@@ -14,6 +14,7 @@ is an accepted no-op, not a failure.
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
 from ctf.enums_communication import CommunicationChannel
 
@@ -41,23 +42,19 @@ class InAppAdapter:
         fast local publish, so it is only an upper sanity bound recorded for
         observability here.
         """
-        from ctf.enums import LiveNotificationKind
-        from ctf.services.notification.live import event_selects
         from ctf.services.notification.realtime import publish_communication_wakeup
-        from shared.notifications import notifications_enabled
 
         logger.debug("in-app %s wake-up for snapshot %s (timeout=%ss)", self.channel, command.snapshot_id, timeout)
-        if command.recipient_user_id is None:
-            # No account to wake; the durable inbox entry is the record of truth.
-            return DeliveryOutcome(OutcomeClass.ACCEPTED, reason="no_socket_recipient")
-        if notifications_enabled() and not event_selects(command.event_id, LiveNotificationKind.MESSAGES):
-            # The event does not use live message wake-ups (ADR-072); the inbox
-            # entry stays available and is read on the next poll or focus.
-            return DeliveryOutcome(OutcomeClass.ACCEPTED, reason="live_disabled")
+        recipient_user_id = command.recipient_user_id
+        if recipient_user_id is None or _live_messages_off(command.event_id):
+            # No account to wake, or the event does not use live message wake-ups
+            # (ADR-072). The durable inbox entry stays available either way.
+            reason = "no_socket_recipient" if recipient_user_id is None else "live_disabled"
+            return DeliveryOutcome(OutcomeClass.ACCEPTED, reason=reason)
         try:
             published = publish_communication_wakeup(
                 event_id=command.event_id,
-                recipient_user_id=command.recipient_user_id,
+                recipient_user_id=recipient_user_id,
                 snapshot_id=command.snapshot_id,
                 references={
                     "snapshot_id": str(command.snapshot_id),
@@ -71,3 +68,12 @@ class InAppAdapter:
         reason = "wakeup_published" if published else "wakeup_unavailable"
         outcome = OutcomeClass.ACCEPTED if published else OutcomeClass.RETRIABLE
         return DeliveryOutcome(outcome, reason=reason)
+
+
+def _live_messages_off(event_id: UUID) -> bool:
+    """Return True when the capability is on but the event does not select ``messages``."""
+    from ctf.enums import LiveNotificationKind
+    from ctf.services.notification.live import event_selects
+    from shared.notifications import notifications_enabled
+
+    return notifications_enabled() and not event_selects(event_id, LiveNotificationKind.MESSAGES)

@@ -123,6 +123,7 @@ def publish_live_hint(
     recipients = [int(user_id) for user_id in recipient_ids if user_id is not None]
     if not recipients or not live_kind_enabled(event, kind):
         return 0
+    published: list[Any] = []
     try:
         # Idempotent re-registration: registration normally happens in
         # apps.ready, but a registry reset must not silently drop the hint.
@@ -136,7 +137,6 @@ def publish_live_hint(
         )
     except Exception:
         logger.exception("Failed to publish %s hint for event %s", kind.value, event.pk)
-        return 0
     return len(published)
 
 

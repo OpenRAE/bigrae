@@ -23,7 +23,7 @@ from shared.field_encryption import EncryptedStringField
 
 from ._base import CTFBaseModel, ImmutableFieldsMixin
 from ._event_defaults import default_reminder_hours
-from ._live_notifications import default_live_notifications, validate_live_notifications
+from ._live_notifications import live_notifications_field
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -292,12 +292,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         default="UTC",
         help_text="IANA timezone for displaying event times in emails (e.g. 'America/New_York')",
     )
-    live_notifications = models.JSONField(
-        default=default_live_notifications,
-        blank=True,
-        validators=[validate_live_notifications],
-        help_text="Live notification kinds this event publishes; an empty list publishes nothing (CTF-802)",
-    )
+    live_notifications = live_notifications_field()
     spare_range_count = models.PositiveIntegerField(
         default=0,
         help_text="Desired size of the event's prewarmed spare-range recovery pool",

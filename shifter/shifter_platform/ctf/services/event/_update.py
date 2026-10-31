@@ -104,6 +104,14 @@ def _admit_scenario_change(event: CTFEvent, safe_data: dict[str, Any], actor_id:
     validate_content_scenario_access(actor, scenario_id, scope=scope)
 
 
+def _reconcile_positions_on_board_change(event: CTFEvent, safe_data: dict[str, Any]) -> None:
+    """A newly visible board or a newly selected kind reconciles positions (CTF-802)."""
+    if {"scoreboard_visibility", "scoreboard_freeze_at", "live_notifications"} & safe_data.keys():
+        from ctf.services.notification.live import request_position_reconcile
+
+        request_position_reconcile(event.pk)
+
+
 def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object | None = None) -> CTFEvent:
     """Update an existing CTF event under the event row lock."""
     logger.info("Updating CTF event %s", safe_log_value(event_id))
@@ -175,11 +183,7 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
         for key, value in safe_data.items():
             setattr(event, key, value)
         event.save()
-        if {"scoreboard_visibility", "scoreboard_freeze_at", "live_notifications"} & safe_data.keys():
-            # A newly visible board or a newly selected kind reconciles positions (CTF-802).
-            from ctf.services.notification.live import request_position_reconcile
-
-            request_position_reconcile(event.pk)
+        _reconcile_positions_on_board_change(event, safe_data)
 
         _audit_public_registration_update(
             event,

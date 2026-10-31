@@ -1,8 +1,9 @@
-"""Default and validator for the event's live notification kinds (CTF-802, ADR-072)."""
+"""Field, default, and validator for the event's live notification kinds (CTF-802, ADR-072)."""
 
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
+from django.db import models
 
 from ctf.enums import LiveNotificationKind
 
@@ -19,3 +20,13 @@ def validate_live_notifications(value: object) -> None:
         raise ValidationError("Select only supported live notification kinds.")
     if len(set(value)) != len(value):
         raise ValidationError("Select each live notification kind once.")
+
+
+def live_notifications_field() -> models.JSONField:
+    """Build the ``CTFEvent.live_notifications`` field."""
+    return models.JSONField(
+        default=default_live_notifications,
+        blank=True,
+        validators=[validate_live_notifications],
+        help_text="Live notification kinds this event publishes; an empty list publishes nothing (CTF-802)",
+    )

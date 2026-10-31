@@ -193,6 +193,17 @@ def run_position_reconcile_task(task: CTFScheduledTask) -> int:
     return len(moved)
 
 
+def handle_live_notice_task(task: CTFScheduledTask, **_scheduler_hooks: object) -> None:
+    """Scheduler entry point for ``LIVE_NOTICE``; it needs no shutdown or heartbeat hook."""
+    run_live_notice_task(task)
+
+
+def handle_position_reconcile_task(task: CTFScheduledTask, **_scheduler_hooks: object) -> None:
+    """Scheduler entry point for ``RECONCILE_POSITIONS``; it needs no shutdown or heartbeat hook."""
+    moved = run_position_reconcile_task(task)
+    logger.info("RECONCILE_POSITIONS for event %s: moved=%d", task.event_id, moved)
+
+
 def _store_positions(event: CTFEvent) -> list[tuple[UUID, int]]:
     """Write changed positions; return moved entries that have a score.
 
