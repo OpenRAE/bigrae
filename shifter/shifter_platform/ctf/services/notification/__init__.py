@@ -45,9 +45,11 @@ from ._scheduled import (
     send_announcement,
 )
 from .delivery_milestones import (
+    declare_cancellation_notice,
     notify_participant_provision_failure,
     send_event_results,
     send_range_ready,
+    send_registration_confirmation,
 )
 from .realtime import (
     publish_live_hint,
@@ -67,6 +69,7 @@ __all__ = (
     "alert_for",
     "alert_if_ranges_not_ready",
     "cancel_scheduled_notification",
+    "declare_cancellation_notice",
     "declare_or_retain_lifecycle_alert",
     "declare_organizer_alert",
     "deliver_scheduled_notification",
@@ -83,5 +86,6 @@ __all__ = (
     "send_event_results",
     "send_login_info",
     "send_range_ready",
+    "send_registration_confirmation",
     "send_reminder",
 )

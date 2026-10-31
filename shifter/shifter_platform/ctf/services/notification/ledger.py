@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import logging
+from datetime import datetime
+from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from django.db import transaction
+from django.utils import timezone
 
+from ctf.exceptions import CTFCommunicationError
 from ctf.models import CommunicationCampaign, CTFEvent, CTFParticipant
 from ctf.services.communication import (
     AdmissionActor,
@@ -14,6 +19,13 @@ from ctf.services.communication import (
     release_campaign,
 )
 from ctf.services.communication.adapters import registered_channels
+
+logger = logging.getLogger(__name__)
+
+
+def _notice_identity(event_id: UUID, kind: str, occurrence: str, participant_id: UUID | None) -> UUID:
+    """Return the stable campaign identity of one notice occurrence."""
+    return uuid5(NAMESPACE_URL, f"shifter:ctf-notice:{event_id}:{kind}:{occurrence}:{participant_id or ''}")
 
 
 def stage_notice(
@@ -35,7 +47,7 @@ def stage_notice(
     """
     with transaction.atomic():
         event = CTFEvent.objects.select_for_update(of=("self",)).select_related("created_by").get(pk=event_id)
-        identity = uuid5(NAMESPACE_URL, f"shifter:ctf-notice:{event.pk}:{kind}:{occurrence}:{participant_id or ''}")
+        identity = _notice_identity(event.pk, kind, occurrence, participant_id)
         campaign = CommunicationCampaign.objects.filter(pk=identity).first()
         if campaign is None:
             audience = (
@@ -64,16 +76,99 @@ def stage_notice(
         return {"campaign_id": str(campaign.pk), "intent_id": str(intent.pk), "outcome": "accepted"}
 
 
+def _declare(
+    event_id: UUID, identity: UUID, audience: dict[str, Any], *, kind: str, subject: str, body: str
+) -> dict[str, str]:
+    """Declare one notice campaign and its scheduled release in the caller's transaction.
+
+    The campaign, its scheduled intent and its release task commit with the
+    change that caused the notice; the scheduler releases it and the worker
+    sends it. The ``stage_notice`` identity makes a retry return the first
+    declaration. A campaign from the older inline path has a manual trigger and
+    is returned as ``existing`` without new work. The declaration skips the
+    shared authoring budget; release admission still applies. A refusal raises
+    ``CTFCommunicationError`` and rolls back only this savepoint.
+    """
+    from ctf.services.communication.scheduling import schedule_declaration
+
+    with transaction.atomic():
+        event = CTFEvent.objects.select_for_update(of=("self",)).select_related("created_by").get(pk=event_id)
+        campaign = CommunicationCampaign.objects.filter(pk=identity).first()
+        if campaign is None:
+            campaign = create_system_event_campaign(
+                event,
+                CampaignDraft(
+                    title=subject,
+                    origin="system_milestone",
+                    target_event_ids=[event.pk],
+                    audience_spec=audience,
+                    trigger_spec={"kind": "absolute_time", "due_at": timezone.now().isoformat()},
+                    channels=["email"],
+                    subject=subject,
+                    body=body,
+                    notice_kind=kind,
+                ),
+                campaign_id=identity,
+                authoring_rate_limited=False,
+            )
+        result = {"campaign_id": str(campaign.pk)}
+        if campaign.trigger_spec.get("kind") != "absolute_time":
+            result["outcome"] = "existing"
+        elif "email" not in registered_channels():
+            result["outcome"] = "channel_unavailable"
+        else:
+            intent = schedule_declaration(
+                campaign,
+                due_at=datetime.fromisoformat(campaign.trigger_spec["due_at"]),
+                occurrence_key="notice",
+                actor=AdmissionActor(system=True),
+            )
+            result.update(intent_id=str(intent.pk), outcome="declared")
+    return result
+
+
+def declare_notice(event: CTFEvent, *, kind: str, subject: str, body: str, occurrence: str) -> dict[str, str]:
+    """Declare one event-audience notice in the caller's transaction (ADR-065-R6).
+
+    A communication refusal is logged with its bounded code and never fails the
+    caller's state change.
+    """
+    identity = _notice_identity(event.pk, kind, occurrence, None)
+    try:
+        return _declare(
+            event.pk, identity, {"kind": "event", "event_ids": [str(event.pk)]}, kind=kind, subject=subject, body=body
+        )
+    except CTFCommunicationError as exc:
+        logger.warning("Event notice unavailable: event=%s kind=%s code=%s", event.pk, kind, exc.code)
+        return {"campaign_id": str(identity), "outcome": "unavailable"}
+
+
+def declare_participant_notice(
+    participant: CTFParticipant, *, kind: str, subject: str, body: str, occurrence: str
+) -> dict[str, str]:
+    """Declare one participant notice in the caller's transaction (ADR-065-R5).
+
+    A communication refusal is logged with its bounded code and never fails the
+    caller.
+    """
+    identity = _notice_identity(participant.event_id, kind, occurrence, participant.pk)
+    audience = {"kind": "participant", "participant_ids": [str(participant.pk)]}
+    try:
+        return _declare(participant.event_id, identity, audience, kind=kind, subject=subject, body=body)
+    except CTFCommunicationError as exc:
+        logger.warning("Participant notice unavailable: participant=%s kind=%s code=%s", participant.pk, kind, exc.code)
+        return {"campaign_id": str(identity), "outcome": "unavailable"}
+
+
 def participant_notice(participant_id: UUID, *, kind: str, subject: str, body: str) -> dict[str, str]:
     """Bind a lifecycle notice to its participant and range occurrence."""
 
-    participant = CTFParticipant.objects.select_related("event").get(pk=participant_id)
+    participant = CTFParticipant.objects.get(pk=participant_id)
     # Range generations distinguish later genuine notices; retries use the same key.
-    return stage_notice(
-        participant.event_id,
+    return declare_participant_notice(
+        participant,
         kind=kind,
         subject=subject,
         body=body,
         occurrence=str(participant.range_instance_id or "account"),
-        participant_id=participant.pk,
     )

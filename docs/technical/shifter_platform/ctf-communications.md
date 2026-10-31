@@ -18,6 +18,11 @@ its [preflight](../../architecture/ctf-email-durable-delivery-preflight-1525.md)
 ADR-051-R14, and ADR-071 define the email channel on this same ledger and
 worker.
 
+The [participant milestone preflight (CTF-801 / #664)](../../architecture/ctf-participant-email-preflight-664.md)
+records registration admission, durable handoff and the cancellation/readiness
+gaps that existing email transport alone does not resolve. It changes no runtime
+behavior; cancellation's required fence specialization belongs to #662.
+
 ADR-065-R4 adds organizer recipients to this ledger. The
 [organizer-alert design (#528)](../../architecture/ctf-organizer-alerts-design-528.md)
 and its [preflight](../../architecture/ctf-organizer-alerts-preflight-528.md)
@@ -81,13 +86,17 @@ read the same value in the web and worker processes.
 
 The adapter reads only the coordinate of its own snapshot. The campaign
 `notice_kind` selects one trusted pair under `ctf/email/notice/`. The kinds are
-`announcement`, `reminder`, `cleanup`, `results`, `range_ready`, and
-`range_failure`. Organizer campaigns are always `announcement`. Only lifecycle
-notices set another kind.
+`announcement`, `reminder`, `cleanup`, `results`, `range_ready`,
+`range_failure`, `registration`, `organizer_alert`, and `cancellation`.
+Organizer campaigns are always `announcement`. Only lifecycle notices set
+another kind.
 
 The pair renders the pinned subject and Markdown source with escaped scalar
 values. These values are the participant name and the event name, dates, and
-portal URL of the snapshot event. The URL comes from `SITE_URL`; an unsafe
+portal URL of the snapshot event. The reminder pair shows the event start in the
+participant time zone (`CTFParticipant.time_zone`). When that value is blank or
+not valid, it uses the event time zone, then UTC. The email shows the zone name
+and the UTC offset (#582). The URL comes from `SITE_URL`; an unsafe
 value is retriable as `site_url_unavailable`. Organizers cannot override the
 templates (#580). The adapter calls `shared.email.attempt_email()` with
 the worker transport timeout and the row `idempotency_key`. The key becomes a
@@ -287,7 +296,39 @@ also physically deletes their legacy source rows and mappings, erasing duplicate
 content and preventing later cutover passes from importing it again.
 
 Participant lifecycle notices use stable server-derived campaign identities and
-remain visibly staged when email is unavailable. Organizer-only alerts have no
+remain visibly staged when email is unavailable.
+
+`cancel_event` declares the `cancellation` notice in its transaction, after
+event task cancellation and `on_event_cancelled`. `ledger.declare_notice`
+commits the campaign, the scheduled intent and its `RELEASE_COMMUNICATION` task
+with the cancellation. A refused declaration is logged and does not block
+cancellation. `is_event_cancellation_notice` is the only exception to the
+cancelled-event fence in `_assert_release_allowed` and `_fence_reason`
+(ADR-065-R6). The exception needs the `system_milestone` origin, the
+`cancellation` kind and one target event. `create_system_event_campaign` sets
+that kind only for a cancelled event. The
+[cancellation notice design (#662)](../../architecture/ctf-cancellation-notice-design-662.md)
+records the architecture.
+
+`notification.ledger.declare_participant_notice` declares registration,
+range-ready and range-failure notices (ADR-065-R5,
+[design](../../architecture/ctf-participant-notices-design-664.md)). It commits
+the system campaign, the scheduled intent and the `RELEASE_COMMUNICATION` task
+in the caller's transaction. It skips the shared system authoring rate budget.
+Release-time admission backpressure still applies. A `CTFCommunicationError`
+rolls back only the declaration savepoint and is logged with its code.
+
+| Notice | Producer | Occurrence |
+| --- | --- | --- |
+| `registration` | `participant.accounts.provision_participant_seat`, for a seat with a delivery email | `registered` |
+| `range_ready` | `signals.sync_ctf_participant_range_status` for a delivered `ready` status, and `range.status.get_range_status` | Range instance ID |
+| `range_failure` | `range.batch` spin-up errors | Range instance ID, or `account` |
+
+A campaign from the older inline path has a `manual` trigger. The declaration
+returns it as `existing` and schedules nothing.
+For a delivered `ready` status, the receiver locks the affected events in
+primary-key order before it writes participant rows. Provisioning and recovery
+use the same event-before-participant order. Organizer-only alerts have no
 participant audience and remain unavailable rather than creating fake recipient
 rows. Password issuance stays volatile in `participant.credentials`; non-secret
 login notices never retain passwords, tokens or issuance objects. The deprecated

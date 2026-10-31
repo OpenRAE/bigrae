@@ -7,7 +7,7 @@ from django.db import migrations, models
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('ctf', '0083_organizer_recipients'),
+        ('ctf', '0086_notice_kind_cancellation'),
     ]
 
     operations = [

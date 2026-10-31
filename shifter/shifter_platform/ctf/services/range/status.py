@@ -11,6 +11,8 @@ import logging
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from django.db import transaction
+
 from ctf.exceptions import CTFNotFoundError, CTFRangeError
 from ctf.models import CTFParticipant
 
@@ -123,19 +125,34 @@ def _get_participant_with_range(participant_id: UUID) -> CTFParticipant:
     return participant
 
 
-def _notify_range_ready(participant: CTFParticipant) -> None:
-    """Range-ready milestone (CTF-801/CTF-802): email + realtime, best-effort."""
-    try:
-        from ctf.enums import LiveNotificationKind
-        from ctf.services.notification import publish_live_hint, send_range_ready
+def notify_range_ready(participant: CTFParticipant, *, publish: bool = True) -> None:
+    """Range-ready milestone (CTF-801/CTF-802): email declaration, then realtime.
 
-        send_range_ready(participant.pk)
-        publish_live_hint(
-            participant.event,
-            LiveNotificationKind.RANGE_READY,
-            recipient_ids=[participant.user_id],
-            occurrence=f"{participant.pk}:{participant.range_instance_id or 'account'}",
+    The email notice is declared in the caller's transaction and its identity
+    collapses repeats. The content-free live hint is published after commit, with
+    one occurrence identity per range generation (ADR-072).
+    """
+    from ctf.enums import LiveNotificationKind
+    from ctf.services.notification import publish_live_hint, send_range_ready
+
+    send_range_ready(participant.pk)
+    user_id = participant.user_id
+    if publish and user_id:
+        occurrence = f"{participant.pk}:{participant.range_instance_id or 'account'}"
+        transaction.on_commit(
+            lambda: publish_live_hint(
+                participant.event,
+                LiveNotificationKind.RANGE_READY,
+                recipient_ids=[user_id],
+                occurrence=occurrence,
+            )
         )
+
+
+def _notify_range_ready(participant: CTFParticipant) -> None:
+    """Best-effort range-ready from a status read; the CMS status outbox declares it too."""
+    try:
+        notify_range_ready(participant)
     # pragma: no cover — defensive; notification must never break status reads
     except Exception:
         logger.exception("Range-ready notification failed for %s", participant.pk)
