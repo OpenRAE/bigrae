@@ -3287,7 +3287,7 @@
       },
       {
         "id": "ADR-051-R6",
-        "description": "Intent release atomically persists immutable recipient snapshots, transactional in-app availability, initial transport delivery commands, and strict audit evidence. Delivery is at-least-once with one idempotency key per intent/snapshot/transport, bounded retry/backoff/jitter, terminal failure, partial-failure truth, and cancellation of unclaimed work only. Participant removal revokes future targeting and inbox/read/acknowledgement authority, cancels unclaimed work, and erases delivery coordinates without retargeting or inventing history. Event cancellation prevents new release/due materialization and cancels only event-qualified unclaimed work. The CTF-706 participant cancellation notice (ADR-065-R5) is the sole cancelled-event exception: one classification checks it at declaration, release and delivery, and campaign/intent cancellation, recipient revocation, tenancy and retention remain effective. Range replacement fences the old generation's unclaimed work and requires a new generation-qualified occurrence; old intents remain truthful retained evidence. Email provider acceptance, optional reference-only WebSocket publication/socket write, participant read, explicit acknowledgement, and intervention effect are separate states; aggregate status must not overclaim any of them. Disabled or failed WebSocket fan-out never removes or fails a persisted inbox item. The canonical CTF-account WebSocket boundary may admit only the exact shared notification route after its existing live-participant and required-password-change checks pass, and must retain normal topic authorization; no broad /ws/ bypass is allowed. The Engine range event outbox and process-local shared.email executor are not reused as the delivery queue.",
+        "description": "Intent release atomically persists immutable recipient snapshots, transactional in-app availability, initial transport delivery commands, and strict audit evidence. Delivery is at-least-once with one idempotency key per intent/snapshot/transport, bounded retry/backoff/jitter, terminal failure, partial-failure truth, and cancellation of unclaimed work only. Participant removal revokes future targeting and inbox/read/acknowledgement authority, cancels unclaimed work, and erases delivery coordinates without retargeting or inventing history. Event cancellation prevents new release/due materialization and cancels only event-qualified unclaimed work. The CTF-706 participant cancellation notice (ADR-065-R6) is the sole cancelled-event exception: one classification checks it at declaration, release and delivery, and campaign/intent cancellation, recipient revocation, tenancy and retention remain effective. Range replacement fences the old generation's unclaimed work and requires a new generation-qualified occurrence; old intents remain truthful retained evidence. Email provider acceptance, optional reference-only WebSocket publication/socket write, participant read, explicit acknowledgement, and intervention effect are separate states; aggregate status must not overclaim any of them. Disabled or failed WebSocket fan-out never removes or fails a persisted inbox item. The canonical CTF-account WebSocket boundary may admit only the exact shared notification route after its existing live-participant and required-password-change checks pass, and must retain normal topic authorization; no broad /ws/ bypass is allowed. The Engine range event outbox and process-local shared.email executor are not reused as the delivery queue.",
         "checks": []
       },
       {
@@ -3346,6 +3346,7 @@
       "docs/architecture/ctf-communications-raes-inject-preflight-2047.md",
       "docs/architecture/ctf-communication-delivery-engine-preflight-2049.md",
       "docs/architecture/ctf-email-durable-delivery-preflight-1525.md",
+      "docs/architecture/ctf-participant-email-preflight-664.md",
       "docs/architecture/email-delivery-design-1525.md",
       "docs/architecture/ctf-communication-api-cutover-preflight-2100.md",
       "docs/design/ctf-communications-console-boundaries-2052.md",
@@ -4250,7 +4251,7 @@
       },
       {
         "id": "ADR-065-R3",
-        "description": "Email availability follows ADR-071 and the #1525 transport contract. Migrated declarations preserve the email channel, scope, author and due time without runnable delivery work while unavailable. Credential passwords/tokens and volatile issuance objects never enter retained content. Lifecycle notifications use scoped ledger declarations. The CTF-706 cancellation notice follows ADR-065-R5. Organizer-only alerts follow ADR-065-R4.",
+        "description": "Email availability follows ADR-071 and the #1525 transport contract. Migrated declarations preserve the email channel, scope, author and due time without runnable delivery work while unavailable. Credential passwords/tokens and volatile issuance objects never enter retained content. Lifecycle notifications use scoped ledger declarations. The CTF-706 cancellation notice follows ADR-065-R6. Organizer-only alerts follow ADR-065-R4.",
         "checks": []
       },
       {
@@ -4260,6 +4261,11 @@
       },
       {
         "id": "ADR-065-R5",
+        "description": "Participant registration, range-ready and range-failure notices are durable ledger declarations in the transaction that causes them: one system campaign for one participant occurrence, with a stable identity, and a scheduled intent with its release task. Every seat-creation path declares a registration confirmation for a seat with a delivery email. These declarations skip the shared system authoring rate budget; release-time admission backpressure still applies. A communication refusal never fails the causing change.",
+        "checks": []
+      },
+      {
+        "id": "ADR-065-R6",
         "description": "The CTF-706 participant cancellation notice is a durable ledger declaration made in the cancel transaction, after event task cancellation and the communication fence, and released by a scheduled RELEASE_COMMUNICATION task with backpressure retry. It is the only exception to the ADR-051-R6 cancelled-event release and delivery fence. The exception requires the system_milestone origin, the immutable cancellation notice kind and exactly one cancelled target event; only the system campaign factory sets that kind, and only for a cancelled event. Campaign and intent cancellation, recipient revocation, tenancy and retention still apply. A notice failure never blocks cancellation or range cleanup, and transport failure never becomes successful delivery.",
         "checks": []
       }
@@ -4276,6 +4282,7 @@
       "docs/architecture/ctf-organizer-alerts-design-528.md",
       "docs/design/ctf-event-cancellation-preflight-706.md",
       "docs/architecture/ctf-cancellation-notice-design-662.md",
+      "docs/architecture/ctf-participant-notices-design-664.md",
       "docs/architecture/ctf-communication-migration-decision-2100.md",
       "shifter/shifter_platform/tests/ctf/test_communication_cutover.py",
       "shifter/shifter_platform/tests/shared/test_api_operation_retirement.py"

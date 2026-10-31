@@ -184,7 +184,7 @@ def _fence_reason(row: DeliveryAttempt) -> str:
     A committed claim is the recall boundary, but the worker voluntarily suppresses
     before its irreversible send when a cancellation/lifecycle change is visible.
     Event cancellation is event-qualified: only that event's commands are fenced,
-    except its own cancellation notice (ADR-065-R5).
+    except its own cancellation notice (ADR-065-R6).
     """
     intent = row.intent
     if intent.status in (IntentStatus.CANCELLED.value, IntentStatus.FENCED.value):

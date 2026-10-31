@@ -4,7 +4,7 @@ Design, 2026-10-31. Scope: the CTF-706 clause "send cancellation notifications
 to all registered participants". The
 [preflight](../design/ctf-event-cancellation-preflight-706.md) gives the
 boundaries. [ADR-065](../adr/065-retire-legacy-ctf-notification-writes.md)
-revision R5 records the decision.
+revision R6 records the decision.
 
 ## Maintainer decisions
 
@@ -46,7 +46,7 @@ flowchart LR
 | --- | --- |
 | `cancel_event` | Locks the event, sets `CANCELLED`, cancels event tasks and fences communications. Then it declares the notice in the same transaction. |
 | `declare_cancellation_notice` | Creates one system campaign for the event and schedules its declaration. The campaign UUID derives from the event, the kind and the occurrence, so a replay returns the first declaration. |
-| `ledger.declare_notice` | The shared durable declaration for a participant lifecycle notice: kind, event, stable occurrence, fixed content and the email channel. |
+| `ledger.declare_notice` | The event-audience declaration. It shares one declaration core with the #664 `declare_participant_notice`: kind, event, stable occurrence, fixed content and the email channel. |
 | `create_system_event_campaign` | Refuses a `cancellation` campaign unless the locked event is `CANCELLED`. The notice skips the shared system authoring rate budget. |
 | `is_event_cancellation_notice` | The one classification of the exception: `system_milestone` origin and `cancellation` notice kind. Only `create_system_event_campaign` can set that kind, and the kind is immutable. |
 | Release | `_assert_release_allowed` lets the notice through when it has exactly one target event. Declaration and due-time release both use this check. |
@@ -61,8 +61,9 @@ flowchart LR
   Neither operation can remove it.
 - Release-time admission backpressure reschedules the release in the grace
   window. A release past the grace window expires. It never delivers late.
-- When the deployment has no email delivery, the release queues email work that
-  the worker does not claim. The intent shows a `pending` disposition.
+- When the deployment has no email delivery, the campaign is staged without a
+  scheduled release. The declaration reports `channel_unavailable`. This is the
+  same rule as the other participant lifecycle notices.
 - A refused declaration is logged with its bounded code. Cancellation and range
   cleanup continue, because the refusals are permanent configuration faults.
 - Range cleanup does not wait for the notice. The notice does not promise mail
@@ -143,7 +144,7 @@ sequenceDiagram
 
 ## Policy, architecture-as-code and ADRs
 
-- ADR-065 gets revision R5. ADR-051-R6 and ADR-065-R3 name the exception.
+- ADR-065 gets revision R6. ADR-051-R6 and ADR-065-R3 name the exception.
 - A migration adds `cancellation` to the `notice_kind` choices and the
   `ctf_comm_campaign_notice_kind_valid` constraint.
 - No new import contract is necessary. The change stays in the `ctf` layer.

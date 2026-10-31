@@ -238,7 +238,7 @@ def create_system_event_campaign(
     commits. Release-time admission backpressure still applies.
 
     A cancellation notice is the only communication that passes the
-    cancelled-event fence (ADR-065-R5), so it is created only for an event that
+    cancelled-event fence (ADR-065-R6), so it is created only for an event that
     is already cancelled.
     """
     if list(dict.fromkeys(validate_campaign_targets(draft.target_event_ids))) != [event.pk]:
@@ -304,7 +304,7 @@ def create_system_event_campaign(
 
 
 def is_event_cancellation_notice(campaign: CommunicationCampaign) -> bool:
-    """Return True only for the trusted participant cancellation notice (ADR-065-R5).
+    """Return True only for the trusted participant cancellation notice (ADR-065-R6).
 
     Public authoring accepts only the announcement kind, ``notice_kind`` is
     immutable, and :func:`create_system_event_campaign` sets the cancellation kind

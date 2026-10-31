@@ -126,7 +126,7 @@ def _assert_release_allowed(campaign: CommunicationCampaign, target_events: list
     the materialization below. Checking status on the locked rows — rather than a
     fresh query filtered to ``CANCELLED`` — is what makes the lock cover every live
     target, not only the already-cancelled ones. The single-event cancellation
-    notice is the one exception to the cancelled-event refusal (ADR-065-R5).
+    notice is the one exception to the cancelled-event refusal (ADR-065-R6).
     """
     from ctf.models import CommunicationCutover, LegacyCommunication
     from ctf.services.communication.adapters import registered_channels
