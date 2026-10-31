@@ -23,7 +23,7 @@ from shared.field_encryption import EncryptedStringField
 
 from ._base import CTFBaseModel, ImmutableFieldsMixin
 from ._event_defaults import default_reminder_hours
-from ._live_notifications import live_notifications_field
+from ._live_notifications import LiveNotificationsMixin
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -43,7 +43,7 @@ def _scoring_mode_choices() -> list[tuple[str, str]]:
     return ScoringMode.choices() + [(mode, mode.title()) for mode in sorted(registered_scoring_modes())]
 
 
-class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
+class CTFEvent(ImmutableFieldsMixin, LiveNotificationsMixin, CTFBaseModel):
     """CTF competition event.
 
     Represents a single CTF competition with its configuration,
@@ -292,7 +292,6 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         default="UTC",
         help_text="IANA timezone for displaying event times in emails (e.g. 'America/New_York')",
     )
-    live_notifications = live_notifications_field()
     spare_range_count = models.PositiveIntegerField(
         default=0,
         help_text="Desired size of the event's prewarmed spare-range recovery pool",

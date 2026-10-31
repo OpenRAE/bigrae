@@ -76,8 +76,11 @@ def _reference_payload(payload: Mapping[str, Any]) -> dict[str, str]:
     kind = payload.get("kind")
     if kind in {hint.value for hint in HINT_KINDS}:
         return {"kind": kind}
-    if kind != "communication":
-        return {"kind": "refresh"}
+    return _communication_reference(payload) if kind == "communication" else {"kind": "refresh"}
+
+
+def _communication_reference(payload: Mapping[str, Any]) -> dict[str, str]:
+    """Project a message wake-up to its validated identifiers, or a refresh hint."""
     try:
         return {
             "kind": "communication",

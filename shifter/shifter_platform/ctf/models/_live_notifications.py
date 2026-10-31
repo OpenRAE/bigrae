@@ -1,4 +1,4 @@
-"""Field, default, and validator for the event's live notification kinds (CTF-802, ADR-072)."""
+"""Model mixin, default, and validator for the event's live notification kinds (CTF-802, ADR-072)."""
 
 from __future__ import annotations
 
@@ -22,11 +22,17 @@ def validate_live_notifications(value: object) -> None:
         raise ValidationError("Select each live notification kind once.")
 
 
-def live_notifications_field() -> models.JSONField:
-    """Build the ``CTFEvent.live_notifications`` field."""
-    return models.JSONField(
+class LiveNotificationsMixin(models.Model):
+    """The event's selected live notification kinds (CTF-802, ADR-072)."""
+
+    live_notifications = models.JSONField(
         default=default_live_notifications,
         blank=True,
         validators=[validate_live_notifications],
         help_text="Live notification kinds this event publishes; an empty list publishes nothing (CTF-802)",
     )
+
+    class Meta:
+        """Abstract: the field belongs to the concrete event model."""
+
+        abstract = True
