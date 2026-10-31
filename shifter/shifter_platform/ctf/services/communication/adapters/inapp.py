@@ -41,12 +41,19 @@ class InAppAdapter:
         fast local publish, so it is only an upper sanity bound recorded for
         observability here.
         """
+        from ctf.enums import LiveNotificationKind
+        from ctf.services.notification.live import event_selects
         from ctf.services.notification.realtime import publish_communication_wakeup
+        from shared.notifications import notifications_enabled
 
         logger.debug("in-app %s wake-up for snapshot %s (timeout=%ss)", self.channel, command.snapshot_id, timeout)
         if command.recipient_user_id is None:
             # No account to wake; the durable inbox entry is the record of truth.
             return DeliveryOutcome(OutcomeClass.ACCEPTED, reason="no_socket_recipient")
+        if notifications_enabled() and not event_selects(command.event_id, LiveNotificationKind.MESSAGES):
+            # The event does not use live message wake-ups (ADR-072); the inbox
+            # entry stays available and is read on the next poll or focus.
+            return DeliveryOutcome(OutcomeClass.ACCEPTED, reason="live_disabled")
         try:
             published = publish_communication_wakeup(
                 event_id=command.event_id,

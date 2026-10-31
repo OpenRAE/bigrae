@@ -53,6 +53,11 @@ class ParticipantEventSerializer(serializers.Serializer):
     rules = serializers.CharField(read_only=True, allow_blank=True)
     logo_url = serializers.CharField(read_only=True, allow_blank=True)
     theme_color = serializers.CharField(read_only=True, allow_blank=True)
+    live_notifications = serializers.ListField(
+        child=serializers.CharField(),
+        read_only=True,
+        help_text="Live notification kinds the event publishes now; empty means no notification socket (CTF-802).",
+    )
 
 
 class ParticipantCurrentEventSerializer(serializers.Serializer):

@@ -36,6 +36,7 @@ const EVENT = {
   scoring_mode: "static",
   scoreboard_visible: true,
   scoreboard_freeze_at: null,
+  live_notifications: ["messages", "first_blood"],
 };
 
 function routeApi(handlers: (path: string, options?: { method?: string }) => unknown) {
@@ -87,6 +88,10 @@ describe("EventFormPage (create)", () => {
       const call = mockApi.mock.calls.find(([p, o]) => p === "/ctf/events/" && o?.method === "POST");
       expect(call).toBeDefined();
       expect(call?.[1]?.body).toMatchObject({ public_registration_enabled: false });
+      // A new event selects every live notification kind (ADR-072).
+      expect(call?.[1]?.body).toMatchObject({
+        live_notifications: ["messages", "challenge_released", "first_blood", "position_changed", "range_ready"],
+      });
     });
   });
 
@@ -126,5 +131,34 @@ describe("EventFormPage (edit)", () => {
     expect(screen.getByRole("checkbox", { name: "Publish public registration page" })).toBeChecked();
     expect(screen.getByText(/publishes the event name, description, dates, and registration deadline/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+  });
+});
+
+describe("EventFormPage (live notifications)", () => {
+  it("loads the selected kinds and saves only the checked kinds", async () => {
+    routeApi((path, options) => {
+      if (path === "/ctf/scenario-options/") return { scenarios: [] };
+      if (path === "/ctf/events/e1/" && options?.method === "PUT") return { id: "e1", name: "Spring CTF", status: "registration" };
+      if (path === "/ctf/events/e1/") return EVENT;
+      return {};
+    });
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="edit" />, {
+      path: "/ctf/admin/events/:eventId/edit",
+      initialEntries: ["/ctf/admin/events/e1/edit"],
+    });
+
+    const firstBlood = await screen.findByRole("checkbox", { name: "First blood" });
+    expect(firstBlood).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Scoreboard position changes" })).not.toBeChecked();
+
+    await user.click(firstBlood);
+    await user.click(screen.getByRole("checkbox", { name: "Scoreboard position changes" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      const call = mockApi.mock.calls.find(([p, o]) => p === "/ctf/events/e1/" && o?.method === "PUT");
+      expect(call?.[1]?.body).toMatchObject({ live_notifications: ["messages", "position_changed"] });
+    });
   });
 });

@@ -594,6 +594,7 @@
         "ctfCommunicationWorker",
         "guacamolePrune",
         "raesOperationRecordPrune",
+        "notificationPrune",
         "operationResultApplier",
         "outboxDrainer",
         "provisionerLauncher",
@@ -609,6 +610,17 @@
         "ctfCommunicationWorker": { "$ref": "#/$defs/scaledWorkload" },
         "guacamolePrune": { "$ref": "#/$defs/scaledWorkload" },
         "raesOperationRecordPrune": { "$ref": "#/$defs/scaledWorkload" },
+        "notificationPrune": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["schedule", "batchSize", "maxBatches", "resources"],
+          "properties": {
+            "schedule": { "type": "string", "pattern": "^\\S+( \\S+){4}$" },
+            "batchSize": { "type": "integer", "minimum": 1, "maximum": 10000 },
+            "maxBatches": { "type": "integer", "minimum": 1, "maximum": 1000 },
+            "resources": { "$ref": "#/$defs/resources" }
+          }
+        },
         "operationResultApplier": { "$ref": "#/$defs/scaledWorkload" },
         "outboxDrainer": { "$ref": "#/$defs/scaledWorkload" },
         "provisionerLauncher": { "$ref": "#/$defs/scaledWorkload" },

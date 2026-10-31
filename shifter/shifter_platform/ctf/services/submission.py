@@ -149,6 +149,8 @@ def _record_submission_locked(
             is_correct=decision.is_correct,
             dynamic_mode=dynamic_mode,
         )
+        if decision.is_correct:
+            _request_live_work(locked_challenge, first_blood=first_blood)
 
     _emit_solve_events(submission, participant, challenge, is_correct=decision.is_correct, first_blood=first_blood)
 
@@ -177,6 +179,16 @@ def _maintain_scores(
     return is_correct and CTFSubmission.objects.filter(challenge=challenge, is_correct=True).count() == 1
 
 
+def _request_live_work(challenge: CTFChallenge, *, first_blood: bool) -> None:
+    """Queue live notification work in the solve transaction (CTF-802, ADR-072)."""
+    from ctf.enums import LiveNotificationKind
+    from ctf.services.notification.live import request_live_notice, request_position_reconcile
+
+    request_position_reconcile(challenge.event_id)
+    if first_blood:
+        request_live_notice(challenge.event, LiveNotificationKind.FIRST_BLOOD, challenge.pk)
+
+
 def _emit_solve_events(
     submission: CTFSubmission,
     participant: CTFParticipant,
@@ -199,17 +211,6 @@ def _emit_solve_events(
     }
     emit_webhook(challenge.event, "flag_solve", solve_data)
     if first_blood:
-        from ctf.services.notification import publish_event_notification
-
-        publish_event_notification(
-            challenge.event,
-            "first_blood",
-            {
-                "challenge_id": str(challenge.pk),
-                "challenge_name": challenge.name,
-                "participant_name": participant.name,
-            },
-        )
         emit_webhook(challenge.event, "first_blood", solve_data)
 
 

@@ -142,6 +142,11 @@ class CTFTeam(CTFBaseModel):
         blank=True,
         help_text="Materialized timestamp of the team's most recent correct solve (tie-breaker)",
     )
+    notified_position = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Board position last reported to members by a live position reconcile (CTF-802)",
+    )
 
     class Meta:
         """Django model metadata."""
@@ -372,6 +377,11 @@ class CTFParticipant(CTFBaseModel):
         null=True,
         blank=True,
         help_text="Materialized timestamp of the most recent correct solve (tie-breaker)",
+    )
+    notified_position = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Board position last reported by a live position reconcile (CTF-802)",
     )
 
     class Meta:

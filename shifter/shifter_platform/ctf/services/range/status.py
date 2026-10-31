@@ -126,16 +126,16 @@ def _get_participant_with_range(participant_id: UUID) -> CTFParticipant:
 def _notify_range_ready(participant: CTFParticipant) -> None:
     """Range-ready milestone (CTF-801/CTF-802): email + realtime, best-effort."""
     try:
-        from ctf.services.notification import publish_event_notification, send_range_ready
+        from ctf.enums import LiveNotificationKind
+        from ctf.services.notification import publish_live_hint, send_range_ready
 
         send_range_ready(participant.pk)
-        if participant.user_id:
-            publish_event_notification(
-                participant.event,
-                "range_ready",
-                {"participant_id": str(participant.pk)},
-                recipient_ids=[participant.user_id],
-            )
+        publish_live_hint(
+            participant.event,
+            LiveNotificationKind.RANGE_READY,
+            recipient_ids=[participant.user_id],
+            occurrence=f"{participant.pk}:{participant.range_instance_id or 'account'}",
+        )
     # pragma: no cover — defensive; notification must never break status reads
     except Exception:
         logger.exception("Range-ready notification failed for %s", participant.pk)

@@ -38,7 +38,6 @@ from ._staff_policy import (
     capabilities_for_role,
     capability_action_pairs,
     eligible_co_organizer_ids,
-    event_notification_organizer_ids,
     event_notification_organizers,
     staff_row_grants_capability,
 )
@@ -75,7 +74,6 @@ __all__ = [
     "capabilities_for_role",
     "capability_action_pairs",
     "eligible_co_organizer_ids",
-    "event_notification_organizer_ids",
     "event_notification_organizers",
     "list_event_staff",
     "pending_event_authority",

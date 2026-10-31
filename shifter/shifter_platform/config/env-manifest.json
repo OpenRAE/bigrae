@@ -1051,6 +1051,21 @@
       "default": "''",
       "name": "WARM_POOL_SERVICE_CREDENTIAL_UUID",
       "source_file": "config/_warm_pool_settings.py"
+    },
+    {
+      "default": "False",
+      "name": "WEBSOCKET_NOTIFICATIONS_ENABLED",
+      "source_file": "config/settings.py"
+    },
+    {
+      "default": "100",
+      "name": "WEBSOCKET_NOTIFICATION_MAX_REPLAY",
+      "source_file": "config/settings.py"
+    },
+    {
+      "default": "7",
+      "name": "WEBSOCKET_NOTIFICATION_RETENTION_DAYS",
+      "source_file": "config/settings.py"
     }
   ]
 }

@@ -173,6 +173,11 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
         for key, value in safe_data.items():
             setattr(event, key, value)
         event.save()
+        if {"scoreboard_visibility", "scoreboard_freeze_at", "live_notifications"} & safe_data.keys():
+            # A newly visible board or a newly selected kind reconciles positions (CTF-802).
+            from ctf.services.notification.live import request_position_reconcile
+
+            request_position_reconcile(event.pk)
 
         _audit_public_registration_update(
             event,

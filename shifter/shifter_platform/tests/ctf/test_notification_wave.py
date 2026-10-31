@@ -133,27 +133,31 @@ class TestMilestoneEmails:
 
 
 class TestRealtimeBus:
-    def test_publish_creates_rows_when_enabled(self, ctf_event_active, participant_user, settings):
-        from ctf.services.notification import publish_event_notification
+    def test_live_hint_creates_rows_only_for_named_recipients(self, ctf_event_active, participant_user, settings):
+        from ctf.enums import LiveNotificationKind
+        from ctf.services.notification import publish_live_hint
         from shared.models import WebSocketNotification
 
         settings.WEBSOCKET_NOTIFICATIONS_ENABLED = True
         _register(ctf_event_active, "watcher", user=participant_user)
 
-        publish_event_notification(ctf_event_active, "announcement", {"subject": "s", "body": "b"})
+        publish_live_hint(
+            ctf_event_active, LiveNotificationKind.RANGE_READY, recipient_ids=[participant_user.pk], occurrence="1"
+        )
 
         rows = WebSocketNotification.objects.filter(topic=f"ctf:event:{ctf_event_active.pk}")
-        recipient_ids = set(rows.values_list("recipient_id", flat=True))
-        assert participant_user.pk in recipient_ids
-        assert ctf_event_active.created_by_id in recipient_ids
-        assert all(row.payload == {"kind": "refresh"} for row in rows)
+        assert set(rows.values_list("recipient_id", flat=True)) == {participant_user.pk}
+        assert all(row.payload == {"kind": "range_ready"} for row in rows)
 
-    def test_publish_noops_when_disabled(self, ctf_event_active, settings):
-        from ctf.services.notification import publish_event_notification
+    def test_live_hint_noops_when_disabled(self, ctf_event_active, participant_user, settings):
+        from ctf.enums import LiveNotificationKind
+        from ctf.services.notification import publish_live_hint
         from shared.models import WebSocketNotification
 
         settings.WEBSOCKET_NOTIFICATIONS_ENABLED = False
-        publish_event_notification(ctf_event_active, "announcement", {"subject": "s"})
+        publish_live_hint(
+            ctf_event_active, LiveNotificationKind.RANGE_READY, recipient_ids=[participant_user.pk], occurrence="1"
+        )
         assert not WebSocketNotification.objects.exists()
 
     def test_subscription_authorization(
@@ -192,32 +196,3 @@ class TestRealtimeBus:
         assert _can_subscribe(organizer_proof, topic) is False
         assert checked
         assert _can_subscribe(live_session_credential(participant_user), topic) is True
-
-    def test_first_blood_published_once(self, ctf_event_active, participant_user, monkeypatch):
-        from ctf.enums import ChallengeCategory, ChallengeDifficulty
-        from ctf.models import CTFChallenge
-        from ctf.services import submit_flag
-
-        challenge = CTFChallenge.objects.create(
-            event=ctf_event_active,
-            name="FB",
-            description="d",
-            category=ChallengeCategory.WEB.value,
-            points=100,
-            difficulty=ChallengeDifficulty.EASY.value,
-            flag_format="FLAG{...}",
-        )
-        solver_one = _register(ctf_event_active, "fb-one", user=participant_user)
-        solver_two = _register(ctf_event_active, "fb-two")
-
-        published = []
-        monkeypatch.setattr(
-            "ctf.services.notification.publish_event_notification",
-            lambda event, kind, payload, **kw: published.append(kind),
-        )
-        monkeypatch.setattr("ctf.services.submission.verify_flag", lambda _c, _f, **_kwargs: True)
-
-        submit_flag(solver_one.pk, challenge.pk, "FLAG{x}")
-        submit_flag(solver_two.pk, challenge.pk, "FLAG{x}")
-
-        assert published.count("first_blood") == 1

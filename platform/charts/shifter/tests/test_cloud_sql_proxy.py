@@ -90,6 +90,8 @@ def test_native_proxy_and_database_user_reach_all_runtime_consumers(tmp_path):
         ("model-access-control", True),
         ("guacamole-client", True),
         ("migrator", True),
+        # The scheduled prune CronJob reads the application database (ADR-072-R5).
+        ("notification-prune", True),
         ("guacd", False),
         ("runtime-plugin", False),
     ):
@@ -114,6 +116,10 @@ def test_native_proxy_and_database_user_reach_all_runtime_consumers(tmp_path):
                 for rule in policy.get("egress", [])
             )
             assert permitted == (expected and destination == "10.60.0.12")
+    prune = next(item for item in documents if item["kind"] == "CronJob" and item["metadata"]["name"] == "notification-prune")
+    prune_pod = prune["spec"]["jobTemplate"]["spec"]["template"]["spec"]
+    assert prune_pod["initContainers"][0]["restartPolicy"] == "Always"
+    assert "--address=127.0.0.1" in prune_pod["initContainers"][0]["args"]
     for document in documents:
         if document["kind"] != "Deployment":
             continue

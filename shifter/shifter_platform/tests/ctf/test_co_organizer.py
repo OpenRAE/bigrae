@@ -367,20 +367,12 @@ class TestCoOrganizerRealtime:
         )
         assert _can_subscribe(live_session_credential(co_organizer_user), event_topic(co_organized_event.id)) is False
 
-    def test_default_recipients_include_owner_and_co_organizer(
-        self, co_organized_event, organizer_user, co_organizer_user, monkeypatch
+    def test_organizer_recipients_include_owner_and_co_organizer(
+        self, co_organized_event, organizer_user, co_organizer_user
     ):
-        captured: dict[str, object] = {}
+        from ctf.services.event.staff import event_notification_organizers
 
-        def _capture(_type, *, topic, payload, recipient_ids, event_id):
-            captured["recipient_ids"] = recipient_ids
-
-        monkeypatch.setattr("shared.notifications.notifications_enabled", lambda: True)
-        monkeypatch.setattr("shared.notifications.publish_notification", _capture)
-        from ctf.services.notification.realtime import publish_event_notification
-
-        publish_event_notification(co_organized_event, "test", {})
-        recipients = captured["recipient_ids"]
+        recipients = list(event_notification_organizers(co_organized_event).values())
         assert organizer_user.pk in recipients
         assert co_organizer_user.pk in recipients
         # De-duplicated.

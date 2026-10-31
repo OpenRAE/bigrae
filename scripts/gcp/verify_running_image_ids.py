@@ -62,6 +62,16 @@ _RELEASE_DEPLOYMENTS: dict[str, str] = {
 }
 
 
+# Scheduled release workloads (Kubernetes CronJobs). They run only on their
+# schedule, so they are optional in the inventory. While a pod runs, it must run
+# its exact release image like every other release container. A finished pod
+# runs no container, so it is outside the running inventory (ADR-072-R5).
+_SCHEDULED_CONTAINERS: dict[str, dict[str, str]] = {
+    "notification-prune": {"notification-prune": "portal"},
+}
+_FINISHED_POD_PHASES = frozenset({"Succeeded", "Failed"})
+
+
 # Pinned third-party containers that the chart adds to release workloads, such
 # as the native SQL Cloud SQL proxy. A pod may run one only at the exact pinned
 # image identity of the rendered release; release containers stay required (#2698).
@@ -258,11 +268,12 @@ def build_evidence(
     if not re.fullmatch(r"[0-9a-f]{40}", source_sha):
         raise ValueError("source SHA must be 40 lowercase hexadecimal characters")
 
-    containers = {
+    required = {
         **_RELEASE_CONTAINERS,
         **(_BROKER_CONTAINERS if model_broker_enabled else {}),
         **(_POLICY_CONTAINERS if policy_enabled else {}),
     }
+    containers = {**required, **_SCHEDULED_CONTAINERS}
     referenced_images = {image_name for containers in containers.values() for image_name in containers.values()}
     if set(expected) != referenced_images:
         raise ValueError("expected image set does not match the closed release workload map")
@@ -274,6 +285,8 @@ def build_evidence(
     seen_components: set[str] = set()
     for pod in items:
         pod_name, component, spec, status = _pod_identity(pod, containers)
+        if component in _SCHEDULED_CONTAINERS and status.get("phase") in _FINISHED_POD_PHASES:
+            continue
         seen_components.add(component)
         declared = _container_entries(
             pod_name,
@@ -289,7 +302,7 @@ def build_evidence(
         )
         observed.extend(_verify_pod_containers(pod_name, component, declared, statuses, expected, containers, support))
 
-    missing_components = sorted(set(containers) - seen_components)
+    missing_components = sorted(set(required) - seen_components)
     if missing_components:
         raise ValueError(f"running workloads are missing release components: {missing_components}")
 

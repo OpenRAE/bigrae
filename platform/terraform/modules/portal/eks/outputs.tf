@@ -125,3 +125,8 @@ output "service_token_issuer" {
   description = "Account issuer URL for STS outbound web identity tokens (AWS_SERVICE_TOKEN_ISSUER)."
   value       = data.aws_iam_outbound_web_identity_federation.account.issuer_identifier
 }
+
+output "channel_runtime_env" {
+  description = "Django Channels posture for the EKS runtime env, read from the portal stack's SSM parameters (ADR-018, ADR-072). Non-secret: the Redis AUTH token flows only as the REDIS_SECRET_ID reference."
+  value       = local.channel_runtime_env
+}

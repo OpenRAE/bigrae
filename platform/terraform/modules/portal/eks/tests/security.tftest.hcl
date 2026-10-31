@@ -947,3 +947,57 @@ run "rotation_schedules_wait_for_the_logins" {
     error_message = "Without the deploy's go-ahead no rotation schedule exists, because creating one tests the login at once."
   }
 }
+
+run "channels_follow_an_in_memory_portal" {
+  command = plan
+
+  override_data {
+    target = data.aws_ssm_parameter.portal_channel_layer_backend
+    values = { value = "in_memory" }
+  }
+
+  assert {
+    condition     = output.channel_runtime_env == { CHANNEL_LAYER_BACKEND = "in_memory" }
+    error_message = "Without a portal Redis layer the EKS runtime env names only the in-memory posture and no Redis host."
+  }
+}
+
+run "channels_follow_a_redis_portal" {
+  command = apply
+
+  variables {
+    secret_names = ["database", "django", "guacamole-db", "guacamole-json-auth", "redis"]
+  }
+
+  override_data {
+    target = data.aws_ssm_parameter.portal_channel_layer_backend
+    values = { value = "redis" }
+  }
+
+  override_data {
+    target = data.aws_ssm_parameter.portal_redis_endpoint
+    values = { value = "test-portal-redis.example.cache.amazonaws.com" }
+  }
+
+  override_data {
+    target = data.aws_ssm_parameter.portal_redis_tls
+    values = { value = "true" }
+  }
+
+  override_data {
+    target = data.aws_ssm_parameter.portal_redis_ca_mode
+    values = { value = "system" }
+  }
+
+  assert {
+    condition = (
+      output.channel_runtime_env["CHANNEL_LAYER_BACKEND"] == "redis" &&
+      output.channel_runtime_env["REDIS_HOST"] == "test-portal-redis.example.cache.amazonaws.com" &&
+      output.channel_runtime_env["REDIS_PORT"] == "6379" &&
+      output.channel_runtime_env["REDIS_TLS"] == "true" &&
+      output.channel_runtime_env["REDIS_CA_MODE"] == "system" &&
+      output.channel_runtime_env["REDIS_SECRET_ID"] == aws_secretsmanager_secret.platform["redis"].arn
+    )
+    error_message = "A Redis portal gives every EKS pod the shared TLS channel layer and only a secret reference for its AUTH token."
+  }
+}

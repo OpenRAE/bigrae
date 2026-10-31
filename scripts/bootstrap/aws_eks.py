@@ -306,8 +306,14 @@ def _aws_account_id(outputs: Mapping[str, object]) -> str:
 def _runtime_env(config: RootConfig, outputs: Mapping[str, object]) -> dict[str, str]:
     """Build the complete canonical runtime environment for AWS EKS."""
     domain = config.deployment.domain
+    terraform_env = _validated_runtime_env(outputs)
     return {
-        **_validated_runtime_env(outputs),
+        **terraform_env,
+        # Live CTF notifications need a shared channel layer across portal,
+        # scheduler, and worker pods (ADR-072). The AWS runtime env names the
+        # ElastiCache host only when the operator supplies it, so the capability
+        # follows that host.
+        "WEBSOCKET_NOTIFICATIONS_ENABLED": "true" if terraform_env.get("REDIS_HOST", "").strip() else "false",
         "AUDIT_DEPLOYMENT_SCOPE": (
             f"aws:{_aws_account_id(outputs)}:{config.settings['region']}:{config.deployment.profile}"
         ),
@@ -1354,6 +1360,11 @@ _EKS_WORKLOAD_SECRET_SOURCES: dict[str, str] = {
     "cognito": "shifter-{environment}-portal-cognito",
 }
 
+# The portal Redis AUTH token ({password}), copied into the EKS-owned redis secret
+# container only when the runtime env names it (ADR-072). The portal stack creates
+# it only on its AUTH + in-transit encryption path.
+_EKS_REDIS_AUTH_SOURCE = "shifter-{environment}-portal-redis-auth"
+
 
 def _populate_eks_workload_secrets(
     outputs: Mapping[str, object],
@@ -1372,49 +1383,44 @@ def _populate_eks_workload_secrets(
     never lands on argv or in the operator log (run_cmd logs only the command).
     """
     secret_arns = _workload_secret_arns(outputs)
-    for name, source_template in _EKS_WORKLOAD_SECRET_SOURCES.items():
-        target_arn = secret_arns[name]
-        source = source_template.format(environment=environment)
-        fetched = run_cmd(
+    copies = [
+        (source_template.format(environment=environment), secret_arns[name], name)
+        for name, source_template in _EKS_WORKLOAD_SECRET_SOURCES.items()
+    ]
+    redis_secret_id = _validated_runtime_env(outputs).get("REDIS_SECRET_ID", "")
+    if redis_secret_id:
+        if redis_secret_id != _bundle_secret_arns(outputs).get("redis"):
+            raise ValueError("REDIS_SECRET_ID must name the eks-owned redis secret container")
+        copies.append((_EKS_REDIS_AUTH_SOURCE.format(environment=environment), redis_secret_id, "redis"))
+    for source, target_arn, name in copies:
+        _copy_secret(source, target_arn, name=name, region=region, aws_profile=aws_profile)
+
+
+def _copy_secret(source: str, target_arn: str, *, name: str, region: str, aws_profile: str | None) -> None:
+    """Copy one SecretString through a 0600 temp file so it never lands on argv."""
+    payload = _read_secret_string(source, region=region, aws_profile=aws_profile)
+    handle, path = tempfile.mkstemp(suffix=f"-{name}.json")
+    os.close(handle)
+    try:
+        secret_file = Path(path)
+        secret_file.chmod(0o600)
+        secret_file.write_text(payload, encoding="utf-8")
+        run_cmd(
             [
                 "aws",
                 "secretsmanager",
-                "get-secret-value",
+                "put-secret-value",
                 "--secret-id",
-                source,
+                target_arn,
                 "--region",
                 region,
-                "--query",
-                "SecretString",
-                "--output",
-                "text",
+                "--secret-string",
+                f"file://{path}",
             ],
-            capture=True,
             profile=aws_profile,
         )
-        payload = str(fetched.stdout).rstrip("\n")
-        handle, path = tempfile.mkstemp(suffix=f"-{name}.json")
-        os.close(handle)
-        try:
-            secret_file = Path(path)
-            secret_file.chmod(0o600)
-            secret_file.write_text(payload, encoding="utf-8")
-            run_cmd(
-                [
-                    "aws",
-                    "secretsmanager",
-                    "put-secret-value",
-                    "--secret-id",
-                    target_arn,
-                    "--region",
-                    region,
-                    "--secret-string",
-                    f"file://{path}",
-                ],
-                profile=aws_profile,
-            )
-        finally:
-            Path(path).unlink(missing_ok=True)
+    finally:
+        Path(path).unlink(missing_ok=True)
 
 
 def _read_secret_string(secret_id: str, *, region: str, aws_profile: str | None) -> str:

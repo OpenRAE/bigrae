@@ -7,6 +7,10 @@ authorized for the event's viewing participants, staff, and the owning
 organizer. Publishing is best-effort — a bus outage never affects the
 triggering action — and disconnected participants receive pending
 notifications on their next connection (shared-bus replay).
+
+Frames stay in a closed, content-free set (ADR-072-R4): a message reference,
+a ``position_changed`` or ``range_ready`` hint, or a generic ``refresh``.
+Each hint has its own occurrence identity, so distinct hints never collapse.
 """
 
 from __future__ import annotations
@@ -14,8 +18,9 @@ from __future__ import annotations
 import logging
 from collections.abc import Mapping
 from typing import TYPE_CHECKING, Any
-from uuid import UUID
+from uuid import NAMESPACE_URL, UUID, uuid5
 
+from ctf.enums import LiveNotificationKind
 from shared.credentials import CredentialContext
 
 if TYPE_CHECKING:
@@ -25,6 +30,9 @@ logger = logging.getLogger(__name__)
 
 NOTIFICATION_TYPE = "ctf_event"
 TOPIC_PREFIX = "ctf:event"
+
+# Content-free socket hints; the browser reads detail only through authenticated APIs.
+HINT_KINDS = frozenset({LiveNotificationKind.POSITION_CHANGED, LiveNotificationKind.RANGE_READY})
 
 
 def event_topic(event_id: object) -> str:
@@ -65,7 +73,10 @@ def _can_subscribe(credential: CredentialContext, topic: str) -> bool:
 
 def _reference_payload(payload: Mapping[str, Any]) -> dict[str, str]:
     """Never replay retained legacy content through the newly admitted socket."""
-    if payload.get("kind") != "communication":
+    kind = payload.get("kind")
+    if kind in {hint.value for hint in HINT_KINDS}:
+        return {"kind": kind}
+    if kind != "communication":
         return {"kind": "refresh"}
     try:
         return {
@@ -89,51 +100,44 @@ def register_ctf_notifications() -> None:
     )
 
 
-def publish_event_notification(
+def publish_live_hint(
     event: CTFEvent,
-    kind: str,
-    payload: dict[str, Any],
+    kind: LiveNotificationKind,
     *,
-    recipient_ids: list[int] | None = None,
-) -> None:
-    """Publish one event-scoped browser notification, best-effort.
+    recipient_ids: list[int],
+    occurrence: str,
+) -> int:
+    """Publish one content-free hint to ``recipient_ids``, best-effort (CTF-802).
 
-    ``recipient_ids`` narrows delivery (e.g. a single participant's
-    range-ready notice); by default every viewing participant with an
-    account plus the organizer receives it.
+    ``occurrence`` names this hint (for example, a range generation or one
+    reconcile result), so a replay maps to the same row and distinct hints never
+    collapse onto the event's identity. Returns the number of rows published; 0
+    when the event does not select ``kind`` or there is no account recipient.
     """
-    from shared.notifications import notifications_enabled, publish_notification
+    from ctf.services.notification.live import live_kind_enabled
+    from shared.notifications import publish_notification
 
+    kind = LiveNotificationKind(kind)
+    if kind not in HINT_KINDS:
+        raise ValueError("Unsupported live hint")
+    recipients = [int(user_id) for user_id in recipient_ids if user_id is not None]
+    if not recipients or not live_kind_enabled(event, kind):
+        return 0
     try:
-        if not notifications_enabled():
-            return
         # Idempotent re-registration: registration normally happens in
-        # apps.ready, but test isolation (and any future registry reset)
-        # must not silently drop CTF publishes.
+        # apps.ready, but a registry reset must not silently drop the hint.
         register_ctf_notifications()
-        if recipient_ids is None:
-            from ctf.models import CTFParticipant
-            from ctf.services.event.staff import event_notification_organizer_ids
-            from ctf.services.participant import viewing_participant_q
-
-            recipient_ids = list(
-                CTFParticipant.objects.filter(viewing_participant_q(), event=event, user_id__isnull=False)
-                .values_list("user_id", flat=True)
-                .distinct()
-            )
-            # These are delivery candidates. Subscription and every send/replay
-            # independently check the current credential and owning policy.
-            recipient_ids.extend(event_notification_organizer_ids(event))
-            recipient_ids = list(dict.fromkeys(recipient_ids))
-        publish_notification(
+        published = publish_notification(
             NOTIFICATION_TYPE,
             topic=event_topic(event.pk),
-            payload={"kind": kind, "event_name": event.name, **payload},
-            recipient_ids=recipient_ids,
-            event_id=event.pk,
+            payload={"kind": kind.value},
+            recipient_ids=recipients,
+            event_id=uuid5(NAMESPACE_URL, f"shifter:ctf-live-hint:{event.pk}:{kind.value}:{occurrence}"),
         )
     except Exception:
-        logger.exception("Failed to publish %s notification for event %s", kind, event.pk)
+        logger.exception("Failed to publish %s hint for event %s", kind.value, event.pk)
+        return 0
+    return len(published)
 
 
 def publish_communication_wakeup(
@@ -149,8 +153,7 @@ def publish_communication_wakeup(
     ``RecipientReceipt`` committed at admission), never the source of truth. It
     uses the stable per-recipient ``snapshot_id`` as the shared replay identity so
     distinct communications never collapse onto one row and a replayed wake-up maps
-    to the same row (no duplicate visible entries) -- unlike the event-scoped
-    ``publish_event_notification``, which keys on the event UUID. It carries only
+    to the same row (no duplicate visible entries). It carries only
     identifiers, never message subject, body, recipient PII, or secrets.
 
     Returns True when a wake-up row was published, False when the subsystem is
@@ -160,7 +163,7 @@ def publish_communication_wakeup(
 
     if not notifications_enabled() or recipient_user_id is None:
         return False
-    # Idempotent re-registration (mirrors publish_event_notification): a registry
+    # Idempotent re-registration (mirrors publish_live_hint): a registry
     # reset or test isolation must not silently drop the wake-up.
     register_ctf_notifications()
     published = publish_notification(

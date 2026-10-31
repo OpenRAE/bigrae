@@ -22,6 +22,7 @@ from ctf.enums import (
 from shared.field_encryption import EncryptedStringField
 
 from ._base import CTFBaseModel, ImmutableFieldsMixin
+from ._live_notifications import default_live_notifications, validate_live_notifications
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -289,6 +290,12 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         max_length=50,
         default="UTC",
         help_text="IANA timezone for displaying event times in emails (e.g. 'America/New_York')",
+    )
+    live_notifications = models.JSONField(
+        default=default_live_notifications,
+        blank=True,
+        validators=[validate_live_notifications],
+        help_text="Live notification kinds this event publishes; an empty list publishes nothing (CTF-802)",
     )
     spare_range_count = models.PositiveIntegerField(
         default=0,

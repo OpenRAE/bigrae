@@ -79,12 +79,20 @@ def _require_captain(participant: CTFParticipant) -> CTFTeam:
 
 
 def _recompute_team(team_id: UUID | None) -> None:
-    """Refresh a team's materialized score columns after membership changes (#850)."""
+    """Refresh a team's materialized score columns after membership changes (#850).
+
+    A membership change can move team board positions (CTF-802).
+    """
     if team_id is None:
         return
+    from ctf.models import CTFTeam
+    from ctf.services.notification.live import request_position_reconcile
     from ctf.services.scoring import recompute_team_score
 
     recompute_team_score(team_id)
+    event_id = CTFTeam.objects.filter(pk=team_id).values_list("event_id", flat=True).first()
+    if event_id is not None:
+        request_position_reconcile(event_id)
 
 
 def create_team(participant_id: UUID, name: str) -> CTFTeam:

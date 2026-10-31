@@ -294,6 +294,21 @@ workers:
         cpu: 500m
         memory: 512Mi
         ephemeral-storage: 256Mi
+  # Expired shared notification rows are pruned by a CronJob (ADR-072-R5).
+  # Nothing runs between runs; each run deletes at most batchSize * maxBatches.
+  notificationPrune:
+    schedule: "17 * * * *"
+    batchSize: 1000
+    maxBatches: 100
+    resources:
+      requests:
+        cpu: 50m
+        memory: 256Mi
+        ephemeral-storage: 64Mi
+      limits:
+        cpu: 500m
+        memory: 512Mi
+        ephemeral-storage: 128Mi
   operationResultApplier:
     replicas: 1
     resources:

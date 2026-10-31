@@ -483,6 +483,29 @@ def _handle_release_communication(
     return run_release_communication_task(task)
 
 
+def _handle_live_notice(
+    task: CTFScheduledTask,
+    shutdown_check: ShutdownCheck | None = None,
+    heartbeat: Heartbeat | None = None,
+) -> None:
+    """Stage the in-app notice a challenge release or first blood declared (CTF-802)."""
+    from ctf.services.notification.live import run_live_notice_task
+
+    run_live_notice_task(task)
+
+
+def _handle_reconcile_positions(
+    task: CTFScheduledTask,
+    shutdown_check: ShutdownCheck | None = None,
+    heartbeat: Heartbeat | None = None,
+) -> None:
+    """Report scoreboard position changes for the event (CTF-802)."""
+    from ctf.services.notification.live import run_position_reconcile_task
+
+    moved = run_position_reconcile_task(task)
+    logger.info("RECONCILE_POSITIONS for event %s: moved=%d", task.event_id, moved)
+
+
 TASK_HANDLERS: dict[str, Any] = {
     ScheduledTaskType.SPIN_UP_RANGES.value: _handle_spin_up_ranges,
     ScheduledTaskType.CLEANUP_RANGES.value: _handle_cleanup_ranges,
@@ -493,4 +516,6 @@ TASK_HANDLERS: dict[str, Any] = {
     ScheduledTaskType.SEND_NOTIFICATION.value: _handle_send_notification,
     ScheduledTaskType.RELEASE_CHALLENGE.value: _handle_release_challenge,
     ScheduledTaskType.RELEASE_COMMUNICATION.value: _handle_release_communication,
+    ScheduledTaskType.LIVE_NOTICE.value: _handle_live_notice,
+    ScheduledTaskType.RECONCILE_POSITIONS.value: _handle_reconcile_positions,
 }

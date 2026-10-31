@@ -59,6 +59,10 @@ _EXPLICIT_BINDINGS = (
     # Read via `_env_bool(...)`; deployment opt-in for participant OpenVPN
     # access (#2030, #2480, ADR-039-R10).
     EnvBinding(name="RANGE_OPENVPN_ENABLED", default="False", source_file=_SETTINGS_FILE),
+    # Shared WebSocket notification capability and bounds (#941, ADR-072).
+    EnvBinding(name="WEBSOCKET_NOTIFICATIONS_ENABLED", default="False", source_file=_SETTINGS_FILE),
+    EnvBinding(name="WEBSOCKET_NOTIFICATION_MAX_REPLAY", default="100", source_file=_SETTINGS_FILE),
+    EnvBinding(name="WEBSOCKET_NOTIFICATION_RETENTION_DAYS", default="7", source_file=_SETTINGS_FILE),
     EnvBinding(name="EMAIL_BACKEND", default=None, source_file="config/_email.py"),
     EnvBinding(name="ENVIRONMENT", default=None, source_file=_SETTINGS_FILE),
     EnvBinding(name="FIELD_ENCRYPTION_KEY", default=None, source_file=_SETTINGS_FILE),
