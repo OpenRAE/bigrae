@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from typing import Any
 from uuid import NAMESPACE_URL, UUID, uuid5
 
 from django.db import transaction
@@ -67,7 +68,7 @@ def stage_notice(
 
 
 def _declare(
-    event_id: UUID, identity: UUID, audience: dict[str, object], *, kind: str, subject: str, body: str
+    event_id: UUID, identity: UUID, audience: dict[str, Any], *, kind: str, subject: str, body: str
 ) -> dict[str, str]:
     """Declare one notice campaign and its scheduled release in the caller's transaction.
 
