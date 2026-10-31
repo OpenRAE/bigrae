@@ -51,7 +51,7 @@ Application paths are relative to `shifter/shifter_platform/`.
 | `notification-prune-cronjob.yaml` | Runs `prune_notifications` on a schedule. | Kubernetes CronJob |
 | `scripts/gcp/verify_running_image_ids.py` | Verifies a running prune pod at its exact release image. Ignores a finished prune pod. | Post-rollout image evidence |
 | `platform/terraform/modules/portal/eks/portal_channels.tf` | Reads the portal Redis posture from SSM Parameter Store. | `channel_runtime_env` output, merged into the EKS root `runtime_env` |
-| `scripts/bootstrap/aws_eks.py` | Copies the portal Redis AUTH token into the EKS-owned `redis` secret container. Sets the AWS capability flag. | `_populate_eks_workload_secrets()`, `render_aws_values()` |
+| `scripts/bootstrap/aws_eks.py` | Copies the portal Redis AUTH token into the EKS-owned `redis` secret container over stdin. Sets the AWS capability flag. | `_populate_eks_workload_secrets()`, `render_aws_values()` |
 
 ### Enablement
 
@@ -152,8 +152,9 @@ when it is `redis`, the endpoint, the TLS flag, and the CA mode (ADR-044-R6). It
 emits `CHANNEL_LAYER_BACKEND`, `REDIS_HOST`, `REDIS_PORT`, `REDIS_TLS`,
 `REDIS_CA_MODE`, and `REDIS_SECRET_ID` into the runtime env. `REDIS_SECRET_ID`
 names the EKS-owned `redis` secret container. Before Helm, the deploy tool copies
-the portal AUTH token into that container through a 0600 temporary file. The
-deploy tool refuses a `REDIS_SECRET_ID` that names any other secret.
+the portal AUTH token into that container over stdin, so the token never lands
+on argv or on disk. The deploy tool copies the other workload secrets the same
+way. The deploy tool refuses a `REDIS_SECRET_ID` that names any other secret.
 `entrypoint.sh` hydrates the token into `REDIS_PASSWORD`. `scripts/bootstrap/aws_eks.py`
 emits `WEBSOCKET_NOTIFICATIONS_ENABLED=true` only when the runtime env names
 `REDIS_HOST`. The runtime inventories, the published bundle contract, and the
@@ -180,7 +181,7 @@ finished pod of any other workload stays in the check.
 | Topic access | A user subscribes to another event | Existing `_can_subscribe` and `authorize_event_projection` on subscription, send, and replay | Existing authorization tests |
 | Database and bus capacity | Fan-out cost for events that do not use the feature | Per-event kinds; zero work for an empty list; coalesced reconcile | Tests prove no task and no row for an empty list |
 | Database storage | Unbounded growth of notification rows | Hourly bounded prune; retention bound | Prune command tests; chart render |
-| Redis AUTH token | Disclosure through argv, logs, ConfigMap, or Terraform outputs | Secret value flows only Secrets Manager to temp file to Secrets Manager; the runtime env carries only the ARN; the copy target must be the EKS-owned container | Deploy tool tests inspect argv and the target; module tests check the output |
+| Redis AUTH token and workload secrets | Disclosure through argv, disk, logs, ConfigMap, or Terraform outputs | Secret values flow from Secrets Manager to Secrets Manager over stdin only; the runtime env carries only the ARN; the copy target must be the EKS-owned container | Deploy tool tests inspect argv, stdin, and the target and refuse any temp file; module tests check the output |
 | Cross-pod delivery | A publish from one pod does not reach a socket on another | Shared Redis channel layer on GCP and on AWS when the portal runs Redis; capability off otherwise | Renderer tests; module tests for both postures |
 | Organizer input | An unknown kind or a large list | Closed choice list, unique values, serializer and model validation | API tests |
 | Socket client | A reconnect storm | Bounded exponential backoff with jitter; no reconnect on authorization close codes | SPA tests |

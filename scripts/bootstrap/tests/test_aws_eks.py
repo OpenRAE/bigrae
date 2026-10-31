@@ -1105,30 +1105,43 @@ def test_validated_runtime_env_allows_empty_optional_but_rejects_empty_required(
         aws_eks._validated_runtime_env({"runtime_env": {"value": bad}})
 
 
-def test_populate_eks_workload_secrets_copies_sources_via_file(monkeypatch):
-    # Copies the portal DB/app secrets into the empty eks-owned workload secrets,
-    # moving values through file:// so the raw secret never lands on argv.
-    calls: list[list[str]] = []
+def _capture_secret_copies(monkeypatch):
+    """Record secret reads (argv) and secret writes (argv plus stdin) without a live AWS call."""
+    reads: list[list[str]] = []
+    writes: list[tuple[list[str], str]] = []
 
     def runner(cmd, **kwargs):
-        calls.append(cmd)
-        if "get-secret-value" in cmd:
-            return SimpleNamespace(stdout='{"password":"supersecretvalue12345"}\n')
-        return SimpleNamespace(stdout="")
+        reads.append(cmd)
+        return SimpleNamespace(stdout='{"password":"supersecretvalue12345"}\n')
+
+    def stdin_runner(cmd, *, secret_stdin, **kwargs):
+        writes.append((cmd, secret_stdin))
+        return 0
+
+    def no_disk(*args, **kwargs):
+        raise AssertionError("a workload secret must never be written to disk")
 
     monkeypatch.setattr(aws_eks, "run_cmd", runner)
+    monkeypatch.setattr(aws_eks, "run_cmd_secret_stdin", stdin_runner)
+    monkeypatch.setattr(aws_eks.tempfile, "mkstemp", no_disk)
+    return reads, writes
+
+
+def test_populate_eks_workload_secrets_copies_sources_over_stdin(monkeypatch):
+    # Copies the portal DB/app/OIDC secrets into the empty eks-owned workload secrets.
+    # The value travels over stdin only: never argv, never a file on disk.
+    reads, writes = _capture_secret_copies(monkeypatch)
     aws_eks._populate_eks_workload_secrets(
         _terraform_outputs(), environment="dev", region="us-east-2", aws_profile=None
     )
 
-    gets = [c for c in calls if "get-secret-value" in c]
-    puts = [c for c in calls if "put-secret-value" in c]
-    assert any("shifter-dev-portal-db-credentials" in c for c in gets)
-    assert any("shifter-dev-portal-app" in c for c in gets)
-    assert any("shifter-dev-portal-cognito" in c for c in gets)
-    assert len(puts) == 3
-    for cmd in puts:
-        assert any(isinstance(a, str) and a.startswith("file://") for a in cmd)
+    assert any("shifter-dev-portal-db-credentials" in c for c in reads)
+    assert any("shifter-dev-portal-app" in c for c in reads)
+    assert any("shifter-dev-portal-cognito" in c for c in reads)
+    assert len(writes) == 3
+    for cmd, stdin in writes:
+        assert cmd[-2:] == ["--secret-string", "file:///dev/stdin"]
+        assert stdin == '{"password":"supersecretvalue12345"}'
         assert not any("supersecretvalue12345" in a for a in cmd)
 
 
@@ -1287,29 +1300,25 @@ def test_live_notification_capability_follows_the_shared_redis_host():
 
 def test_populate_eks_workload_secrets_copies_the_redis_auth_token_only_for_a_redis_portal(monkeypatch):
     """The EKS redis container gets the portal AUTH token only when the runtime env names it (ADR-072)."""
-    calls: list[list[str]] = []
-
-    def runner(cmd, **kwargs):
-        calls.append(cmd)
-        if "get-secret-value" in cmd:
-            return SimpleNamespace(stdout='{"password":"supersecretvalue12345"}\n')
-        return SimpleNamespace(stdout="")
-
-    monkeypatch.setattr(aws_eks, "run_cmd", runner)
+    reads, writes = _capture_secret_copies(monkeypatch)
     aws_eks._populate_eks_workload_secrets(
         _terraform_outputs(), environment="dev", region="us-east-2", aws_profile=None
     )
-    assert not any("shifter-dev-portal-redis-auth" in c for c in calls)
+    assert not any("shifter-dev-portal-redis-auth" in c for c in reads)
 
-    calls.clear()
+    reads.clear()
+    writes.clear()
     outputs = _terraform_outputs()
     redis_arn = outputs["bundle_outputs"]["value"]["secret_arns"]["redis"]
     outputs["runtime_env"]["value"]["REDIS_SECRET_ID"] = redis_arn
-    aws_eks._populate_eks_workload_secrets(outputs, environment="dev", region="us-east-2", aws_profile=None)
-    assert any("get-secret-value" in c and "shifter-dev-portal-redis-auth" in c for c in calls)
-    redis_puts = [c for c in calls if "put-secret-value" in c and redis_arn in c]
-    assert len(redis_puts) == 1
-    assert not any("supersecretvalue12345" in a for a in redis_puts[0])
+    aws_eks._populate_eks_workload_secrets(outputs, environment="dev", region="us-east-2", aws_profile="ops")
+    assert any("shifter-dev-portal-redis-auth" in c for c in reads)
+    redis_writes = [(cmd, stdin) for cmd, stdin in writes if redis_arn in cmd]
+    assert len(redis_writes) == 1
+    cmd, stdin = redis_writes[0]
+    assert cmd[:3] == ["aws", "--profile", "ops"]
+    assert not any("supersecretvalue12345" in a for a in cmd)
+    assert "supersecretvalue12345" in stdin
 
     outputs["runtime_env"]["value"]["REDIS_SECRET_ID"] = "arn:aws:secretsmanager:us-east-2:123456789012:secret:other"
     with pytest.raises(ValueError, match="REDIS_SECRET_ID"):

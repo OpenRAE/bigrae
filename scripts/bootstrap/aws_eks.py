@@ -1379,8 +1379,8 @@ def _populate_eks_workload_secrets(
     as empty containers that only the portal IRSA role may read; the real values
     live in the portal RDS/app secrets. Copy them in before Helm so the portal and
     worker entrypoints can hydrate DB_SECRET_ID/APP_SECRET_ID. Each value moves
-    through a 0600 temp file (put-secret-value --secret-string file://...) so it
-    never lands on argv or in the operator log (run_cmd logs only the command).
+    over stdin (put-secret-value --secret-string file:///dev/stdin), so it never
+    lands on argv, on disk, or in the operator log.
     """
     secret_arns = _workload_secret_arns(outputs)
     copies = [
@@ -1397,30 +1397,26 @@ def _populate_eks_workload_secrets(
 
 
 def _copy_secret(source: str, target_arn: str, *, name: str, region: str, aws_profile: str | None) -> None:
-    """Copy one SecretString through a 0600 temp file so it never lands on argv."""
+    """Copy one SecretString over stdin, so it never lands on argv or on disk."""
     payload = _read_secret_string(source, region=region, aws_profile=aws_profile)
-    handle, path = tempfile.mkstemp(suffix=f"-{name}.json")
-    os.close(handle)
-    try:
-        secret_file = Path(path)
-        secret_file.chmod(0o600)
-        secret_file.write_text(payload, encoding="utf-8")
-        run_cmd(
-            [
-                "aws",
-                "secretsmanager",
-                "put-secret-value",
-                "--secret-id",
-                target_arn,
-                "--region",
-                region,
-                "--secret-string",
-                f"file://{path}",
-            ],
-            profile=aws_profile,
-        )
-    finally:
-        Path(path).unlink(missing_ok=True)
+    profile = ["--profile", aws_profile] if aws_profile else []
+    return_code = run_cmd_secret_stdin(
+        [
+            "aws",
+            *profile,
+            "secretsmanager",
+            "put-secret-value",
+            "--secret-id",
+            target_arn,
+            "--region",
+            region,
+            "--secret-string",
+            "file:///dev/stdin",
+        ],
+        secret_stdin=payload,
+    )
+    if return_code != 0:
+        raise RuntimeError(f"failed to copy the {name} workload secret")
 
 
 def _read_secret_string(secret_id: str, *, region: str, aws_profile: str | None) -> str:
