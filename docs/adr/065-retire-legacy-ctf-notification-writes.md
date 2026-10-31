@@ -59,6 +59,21 @@ authoring rate budget, as organizer alerts do. Seat creation and range status
 bound their number. Release-time admission backpressure still applies. The
 [design](../architecture/ctf-participant-notices-design-664.md) gives the details.
 
+Revision R6, 2026-10-31, issue #662. The maintainer chose a durable
+cancellation notice on this ledger. The cancel transaction declares one
+`cancellation` notice for the event, after task cancellation and the
+communication fence. A scheduled release task releases it and retries on
+backpressure. This notice is the only exception to the ADR-051-R6
+cancelled-event release and delivery fence. The exception needs the
+`system_milestone` origin, the immutable `cancellation` kind and exactly one
+cancelled target event. Only the system campaign factory can set that kind, and
+only for a cancelled event. Campaign and intent cancellation, recipient
+revocation, tenancy and retention still apply. A notice failure does not block
+cancellation or range cleanup. The
+[design](../architecture/ctf-cancellation-notice-design-662.md) and the
+[preflight](../design/ctf-event-cancellation-preflight-706.md) give the
+details.
+
 The API compatibility checker supports exact absent write-method retirements so
 retaining GET on the same URL does not exempt it from compatibility checking.
 Reintroducing any retired method fails the checker. All unrelated differences

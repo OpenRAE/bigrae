@@ -87,8 +87,9 @@ read the same value in the web and worker processes.
 The adapter reads only the coordinate of its own snapshot. The campaign
 `notice_kind` selects one trusted pair under `ctf/email/notice/`. The kinds are
 `announcement`, `reminder`, `cleanup`, `results`, `range_ready`,
-`range_failure`, `registration`, and `organizer_alert`. Organizer campaigns are
-always `announcement`. Only lifecycle notices set another kind.
+`range_failure`, `registration`, `organizer_alert`, and `cancellation`.
+Organizer campaigns are always `announcement`. Only lifecycle notices set
+another kind.
 
 The pair renders the pinned subject and Markdown source with escaped scalar
 values. These values are the participant name and the event name, dates, and
@@ -286,6 +287,18 @@ content and preventing later cutover passes from importing it again.
 
 Participant lifecycle notices use stable server-derived campaign identities and
 remain visibly staged when email is unavailable.
+
+`cancel_event` declares the `cancellation` notice in its transaction, after
+event task cancellation and `on_event_cancelled`. `ledger.declare_notice`
+commits the campaign, the scheduled intent and its `RELEASE_COMMUNICATION` task
+with the cancellation. A refused declaration is logged and does not block
+cancellation. `is_event_cancellation_notice` is the only exception to the
+cancelled-event fence in `_assert_release_allowed` and `_fence_reason`
+(ADR-065-R6). The exception needs the `system_milestone` origin, the
+`cancellation` kind and one target event. `create_system_event_campaign` sets
+that kind only for a cancelled event. The
+[cancellation notice design (#662)](../../architecture/ctf-cancellation-notice-design-662.md)
+records the architecture.
 
 `notification.ledger.declare_participant_notice` declares registration,
 range-ready and range-failure notices (ADR-065-R5,
