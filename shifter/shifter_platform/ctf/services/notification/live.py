@@ -17,7 +17,8 @@ lock and publishes hints after the commit.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from collections.abc import Iterable, Mapping
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from django.db import transaction
@@ -26,7 +27,7 @@ from django.utils import timezone
 from ctf.enums import EventStatus, LiveNotificationKind, ScheduledTaskStatus, ScheduledTaskType
 
 if TYPE_CHECKING:
-    from ctf.models import CTFChallenge, CTFEvent, CTFScheduledTask
+    from ctf.models import CTFChallenge, CTFEvent, CTFParticipant, CTFScheduledTask, CTFTeam
 
 logger = logging.getLogger(__name__)
 
@@ -61,8 +62,8 @@ def event_selects(event_id: UUID, kind: LiveNotificationKind) -> bool:
     """Return True when the event row lists ``kind``; reads one column only."""
     from ctf.models import CTFEvent
 
-    kinds = CTFEvent.objects.filter(pk=event_id).values_list("live_notifications", flat=True).first()
-    return bool(kinds) and kind.value in kinds
+    kinds = CTFEvent.objects.filter(pk=event_id).values_list("live_notifications", flat=True).first() or []
+    return kind.value in kinds
 
 
 def _board_open(event: CTFEvent) -> bool:
@@ -136,7 +137,7 @@ def run_live_notice_task(task: CTFScheduledTask) -> None:
     from ctf.services.notification.ledger import stage_notice
 
     metadata = task.metadata or {}
-    notice = LiveNotificationKind(metadata.get("notice"))
+    notice = LiveNotificationKind(str(metadata.get("notice", "")))
     if notice not in _NOTICE_TEXT:
         raise ValueError("Unsupported live notice")
     challenge_id = UUID(str(metadata.get("challenge_id")))
@@ -202,11 +203,16 @@ def _store_positions(event: CTFEvent) -> list[tuple[UUID, int]]:
     from ctf.services.scoring import get_scoreboard, get_team_scoreboard
 
     if event.team_mode:
-        model, key, rows = CTFTeam, "team_id", get_team_scoreboard(event.pk)
-    else:
-        model, key, rows = CTFParticipant, "participant_id", get_scoreboard(event.pk)
+        return _store_board_positions(CTFTeam, "team_id", get_team_scoreboard(event.pk), event)
+    return _store_board_positions(CTFParticipant, "participant_id", get_scoreboard(event.pk), event)
+
+
+def _store_board_positions[Entry: (CTFParticipant, CTFTeam)](
+    model: type[Entry], key: str, rows: Iterable[Mapping[str, Any]], event: CTFEvent
+) -> list[tuple[UUID, int]]:
+    """Diff one board against its model's notified positions; checked per entry model."""
     stored = dict(model.objects.filter(event=event).values_list("pk", "notified_position"))
-    changed = []
+    changed: list[Entry] = []
     moved: list[tuple[UUID, int]] = []
     ranked: set[UUID] = set()
     for row in rows:
