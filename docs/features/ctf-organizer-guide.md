@@ -43,6 +43,7 @@ From **CTF Admin → Events → Create**, set the core parameters:
 | Range spin-up minutes | Lead time to provision ranges before start |
 | Submission cooldown / attempt limit | Anti-brute-force throttles |
 | Scoreboard visibility / freeze | Whether and when standings are shown |
+| Live notifications | Which live notices participants get; see [Notifications](#6-notifications) |
 | Auto cleanup / cleanup delay | Whether ranges are torn down after the event |
 | Publish public registration page | Opt-in public event details and request form; off by default |
 
@@ -242,6 +243,21 @@ The event sends reminder emails before the start, at the hour offsets in
 reminders off. A change replaces the reminders that are not sent yet. Each email shows the start time in the participant's time zone.
 When a participant has not set a time zone, the email uses the event time zone.
 Reminder emails need a configured mail provider.
+
+**Live notifications** in the event form select the live notices that
+participants get while the event runs:
+
+| Kind | What the participant gets |
+|------|---------------------------|
+| Live message alerts | A toast when a new message arrives in the inbox |
+| New challenge released | An inbox notice when a hidden challenge becomes visible |
+| First blood | An inbox notice when a challenge has its first solve |
+| Scoreboard position changes | A toast when the participant's scoreboard position changes |
+| Range ready | A toast when the participant's range is ready |
+
+A new event selects all kinds. Clear all kinds to turn live notifications off
+for the event. Notices do not name a challenge or a participant. First blood and
+position notices stop while the scoreboard is hidden or frozen.
 
 ## 7. During and After the Event
 

@@ -12,6 +12,8 @@ from typing import TYPE_CHECKING, Any
 from drf_spectacular.utils import extend_schema_field
 from rest_framework import serializers
 
+from ctf.enums import LiveNotificationKind
+
 # Imported at runtime (not TYPE_CHECKING): drf-spectacular calls typing.get_type_hints
 # on the SerializerMethodField methods, which evaluates the ``event: CTFEvent``
 # annotations, so the name must resolve at runtime.
@@ -170,6 +172,7 @@ class EventDetailSerializer(_EventAccessProjectionMixin, serializers.Serializer)
     scoreboard_freeze_at = serializers.DateTimeField(read_only=True, allow_null=True)
     rules = serializers.CharField(read_only=True, allow_blank=True)
     reminder_hours = serializers.ListField(child=serializers.IntegerField(), read_only=True)
+    live_notifications = serializers.ListField(child=serializers.CharField(), read_only=True)
     event_timezone = serializers.CharField(read_only=True, allow_blank=True)
     capacity_hints = serializers.DictField(read_only=True)
     model_demand = serializers.ListField(child=serializers.DictField(), read_only=True)
@@ -272,6 +275,11 @@ class EventWriteSerializer(ClosedSerializer):
     reminder_hours = serializers.ListField(
         child=serializers.IntegerField(min_value=1, max_value=720), required=False, max_length=10
     )
+    live_notifications = serializers.ListField(
+        child=serializers.ChoiceField(choices=LiveNotificationKind.choices()),
+        required=False,
+        max_length=len(LiveNotificationKind),
+    )
     event_timezone = serializers.CharField(required=False, allow_blank=True, max_length=64)
     capacity_hints = serializers.DictField(required=False)
     model_demand = serializers.ListField(child=serializers.DictField(), required=False, max_length=64)
@@ -289,6 +297,12 @@ class EventWriteSerializer(ClosedSerializer):
         if sum(key in attrs for key in ("account", "organization", "workspace")) > 1:
             raise serializers.ValidationError("Select exactly one event placement.")
         return attrs
+
+    def validate_live_notifications(self, value: list[str]) -> list[str]:
+        """Each live notification kind appears at most once (CTF-802)."""
+        if len(set(value)) != len(value):
+            raise serializers.ValidationError("Select each live notification kind once.")
+        return value
 
     def validate_model_demand(self, value: list[dict[str, Any]]) -> list[dict[str, Any]]:
         """Validate each typed model-demand entry (PLAT-202, CTF-908).

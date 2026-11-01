@@ -142,6 +142,8 @@ AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
         "MODEL_ENROLLMENT_CONTROL_URL",
         "MODEL_ENROLLMENT_CA_PEM_B64",
         "SITE_URL",
+        # Follows the presence of a shared Redis channel layer (ADR-072).
+        "WEBSOCKET_NOTIFICATIONS_ENABLED",
     }
 )
 
@@ -215,6 +217,22 @@ AWS_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     }
 )
 
+# Django Channels posture that the EKS root reads from the portal stack's SSM
+# parameters (modules/portal/eks/portal_channels.tf; ADR-018, ADR-044-R6, ADR-072).
+# CHANNEL_LAYER_BACKEND is always present; the REDIS_* keys are present only when
+# the portal stack runs Redis. REDIS_SECRET_ID is a reference: entrypoint.sh
+# hydrates the AUTH token from it, so no secret value enters the ConfigMap.
+AWS_CHANNEL_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
+    {
+        "CHANNEL_LAYER_BACKEND",
+        "REDIS_CA_MODE",
+        "REDIS_HOST",
+        "REDIS_PORT",
+        "REDIS_SECRET_ID",
+        "REDIS_TLS",
+    }
+)
+
 # Forwarded keys whose value is hydrated from a secret store after process startup
 # (the launcher injects them as secret references). The Terraform provisioner_env
 # excludes them by design, so they never enter the ConfigMap-bound runtime env and
@@ -233,5 +251,6 @@ AWS_PROVISIONER_HYDRATED_SECRET_KEYS: frozenset[str] = frozenset({"DC_DOMAIN_PAS
 AWS_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = (
     AWS_EKS_REQUIRED_RUNTIME_ENV_KEYS
     | AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS
+    | AWS_CHANNEL_RUNTIME_ENV_KEYS
     | (AWS_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS - AWS_PROVISIONER_HYDRATED_SECRET_KEYS)
 )

@@ -63,6 +63,7 @@ _EVENT_MUTABLE_FIELDS = frozenset(
         "scoring_mode",
         "rules",
         "reminder_hours",
+        "live_notifications",
         "event_timezone",
         "capacity_hints",
         "model_demand",

@@ -210,7 +210,17 @@ subscription, replay and each delivery. It projects retained payloads
 through the current registration. CTF wake-ups contain references only; legacy
 bodies become a refresh hint. Revocation at final send retains the undelivered
 receipt. The SPA shell refetches the inbox on a `communication` hint and
-refetches CTF reads on a `refresh` hint. It drops other frames. The
+refetches CTF reads on a `refresh` hint. It shows a fixed-text toast for a bare
+`position_changed` or `range_ready` hint. It drops other frames.
+
+Each event selects its live notification kinds in `CTFEvent.live_notifications`
+(ADR-072). The SPA opens no notification socket when the effective list is
+empty. The in-app adapter accepts a command without a wake-up when the event
+does not select `messages`; the inbox entry stays available. Challenge release
+and first blood are fixed-text in-app ledger notices from `LIVE_NOTICE` scheduler
+tasks. Position changes come from the `RECONCILE_POSITIONS` task. The
+[live notifications design](../../architecture/ctf-live-notifications-design-665.md)
+records the data flows and controls. The
 communication Markdown profile on the canonical renderer drops media and renders
 non-allowlisted links as plain text. An unknown content profile shows no body
 and offers no read or acknowledge action.

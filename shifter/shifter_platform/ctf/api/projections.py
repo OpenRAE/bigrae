@@ -32,6 +32,8 @@ def participant_current_event(participant: CTFParticipant) -> dict[str, Any]:
     organizer-only configuration (range_config, reminder schedule, spare counts,
     email templates) is included.
     """
+    from ctf.services.notification.live import effective_live_kinds
+
     event = participant.event
     return {
         "event": {
@@ -51,6 +53,7 @@ def participant_current_event(participant: CTFParticipant) -> dict[str, Any]:
             "rules": event.rules,
             "logo_url": event.logo_url,
             "theme_color": event.theme_color,
+            "live_notifications": effective_live_kinds(event),
         },
         "participant": _participant_self(participant),
     }

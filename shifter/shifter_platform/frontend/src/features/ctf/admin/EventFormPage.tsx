@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { ctfAdminEventPath, ctfAdminEventsPath } from "../routes";
 import { CheckboxField, FieldError, TextAreaField, TextField } from "./form-fields";
-import { NO_SCENARIO, renderEditLoadState, useEventFormState } from "./eventFormState";
+import { LIVE_NOTIFICATION_OPTIONS, NO_SCENARIO, renderEditLoadState, useEventFormState } from "./eventFormState";
 
 export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
   const form = useEventFormState(mode);
@@ -294,6 +294,30 @@ export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
                 </Select>
                 <FieldError id="e-ratingvis-e" error={firstError("rating_visibility")} />
               </div>
+            </fieldset>
+
+            <fieldset className="flex flex-col gap-3">
+              <legend className="mb-1 text-sm font-medium">Live notifications</legend>
+              <p className="text-sm text-muted-foreground">
+                Participants get these notices while the event runs. Clear all of them to turn live notifications off.
+              </p>
+              {LIVE_NOTIFICATION_OPTIONS.map((option) => (
+                <CheckboxField
+                  key={option.kind}
+                  id={`e-live-${option.kind}`}
+                  label={option.label}
+                  checked={state.live_notifications.includes(option.kind)}
+                  onChange={(checked) =>
+                    set(
+                      "live_notifications",
+                      LIVE_NOTIFICATION_OPTIONS.map((o) => o.kind).filter((kind) =>
+                        kind === option.kind ? checked : state.live_notifications.includes(kind),
+                      ),
+                    )
+                  }
+                />
+              ))}
+              <FieldError id="e-live-e" error={firstError("live_notifications")} />
             </fieldset>
           </CardContent>
           <CardFooter className="justify-end gap-2">

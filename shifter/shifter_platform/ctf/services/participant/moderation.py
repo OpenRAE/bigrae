@@ -43,11 +43,17 @@ def _locked_participant(participant_id: UUID) -> CTFParticipant:
 
 
 def _recompute_team(participant: CTFParticipant) -> None:
-    """Refresh the materialized team score after an eligibility-affecting change."""
+    """Refresh the materialized team score after an eligibility-affecting change.
+
+    Eligibility changes who ranks, so board positions can move (CTF-802).
+    """
+    from ctf.services.notification.live import request_position_reconcile
+
     if participant.team_id is not None:
         from ctf.services.scoring import recompute_team_score
 
         recompute_team_score(participant.team_id)
+    request_position_reconcile(participant.event_id)
 
 
 def _restored_status() -> str:

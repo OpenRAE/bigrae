@@ -27634,6 +27634,13 @@
             },
             "readOnly": true
           },
+          "live_notifications": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "readOnly": true
+          },
           "event_timezone": {
             "type": "string",
             "readOnly": true
@@ -27720,6 +27727,7 @@
           "event_start",
           "event_timezone",
           "id",
+          "live_notifications",
           "logo_url",
           "managed_content",
           "max_participants",
@@ -28190,6 +28198,13 @@
               "minimum": 1
             },
             "maxItems": 10
+          },
+          "live_notifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveNotificationsEnum"
+            },
+            "maxItems": 5
           },
           "event_timezone": {
             "type": "string",
@@ -29003,6 +29018,17 @@
         "required": [
           "error"
         ]
+      },
+      "LiveNotificationsEnum": {
+        "enum": [
+          "messages",
+          "challenge_released",
+          "first_blood",
+          "position_changed",
+          "range_ready"
+        ],
+        "type": "string",
+        "description": "* `messages` - Messages\n* `challenge_released` - Challenge Released\n* `first_blood` - First Blood\n* `position_changed` - Position Changed\n* `range_ready` - Range Ready"
       },
       "ManagedContentSummary": {
         "type": "object",
@@ -30887,6 +30913,14 @@
           "theme_color": {
             "type": "string",
             "readOnly": true
+          },
+          "live_notifications": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "readOnly": true,
+            "description": "Live notification kinds the event publishes now; empty means no notification socket (CTF-802)."
           }
         },
         "required": [
@@ -30895,6 +30929,7 @@
           "event_end",
           "event_start",
           "id",
+          "live_notifications",
           "logo_url",
           "name",
           "rating_visibility",

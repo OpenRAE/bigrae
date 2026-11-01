@@ -72,6 +72,9 @@ def grant_award(
 
         recompute_participant_score(participant.id)
         recompute_team_score(participant.team_id)
+        from ctf.services.notification.live import request_position_reconcile
+
+        request_position_reconcile(event.pk)
 
     logger.info(
         "Award granted: %+d points to participant %s in event %s by user_id=%s — %s",
@@ -109,6 +112,9 @@ def revoke_award(award_id: UUID) -> None:
 
         recompute_participant_score(participant_id)
         recompute_team_score(team_id)
+        from ctf.services.notification.live import request_position_reconcile
+
+        request_position_reconcile(award.event_id)
 
     logger.info("Award revoked: %s", safe_log_value(award_id))
 

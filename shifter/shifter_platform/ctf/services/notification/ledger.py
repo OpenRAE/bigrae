@@ -29,12 +29,21 @@ def _notice_identity(event_id: UUID, kind: str, occurrence: str, participant_id:
 
 
 def stage_notice(
-    event_id: UUID, *, kind: str, subject: str, body: str, occurrence: str, participant_id: UUID | None = None
+    event_id: UUID,
+    *,
+    kind: str,
+    subject: str,
+    body: str,
+    occurrence: str,
+    participant_id: UUID | None = None,
+    channels: tuple[str, ...] | list[str] = ("email",),
 ) -> dict[str, str]:
     """One stable campaign per trusted occurrence; unavailable email is never dispatched.
 
     The original event owner remains the live author, with the same workspace and
     per-event checks as ordinary authoring. No missing actor becomes system trust.
+    ``channels`` selects the delivery channels; live notices select ``in_app``
+    only (CTF-802).
     """
     with transaction.atomic():
         event = CTFEvent.objects.select_for_update(of=("self",)).select_related("created_by").get(pk=event_id)
@@ -54,14 +63,14 @@ def stage_notice(
                     target_event_ids=[event.pk],
                     audience_spec=audience,
                     trigger_spec={"kind": "manual"},
-                    channels=["email"],
+                    channels=list(channels),
                     subject=subject,
                     body=body,
                     notice_kind=kind,
                 ),
                 campaign_id=identity,
             )
-        if "email" not in registered_channels():
+        if "email" in channels and "email" not in registered_channels():
             return {"campaign_id": str(campaign.pk), "outcome": "channel_unavailable"}
         intent = release_campaign(campaign, occurrence_key="notice", admission=AdmissionActor(system=True))
         return {"campaign_id": str(campaign.pk), "intent_id": str(intent.pk), "outcome": "accepted"}

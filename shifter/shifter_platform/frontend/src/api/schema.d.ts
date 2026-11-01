@@ -6057,6 +6057,7 @@ export interface components {
             readonly scoreboard_freeze_at: string | null;
             readonly rules: string;
             readonly reminder_hours: number[];
+            readonly live_notifications: string[];
             readonly event_timezone: string;
             readonly capacity_hints: {
                 [key: string]: unknown;
@@ -6210,6 +6211,7 @@ export interface components {
             scoreboard_freeze_at?: string | null;
             rules?: string;
             reminder_hours?: number[];
+            live_notifications?: components["schemas"]["LiveNotificationsEnum"][];
             event_timezone?: string;
             capacity_hints?: {
                 [key: string]: unknown;
@@ -6585,6 +6587,15 @@ export interface components {
             /** @description Human-readable error message. */
             error: string;
         };
+        /**
+         * @description * `messages` - Messages
+         *     * `challenge_released` - Challenge Released
+         *     * `first_blood` - First Blood
+         *     * `position_changed` - Position Changed
+         *     * `range_ready` - Range Ready
+         * @enum {string}
+         */
+        LiveNotificationsEnum: "messages" | "challenge_released" | "first_blood" | "position_changed" | "range_ready";
         /**
          * @description Bounded managed-content status for the organizer (issue #1971).
          *
@@ -7196,6 +7207,8 @@ export interface components {
             readonly rules: string;
             readonly logo_url: string;
             readonly theme_color: string;
+            /** @description Live notification kinds the event publishes now; empty means no notification socket (CTF-802). */
+            readonly live_notifications: string[];
         };
         /** @description Target scoreboard visibility for the hidden endpoint (CTF-606). */
         ParticipantHiddenRequest: {

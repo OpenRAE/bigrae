@@ -6,8 +6,8 @@ architecture; subsystem guides provide detail.
 
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
-**Reviewed:** 2026-10-30 for the AWS native identity bindings (#2313) and the
-one-command GCP install (#2679).
+**Reviewed:** 2026-10-31 for live CTF notifications (#665), after the AWS native
+identity bindings (#2313) and the one-command GCP install (#2679).
 This describes source behavior, not a certificate of a live deployment.
 
 BigRAE is the current product name. Public BigRAE config, SDK, client and plugin
@@ -257,6 +257,13 @@ is an implementation record. The current input/result definitions are
 with shared [wire envelopes](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/shared/operation_envelope.py).
 Reconciliation, bounded retries and dead-letter handling repair delivery;
 WebSocket notifications are projections and can be recovered by an authorized read.
+
+Supported GCP deployments turn on the shared WebSocket notification capability.
+The AWS EKS root reads the portal Redis posture from SSM Parameter Store. AWS
+turns the capability on only when that posture names a shared Redis host. Each CTF
+event selects its live notification kinds, so an event that selects none does no
+work. The `notification-prune` CronJob deletes expired notification rows in
+bounded batches (ADR-072, [live notifications design](../architecture/ctf-live-notifications-design-665.md)).
 
 ## Data ownership and recovery
 

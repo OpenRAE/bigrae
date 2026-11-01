@@ -339,6 +339,13 @@ def test_render_env_emits_cloud_provider():
     assert "CLOUD_PROVIDER=gcp\n" in rendered
 
 
+def test_render_env_turns_on_the_live_notification_capability():
+    """Supported GCP deployments carry the capability; events select their kinds (ADR-072)."""
+    module = _load_module("render_runtime_env.py", "render_runtime_env")
+    rendered = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST).splitlines()
+    assert "WEBSOCKET_NOTIFICATIONS_ENABLED=true" in rendered
+
+
 def test_render_env_defaults_model_access_to_disabled_without_catalog_body():
     module = _load_module("render_runtime_env.py", "render_runtime_env")
     rendered = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST)

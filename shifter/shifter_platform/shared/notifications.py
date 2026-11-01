@@ -298,10 +298,29 @@ def mark_notification_delivered(notification_id: int, user_id: int) -> None:
     ).update(delivered_at=timezone.now())
 
 
-def prune_expired_notifications() -> int:
-    """Delete expired notification queue rows and return the count."""
-    deleted, _details = WebSocketNotification.objects.filter(expires_at__lte=timezone.now()).delete()
-    return deleted
+def prune_expired_notifications(*, batch_size: int = 1000, max_batches: int = 100) -> int:
+    """Delete expired queue rows, delivered or not, in bounded batches; return the count.
+
+    One run deletes at most ``batch_size * max_batches`` rows, so a scheduled run
+    has bounded database work and a second concurrent run is safe (ADR-072-R5).
+    The remainder drains on the next run.
+    """
+    batch_size = max(int(batch_size), 1)
+    total = 0
+    for _ in range(max(int(max_batches), 1)):
+        cutoff = timezone.now()
+        ids = list(
+            WebSocketNotification.objects.filter(expires_at__lte=cutoff)
+            .order_by("expires_at", "id")
+            .values_list("id", flat=True)[:batch_size]
+        )
+        if not ids:
+            break
+        deleted, _details = WebSocketNotification.objects.filter(id__in=ids, expires_at__lte=cutoff).delete()
+        total += deleted
+        if len(ids) < batch_size:
+            break
+    return total
 
 
 def authorized_notification_payload(

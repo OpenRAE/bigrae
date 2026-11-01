@@ -129,19 +129,22 @@ def notify_range_ready(participant: CTFParticipant, *, publish: bool = True) -> 
     """Range-ready milestone (CTF-801/CTF-802): email declaration, then realtime.
 
     The email notice is declared in the caller's transaction and its identity
-    collapses repeats. The realtime event is published after commit.
+    collapses repeats. The content-free live hint is published after commit, with
+    one occurrence identity per range generation (ADR-072).
     """
-    from ctf.services.notification import publish_event_notification, send_range_ready
+    from ctf.enums import LiveNotificationKind
+    from ctf.services.notification import publish_live_hint, send_range_ready
 
     send_range_ready(participant.pk)
     user_id = participant.user_id
     if publish and user_id:
+        occurrence = f"{participant.pk}:{participant.range_instance_id or 'account'}"
         transaction.on_commit(
-            lambda: publish_event_notification(
+            lambda: publish_live_hint(
                 participant.event,
-                "range_ready",
-                {"participant_id": str(participant.pk)},
+                LiveNotificationKind.RANGE_READY,
                 recipient_ids=[user_id],
+                occurrence=occurrence,
             )
         )
 

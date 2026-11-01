@@ -52,7 +52,7 @@ from .delivery_milestones import (
     send_registration_confirmation,
 )
 from .realtime import (
-    publish_event_notification,
+    publish_live_hint,
     register_ctf_notifications,
 )
 
@@ -76,7 +76,7 @@ __all__ = (
     "notify_organizer_capacity_outcome",
     "notify_organizer_provision_failure",
     "notify_participant_provision_failure",
-    "publish_event_notification",
+    "publish_live_hint",
     "redeclare_pending_alerts",
     "register_ctf_notifications",
     "schedule_notification",

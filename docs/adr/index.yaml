@@ -2712,7 +2712,7 @@
       },
       {
         "id": "ADR-044-R6",
-        "description": "For root-configured backend=aws deployments the EKS control plane composes over the existing portal and range data plane and must not introduce a standalone EKS data plane. The AWS EKS Terraform roots (platform/terraform/environments/*/eks) source cross-stack values (control-plane database endpoint and IAM-auth resource id, secrets KMS key, agent bucket, range VPC/subnets/route table/availability zone, prebaked AMIs, and range/NGFW instance roles) through native AWS data sources and SSM Parameter Store, never terraform_remote_state, keeping the consumer loosely coupled to producer state. The provisioner Job environment is one provider-neutral contract that AWS and GCP emit identically into the backend-neutral chart's runtimeEnv ConfigMap (ADR-044-R2), with secret payloads flowing only as references through the existing in-process hydration boundary.",
+        "description": "For root-configured backend=aws deployments the EKS control plane composes over the existing portal and range data plane and must not introduce a standalone EKS data plane. The AWS EKS Terraform roots (platform/terraform/environments/*/eks) source cross-stack values (control-plane database endpoint and IAM-auth resource id, portal Redis channel-layer posture, secrets KMS key, agent bucket, range VPC/subnets/route table/availability zone, prebaked AMIs, and range/NGFW instance roles) through native AWS data sources and SSM Parameter Store, never terraform_remote_state, keeping the consumer loosely coupled to producer state. The provisioner Job environment is one provider-neutral contract that AWS and GCP emit identically into the backend-neutral chart's runtimeEnv ConfigMap (ADR-044-R2), with secret payloads flowing only as references through the existing in-process hydration boundary.",
         "checks": [
           "eks-cross-stack-sourcing"
         ]
@@ -3355,6 +3355,7 @@
       "docs/architecture/ctf-communications-console-design-2052.md",
       "docs/architecture/email-templating-delivery-preflight-581.md",
       "docs/architecture/notifications-websocket-fanout-preflight-941.md",
+      "docs/architecture/ctf-realtime-notifications-preflight-665.md",
       "docs/design/ctf-email-template-rendering-preflight-1095.md",
       "docs/design/ctf-ledger-email-template-boundaries-580.md",
       "docs/design/ctf-reminder-content-preflight-582.md",
@@ -4663,6 +4664,60 @@
       "shifter/shifter_platform/workspaces/services/_invitations.py",
       "shifter/shifter_platform/workspaces/services/_invitation_delivery.py",
       "shifter/shifter_platform/management/password_reset.py"
+    ]
+  },
+  {
+    "id": "ADR-072",
+    "title": "Live CTF notifications are per-event and cost nothing when unused",
+    "status": "accepted",
+    "scope": "shifter_platform",
+    "decision": "CTF live notifications are an always-available deployment capability whose cost each event selects. CTFEvent.live_notifications is a closed list (messages, challenge_released, first_blood, position_changed, range_ready); new events select all kinds, pre-existing events select none, and an empty list causes no publish, no scheduler work, and no browser socket. Supported GCP deployments render WEBSOCKET_NOTIFICATIONS_ENABLED=true. The AWS EKS root reads the portal stack's Redis channel-layer posture from SSM Parameter Store into the runtime env, and AWS renders true only when that posture names a shared Redis host; the Django default stays false. Challenge release and first blood are durable in-app ledger notices with fixed text that names no challenge or participant, staged by a scheduler task that the source transaction inserts. A scoreboard position change is a content-free socket hint from a coalesced per-event scheduler reconcile that compares the participant-visible board with stored notified positions under the event lock and publishes after commit. Socket payloads stay in a closed reference-only set with one occurrence identity per hint. A Kubernetes CronJob prunes expired notification rows in bounded batches.",
+    "rules": [
+      {
+        "id": "ADR-072-R1",
+        "description": "Every live notification producer checks live_kind_enabled(event, kind), which requires both the deployment capability flag and the event's selected kind, before it inserts a task, writes a row, or sends to the channel layer. The participant current-event response returns the effective kind list, and the SPA opens no notification socket for an empty list. Inbox availability never depends on the messages kind.",
+        "checks": []
+      },
+      {
+        "id": "ADR-072-R2",
+        "description": "Challenge release and first blood are staged on the communication ledger as in-app notices with fixed text that names no challenge and no participant. The source transaction inserts a LIVE_NOTICE scheduler task; the campaign identity derives from the event, the notice kind, and the challenge, so retries and repeated releases collapse. First blood is not declared while the scoreboard is hidden or frozen, re-checked under the event lock in the transaction that stages the notice.",
+        "checks": []
+      },
+      {
+        "id": "ADR-072-R3",
+        "description": "Scoreboard position changes come only from the RECONCILE_POSITIONS scheduler task. Each score owner updates the pending task for the event in the change transaction, which row-locks it so the skip-locked scheduler claim waits for the commit, or inserts one when none is pending; a duplicate from a race finds no change. The reconcile locks the event, reads the canonical participant-visible board once, compares it with stored notified positions, writes changed positions, and publishes content-free hints after commit to changed entries with a score above zero. It does nothing while the event is not running or the board is hidden or frozen.",
+        "checks": []
+      },
+      {
+        "id": "ADR-072-R4",
+        "description": "The CTF socket projection admits only a communication reference, position_changed, range_ready, and refresh, before storage and before every send and replay. Each hint uses its own occurrence identity, never the bare event UUID.",
+        "checks": []
+      },
+      {
+        "id": "ADR-072-R5",
+        "description": "Expired shared notification rows are pruned by a Kubernetes CronJob with concurrencyPolicy Forbid that runs the bounded prune command. The prune deletes at most a fixed number of batches per run and is safe to run twice. The GCP running-image check treats a running prune pod as a release workload at its exact release image and ignores only a finished prune pod.",
+        "checks": []
+      }
+    ],
+    "exceptions": [],
+    "enforcement": [
+      "ci",
+      "agent-policy"
+    ],
+    "evidence": [
+      "https://github.com/Brad-Edwards/bigrae/issues/665",
+      "docs/adr/072-live-ctf-notifications-per-event.md",
+      "docs/architecture/ctf-live-notifications-design-665.md",
+      "docs/architecture/ctf-realtime-notifications-preflight-665.md",
+      "shifter/shifter_platform/ctf/services/notification/realtime.py",
+      "shifter/shifter_platform/ctf/services/notification/live.py",
+      "shifter/shifter_platform/ctf/models/_live_notifications.py",
+      "shifter/shifter_platform/shared/notifications.py",
+      "shifter/shifter_platform/frontend/src/features/ctf/CtfWorkspaceLayout.tsx",
+      "platform/charts/shifter/templates/notification-prune-cronjob.yaml",
+      "scripts/gcp/verify_running_image_ids.py",
+      "platform/terraform/modules/portal/eks/portal_channels.tf",
+      "scripts/bootstrap/aws_eks.py"
     ]
   }
 ]
