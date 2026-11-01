@@ -2,7 +2,7 @@
 name = "shifter-platform"
 version = "0.1.0"
 description = "Self-service cyber range platform"
-requires-python = ">=3.12"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     # Daphne installs Autobahn transitively; require the decompressed WebSocket
     # message-size limit fixes (CVE-2026-77528, CVE-2026-116579) in the runtime image.
@@ -25,7 +25,7 @@ dependencies = [
     "django-rest-knox==5.0.4",
     "django-ses",
     "djangorestframework>=3.18.3",
-    "drf-spectacular>=0.29.0",
+    "drf-spectacular>=0.30.0",
     "drf-spectacular-sidecar>=2026.6.1",
     "firebase-admin",
     "google-auth>=2.40,<3",
@@ -58,14 +58,14 @@ dependencies = [
     # provisioner consumer accepts (raes_plan.SUPPORTED_RAES_VERSION, kept in
     # agreement by tests/shared/raes/test_plan_provisioner_parity.py); changing
     # it requires passing the RAES conformance gate.
-    # raes-env-packs 5.2.0 requires this exact RAES release.
-    "raes==3.5.0",
+    # raes-env-packs 7.1.0 requires RAES 10.
+    "raes==10.2.0",
     # RAES environment-pack contract and canonical content-digest implementation
     # used by the uniform content-ingestion path (#1578, ADR-034) and the public
     # publication profile consumed by artifact resolution (#1580). Keep this
     # exact: its schemas, validator, digest profile, publication profile, and raes
     # dependency are one versioned consumer contract.
-    "raes-env-packs==5.2.0",
+    "raes-env-packs==7.1.0",
     "uvicorn-worker",
     # uvicorn's WebSocket protocol backend. Not imported directly: the
     # Gunicorn/Uvicorn ASGI workers (entrypoint.sh) need websockets (or wsproto)
@@ -186,6 +186,8 @@ omit = [
 fail_under = 87
 
 # Ruff - linting and formatting
+# The portal runs on Python 3.14, but the provisioner and GCP deployer images
+# load modules from shared/ on Python 3.12. Keep the syntax target at 3.12.
 [tool.ruff]
 target-version = "py312"
 line-length = 120
@@ -265,6 +267,7 @@ skips = ["B101"]  # assert OK in production code for this project
 # enforced/transitional boundary in one machine-readable place that CI and
 # pre-commit share.
 [tool.mypy]
+# Check against 3.12 for the same reason as the Ruff target above.
 python_version = "3.12"
 mypy_path = ".."  # Add shifter/ to the path for sibling runtime packages.
 plugins = ["mypy_django_plugin.main"]

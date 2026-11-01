@@ -15,7 +15,7 @@ from raes_plan import RaesPlan, RaesPlanNode
 
 def _plan():
     return RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.2.0",
         nodes=(RaesPlanNode("provision.node.web", "web", "linux", 2, ()),),
         networks=(),
     )

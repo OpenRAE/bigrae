@@ -1,15 +1,15 @@
 # Build from repository root. Private adapters derive from this runtime and copy
 # their contained contexts into /app/preparation/contexts before digest approval.
-# base image: python3.12-trixie-slim
-FROM ghcr.io/astral-sh/uv@sha256:3137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646 AS builder
+# base image: python3.14-trixie-slim
+FROM ghcr.io/astral-sh/uv@sha256:637619278855a77885a94312efa7decd8479ca6cec5f959e134cbab96582821e AS builder
 WORKDIR /build
 COPY shifter/packer/pyproject.toml shifter/packer/uv.lock ./
 RUN uv export --frozen --no-dev --no-emit-project --output-file requirements.txt && \
     uv venv --python /usr/local/bin/python /opt/venv && \
     uv pip install --python /opt/venv/bin/python --no-config --require-hashes --only-binary :all: -r requirements.txt
 
-# base image: python:3.12-slim-trixie
-FROM python@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf
+# base image: python:3.14-slim-trixie
+FROM python@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8
 # CI sets the source URL from the running repository (ADR-069).
 # A local build leaves the label empty.
 ARG SOURCE_REPOSITORY_URL=""

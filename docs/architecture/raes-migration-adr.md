@@ -3,7 +3,7 @@
 ## Status
 
 Accepted. Amended by issues #1862 on 2026-07-28, #1580 on 2026-07-30, and
-#1937 on 2026-09-06, and #1583 on 2026-09-13.
+#1937 on 2026-09-06, #1583 on 2026-09-13, and #2712 on 2026-11-01.
 
 ## Context
 
@@ -12,8 +12,8 @@ been superseded. Maintaining two package contracts, transport readers,
 configuration surfaces, catalog paths, or provisioning selectors would make
 the boundary ambiguous and leave the retired implementation operational.
 
-The released contract pair is `raes==3.5.0` and
-`raes-env-packs==5.2.0`. Environment packs require that exact RAE version.
+The released contract pair is `raes==10.2.0` and
+`raes-env-packs==7.1.0`. Environment packs require RAES 10.
 The provisioning transport is `raes-provisioning-plan-v2`; it preserves the
 public operations, authority, envelope, constraints, and operation identity.
 
@@ -54,8 +54,9 @@ does not read them.
   not a reason to import the monolithic RAES distribution across that process
   boundary and not a substitute for exact-pin wire validation.
 - The provisioner accepts only `raes_provisioning_plan`,
-  `raes-provisioning-plan-v2`, and producer version `3.5.0` for new realization.
-  Cleanup alone may read the previous exact `v1` / `2.0.0` pair through an
+  `raes-provisioning-plan-v2`, and producer version `10.2.0` for new realization.
+  Cleanup alone may read the previous exact `v2` / `3.5.0` pair with the same
+  `v2` checks. Cleanup alone may also read the exact `v1` / `2.0.0` pair through an
   isolated view that preserves its resource and secret identities. Persisted
   bytes are never relabeled or rewritten. This narrow RAE version transition
   does not restore the retired pre-RAE runtime.

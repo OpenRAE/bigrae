@@ -29,6 +29,7 @@ from uuid import UUID
 from django.db import transaction
 
 from shared.enums import RangeSource
+from shared.raes.contracts import provisioning_plan_producer
 from shared.range_instantiation_policy import backend_supports_warm_activation
 from shared.warm_pool.compatibility import CompatibilityKey, compatibility_digest
 from shared.warm_pool.policy import (
@@ -104,6 +105,7 @@ def _resolve_claim_candidates(request: WarmClaimRequest, override: WarmPoolOverr
             scenario=request.scenario,
             package_digest=request.package_digest,
             lock_digest=request.lock_digest,
+            plan_producer=provisioning_plan_producer(),
         )
     )
     return [(bucket.id, digest) for bucket in eligible]

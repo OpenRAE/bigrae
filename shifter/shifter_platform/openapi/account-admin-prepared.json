@@ -9771,14 +9771,30 @@
                         "maxLength": 2000
                     },
                     "support_email": {
-                        "type": "string",
-                        "format": "email",
-                        "maxLength": 254
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     },
                     "support_url": {
-                        "type": "string",
-                        "format": "uri",
-                        "maxLength": 500
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "uri",
+                                "maxLength": 500
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     }
                 }
             },
@@ -9791,9 +9807,17 @@
                         "maxLength": 150
                     },
                     "email": {
-                        "type": "string",
-                        "format": "email",
-                        "maxLength": 254
+                        "oneOf": [
+                            {
+                                "type": "string",
+                                "format": "email",
+                                "maxLength": 254
+                            },
+                            {
+                                "type": "string",
+                                "maxLength": 0
+                            }
+                        ]
                     },
                     "first_name": {
                         "type": "string",

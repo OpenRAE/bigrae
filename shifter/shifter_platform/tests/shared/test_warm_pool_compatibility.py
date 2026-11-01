@@ -34,6 +34,7 @@ def _key(**overrides) -> CompatibilityKey:
         "scenario": "example",
         "package_digest": "sha256:aaa",
         "lock_digest": "sha256:bbb",
+        "plan_producer": "raes-provisioning-plan-v2/10.2.0",
     }
     base.update(overrides)
     return CompatibilityKey(**base)
@@ -72,7 +73,9 @@ class TestSensitivity:
 
 
 class TestFailClosed:
-    @pytest.mark.parametrize("field", ["backend", "range_source", "package_digest", "lock_digest", "scenario"])
+    @pytest.mark.parametrize(
+        "field", ["backend", "range_source", "package_digest", "lock_digest", "scenario", "plan_producer"]
+    )
     def test_missing_required_dimension_rejected(self, field):
         key = _key(**{field: ""})
         with pytest.raises(WarmPoolCompatibilityError) as exc:

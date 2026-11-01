@@ -290,7 +290,7 @@ class EventWriteSerializer(ClosedSerializer):
     expected_model_source_revision = ModelSourceRevisionField(required=False, min_value=0)
     logo_url = serializers.URLField(required=False, allow_blank=True, max_length=500)
     visible_os_types = serializers.ListField(child=serializers.CharField(max_length=32), required=False, max_length=16)
-    theme_color = serializers.RegexField(r"^(#[0-9a-fA-F]{6})?$", required=False, allow_blank=True)
+    theme_color = serializers.RegexField(r"^#[0-9a-fA-F]{6}$", required=False, allow_blank=True)
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Accept at most one explicit event parent; omission selects a human's individual account."""

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import importlib.metadata
 from collections.abc import Mapping
 from copy import deepcopy
 from typing import Any
@@ -94,11 +95,21 @@ def load_serialized_plan(value: Mapping[str, Any]) -> ProvisioningPlan:
     if (
         value.get("kind") != "raes_provisioning_plan"
         or value.get("contract_version") != RAES_PROVISIONING_PLAN_CONTRACT_VERSION
-        or value.get("raes_version") != "3.5.0"
+        or value.get("raes_version") != importlib.metadata.version("raes")
     ):
         raise ValueError("unsupported completed plan version")
+    from raes_contracts.domain_profiles import DomainProfileBindingModel
+    from raes_contracts.realization_profiles import PlanProfileAuthority
+
+    # The plan model names these only under TYPE_CHECKING; supply each one.
     adapter = TypeAdapter(ProvisioningPlan)
-    adapter.rebuild(_types_namespace={"RealizationEnvelopeIdentityModel": RealizationEnvelopeIdentityModel})
+    adapter.rebuild(
+        _types_namespace={
+            "RealizationEnvelopeIdentityModel": RealizationEnvelopeIdentityModel,
+            "DomainProfileBindingModel": DomainProfileBindingModel,
+            "PlanProfileAuthority": PlanProfileAuthority,
+        }
+    )
     fields = {
         "resources",
         "operations",
@@ -146,10 +157,11 @@ def completed_snapshot(
     )
     snapshot.realization_envelope = carrier.identity
     snapshot.realization_observations = tuple(observations)
-    diagnostics, provenance = realization_authority_disclosure(plan, snapshot, manifest=manifest)
+    # Check the evidence against the admitted contract. RAES 10 owns the
+    # snapshot's realization provenance and derives it after this result.
+    diagnostics, _provenance = realization_authority_disclosure(plan, snapshot, manifest=manifest)
     if any(item.is_error for item in diagnostics):
         raise ValueError("completed state does not satisfy the admitted realization contract")
-    snapshot.realization_provenance = provenance
     return snapshot
 
 

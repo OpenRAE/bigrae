@@ -1819,7 +1819,7 @@
       },
       {
         "id": "ADR-032-R4",
-        "description": "Shifter depends on the exact released PyPI pair raes==3.5.0 and raes-env-packs==5.2.0. Neither contract may use a range, git ref, non-released build, or alternate name. New realization accepts only raes-provisioning-plan-v2 with producer 3.5.0. Cleanup alone may read the previous exact raes-provisioning-plan-v1 / 2.0.0 pair through an isolated view preserving resource and secret identities, without rewriting persisted bytes or allowing old producers for new realization. The RAES module family is imported only within shared.raes (ADR-024, ADR-031-R1); the engine, provisioner, and other layers consume the serialized plan as plain data without importing it.",
+        "description": "Shifter depends on the exact released PyPI pair raes==10.2.0 and raes-env-packs==7.1.0. Neither contract may use a range, git ref, non-released build, or alternate name. New realization accepts only raes-provisioning-plan-v2 with producer 10.2.0. Cleanup alone may read the previous exact raes-provisioning-plan-v2 / 3.5.0 pair with the same v2 checks, and the exact raes-provisioning-plan-v1 / 2.0.0 pair through an isolated view preserving resource and secret identities, without rewriting persisted bytes or allowing old producers for new realization. The RAES module family is imported only within shared.raes (ADR-024, ADR-031-R1); the engine, provisioner, and other layers consume the serialized plan as plain data without importing it.",
         "checks": []
       },
       {

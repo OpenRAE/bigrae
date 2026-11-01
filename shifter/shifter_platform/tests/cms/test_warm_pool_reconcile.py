@@ -24,6 +24,7 @@ from cms.services._warm_pool_reconcile import (
     _bucket_compatibility_digest,
     reconcile_warm_pool,
 )
+from shared.raes.contracts import provisioning_plan_producer
 from shared.warm_pool.compatibility import CompatibilityKey, compatibility_digest
 from shared.warm_pool.policy import load_policy_json
 
@@ -54,6 +55,7 @@ class TestDigestParity:
                 scenario=bucket.scenario,
                 package_digest=package_digest,
                 lock_digest=lock_digest,
+                plan_producer=provisioning_plan_producer(),
             )
         )
         assert reconciler_digest == launch_digest
@@ -63,6 +65,17 @@ class TestDigestParity:
         a = _bucket_compatibility_digest(bucket, package_digest="sha256:a", lock_digest="sha256:x")
         b = _bucket_compatibility_digest(bucket, package_digest="sha256:b", lock_digest="sha256:x")
         assert a != b
+
+    def test_reconciler_digest_changes_with_plan_producer(self, monkeypatch):
+        """A generation minted under an earlier RAES producer is no longer compatible."""
+        bucket = _ENABLED.buckets[0]
+        current = _bucket_compatibility_digest(bucket, package_digest="sha256:a", lock_digest="sha256:x")
+        monkeypatch.setattr(
+            "cms.services._warm_pool_reconcile.provisioning_plan_producer",
+            lambda: "raes-provisioning-plan-v2/3.5.0",
+        )
+        previous = _bucket_compatibility_digest(bucket, package_digest="sha256:a", lock_digest="sha256:x")
+        assert previous != current
 
 
 @pytest.mark.django_db

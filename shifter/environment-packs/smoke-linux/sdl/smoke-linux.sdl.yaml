@@ -2,7 +2,7 @@ name: smoke-linux
 description: >
   Two-node switched Linux range: a Kali attacker and an Ubuntu victim on one
   LAN, both reachable over an SSH participant access channel. Authored against
-  raes 3.5.0 for the platform post-deploy smoke.
+  raes 10.2.0 for the platform post-deploy smoke.
 
 nodes:
   lan:
@@ -78,7 +78,7 @@ accounts:
 
 agents:
   operator:
-    entity: operator
+    affiliations: [operator]
     description: Participant with SSH access to both range nodes
     starting_accounts: [attacker_login, victim_login]
     interactive_access:
