@@ -13,7 +13,7 @@ configuration surfaces, catalog paths, or provisioning selectors would make
 the boundary ambiguous and leave the retired implementation operational.
 
 The released contract pair is `raes==10.2.0` and
-`raes-env-packs==7.1.0`. Environment packs require RAES 10.
+`raes-env-packs==7.2.0`. Environment packs require RAES 10.2 or later.
 The provisioning transport is `raes-provisioning-plan-v2`; it preserves the
 public operations, authority, envelope, constraints, and operation identity.
 
