@@ -15,7 +15,7 @@ and how it maps onto Shifter's range lifecycle. It is deliberately:
   persistence and outbox enqueue.
 
 The RAES ``OperationStatus`` carries a *coarse operation* lifecycle
-(accepted/running/succeeded/failed/cancelled) plus ``domain=provisioning``. It
+(accepted/running/succeeded/failed/cancelled/indeterminate) plus ``domain=provisioning``. It
 does not carry the range lifecycle *direction*, so the caller supplies the
 submitted Shifter operation intent (provision/destroy/pause/resume) explicitly;
 the adapter never infers direction from provider task state or string shape.
@@ -40,6 +40,7 @@ RAES_STATE_RUNNING = "running"
 RAES_STATE_SUCCEEDED = "succeeded"
 RAES_STATE_FAILED = "failed"
 RAES_STATE_CANCELLED = "cancelled"
+RAES_STATE_INDETERMINATE = "indeterminate"
 
 RAES_OPERATION_STATES: frozenset[str] = frozenset(
     {
@@ -48,6 +49,7 @@ RAES_OPERATION_STATES: frozenset[str] = frozenset(
         RAES_STATE_SUCCEEDED,
         RAES_STATE_FAILED,
         RAES_STATE_CANCELLED,
+        RAES_STATE_INDETERMINATE,
     }
 )
 
@@ -118,7 +120,9 @@ class RaesOperationStatusObservation:
 #
 # ``cancelled`` maps to FAILED for every intent: a cancelled control-plane
 # operation means the intended transition did not complete, so surfacing FAILED
-# is the safe, operator-visible, reconciler-recoverable outcome. Only RAES-backed
+# is the safe, operator-visible, reconciler-recoverable outcome. ``indeterminate``
+# maps to FAILED for the same reason: the backend could not confirm the
+# transition, so it must not read as complete. Only RAES-backed
 # ranges pass through this adapter, so this does not affect non-RAES range UX.
 _STATE_MAP: dict[RangeOperation, dict[str, ResourceStatus]] = {
     RangeOperation.PROVISION: {
@@ -127,6 +131,7 @@ _STATE_MAP: dict[RangeOperation, dict[str, ResourceStatus]] = {
         RAES_STATE_SUCCEEDED: ResourceStatus.READY,
         RAES_STATE_FAILED: ResourceStatus.FAILED,
         RAES_STATE_CANCELLED: ResourceStatus.FAILED,
+        RAES_STATE_INDETERMINATE: ResourceStatus.FAILED,
     },
     RangeOperation.DESTROY: {
         RAES_STATE_ACCEPTED: ResourceStatus.DESTROYING,
@@ -134,6 +139,7 @@ _STATE_MAP: dict[RangeOperation, dict[str, ResourceStatus]] = {
         RAES_STATE_SUCCEEDED: ResourceStatus.DESTROYED,
         RAES_STATE_FAILED: ResourceStatus.FAILED,
         RAES_STATE_CANCELLED: ResourceStatus.FAILED,
+        RAES_STATE_INDETERMINATE: ResourceStatus.FAILED,
     },
     RangeOperation.PAUSE: {
         RAES_STATE_ACCEPTED: ResourceStatus.PAUSING,
@@ -141,6 +147,7 @@ _STATE_MAP: dict[RangeOperation, dict[str, ResourceStatus]] = {
         RAES_STATE_SUCCEEDED: ResourceStatus.PAUSED,
         RAES_STATE_FAILED: ResourceStatus.FAILED,
         RAES_STATE_CANCELLED: ResourceStatus.FAILED,
+        RAES_STATE_INDETERMINATE: ResourceStatus.FAILED,
     },
     RangeOperation.RESUME: {
         RAES_STATE_ACCEPTED: ResourceStatus.RESUMING,
@@ -148,6 +155,7 @@ _STATE_MAP: dict[RangeOperation, dict[str, ResourceStatus]] = {
         RAES_STATE_SUCCEEDED: ResourceStatus.READY,
         RAES_STATE_FAILED: ResourceStatus.FAILED,
         RAES_STATE_CANCELLED: ResourceStatus.FAILED,
+        RAES_STATE_INDETERMINATE: ResourceStatus.FAILED,
     },
 }
 

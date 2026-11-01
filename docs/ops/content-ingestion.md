@@ -10,7 +10,7 @@ A pack is registered as a provenance-only reference: BigRAE records where the
 pack lives (`package_ref`), its version and digest, its contract and profile, and
 bounded provenance. It does not copy the pack body into the catalog. Pack content
 is defined by the `raes-env-packs` contract. BigRAE pins
-`raes-env-packs==5.2.0` with its required `raes==3.5.0`, and delegates
+`raes-env-packs==7.1.0` with its required `raes==10.2.0`, and delegates
 validation, canonical content identity, and the artifact-requirement publication
 profile to those released libraries. A broken, malformed, or non-conformant pack
 is rejected.
@@ -176,8 +176,8 @@ image app root. Development packs in the same collection are not shipped or
 registered automatically. In a checkout, register one manually with the
 `shifter/environment-packs/<pack>` reference.
 
-A shipped revision declares its expected predecessor explicitly. The RAES 3.5
-smoke pack is version `0.2.0`; bootstrap upgrades the known `0.1.0` digest through
+A shipped revision declares its expected predecessor explicitly. The RAES 10.2
+smoke packs are version `0.4.0`. Bootstrap upgrades the known `0.3.0` digest through
 the same registration service, then runs release conformance. A customized or
 unexpected tenant digest remains a visible conflict.
 

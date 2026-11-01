@@ -152,6 +152,7 @@
       "supports_generated_artifacts": false,
       "supported_generated_artifact_kinds": [],
       "supported_generated_artifact_delivery_modes": [],
+      "supported_regeneration_scopes": [],
       "supports_persistent_volumes": false,
       "constraints": {
         "network-address-family": "ipv4-only"

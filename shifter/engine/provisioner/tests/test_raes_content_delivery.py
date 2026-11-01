@@ -71,7 +71,7 @@ def _feature(**kw) -> RaesPlanFeature:
 
 def _plan(*, content=(), features=(), nodes=None) -> RaesPlan:
     return RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.2.0",
         nodes=nodes or (_node(),),
         networks=(),
         content=content,

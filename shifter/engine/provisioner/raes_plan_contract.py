@@ -10,8 +10,11 @@ from typing import Any
 from raes_plan_types import RaesPlanError
 
 CONTRACT_VERSION = "raes-provisioning-plan-v2"
-PRODUCER_VERSION = "3.5.0"
+PRODUCER_VERSION = "10.2.0"
 _LEGACY_PAIR = ("raes-provisioning-plan-v1", "2.0.0")
+# Ranges realized before the RAES 10 upgrade carry this producer. Its v2 payload
+# is a subset of the current one, so cleanup reads it with the same checks.
+_PREVIOUS_CLEANUP_PAIR = (CONTRACT_VERSION, "3.5.0")
 
 
 def prepare_envelope(envelope: Mapping[str, Any], *, cleanup_only: bool) -> Mapping[str, Any]:
@@ -19,7 +22,7 @@ def prepare_envelope(envelope: Mapping[str, Any], *, cleanup_only: bool) -> Mapp
     pair = (envelope.get("contract_version"), envelope.get("raes_version"))
     if cleanup_only and pair == _LEGACY_PAIR:
         return _legacy_cleanup(envelope)
-    if pair != (CONTRACT_VERSION, PRODUCER_VERSION):
+    if pair != (CONTRACT_VERSION, PRODUCER_VERSION) and not (cleanup_only and pair == _PREVIOUS_CLEANUP_PAIR):
         raise RaesPlanError("unsupported contract_version or raes_version")
     _validate_collection_fields(envelope)
     _validate_operation_id(envelope.get("operation_id"))
@@ -119,6 +122,7 @@ def _validate_authority(envelope: Mapping[str, Any]) -> None:
     """Read the supported authority ledger without accepting malformed presence."""
     required = {"address", "field_path", "domain", "requirement_kind", "payload_pointer", "mode", "source"}
     optional = {"provenance", "governing_scope", "bounds", "verification_scope", "required_observation_strength"}
+    optional |= _RECURSIVE_AUTHORITY_FIELDS
     seen: set[tuple[str, str]] = set()
     for row in envelope.get("realization_authority", []):
         identity = _validate_authority_row(row, envelope.get("resources", {}), required, optional)
@@ -169,11 +173,40 @@ def _validate_authority_posture(row: Mapping[str, Any]) -> None:
         raise RaesPlanError("realization_authority has an invalid payload pointer")
 
 
+_RECURSIVE_AUTHORITY_FIELDS = frozenset({"structure", "constraint_document", "constraint_binding"})
+_RECURSIVE_CONSTRAINT_CONTRACT = "recursive-realization-constraint-v1"
+_DIGEST_RE = re.compile(r"sha256:[0-9a-f]{64}")
+
+
+def _validate_recursive_authority(row: Mapping[str, Any]) -> None:
+    """Accept the RAES 10 recursive constraint carriers by shape only.
+
+    The RAES planner admits these semantics against the backend manifest before
+    dispatch, and result admission checks them; this consumer keeps its
+    existing posture and bounds gates and reads realized values from payloads.
+    """
+    document = row.get("constraint_document")
+    binding = row.get("constraint_binding")
+    structure = row.get("structure")
+    valid = (
+        (document is None) == (binding is None)
+        and (
+            document is None
+            or (isinstance(document, Mapping) and document.get("contract_id") == _RECURSIVE_CONSTRAINT_CONTRACT)
+        )
+        and (binding is None or (isinstance(binding, str) and _DIGEST_RE.fullmatch(binding) is not None))
+        and (structure is None or isinstance(structure, Mapping))
+    )
+    if not valid:
+        raise RaesPlanError("realization_authority has a malformed recursive constraint")
+
+
 def _validate_authority_metadata(row: Mapping[str, Any], optional: set[str]) -> None:
     """Validate bounded optional authority metadata and unsupported bounds."""
     if row.get("bounds", []) != []:
         raise RaesPlanError("realization_authority bounds require unsupported constrained realization")
-    for field in optional - {"bounds"}:
+    _validate_recursive_authority(row)
+    for field in optional - {"bounds"} - _RECURSIVE_AUTHORITY_FIELDS:
         value = row.get(field)
         if value is not None and (not isinstance(value, str) or not value or len(value) > 1024):
             raise RaesPlanError("realization_authority has malformed optional metadata")

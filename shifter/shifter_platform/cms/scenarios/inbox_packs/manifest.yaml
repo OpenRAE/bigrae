@@ -25,9 +25,9 @@ packs:
     contract_kind: raes
     contract_profile: shifter
     package_ref: cms/scenarios/inbox_packs/smoke-linux
-    package_version: "0.3.0"
-    expected_package_digest: sha256:b2285de5a8fb047f5aa50a14621f9f5492aa79647bc1bd1f5d992d2e59a8f482
-    package_digest: sha256:d68f85e09696ac91c39398482a245db24b3733e36da03f6424c09371744f9d91
+    package_version: "0.4.0"
+    expected_package_digest: sha256:d68f85e09696ac91c39398482a245db24b3733e36da03f6424c09371744f9d91
+    package_digest: sha256:7e96c1da428b525330376a1f1b3d6eb0de11ff81576063dd8bb7addf92b57c49
     provenance:
       repo: Brad-Edwards/bigrae
   # Portable-addressing variant of smoke-linux for the AWS EC2 range backend
@@ -40,8 +40,8 @@ packs:
     contract_kind: raes
     contract_profile: shifter
     package_ref: cms/scenarios/inbox_packs/smoke-linux-aws
-    package_version: "0.3.0"
-    expected_package_digest: sha256:6dc1e07209c64bf2b4d558c68bf1df4cf2b6d52e27624b2dd1d1e02bebed8410
-    package_digest: sha256:dc71d76107a54be22f0e32f17802678f3f893ebfbe3d6ccf135f8b586a1a72ff
+    package_version: "0.4.0"
+    expected_package_digest: sha256:dc71d76107a54be22f0e32f17802678f3f893ebfbe3d6ccf135f8b586a1a72ff
+    package_digest: sha256:e6e3adfbb65aef880ac16e18fd9db596d0636ea31b2ede82b7aae0d66575feaa
     provenance:
       repo: Brad-Edwards/bigrae

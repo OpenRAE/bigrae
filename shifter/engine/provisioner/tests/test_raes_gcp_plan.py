@@ -82,7 +82,7 @@ def _node(
 
 
 def _plan(nodes: tuple[RaesPlanNode, ...], networks: tuple[RaesPlanNetwork, ...]) -> RaesPlan:
-    return RaesPlan(raes_version="3.5.0", nodes=nodes, networks=networks)
+    return RaesPlan(raes_version="10.2.0", nodes=nodes, networks=networks)
 
 
 def _resolver(profile: GCERangeImageProfile | None = None):

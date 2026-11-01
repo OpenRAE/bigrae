@@ -4,7 +4,7 @@ description: >
   LAN, both reachable over an SSH participant access channel. Portable-addressing
   variant of smoke-linux for the AWS EC2 range backend, which allocates subnet
   CIDRs inside the range VPC rather than accepting authored addressing. Authored
-  against raes 3.5.0 for the platform post-deploy smoke.
+  against raes 10.2.0 for the platform post-deploy smoke.
 
 nodes:
   lan:
@@ -78,7 +78,7 @@ accounts:
 
 agents:
   operator:
-    entity: operator
+    affiliations: [operator]
     description: Participant with SSH access to both range nodes
     starting_accounts: [attacker_login, victim_login]
     interactive_access:

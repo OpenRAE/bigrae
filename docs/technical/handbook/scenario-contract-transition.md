@@ -7,7 +7,7 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==3.5.0` and `raes-env-packs==5.2.0` in its
+`raes==10.2.0` and `raes-env-packs==7.1.0` in its
 [package manifest](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
