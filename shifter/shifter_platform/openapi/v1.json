@@ -27942,9 +27942,17 @@
             "maxLength": 120
           },
           "slug": {
-            "type": "string",
-            "maxLength": 140,
-            "pattern": "^[-a-zA-Z0-9_]+$"
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 140,
+                "pattern": "^[-a-zA-Z0-9_]+$"
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "body": {
             "type": "string",
@@ -28242,9 +28250,17 @@
             "minimum": 0
           },
           "logo_url": {
-            "type": "string",
-            "format": "uri",
-            "maxLength": 500
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 500
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "visible_os_types": {
             "type": "array",
@@ -28255,8 +28271,16 @@
             "maxItems": 16
           },
           "theme_color": {
-            "type": "string",
-            "pattern": "^(#[0-9a-fA-F]{6})?$"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           }
         },
         "required": [
@@ -30120,10 +30144,17 @@
             "maxLength": 71
           },
           "expected_package_digest": {
-            "type": "string",
-            "default": "",
-            "maxLength": 71,
-            "pattern": "^(sha256:[a-f0-9]{64})?$"
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 71,
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "lock_ref": {
             "type": "string",
@@ -31506,14 +31537,30 @@
             "maxLength": 2000
           },
           "support_email": {
-            "type": "string",
-            "format": "email",
-            "maxLength": 254
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "email",
+                "maxLength": 254
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "support_url": {
-            "type": "string",
-            "format": "uri",
-            "maxLength": 500
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 500
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           }
         }
       },
@@ -31526,9 +31573,17 @@
             "maxLength": 150
           },
           "email": {
-            "type": "string",
-            "format": "email",
-            "maxLength": 254
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "email",
+                "maxLength": 254
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "first_name": {
             "type": "string",
@@ -35214,9 +35269,16 @@
             "format": "uri"
           },
           "expected_digest": {
-            "type": "string",
-            "default": "",
-            "pattern": "^(sha256:[a-f0-9]{64})?$"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           }
         },
         "required": [

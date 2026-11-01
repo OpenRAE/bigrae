@@ -6227,7 +6227,6 @@ export interface components {
             /** Format: uuid */
             workspace?: string;
             expected_model_source_revision?: number;
-            /** Format: uri */
             logo_url?: string;
             visible_os_types?: string[];
             theme_color?: string;
@@ -6968,8 +6967,7 @@ export interface components {
             package_ref: string;
             package_version: string;
             package_digest: string;
-            /** @default  */
-            expected_package_digest: string;
+            expected_package_digest?: string;
             /** @default  */
             lock_ref: string;
             /** @default  */
@@ -7371,15 +7369,12 @@ export interface components {
         PatchedOrganizationProfileUpdate: {
             name?: string;
             description?: string;
-            /** Format: email */
             support_email?: string;
-            /** Format: uri */
             support_url?: string;
         };
         /** @description Contact/display fields only; provider bindings and authority are immutable here. */
         PatchedPolicyUserMetadataCommand: {
             username?: string;
-            /** Format: email */
             email?: string;
             first_name?: string;
             last_name?: string;
@@ -8626,8 +8621,7 @@ export interface components {
             name: string;
             /** Format: uri */
             archive: string;
-            /** @default  */
-            expected_digest: string;
+            expected_digest?: string;
         };
         /** @description Validate agent-upload cancel requests. */
         UploadCancel: {
