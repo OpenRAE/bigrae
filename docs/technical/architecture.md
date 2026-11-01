@@ -356,6 +356,10 @@ The 2026-10-28 logging and exception-handling cleanup (#2569) changed only the
 Ruff lint rules in the SDK package manifest. It did not change the adapter ABI,
 the public contracts, or the installation boundary on this page.
 
+The 2026-11-01 move to RAES 10.2 (#2712) changed the in-box manifest only to
+upgrade the smoke packs to new revisions and digests. It did not change the
+registration path or the scenario content boundary on this page.
+
 ## Install, exercise and maintain
 
 Start with the [GCP installation and first exercise](handbook/gcp-first-run.md).
