@@ -177,8 +177,10 @@ def _validate_call_violations(job_id: str, job: dict[str, object]) -> list[Viola
     if uses != _VALIDATE_USES:
         violations.append(_violation("ADR-004-R23", f"job '{job_id}' must call {_VALIDATE_USES} from this commit"))
     secrets = job.get("secrets", {})
-    if not isinstance(secrets, dict) or set(secrets) - _VALIDATE_SECRETS or any(
-        str(value).replace(" ", "") != f"${{{{secrets.{name}}}}}" for name, value in secrets.items()
+    if (
+        not isinstance(secrets, dict)
+        or set(secrets) - _VALIDATE_SECRETS
+        or any(str(value).replace(" ", "") != f"${{{{secrets.{name}}}}}" for name, value in secrets.items())
     ):
         violations.append(
             _violation(
