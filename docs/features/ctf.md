@@ -107,7 +107,8 @@ An event in solo mode does not require team membership.
 
 ## Scoreboard
 
-The **Scoreboard** ranks participants (or teams) by score. Organizers can:
+The **Scoreboard** ranks participants (or teams) by score. An open scoreboard
+refreshes every 15 seconds, so you do not need to reload the page. Organizers can:
 
 - Hide the scoreboard entirely, or
 - Freeze the scoreboard at a set time near the end so final standings are not

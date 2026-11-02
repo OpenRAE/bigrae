@@ -310,6 +310,16 @@ banned, deleted and unregistered rows do not qualify. Ordinary participant
 credentials also require current participation policy. Public publication and
 hidden scoreboards keep their separate publication rules.
 
+### Scoreboard refresh
+
+The SPA participant and organizer scoreboard hooks poll their API read every
+15 seconds (`SCOREBOARD_POLL_MS` in `frontend/src/api/ctf.ts`). They also
+refetch on window focus and on network reconnect. Thus a scoring event shows
+within 30 seconds (CTF-401). A frozen participant board withholds later solves
+by design. The ADR-072 `position_changed` hint is optional and only accelerates
+the refresh. See the
+[design note](../../design/ctf-scoreboard-refresh-576.md).
+
 ## Scheduled Work
 
 Two management commands operate the event runtime:
