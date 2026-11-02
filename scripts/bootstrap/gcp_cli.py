@@ -6,12 +6,14 @@ Commands:
 - ``gcp-release-scan``: scan the exact images of a release manifest;
 - ``gcp-smoke``: run the advisory post-deploy range smoke;
 - ``gcp-destroy``: tear down the platform resources of one deployment;
-- ``gcp-config``: publish, pull, and show the deployment inputs, and set range images.
+- ``gcp-config``: publish, pull, and show the deployment inputs, and set range images;
+- ``gcp-cmek-migrate``: move the live objects of an operator-owned bucket to its key.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Callable
 
@@ -29,8 +31,11 @@ from gcp_destroy import DestroyOptions, run_destroy
 from gcp_inputs import RANGE_IMAGE_ROLES
 
 LIFECYCLE_COMMANDS = frozenset(
-    {"gcp-install", "gcp-deploy", "gcp-release-scan", "gcp-smoke", "gcp-destroy", "gcp-config"}
+    {"gcp-install", "gcp-deploy", "gcp-release-scan", "gcp-smoke", "gcp-destroy", "gcp-config", "gcp-cmek-migrate"}
 )
+# A Cloud KMS key resource name without a version (#2564).
+_KMS_KEY_RE = re.compile(r"projects/[a-z0-9-]+/locations/[a-z0-9-]+/keyRings/[A-Za-z0-9_-]+/cryptoKeys/[A-Za-z0-9_-]+")
+_BUCKET_RE = re.compile(r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]")
 _IDENTITY_HELP = "impersonate (operator, default) or ambient (the caller already is the purpose identity, CI)"
 _STORE_HELP = "Deployment config bucket prefix"
 _RELEASE_SOURCE_HELP = "Mirror registry prefix that holds the release images by digest (default: the manifest's)"
@@ -151,6 +156,12 @@ def add_lifecycle_subparsers(subparsers: argparse._SubParsersAction) -> None:
     image_parser.add_argument("--role", required=True, choices=RANGE_IMAGE_ROLES, help="Range guest role")
     image_parser.add_argument("--image", required=True, help="projects/<project>/global/images/[family/]<name>")
 
+    cmek = subparsers.add_parser(
+        "gcp-cmek-migrate", help="Rewrite the live objects of an operator-owned bucket with its customer-managed key"
+    )
+    cmek.add_argument("--bucket", required=True, help="Bucket name, for example the private pack bucket")
+    cmek.add_argument("--key", required=True, help="projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>")
+
 
 def _deploy_options(args: argparse.Namespace) -> DeployOptions:
     """Build ``gcp-deploy`` or ``gcp-smoke`` options; an argument that the command lacks takes its default."""
@@ -216,6 +227,19 @@ def _handle_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_cmek_migrate(args: argparse.Namespace) -> int:
+    """Run ``gcp-cmek-migrate`` with the caller's credentials after a check of both names."""
+    from gcp_process import ProcessRunner
+    from gcp_storage_cmek import migrate_bucket
+
+    if not _BUCKET_RE.fullmatch(args.bucket):
+        raise ValueError("--bucket must be a bucket name, not a URL")
+    if not _KMS_KEY_RE.fullmatch(args.key):
+        raise ValueError("--key must be projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>, without a version")
+    migrate_bucket(ProcessRunner(), args.bucket, args.key)
+    return 0
+
+
 _HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
     "gcp-install": lambda args: _run_install(args),
     "gcp-deploy": lambda args: run_deploy(_deploy_options(args)),
@@ -251,6 +275,7 @@ _HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
         )
     ),
     "gcp-config": _handle_config,
+    "gcp-cmek-migrate": _run_cmek_migrate,
 }
 
 

@@ -1,4 +1,10 @@
-mock_provider "google" {}
+mock_provider "google" {
+  mock_data "google_storage_project_service_account" {
+    defaults = {
+      member = "serviceAccount:service-789@gs-project-accounts.iam.gserviceaccount.com"
+    }
+  }
+}
 
 # A deployment without GitHub (ADR-070): no federation, impersonation by named
 # principals only, and a hardened deployment config bucket.
@@ -107,6 +113,58 @@ run "impersonation_only_foundation" {
   assert {
     condition     = join(",", module.storage_data_access_audit[0].enabled_log_types) == "DATA_READ,DATA_WRITE"
     error_message = "Cloud Audit Logs must record every read and write of the deployment config bucket (#2585)."
+  }
+}
+
+# Foundation buckets use foundation-owned keys in the bucket location (#2564).
+run "foundation_buckets_use_their_own_keys" {
+  command = apply
+  module {
+    source = "../../modules/cicd-oidc-identity"
+  }
+  assert {
+    condition     = module.storage_cmek.key_ids["release-evidence"] == google_storage_bucket.release_evidence.encryption[0].default_kms_key_name
+    error_message = "The release-evidence bucket must use its own customer-managed key (#2564)."
+  }
+  assert {
+    condition     = module.storage_cmek.key_ids["deployment-config"] == google_storage_bucket.deployment_config[0].encryption[0].default_kms_key_name
+    error_message = "The deployment config bucket must use its own customer-managed key (#2564)."
+  }
+  assert {
+    condition     = module.storage_cmek.key_ids["release-evidence"] != module.storage_cmek.key_ids["deployment-config"]
+    error_message = "Each foundation bucket role must have a distinct key (#2564)."
+  }
+  assert {
+    condition     = output.storage_cmek_buckets == { "example-customer-evidence" = module.storage_cmek.key_ids["release-evidence"], "example-customer-deployment-config" = module.storage_cmek.key_ids["deployment-config"] }
+    error_message = "The foundation must publish each bucket with its key for the object migration (#2564)."
+  }
+}
+
+# The lifecycle identities manage keys and grants but can not destroy, disable,
+# or delete a key or a key version (#2564).
+run "lifecycle_identities_can_not_destroy_keys" {
+  command = plan
+  module {
+    source = "../../modules/cicd-oidc-identity"
+  }
+  assert {
+    condition     = !contains(var.deploy_roles, "roles/cloudkms.admin") && !contains(var.destroy_roles, "roles/cloudkms.admin")
+    error_message = "The lifecycle identities must not hold project-wide Cloud KMS admin (#2564)."
+  }
+  assert {
+    condition = alltrue([
+      for permission in setunion(google_project_iam_custom_role.deploy_kms[0].permissions, google_project_iam_custom_role.destroy_kms[0].permissions) :
+      !contains(["cloudkms.cryptoKeyVersions.destroy", "cloudkms.cryptoKeyVersions.update", "cloudkms.cryptoKeyVersions.delete", "cloudkms.cryptoKeys.delete", "cloudkms.keyRings.delete"], permission)
+    ])
+    error_message = "No lifecycle KMS role may destroy, disable, or delete a key or a key version (#2564)."
+  }
+  assert {
+    condition = (
+      toset(["cloudkms.keyRings.create", "cloudkms.cryptoKeys.create", "cloudkms.cryptoKeys.setIamPolicy"]) == setintersection(toset(google_project_iam_custom_role.deploy_kms[0].permissions), toset(["cloudkms.keyRings.create", "cloudkms.cryptoKeys.create", "cloudkms.cryptoKeys.setIamPolicy"])) &&
+      google_project_iam_member.deploy_kms[0].member == "serviceAccount:custunseen-deploy@example-project.iam.gserviceaccount.com" &&
+      google_project_iam_member.destroy_kms[0].member == "serviceAccount:custunseen-destroy@example-project.iam.gserviceaccount.com"
+    )
+    error_message = "Deploy must create key rings, keys, and key grants; each lifecycle identity holds its own KMS role (#2564)."
   }
 }
 

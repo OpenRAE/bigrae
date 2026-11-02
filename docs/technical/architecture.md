@@ -129,9 +129,11 @@ A developer builds and validates those images in a build project that they
 supply. Each release takes the newest verified publication of each role, and
 the deploy imports the release guests after it verifies them
 ([GCP guest images](../architecture/gcp-guest-images.md), #2668). Keep platform
-hosting separate from the range guest backend. `gcp-destroy` keeps the Artifact
-Registry key ring and key, which GCP can not delete. A later install adopts them
-with import blocks. The range network peers with the platform network after the
+hosting separate from the range guest backend. Each Terraform-owned GCS bucket
+uses a customer-managed key in its location, and the owner command rewrites the
+live objects with that key (ADR-008-R5, [GCS CMEK](../architecture/gcp-gcs-cmek-design-2564.md)).
+`gcp-destroy` keeps the Artifact Registry and platform bucket key rings and keys,
+which GCP can not delete. A later install adopts them with import blocks. The range network peers with the platform network after the
 Service Networking connection, because GCP runs one peering operation for each
 network at a time (#2643). `deploy.py gcp-install` installs a tenant from a
 release and one bundle with no checkout (#2679). The release manifest pins the

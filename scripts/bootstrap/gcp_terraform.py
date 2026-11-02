@@ -40,11 +40,46 @@ DESTROY_SETTING_TYPES = frozenset({"google_sql_database_instance", "google_stora
 _RESOURCE_ADDRESS_RE = re.compile(r"(?:^|\.)(?P<type>[a-z0-9_]+)\.[A-Za-z0-9_-]+(?:\[[^\]]*\])?$")
 # Terraform also reads TF_INPUT=0; each command that prompts carries the flag too.
 _NO_INPUT = "-input=false"
-KMS_KEY_SUFFIXES = ("google_kms_crypto_key.artifact_registry", "google_kms_key_ring.artifact_registry")
+
+
+@dataclass(frozen=True)
+class RetainedKeyRing:
+    """A platform key ring that gcp-destroy leaves in place and the next deploy adopts.
+
+    KMS can not delete a key ring or a key, so ``gcp-destroy`` removes the exact
+    ``addresses`` from state and the root's import blocks adopt them again when
+    ``variable`` is true (#2643, #2564).
+    """
+
+    variable: str
+    name_suffix: str
+    addresses: tuple[str, ...]
+
+
+RETAINED_KEY_RINGS = (
+    RetainedKeyRing(
+        variable="adopt_artifact_registry_kms",
+        name_suffix="ar",
+        addresses=(
+            "module.platform_core.module.portal_artifact_registry.google_kms_crypto_key.artifact_registry",
+            "module.platform_core.module.portal_artifact_registry.google_kms_key_ring.artifact_registry",
+        ),
+    ),
+    RetainedKeyRing(
+        variable="adopt_storage_kms",
+        name_suffix="gcs",
+        addresses=(
+            'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["assets"]',
+            'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["audit-logs"]',
+            "module.platform_core.module.portal_gcs.module.cmek.google_kms_key_ring.this",
+        ),
+    ),
+)
 COMMAND_OWNED_KEYS = frozenset(
     {
         "project_id",
         "adopt_artifact_registry_kms",
+        "adopt_storage_kms",
         "region",
         "artifact_registry_location",
         "environment",
@@ -220,7 +255,7 @@ def state_addresses(runner: ProcessRunner, ctx: TerraformContext) -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _transient_cause(text: str) -> str | None:
+def transient_cause(text: str) -> str | None:
     """Return the transient cause that ``text`` shows, or None for a failure to report."""
     lowered = text.lower()
     if any(marker in lowered for marker in _RETRYABLE_CAPACITY_MARKERS):
@@ -251,7 +286,7 @@ def terraform_apply(
             print(result.stdout, end="")
         if result.returncode == 0:
             return
-        cause = _transient_cause(f"{result.stdout}\n{result.stderr}")
+        cause = transient_cause(f"{result.stdout}\n{result.stderr}")
         if attempt < max_attempts and cause:
             # Show the error, so an operator can tell a transient cause from a real failure (#2601).
             if result.stderr:
@@ -282,12 +317,17 @@ def _resource_type(address: str) -> str:
     return match.group("type") if match else ""
 
 
-def apply_destroy_settings(runner: ProcessRunner, ctx: TerraformContext) -> None:
+def apply_destroy_settings(
+    runner: ProcessRunner, ctx: TerraformContext, *, variables: Mapping[str, str] | None = None
+) -> None:
     """Apply the destroy-time deletion settings to the live resources before the destroy.
 
     ``terraform destroy`` reads deletion_protection, force_destroy, and
     deletion_policy from state, not from the destroy values. A targeted apply
-    stores them first (#2640).
+    stores them first (#2640). ``variables`` carries the adopt values of
+    :func:`kms_adoption_variables`: after an interrupted destroy, a surviving
+    bucket depends on keys that already left state, so the apply imports them
+    instead of creating them (#2564).
     """
     targets = [address for address in state_addresses(runner, ctx) if _resource_type(address) in DESTROY_SETTING_TYPES]
     if not targets:
@@ -296,37 +336,46 @@ def apply_destroy_settings(runner: ProcessRunner, ctx: TerraformContext) -> None
     info("Applying destroy-time deletion settings to: " + ", ".join(targets))
     runner.run(
         ctx.argv(
-            "apply", "-auto-approve", _NO_INPUT, *ctx.var_file_args(), *[f"-target={address}" for address in targets]
+            "apply",
+            "-auto-approve",
+            _NO_INPUT,
+            *ctx.var_file_args(),
+            *[f"-var={name}={value}" for name, value in (variables or {}).items()],
+            *[f"-target={address}" for address in targets],
         ),
         env=ctx.env,
         capture=False,
     )
 
 
-def artifact_registry_kms_adoption(runner: ProcessRunner, ctx: TerraformContext, inputs: DeploymentInputs) -> bool:
-    """Return whether the install must adopt a key ring that a previous destroy left behind (#2643)."""
-    if any(address.endswith(suffix) for address in state_addresses(runner, ctx) for suffix in KMS_KEY_SUFFIXES):
-        return False
-    key_ring = f"shifter-{inputs.environment}-ar"
-    exists = runner.run(
-        ["gcloud", "kms", "keyrings", "describe", key_ring]
-        + ["--location", inputs.region, "--project", inputs.project_id],
-        env=ctx.env,
-        check=False,
-    )
-    if exists.returncode != 0:
-        return False
-    info(f"Adopting the existing Artifact Registry key ring {key_ring} and its key")
-    return True
+def kms_adoption_variables(runner: ProcessRunner, ctx: TerraformContext, inputs: DeploymentInputs) -> dict[str, str]:
+    """Return the adopt variables for the key rings that a previous destroy left behind (#2643, #2564)."""
+    addresses = set(state_addresses(runner, ctx))
+    variables: dict[str, str] = {}
+    for ring in RETAINED_KEY_RINGS:
+        if addresses.intersection(ring.addresses):
+            continue
+        name = f"shifter-{inputs.environment}-{ring.name_suffix}"
+        exists = runner.run(
+            ["gcloud", "kms", "keyrings", "describe", name, "--location", inputs.region.lower()]
+            + ["--project", inputs.project_id],
+            env=ctx.env,
+            check=False,
+        )
+        if exists.returncode == 0:
+            info(f"Adopting the existing key ring {name} and its keys")
+            variables[ring.variable] = "true"
+    return variables
 
 
 def drop_unremovable_kms_resources(runner: ProcessRunner, ctx: TerraformContext) -> None:
-    """Remove the permanent Artifact Registry KMS key ring and key from state."""
-    addresses = state_addresses(runner, ctx)
-    for suffix in KMS_KEY_SUFFIXES:
-        for address in [item for item in addresses if item.endswith(suffix)]:
-            info(f"Dropping from state: {address}")
-            runner.run(ctx.argv("state", "rm", address), env=ctx.env)
+    """Remove the exact permanent platform key rings and keys from state; their grants stay managed."""
+    addresses = set(state_addresses(runner, ctx))
+    for ring in RETAINED_KEY_RINGS:
+        for address in ring.addresses:
+            if address in addresses:
+                info(f"Dropping from state: {address}")
+                runner.run(ctx.argv("state", "rm", address), env=ctx.env)
 
 
 def terraform_destroy(

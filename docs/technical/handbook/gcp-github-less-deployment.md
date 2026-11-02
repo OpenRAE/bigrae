@@ -287,12 +287,21 @@ mode. It creates these resources:
 - the release-evidence bucket, with a locked 90-day retention policy;
 - the deployment config bucket, with uniform access, public access
   prevention, and versioning;
+- the `<name_prefix>-foundation-gcs` key ring, with one customer-managed key
+  for each foundation bucket
+  ([Bucket encryption keys](#bucket-encryption-keys));
+- custom Cloud KMS roles for the deploy and destroy identities. These roles
+  can not destroy, disable, or delete a key or a key version;
 - Cloud Audit Logs for storage reads and writes in the project. Usage-log
   delivery to the release-evidence bucket is optional
   (`enable_gcs_usage_log_delivery`), because a Domain Restricted Sharing org
   policy rejects its Google-managed writer group;
 - the image-build network and the image build service account, only when
   `enable_image_build_network` is `true`.
+
+After the apply, the command rewrites the live objects of each foundation
+bucket with the bucket key. It does not rewrite the release-evidence bucket,
+because its retention policy is locked.
 
 The retention lock on the release-evidence bucket is permanent. Check the
 project and the bucket name in the plan before you apply it.
@@ -532,7 +541,7 @@ The command runs these stages in order:
 | Stage | Identity | Steps |
 | --- | --- | --- |
 | Inputs | Your identity, then deploy | Load and validate the bundle, check the tooling revision, verify the provenance of the release images, import the release's base range images when the bundle has none, and take the lock. |
-| Infrastructure | Deploy | Initialize Identity Platform, harden the state bucket, remove project bindings to deleted custom roles, apply Terraform, verify range audit telemetry, and seed the provider account without an application grant. |
+| Infrastructure | Deploy | Initialize Identity Platform, harden the state bucket, remove project bindings to deleted custom roles, apply Terraform, rewrite the live bucket objects with the bucket keys, verify range audit telemetry, and seed the provider account without an application grant. |
 | Preconditions | Deploy | Check the GCE range inputs and images. |
 | Images | Deploy | Copy each release image and its attestations into the deployment registry by digest. |
 | Scan | Release scan | Scan each exact digest with Trivy for HIGH and CRITICAL findings. |
@@ -606,16 +615,99 @@ command fails while the lock exists and names the holder.
 The destroy runs as the destroy identity. It first verifies that the tooling
 revision equals the release revision and that the release images verify. It
 then takes the lock, lifts the Cloud SQL deletion protection, removes the
-permanent KMS key ring and key from the state, and runs `terraform destroy`
+permanent KMS key rings and keys from the state, and runs `terraform destroy`
 with bounded retries.
 
 These items stay after a teardown:
 
 - the foundation: the purpose identities, the state bucket, the
-  release-evidence bucket, and the config bucket;
-- the Artifact Registry KMS key ring and key;
+  release-evidence bucket, the config bucket, and their key ring;
+- the Artifact Registry key ring and key, and the platform bucket key ring and
+  keys. The next deploy adopts them. A destroy that you run again after an
+  interruption also adopts them;
 - the resources that Terraform does not own, for example the operator password
   secret and the imported range guest images.
+
+## Bucket encryption keys
+
+Each Terraform-owned bucket uses a customer-managed Cloud KMS key. The
+[GCS CMEK design](../../architecture/gcp-gcs-cmek-design-2564.md) gives the
+architecture.
+
+| Key ring | Location | Keys | Owner |
+| --- | --- | --- | --- |
+| `<name_prefix>-foundation-gcs` | Foundation region | `release-evidence`, `deployment-config` | `gcp-foundation` |
+| `<name_prefix>-image-export-gcs` | Foundation region | `staging`, `daisy-scratch` | `gcp-foundation`, build projects only |
+| `shifter-<environment>-gcs` | Deployment region | `assets`, `audit-logs` | `gcp-deploy` |
+| Pack bucket name, dots changed to hyphens | Pack bucket location | `raes-packages` | Your Terraform root |
+
+Each key rotates every 90 days. Rotation makes a new primary version for new
+writes. It does not re-encrypt old objects, and old versions stay enabled.
+
+### Upgrade a deployment to bucket keys
+
+1. Apply the foundation again with the release tooling:
+
+   ```bash
+   ./scripts/bootstrap/deploy.py gcp-foundation --inputs /path/to/foundation.json --yes
+   ```
+
+2. Run the deploy:
+
+   ```bash
+   ./scripts/bootstrap/deploy.py gcp-deploy --store gs://<bucket>
+   ```
+
+3. If you use the private pack bucket, apply your pack bucket root. Then
+   rewrite its objects with the `package_bucket_kms_key` output:
+
+   ```bash
+   ./scripts/bootstrap/deploy.py gcp-cmek-migrate --bucket <pack-bucket> --key <key>
+   ```
+
+Do not use `--reconcile-foundation-image-network` before step 1. That plan
+accepts only image-network changes, so it stops on the new keys.
+
+Each command rewrites the live objects that do not use the bucket key. Each
+rewrite pins the object generation, so a concurrent upload is not replaced. A
+second run rewrites nothing.
+
+### Objects that keep the Google-managed key
+
+The command reports these objects and does not change them:
+
+- noncurrent versions. The `assets` and deployment config buckets keep them
+  until you delete them;
+- soft-deleted objects, until the soft-delete period ends;
+- live objects in the release-evidence bucket, until the lifecycle rule deletes
+  them after 365 days;
+- live objects with `*`, `?`, `[`, or `]` in the name.
+
+To list the noncurrent versions that do not use a key, run this command:
+
+```bash
+gcloud storage objects list "gs://<bucket>/**" \
+  --format="table(name,generation,kms_key,noncurrent_time)" \
+  --filter='noncurrent_time:* AND NOT kms_key:"<key>"'
+```
+
+### Repair key access
+
+If reads or writes fail with `Permission denied on Cloud KMS key`, do these
+steps:
+
+1. Run the owner command again (`gcp-foundation`, `gcp-deploy`, or your pack
+   bucket root). Terraform restores the Storage service agent grant.
+2. If a key version is disabled, enable it with an account that has
+   `roles/cloudkms.admin`. The lifecycle identities can not do this:
+
+   ```bash
+   gcloud kms keys versions enable <version> --key <key> --keyring <key-ring> \
+     --location <location> --project <project>
+   ```
+
+Do not remove a bucket default key to restore access. A destroyed key version
+can not be recovered after its scheduled destruction date.
 
 ## Identity options
 

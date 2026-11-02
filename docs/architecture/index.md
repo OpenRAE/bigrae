@@ -41,3 +41,4 @@ These retain their stated design authority and are not historical preflights:
 - [Shared deployment configuration](deployment-root-consolidation-2089.md)
 - [Verification and adoption ownership](verification-adoption-ownership-design-2090.md)
 - [Browser CSP enforcement](browser-csp-enforcement-design-2090.md)
+- [GCS CMEK](gcp-gcs-cmek-design-2564.md)

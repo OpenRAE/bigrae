@@ -22,12 +22,20 @@ import importlib.util
 import json
 import re
 import tempfile
+import time
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from bootstrap_core import confirm, gcloud_resource_exists, get_repo_root, run_cmd, run_cmd_secret_stdin
-from gcp_process import scoped_environment
+from bootstrap_core import (
+    confirm,
+    gcloud_resource_exists,
+    get_repo_root,
+    run_cmd,
+    run_cmd_secret_stdin,
+    warn,
+)
+from gcp_process import ProcessRunner, scoped_environment
 
 # A destroy workflow rejects every other dispatch ref before auth; the
 # cicd-oidc purpose_contexts validation enforces the same set.
@@ -47,6 +55,10 @@ _SERVICE_ACCOUNT_SUFFIXES = {
     "deploy": "deploy",
     "destroy": "destroy",
 }
+# A new Storage service agent key grant can take time to reach the bucket update
+# that sets the default key (#2564). Each retry plans and checks the plan again.
+_APPLY_ATTEMPTS = 6
+_APPLY_RETRY_SECONDS = 20
 _BRANCH_REF_RE = re.compile(r"refs/heads/([A-Za-z0-9][A-Za-z0-9_/-]*)", re.ASCII)
 
 # GCP naming rules. The bucket rule matches the cicd-oidc
@@ -243,6 +255,7 @@ def _apply_foundation(
             "cloudbuild.googleapis.com",
             "artifactregistry.googleapis.com",
             "storage.googleapis.com",
+            "cloudkms.googleapis.com",
             "--project",
             project,
         ],
@@ -270,14 +283,43 @@ def _apply_foundation(
         [*tf, "init", "-reconfigure", f"-backend-config=bucket={bucket}", "-backend-config=prefix=cicd-oidc"],
         dry_run=dry_run,
     )
-    plan = str(staging / "foundation.tfplan")
-    run_cmd([*tf, "plan", "-input=false", *_var_files(inputs, path, staging), f"-out={plan}"], dry_run=dry_run)
+    _plan_and_apply(tf, inputs, path, staging, dry_run=dry_run)
+    outputs = {} if dry_run else _terraform_outputs(tf)
     if not dry_run:
-        _verify_saved_plan(tf, plan, inputs)
-    run_cmd([*tf, "apply", "-input=false", plan], dry_run=dry_run)
+        from gcp_storage_cmek import migrate_buckets
+
+        # A bucket default key applies only to new writes; move the live objects too (#2564).
+        migrate_buckets(ProcessRunner(), outputs.get("storage_cmek_buckets"))  # type: ignore[arg-type]
     if _builds_images(inputs):
-        outputs = {} if dry_run else _terraform_outputs(tf)
         publish_image_environments(inputs, outputs, dry_run=dry_run)
+
+
+def _plan_and_apply(tf: list[str], inputs: dict[str, object], path: Path, staging: Path, *, dry_run: bool) -> None:
+    """Apply a saved plan that passed the trust check; plan again after an IAM propagation error."""
+    from gcp_terraform import transient_cause
+
+    plan = str(staging / "foundation.tfplan")
+    plan_argv = [*tf, "plan", "-input=false", *_var_files(inputs, path, staging), f"-out={plan}"]
+    apply_argv = [*tf, "apply", "-input=false", plan]
+    if dry_run:
+        run_cmd(plan_argv, dry_run=True)
+        run_cmd(apply_argv, dry_run=True)
+        return
+    for attempt in range(1, _APPLY_ATTEMPTS + 1):
+        run_cmd(plan_argv)
+        _verify_saved_plan(tf, plan, inputs)
+        result = run_cmd(apply_argv, check=False, capture=True)
+        if result.stdout:
+            print(result.stdout, end="")
+        if result.stderr:
+            print(result.stderr, end="")
+        if result.returncode == 0:
+            return
+        cause = transient_cause(f"{result.stdout}\n{result.stderr}")
+        if attempt == _APPLY_ATTEMPTS or not cause:
+            raise SystemExit(1)
+        warn(f"Foundation apply hit {cause}; planning again in {_APPLY_RETRY_SECONDS}s ({attempt}/{_APPLY_ATTEMPTS})")
+        time.sleep(_APPLY_RETRY_SECONDS)
 
 
 def _confirm_foundation(inputs: dict[str, object], project: str) -> None:

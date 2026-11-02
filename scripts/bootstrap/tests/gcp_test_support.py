@@ -67,6 +67,16 @@ def sample_gcp_outputs(project_id: str = "example-gcp-project") -> dict[str, dic
             }
         },
         "assets_bucket_name": {"value": f"{project_id}-gcp-dev-assets"},
+        "storage_cmek_buckets": {
+            "value": {
+                f"{project_id}-gcp-dev-assets": (
+                    f"projects/{project_id}/locations/us-central1/keyRings/shifter-gcp-dev-gcs/cryptoKeys/assets"
+                ),
+                f"{project_id}-gcp-dev-audit-logs": (
+                    f"projects/{project_id}/locations/us-central1/keyRings/shifter-gcp-dev-gcs/cryptoKeys/audit-logs"
+                ),
+            }
+        },
         "terraform_state_bucket_name": {"value": f"{project_id}-terraform-state"},
         "platform_events_topic_id": {"value": f"projects/{project_id}/topics/shifter-gcp-dev-events"},
         "platform_event_subscriptions": {
@@ -165,6 +175,7 @@ class Call:
     argv: list[str]
     env: dict[str, str]
     input_text: str | None
+    display_argv: list[str] | None = None
 
 
 @dataclass
@@ -194,11 +205,13 @@ class FakeRunner:
         capture: bool = True,
         timeout: float | None = None,
         sensitive: bool = False,
+        display_argv: Sequence[str] | None = None,
     ) -> ProcessResult:
         del capture, timeout, sensitive
         command = [str(part) for part in argv]
         child_env = merged_env(self.base, env)
-        self.calls.append(Call(command, child_env, input_text))
+        shown = None if display_argv is None else [str(part) for part in display_argv]
+        self.calls.append(Call(command, child_env, input_text, shown))
         result = ProcessResult(0)
         for prefix, response in self.responses:
             if command[: len(prefix)] == list(prefix):

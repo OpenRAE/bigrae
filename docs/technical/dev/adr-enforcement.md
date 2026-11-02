@@ -694,6 +694,14 @@ The first slice intentionally stays small:
   the [#2558 architecture preflight](../../architecture/blocking-config-security-preflight-2558.md)
   records the cross-repository contracts for that follow-up.
 
+  ADR-008-R5's [#2564 CMEK design](../../architecture/gcp-gcs-cmek-design-2564.md)
+  puts every Terraform-owned GCS bucket on a customer-managed key. A
+  `trivy config` scan of `platform/terraform/gcp` reports no GCP-0066 finding,
+  with no exception. #2566 makes that scan a CI gate. The `terraform test` contracts of `modules/gcs-cmek`,
+  `modules/portal/gcs`, `modules/image-export-storage`,
+  `modules/raes-package-storage`, and `global/cicd-oidc` enforce the keys and
+  the lifecycle KMS roles.
+
 - `checkov-terraform`
   IaC security scan over first-party Terraform in `platform/terraform/`. A
   **blocking gate** under ADR-004-R11. Pre-commit (`.pre-commit-config.yaml`

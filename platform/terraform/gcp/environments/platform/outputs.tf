@@ -88,6 +88,11 @@ output "assets_bucket_name" {
   value       = module.platform_core.assets_bucket_name
 }
 
+output "storage_cmek_buckets" {
+  description = "Customer-managed key of each platform bucket; gcp-deploy rewrites the live objects that do not use it (#2564)."
+  value       = module.platform_core.storage_cmek_buckets
+}
+
 output "ctf_content_bucket_name" {
   description = "Private bucket configured for digest-pinned native CTF content bundles."
   value       = var.ctf_content_bucket_name
