@@ -10,6 +10,7 @@ from ctf.api.organizer import communication
 app_name = "ctf"
 
 urlpatterns = [
+    path("teams/<uuid:team_id>/captain/", organizer.TeamCaptainView.as_view(), name="api_organizer_team_captain"),
     path(
         "events/<uuid:event_id>/principal-participants/",
         principal_participants.PrincipalParticipantAdmissionView.as_view(),
