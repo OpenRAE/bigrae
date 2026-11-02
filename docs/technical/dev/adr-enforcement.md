@@ -636,7 +636,10 @@ The first slice intentionally stays small:
   - `packer-gcp.yml` starts only from `workflow_dispatch` and has no
     `environment` or `publish_target` input.
   - `packer-gcp-validate.yml` starts only from `workflow_call`. The build
-    workflow calls it with a local reference and passes no secrets.
+    workflow calls it with a local reference. It passes only
+    `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_PACKER_VALIDATE_SERVICE_ACCOUNT`, and
+    `GCP_PROJECT_ID`, each from the secret of the same name. A called workflow
+    reads an Environment secret only when the caller passes its name.
   - Each job that publishes binds its fixed Environment (`gcp-image-build` or
     `gcp-image-validate`) and runs on a GitHub-hosted runner. Before its first
     publishing step, it rejects every ref except `refs/heads/dev` and

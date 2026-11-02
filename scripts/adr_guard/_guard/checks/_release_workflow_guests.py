@@ -8,8 +8,10 @@ reads both workflows as data and fails closed:
 - the build workflow starts only through ``workflow_dispatch`` and selects no
   tenant: it has no ``environment`` or ``publish_target`` input (ADR-037-R9);
 - the validation workflow starts only through ``workflow_call``. The build
-  workflow calls it from this commit (a local reference) and passes no secrets
-  (ADR-004-R23);
+  workflow calls it from this commit (a local reference) and passes only the
+  validation secret names, each from the secret of the same name, so the
+  validation job reads them from its own Environment and no build secret
+  reaches it (ADR-004-R23, #2736);
 - every job that publishes (it authenticates to a cloud, logs in to a registry,
   or pushes with ORAS) binds its fixed Environment (``gcp-image-build``, or
   ``gcp-image-validate`` in the validation workflow), runs on a GitHub-hosted
@@ -48,6 +50,11 @@ _LOGIN_ACTION = "docker/login-action@"
 _ATTEST_ACTION = "actions/attest-build-provenance@"
 _ORAS_PUSH = re.compile(r"\boras\s+push\b")
 _TENANT_INPUTS = ("environment", "publish_target")
+# A called workflow reads an Environment secret only when the caller passes its
+# name; these are the only names that validation may receive (#2736).
+_VALIDATE_SECRETS = frozenset(
+    {"GCP_WORKLOAD_IDENTITY_PROVIDER", "GCP_PACKER_VALIDATE_SERVICE_ACCOUNT", "GCP_PROJECT_ID"}
+)
 
 
 def _violation(rule_id: str, message: str, path: str = GUEST_WORKFLOW_PATH) -> Violation:
@@ -162,15 +169,27 @@ def _trigger_violations(workflow: dict[str, object]) -> list[Violation]:
 
 
 def _validate_call_violations(job_id: str, job: dict[str, object]) -> list[Violation]:
-    """Check that a job that calls validation uses this commit and passes no secrets."""
+    """Check that a job that calls validation uses this commit and passes only the validation secrets."""
     uses = str(job.get("uses", "")).strip()
     if not (uses.startswith("./") or "packer-gcp-validate.yml" in uses):
         return []
     violations: list[Violation] = []
     if uses != _VALIDATE_USES:
         violations.append(_violation("ADR-004-R23", f"job '{job_id}' must call {_VALIDATE_USES} from this commit"))
-    if "secrets" in job:
-        violations.append(_violation("ADR-004-R23", f"job '{job_id}' must pass no secrets to validation"))
+    secrets = job.get("secrets", {})
+    if (
+        not isinstance(secrets, dict)
+        or set(secrets) - _VALIDATE_SECRETS
+        or any(str(value).replace(" ", "") != f"${{{{secrets.{name}}}}}" for name, value in secrets.items())
+    ):
+        violations.append(
+            _violation(
+                "ADR-004-R23",
+                f"job '{job_id}' must pass validation only "
+                + ", ".join(sorted(_VALIDATE_SECRETS))
+                + ", each from the secret of the same name",
+            )
+        )
     return violations
 
 
