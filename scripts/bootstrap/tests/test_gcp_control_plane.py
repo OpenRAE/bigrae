@@ -1690,16 +1690,26 @@ class TestGceRangePreconditions:
         with patch("subprocess.run", return_value=absent):
             assert gcp_control_plane._gce_image_exists("p", "image", "i") is False
 
-    def test_allow_flag_downgrades_failures_to_warning(self, capsys):
+    def test_a_dc_image_is_optional(self, capsys):
         env = dict(self._FULL_ENV)
         del env["GCP_RANGE_DC_IMAGE"]
+        checked: list[str] = []
+        gcp_control_plane.check_gce_range_preconditions(
+            self._config(), env=env, image_exists=lambda project, kind, name: checked.append(name) or True
+        )
+        assert checked == ["shifter-ubuntu"]
+        assert "GCE range preconditions satisfied" in capsys.readouterr().out
+
+    def test_allow_flag_downgrades_failures_to_warning(self, capsys):
+        env = dict(self._FULL_ENV)
+        del env["GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL"]
         # Missing var AND a missing image, but the opt-out lets a platform-first bring-up proceed.
         gcp_control_plane.check_gce_range_preconditions(
             self._config(), allow_missing_range_images=True, env=env, image_exists=lambda *_: False
         )
         captured = capsys.readouterr()
         output = captured.out + captured.err
-        assert "GCP_RANGE_DC_IMAGE" in output
+        assert "GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL" in output
         assert "Range guest image not imported" in output
         assert "Proceeding despite the range prerequisites" in output
 
