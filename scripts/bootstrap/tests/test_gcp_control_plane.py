@@ -1560,7 +1560,7 @@ class TestGdcBootstrapRangeBackend:
                 config, confirmation=lambda _p: True, substrate_builder=mock_substrate
             )
         mock_substrate.assert_not_called()
-        assert "gcp-deploy" in capsys.readouterr().out
+        assert "gcp-deploy" in capsys.readouterr().err
 
     def test_gdc_backend_builds_only_the_substrate(self):
         """The gdc backend builds the substrate (including the vm-image secret) and nothing else."""
@@ -1681,7 +1681,7 @@ class TestGceRangePreconditions:
                 self._config(), allow_missing_range_images=True, env=dict(self._FULL_ENV)
             )
         assert exc.value.code == 1
-        output = capsys.readouterr().out
+        output = capsys.readouterr().err
         assert "Required 'compute.images.get' permission" in output
         assert "not imported" not in output
 
@@ -1697,7 +1697,8 @@ class TestGceRangePreconditions:
         gcp_control_plane.check_gce_range_preconditions(
             self._config(), allow_missing_range_images=True, env=env, image_exists=lambda *_: False
         )
-        output = capsys.readouterr().out
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
         assert "GCP_RANGE_DC_IMAGE" in output
         assert "Range guest image not imported" in output
         assert "Proceeding despite the range prerequisites" in output
