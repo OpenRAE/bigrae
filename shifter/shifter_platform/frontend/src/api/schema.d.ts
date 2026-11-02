@@ -3632,6 +3632,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/ctf/teams/{team_id}/captain/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Reassign an existing team's captain using event team authority. */
+        post: operations["ctf_teams_captain_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/ctf/webhooks/{webhook_id}/": {
         parameters: {
             query?: never;
@@ -6844,6 +6861,13 @@ export interface components {
             readonly name: string;
             readonly is_default: boolean;
         };
+        /** @description Minimal team identity and current captain; no invitation material. */
+        OrganizerCaptain: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly captain_id: string | null;
+        };
         /** @description Full organizer-facing challenge detail projection. */
         OrganizerChallengeDetail: {
             readonly id: string;
@@ -7164,6 +7188,10 @@ export interface components {
             readonly hidden: boolean;
             readonly affiliation: string;
             readonly username: string | null;
+            /** Format: uuid */
+            readonly team_id: string | null;
+            /** Format: uuid */
+            readonly team_captain_id: string | null;
             readonly team_name: string | null;
             /** Format: date-time */
             readonly registered_at: string | null;
@@ -20327,6 +20355,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmissionListResponse"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    ctf_teams_captain_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                team_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamMemberRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TeamMemberRequest"];
+                "multipart/form-data": components["schemas"]["TeamMemberRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizerCaptain"];
                 };
             };
             /** @description Authentication failed. */

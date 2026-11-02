@@ -153,6 +153,10 @@ import a roster. Each participant is tracked through registration, range assignm
 and scoring. Use **Brackets** to group participants into ranked cohorts, and (in team
 mode) manage team membership.
 
+To reassign a captain, open an existing team member’s participant detail page.
+Select **Make team captain**. This action requires permission to manage teams.
+It changes captaincy without changing membership or scores.
+
 Requests from the optional public page appear separately at the top of this screen.
 **Reject** closes a request without side effects. **Approve** sends the request
 through the same participant-admission path as a manual add: current capacity and

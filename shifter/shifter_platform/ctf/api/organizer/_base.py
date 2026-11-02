@@ -460,6 +460,10 @@ def _participant_detail_payload(participant: CTFParticipant) -> dict[str, object
         "affiliation": participant.affiliation,
         "username": _participant_username(participant),
         "team_name": participant.team.name if participant.team else None,
+        "team_id": str(participant.team_id) if participant.team else None,
+        "team_captain_id": str(participant.team.captain_id)
+        if participant.team and participant.team.captain_id
+        else None,
         "registered_at": participant.registered_at.isoformat() if participant.registered_at else None,
         "login_info_sent_at": participant.login_info_sent_at.isoformat() if participant.login_info_sent_at else None,
         "last_active_at": participant.last_active_at.isoformat() if participant.last_active_at else None,
