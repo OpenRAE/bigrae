@@ -7,7 +7,7 @@ dependencies = [
     "google-auth==2.50.0",
     "pydantic==2.13.4",
     "raes==10.2.0",
-    "raes-env-packs==7.1.0",
+    "raes-env-packs==7.2.0",
     "requests==2.33.1",
 ]
 
