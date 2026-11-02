@@ -508,9 +508,9 @@ class GuestPublicationTests(unittest.TestCase):
             "      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}\n"
         )
         self.assertEqual(self.violations(build=guest_build(validate_job=GUEST_VALIDATE_JOB + named)), [])
-        build_secret = "      GCP_PACKER_BUILD_SERVICE_ACCOUNT: ${{ secrets.GCP_PACKER_BUILD_SERVICE_ACCOUNT }}\n"
+        build_line = "      GCP_PACKER_BUILD_SERVICE_ACCOUNT: ${{ secrets.GCP_PACKER_BUILD_SERVICE_ACCOUNT }}\n"
         renamed = "    secrets:\n      GCP_PROJECT_ID: ${{ secrets.GCP_PACKER_BUILD_SERVICE_ACCOUNT }}\n"
-        for passed in ("    secrets: inherit\n", named + build_secret, renamed):
+        for passed in ("    secrets: inherit\n", named + build_line, renamed):
             self.assert_one(
                 "ADR-004-R23",
                 "must pass validation only",

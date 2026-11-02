@@ -854,7 +854,14 @@ class TestGcpReleaseSecurityClosure(unittest.TestCase):
         jobs = ADR_GUARD._dw_jobs(build, "packer-gcp.yml")
         self.assertEqual(jobs["publish"]["needs"], ["build", "validate"])
         self.assertEqual(jobs["validate"]["uses"], "./.github/workflows/packer-gcp-validate.yml")
-        self.assertNotIn("secrets", jobs["validate"])
+        # Only the validation secret names, each from the secret of the same name (#2736).
+        self.assertEqual(
+            jobs["validate"]["secrets"],
+            {
+                name: f"${{{{ secrets.{name} }}}}"
+                for name in ("GCP_WORKLOAD_IDENTITY_PROVIDER", "GCP_PACKER_VALIDATE_SERVICE_ACCOUNT", "GCP_PROJECT_ID")
+            },
+        )
         self.assertFalse((REPO_ROOT / ".github/workflows/packer-gcp-promote.yml").exists())
 
     def test_gcp_workflows_keep_sensitive_tfvars_out_of_the_checkout(self):
