@@ -134,6 +134,57 @@ describe("EventFormPage (edit)", () => {
   });
 });
 
+describe("EventFormPage (team size)", () => {
+  it("accepts 0 as an unlimited team size limit (CTF-505)", async () => {
+    routeApi((path, options) => {
+      if (path === "/ctf/scenario-options/") return { scenarios: [] };
+      if (path === "/ctf/events/e1/" && options?.method === "PUT") return { id: "e1", name: "Spring CTF", status: "registration" };
+      if (path === "/ctf/events/e1/") return { ...EVENT, team_mode: true, team_size_limit: 4 };
+      return {};
+    });
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="edit" />, {
+      path: "/ctf/admin/events/:eventId/edit",
+      initialEntries: ["/ctf/admin/events/e1/edit"],
+    });
+
+    const limit = await screen.findByLabelText("Team size limit (0 or blank = unlimited)");
+    expect(limit).toHaveAttribute("min", "0");
+    await user.clear(limit);
+    await user.type(limit, "0");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      const call = mockApi.mock.calls.find(([p, o]) => p === "/ctf/events/e1/" && o?.method === "PUT");
+      expect(call?.[1]?.body).toMatchObject({ team_mode: true, team_size_limit: 0 });
+    });
+  });
+
+  it("does not save unparseable number input as an unlimited team size", async () => {
+    routeApi((path) => {
+      if (path === "/ctf/scenario-options/") return { scenarios: [] };
+      if (path === "/ctf/events/e1/") return { ...EVENT, team_mode: true, team_size_limit: 4 };
+      return {};
+    });
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="edit" />, {
+      path: "/ctf/admin/events/:eventId/edit",
+      initialEntries: ["/ctf/admin/events/e1/edit"],
+    });
+
+    const limit = await screen.findByLabelText("Team size limit (0 or blank = unlimited)");
+    await user.clear(limit);
+    // Browsers report unparseable number input (like "1e") as an empty value
+    // with validity.badInput set; jsdom does not model badInput.
+    Object.defineProperty(limit, "validity", { value: { ...(limit as HTMLInputElement).validity, badInput: true } });
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByText("Team size limit (0 or blank = unlimited) is not a valid number.")).toBeInTheDocument();
+    expect(limit).toHaveFocus();
+    expect(mockApi.mock.calls.some(([p, o]) => p === "/ctf/events/e1/" && o?.method === "PUT")).toBe(false);
+  });
+});
+
 describe("EventFormPage (live notifications)", () => {
   it("loads the selected kinds and saves only the checked kinds", async () => {
     routeApi((path, options) => {

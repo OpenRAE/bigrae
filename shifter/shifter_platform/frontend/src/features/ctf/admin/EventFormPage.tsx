@@ -188,9 +188,9 @@ export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
               {state.team_mode ? (
                 <TextField
                   id="e-teamsize"
-                  label="Team size limit (optional)"
+                  label="Team size limit (0 or blank = unlimited)"
                   type="number"
-                  min={1}
+                  min={0}
                   value={state.team_size_limit}
                   error={firstError("team_size_limit")}
                   onChange={(v) => set("team_size_limit", v)}
