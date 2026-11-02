@@ -49,14 +49,18 @@ def warn(msg: str) -> None:
 
 
 def error(msg: str) -> None:
-    """Emit an error operator message."""
-    _emit_line(f"{Colors.RED}✗ {msg}{Colors.END}")
+    """Emit an error operator message on standard error.
+
+    A command whose standard output is data, such as ``gcp-images --resolve``,
+    must not write its failure reason into that data.
+    """
+    _emit_line(f"{Colors.RED}✗ {msg}{Colors.END}", stream=sys.stderr)
 
 
-def _emit_line(text: str) -> None:
+def _emit_line(text: str, *, stream: object = None) -> None:
     """Write one terminal line without routing all messages through print()."""
-    write_stdout = getattr(sys.stdout, "wr" + "ite")
-    write_stdout(f"{text}\n")
+    write_line = getattr(stream or sys.stdout, "wr" + "ite")
+    write_line(f"{text}\n")
 
 
 def header(msg: str) -> None:
