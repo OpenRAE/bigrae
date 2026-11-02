@@ -39,7 +39,7 @@ From **CTF Admin → Events → Create**, set the core parameters:
 | Event start / end | Competition window |
 | Registration deadline | Latest time a participant may register |
 | Max participants | Capacity limit |
-| Team mode / team size | Individual vs. team competition |
+| Team mode / team size | Individual vs. team competition. Team size is 1 or more; 0 or blank is unlimited |
 | Range spin-up minutes | Lead time to provision ranges before start |
 | Submission cooldown / attempt limit | Anti-brute-force throttles |
 | Scoreboard visibility / freeze | Whether and when standings are shown |
