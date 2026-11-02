@@ -405,7 +405,7 @@ class TestMainCLI:
             deploy.main()
 
         assert exc.value.code == 1
-        output = capsys.readouterr().out
+        output = capsys.readouterr().err
         assert "Missing required dependencies" in output
         assert "gcloud" in output
         assert "Bootstrapping cluster1 GDC Cluster" not in output
@@ -842,7 +842,7 @@ class TestMainCLI:
             deploy.main(dependency_checker=_skip_dependency_check)
 
         assert exc.value.code == 1
-        assert "No gh default repository is set" in capsys.readouterr().out
+        assert "No gh default repository is set" in capsys.readouterr().err
         assert calls == [["gh", "repo", "set-default", "--view"]]
 
 
