@@ -261,8 +261,8 @@ position notices stop while the scoreboard is hidden or frozen.
 
 ## 7. During and After the Event
 
-- The **Scoreboard** updates as submissions land. Freeze it near the end to keep final
-  standings suspended until close.
+- The **Scoreboard** on the Monitoring page refreshes every 15 seconds. Freeze it
+  near the end to keep final standings suspended until close.
 - **Analytics** summarizes solves, attempts, and challenge difficulty in practice.
 - After the event, scoring can be recomputed authoritatively if needed (see the
   technical docs for the leaderboard recompute command).
