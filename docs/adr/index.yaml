@@ -2519,6 +2519,13 @@
         "id": "ADR-041-R10",
         "description": "Core image workflows and quality jobs must not build, seed, validate, or publish private scenario images or execute private pack tests. Pack-owned content, image recipes, private scripts, and their behavioral tests live in the owning repository. Shared base-image and domain-controller build tools remain generic, require explicit domain/content inputs, and retain first-boot, reboot, credential-cleanup, encryption and protected-ref checks. Private source must be preserved with a hash inventory before removal; history rewriting is not part of extraction.",
         "checks": []
+      },
+      {
+        "id": "ADR-041-R11",
+        "description": "Named adapter file inputs use the incumbent CMS scoped upload, immutable-copy, quota, soft-delete and cleanup boundaries. Required names and digest/size descriptors are closed SDK contracts; empty additions preserve retained manifest and invocation identities. CMS authorizes actual file custody and pins exact versions before dispatch, retaining admitted range uses through destruction. File material is bounded to 512 KiB total and 16 declared inputs, verified against installed object identity and SHA-256, and supplied only through an immutable invocation-owned read-only file Secret. Metadata and operation pins remain byte-free. A file selection grants no platform credential, provider permission, network access, arbitrary mount or application-process code execution. Missing, changed, unauthorized or undeclared inputs fail closed. Native custody constraints, rendered admission-policy tests and synthetic SDK/lifecycle tests enforce the channel; no live tenant effect is needed to test it.",
+        "checks": [
+          "layer-imports"
+        ]
       }
     ],
     "exceptions": [],
@@ -2531,6 +2538,7 @@
       "docs/technical/shifter_platform/scenario-verification.md",
       "shifter/shifter_adapter_sdk/verification",
       "docs/architecture/external-scenario-runtime-design.md",
+      "docs/architecture/named-file-assets-2719.md",
       "shifter/shifter_adapter_sdk/runtime.py",
       "shifter/shifter_platform/engine/services/_runtime_plugins.py",
       "shifter/shifter_platform/engine/services/_runtime_plugin_controller.py",

@@ -21,7 +21,7 @@ def create_agent(user: object, **kwargs: object) -> AgentConfig:
     credential = require_native_content_credential(user)
     if set(kwargs) != {"upload_token"}:
         raise CMSError("A verified upload is required")
-    return complete_scoped_upload(credential, cast(str, kwargs["upload_token"]))
+    return cast("AgentConfig", complete_scoped_upload(credential, cast(str, kwargs["upload_token"])))
 
 
 def delete_agent(user: object, agent_id: int) -> None:

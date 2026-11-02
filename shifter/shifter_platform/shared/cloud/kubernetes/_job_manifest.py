@@ -184,6 +184,10 @@ def _build_container(
     if hardening is not None:
         kwargs["security_context"] = _build_container_security_context(client, hardening)
         kwargs["volume_mounts"] = _build_container_volume_mounts(client, hardening)
+        kwargs["volume_mounts"].extend(
+            _api_call(client, "V1VolumeMount", name=mount.name, mount_path=mount.mount_path, read_only=True)
+            for mount in profile.read_only_secret_mounts
+        )
     return _api_call(client, "V1Container", **kwargs)
 
 
@@ -256,7 +260,24 @@ def _build_job(
     if hardening is not None:
         pod_spec_kwargs["security_context"] = _build_pod_security_context(client, hardening)
         pod_spec_kwargs["volumes"] = _build_writable_volumes(client, hardening)
+        pod_spec_kwargs["volumes"].extend(
+            _api_call(
+                client,
+                "V1Volume",
+                name=mount.name,
+                secret=_api_call(
+                    client,
+                    "V1SecretVolumeSource",
+                    secret_name=mount.secret_name,
+                    default_mode=0o440,
+                    items=[_api_call(client, "V1KeyToPath", key=key, path=key) for key in mount.keys],
+                ),
+            )
+            for mount in profile.read_only_secret_mounts
+        )
         pod_spec_kwargs["automount_service_account_token"] = False
+    elif profile.read_only_secret_mounts:
+        raise CloudTaskError("Read-only file inputs require the hardened task profile")
     _attach_database_proxy(client, profile, hardening, pod_spec_kwargs)
 
     if profile.service_account_name:

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import os
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.contrib.sessions.backends.base import SessionBase
 from drf_spectacular.utils import extend_schema
@@ -37,6 +37,11 @@ from shared.log_sanitize import safe_log_value
 
 logger = logging.getLogger(__name__)
 
+if TYPE_CHECKING:
+    from rest_framework.serializers import Serializer
+
+    from shared.schemas.cms_projections import UploadAssetRef, UploadInitiation
+
 
 def _upload_session(request: Request) -> SessionBase | dict[str, Any]:
     """Browser presentation state never supplies token/service authority."""
@@ -56,6 +61,7 @@ class UploadInitiateView(MissionControlAPIView):
     """Initiate a presigned agent upload."""
 
     required_actions = scope_actions("manage_content")
+    upload_serializer: type[Serializer] = UploadInitiateSerializer
 
     permission_classes = [IsAuthenticatedSessionOrApiToken, HasMissionControlActor]
 
@@ -73,7 +79,7 @@ class UploadInitiateView(MissionControlAPIView):
                 status_code=409,
             )
 
-        data, error = _validated(self, UploadInitiateSerializer, request.data)
+        data, error = _validated(self, self.upload_serializer, request.data)
         if error is not None:
             return error
         assert data is not None
@@ -84,39 +90,45 @@ class UploadInitiateView(MissionControlAPIView):
     def _initiate_upload(self, request: Request, user: CredentialContext, data: dict[str, Any]) -> Response:
         """Create the presigned upload and mark the session upload state."""
         filename = os.path.basename(data["filename"])
+        data = {**data, "filename": filename}
         try:
-            result = cms_initiate_upload(
-                user,
-                data["name"],
-                filename,
-                data["file_size"],
-                data["agent_type"],
-                scope=resource_placement(user, data),
-            )
+            result = self.initiate_asset(user, data)
         except CMSError as exc:
             # The CMS and storage layers log rejections and failures where they are raised.
             logger.warning(
-                "Upload initiation failed: principal_uuid=%s filename=%s exc_type=%s",
+                "Upload initiation failed: principal_uuid=%s exc_type=%s",
                 user.principal.uuid,
-                safe_log_value(filename),
                 type(exc).__name__,
             )
             return self.bad_request(classify_user_message(str(exc), default="Upload could not be initiated"))
 
         set_upload_in_progress(_upload_session(request), True, upload_token=str(result["upload_token"]))
         logger.info(
-            "Upload initiated: principal_uuid=%s filename=%s size=%d",
+            "Upload initiated: principal_uuid=%s size=%d",
             safe_log_value(str(user.principal.uuid)),
-            safe_log_value(filename),
             data["file_size"],
         )
         return Response(result)
+
+    def initiate_asset(self, user: CredentialContext, data: dict[str, Any]) -> UploadInitiation:
+        """Select the installer service; subclasses retain the same upload protocol."""
+        return cms_initiate_upload(
+            user,
+            data["name"],
+            data["filename"],
+            data["file_size"],
+            data["agent_type"],
+            scope=resource_placement(user, data),
+        )
 
 
 class UploadCompleteView(MissionControlAPIView):
     """Complete a presigned agent upload."""
 
     required_actions = scope_actions("manage_content")
+    response_id_field = "agent_id"
+    asset_label = "Agent"
+    upload_serializer: type[Serializer] = UploadCompleteSerializer
 
     permission_classes = [IsAuthenticatedSessionOrApiToken, HasMissionControlActor]
 
@@ -127,14 +139,14 @@ class UploadCompleteView(MissionControlAPIView):
     )
     def post(self, request: Request) -> Response:
         """Finalize a completed upload and clear the session upload marker."""
-        data, error = _validated(self, UploadCompleteSerializer, request.data)
+        data, error = _validated(self, self.upload_serializer, request.data)
         if error is not None:
             return error
         assert data is not None
 
         user = self.actor_credential()
         try:
-            agent = cms_complete_upload(user, data.get("upload_token", ""))
+            asset = self.complete_asset(user, data.get("upload_token", ""))
         except CMSError as exc:
             _clear_matching_upload(request, data.get("upload_token", ""))
             logger.warning(
@@ -143,20 +155,25 @@ class UploadCompleteView(MissionControlAPIView):
             return self.bad_request(classify_user_message(str(exc), default="Upload could not be completed"))
 
         _clear_matching_upload(request, data.get("upload_token", ""))
-        logger.info("Upload completed: user=%s agent_id=%s", safe_log_value(str(user.principal.uuid)), agent.id)
+        logger.info("Upload completed: principal_uuid=%s asset_id=%s", user.principal.uuid, asset.pk)
         return Response(
             {
                 "success": True,
-                "agent_id": agent.id,
-                "message": f"Agent '{agent.name}' uploaded successfully.",
+                self.response_id_field: asset.pk,
+                "message": f"{self.asset_label} '{asset.name}' uploaded successfully.",
             }
         )
+
+    def complete_asset(self, user: CredentialContext, token: str) -> UploadAssetRef:
+        """Use the installer-purpose service while preserving shared session handling."""
+        return cms_complete_upload(user, token)
 
 
 class UploadCancelView(MissionControlAPIView):
     """Cancel an in-progress agent upload."""
 
     required_actions = scope_actions("manage_content")
+    upload_serializer: type[Serializer] = UploadCancelSerializer
 
     permission_classes = [IsAuthenticatedSessionOrApiToken, HasMissionControlActor]
 
@@ -171,7 +188,7 @@ class UploadCancelView(MissionControlAPIView):
             raw_data = request.data
         except ParseError:
             return self.bad_request("Invalid request")
-        data, error = _validated(self, UploadCancelSerializer, raw_data)
+        data, error = _validated(self, self.upload_serializer, raw_data)
         if error is not None:
             return error
         assert data is not None
@@ -181,7 +198,7 @@ class UploadCancelView(MissionControlAPIView):
         if upload_token:
             try:
                 # CMS validates the token and absorbs best-effort storage cleanup failures.
-                cms_cancel_upload(user, upload_token)
+                self.cancel_asset(user, upload_token)
                 logger.info("Cancelled upload cleaned up: user=%s", safe_log_value(str(user.principal.uuid)))
             except (ValueError, CMSError):
                 response = self.bad_request("Upload cancel token is invalid or stale")
@@ -192,3 +209,7 @@ class UploadCancelView(MissionControlAPIView):
             response = self.bad_request("Upload cancel token is invalid or stale")
 
         return response
+
+    def cancel_asset(self, user: CredentialContext, token: str) -> None:
+        """Cancel the exact installer admission, leaving storage cleanup durable."""
+        cms_cancel_upload(user, token)

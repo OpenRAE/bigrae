@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
@@ -28,6 +29,7 @@ from shared.identity_scope import ResourceScope
 from shared.runtime_plugin_binding import PluginTargetBindings, RuntimePluginPin, RuntimePluginScope
 
 from ._runtime_plugin_authority import admit_plugin_authority, current_plugin_credential, fence_plugin_authority
+from ._runtime_plugin_file_selection import runtime_plugin_file_selection as runtime_plugin_file_selection
 from ._runtime_plugins import _authorize
 
 if TYPE_CHECKING:
@@ -325,6 +327,8 @@ def resolve_runtime_plugin_pin(
         .first()
     )
     if candidate is None:
+        if scope.binding_digest is not None or scope.files:
+            raise ValidationError("The pack's runtime plugin changed during launch; retry the launch")
         return None
     # All writers lock installation before binding. Recheck after acquiring both
     # locks: a concurrent version switch must not admit a partially old pin.
@@ -340,6 +344,11 @@ def resolve_runtime_plugin_pin(
         manifest = PluginManifest.model_validate(installation.manifest)
         if manifest.digest != installation.manifest_digest:
             raise ValueError("Stored plugin identity mismatch")
+        if scope.binding_digest is not None:
+            from ._runtime_plugin_file_selection import file_selection_digest
+
+            if file_selection_digest(binding, installation) != scope.binding_digest:
+                raise ValueError("The file selection changed during admission")
         pin = RuntimePluginPin(
             installation_id=installation.id,
             organization_uuid=organization_uuid,
@@ -347,6 +356,8 @@ def resolve_runtime_plugin_pin(
             pack_digest=pack_digest,
             manifest=manifest,
             bindings=binding.bindings,
+            files=scope.files,
+            binding_digest=scope.binding_digest,
         )
         pin.bindings.validate_plan(plan)
         if backend is not None:
@@ -430,13 +441,21 @@ def _validate_pack_pin(
         if manifest.digest != installation.manifest_digest:
             raise ValueError("Stored plugin identity mismatch")
         parsed.validate_manifest(manifest)
-        RuntimePluginPin(
-            installation_id=installation.id,
+        scope = RuntimePluginScope(
             organization_uuid=organization_uuid,
             pack_id=pack_id,
             pack_digest=pack_digest,
-            manifest=manifest,
-            bindings=parsed,
         )
+        # Assignment names logical files. Only CMS launch admission may supply
+        # immutable versions, so do not manufacture a lifetime pin at save time.
+        selection = {
+            **scope.model_dump(mode="json"),
+            "binding_version": 1,
+            "installation_id": str(installation.id),
+            "manifest": manifest.model_dump(mode="json"),
+            "bindings": parsed.model_dump(mode="json"),
+        }
+        if len(json.dumps(selection, ensure_ascii=False, separators=(",", ":")).encode()) > 32_768:
+            raise ValueError("Plugin binding exceeds its input budget")
     except ValueError:
         raise ValidationError("The bindings do not match the installed plugin declaration") from None

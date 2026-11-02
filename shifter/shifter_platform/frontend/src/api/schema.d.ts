@@ -3734,6 +3734,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/mission-control/files/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Return scoped metadata without signed downloads or material. */
+        get: operations["api_v1_mission_control_files_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mission-control/files/{file_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** @description Use the actual asset's owning scope, never a caller-supplied parent. */
+        delete: operations["api_v1_mission_control_files_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mission-control/files/upload/cancel/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Keep exact capability cleanup evidence after cancellation. */
+        post: operations["api_v1_mission_control_file_upload_cancel"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mission-control/files/upload/complete/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Return metadata for the installed immutable version. */
+        post: operations["api_v1_mission_control_file_upload_complete"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/mission-control/files/upload/initiate/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Issue the existing bounded upload capability for a file asset. */
+        post: operations["api_v1_mission_control_file_upload_initiate"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/mission-control/guacamole/bootstrap/{request_id}/": {
         parameters: {
             query?: never;
@@ -6248,10 +6333,49 @@ export interface components {
             visible_os_types?: string[];
             theme_color?: string;
         };
+        /** @description Display metadata, with no content, object key, owner or digest. */
+        FileAsset: {
+            id: number;
+            /** Format: uuid */
+            uuid: string;
+            name: string;
+            original_filename: string;
+            file_size_bytes: number;
+            /** Format: date-time */
+            created_at: string;
+        };
+        /** @description Active files and the same server-owned bound used by upload admission. */
+        FileAssetList: {
+            files: components["schemas"]["FileAsset"][];
+            max_file_size_bytes: number;
+        };
         /** @description Presigned download URL for a challenge attachment. */
         FileDownloadResponse: {
             readonly url: string;
             readonly filename: string;
+        };
+        /** @description The new immutable version, not a storage capability. */
+        FileUploadComplete: {
+            success: boolean;
+            file_id: number;
+            message: string;
+        };
+        /** @description Closed opaque-file metadata; storage and ownership are server-selected. */
+        FileUploadInitiate: {
+            /** Format: uuid */
+            account_uuid?: string;
+            /** Format: uuid */
+            organization_uuid?: string;
+            /** Format: uuid */
+            workspace_uuid?: string;
+            name: string;
+            filename: string;
+            file_size: unknown;
+            replaces?: number;
+        };
+        /** @description The signed reference alone selects a retained file-purpose admission. */
+        FileUploadToken: {
+            upload_token: string;
         };
         /** @description Result returned after adding a flag (validator_config only when set). */
         FlagCreateResult: {
@@ -8243,6 +8367,9 @@ export interface components {
             };
             image_profiles?: {
                 [key: string]: components["schemas"]["RuntimeTargetImageProfile"];
+            };
+            file_assets?: {
+                [key: string]: string;
             };
         };
         /** @description A conforming adapter manifest and optional registry credentials. */
@@ -20604,6 +20731,214 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SuccessResponse"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    api_v1_mission_control_files_list: {
+        parameters: {
+            query?: {
+                account_uuid?: string;
+                organization_uuid?: string;
+                workspace_uuid?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileAssetList"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    api_v1_mission_control_files_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                file_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No response body */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    api_v1_mission_control_file_upload_cancel: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileUploadToken"];
+                "application/x-www-form-urlencoded": components["schemas"]["FileUploadToken"];
+                "multipart/form-data": components["schemas"]["FileUploadToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SuccessResponse"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    api_v1_mission_control_file_upload_complete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileUploadToken"];
+                "application/x-www-form-urlencoded": components["schemas"]["FileUploadToken"];
+                "multipart/form-data": components["schemas"]["FileUploadToken"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileUploadComplete"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    api_v1_mission_control_file_upload_initiate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FileUploadInitiate"];
+                "application/x-www-form-urlencoded": components["schemas"]["FileUploadInitiate"];
+                "multipart/form-data": components["schemas"]["FileUploadInitiate"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UploadInitiateResponse"];
                 };
             };
             /** @description Authentication failed. */

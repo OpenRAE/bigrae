@@ -1308,6 +1308,25 @@ qualification of an external adapter on either cloud.
 
 The independent adapter SDK has its own dependency update entry, like every other Python package root. Private image recipes and their dependency update targets belong to the pack owner.
 
+### Named adapter file inputs (ADR-041-R11)
+
+Named files reuse CMS's scoped upload ledger, quota mutex, immutable installation
+and cleanup. Database constraints and custody triggers retain the file purpose,
+exact object version and original range-use proof. SDK checks require the exact
+declared input names, nonempty files and a 512 KiB aggregate budget; empty new
+fields preserve retained request identities. CMS authorizes and fences actual
+file custody before native creation and through a composition-bound material
+port before worker dispatch. Engine cannot import CMS.
+
+The rendered runtime-plugin admission policy permits only the invocation's
+immutable file Secret, projected with explicit bounded keys and a fixed read-only
+mount. The object-count quota allows three Secrets per reserved Job without
+increasing the 16-pod execution cap. Synthetic tests evaluate the rendered CEL
+with actual builder manifests and reject wrong Secrets, writable or extra mounts,
+path traversal, unsafe modes and oversized key sets. CMS tests cover replacement,
+retention, quota cleanup, original-proof revocation and digest tampering; these
+checks require no deployment or live qualification.
+
 ### Participant model credential cutover (ADR-004-R21, ADR-059)
 
 Core no longer creates pack-specific provider roles or issues guest provider keys.

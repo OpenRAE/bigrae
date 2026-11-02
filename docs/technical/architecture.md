@@ -352,6 +352,23 @@ image recipes, answers and acceptance evidence stay in their owner's repository.
 A compatibility probe, buildable SDK, or accepted manifest proves neither a
 published package release nor a qualified live range.
 
+Named adapter input files use CMS's existing content scope, signed upload,
+immutable object installation, quota and cleanup. Administrators manage them in
+Mission Control → Assets → Files and bind declared input names to logical file
+identities in the pack assignment. New launches pin the active immutable version;
+replacement or retirement cannot substitute bytes for an admitted range.
+CMS retains the original non-secret read authority and reauthorizes it before
+each planning invocation. The composition root connects this CMS service through
+a neutral material port; Engine imports no CMS implementation.
+
+Only SHA-256, size and exact version references enter the operation pin.
+The worker receives bounded bytes through its own Job-owned immutable Secret,
+mounted read-only at `/run/plugin-inputs`. The aggregate limit is 512 KiB across
+at most 16 inputs. Missing files, revoked authority or changed material prevent
+worker dispatch. File inputs grant no network access or cloud credentials.
+See the [named-file design](../architecture/named-file-assets-2719.md) for the
+trust boundaries, retention and admission checks.
+
 The 2026-10-28 logging and exception-handling cleanup (#2569) changed only the
 Ruff lint rules in the SDK package manifest. It did not change the adapter ABI,
 the public contracts, or the installation boundary on this page.

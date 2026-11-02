@@ -91,7 +91,17 @@ def test_pull_secret_reuses_an_existing_matching_secret(pull_secret_env):
             type=body["type"],
             data=body["data"],
             immutable=True,
-            metadata=SimpleNamespace(owner_references=[SimpleNamespace(uid="job-uid")]),
+            metadata=SimpleNamespace(
+                owner_references=[
+                    SimpleNamespace(
+                        uid="job-uid",
+                        name=body["metadata"]["ownerReferences"][0]["name"],
+                        kind="Job",
+                        api_version="batch/v1",
+                        controller=True,
+                    )
+                ]
+            ),
         )
 
     env.core.read_namespaced_secret.side_effect = _existing
@@ -99,3 +109,33 @@ def test_pull_secret_reuses_an_existing_matching_secret(pull_secret_env):
     assert _pull_secret(env.row, env.request) == f"runtime-plugin-pull-{env.request.invocation_id.hex}"
     assert env.core.create_namespaced_secret.call_count == 1
     env.core.read_namespaced_secret.assert_called_once()
+
+
+@pytest.mark.parametrize("changed", ["uid", "controller", "name", "kind", "api_version", "data", "immutable"])
+def test_input_secret_conflict_cannot_adopt_another_owner_or_material(pull_secret_env, changed):
+    from engine.services._runtime_plugin_controller import _owned_secret
+
+    env = pull_secret_env
+    env.core.create_namespaced_secret.side_effect = _ApiException(409, "AlreadyExists")
+
+    def existing(**_kwargs):
+        body = env.core.create_namespaced_secret.call_args.kwargs["body"]
+        owner = SimpleNamespace(
+            uid="job-uid",
+            name=body["metadata"]["ownerReferences"][0]["name"],
+            kind="Job",
+            api_version="batch/v1",
+            controller=True,
+        )
+        secret = SimpleNamespace(
+            type="Opaque", data=body["data"], immutable=True, metadata=SimpleNamespace(owner_references=[owner])
+        )
+        if changed in {"data", "immutable"}:
+            setattr(secret, changed, {"parameters": "different"} if changed == "data" else False)
+        else:
+            setattr(owner, changed, False if changed == "controller" else "different")
+        return secret
+
+    env.core.read_namespaced_secret.side_effect = existing
+    with pytest.raises(CloudTaskError, match="identity mismatch"):
+        _owned_secret(env.request, "job-inputs", "Opaque", {"parameters": "private-material"})

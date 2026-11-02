@@ -135,6 +135,10 @@ def set_runtime_plugin_pack(
     admission = prepare_runtime_plugin_binding(
         user, plugin_scope, payload["installation_id"], bindings.model_dump(mode="json"), enabled=payload["enabled"]
     )
+    from ._runtime_file_admission import fence_file_selection, prepare_file_selection
+
+    tenant_scope = resolve_credential_scope(TargetRef("organization", organization_uuid))
+    files = prepare_file_selection(user, tenant_scope, bindings.file_assets, assignment=True)
     with transaction.atomic():
         source = RaesPackageSource.objects.select_for_update().filter(scenario_id=pack_id).first()
         try:
@@ -150,6 +154,8 @@ def set_runtime_plugin_pack(
             or locked_scope != source_scope
         ):
             raise ValidationError(_PACK_CHANGED)
+        if files:
+            fence_file_selection(user, tenant_scope, files, assignment=True)
         return bind_runtime_plugin(
             admission,
             plugin_scope,

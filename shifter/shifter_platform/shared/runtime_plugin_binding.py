@@ -12,8 +12,11 @@ from uuid import UUID, uuid5
 
 from pydantic import Field, model_validator
 from shifter_adapter_sdk.runtime import (
+    MAX_FILE_INPUT_BYTES,
+    MAX_FILE_INPUTS,
     ClosedModel,
     Digest,
+    FileInput,
     GuestTarget,
     Identifier,
     Phase,
@@ -21,6 +24,8 @@ from shifter_adapter_sdk.runtime import (
     RuntimeInput,
     canonical_digest,
 )
+
+from shared.runtime_file_inputs import RuntimeFileBinding
 
 _GCE_IMAGE_REF = re.compile(r"^projects/[a-z0-9][-a-z0-9.:]*/global/images/[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$")
 _GCE_MACHINE_IMAGE_REF = re.compile(
@@ -204,12 +209,17 @@ class PluginTargetBindings(ClosedModel):
         repr=False,
     )
     image_profiles: dict[Identifier, RuntimeTargetImageProfile] = Field(default_factory=dict, max_length=64)
+    file_assets: dict[Identifier, UUID] = Field(
+        default_factory=dict, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
+    )
 
     def validate_manifest(self, manifest: PluginManifest) -> None:
         if set(self.targets) != set(manifest.required_bindings):
             raise ValueError("Plugin target bindings do not match its declaration")
         if set(self.parameters) != set(manifest.required_parameters):
             raise ValueError("Plugin parameters do not match its declaration")
+        if set(self.file_assets) != set(manifest.required_files):
+            raise ValueError("Plugin file selections do not match its declaration")
         if not set(self.image_profiles).issubset(self.targets):
             raise ValueError("Plugin image profiles must name declared target bindings")
 
@@ -253,6 +263,10 @@ class RuntimePluginScope(ClosedModel):
     organization_uuid: UUID
     pack_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
     pack_digest: Digest
+    files: dict[Identifier, RuntimeFileBinding] = Field(
+        default_factory=dict, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
+    )
+    binding_digest: Digest | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class RuntimePluginPin(RuntimePluginScope):
@@ -266,6 +280,12 @@ class RuntimePluginPin(RuntimePluginScope):
     @model_validator(mode="after")
     def validate_pin(self) -> Self:
         self.bindings.validate_manifest(self.manifest)
+        if set(self.files) != set(self.manifest.required_files) or any(
+            self.bindings.file_assets[name] != item.asset_uuid for name, item in self.files.items()
+        ):
+            raise ValueError("Plugin file versions do not match their admitted selection")
+        if sum(item.size_bytes for item in self.files.values()) > MAX_FILE_INPUT_BYTES:
+            raise ValueError("Plugin files exceed their aggregate byte budget")
         if len(self.model_dump_json().encode("utf-8")) > 32_768:
             raise ValueError("Plugin binding exceeds its input budget")
         return self
@@ -311,6 +331,7 @@ def runtime_plugin_requests(
             range_id=range_id,
             targets=targets,
             parameters=pin.bindings.parameters,
+            files={name: FileInput(sha256=item.sha256, size_bytes=item.size_bytes) for name, item in pin.files.items()},
         )
         for phase in phases
     )

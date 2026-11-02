@@ -42,7 +42,6 @@ def test_legacy_experiment_settings_are_removed():
 
 def test_legacy_script_surfaces_are_not_routed():
     for path in (
-        "/mission-control/files/",
         "/mission-control/api/scripts/",
         "/api/v1/mission-control/scripts/",
         "/api/v1/mission-control/scripts/upload/",
@@ -52,6 +51,11 @@ def test_legacy_script_surfaces_are_not_routed():
         except Resolver404:
             continue
         raise AssertionError(f"legacy experiment script path still resolves: {path}")
+
+
+def test_named_files_page_routes_to_the_current_spa():
+    match = resolve("/mission-control/files/")
+    assert match.url_name == "files"
 
 
 def test_legacy_script_token_scopes_are_removed():
