@@ -16,6 +16,7 @@ never reach argv, a log, or an error message.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import re
 from collections.abc import Mapping
@@ -131,6 +132,29 @@ def _rewrite_live_objects(runner: ProcessRunner, bucket: str, key: str, env: Map
     return rewritten
 
 
+def _verified_report(
+    after: list[dict[str, object]], bucket: str, key: str, *, locked: bool, rewritten: int
+) -> MigrationReport:
+    """Count the generations after the rewrite; fail when an addressable live object still lacks ``key``."""
+    live = [item for item in after if _is_live(item)]
+    pending = [item for item in live if not _uses_key(item, key)]
+    retained = pending if locked else []
+    unaddressable = [] if locked else [item for item in pending if _WILDCARD_RE.search(str(item["name"]))]
+    unmigrated = len(pending) - len(retained) - len(unaddressable)
+    if unmigrated:
+        noun = "object" if unmigrated == 1 else "objects"
+        raise StorageMigrationError(f"Bucket {bucket}: {unmigrated} live {noun} do not use {key} after the rewrite")
+    return MigrationReport(
+        bucket=bucket,
+        rewritten=rewritten,
+        customer_managed=len(live) - len(pending),
+        noncurrent_residual=sum(1 for item in after if not _is_live(item) and not _uses_key(item, key)),
+        soft_deleted_residual=None,
+        retained_residual=len(retained),
+        unaddressable_residual=len(unaddressable),
+    )
+
+
 def migrate_bucket(
     runner: ProcessRunner, bucket: str, key: str, *, env: Mapping[str, str | None] | None = None
 ) -> MigrationReport:
@@ -138,24 +162,8 @@ def migrate_bucket(
     retention = _bucket_metadata(runner, bucket, key, env).get("retentionPolicy")
     locked = isinstance(retention, dict) and bool(retention.get("isLocked"))
     rewritten = 0 if locked else _rewrite_live_objects(runner, bucket, key, env)
-    after = _generations(runner, bucket, env)
-    live = [item for item in after if _is_live(item)]
-    pending = [item for item in live if not _uses_key(item, key)]
-    unaddressable = [] if locked else [item for item in pending if _WILDCARD_RE.search(str(item["name"]))]
-    retained = pending if locked else []
-    unmigrated = len(pending) - len(retained) - len(unaddressable)
-    if unmigrated:
-        noun = "object" if unmigrated == 1 else "objects"
-        raise StorageMigrationError(f"Bucket {bucket}: {unmigrated} live {noun} do not use {key} after the rewrite")
-    report = MigrationReport(
-        bucket=bucket,
-        rewritten=rewritten,
-        customer_managed=len(live) - len(pending),
-        noncurrent_residual=sum(1 for item in after if not _is_live(item) and not _uses_key(item, key)),
-        soft_deleted_residual=_soft_deleted_count(runner, bucket, env),
-        retained_residual=len(retained),
-        unaddressable_residual=len(unaddressable),
-    )
+    report = _verified_report(_generations(runner, bucket, env), bucket, key, locked=locked, rewritten=rewritten)
+    report = dataclasses.replace(report, soft_deleted_residual=_soft_deleted_count(runner, bucket, env))
     _print_report(report)
     return report
 
