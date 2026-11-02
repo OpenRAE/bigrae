@@ -216,3 +216,7 @@ The solve-first test requires NOWAIT refusal before committing the solve.
 The dissolution-first test observes the submission's PostgreSQL lock wait before committing dissolution.
 This forces database overlap instead of relying on thread scheduling.
 Mutation checks remove member locking and locked membership validation independently.
+
+The authorization surface inventory also records the new team endpoint.
+Its persisted team locator maps to `event.manage_teams` on the event.
+The historical baseline remains unchanged.
