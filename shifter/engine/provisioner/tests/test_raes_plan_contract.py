@@ -11,7 +11,7 @@ def _plan():
     return {
         "kind": "raes_provisioning_plan",
         "contract_version": "raes-provisioning-plan-v2",
-        "raes_version": "10.2.0",
+        "raes_version": "10.6.0",
         "resources": {},
         "operations": [],
         "realization_authority": [],
@@ -71,7 +71,7 @@ def _semantic_plan():
 
 
 def test_new_transport_is_accepted():
-    assert parse_plan(_plan()).raes_version == "10.2.0"
+    assert parse_plan(_plan()).raes_version == "10.6.0"
 
 
 def test_populated_semantic_metadata_is_accepted():
@@ -253,7 +253,7 @@ def test_runtime_selected_carrier_must_match_plan_identity():
     plan["backend_realization_envelope"] = carrier
     plan["realization_envelope"] = identity
 
-    assert parse_plan(plan).raes_version == "10.2.0"
+    assert parse_plan(plan).raes_version == "10.6.0"
 
     plan["backend_realization_envelope"]["digest"] = "sha256:" + "3" * 64
     with pytest.raises(RaesPlanError, match="diverges"):
@@ -283,13 +283,14 @@ def test_old_producer_is_cleanup_only_and_input_is_not_rewritten():
     assert old == before
 
 
-def test_previous_v2_producer_is_cleanup_only_with_current_checks():
+@pytest.mark.parametrize("version", ["10.2.0", "3.5.0"])
+def test_previous_v2_producer_is_cleanup_only_with_current_checks(version):
     old = _plan()
-    old["raes_version"] = "3.5.0"
+    old["raes_version"] = version
     before = deepcopy(old)
     with pytest.raises(RaesPlanError):
         parse_plan(old)
-    assert parse_plan(old, cleanup_only=True).raes_version == "3.5.0"
+    assert parse_plan(old, cleanup_only=True).raes_version == version
     assert old == before
 
     old["realization_authority"] = "invalid"

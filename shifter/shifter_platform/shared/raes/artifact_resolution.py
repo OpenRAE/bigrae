@@ -35,24 +35,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 
-from raes.artifact_requirements import (
-    ArtifactMechanismProfile,
-    ArtifactRequirement,
-    ArtifactSatisfactionRoute,
-)
-from raes.explicitness import ExplicitnessClass
-
-# ``raes_contracts.artifact_requirements`` raises a partially-initialized circular
-# ImportError when it is the first ``raes_contracts`` submodule imported. Importing
-# ``raes_contracts.apparatus`` first (as ``shared.raes.manifest`` also does) resolves
-# it, and it sorts before ``raes_contracts.contracts`` so import ordering is stable.
+from raes.artifact_requirements import ArtifactRequirement, ArtifactSatisfactionRoute
 from raes_contracts.apparatus import ApparatusIdentity
+from raes_contracts.artifact_identity import ArtifactMechanismProfile
 from raes_contracts.contracts import (
     ArtifactAcquisitionTimingModel,
     ArtifactMechanismCapability,
     ArtifactRequirementAvailability,
     ArtifactSatisfactionDisclosureModel,
 )
+from raes_contracts.explicitness import ExplicitnessClass
 
 from shared.operation_envelope import canonical_payload_digest
 from shared.raes.prepared_artifacts import VerifiedMaterialization
