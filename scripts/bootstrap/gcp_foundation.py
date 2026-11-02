@@ -57,6 +57,7 @@ _PROVIDER_ID = "github"
 # A new service account can be unknown to IAM for a short time after the apply creates it.
 _APPLY_ATTEMPTS = 6
 _APPLY_RETRY_SECONDS = 20
+_NO_INPUT = "-input=false"
 
 # GCP naming rules. The bucket rule matches the cicd-oidc
 # terraform_state_bucket_name validation. A value that starts with "-" can
@@ -301,12 +302,12 @@ def _plan_and_apply(
     """Apply a checked saved plan; after an IAM propagation error, plan, check, and apply again (#2732)."""
     plan = str(staging / "foundation.tfplan")
     for attempt in range(1, _APPLY_ATTEMPTS + 1):
-        run_cmd([*tf, "plan", "-input=false", *_var_files(inputs, path, staging), f"-out={plan}"], dry_run=dry_run)
+        run_cmd([*tf, "plan", _NO_INPUT, *_var_files(inputs, path, staging), f"-out={plan}"], dry_run=dry_run)
         if dry_run:
-            run_cmd([*tf, "apply", "-input=false", plan], dry_run=True)
+            run_cmd([*tf, "apply", _NO_INPUT, plan], dry_run=True)
             return
         _verify_saved_plan(tf, plan, inputs)
-        result = run_cmd([*tf, "apply", "-input=false", plan], check=False, capture=True)
+        result = run_cmd([*tf, "apply", _NO_INPUT, plan], check=False, capture=True)
         output = "" if result is None else f"{result.stdout or ''}\n{result.stderr or ''}"
         print(output.strip())
         if result is not None and result.returncode == 0:
@@ -347,7 +348,7 @@ def _restore_federation(tf: list[str], var_files: list[str], *, project: str, po
             run_cmd([*group, "undelete", *args])
             info(f"Restored the deleted federation resource {resource_id}")
         if address not in in_state:
-            run_cmd([*tf, "import", "-input=false", *var_files, address, resource_id])
+            run_cmd([*tf, "import", _NO_INPUT, *var_files, address, resource_id])
 
 
 def _confirm_foundation(inputs: dict[str, object], project: str) -> None:
