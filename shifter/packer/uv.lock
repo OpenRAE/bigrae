@@ -544,8 +544,8 @@ dev = [
 requires-dist = [
     { name = "google-auth", specifier = "==2.50.0" },
     { name = "pydantic", specifier = "==2.13.4" },
-    { name = "raes", specifier = "==10.2.0" },
-    { name = "raes-env-packs", specifier = "==7.2.0" },
+    { name = "raes", specifier = "==10.6.0" },
+    { name = "raes-env-packs", specifier = "==7.2.2" },
     { name = "requests", specifier = "==2.33.1" },
 ]
 
@@ -760,7 +760,7 @@ wheels = [
 
 [[package]]
 name = "raes"
-version = "10.2.0"
+version = "10.6.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -785,14 +785,14 @@ dependencies = [
     { name = "uvicorn", extra = ["standard"] },
     { name = "z3-solver" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/63/fa/01a3b0c744a58c862a02c28a1b710ba5027e56698eafaf52b20fbf38b7c1/raes-10.2.0.tar.gz", hash = "sha256:b28205ef0a8f033c34fc2eb2e2e7f5cb1d599859486cf7a06a7271a8f4241a63", size = 5872064, upload-time = "2026-10-31T17:15:04.861Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d1/21/cb31a48f6e7f81406e4beb984b12453714be8728b56f5275136e667fdf6e/raes-10.6.0.tar.gz", hash = "sha256:a8065f84b4200358e037b3f34333b942e2cedb1be4ffa8bee1a9c68ceb13ee55", size = 5986900, upload-time = "2026-11-02T07:49:03.54Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/8c/8d/410bf4f8ac086f99603774eed198fe0b0e345a086ba0e1c1a246bc5f5108/raes-10.2.0-py3-none-any.whl", hash = "sha256:f8209874f44ad77c3ded6ed3c9057c0d425dacd52953fada76848671fd444631", size = 5155778, upload-time = "2026-10-31T17:15:02.536Z" },
+    { url = "https://files.pythonhosted.org/packages/07/1e/4c699c5d9aae4ac25c3a8086a84935eaeb4e5591784ead191de3da798ec3/raes-10.6.0-py3-none-any.whl", hash = "sha256:60d38a6a73cd7c1d366cf03ef6b195b0fb64e0f091d0aa9a6bd2fe7f53417538", size = 5256619, upload-time = "2026-11-02T07:49:00.95Z" },
 ]
 
 [[package]]
 name = "raes-env-packs"
-version = "7.2.0"
+version = "7.2.2"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "anyio" },
@@ -801,9 +801,9 @@ dependencies = [
     { name = "pyyaml" },
     { name = "raes" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/df/fe/537331016d6713e4d8ef6180db7844a46637317b8621885d509883502883/raes_env_packs-7.2.0.tar.gz", hash = "sha256:ee779522898e7f3543f753feb92683e64f38dd582fc8725b4b2ef6462140ca2e", size = 3320479, upload-time = "2026-11-01T08:06:18.468Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/87/28/3acacb31b6ae24dd9ae83511ea73cd947d9eabac9a90d32ee5857fbffa5e/raes_env_packs-7.2.2.tar.gz", hash = "sha256:fe209485eb26a049ff46605751b3a276324b17ec012dd00ab1b0bf11af193497", size = 3322116, upload-time = "2026-11-02T08:17:54.353Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/3a/bb/985bca53b7148ed41a80808f45acf7f3734df9a8f4e6b3d2d220bc08241b/raes_env_packs-7.2.0-py3-none-any.whl", hash = "sha256:c8f262ea0c4a00efeb7a400b924e38c0d45196e1d3694a81ad6954a3e527ac65", size = 3555430, upload-time = "2026-11-01T08:06:16.543Z" },
+    { url = "https://files.pythonhosted.org/packages/45/10/842127f2305e6f0c9030f490459e8e820b95ea3a1b066e6a013b25b5211e/raes_env_packs-7.2.2-py3-none-any.whl", hash = "sha256:136d6a198d701370e226d90ca9db8294d36e989ca0259928d737d82075f32a76", size = 3555460, upload-time = "2026-11-02T08:17:52.108Z" },
 ]
 
 [[package]]
