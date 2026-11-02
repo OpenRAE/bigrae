@@ -321,3 +321,20 @@ def test_reassignment_refuses_outside_member(team_event_participant, organizer_u
         reassign_captain(team.pk, outsider.pk, actor=organizer_user)
     team.refresh_from_db()
     assert team.captain_id == captain.pk
+
+
+@pytest.mark.parametrize("has_team", [True, False])
+def test_organizer_detail_team_identity(team_event_participant, authenticated_organizer_client, has_team):
+    from ctf.services.team import create_team
+
+    _event, captain, _client = team_event_participant
+    team = create_team(captain.pk, "Detail team") if has_team else None
+    response = call_json(
+        authenticated_organizer_client, "get", "api_participant_detail", kwargs={"participant_id": captain.pk}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["team_id"] == (str(team.pk) if team else None)
+    assert body["team_captain_id"] == (str(captain.pk) if team else None)
+    assert body["team_name"] == (team.name if team else None)
+    assert "invite_code" not in body
