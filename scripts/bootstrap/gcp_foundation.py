@@ -298,6 +298,14 @@ def _apply_foundation(
         publish_image_environments(inputs, outputs, dry_run=dry_run)
 
 
+def _apply_saved_plan(tf: list[str], plan: str) -> str | None:
+    """Apply a saved plan; return None on success, or the command output on failure."""
+    result = run_cmd([*tf, "apply", _NO_INPUT, plan], check=False, capture=True)
+    output = "" if result is None else f"{result.stdout or ''}\n{result.stderr or ''}"
+    print(output.strip())
+    return None if result is not None and result.returncode == 0 else output
+
+
 def _plan_and_apply(
     tf: list[str],
     inputs: dict[str, object],
@@ -315,12 +323,10 @@ def _plan_and_apply(
             run_cmd([*tf, "apply", _NO_INPUT, plan], dry_run=True)
             return
         _verify_saved_plan(tf, plan, inputs)
-        result = run_cmd([*tf, "apply", _NO_INPUT, plan], check=False, capture=True)
-        output = "" if result is None else f"{result.stdout or ''}\n{result.stderr or ''}"
-        print(output.strip())
-        if result is not None and result.returncode == 0:
+        failure = _apply_saved_plan(tf, plan)
+        if failure is None:
             return
-        cause = transient_cause(output)
+        cause = transient_cause(failure)
         if attempt == _APPLY_ATTEMPTS or cause != "an IAM propagation error":
             raise SystemExit(1)
         warn(f"Foundation apply hit {cause}; planning again in {_APPLY_RETRY_SECONDS}s ({attempt}/{_APPLY_ATTEMPTS})")
