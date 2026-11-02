@@ -187,7 +187,7 @@ class TestProvisionerReaderContract:
 
         assert importlib.metadata.version("raes") == "10.2.0"
         assert importlib.metadata.version("raes") == _exact_dependency_pin("raes")
-        assert importlib.metadata.version("raes-env-packs") == "7.1.0"
+        assert importlib.metadata.version("raes-env-packs") == "7.2.0"
         assert importlib.metadata.version("raes-env-packs") == _exact_dependency_pin("raes-env-packs")
         # raes-env-packs 7 declares a RAES range; the pinned release must satisfy it.
         requirements = [Requirement(item) for item in importlib.metadata.requires("raes-env-packs") or []]
