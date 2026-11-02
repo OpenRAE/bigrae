@@ -37,7 +37,6 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as distribution_version
 from typing import Any
 
-from raes.artifact_requirements import ArtifactMechanismProfile
 from raes_backend_protocols.capabilities import (
     BackendCapabilitySet,
     BackendManifest,
@@ -51,6 +50,7 @@ from raes_contracts.apparatus import (
     RealizationObservationCapability,
     RealizationSupportDeclaration,
 )
+from raes_contracts.artifact_identity import ArtifactMechanismProfile
 from raes_contracts.contracts import ArtifactAcquisitionTimingModel, ArtifactMechanismCapability
 from raes_contracts.realization_envelope import BackendRealizationEnvelopeModel
 from raes_contracts.vocabulary import ObservationStrength, RealizationSupportMode, RealizationVerificationScope

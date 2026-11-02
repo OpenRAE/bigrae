@@ -19,8 +19,8 @@ from raes.artifact_requirements import (
     ArtifactRequirement,
     ArtifactSatisfactionRoute,
 )
-from raes.explicitness import ExplicitnessClass
 from raes.scenarios import ScenarioError, load_scenario
+from raes_contracts.explicitness import ExplicitnessClass
 from raes_env_packs.publication import authored_artifact_requirements
 
 from shared.exceptions import ValidationError as PreparationContractError

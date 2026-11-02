@@ -13,7 +13,9 @@ from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from raes.artifact_requirements import ArtifactIdentity, ArtifactLockedInput
+from raes.artifact_requirements import ArtifactLockedInput
+from raes.associated_artifacts import ScenarioArtifactParent
+from raes_contracts.artifact_identity import ArtifactIdentity
 from raes_contracts.associated_artifacts import (
     AssociatedArtifactManifestModel,
     AssociatedArtifactValidationLimits,
@@ -68,7 +70,7 @@ def bind_input_material(
         raise ValueError("input manifest has an unsupported payload type")
     diagnostics = validate_associated_artifact_manifest(
         manifest,
-        parent=parent,
+        parent=ScenarioArtifactParent(parent),
         artifact_readers={lock.input_id: BytesIO(descriptor_bytes)},
         limits=AssociatedArtifactValidationLimits(
             max_artifacts=1, max_artifact_bytes=MAX_INPUT_BYTES, max_total_bytes=MAX_INPUT_BYTES

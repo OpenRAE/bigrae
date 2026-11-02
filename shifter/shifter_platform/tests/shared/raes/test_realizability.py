@@ -15,8 +15,11 @@ reintroduces ``apply`` fails these tests rather than provisioning a range.
 from __future__ import annotations
 
 from pathlib import Path
+from unittest.mock import Mock
 
 import pytest
+import yaml
+from raes.scenarios import ScenarioValidationError, load_scenario
 
 from shared.raes.realizability import (
     GapCategory,
@@ -27,6 +30,74 @@ from shared.raes.realizability import (
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "launchable"
 _MINIMAL = _FIXTURES / "shifter-launch-min.sdl.yaml"
+
+
+def _cloud_contract(tmp_path: Path, *, mode: str = "automatic") -> Path:
+    """Synthetic cloud intent must reach capability admission, never dispatch."""
+    document = yaml.safe_load(_MINIMAL.read_text(encoding="utf-8"))
+    scope = "nodes.web.runtime.identity_authorities.cloud-iam.resource_scopes.project"
+    document["nodes"]["web"]["runtime"] = {
+        "identity_authorities": [
+            {
+                "identity_authority_id": "cloud-iam",
+                "kind": "cloud_iam",
+                "resource_scopes": [
+                    {
+                        "scope_id": "project",
+                        "provider": "gcp",
+                        "scope_kind": "project",
+                        "audit_logs": [
+                            {
+                                "audit_log_id": "data-read",
+                                "service": "secretmanager.googleapis.com",
+                                "log_type": "DATA_READ",
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+        "platform_applications": [
+            {
+                "platform_application_id": "secret-service",
+                "product": "GCP Secret Manager",
+                "resource_scope_ref": scope,
+                "secrets": [
+                    {
+                        "secret_id": "example",
+                        "native_id": "example",
+                        "resource_scope_ref": scope,
+                        "replication": {"provider": "gcp-secret-manager", "mode": mode},
+                        "versions": [{"version_id": "v1", "state": "enabled"}],
+                    }
+                ],
+            }
+        ],
+    }
+    path = tmp_path / "synthetic-cloud.sdl.yaml"
+    path.write_text(yaml.safe_dump(document), encoding="utf-8")
+    return path
+
+
+def test_released_cloud_contract_reaches_refusal_before_dispatch(tmp_path, monkeypatch):
+    dispatch = Mock(side_effect=AssertionError("assessment must not dispatch"))
+    monkeypatch.setattr("shared.raes.realizability._NeverDispatchPort.realize", dispatch)
+    path = _cloud_contract(tmp_path)
+    scenario = load_scenario(path)
+    runtime = scenario.nodes["web"].runtime
+    assert runtime.identity_authorities[0].resource_scopes[0].audit_logs[0].log_type == "DATA_READ"
+    application = runtime.platform_applications[0]
+    assert application.secrets[0].replication.mode == "automatic"
+    assessment = assess_scenario_capability(path)
+    assert assessment.outcome is RealizabilityOutcome.NOT_REALIZABLE
+    for family in ("runtime-identity-authorities", "runtime-platform-applications"):
+        assert any(family in gap.code + gap.message for gap in assessment.gaps)
+    dispatch.assert_not_called()
+
+
+def test_released_cloud_contract_rejects_malformed_replication(tmp_path):
+    with pytest.raises(ScenarioValidationError, match="User-managed secret replication requires replicas"):
+        load_scenario(_cloud_contract(tmp_path, mode="user-managed"))
 
 
 def _variant(tmp_path: Path, *, replace: tuple[str, str]) -> Path:
@@ -61,13 +132,9 @@ class TestArtifactRequirementRealizability:
 
     @staticmethod
     def _unsupported_exact_requirement():
-        from raes.artifact_requirements import (
-            ArtifactIdentity,
-            ArtifactMechanismProfile,
-            ArtifactRequirement,
-            ArtifactSatisfactionRoute,
-        )
-        from raes.explicitness import ExplicitnessClass
+        from raes.artifact_requirements import ArtifactRequirement, ArtifactSatisfactionRoute
+        from raes_contracts.artifact_identity import ArtifactIdentity, ArtifactMechanismProfile
+        from raes_contracts.explicitness import ExplicitnessClass
 
         route = ArtifactSatisfactionRoute(
             mechanism=ArtifactMechanismProfile(
