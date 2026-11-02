@@ -24,6 +24,11 @@ source "googlecompute" "kali" {
   // boot disk well above the debian-12 base (10 GB) with install headroom.
   disk_size = 40
 
+  // state_timeout also bounds the wait for GCE to register the captured image.
+  // The default of 5m is too short for the full Kali disk, so the build fails
+  // after provisioning completes (#2734).
+  state_timeout = "30m"
+
   network               = var.network
   subnetwork            = var.subnetwork
   service_account_email = var.service_account_email

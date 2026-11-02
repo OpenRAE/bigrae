@@ -159,6 +159,8 @@ class TestGcpKaliSourceImage:
         assert "../scripts/kali/gce-debian-to-kali.sh" in content
         # The imported-base path (and its variable) is fully retired.
         assert "kali_source_image" not in content
+        # Registering the full Kali image takes longer than the 5m default (#2734).
+        assert 'state_timeout = "30m"' in content
 
     def test_kali_conversion_script_preserves_guest_agent(self):
         script = (PACKER_DIR / "scripts" / "kali" / "gce-debian-to-kali.sh").read_text()
