@@ -230,6 +230,15 @@ export function renderEditLoadState(
   return null;
 }
 
+/**
+ * Browsers report unparseable number input (like "1e") as an empty value, which
+ * would otherwise save as an intentional blank: for team size, unlimited (CTF-505).
+ */
+function firstUnparsedNumberInput(form: HTMLFormElement): HTMLInputElement | null {
+  const inputs = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="number"]'));
+  return inputs.find((input) => input.validity.badInput) ?? null;
+}
+
 function submitEventForm(
   event: React.FormEvent,
   opts: Readonly<{
@@ -271,6 +280,7 @@ export function useEventFormState(mode: "create" | "edit") {
 
   const [state, setState] = useState<FormState>(EMPTY);
   const [initialized, setInitialized] = useState(mode === "create");
+  const [inputError, setInputError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -292,9 +302,10 @@ export function useEventFormState(mode: "create" | "edit") {
   }, [fieldErrors]);
 
   const nonFieldError =
-    Object.keys(fieldErrors).length === 0
+    inputError ??
+    (Object.keys(fieldErrors).length === 0
       ? describeMutationError(mutation.error, "The event could not be saved.")
-      : null;
+      : null);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((prev) => ({ ...prev, [key]: value }));
@@ -314,7 +325,15 @@ export function useEventFormState(mode: "create" | "edit") {
     return fieldErrors[field]?.[0];
   }
 
-  function onSubmit(event: React.FormEvent) {
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    const unparsed = firstUnparsedNumberInput(event.currentTarget);
+    if (unparsed) {
+      event.preventDefault();
+      unparsed.focus();
+      setInputError(`${unparsed.labels?.[0]?.textContent ?? "A number field"} is not a valid number.`);
+      return;
+    }
+    setInputError(null);
     submitEventForm(event, { state, mode, eventId, create, update, navigate });
   }
 
