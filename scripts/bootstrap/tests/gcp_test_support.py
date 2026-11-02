@@ -67,6 +67,16 @@ def sample_gcp_outputs(project_id: str = "example-gcp-project") -> dict[str, dic
             }
         },
         "assets_bucket_name": {"value": f"{project_id}-gcp-dev-assets"},
+        "storage_cmek_buckets": {
+            "value": {
+                f"{project_id}-gcp-dev-assets": (
+                    f"projects/{project_id}/locations/us-central1/keyRings/shifter-gcp-dev-gcs/cryptoKeys/assets"
+                ),
+                f"{project_id}-gcp-dev-audit-logs": (
+                    f"projects/{project_id}/locations/us-central1/keyRings/shifter-gcp-dev-gcs/cryptoKeys/audit-logs"
+                ),
+            }
+        },
         "terraform_state_bucket_name": {"value": f"{project_id}-terraform-state"},
         "platform_events_topic_id": {"value": f"projects/{project_id}/topics/shifter-gcp-dev-events"},
         "platform_event_subscriptions": {

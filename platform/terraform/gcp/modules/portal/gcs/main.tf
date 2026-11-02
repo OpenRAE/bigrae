@@ -1,3 +1,15 @@
+# One key for each bucket role, in the bucket location (#2564). Each bucket reads
+# its key from module.cmek, so Terraform grants the Storage service agent first.
+module "cmek" {
+  source = "../../gcs-cmek"
+
+  project_id    = var.project_id
+  location      = var.region
+  key_ring_name = "${var.name_prefix}-gcs"
+  key_names     = ["assets", "audit-logs"]
+  labels        = var.common_labels
+}
+
 resource "google_storage_bucket" "audit_logs" {
   # checkov:skip=CKV_GCP_62:This is the access-log sink for the assets bucket; making it log to itself creates recursive log objects, while a second sink would only move the same terminal-sink exception. See ADR-004-R11 exception (#2084).
   name                        = lower("${var.project_id}-${replace(var.environment, "_", "-")}-audit-logs")
@@ -7,6 +19,10 @@ resource "google_storage_bucket" "audit_logs" {
   public_access_prevention    = "enforced"
   force_destroy               = var.force_destroy
   labels                      = var.common_labels
+
+  encryption {
+    default_kms_key_name = module.cmek.key_ids["audit-logs"]
+  }
 
   versioning {
     enabled = true
@@ -44,6 +60,10 @@ resource "google_storage_bucket" "assets" {
   public_access_prevention    = "enforced"
   force_destroy               = var.force_destroy
   labels                      = var.common_labels
+
+  encryption {
+    default_kms_key_name = module.cmek.key_ids["assets"]
+  }
 
   versioning {
     enabled = true

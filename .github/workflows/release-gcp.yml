@@ -159,7 +159,7 @@ jobs:
             --registry "${RELEASE_REGISTRY}" \
             --trusted-repository-id "${TRUSTED_REPOSITORY_ID}" --trusted-owner-id "${TRUSTED_OWNER_ID}" \
             > "${RUNNER_TEMP}/release/base-images.json"
-          python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); assert set(m) == {"kali","ubuntu","dc"}' \
+          python3 -c 'import json,sys; m=json.load(open(sys.argv[1])); assert {"kali","ubuntu"} <= set(m) <= {"kali","ubuntu","dc"}' \
             "${RUNNER_TEMP}/release/base-images.json"
 
       - name: Login to the release registry

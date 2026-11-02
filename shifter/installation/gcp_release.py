@@ -25,6 +25,9 @@ RELEASE_IMAGE_NAMES: tuple[str, ...] = ("portal", "provisioner", "guacd", "guaca
 ReleaseImageName = Literal["portal", "provisioner", "guacd", "guacamole-client", "openvpn"]
 #: Base range image roles that a release pins for import into each tenant (#2679).
 BASE_IMAGE_ROLES: tuple[str, ...] = ("kali", "ubuntu", "dc")
+#: Roles that every release names. The repository publishes no ``dc``; a content pack
+#: supplies its own domain controller (#2730).
+REQUIRED_BASE_IMAGE_ROLES: tuple[str, ...] = ("kali", "ubuntu")
 BaseImageRole = Literal["kali", "ubuntu", "dc"]
 
 # re.ASCII keeps \d to the digits 0-9, as in the other character classes.
@@ -58,8 +61,8 @@ class GcpReleaseManifest(BaseModel):
     @field_validator("base_images")
     @classmethod
     def _exact_base_images(cls, images: dict[str, str]) -> dict[str, str]:
-        if images and set(images) != set(BASE_IMAGE_ROLES):
-            raise ValueError("release base images must name exactly: " + ", ".join(BASE_IMAGE_ROLES))
+        if images and not set(REQUIRED_BASE_IMAGE_ROLES) <= set(images):
+            raise ValueError("release base images must name: " + ", ".join(REQUIRED_BASE_IMAGE_ROLES))
         invalid = sorted(role for role, identity in images.items() if not _IMAGE_IDENTITY_RE.fullmatch(identity))
         if invalid:
             raise ValueError("release base images must be exact repository@sha256 identities: " + ", ".join(invalid))

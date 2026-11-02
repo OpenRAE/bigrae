@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Any
 
 from bootstrap_core import confirm, gcloud_resource_exists, get_repo_root, info, run_cmd, run_cmd_secret_stdin, warn
-from gcp_process import scoped_environment
+from gcp_process import ProcessRunner, scoped_environment
 from gcp_terraform import transient_cause
 
 # A destroy workflow rejects every other dispatch ref before auth; the
@@ -54,7 +54,9 @@ _BRANCH_REF_RE = re.compile(r"refs/heads/([A-Za-z0-9][A-Za-z0-9_/-]*)", re.ASCII
 _POOL_ADDRESS = "module.cicd_oidc_identity.google_iam_workload_identity_pool.github[0]"
 _PROVIDER_ADDRESS = "module.cicd_oidc_identity.google_iam_workload_identity_pool_provider.github[0]"
 _PROVIDER_ID = "github"
-# A new service account can be unknown to IAM for a short time after the apply creates it.
+# A new service account can be unknown to IAM for a short time after the apply
+# creates it, and a new Storage service agent key grant can take time to reach the
+# bucket update that sets the default key (#2564).
 _APPLY_ATTEMPTS = 6
 _APPLY_RETRY_SECONDS = 20
 _NO_INPUT = "-input=false"
@@ -253,6 +255,7 @@ def _apply_foundation(
             "cloudbuild.googleapis.com",
             "artifactregistry.googleapis.com",
             "storage.googleapis.com",
+            "cloudkms.googleapis.com",
             "--project",
             project,
         ],
@@ -285,9 +288,22 @@ def _apply_foundation(
             tf, _var_files(inputs, path, staging), project=project, pool_id=f"{inputs['name_prefix']}-github"
         )
     _plan_and_apply(tf, inputs, path, staging, dry_run=dry_run)
+    outputs = {} if dry_run else _terraform_outputs(tf)
+    if not dry_run:
+        from gcp_storage_cmek import migrate_buckets
+
+        # A bucket default key applies only to new writes; move the live objects too (#2564).
+        migrate_buckets(ProcessRunner(), outputs.get("storage_cmek_buckets"))  # type: ignore[arg-type]
     if _builds_images(inputs):
-        outputs = {} if dry_run else _terraform_outputs(tf)
         publish_image_environments(inputs, outputs, dry_run=dry_run)
+
+
+def _apply_saved_plan(tf: list[str], plan: str) -> str | None:
+    """Apply a saved plan; return None on success, or the command output on failure."""
+    result = run_cmd([*tf, "apply", _NO_INPUT, plan], check=False, capture=True)
+    output = "" if result is None else f"{result.stdout or ''}\n{result.stderr or ''}"
+    print(output.strip())
+    return None if result is not None and result.returncode == 0 else output
 
 
 def _plan_and_apply(
@@ -297,7 +313,7 @@ def _plan_and_apply(
     staging: Path,
     *,
     dry_run: bool,
-    sleep: Callable[[float], None] = time.sleep,
+    sleep: Callable[[float], None] | None = None,
 ) -> None:
     """Apply a checked saved plan; after an IAM propagation error, plan, check, and apply again (#2732)."""
     plan = str(staging / "foundation.tfplan")
@@ -307,16 +323,15 @@ def _plan_and_apply(
             run_cmd([*tf, "apply", _NO_INPUT, plan], dry_run=True)
             return
         _verify_saved_plan(tf, plan, inputs)
-        result = run_cmd([*tf, "apply", _NO_INPUT, plan], check=False, capture=True)
-        output = "" if result is None else f"{result.stdout or ''}\n{result.stderr or ''}"
-        print(output.strip())
-        if result is not None and result.returncode == 0:
+        failure = _apply_saved_plan(tf, plan)
+        if failure is None:
             return
-        cause = transient_cause(output)
+        cause = transient_cause(failure)
         if attempt == _APPLY_ATTEMPTS or cause != "an IAM propagation error":
             raise SystemExit(1)
         warn(f"Foundation apply hit {cause}; planning again in {_APPLY_RETRY_SECONDS}s ({attempt}/{_APPLY_ATTEMPTS})")
-        sleep(_APPLY_RETRY_SECONDS)
+        # Read time.sleep at call time, so a test that replaces it does not wait.
+        (sleep or time.sleep)(_APPLY_RETRY_SECONDS)
 
 
 def _restore_federation(tf: list[str], var_files: list[str], *, project: str, pool_id: str) -> None:

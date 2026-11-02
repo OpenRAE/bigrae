@@ -210,9 +210,10 @@ def infrastructure_stage(
         remove_deleted_role_bindings,
     )
     from gcp_runtime import gdc_config
+    from gcp_storage_cmek import migrate_buckets
     from gcp_terraform import (
-        artifact_registry_kms_adoption,
         backend_prefix,
+        kms_adoption_variables,
         state_bucket_name,
         terraform_apply,
         terraform_context,
@@ -257,9 +258,10 @@ def infrastructure_stage(
             cluster=cluster,
             kube_env=early_kube,
         )
-    adopt_kms = artifact_registry_kms_adoption(runner, ctx, inputs)
-    terraform_apply(runner, ctx, variables={"adopt_artifact_registry_kms": "true"} if adopt_kms else None)
+    terraform_apply(runner, ctx, variables=kms_adoption_variables(runner, ctx, inputs) or None)
     outputs = terraform_outputs(runner, ctx)
+    # A bucket default key applies only to new writes; move the live objects too (#2564).
+    migrate_buckets(runner, outputs["storage_cmek_buckets"]["value"])  # type: ignore[arg-type]
     verify_range_telemetry(runner, inputs, outputs)
     kube = kube_env(
         runner,

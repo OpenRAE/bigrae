@@ -1155,11 +1155,11 @@ def _gdc_bootstrap_result(config: GDCBootstrapConfig) -> dict[str, str]:
 # that has no range images or range identity, because a control plane without them
 # can not launch a range.
 
-# Required GCE range-cell variables. A live range needs each of these set.
+# Required GCE range-cell variables. A live range needs each of these set. A DC
+# image is optional: the release names one only when it is published (#2730).
 _REQUIRED_GCE_RANGE_VARS: tuple[str, ...] = (
     "RANGE_NETWORK_ZONE",
     "GCP_RANGE_LINUX_IMAGE",
-    "GCP_RANGE_DC_IMAGE",
     "GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL",
 )
 

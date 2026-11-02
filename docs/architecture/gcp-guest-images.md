@@ -32,7 +32,9 @@ developer-supplied build project and made guest images part of the release.
 | Import | `deploy.py gcp-deploy` and `deploy.py gcp-images` | Verify and import the release guest images into a range project and record `range-images.json`. |
 
 The published roles are `kali`, `ubuntu`, and `dc`. The `dc` role is the
-pre-promoted `dc-prebaked` image. The sysprepped `windows` and the
+pre-promoted `dc-prebaked` image. Each release names `kali` and `ubuntu`. It
+names `dc` only when a `dc` publication exists. This repository has no DC
+profile, so a content pack supplies its own domain controller (#2730). The sysprepped `windows` and the
 first-boot-promotion `dc` images have no validator, so they are not published.
 A new role needs a validator, a guest feature contract, and one role mapping.
 

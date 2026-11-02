@@ -42,6 +42,13 @@ on:
         required: false
         type: string
         default: ''
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER:
+        required: true
+      GCP_PACKER_VALIDATE_SERVICE_ACCOUNT:
+        required: true
+      GCP_PROJECT_ID:
+        required: true
     outputs:
       image_id:
         description: 'Numeric GCE image ID of the validated candidate.'

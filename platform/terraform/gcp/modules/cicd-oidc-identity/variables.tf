@@ -124,7 +124,6 @@ variable "deploy_roles" {
     "roles/redis.admin",
     "roles/pubsub.admin",
     "roles/secretmanager.admin",
-    "roles/cloudkms.admin",
     "roles/artifactregistry.admin",
     "roles/identityplatform.admin",
     "roles/monitoring.editor",
@@ -158,7 +157,6 @@ variable "destroy_roles" {
     "roles/redis.admin",
     "roles/pubsub.admin",
     "roles/secretmanager.admin",
-    "roles/cloudkms.admin",
     "roles/artifactregistry.admin",
     "roles/identityplatform.admin",
     "roles/monitoring.editor",
@@ -179,6 +177,42 @@ variable "deploy_identity_platform_permissions" {
   default = [
     "firebase.projects.get",
     "firebase.projects.update",
+  ]
+}
+
+variable "deploy_kms_permissions" {
+  description = "Cloud KMS permissions of the deploy identity: create and grant keys, never destroy, disable, or delete them (#2564)."
+  type        = list(string)
+  default = [
+    "cloudkms.cryptoKeyVersions.get",
+    "cloudkms.cryptoKeyVersions.list",
+    "cloudkms.cryptoKeys.create",
+    "cloudkms.cryptoKeys.get",
+    "cloudkms.cryptoKeys.getIamPolicy",
+    "cloudkms.cryptoKeys.list",
+    "cloudkms.cryptoKeys.setIamPolicy",
+    "cloudkms.cryptoKeys.update",
+    "cloudkms.keyRings.create",
+    "cloudkms.keyRings.get",
+    "cloudkms.keyRings.getIamPolicy",
+    "cloudkms.keyRings.list",
+    "cloudkms.locations.get",
+    "cloudkms.locations.list",
+  ]
+}
+
+variable "destroy_kms_permissions" {
+  description = "Cloud KMS permissions of the destroy identity: read keys and remove key grants, never destroy, disable, or delete them (#2564)."
+  type        = list(string)
+  default = [
+    "cloudkms.cryptoKeys.get",
+    "cloudkms.cryptoKeys.getIamPolicy",
+    "cloudkms.cryptoKeys.list",
+    "cloudkms.cryptoKeys.setIamPolicy",
+    "cloudkms.keyRings.get",
+    "cloudkms.keyRings.list",
+    "cloudkms.locations.get",
+    "cloudkms.locations.list",
   ]
 }
 
