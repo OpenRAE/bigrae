@@ -58,6 +58,11 @@ class TestScriptStructureLint:
             path = SCRIPTS_DIR / "kali" / script
             assert path.exists(), f"Missing required script: {script}"
 
+    def test_aws_kali_conversion_purges_orphaned_debian_packages(self):
+        """The AWS conversion removes Debian leftovers after the guest environment reinstall (#2734)."""
+        script = (SCRIPTS_DIR / "aws" / "debian-to-kali.sh").read_text()
+        assert script.index("apt-get -y autoremove --purge") > script.index("systemctl enable ssh.service")
+
     def test_required_ubuntu_scripts(self):
         """Check all required Ubuntu scripts exist."""
         required = ["base.sh", "services.sh", "tools.sh", "claude-code.sh"]
