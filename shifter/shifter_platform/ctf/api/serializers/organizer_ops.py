@@ -115,6 +115,8 @@ class ParticipantDetailSerializer(serializers.Serializer):
     hidden = serializers.BooleanField(read_only=True)
     affiliation = serializers.CharField(read_only=True, allow_blank=True)
     username = serializers.CharField(read_only=True, allow_null=True)
+    team_id = serializers.UUIDField(read_only=True, allow_null=True)
+    team_captain_id = serializers.UUIDField(read_only=True, allow_null=True)
     team_name = serializers.CharField(read_only=True, allow_null=True)
     registered_at = serializers.DateTimeField(read_only=True, allow_null=True)
     login_info_sent_at = serializers.DateTimeField(read_only=True, allow_null=True)

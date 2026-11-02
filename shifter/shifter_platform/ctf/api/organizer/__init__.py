@@ -183,8 +183,10 @@ __all__ = [
     "SubmissionListView",
     "SubmitFlagView",
     "TaskRunNowView",
+    "TeamCaptainView",
     "UseHintView",
     "WebhookDetailView",
 ]
 
+from ctf.api.organizer.teams import TeamCaptainView
 from ctf.api.organizer.vpn import ParticipantVpnProfileView
