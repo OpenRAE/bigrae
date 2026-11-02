@@ -18633,7 +18633,7 @@
     "/api/v1/ctf/teams/{team_id}/captain/": {
       "post": {
         "operationId": "ctf_teams_captain_create",
-        "description": "Reassign an existing team's captain using event team authority.",
+        "description": "Authorize the event and assign the requested teammate as captain.",
         "parameters": [
           {
             "in": "path",

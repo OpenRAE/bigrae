@@ -3641,7 +3641,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Reassign an existing team's captain using event team authority. */
+        /** @description Authorize the event and assign the requested teammate as captain. */
         post: operations["ctf_teams_captain_create"];
         delete?: never;
         options?: never;
