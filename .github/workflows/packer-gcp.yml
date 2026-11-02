@@ -308,6 +308,13 @@ jobs:
       contents: read
       id-token: write
     uses: ./.github/workflows/packer-gcp-validate.yml
+    # A called workflow reads a secret of its gcp-image-validate Environment only
+    # when the caller passes that name; otherwise it resolves to an empty string.
+    # Pass exactly the validation names, so no build secret reaches it (#2736).
+    secrets:
+      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      GCP_PACKER_VALIDATE_SERVICE_ACCOUNT: ${{ secrets.GCP_PACKER_VALIDATE_SERVICE_ACCOUNT }}
+      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
     with:
       image_type: ${{ inputs.image_type }}
       dc_profile: ${{ inputs.dc_profile }}

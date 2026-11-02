@@ -56,10 +56,16 @@ class TestReleaseInstallInputs:
         loaded = load_release_manifest(path)
         assert loaded.base_images == base and loaded.authorization_model == model
 
+    def test_a_release_may_omit_the_dc_image(self):
+        base = {role: f"ghcr.io/acme/bigrae/gce-{role}@sha256:" + "a" * 64 for role in ("kali", "ubuntu")}
+        manifest = parse_release_manifest(json.dumps(_manifest_payload(base_images=base)))
+        assert manifest.base_images == base
+
     @pytest.mark.parametrize(
         "overrides",
         [
             {"base_images": {"kali": "ghcr.io/acme/shifter-gce-kali@sha256:" + "a" * 64}},
+            {"base_images": dict.fromkeys(("kali", "ubuntu", "windows"), "ghcr.io/acme/x@sha256:" + "a" * 64)},
             {"base_images": dict.fromkeys(("kali", "ubuntu", "dc"), "ghcr.io/acme/x:latest")},
             {"authorization_model": {"type_definitions": []}},
         ],

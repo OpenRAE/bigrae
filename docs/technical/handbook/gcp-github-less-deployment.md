@@ -452,12 +452,12 @@ Other inputs that refer to secrets:
    ```
 
    The command verifies every guest against `settings.release_trust` before it
-   changes anything. It imports the `kali`, `ubuntu`, and `dc` artifacts as
-   native GCE images and writes the `linux`, `kali`, and `dc` roles to
-   `range-images.json`. A guest that did not change since the last import is
-   reused. Add `--release-source <mirror prefix>` to read from a mirror, and
-   `--dry-run` to check without a change. A GCE deploy requires the `linux` and
-   `dc` roles, unless you pass `--allow-missing-range-images`.
+   changes anything. It imports the `kali` and `ubuntu` artifacts, and the `dc`
+   artifact when the release names one, as native GCE images. It writes the
+   `linux`, `kali`, and `dc` roles to `range-images.json`. A guest that did not
+   change since the last import is reused. Add `--release-source <mirror prefix>`
+   to read from a mirror, and `--dry-run` to check without a change. A GCE deploy
+   requires the `linux` role, unless you pass `--allow-missing-range-images`.
 9. To record one image by hand, use `set-range-image`. The roles are `linux`,
    `kali`, `windows`, and `dc`:
 
