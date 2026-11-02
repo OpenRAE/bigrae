@@ -25,6 +25,7 @@ _PARTICIPATE = "event.participate"
 
 
 API_OPERATION_POLICY: dict[str, OperationPolicy] = {
+    "ctf_teams_captain_create": OperationPolicy(("event.manage_teams",), "event", "team"),
     "ctf_awards_delete_create": OperationPolicy((_MANAGE_AWARDS,), "event", "award"),
     "ctf_challenges_retrieve": OperationPolicy((_MANAGE_CHALLENGES,), "event", "challenge"),
     "ctf_challenges_update": OperationPolicy((_MANAGE_CHALLENGES,), "event", "challenge"),

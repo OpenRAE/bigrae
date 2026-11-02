@@ -18630,6 +18630,86 @@
         }
       }
     },
+    "/api/v1/ctf/teams/{team_id}/captain/": {
+      "post": {
+        "operationId": "ctf_teams_captain_create",
+        "description": "Authorize the event and assign the requested teammate as captain.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "ctf"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamMemberRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamMemberRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizerCaptain"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
     "/api/v1/ctf/webhooks/{webhook_id}/": {
       "delete": {
         "operationId": "ctf_webhooks_destroy",
@@ -29798,6 +29878,27 @@
           "uuid"
         ]
       },
+      "OrganizerCaptain": {
+        "type": "object",
+        "description": "Minimal team identity and current captain; no invitation material.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "captain_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "captain_id",
+          "id"
+        ]
+      },
       "OrganizerChallengeDetail": {
         "type": "object",
         "description": "Full organizer-facing challenge detail projection.",
@@ -30791,6 +30892,18 @@
             "readOnly": true,
             "nullable": true
           },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "nullable": true
+          },
+          "team_captain_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "nullable": true
+          },
           "team_name": {
             "type": "string",
             "readOnly": true,
@@ -30866,6 +30979,8 @@
           "solved_count",
           "status",
           "status_reason",
+          "team_captain_id",
+          "team_id",
           "team_name",
           "total_score",
           "username"

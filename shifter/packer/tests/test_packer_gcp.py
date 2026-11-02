@@ -166,6 +166,9 @@ class TestGcpKaliSourceImage:
         # it or the captured image loses metadata SSH + networking on GCE.
         assert "google-guest-agent" in script
         assert "--force-overwrite" in script
+        # Orphaned Debian libraries go after the agents are reinstalled, so the
+        # purge cannot remove them (#2734).
+        assert script.index("apt-get -y autoremove --purge") > script.index("systemctl enable google-osconfig-agent")
 
     def test_kali_conversion_script_regenerates_ssh_host_keys(self):
         script = (PACKER_DIR / "scripts" / "kali" / "gce-debian-to-kali.sh").read_text()

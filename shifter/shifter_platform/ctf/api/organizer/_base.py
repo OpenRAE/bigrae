@@ -440,6 +440,18 @@ def _participant_username(participant: CTFParticipant) -> str | None:
     return user.username if is_ctf_account else None
 
 
+def _participant_team_fields(participant: CTFParticipant) -> dict[str, str | None]:
+    """Expose stable organizer team identity without invitation material."""
+    team = participant.team
+    if team is None:
+        return {"team_name": None, "team_id": None, "team_captain_id": None}
+    return {
+        "team_name": team.name,
+        "team_id": str(team.pk),
+        "team_captain_id": str(team.captain_id) if team.captain_id else None,
+    }
+
+
 def _participant_detail_payload(participant: CTFParticipant) -> dict[str, object]:
     """Render the organizer GET-participant JSON payload.
 
@@ -459,7 +471,7 @@ def _participant_detail_payload(participant: CTFParticipant) -> dict[str, object
         "hidden": participant.hidden,
         "affiliation": participant.affiliation,
         "username": _participant_username(participant),
-        "team_name": participant.team.name if participant.team else None,
+        **_participant_team_fields(participant),
         "registered_at": participant.registered_at.isoformat() if participant.registered_at else None,
         "login_info_sent_at": participant.login_info_sent_at.isoformat() if participant.login_info_sent_at else None,
         "last_active_at": participant.last_active_at.isoformat() if participant.last_active_at else None,
