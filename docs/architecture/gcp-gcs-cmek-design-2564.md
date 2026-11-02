@@ -100,8 +100,8 @@ bucket and key, the helper does these steps:
    uses the source generation and `--if-generation-match` with that generation.
 4. List the live objects again. Stop if a live object still does not use the
    expected key, except for the residuals below.
-5. Print counts only. Object names stay private, and the command log shows a
-   placeholder in place of each object name.
+5. Print counts only. Object names stay private: each rewrite reads its object
+   URL from stdin, so no object name reaches argv or the command log.
 
 The helper does not rewrite these objects. It reports them as residuals:
 

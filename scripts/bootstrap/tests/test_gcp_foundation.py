@@ -203,7 +203,7 @@ def test_new_foundation_creates_backend_and_checks_the_saved_plan_before_apply(i
     assert calls[apply][2:] == ["apply", "-input=false", plan]
     # Cloud KMS is on before the first key operation (#2564).
     services = next(c for c in calls if c[:3] == ["gcloud", "services", "enable"])
-    assert "cloudkms.googleapis.com" in services and calls.index(services) < init
+    assert services.count("cloudkms.googleapis.com") == 1 and calls.index(services) < init
     # After the apply, each foundation bucket moves its live objects to its key (#2564).
     migrated = [
         i for i, c in enumerate(calls) if c[:4] == ["gcloud", "storage", "buckets", "describe"] and "--raw" in c

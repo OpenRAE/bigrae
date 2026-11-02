@@ -11,7 +11,7 @@ key, this module rewrites each live object that does not use it, in place:
   noncurrent generation would make a new live object.
 
 The report prints counts only. Object names are private operational data and
-never reach a log or an error message.
+never reach argv, a log, or an error message.
 """
 
 from __future__ import annotations
@@ -26,6 +26,8 @@ from gcp_process import ProcessRunner
 
 # gcloud storage reads these characters in a URL as wildcards (wildcard_iterator).
 _WILDCARD_RE = re.compile(r"[*?\[\]]")
+# Raw API field names (kmsKeyName, timeDeleted, retentionPolicy) as JSON.
+_RAW_JSON = ("--raw", "--format=json")
 
 
 class StorageMigrationError(RuntimeError):
@@ -53,7 +55,7 @@ def _uses_key(item: Mapping[str, object], key: str) -> bool:
 
 def _json(runner: ProcessRunner, argv: list[str], env: Mapping[str, str | None] | None, what: str) -> object:
     """Run a gcloud command with raw JSON output and parse it."""
-    result = runner.run(argv, env=env)
+    result = runner.run([*argv, *_RAW_JSON], env=env)
     try:
         return json.loads(result.stdout or "null")
     except json.JSONDecodeError:
@@ -64,9 +66,7 @@ def _bucket_metadata(
     runner: ProcessRunner, bucket: str, key: str, env: Mapping[str, str | None] | None
 ) -> dict[str, object]:
     """Return the bucket metadata after a check that its default key is ``key``."""
-    metadata = _json(
-        runner, ["gcloud", "storage", "buckets", "describe", f"gs://{bucket}", "--raw", "--format=json"], env, "bucket"
-    )
+    metadata = _json(runner, ["gcloud", "storage", "buckets", "describe", f"gs://{bucket}"], env, "bucket")
     if not isinstance(metadata, dict):
         raise StorageMigrationError(f"Bucket {bucket} metadata is not readable")
     encryption = metadata.get("encryption")
@@ -79,10 +79,7 @@ def _bucket_metadata(
 def _generations(runner: ProcessRunner, bucket: str, env: Mapping[str, str | None] | None) -> list[dict[str, object]]:
     """Return every live and noncurrent object generation of the bucket."""
     items = _json(
-        runner,
-        ["gcloud", "storage", "objects", "list", f"gs://{bucket}/**", "--raw", "--format=json"],
-        env,
-        f"bucket {bucket} listing",
+        runner, ["gcloud", "storage", "objects", "list", f"gs://{bucket}/**"], env, f"bucket {bucket} listing"
     )
     items = [] if items is None else items
     if not isinstance(items, list) or not all(isinstance(item, dict) and item.get("name") for item in items):
@@ -93,51 +90,60 @@ def _generations(runner: ProcessRunner, bucket: str, env: Mapping[str, str | Non
 def _soft_deleted_count(runner: ProcessRunner, bucket: str, env: Mapping[str, str | None] | None) -> int | None:
     """Return the number of soft-deleted objects, or None when the listing is not available."""
     argv = ["gcloud", "storage", "objects", "list", f"gs://{bucket}/**", "--soft-deleted", "--exhaustive"]
-    result = runner.run([*argv, "--raw", "--format=json"], env=env, check=False)
-    if result.returncode != 0:
-        return None
-    try:
-        items = json.loads(result.stdout or "null")
-    except json.JSONDecodeError:
-        return None
-    return len(items) if isinstance(items, list) else 0 if items is None else None
+    result = runner.run([*argv, *_RAW_JSON], env=env, check=False)
+    items: object = None
+    if result.returncode == 0:
+        try:
+            items = json.loads(result.stdout or "[]")
+        except json.JSONDecodeError:
+            items = None
+    return len(items) if isinstance(items, list) else None
 
 
 def _is_live(item: Mapping[str, object]) -> bool:
+    """Return whether an object generation is the live version (not noncurrent)."""
     return not item.get("timeDeleted")
+
+
+def _needs_rewrite(item: Mapping[str, object], key: str) -> bool:
+    """Return whether a generation is a live, addressable object that does not use ``key``."""
+    addressable = bool(item.get("generation")) and not _WILDCARD_RE.search(str(item["name"]))
+    return _is_live(item) and addressable and not _uses_key(item, key)
+
+
+def _rewrite_live_objects(runner: ProcessRunner, bucket: str, key: str, env: Mapping[str, str | None] | None) -> int:
+    """Rewrite each live object that does not use ``key``; return the number of rewrites."""
+    rewritten = 0
+    for item in filter(lambda candidate: _needs_rewrite(candidate, key), _generations(runner, bucket, env)):
+        generation = str(item["generation"])
+        # The object URL travels on stdin, so no object name reaches argv or the
+        # command log. gcloud parses "#<digits>" at the end as the source generation.
+        result = runner.run(
+            ["gcloud", "storage", "objects", "update", "--read-paths-from-stdin"]
+            + [f"--encryption-key={key}", f"--if-generation-match={generation}"],
+            env=env,
+            input_text=f"gs://{bucket}/{item['name']}#{generation}\n",
+            check=False,
+        )
+        # A failed precondition means a newer object replaced this one; the
+        # verification decides whether the newer object uses the key.
+        rewritten += result.returncode == 0
+    return rewritten
 
 
 def migrate_bucket(
     runner: ProcessRunner, bucket: str, key: str, *, env: Mapping[str, str | None] | None = None
 ) -> MigrationReport:
     """Rewrite the live objects of ``bucket`` that do not use ``key``, then verify and report."""
-    metadata = _bucket_metadata(runner, bucket, key, env)
-    retention = metadata.get("retentionPolicy")
+    retention = _bucket_metadata(runner, bucket, key, env).get("retentionPolicy")
     locked = isinstance(retention, dict) and bool(retention.get("isLocked"))
-    rewritten = 0
-    if not locked:
-        for item in _generations(runner, bucket, env):
-            name, generation = str(item["name"]), str(item.get("generation", ""))
-            if not _is_live(item) or _uses_key(item, key) or _WILDCARD_RE.search(name) or not generation:
-                continue
-            # The URL carries the source generation; gcloud parses "#<digits>" at the end only.
-            flags = [f"--encryption-key={key}", f"--if-generation-match={generation}"]
-            update = ["gcloud", "storage", "objects", "update"]
-            result = runner.run(
-                [*update, f"gs://{bucket}/{name}#{generation}", *flags],
-                env=env,
-                check=False,
-                display_argv=[*update, f"gs://{bucket}/<object>", *flags],
-            )
-            # A failed precondition means a newer object replaced this one; the
-            # verification below decides whether the newer object uses the key.
-            rewritten += result.returncode == 0
+    rewritten = 0 if locked else _rewrite_live_objects(runner, bucket, key, env)
     after = _generations(runner, bucket, env)
     live = [item for item in after if _is_live(item)]
     pending = [item for item in live if not _uses_key(item, key)]
-    unaddressable = [item for item in pending if _WILDCARD_RE.search(str(item["name"]))]
+    unaddressable = [] if locked else [item for item in pending if _WILDCARD_RE.search(str(item["name"]))]
     retained = pending if locked else []
-    unmigrated = len(pending) - len(retained) - (0 if locked else len(unaddressable))
+    unmigrated = len(pending) - len(retained) - len(unaddressable)
     if unmigrated:
         noun = "object" if unmigrated == 1 else "objects"
         raise StorageMigrationError(f"Bucket {bucket}: {unmigrated} live {noun} do not use {key} after the rewrite")
@@ -148,7 +154,7 @@ def migrate_bucket(
         noncurrent_residual=sum(1 for item in after if not _is_live(item) and not _uses_key(item, key)),
         soft_deleted_residual=_soft_deleted_count(runner, bucket, env),
         retained_residual=len(retained),
-        unaddressable_residual=0 if locked else len(unaddressable),
+        unaddressable_residual=len(unaddressable),
     )
     _print_report(report)
     return report

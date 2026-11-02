@@ -70,8 +70,9 @@ class FakeBucket:
         self.objects.append(new)
 
     def update(self, argv: Sequence[str], env, stdin) -> ProcessResult:
-        self.rewrites.append(list(argv))
-        url = argv[4]
+        assert argv[4] == "--read-paths-from-stdin" and stdin.endswith("\n") and stdin.count("\n") == 1
+        url = stdin.strip()
+        self.rewrites.append([*argv, url])
         name, _, generation = url.removeprefix(f"gs://{BUCKET}/").rpartition("#")
         key = next(arg.split("=", 1)[1] for arg in argv if arg.startswith("--encryption-key="))
         match = next(arg.split("=", 1)[1] for arg in argv if arg.startswith("--if-generation-match="))
@@ -112,12 +113,12 @@ class TestMigrateBucket:
             soft_deleted=2,
         )
         report = migrate_bucket(bucket.runner(), BUCKET, KEY)
-        rewritten = sorted(argv[4] for argv in bucket.rewrites)
+        rewritten = sorted(argv[-1] for argv in bucket.rewrites)
         assert rewritten == [f"gs://{BUCKET}/agents/a.msi#11", f"gs://{BUCKET}/agents/b.msi#12"]
         # Each rewrite pins the listed generation, so it can not replace a newer object.
         for argv in bucket.rewrites:
-            generation = argv[4].rpartition("#")[2]
-            assert argv[5:] == [f"--encryption-key={KEY}", f"--if-generation-match={generation}"]
+            generation = argv[-1].rpartition("#")[2]
+            assert argv[5:-1] == [f"--encryption-key={KEY}", f"--if-generation-match={generation}"]
         assert all(kms and kms.startswith(KEY + "/") for kms in bucket.live_keys().values())
         assert report.rewritten == 2 and report.customer_managed == 3
         # The original generations stay as noncurrent residuals; they are never rewritten or deleted.
@@ -147,13 +148,13 @@ class TestMigrateBucket:
     def test_wildcard_names_are_reported_and_not_addressed(self):
         bucket = FakeBucket([_live("uploads/report[1].pdf", "41"), _live("uploads/*.txt", "42"), _live("ok", "43")])
         report = migrate_bucket(bucket.runner(), BUCKET, KEY)
-        assert [argv[4] for argv in bucket.rewrites] == [f"gs://{BUCKET}/ok#43"]
+        assert [argv[-1] for argv in bucket.rewrites] == [f"gs://{BUCKET}/ok#43"]
         assert report.unaddressable_residual == 2 and report.rewritten == 1
 
     def test_a_name_with_a_hash_keeps_its_full_name(self):
         bucket = FakeBucket([_live("notes#draft", "51")])
         migrate_bucket(bucket.runner(), BUCKET, KEY)
-        assert [argv[4] for argv in bucket.rewrites] == [f"gs://{BUCKET}/notes#draft#51"]
+        assert [argv[-1] for argv in bucket.rewrites] == [f"gs://{BUCKET}/notes#draft#51"]
         assert bucket.live_keys()["notes#draft"].startswith(KEY + "/")
 
     def test_a_bucket_without_the_expected_default_key_stops_before_any_rewrite(self):
@@ -177,10 +178,10 @@ class TestMigrateBucket:
         migrate_bucket(runner, BUCKET, KEY)
         out = capsys.readouterr().out
         assert "customer-file" not in out and BUCKET in out and "rewrote 1" in out
-        # The runner logs the display argv, which names no object (#2564).
+        # The object URL travels on stdin, so the logged argv names no object (#2564).
         (update,) = runner.find("gcloud", "storage", "objects", "update")
-        assert update.display_argv is not None and "customer-file" not in " ".join(update.display_argv)
-        assert update.display_argv[4] == f"gs://{BUCKET}/<object>"
+        assert not any("customer-file" in arg for arg in update.argv)
+        assert update.input_text == f"gs://{BUCKET}/private/customer-file.bin#71\n"
 
     def test_unreadable_listing_fails(self):
         runner = FakeBucket([]).runner((["gcloud", "storage", "objects", "list"], ProcessResult(0, "not json")))

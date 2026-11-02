@@ -175,7 +175,6 @@ class Call:
     argv: list[str]
     env: dict[str, str]
     input_text: str | None
-    display_argv: list[str] | None = None
 
 
 @dataclass
@@ -205,13 +204,11 @@ class FakeRunner:
         capture: bool = True,
         timeout: float | None = None,
         sensitive: bool = False,
-        display_argv: Sequence[str] | None = None,
     ) -> ProcessResult:
         del capture, timeout, sensitive
         command = [str(part) for part in argv]
         child_env = merged_env(self.base, env)
-        shown = None if display_argv is None else [str(part) for part in display_argv]
-        self.calls.append(Call(command, child_env, input_text, shown))
+        self.calls.append(Call(command, child_env, input_text))
         result = ProcessResult(0)
         for prefix, response in self.responses:
             if command[: len(prefix)] == list(prefix):

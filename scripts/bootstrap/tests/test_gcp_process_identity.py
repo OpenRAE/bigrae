@@ -41,16 +41,6 @@ class TestProcessRunner:
         assert "boom-detail" not in str(caught.value)
         assert runner.run(failing, check=False).returncode == 3
 
-    def test_display_argv_keeps_private_arguments_out_of_the_log(self, capsys):
-        # The object migration names objects in argv; the log shows a placeholder (#2564).
-        runner = ProcessRunner()
-        result = runner.run(
-            [PY, "-c", "import sys; print(sys.argv[1])", "private-object-name"], display_argv=[PY, "-c", "<object>"]
-        )
-        assert result.stdout.strip() == "private-object-name"
-        out = capsys.readouterr().out
-        assert "private-object-name" not in out and "<object>" in out
-
     def test_missing_tool_timeout_and_empty_command_fail_clearly(self):
         runner = ProcessRunner()
         with pytest.raises(GcpCommandError, match="not on PATH"):

@@ -91,7 +91,6 @@ class ProcessRunner:
         capture: bool = True,
         timeout: float | None = None,
         sensitive: bool = False,
-        display_argv: Sequence[str] | None = None,
     ) -> ProcessResult:
         """Run ``argv`` and return its result.
 
@@ -99,14 +98,11 @@ class ProcessRunner:
         An :func:`isolated_env` overlay removes every base key, so a renderer sees only
         the inputs it is given. ``sensitive`` suppresses the
         captured streams from the failure message, for commands that read secrets.
-        ``display_argv`` replaces ``argv`` in the log, for an argument that is
-        private data but not a secret, such as an object name.
         """
         command = [str(part) for part in argv]
         if not command or not command[0]:
             raise GcpCommandError("refusing to run an empty command")
-        shown = command if display_argv is None else [str(part) for part in display_argv]
-        info(f"Running: {_redact_argv_for_log(shown)}")
+        info(f"Running: {_redact_argv_for_log(command)}")
         try:
             # An argv list with no shell; the command layer builds every argv.
             completed = subprocess.run(  # nosec B603
