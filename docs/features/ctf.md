@@ -102,6 +102,10 @@ If the event runs in team mode, you compete as part of a team (up to the event's
 size limit) and your team shares a score. Organizers may also group participants into
 brackets so leaderboards are ranked within a cohort.
 
+The team captain can rename the team, remove members, and transfer captaincy.
+A captain can disband a team only when its current members have no recorded correct solves.
+Zero-point solves also prevent disbanding. Leaving as the last member follows the same rule.
+
 In team mode, join or create a team before you submit flags.
 An event in solo mode does not require team membership.
 

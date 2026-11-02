@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
+import { ParticipantCaptainCard } from "./ParticipantCaptainCard";
 import { ParticipantModerationCard } from "./ParticipantModerationCard";
 import { ParticipantPasswordDialog } from "./ParticipantPasswordDialog";
 import { formatDateTime, titleCase } from "../format";
@@ -285,6 +286,7 @@ export function ParticipantDetailPage() {
         </Card>
 
         <AwardsCard participant={participant} />
+        <ParticipantCaptainCard participant={participant} />
         <ParticipantModerationCard participant={participant} />
         <BracketControl participant={participant} />
         <RangeControls participant={participant} />
