@@ -1634,7 +1634,9 @@
     "evidence": [
       "docs/architecture/spa-cutover-architecture-1300.md",
       "docs/design/spa-design-system-foundation-1299.md",
-      "docs/design/design-system/README.md"
+      "docs/design/design-system/README.md",
+      "docs/design/ctf-scoreboard-refresh-preflight-576.md",
+      "docs/design/ctf-scoreboard-refresh-576.md"
     ]
   },
   {

@@ -161,8 +161,17 @@ class TestCTFEventModel:
 
         assert "event_end" in exc_info.value.message_dict
 
-    def test_event_validation_team_mode_requires_size_limit(self):
-        """Test validation requires team_size_limit when team_mode is True."""
+    @pytest.mark.parametrize(
+        "team_size_limit",
+        [
+            pytest.param(None, id="none-unlimited"),
+            pytest.param(0, id="zero-unlimited"),
+            pytest.param(1, id="solo-minimum"),
+            pytest.param(50, id="large-no-upper-bound"),
+        ],
+    )
+    def test_event_validation_team_size_limit_accepts_ctf_505_values(self, team_size_limit):
+        """CTF-505 (#648): team mode accepts 1+, and 0 or None as unlimited."""
         now = timezone.now()
         event = CTFEvent(
             name="Team Event",
@@ -170,10 +179,18 @@ class TestCTFEventModel:
             event_start=now + timedelta(days=1),
             event_end=now + timedelta(days=1, hours=8),
             team_mode=True,
-            team_size_limit=None,
+            team_size_limit=team_size_limit,
         )
+        other_fields = [f.name for f in CTFEvent._meta.fields if f.name != "team_size_limit"]
+        event.clean_fields(exclude=other_fields)
+        event.clean()
+
+    def test_event_validation_team_size_limit_rejects_negative(self):
+        """A negative team size limit fails field validation."""
+        event = CTFEvent(team_mode=True, team_size_limit=-1)
+        other_fields = [f.name for f in CTFEvent._meta.fields if f.name != "team_size_limit"]
         with pytest.raises(ValidationError) as exc_info:
-            event.clean()
+            event.clean_fields(exclude=other_fields)
 
         assert "team_size_limit" in exc_info.value.message_dict
 
@@ -381,6 +398,8 @@ class TestCTFTeamModel:
         [
             pytest.param(4, 4, True, id="at-capacity"),
             pytest.param(4, 2, False, id="has-space"),
+            pytest.param(1, 1, True, id="solo-at-capacity"),
+            pytest.param(0, 50, False, id="zero-unlimited"),
         ],
     )
     def test_team_is_full(self, team_size_limit, member_count, expected):
