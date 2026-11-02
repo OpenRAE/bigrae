@@ -124,6 +124,7 @@ def test_deleted_required_file_refuses_real_launch_before_native_dispatch(file_l
 
 def test_cancellation_during_file_read_prevents_worker_dispatch(file_launch, storage_client, monkeypatch):
     from unittest.mock import Mock
+
     from engine.services import _runtime_plugin_operations as controller
 
     actor, source, _ = file_launch
@@ -131,9 +132,11 @@ def test_cancellation_during_file_read_prevents_worker_dispatch(file_launch, sto
     launched = Mock()
     monkeypatch.setattr(controller, "launch_plugin", launched)
     monkeypatch.setattr(controller, "interrupt_plugin", Mock())
+
     def read(*_args, **_kwargs):
         Range.objects.filter(request__request_id=result.request_id).update(status="destroying")
         return b"synthetic parameters"
+
     storage_client.get_object.return_value["Body"].read.side_effect = read
     assert controller.reconcile_runtime_plugin_operations() == 3
     launched.assert_not_called()
