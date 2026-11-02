@@ -86,7 +86,8 @@ def recorder(monkeypatch, chart):
     )
     monkeypatch.setattr("gcp_terraform.terraform_context", record("terraform_context", lambda *a, **k: object()))
     monkeypatch.setattr("gcp_terraform.terraform_outputs", record("terraform_outputs", lambda *a, **k: outputs))
-    monkeypatch.setattr("gcp_terraform.artifact_registry_kms_adoption", lambda *a, **k: False)
+    monkeypatch.setattr("gcp_terraform.kms_adoption_variables", lambda *a, **k: {})
+    monkeypatch.setattr("gcp_storage_cmek.migrate_buckets", record("migrate_buckets", lambda *a, **k: []))
     monkeypatch.setattr("gcp_helm.render_chart", record("render_chart", lambda *a, **k: chart))
     monkeypatch.setattr(
         "gcp_helm.build_values", record("build_values", lambda *a, **k: {"modelBroker": {"enabled": False}})
@@ -130,10 +131,23 @@ class TestInfrastructureStage:
             "terraform_init",
             "terraform_apply",
             "terraform_outputs",
+            "migrate_buckets",
             "verify_range_telemetry",
             "kube_env",
             "seed_operator",
         ]
+
+    def test_platform_buckets_move_to_their_keys_after_apply(self, inputs, recorder, monkeypatch):
+        # The migration gets the bucket-to-key map that the apply produced (#2564).
+        _, outputs = recorder
+        seen = []
+        monkeypatch.setattr("gcp_storage_cmek.migrate_buckets", lambda runner, buckets, **k: seen.append(buckets))
+        adopted = []
+        monkeypatch.setattr("gcp_terraform.kms_adoption_variables", lambda *a, **k: {"adopt_storage_kms": "true"})
+        monkeypatch.setattr("gcp_terraform.terraform_apply", lambda *a, variables=None, **k: adopted.append(variables))
+        infrastructure_stage(FakeRunner(), inputs, operator_password="pw", reconcile_foundation=False)
+        assert seen == [outputs["storage_cmek_buckets"]["value"]]
+        assert adopted == [{"adopt_storage_kms": "true"}]
 
     def test_update_releases_a_disabled_broker_before_apply(self, inputs, recorder):
         order, _ = recorder

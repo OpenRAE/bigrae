@@ -1,12 +1,13 @@
 # RB023: GitHub-less GCP deploy, update, or teardown failed
 
 Applicability: GCP deployments that use the GitHub-less deploy path (ADR-070).
-Operator: platform owner. Verified against the repository: 2026-10-30.
+Operator: platform owner. Verified against the repository: 2026-11-02.
 
 The procedures are in the
 [GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md).
-This runbook covers a failed `gcp-deploy`, `gcp-release-scan`, `gcp-smoke`, or
-`gcp-destroy` run. A CI deployment runs the same commands. Its job log shows the
+This runbook covers a failed `gcp-deploy`, `gcp-release-scan`, `gcp-smoke`,
+`gcp-destroy`, or `gcp-cmek-migrate` run, and a bucket key failure in
+`gcp-foundation`. A CI deployment runs the same commands. Its job log shows the
 same messages.
 
 ## Symptom
@@ -37,6 +38,11 @@ messages identify the stage:
 | Policy | `Only some OpenFGA secrets exist`; `This release has no authorization model`; `The OpenFGA publisher returned no binding`; `kubectl wait` fails on job `openfga-publish-*` |
 | Catalog | The deploy completes, then warns `The in-box catalog may be incomplete` or `Automatic catalog registration did not complete`. The application is active. |
 | Teardown | `--confirm must equal the deployment name`; `terraform destroy failed after 6 attempts` |
+| Bucket keys | `Bucket <bucket> default key is not <key>; apply its owner root first`; `Bucket <bucket>: <n> live objects do not use <key> after the rewrite`; `storage_cmek_buckets must map each bucket name to its key`; `Permission denied on Cloud KMS key` in a Terraform, upload, or download error |
+
+The warning `<bucket>: objects that do not use the bucket key` is not a failure.
+It counts the noncurrent, soft-deleted, retention-locked, and wildcard-named
+objects that keep the Google-managed key.
 
 ## Investigation
 
@@ -136,18 +142,32 @@ the guide describes, or from a clean checkout of the release revision.
      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[*].imageID}{"\n"}{end}'
    ```
 
-9. For an ingress or certificate failure, compare the ingress address, the
-   certificate status, and the DNS answer.
+9. For a bucket key failure, read the bucket default key, the key grants, and
+   the key versions. Each bucket must use its own key, and the Storage service
+   agent of the project must have `roles/cloudkms.cryptoKeyEncrypterDecrypter`
+   on that key.
 
    Read-only command:
 
    ```bash
-   kubectl -n shifter-platform get ingress platform-external \
-     -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-   kubectl -n shifter-platform get managedcertificate platform-managed-cert \
-     -o jsonpath='{.spec.domains} {.status.certificateStatus}'
-   dig +short <hostname>
+   gcloud storage buckets describe gs://<bucket> --format='value(default_kms_key)'
+   gcloud kms keys get-iam-policy <key> --keyring <key-ring> --location <location> --project <project>
+   gcloud kms keys versions list --key <key> --keyring <key-ring> --location <location> \
+     --project <project> --format='table(name,state)'
    ```
+
+10. For an ingress or certificate failure, compare the ingress address, the
+    certificate status, and the DNS answer.
+
+    Read-only command:
+
+    ```bash
+    kubectl -n shifter-platform get ingress platform-external \
+      -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+    kubectl -n shifter-platform get managedcertificate platform-managed-cert \
+      -o jsonpath='{.spec.domains} {.status.certificateStatus}'
+    dig +short <hostname>
+    ```
 
 ## Resolution
 
@@ -220,6 +240,16 @@ release. Use the guide for each step that changes the deployment.
 - **Smoke (exit status 3):** The deployment is current. Find the cause in the
   smoke output, then run `gcp-smoke` again
   ([Smoke and exit status](../technical/handbook/gcp-github-less-deployment.md#smoke-and-exit-status)).
+- **Bucket keys:** For a wrong default key, run the owner command first:
+  `gcp-foundation` for the foundation buckets, `gcp-deploy` for the platform
+  buckets, or your pack bucket root
+  ([Upgrade a deployment to bucket keys](../technical/handbook/gcp-github-less-deployment.md#upgrade-a-deployment-to-bucket-keys)).
+  For a missing grant or a disabled key version, follow
+  [Repair key access](../technical/handbook/gcp-github-less-deployment.md#repair-key-access).
+  For live objects that stay unmigrated, find the writer that sets its own
+  key or the identity that can not rewrite objects, fix it, and run the
+  command again. A second run rewrites only the objects that remain. Do not
+  remove a bucket default key to restore access.
 - **Teardown:** Pass the exact deployment name to `--confirm`. Use the deployer
   image of the release that the deployment runs. After a failed destroy, run
   `gcp-destroy` again
@@ -230,10 +260,13 @@ To roll back, deploy the deployer image of an earlier verified release.
 ## Prevention
 
 Deploy only verified releases by digest. Keep the bundle in the config bucket,
-not in a repository. Keep the evidence bucket retention lock. Run the preflight
+not in a repository. Keep the evidence bucket retention lock. Do not disable or
+destroy a bucket key version while data uses it. After an upgrade, run
+`gcp-foundation` before `gcp-deploy`. Run the preflight
 before each change. Run one lifecycle command at a time for each deployment.
 
 Escalate when a release fails its provenance check, when the scan finds a
 HIGH or CRITICAL finding with no fixed release, when the state of a lock holder
 is unknown, when a Terraform state lock remains after a stopped run, or when a
-teardown would remove a resource outside the selected deployment.
+teardown would remove a resource outside the selected deployment, or when a
+bucket key version is destroyed or scheduled for destruction.

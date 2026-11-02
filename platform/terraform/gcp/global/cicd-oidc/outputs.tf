@@ -38,3 +38,11 @@ output "deployment_config_bucket_name" {
   description = "Deployment config bucket for the GitHub-less input bundle (gcp-deploy --store gs://<name>)."
   value       = module.cicd_oidc_identity.deployment_config_bucket_name
 }
+
+output "storage_cmek_buckets" {
+  description = "Customer-managed key of each foundation bucket; gcp-foundation rewrites the live objects that do not use it (#2564)."
+  value = merge(
+    module.cicd_oidc_identity.storage_cmek_buckets,
+    var.enable_image_export_storage ? module.image_export_storage[0].storage_cmek_buckets : {},
+  )
+}

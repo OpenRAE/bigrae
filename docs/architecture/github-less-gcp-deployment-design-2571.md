@@ -344,7 +344,7 @@ their Kustomize names, so the command adopts them.
 `gcp-destroy` runs as the destroy identity. It requires `--confirm
 <environment>`, takes the deployment lock, renders the same Terraform inputs
 as the deploy, lifts Cloud SQL deletion protection, removes the unremovable KMS
-key ring and key from state, and runs `terraform destroy` with bounded retries.
+key rings and keys from state, and runs `terraform destroy` with bounded retries.
 The protected-branch check of the workflow becomes a tooling check. In operator
 mode, the command loads the release manifest and verifies the release images
 against the trust anchor. It runs only from tooling whose source revision
@@ -452,7 +452,7 @@ flowchart LR
   reg[(Release registry)] -->|verify release images| cmd
   cmd -->|lock| store
   cmd -->|terraform destroy| gcp[Platform resources]
-  gcp -.->|retained| keep[Foundation identities, state, evidence, config, KMS key ring]
+  gcp -.->|retained| keep[Foundation identities, state, evidence, config, KMS key rings]
 ```
 
 ### CI deploy

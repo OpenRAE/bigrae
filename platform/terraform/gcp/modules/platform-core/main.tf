@@ -244,6 +244,7 @@ module "portal_gcs" {
   project_id                    = var.project_id
   region                        = var.region
   environment                   = var.environment
+  name_prefix                   = local.name_prefix
   common_labels                 = local.common_labels
   public_hostname               = local.normalized_public_hostname
   enable_gcs_usage_log_delivery = var.enable_gcs_usage_log_delivery

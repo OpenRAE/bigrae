@@ -491,3 +491,9 @@ variable "adopt_artifact_registry_kms" {
   type        = bool
   default     = false
 }
+
+variable "adopt_storage_kms" {
+  description = "Adopt an existing platform bucket key ring and keys that a previous gcp-destroy left in place. gcp-deploy sets this value (#2564)."
+  type        = bool
+  default     = false
+}

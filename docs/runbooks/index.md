@@ -63,6 +63,7 @@ silently weakening containment, retention, admission, or cleanup checks.
 | --- | --- |
 | Install, upgrade, or roll back | [RB012](rb012-portal-deployment.md), [RB013](rb013-infrastructure-deployment.md), [RB015](rb015-database-migrations.md), [RB023](rb023-gcp-deployment.md) |
 | GitHub-less GCP deploy, update, or teardown failure | [RB023](rb023-gcp-deployment.md) |
+| GCP bucket key or object re-encryption failure | [RB023](rb023-gcp-deployment.md) |
 | Back up, restore, and reconcile | [RB014](rb014-database-backup-restore.md), [RB003](rb003-orphaned-range-resources.md) |
 | Queue or provider dependency outage | [RB008](rb008-dead-letter-messages.md), [RB020](rb020-provisioner-timeout.md) |
 | Sensor or collector loss | [RB007](rb007-logs-not-flowing.md) |

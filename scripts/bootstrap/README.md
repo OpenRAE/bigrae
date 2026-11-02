@@ -25,8 +25,9 @@ The `deploy.py` CLI provides an interactive walkthrough for bootstrapping a bare
 **GCP:**
 
 - `gcp-foundation` applies the foundation: the state bucket, the purpose
-  identities, the release-evidence bucket, and optionally the image-build
-  network. Without GitHub, it also creates the deployment config bucket.
+  identities, the release-evidence bucket, the foundation bucket keys, and
+  optionally the image-build network. Without GitHub, it also creates the
+  deployment config bucket.
 - `gcp-deploy`, `gcp-release-scan`, `gcp-smoke`, `gcp-destroy`, and `gcp-config`
   stand up, update, scan, smoke-test, and tear down one deployment from a
   published release, and manage its inputs (ADR-070). The control plane uses GKE
@@ -87,12 +88,19 @@ GCP lifecycle commands and `gcp-images` use no GitHub service.
 | `gcp-smoke --store gs://<bucket>` | Run the advisory post-deploy range smoke. |
 | `gcp-destroy --store gs://<bucket> --confirm <environment>` | Tear down the platform resources as the destroy identity. |
 | `gcp-config publish\|pull\|show\|set-range-image --store gs://<bucket>` | Publish, pull, and show the deployment input bundle, and record one range image. |
+| `gcp-cmek-migrate --bucket <bucket> --key <key>` | Rewrite the live objects of an operator-owned bucket, such as the private pack bucket, with its customer-managed key. |
 
 Each lifecycle command reads a deployment input bundle from `--store
 gs://<bucket>[/<prefix>]` or `--inputs <dir>`. By default, the command
 impersonates the purpose identity of each stage (`--identity impersonate`). CI
 uses `--identity ambient`, because the job credentials already are that
 identity. `gcp-deploy` exits with status 3 when only the advisory smoke failed.
+Each Terraform-owned GCS bucket uses a customer-managed key (ADR-008-R5).
+`gcp-deploy` rewrites the live objects of the platform buckets with their keys
+after the apply. `gcp-destroy` keeps the platform key rings and keys, and the
+next deploy adopts them. See
+[Bucket encryption keys](../../docs/technical/handbook/gcp-github-less-deployment.md#bucket-encryption-keys).
+
 Run `deploy.py <command> --help` for every flag. The procedure is in
 `docs/technical/handbook/gcp-github-less-deployment.md`. Failure handling is in
 `docs/runbooks/rb023-gcp-deployment.md`.
@@ -208,9 +216,13 @@ policies, secrets, and variables. See `docs/architecture/gcp-guest-images.md`.
 ./scripts/bootstrap/deploy.py gcp-foundation --inputs /path/to/foundation.tfvars.json --yes
 ```
 
-This enables the foundation APIs, creates the private versioned state bucket,
-and applies the independently owned `cicd-oidc` root from a saved plan under
-operator credentials. Without GitHub, the root creates no Workload Identity pool
+This enables the foundation APIs, including Cloud KMS, creates the private
+versioned state bucket, and applies the independently owned `cicd-oidc` root
+from a saved plan under operator credentials. After an IAM propagation error,
+it makes and checks a new saved plan and applies again. The root creates one
+customer-managed key for each foundation bucket. After the apply, the command
+rewrites the live objects of each foundation bucket with its key, except in the
+retention-locked evidence bucket. Without GitHub, the root creates no Workload Identity pool
 or provider, and it creates the deployment config bucket. The evidence bucket
 has an irreversible 90-day retention lock. `enable_image_build_network=true` creates a foundation-owned custom VPC,
 private subnet, Cloud NAT, and IAP-only build/validation ingress before any

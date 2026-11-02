@@ -38,3 +38,11 @@ output "deployment_config_bucket_name" {
   description = "Deployment config bucket for the GitHub-less input bundle; null when it is disabled."
   value       = try(google_storage_bucket.deployment_config[0].name, null)
 }
+
+output "storage_cmek_buckets" {
+  description = "Customer-managed key of each foundation bucket; gcp-foundation rewrites the live objects that do not use it (#2564)."
+  value = merge(
+    { (google_storage_bucket.release_evidence.name) = module.storage_cmek.key_ids["release-evidence"] },
+    local.deployment_config_enabled ? { (google_storage_bucket.deployment_config[0].name) = module.storage_cmek.key_ids["deployment-config"] } : {},
+  )
+}
