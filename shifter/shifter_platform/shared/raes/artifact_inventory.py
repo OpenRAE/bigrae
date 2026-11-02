@@ -23,8 +23,9 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 
-from raes.artifact_requirements import ArtifactIdentity, ArtifactRequirement
+from raes.artifact_requirements import ArtifactRequirement
 from raes_contracts.apparatus import ApparatusIdentity
+from raes_contracts.artifact_identity import ArtifactIdentity
 from raes_contracts.contracts import (
     ArtifactAcquisitionTimingModel,
     ArtifactMechanismCapability,

@@ -1,5 +1,5 @@
 {
-  "current_operation_count": 318,
+  "current_operation_count": 319,
   "historical_baseline": {
     "commit": "8aee758331286293cdc837d94eb95fafa5674ae0",
     "operation_count": 220
@@ -2908,6 +2908,17 @@
       "method": "GET",
       "operation_id": "ctf_submissions_retrieve",
       "path": "/api/v1/ctf/submissions/"
+    },
+    {
+      "authority": {
+        "decision": "event.manage_teams",
+        "scope": "sql:team",
+        "target": "event"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "ctf_teams_captain_create",
+      "path": "/api/v1/ctf/teams/{team_id}/captain/"
     },
     {
       "authority": {

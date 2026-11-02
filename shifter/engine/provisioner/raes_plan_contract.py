@@ -10,11 +10,11 @@ from typing import Any
 from raes_plan_types import RaesPlanError
 
 CONTRACT_VERSION = "raes-provisioning-plan-v2"
-PRODUCER_VERSION = "10.2.0"
+PRODUCER_VERSION = "10.6.0"
 _LEGACY_PAIR = ("raes-provisioning-plan-v1", "2.0.0")
-# Ranges realized before the RAES 10 upgrade carry this producer. Its v2 payload
-# is a subset of the current one, so cleanup reads it with the same checks.
-_PREVIOUS_CLEANUP_PAIR = (CONTRACT_VERSION, "3.5.0")
+# Retained ranges keep their original producer and resource identities. These
+# reviewed v2 pairs are accepted only for cleanup, with the same wire checks.
+_PREVIOUS_CLEANUP_PAIRS = ((CONTRACT_VERSION, "10.2.0"), (CONTRACT_VERSION, "3.5.0"))
 
 
 def prepare_envelope(envelope: Mapping[str, Any], *, cleanup_only: bool) -> Mapping[str, Any]:
@@ -22,7 +22,7 @@ def prepare_envelope(envelope: Mapping[str, Any], *, cleanup_only: bool) -> Mapp
     pair = (envelope.get("contract_version"), envelope.get("raes_version"))
     if cleanup_only and pair == _LEGACY_PAIR:
         return _legacy_cleanup(envelope)
-    if pair != (CONTRACT_VERSION, PRODUCER_VERSION) and not (cleanup_only and pair == _PREVIOUS_CLEANUP_PAIR):
+    if pair != (CONTRACT_VERSION, PRODUCER_VERSION) and not (cleanup_only and pair in _PREVIOUS_CLEANUP_PAIRS):
         raise RaesPlanError("unsupported contract_version or raes_version")
     _validate_collection_fields(envelope)
     _validate_operation_id(envelope.get("operation_id"))

@@ -13,12 +13,12 @@ import pytest
 from raes.artifact_requirements import (
     ArtifactCandidate,
     ArtifactConstraint,
-    ArtifactIdentity,
     ArtifactRequirement,
     ArtifactSatisfactionRoute,
 )
-from raes.explicitness import ExplicitnessClass
 from raes_contracts.apparatus import ApparatusIdentity
+from raes_contracts.artifact_identity import ArtifactIdentity
+from raes_contracts.explicitness import ExplicitnessClass
 
 from shared.raes.artifact_inventory import (
     ArtifactSatisfactionError,

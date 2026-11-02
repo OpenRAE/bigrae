@@ -7,8 +7,8 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==10.2.0` and `raes-env-packs==7.2.0` in its
-[package manifest](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/pyproject.toml)
+`raes==10.6.0` and `raes-env-packs==7.2.2` in its
+[package manifest](../../../shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
 parser added for #2090, do not change these pins.
@@ -34,7 +34,7 @@ the ownership boundary, or the migration contract.
 Only `shared.raes` imports the released RAES module family. It validates and
 compiles authored intent into the RAES ProvisioningPlan. The independent
 provisioner validates and reads plain serialized data, not a second authored
-schema. New realization accepts `raes-provisioning-plan-v2` with producer `3.5.0`.
+schema. New realization accepts `raes-provisioning-plan-v2` with producer `10.6.0`.
 Images, cloud resources, secrets and backend realization remain BigRAE-owned.
 
 ## Transition history
@@ -51,8 +51,9 @@ bytes as a new producer is not migration. Retired source/sidecar records are
 removed by cutover migrations; terminal opaque historical envelopes remain
 factual and inert.
 
-Cleanup alone has a narrowly versioned reader for the previous exact
-`raes-provisioning-plan-v1` / `2.0.0` pair. This preserves cleanup identities
+Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `10.2.0` and
+`v2` / `3.5.0` pairs through the current wire checks. It also accepts the exact
+`raes-provisioning-plan-v1` / `2.0.0` pair through its isolated cleanup view. This preserves cleanup identities
 without allowing old producers for new realization. It does not revive the
 retired CyberScript or ACES path.
 
@@ -61,7 +62,7 @@ retired CyberScript or ACES path.
 The target stays one released RAES contract, with backend capabilities advertised
 only when their admitted shapes have real guest effects and readback evidence.
 The current
-[backend manifest](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/shared/raes/backend-manifest.json)
+[backend manifest](../../../shifter/shifter_platform/shared/raes/backend-manifest.json)
 and realization envelope bound claims. Parsing a field, retaining a projection,
 or passing unit conformance is not proof of live scenario support. Private packs
 and executable adapters remain separately owned and authorized.
@@ -81,3 +82,16 @@ The [hard-cut decision](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/arc
 and [ADR registry](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/adr/index.yaml)
 retain the detailed migration and realization constraints. Earlier preflights
 are historical records and do not override them.
+
+
+## Dependency release transition
+
+The RAES 10.6.0 / env-packs 7.2.2 update adds parser contracts for scope-owned
+audit logs and provider-qualified secret replication. Parser acceptance does
+not add a backend capability. Unsupported effects still fail before dispatch.
+
+Before a future deployment, drain old provision/activate work and settle its
+pending completion results. The completion validator also requires the installed
+producer version. Preserve original plans; never relabel or replay them as the
+new version. Retained ranges keep their cleanup-only reader. Deployment and
+live tenant qualification require explicit user approval.

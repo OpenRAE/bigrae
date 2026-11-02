@@ -246,6 +246,23 @@ class TestCommandLine:
         assert json.loads(captured.out) == BASE_IMAGES
         assert "Running: oras repo tags" in captured.err
 
+    def test_release_resolution_failure_reports_on_stderr(self, monkeypatch, capsys):
+        import cli
+
+        def missing(registry):
+            raise gcp_base_images.BaseImageError(f"no guest image found at {registry}/gce-kali")
+
+        monkeypatch.setattr(cli, "newest_publications", missing)
+        argv = ["deploy.py", "gcp-images", "--resolve", "--registry", "ghcr.io/acme/bigrae"]
+        monkeypatch.setattr("sys.argv", [*argv, "--trusted-repository-id", "11", "--trusted-owner-id", "22"])
+        with pytest.raises(SystemExit) as exc:
+            cli.main(dependency_checker=lambda *args, **kwargs: None)
+        assert exc.value.code == 1
+        captured = capsys.readouterr()
+        # The release workflow writes stdout to the manifest file; the reason must reach the log.
+        assert captured.out == ""
+        assert "no guest image found at ghcr.io/acme/bigrae/gce-kali" in captured.err
+
 
 class TestInstall:
     def test_foundation_inputs_come_from_the_bundle_and_the_operator(self, inputs):
