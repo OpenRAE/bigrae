@@ -272,6 +272,24 @@ class TestNewestPublications:
         fetches = [c[-1] for c in fake_run.calls if c[:3] == ["oras", "manifest", "fetch"]]
         assert fetches == [f"{REGISTRY}/gce-{role}:run-12.2" for role in gbi.BASE_IMAGE_ROLES]
 
+    def test_an_unpublished_dc_leaves_the_release_without_dc(self, monkeypatch):
+        def oras(cmd, dry_run=False, check=True, capture=False, profile=None):
+            if cmd[:3] == ["oras", "repo", "tags"]:
+                if cmd[-1].endswith("/gce-dc"):
+                    return _completed(returncode=1, stderr="denied: requested access to the resource is denied")
+                return _completed(stdout="run-4.1\n")
+            return _completed(stdout=json.dumps({"digest": DIGEST}))
+
+        monkeypatch.setattr(gbi, "run_cmd", oras)
+        pins = _pins()
+        del pins["dc"]
+        assert gbi.newest_publications(REGISTRY) == pins
+
+    def test_an_unpublished_required_role_stops_the_release(self, monkeypatch):
+        monkeypatch.setattr(gbi, "run_cmd", lambda *a, **k: _completed(returncode=1, stderr="denied"))
+        with pytest.raises(gbi.BaseImageError, match=r"no guest image found at .*/gce-kali"):
+            gbi.newest_publications(REGISTRY)
+
     def test_a_role_without_a_publication_stops_the_release(self, monkeypatch):
         monkeypatch.setattr(gbi, "run_cmd", lambda *a, **k: _completed(stdout="latest\n"))
         with pytest.raises(gbi.BaseImageError, match="publication tag"):
@@ -302,13 +320,23 @@ class TestResolveSelection:
         ("pins", "message"),
         [
             ({}, "names no guest images"),
-            ({"kali": f"{REGISTRY}/gce-kali@{DIGEST}"}, "exactly the guest images"),
+            ({"kali": f"{REGISTRY}/gce-kali@{DIGEST}"}, "must name the guest images kali, ubuntu"),
+            ({**_pins(), "windows": f"{REGISTRY}/gce-windows@{DIGEST}"}, "may name only"),
         ],
     )
     def test_refuses_an_empty_or_partial_selection(self, fake_oci, provenance, pins, message):
         with pytest.raises(gbi.BaseImageError, match=message):
             _resolve(fake_oci, pins=pins)
         assert not fake_oci.reads
+
+    def test_a_release_without_dc_verifies_kali_and_ubuntu(self, fake_oci, provenance):
+        pins = _pins()
+        del pins["dc"]
+        assert [artifact.role for artifact in _resolve(fake_oci, pins=pins)] == ["kali", "ubuntu"]
+
+    def test_range_roles_map_release_roles_to_range_image_roles(self):
+        assert gbi.range_roles(["kali", "ubuntu"]) == {"kali", "linux"}
+        assert gbi.range_roles(gbi.BASE_IMAGE_ROLES) == {"kali", "linux", "dc"}
 
     def test_an_unsigned_or_foreign_guest_stops_the_whole_selection(self, fake_oci, provenance):
         provenance["refuse"].add("ubuntu")
