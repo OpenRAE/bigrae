@@ -98,6 +98,13 @@ if ! systemctl is-enabled --quiet cloud-final.service; then
 fi
 systemctl enable ssh.service systemd-resolved.service
 
+echo "=== Removing the Debian packages that the conversion left behind ==="
+# Kali Rolling has no package for some pre-t64 Debian libraries, so the
+# full-upgrade leaves them installed. A later Kali package that ships the same
+# file then fails to unpack (libcurl4-gnutls over libcurl3-gnutls, #2734).
+# Held packages are never removed, so the signed boot chain stays.
+apt-get -y autoremove --purge
+
 echo "=== Regenerating the GRUB config for the installed kernels ==="
 # The held grub-common still owns update-grub; regenerate explicitly so the
 # config lists the Kali cloud kernel regardless of hook ordering.

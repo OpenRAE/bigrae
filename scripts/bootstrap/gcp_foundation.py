@@ -27,15 +27,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
-from bootstrap_core import (
-    confirm,
-    gcloud_resource_exists,
-    get_repo_root,
-    run_cmd,
-    run_cmd_secret_stdin,
-    warn,
-)
+from bootstrap_core import confirm, gcloud_resource_exists, get_repo_root, info, run_cmd, run_cmd_secret_stdin, warn
 from gcp_process import ProcessRunner, scoped_environment
+from gcp_terraform import transient_cause
 
 # A destroy workflow rejects every other dispatch ref before auth; the
 # cicd-oidc purpose_contexts validation enforces the same set.
@@ -55,11 +49,17 @@ _SERVICE_ACCOUNT_SUFFIXES = {
     "deploy": "deploy",
     "destroy": "destroy",
 }
-# A new Storage service agent key grant can take time to reach the bucket update
-# that sets the default key (#2564). Each retry plans and checks the plan again.
+_BRANCH_REF_RE = re.compile(r"refs/heads/([A-Za-z0-9][A-Za-z0-9_/-]*)", re.ASCII)
+# State addresses of the federation resources (modules/cicd-oidc-identity).
+_POOL_ADDRESS = "module.cicd_oidc_identity.google_iam_workload_identity_pool.github[0]"
+_PROVIDER_ADDRESS = "module.cicd_oidc_identity.google_iam_workload_identity_pool_provider.github[0]"
+_PROVIDER_ID = "github"
+# A new service account can be unknown to IAM for a short time after the apply
+# creates it, and a new Storage service agent key grant can take time to reach the
+# bucket update that sets the default key (#2564).
 _APPLY_ATTEMPTS = 6
 _APPLY_RETRY_SECONDS = 20
-_BRANCH_REF_RE = re.compile(r"refs/heads/([A-Za-z0-9][A-Za-z0-9_/-]*)", re.ASCII)
+_NO_INPUT = "-input=false"
 
 # GCP naming rules. The bucket rule matches the cicd-oidc
 # terraform_state_bucket_name validation. A value that starts with "-" can
@@ -283,6 +283,10 @@ def _apply_foundation(
         [*tf, "init", "-reconfigure", f"-backend-config=bucket={bucket}", "-backend-config=prefix=cicd-oidc"],
         dry_run=dry_run,
     )
+    if inputs.get("purpose_contexts") and not dry_run:
+        _restore_federation(
+            tf, _var_files(inputs, path, staging), project=project, pool_id=f"{inputs['name_prefix']}-github"
+        )
     _plan_and_apply(tf, inputs, path, staging, dry_run=dry_run)
     outputs = {} if dry_run else _terraform_outputs(tf)
     if not dry_run:
@@ -294,32 +298,66 @@ def _apply_foundation(
         publish_image_environments(inputs, outputs, dry_run=dry_run)
 
 
-def _plan_and_apply(tf: list[str], inputs: dict[str, object], path: Path, staging: Path, *, dry_run: bool) -> None:
-    """Apply a saved plan that passed the trust check; plan again after an IAM propagation error."""
-    from gcp_terraform import transient_cause
-
+def _plan_and_apply(
+    tf: list[str],
+    inputs: dict[str, object],
+    path: Path,
+    staging: Path,
+    *,
+    dry_run: bool,
+    sleep: Callable[[float], None] | None = None,
+) -> None:
+    """Apply a checked saved plan; after an IAM propagation error, plan, check, and apply again (#2732)."""
     plan = str(staging / "foundation.tfplan")
-    plan_argv = [*tf, "plan", "-input=false", *_var_files(inputs, path, staging), f"-out={plan}"]
-    apply_argv = [*tf, "apply", "-input=false", plan]
-    if dry_run:
-        run_cmd(plan_argv, dry_run=True)
-        run_cmd(apply_argv, dry_run=True)
-        return
     for attempt in range(1, _APPLY_ATTEMPTS + 1):
-        run_cmd(plan_argv)
-        _verify_saved_plan(tf, plan, inputs)
-        result = run_cmd(apply_argv, check=False, capture=True)
-        if result.stdout:
-            print(result.stdout, end="")
-        if result.stderr:
-            print(result.stderr, end="")
-        if result.returncode == 0:
+        run_cmd([*tf, "plan", _NO_INPUT, *_var_files(inputs, path, staging), f"-out={plan}"], dry_run=dry_run)
+        if dry_run:
+            run_cmd([*tf, "apply", _NO_INPUT, plan], dry_run=True)
             return
-        cause = transient_cause(f"{result.stdout}\n{result.stderr}")
-        if attempt == _APPLY_ATTEMPTS or not cause:
+        _verify_saved_plan(tf, plan, inputs)
+        result = run_cmd([*tf, "apply", _NO_INPUT, plan], check=False, capture=True)
+        output = "" if result is None else f"{result.stdout or ''}\n{result.stderr or ''}"
+        print(output.strip())
+        if result is not None and result.returncode == 0:
+            return
+        cause = transient_cause(output)
+        if attempt == _APPLY_ATTEMPTS or cause != "an IAM propagation error":
             raise SystemExit(1)
         warn(f"Foundation apply hit {cause}; planning again in {_APPLY_RETRY_SECONDS}s ({attempt}/{_APPLY_ATTEMPTS})")
-        time.sleep(_APPLY_RETRY_SECONDS)
+        # Read time.sleep at call time, so a test that replaces it does not wait.
+        (sleep or time.sleep)(_APPLY_RETRY_SECONDS)
+
+
+def _restore_federation(tf: list[str], var_files: list[str], *, project: str, pool_id: str) -> None:
+    """Restore a soft-deleted pool and provider, and adopt them into state (#2732).
+
+    A foundation that turns federation off deletes the pool. GCP keeps a deleted pool
+    and its ID for 30 days, so turning federation on again in that time fails with
+    409 unless the bootstrap restores the pool and imports it.
+    """
+    pool = f"projects/{project}/locations/global/workloadIdentityPools/{pool_id}"
+    pool_args = [pool_id, "--location=global", f"--project={project}"]
+    provider_args = [_PROVIDER_ID, f"--workload-identity-pool={pool_id}", "--location=global", f"--project={project}"]
+    resources = (
+        (["gcloud", "iam", "workload-identity-pools"], pool_args, _POOL_ADDRESS, pool),
+        (
+            ["gcloud", "iam", "workload-identity-pools", "providers"],
+            provider_args,
+            _PROVIDER_ADDRESS,
+            f"{pool}/providers/{_PROVIDER_ID}",
+        ),
+    )
+    listed = run_cmd([*tf, "state", "list"], check=False, capture=True)
+    in_state = set((listed.stdout or "").split()) if listed is not None and listed.returncode == 0 else set()
+    for group, args, address, resource_id in resources:
+        described = run_cmd([*group, "describe", *args, "--format=value(state)"], check=False, capture=True)
+        if described is None or described.returncode != 0:
+            return
+        if described.stdout.strip() == "DELETED":
+            run_cmd([*group, "undelete", *args])
+            info(f"Restored the deleted federation resource {resource_id}")
+        if address not in in_state:
+            run_cmd([*tf, "import", _NO_INPUT, *var_files, address, resource_id])
 
 
 def _confirm_foundation(inputs: dict[str, object], project: str) -> None:

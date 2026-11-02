@@ -260,7 +260,11 @@ def transient_cause(text: str) -> str | None:
     lowered = text.lower()
     if any(marker in lowered for marker in _RETRYABLE_CAPACITY_MARKERS):
         return "a Compute Engine capacity shortage"
-    if any(marker in lowered for marker in _RETRYABLE_PERMISSION_MARKERS):
+    # A service account that the same apply created can be unknown to IAM for a
+    # short time; a binding to it then fails with "does not exist" (#2732).
+    if any(marker in lowered for marker in _RETRYABLE_PERMISSION_MARKERS) or (
+        "service account" in lowered and "does not exist" in lowered
+    ):
         return "an IAM propagation error"
     return None
 
