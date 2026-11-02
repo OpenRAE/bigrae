@@ -43,6 +43,7 @@ from shared.credentials import CredentialContext
 from shared.enums import RangeSource, ResourceStatus
 from shared.identity_scope import ResourceScope
 from shared.operation_envelope import canonical_payload_digest
+from shared.raes.contracts import provisioning_plan_producer
 from shared.range_instantiation_policy import InstantiationPurpose, backend_supports_warm_activation
 from shared.warm_pool.compatibility import CompatibilityKey, compatibility_digest
 from shared.warm_pool.policy import WarmPoolBucketPolicy, WarmPoolRuntimePolicy
@@ -94,6 +95,7 @@ def _bucket_compatibility_digest(bucket: WarmPoolBucketPolicy, *, package_digest
             scenario=bucket.scenario,
             package_digest=package_digest,
             lock_digest=lock_digest,
+            plan_producer=provisioning_plan_producer(),
         )
     )
 
@@ -101,11 +103,12 @@ def _bucket_compatibility_digest(bucket: WarmPoolBucketPolicy, *, package_digest
 def _warm_pool_credential() -> CredentialContext:
     """Resolve the configured service credential's current lifecycle state."""
     from management.services import resolve_service_credential_reference
+    from shared.service_proof import service_proof_profile
 
     reference = settings.WARM_POOL_SERVICE_CREDENTIAL_UUID
     if reference is None:
         raise ValueError("Warm-pool service credential unavailable")
-    return resolve_service_credential_reference(reference, audience=settings.GCP_SERVICE_TOKEN_AUDIENCE)
+    return resolve_service_credential_reference(reference, audience=service_proof_profile().audience)
 
 
 def reconcile_warm_pool(*, now: datetime | None = None, cleanup_cursor: int = 0) -> dict[str, int]:

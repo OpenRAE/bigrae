@@ -8692,7 +8692,7 @@
       },
       "post": {
         "operationId": "credentials_services_create",
-        "description": "Register a native Google service identity admission.",
+        "description": "Register a native cloud service identity admission.",
         "tags": [
           "credentials"
         ],
@@ -15985,7 +15985,7 @@
       },
       "patch": {
         "operationId": "ctf_me_profile_partial_update",
-        "description": "Update display name and/or affiliation; omitted fields stay put.",
+        "description": "Update display name, affiliation, and/or time zone; omitted fields stay put.",
         "tags": [
           "ctf"
         ],
@@ -18602,6 +18602,86 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SubmissionListResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/ctf/teams/{team_id}/captain/": {
+      "post": {
+        "operationId": "ctf_teams_captain_create",
+        "description": "Authorize the event and assign the requested teammate as captain.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "team_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "ctf"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamMemberRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamMemberRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamMemberRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizerCaptain"
                 }
               }
             },
@@ -26808,7 +26888,7 @@
           },
           "subject": {
             "type": "string",
-            "pattern": "^[0-9]{10,32}$"
+            "maxLength": 2048
           },
           "scopes": {
             "type": "array",
@@ -27634,6 +27714,13 @@
             },
             "readOnly": true
           },
+          "live_notifications": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "readOnly": true
+          },
           "event_timezone": {
             "type": "string",
             "readOnly": true
@@ -27720,6 +27807,7 @@
           "event_start",
           "event_timezone",
           "id",
+          "live_notifications",
           "logo_url",
           "managed_content",
           "max_participants",
@@ -27934,9 +28022,17 @@
             "maxLength": 120
           },
           "slug": {
-            "type": "string",
-            "maxLength": 140,
-            "pattern": "^[-a-zA-Z0-9_]+$"
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 140,
+                "pattern": "^[-a-zA-Z0-9_]+$"
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "body": {
             "type": "string",
@@ -28191,6 +28287,13 @@
             },
             "maxItems": 10
           },
+          "live_notifications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/LiveNotificationsEnum"
+            },
+            "maxItems": 5
+          },
           "event_timezone": {
             "type": "string",
             "maxLength": 64
@@ -28227,9 +28330,17 @@
             "minimum": 0
           },
           "logo_url": {
-            "type": "string",
-            "format": "uri",
-            "maxLength": 500
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 500
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "visible_os_types": {
             "type": "array",
@@ -28240,8 +28351,16 @@
             "maxItems": 16
           },
           "theme_color": {
-            "type": "string",
-            "pattern": "^(#[0-9a-fA-F]{6})?$"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^#[0-9a-fA-F]{6}$"
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           }
         },
         "required": [
@@ -29004,6 +29123,17 @@
           "error"
         ]
       },
+      "LiveNotificationsEnum": {
+        "enum": [
+          "messages",
+          "challenge_released",
+          "first_blood",
+          "position_changed",
+          "range_ready"
+        ],
+        "type": "string",
+        "description": "* `messages` - Messages\n* `challenge_released` - Challenge Released\n* `first_blood` - First Blood\n* `position_changed` - Position Changed\n* `range_ready` - Range Ready"
+      },
       "ManagedContentSummary": {
         "type": "object",
         "description": "Bounded managed-content status for the organizer (issue #1971).\n\nExposes only the current revision fence and drift state so the organizer can\nrefresh; never object keys, flag material, or validator configuration.",
@@ -29748,6 +29878,27 @@
           "uuid"
         ]
       },
+      "OrganizerCaptain": {
+        "type": "object",
+        "description": "Minimal team identity and current captain; no invitation material.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true
+          },
+          "captain_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "captain_id",
+          "id"
+        ]
+      },
       "OrganizerChallengeDetail": {
         "type": "object",
         "description": "Full organizer-facing challenge detail projection.",
@@ -30094,10 +30245,17 @@
             "maxLength": 71
           },
           "expected_package_digest": {
-            "type": "string",
-            "default": "",
-            "maxLength": 71,
-            "pattern": "^(sha256:[a-f0-9]{64})?$"
+            "oneOf": [
+              {
+                "type": "string",
+                "maxLength": 71,
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "lock_ref": {
             "type": "string",
@@ -30734,6 +30892,18 @@
             "readOnly": true,
             "nullable": true
           },
+          "team_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "nullable": true
+          },
+          "team_captain_id": {
+            "type": "string",
+            "format": "uuid",
+            "readOnly": true,
+            "nullable": true
+          },
           "team_name": {
             "type": "string",
             "readOnly": true,
@@ -30809,6 +30979,8 @@
           "solved_count",
           "status",
           "status_reason",
+          "team_captain_id",
+          "team_id",
           "team_name",
           "total_score",
           "username"
@@ -30887,6 +31059,14 @@
           "theme_color": {
             "type": "string",
             "readOnly": true
+          },
+          "live_notifications": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "readOnly": true,
+            "description": "Live notification kinds the event publishes now; empty means no notification socket (CTF-802)."
           }
         },
         "required": [
@@ -30895,6 +31075,7 @@
           "event_end",
           "event_start",
           "id",
+          "live_notifications",
           "logo_url",
           "name",
           "rating_visibility",
@@ -31166,6 +31347,10 @@
             "type": "string",
             "readOnly": true
           },
+          "time_zone": {
+            "type": "string",
+            "readOnly": true
+          },
           "email": {
             "type": "string",
             "readOnly": true
@@ -31210,6 +31395,7 @@
           "score",
           "solve_count",
           "status",
+          "time_zone",
           "username"
         ]
       },
@@ -31466,14 +31652,30 @@
             "maxLength": 2000
           },
           "support_email": {
-            "type": "string",
-            "format": "email",
-            "maxLength": 254
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "email",
+                "maxLength": 254
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "support_url": {
-            "type": "string",
-            "format": "uri",
-            "maxLength": 500
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "uri",
+                "maxLength": 500
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           }
         }
       },
@@ -31486,9 +31688,17 @@
             "maxLength": 150
           },
           "email": {
-            "type": "string",
-            "format": "email",
-            "maxLength": 254
+            "oneOf": [
+              {
+                "type": "string",
+                "format": "email",
+                "maxLength": 254
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           },
           "first_name": {
             "type": "string",
@@ -31511,6 +31721,10 @@
           "affiliation": {
             "type": "string",
             "maxLength": 120
+          },
+          "time_zone": {
+            "type": "string",
+            "maxLength": 64
           }
         }
       },
@@ -35170,9 +35384,16 @@
             "format": "uri"
           },
           "expected_digest": {
-            "type": "string",
-            "default": "",
-            "pattern": "^(sha256:[a-f0-9]{64})?$"
+            "oneOf": [
+              {
+                "type": "string",
+                "pattern": "^sha256:[a-f0-9]{64}$"
+              },
+              {
+                "type": "string",
+                "maxLength": 0
+              }
+            ]
           }
         },
         "required": [
@@ -35774,8 +35995,8 @@
       "ApiTokenAuth": {
         "type": "http",
         "scheme": "bearer",
-        "bearerFormat": "Knox opaque credential or native Google ID token",
-        "description": "Personal Knox credential with live authorization, or explicitly admitted audience-bound Google service ID token. Cloud access tokens and human provider ID tokens are not application bearer credentials."
+        "bearerFormat": "Knox opaque credential or native cloud service identity token",
+        "description": "Personal Knox credential with live authorization, or an explicitly admitted audience-bound native service identity token: a Google service ID token on GCP or an AWS STS web identity token on AWS. Cloud access tokens and human provider ID tokens are not application bearer credentials."
       },
       "cookieAuth": {
         "type": "apiKey",

@@ -138,11 +138,6 @@ def event_notification_organizers(event: CTFEvent) -> dict[UUID, int]:
     return active_human_user_ids_by_principal(principal_uuids)
 
 
-def event_notification_organizer_ids(event: CTFEvent) -> list[int]:
-    """Map current owner and co-organizer principals without remote policy I/O."""
-    return list(event_notification_organizers(event).values())
-
-
 def actor_has_event_capability(actor: User | AnonymousUser, event: CTFEvent, capability: str) -> bool:
     """Return whether ``actor`` may exercise ``capability`` on ``event``.
 

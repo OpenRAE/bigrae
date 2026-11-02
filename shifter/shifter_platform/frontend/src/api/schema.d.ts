@@ -1660,7 +1660,7 @@ export interface paths {
         /** @description List safe service-principal admission metadata. */
         get: operations["credentials_services_retrieve"];
         put?: never;
-        /** @description Register a native Google service identity admission. */
+        /** @description Register a native cloud service identity admission. */
         post: operations["credentials_services_create"];
         delete?: never;
         options?: never;
@@ -3010,7 +3010,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** @description Update display name and/or affiliation; omitted fields stay put. */
+        /** @description Update display name, affiliation, and/or time zone; omitted fields stay put. */
         patch: operations["ctf_me_profile_partial_update"];
         trace?: never;
     };
@@ -3626,6 +3626,23 @@ export interface paths {
         get: operations["ctf_submissions_retrieve"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/ctf/teams/{team_id}/captain/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Authorize the event and assign the requested teammate as captain. */
+        post: operations["ctf_teams_captain_create"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6057,6 +6074,7 @@ export interface components {
             readonly scoreboard_freeze_at: string | null;
             readonly rules: string;
             readonly reminder_hours: number[];
+            readonly live_notifications: string[];
             readonly event_timezone: string;
             readonly capacity_hints: {
                 [key: string]: unknown;
@@ -6210,6 +6228,7 @@ export interface components {
             scoreboard_freeze_at?: string | null;
             rules?: string;
             reminder_hours?: number[];
+            live_notifications?: components["schemas"]["LiveNotificationsEnum"][];
             event_timezone?: string;
             capacity_hints?: {
                 [key: string]: unknown;
@@ -6225,7 +6244,6 @@ export interface components {
             /** Format: uuid */
             workspace?: string;
             expected_model_source_revision?: number;
-            /** Format: uri */
             logo_url?: string;
             visible_os_types?: string[];
             theme_color?: string;
@@ -6586,6 +6604,15 @@ export interface components {
             error: string;
         };
         /**
+         * @description * `messages` - Messages
+         *     * `challenge_released` - Challenge Released
+         *     * `first_blood` - First Blood
+         *     * `position_changed` - Position Changed
+         *     * `range_ready` - Range Ready
+         * @enum {string}
+         */
+        LiveNotificationsEnum: "messages" | "challenge_released" | "first_blood" | "position_changed" | "range_ready";
+        /**
          * @description Bounded managed-content status for the organizer (issue #1971).
          *
          *     Exposes only the current revision fence and drift state so the organizer can
@@ -6834,6 +6861,13 @@ export interface components {
             readonly name: string;
             readonly is_default: boolean;
         };
+        /** @description Minimal team identity and current captain; no invitation material. */
+        OrganizerCaptain: {
+            /** Format: uuid */
+            readonly id: string;
+            /** Format: uuid */
+            readonly captain_id: string | null;
+        };
         /** @description Full organizer-facing challenge detail projection. */
         OrganizerChallengeDetail: {
             readonly id: string;
@@ -6957,8 +6991,7 @@ export interface components {
             package_ref: string;
             package_version: string;
             package_digest: string;
-            /** @default  */
-            expected_package_digest: string;
+            expected_package_digest?: string;
             /** @default  */
             lock_ref: string;
             /** @default  */
@@ -7155,6 +7188,10 @@ export interface components {
             readonly hidden: boolean;
             readonly affiliation: string;
             readonly username: string | null;
+            /** Format: uuid */
+            readonly team_id: string | null;
+            /** Format: uuid */
+            readonly team_captain_id: string | null;
             readonly team_name: string | null;
             /** Format: date-time */
             readonly registered_at: string | null;
@@ -7196,6 +7233,8 @@ export interface components {
             readonly rules: string;
             readonly logo_url: string;
             readonly theme_color: string;
+            /** @description Live notification kinds the event publishes now; empty means no notification socket (CTF-802). */
+            readonly live_notifications: string[];
         };
         /** @description Target scoreboard visibility for the hidden endpoint (CTF-606). */
         ParticipantHiddenRequest: {
@@ -7282,6 +7321,7 @@ export interface components {
             readonly id: string;
             readonly name: string;
             readonly affiliation: string;
+            readonly time_zone: string;
             readonly email: string;
             readonly username: string | null;
             readonly role: string;
@@ -7357,15 +7397,12 @@ export interface components {
         PatchedOrganizationProfileUpdate: {
             name?: string;
             description?: string;
-            /** Format: email */
             support_email?: string;
-            /** Format: uri */
             support_url?: string;
         };
         /** @description Contact/display fields only; provider bindings and authority are immutable here. */
         PatchedPolicyUserMetadataCommand: {
             username?: string;
-            /** Format: email */
             email?: string;
             first_name?: string;
             last_name?: string;
@@ -7374,6 +7411,7 @@ export interface components {
         PatchedProfileUpdateRequest: {
             name?: string;
             affiliation?: string;
+            time_zone?: string;
         };
         /** @description Metadata (availability/audience) update; both fields optional for PATCH. */
         PatchedScenarioMetadataUpdate: {
@@ -8611,8 +8649,7 @@ export interface components {
             name: string;
             /** Format: uri */
             archive: string;
-            /** @default  */
-            expected_digest: string;
+            expected_digest?: string;
         };
         /** @description Validate agent-upload cancel requests. */
         UploadCancel: {
@@ -20318,6 +20355,51 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["SubmissionListResponse"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    ctf_teams_captain_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                team_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TeamMemberRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TeamMemberRequest"];
+                "multipart/form-data": components["schemas"]["TeamMemberRequest"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OrganizerCaptain"];
                 };
             };
             /** @description Authentication failed. */

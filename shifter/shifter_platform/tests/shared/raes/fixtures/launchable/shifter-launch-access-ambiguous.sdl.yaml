@@ -38,7 +38,7 @@ accounts:
 
 agents:
   analyst:
-    entity: analyst-team
+    affiliations: [analyst-team]
     description: Participant offered SSH to the web host.
     starting_accounts: [analyst]
     interactive_access:
@@ -47,7 +47,7 @@ agents:
         channel: ssh
         account_ref: analyst
   observer:
-    entity: analyst-team
+    affiliations: [analyst-team]
     description: Participant offered no interactive access.
 
 realization:

@@ -115,6 +115,44 @@ class TestEventApi:
         # Valid rename of a draft event must succeed (200).
         assert resp.status_code == 200
 
+    @pytest.mark.parametrize("team_size_limit", [None, 0, 1, 50])
+    def test_detail_put_team_size_limit_accepts_ctf_505_values(
+        self, authenticated_organizer_client: Client, ctf_event_draft: CTFEvent, team_size_limit
+    ):
+        """CTF-505 (#648): organizers set 1+ with no upper bound; 0 or null is unlimited."""
+        resp = _json(
+            authenticated_organizer_client,
+            "put",
+            "api_event_detail",
+            kwargs={"event_id": ctf_event_draft.id},
+            body={"team_mode": True, "team_size_limit": team_size_limit},
+        )
+        assert resp.status_code == 200
+        ctf_event_draft.refresh_from_db()
+        assert ctf_event_draft.team_size_limit == team_size_limit
+
+    @pytest.mark.parametrize("team_size_limit", [-1, 2.5, "overflow"], ids=["negative", "fractional", "overflow"])
+    def test_detail_put_team_size_limit_rejects_invalid(
+        self, authenticated_organizer_client: Client, ctf_event_draft: CTFEvent, team_size_limit
+    ):
+        """Invalid limits fail validation with a 400 before any write."""
+        if team_size_limit == "overflow":
+            from django.db import connection
+
+            # The representable maximum is backend-specific (32-bit on PostgreSQL, 64-bit on SQLite).
+            team_size_limit = connection.ops.integer_field_range("PositiveIntegerField")[1] + 1
+        before = ctf_event_draft.team_size_limit
+        resp = _json(
+            authenticated_organizer_client,
+            "put",
+            "api_event_detail",
+            kwargs={"event_id": ctf_event_draft.id},
+            body={"team_mode": True, "team_size_limit": team_size_limit},
+        )
+        assert resp.status_code == 400
+        ctf_event_draft.refresh_from_db()
+        assert ctf_event_draft.team_size_limit == before
+
     def test_detail_delete(self, authenticated_organizer_client: Client, ctf_event_draft: CTFEvent):
         resp = _json(
             authenticated_organizer_client, "delete", "api_event_detail", kwargs={"event_id": ctf_event_draft.id}

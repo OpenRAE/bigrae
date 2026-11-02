@@ -427,3 +427,63 @@ def test_policy_servers_are_required_at_their_pinned_image_when_the_release_rend
         module.build_evidence(pods, expected, source_sha=_SHA, policy_enabled=True)
     assert {"openfga", "openfga-admin"} <= set(module.release_deployments(policy_enabled=True))
     assert "openfga" not in module.release_deployments()
+
+
+def _prune_pod(root: str, digest: str, phase: str) -> dict[str, object]:
+    status = _container("notification-prune", root, digest)
+    return {
+        "metadata": {
+            "name": f"notification-prune-{phase.lower()}",
+            "labels": {"app.kubernetes.io/part-of": "shifter", "app.kubernetes.io/component": "notification-prune"},
+        },
+        "spec": {"containers": [{"name": status["name"], "image": status["image"]}]},
+        "status": {"phase": phase, "containerStatuses": [status]},
+    }
+
+
+def test_running_scheduled_prune_pod_must_run_the_exact_release_image() -> None:
+    """A scheduled pod is optional, but while it runs it is a release workload (ADR-072-R5)."""
+    module = _load_module()
+    portal = _EXPECTED["portal"]
+    pods = _valid_pods(module)
+    pods["items"].append(_prune_pod(portal["root"], portal["digest"], "Running"))
+
+    evidence = module.build_evidence(pods, _EXPECTED, source_sha=_SHA)
+    assert any(item["component"] == "notification-prune" for item in evidence["running_containers"])
+
+    stale = _valid_pods(module)
+    stale["items"].append(_prune_pod(portal["root"], "sha256:" + "9" * 64, "Running"))
+    with pytest.raises(ValueError, match=r"notification-prune.*exact approved image"):
+        module.build_evidence(stale, _EXPECTED, source_sha=_SHA)
+
+
+def test_finished_scheduled_pod_is_not_running_but_finished_release_pods_stay_verified() -> None:
+    module = _load_module()
+    portal = _EXPECTED["portal"]
+    pods = _valid_pods(module)
+    pods["items"].append(_prune_pod(portal["root"], "sha256:" + "9" * 64, "Succeeded"))
+
+    evidence = module.build_evidence(pods, _EXPECTED, source_sha=_SHA)
+    assert not any(item["component"] == "notification-prune" for item in evidence["running_containers"])
+
+    stale_release = _valid_pods(module)
+    worker = _pod_for(stale_release, "worker-cms")
+    worker["status"]["phase"] = "Failed"
+    worker["status"]["containerStatuses"][0]["imageID"] = f"containerd://{portal['root']}@sha256:{'9' * 64}"
+    with pytest.raises(ValueError, match=r"worker-cms.*exact approved image"):
+        module.build_evidence(stale_release, _EXPECTED, source_sha=_SHA)
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize("profile", ["dev", "prod"])
+def test_every_scheduled_workload_the_chart_renders_is_verified(profile: str) -> None:
+    """No CronJob in the verified namespace can skip the closed inventory."""
+    module = _load_module()
+
+    rendered = {
+        document["metadata"]["name"]
+        for document in _render_gcp_profile(profile)
+        if document["kind"] == "CronJob" and document["metadata"]["namespace"] == "shifter-platform"
+    }
+
+    assert rendered == set(module._SCHEDULED_CONTAINERS)

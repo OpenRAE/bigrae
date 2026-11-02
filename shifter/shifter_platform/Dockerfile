@@ -6,8 +6,8 @@
 # tag. Digest-only (no tag) satisfies SonarCloud docker:S8431 ("specify tag OR
 # digest, not both"). Refresh the digest via the reviewed process in
 # docs/architecture/rev1-build-deployment-provenance.md.
-# base image: python3.12-trixie-slim
-FROM ghcr.io/astral-sh/uv@sha256:3137a0b606f65a74ee0245f43dae219b09e8af98fc37fef20841cbceef35a646 AS builder
+# base image: python3.14-trixie-slim
+FROM ghcr.io/astral-sh/uv@sha256:637619278855a77885a94312efa7decd8479ca6cec5f959e134cbab96582821e AS builder
 
 WORKDIR /app
 
@@ -15,7 +15,7 @@ WORKDIR /app
 # requirements-gcp.txt; regenerate it with:
 #   uv export --no-emit-project --frozen --no-hashes > /tmp/constraint.txt
 #   uv pip compile requirements-gcp.txt --constraint /tmp/constraint.txt \
-#     --python-version 3.12 --generate-hashes -o requirements-gcp.lock
+#     --python-version 3.14 --generate-hashes -o requirements-gcp.lock
 COPY shifter_platform/pyproject.toml shifter_platform/uv.lock shifter_platform/requirements-gcp.lock ./
 
 # Export the platform's frozen lock to a hashed requirements.txt and install every
@@ -77,8 +77,8 @@ RUN npm run build
 # Production stage. Digest-pinned for build provenance (ADR-037-R2);
 # digest-only satisfies docker:S8431. Refresh per
 # docs/architecture/rev1-build-deployment-provenance.md.
-# base image: python:3.12-slim-trixie
-FROM python@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf AS production
+# base image: python:3.14-slim-trixie
+FROM python@sha256:cd89c30eda26ee911a4611b18680086e0ea42e6f5f8cbe653d07fa7958c9cec8 AS production
 
 # Image metadata. `maintainer` is the label SonarCloud docker:S7028 requires;
 # the org.opencontainers.image.* labels are the modern OCI equivalents.
@@ -117,7 +117,7 @@ RUN groupadd --gid 10001 appgroup && \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy installed packages from builder
-COPY --from=builder /usr/local/lib/python3.12/site-packages /usr/local/lib/python3.12/site-packages
+COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
 COPY --from=builder /usr/local/bin/gunicorn /usr/local/bin/daphne /usr/local/bin/django-admin /usr/local/bin/
 
 # First-party installation config on PYTHONPATH. It is first-party source with

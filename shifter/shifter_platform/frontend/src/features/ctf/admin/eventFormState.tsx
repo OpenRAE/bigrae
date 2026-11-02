@@ -16,6 +16,17 @@ import { ctfAdminEventPath, ctfAdminEventsPath } from "../routes";
 
 export const NO_SCENARIO = "__none__";
 
+type LiveNotificationKind = NonNullable<CtfEventWrite["live_notifications"]>[number];
+
+/** Live notification kinds an organizer can select, in display order (CTF-802, ADR-072). */
+export const LIVE_NOTIFICATION_OPTIONS: ReadonlyArray<{ kind: LiveNotificationKind; label: string }> = [
+  { kind: "messages", label: "Live message alerts" },
+  { kind: "challenge_released", label: "New challenge released" },
+  { kind: "first_blood", label: "First blood" },
+  { kind: "position_changed", label: "Scoreboard position changes" },
+  { kind: "range_ready", label: "Range ready" },
+];
+
 interface FormState {
   workspace: string;
   model_sources: ModelSourceSelection;
@@ -46,6 +57,7 @@ interface FormState {
   scoreboard_visibility: string;
   rating_visibility: string;
   scoring_mode: string;
+  live_notifications: LiveNotificationKind[];
 }
 
 const EMPTY: FormState = {
@@ -76,6 +88,7 @@ const EMPTY: FormState = {
   scoreboard_visibility: "public",
   rating_visibility: "public",
   scoring_mode: "standard",
+  live_notifications: LIVE_NOTIFICATION_OPTIONS.map((option) => option.kind),
 };
 
 function fromEvent(event: CtfEventDetail): FormState {
@@ -111,6 +124,9 @@ function fromEvent(event: CtfEventDetail): FormState {
     scoreboard_visibility: event.scoreboard_visibility || "public",
     rating_visibility: event.rating_visibility || "public",
     scoring_mode: event.scoring_mode || "standard",
+    live_notifications: LIVE_NOTIFICATION_OPTIONS.map((option) => option.kind).filter((kind) =>
+      (event.live_notifications ?? []).includes(kind),
+    ),
   };
 }
 
@@ -180,6 +196,7 @@ function toPayload(state: FormState): CtfEventWrite {
     scoreboard_visibility: state.scoreboard_visibility,
     rating_visibility: state.rating_visibility,
     scoring_mode: state.scoring_mode,
+    live_notifications: state.live_notifications,
   };
 }
 
@@ -211,6 +228,15 @@ export function renderEditLoadState(
     );
   }
   return null;
+}
+
+/**
+ * Browsers report unparseable number input (like "1e") as an empty value, which
+ * would otherwise save as an intentional blank: for team size, unlimited (CTF-505).
+ */
+function firstUnparsedNumberInput(form: HTMLFormElement): HTMLInputElement | null {
+  const inputs = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="number"]'));
+  return inputs.find((input) => input.validity.badInput) ?? null;
 }
 
 function submitEventForm(
@@ -254,6 +280,7 @@ export function useEventFormState(mode: "create" | "edit") {
 
   const [state, setState] = useState<FormState>(EMPTY);
   const [initialized, setInitialized] = useState(mode === "create");
+  const [inputError, setInputError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -275,9 +302,10 @@ export function useEventFormState(mode: "create" | "edit") {
   }, [fieldErrors]);
 
   const nonFieldError =
-    Object.keys(fieldErrors).length === 0
+    inputError ??
+    (Object.keys(fieldErrors).length === 0
       ? describeMutationError(mutation.error, "The event could not be saved.")
-      : null;
+      : null);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((prev) => ({ ...prev, [key]: value }));
@@ -297,7 +325,15 @@ export function useEventFormState(mode: "create" | "edit") {
     return fieldErrors[field]?.[0];
   }
 
-  function onSubmit(event: React.FormEvent) {
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    const unparsed = firstUnparsedNumberInput(event.currentTarget);
+    if (unparsed) {
+      event.preventDefault();
+      unparsed.focus();
+      setInputError(`${unparsed.labels?.[0]?.textContent ?? "A number field"} is not a valid number.`);
+      return;
+    }
+    setInputError(null);
     submitEventForm(event, { state, mode, eventId, create, update, navigate });
   }
 

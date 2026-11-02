@@ -55,6 +55,7 @@ from django.utils import timezone
 
 from ctf.enums import ScheduledTaskStatus, ScheduledTaskType
 from ctf.models import CTFScheduledTask
+from ctf.services.notification.live import handle_live_notice_task, handle_position_reconcile_task
 from shared.log_sanitize import safe_log_value
 
 logger = logging.getLogger(__name__)
@@ -493,4 +494,6 @@ TASK_HANDLERS: dict[str, Any] = {
     ScheduledTaskType.SEND_NOTIFICATION.value: _handle_send_notification,
     ScheduledTaskType.RELEASE_CHALLENGE.value: _handle_release_challenge,
     ScheduledTaskType.RELEASE_COMMUNICATION.value: _handle_release_communication,
+    ScheduledTaskType.LIVE_NOTICE.value: handle_live_notice_task,
+    ScheduledTaskType.RECONCILE_POSITIONS.value: handle_position_reconcile_task,
 }

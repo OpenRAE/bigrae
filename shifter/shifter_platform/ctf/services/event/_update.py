@@ -18,7 +18,7 @@ from ._crud import (
     _reschedule_event_if_schedule_changed,
     _validate_event_time_range,
 )
-from ._validation import validate_content_scenario_access, validate_scoring_mode
+from ._validation import validate_content_scenario_access, validate_event_timezone, validate_scoring_mode
 
 logger = logging.getLogger(__name__)
 
@@ -46,6 +46,7 @@ def _validate_event_update(event: CTFEvent, event_data: dict[str, Any]) -> None:
         event_data.get("event_end", event.event_end),
     )
     validate_scoring_mode(event_data)
+    validate_event_timezone(event_data)
 
 
 def _safe_event_update_data(event: CTFEvent, event_data: dict[str, Any]) -> dict[str, Any]:
@@ -101,6 +102,14 @@ def _admit_scenario_change(event: CTFEvent, safe_data: dict[str, Any], actor_id:
         workspace_id=event.workspace_id,
     )
     validate_content_scenario_access(actor, scenario_id, scope=scope)
+
+
+def _reconcile_positions_on_board_change(event: CTFEvent, safe_data: dict[str, Any]) -> None:
+    """A newly visible board or a newly selected kind reconciles positions (CTF-802)."""
+    if {"scoreboard_visibility", "scoreboard_freeze_at", "live_notifications"} & safe_data.keys():
+        from ctf.services.notification.live import request_position_reconcile
+
+        request_position_reconcile(event.pk)
 
 
 def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object | None = None) -> CTFEvent:
@@ -166,6 +175,7 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
         old_event_end = event.event_end
         cleanup_may_change = bool({"event_end", "cleanup_delay_hours"} & safe_data.keys())
         old_cleanup_time = event.get_cleanup_time() if cleanup_may_change else None
+        old_reminder_hours = list(event.reminder_hours)
         public_registration_was_enabled = event.public_registration_enabled
 
         if prepared_sources is not None:
@@ -173,6 +183,7 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
         for key, value in safe_data.items():
             setattr(event, key, value)
         event.save()
+        _reconcile_positions_on_board_change(event, safe_data)
 
         _audit_public_registration_update(
             event,
@@ -187,6 +198,7 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
             old_event_start=old_event_start,
             old_event_end=old_event_end,
             old_cleanup_time=old_cleanup_time,
+            old_reminder_hours=old_reminder_hours,
             actor=actor_id,
         )
 

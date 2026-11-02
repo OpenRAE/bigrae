@@ -39,10 +39,11 @@ From **CTF Admin → Events → Create**, set the core parameters:
 | Event start / end | Competition window |
 | Registration deadline | Latest time a participant may register |
 | Max participants | Capacity limit |
-| Team mode / team size | Individual vs. team competition |
+| Team mode / team size | Individual vs. team competition. Team size is 1 or more; 0 or blank is unlimited |
 | Range spin-up minutes | Lead time to provision ranges before start |
 | Submission cooldown / attempt limit | Anti-brute-force throttles |
 | Scoreboard visibility / freeze | Whether and when standings are shown |
+| Live notifications | Which live notices participants get; see [Notifications](#6-notifications) |
 | Auto cleanup / cleanup delay | Whether ranges are torn down after the event |
 | Publish public registration page | Opt-in public event details and request form; off by default |
 
@@ -152,12 +153,22 @@ import a roster. Each participant is tracked through registration, range assignm
 and scoring. Use **Brackets** to group participants into ranked cohorts, and (in team
 mode) manage team membership.
 
+To reassign a captain, open an existing team member’s participant detail page.
+Select **Make team captain**. This action requires permission to manage teams.
+It changes captaincy without changing membership or scores.
+
 Requests from the optional public page appear separately at the top of this screen.
 **Reject** closes a request without side effects. **Approve** sends the request
 through the same participant-admission path as a manual add: current capacity and
 duplicate-email policy are rechecked, then the isolated account, participant seat,
 and normal provisioning wake-up are created. A public submission itself never sends
-mail, creates credentials, reserves capacity, or provisions a range. Requests can be
+mail, creates credentials, reserves capacity, or provisions a range.
+
+Every new participant with a delivery email gets a registration confirmation by
+email. This includes approved requests, single adds, CSV imports and generated
+accounts. The confirmation gives the event name, start, end and timezone. It
+never contains a password. The platform sends it only when the deployment has a
+mail provider. Requests can be
 reviewed only once and their PII is removed by the scheduler after the event-relative
 participant-account retention window.
 
@@ -229,14 +240,33 @@ as an initial-launch warm range, and vice versa.
 
 ## 6. Notifications
 
-Use **Notifications** to send announcements during the event and **Email Templates**
-to configure reminder messages. Events can also send registration reminders at the
-hour offsets you configure.
+Use **Notifications** to send announcements during the event.
+
+The event sends reminder emails before the start, at the hour offsets in
+**Reminder hours before start**. New events use 24 and 1. Clear the field to turn
+reminders off. A change replaces the reminders that are not sent yet. Each email shows the start time in the participant's time zone.
+When a participant has not set a time zone, the email uses the event time zone.
+Reminder emails need a configured mail provider.
+
+**Live notifications** in the event form select the live notices that
+participants get while the event runs:
+
+| Kind | What the participant gets |
+|------|---------------------------|
+| Live message alerts | A toast when a new message arrives in the inbox |
+| New challenge released | An inbox notice when a hidden challenge becomes visible |
+| First blood | An inbox notice when a challenge has its first solve |
+| Scoreboard position changes | A toast when the participant's scoreboard position changes |
+| Range ready | A toast when the participant's range is ready |
+
+A new event selects all kinds. Clear all kinds to turn live notifications off
+for the event. Notices do not name a challenge or a participant. First blood and
+position notices stop while the scoreboard is hidden or frozen.
 
 ## 7. During and After the Event
 
-- The **Scoreboard** updates as submissions land. Freeze it near the end to keep final
-  standings suspended until close.
+- The **Scoreboard** on the Monitoring page refreshes every 15 seconds. Freeze it
+  near the end to keep final standings suspended until close.
 - **Analytics** summarizes solves, attempts, and challenge difficulty in practice.
 - After the event, scoring can be recomputed authoritatively if needed (see the
   technical docs for the leaderboard recompute command).

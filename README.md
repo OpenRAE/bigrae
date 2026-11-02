@@ -33,7 +33,8 @@ package's manifest; do not install a local CyberScript package.
 ## Develop
 
 Use Python 3.12+, [uv](https://github.com/astral-sh/uv), the frontend's declared
-Node version and npm, and [pre-commit](https://pre-commit.com/).
+Node version and npm, and [pre-commit](https://pre-commit.com/). The platform
+and packer packages require Python 3.14.
 From the repository root:
 
 ```shell

@@ -32,7 +32,7 @@ def _plan(*networks: RaesPlanNetwork, open_network: bool = False) -> RaesPlan:
         network_addresses=() if open_network else (networks[0].address,),
         network_selection_open=open_network,
     )
-    return RaesPlan(raes_version="3.5.0", nodes=(node,), networks=networks)
+    return RaesPlan(raes_version="10.2.0", nodes=(node,), networks=networks)
 
 
 def _config() -> SimpleNamespace:

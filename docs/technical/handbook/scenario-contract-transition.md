@@ -7,7 +7,7 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==3.5.0` and `raes-env-packs==5.2.0` in its
+`raes==10.2.0` and `raes-env-packs==7.2.0` in its
 [package manifest](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
@@ -26,6 +26,10 @@ The 2026-10-28 WebSocket security update requires Autobahn 26.10.1 and its
 CPython `cbor2` dependency update. It changes transport dependencies only; the
 RAES pins, serialized plans, authoring contract and cleanup reader remain the
 same. The related Node adapter lock updates affect the MCP HTTP transport.
+
+The 2026-10-31 dependency security update (#2696) raised the `pyasn1` floor to
+0.6.5. It did not change the RAES package pins, the serialized plan versions,
+the ownership boundary, or the migration contract.
 
 Only `shared.raes` imports the released RAES module family. It validates and
 compiles authored intent into the RAES ProvisioningPlan. The independent

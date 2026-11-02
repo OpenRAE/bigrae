@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act, screen } from "@testing-library/react";
 
+import { FakeWebSocket, installFakeWebSocket } from "@/test/fake-websocket";
 import { renderRoute } from "@/test/utils";
 
 vi.mock("@/api/client", () => ({ apiFetch: vi.fn() }));
@@ -11,36 +12,20 @@ import { CtfWorkspaceLayout } from "./CtfWorkspaceLayout";
 
 const mockApi = vi.mocked(apiFetch);
 
-class FakeWebSocket {
-  static instances: FakeWebSocket[] = [];
-  url: string;
-  onopen: (() => void) | null = null;
-  onmessage: ((event: { data: string }) => void) | null = null;
-  sent: string[] = [];
-
-  constructor(url: string) {
-    this.url = url;
-    FakeWebSocket.instances.push(this);
-  }
-
-  send(data: string) {
-    this.sent.push(data);
-  }
-
-  close() {
-    // No-op for tests.
-  }
-}
-
-const CURRENT_EVENT = {
-  event: { id: "e1", name: "Spring CTF", status: "active" },
+const ALL_KINDS = ["messages", "challenge_released", "first_blood", "position_changed", "range_ready"];
+let liveKinds: string[] = ALL_KINDS;
+const currentEvent = () => ({
+  event: { id: "e1", name: "Spring CTF", status: "active", live_notifications: liveKinds },
   participant: { id: "p1", name: "Alice", status: "active" },
-};
+});
 const INBOX = "/ctf/me/events/e1/communications/";
 let actionRequired = 0;
 
+let restoreWebSocket: () => void;
+
 beforeEach(() => {
   actionRequired = 0;
+  liveKinds = ALL_KINDS;
   mockApi.mockReset();
   mockApi.mockImplementation(async (path: string) => {
     if (path === INBOX) {
@@ -52,27 +37,26 @@ beforeEach(() => {
         allowed_link_hosts: [],
       };
     }
-    if (path.endsWith("/me/event/")) return CURRENT_EVENT;
+    if (path.endsWith("/me/event/")) return currentEvent();
     return { images: [], announcements: [] };
   });
-  FakeWebSocket.instances = [];
-  vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
+  restoreWebSocket = installFakeWebSocket();
 });
 
 afterEach(() => {
-  vi.unstubAllGlobals();
+  restoreWebSocket();
 });
 
 const inboxCalls = () => mockApi.mock.calls.filter(([path]) => path === INBOX);
 const frame = (payload: unknown, topic = "ctf:event:e1") =>
-  ({ data: JSON.stringify({ type: "notification", id: 7, event_id: "s1", topic, payload }) });
+  ({ data: JSON.stringify({ type: "notification", id: 7, event_id: "s1", topic, payload }) }) as MessageEvent;
 
 async function openSocket() {
   renderRoute(<CtfWorkspaceLayout />);
   await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(1));
   await vi.waitFor(() => expect(inboxCalls()).toHaveLength(1));
   const socket = FakeWebSocket.instances[0];
-  act(() => socket.onopen?.());
+  act(() => socket.emitOpen());
   return socket;
 }
 
@@ -106,7 +90,7 @@ describe("CtfWorkspaceLayout", () => {
     await vi.waitFor(() => expect(inboxCalls()).toHaveLength(2));
     expect(screen.queryByText("New message")).not.toBeInTheDocument();
 
-    act(() => socket.onmessage?.({ data: "not-json" }));
+    act(() => socket.onmessage?.({ data: "not-json" } as MessageEvent));
     act(() => socket.onmessage?.(frame({ kind: "communication", snapshot_id: "x" })));
     act(() => socket.onmessage?.(frame({ kind: "refresh" }, "ctf:event:other")));
     // A legacy content-bearing frame is never rendered as content.
@@ -121,13 +105,50 @@ describe("CtfWorkspaceLayout", () => {
     async (data) => {
       const socket = await openSocket();
 
-      await act(async () => socket.onmessage?.({ data }));
+      await act(async () => socket.onmessage?.({ data } as MessageEvent));
 
       expect(inboxCalls()).toHaveLength(1);
       expect(screen.queryByText("New message")).not.toBeInTheDocument();
       expect(screen.queryByText("First blood!")).not.toBeInTheDocument();
     },
   );
+
+  it("opens no socket when the event selects no live notification kinds", async () => {
+    liveKinds = [];
+    renderRoute(<CtfWorkspaceLayout />);
+
+    await vi.waitFor(() => expect(inboxCalls()).toHaveLength(1));
+    expect(FakeWebSocket.instances).toHaveLength(0);
+  });
+
+  it("shows fixed-text toasts for position and range hints", async () => {
+    const socket = await openSocket();
+
+    act(() => socket.onmessage?.(frame({ kind: "position_changed", rank: 1, name: "<b>Bob</b>" })));
+    expect(await screen.findByText("Scoreboard position changed")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open scoreboard" })).toHaveAttribute("href", "/ctf/scoreboard/");
+    expect(screen.queryByText(/Bob/)).not.toBeInTheDocument();
+
+    act(() => socket.onmessage?.(frame({ kind: "range_ready" })));
+    expect(await screen.findByText("Range ready")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Open range" })).toHaveAttribute("href", "/ctf/range/");
+    // A hint carries no read; nothing is posted on its behalf.
+    expect(mockApi.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
+  });
+
+  it("reconnects and resubscribes after a dropped socket, and stops on an authorization close", async () => {
+    const socket = await openSocket();
+
+    act(() => socket.emitClose(1006));
+    await vi.waitFor(() => expect(FakeWebSocket.instances).toHaveLength(2), { timeout: 2000 });
+    const second = FakeWebSocket.instances[1];
+    act(() => second.emitOpen());
+    expect(second.sent[0]).toContain("ctf:event:e1");
+
+    act(() => second.emitClose(4003));
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+    expect(FakeWebSocket.instances).toHaveLength(2);
+  });
 
   it("announces open obligations without moving focus or blocking navigation", async () => {
     actionRequired = 2;

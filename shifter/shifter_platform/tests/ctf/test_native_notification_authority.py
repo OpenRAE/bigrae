@@ -10,7 +10,7 @@ from django.test import Client
 from django.utils import timezone
 
 from ctf.services.event import assign_event_staff, revoke_event_staff, transfer_event_ownership
-from ctf.services.notification.realtime import event_topic, publish_event_notification
+from ctf.services.notification.realtime import event_topic
 from shared.authorization import (
     AuthorizationDecision,
     CredentialCeiling,
@@ -20,7 +20,6 @@ from shared.authorization import (
 )
 from tests.ctf._api_flow_helpers import call_json
 from tests.ctf.test_event_staff_api import helper_organizer as helper_organizer
-from tests.integration.asgi.conftest import in_memory_channel_layer as in_memory_channel_layer
 
 pytestmark = pytest.mark.django_db
 
@@ -86,14 +85,11 @@ def test_current_native_human_recipients_need_no_group_and_services_are_not_brow
     organizer_user,
     admin_user,
     live_session_credential,
-    settings,
-    in_memory_channel_layer,
     monkeypatch,
 ):
     from django.db import transaction
 
     from management.services import create_service_principal
-    from shared.models import WebSocketNotification
 
     colleague = get_user_model().objects.create_user(username="native-notification-colleague")
     assign_event_staff(ctf_event.pk, organizer_credential, colleague.identity_principal.uuid, "co_organizer")
@@ -104,18 +100,17 @@ def test_current_native_human_recipients_need_no_group_and_services_are_not_brow
     revoke_event_staff(ctf_event.pk, administrator, organizer_user.identity_principal.uuid)
     ctf_event.refresh_from_db()
     assert ctf_event.owner_principal_uuid == service.uuid
-    settings.WEBSOCKET_NOTIFICATIONS_ENABLED = True
     provider = configured_authorization_provider()
 
     def remote_call_is_forbidden(request):
         raise AssertionError("Recipient projection must not perform remote policy I/O")
 
     monkeypatch.setattr(provider, "check", remote_call_is_forbidden)
+    from ctf.services.event.staff import event_notification_organizers
+
     with transaction.atomic():
-        publish_event_notification(ctf_event, "first_blood", {})
-    assert set(
-        WebSocketNotification.objects.filter(topic=event_topic(ctf_event.pk)).values_list("recipient_id", flat=True)
-    ) == {colleague.pk}
+        recipients = set(event_notification_organizers(ctf_event).values())
+    assert recipients == {colleague.pk}
 
 
 @pytest.mark.parametrize("status,registered", [("banned", True), ("active", False)])

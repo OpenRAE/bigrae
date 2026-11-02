@@ -221,12 +221,11 @@ REDIS_HOST = product_env("REDIS_HOST", "")
 REDIS_PORT = int(product_env("REDIS_PORT", "6379"))
 CHANNEL_LAYERS = _build_channel_layers(os.environ)
 
-# Shared WebSocket notification subsystem enablement (issue #941). The shared
-# persisted notification path (``/ws/notifications/``) has no front-end consumer,
-# so it is disabled by default: when off, publishing creates no per-recipient rows
-# and performs no channel-layer fan-out, and the shared socket is parked. Set to
-# "true" only once a real browser consumer, bounded fan-out, and scheduled pruning
-# exist. Non-secret boolean; absent env means disabled.
+# Shared WebSocket notification capability (issue #941, ADR-072). Supported
+# deployments render "true"; each CTF event then selects its live notification
+# kinds, so an unused event does no work. When off, publishing creates no
+# per-recipient rows and performs no channel-layer fan-out, and the shared socket
+# is parked. Non-secret boolean; absent env means disabled (local and test).
 WEBSOCKET_NOTIFICATIONS_ENABLED = _env_bool("WEBSOCKET_NOTIFICATIONS_ENABLED", False)
 
 # Shared WebSocket notification replay bounds (issue #679).

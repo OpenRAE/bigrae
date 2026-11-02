@@ -61,7 +61,7 @@ class TenantPackUploadSerializer(PreparationSerializer):
 
     name = serializers.RegexField(r"^[A-Za-z0-9_-]{1,100}$")
     archive = serializers.FileField()
-    expected_digest = serializers.RegexField(r"^(sha256:[a-f0-9]{64})?$", required=False, default="", allow_blank=True)
+    expected_digest = serializers.RegexField(r"^sha256:[a-f0-9]{64}$", required=False, allow_blank=True)
 
 
 class TenantPackInstalledSerializer(serializers.Serializer):

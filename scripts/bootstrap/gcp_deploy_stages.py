@@ -408,17 +408,11 @@ def _finish_rollout(
 ) -> None:
     """Restart and wait for the workloads, roll the VPN pool, and record the running images."""
     from gcp_openvpn import roll_out_pool
-    from gcp_rollout import (
-        record_running_images,
-        release_policy_image,
-        release_support_images,
-        restart_workloads,
-        wait_for_rollouts,
-    )
+    from gcp_rollout import ReleasePins, record_running_images, restart_workloads, wait_for_rollouts
 
-    policy_image = release_policy_image(documents)
+    pins = ReleasePins.from_documents(documents)
     restart_workloads(runner, {}, model_broker_enabled=broker_enabled)
-    wait_for_rollouts(runner, {}, model_broker_enabled=broker_enabled, policy_enabled=policy_image is not None)
+    wait_for_rollouts(runner, {}, model_broker_enabled=broker_enabled, policy_enabled=pins.policy is not None)
     if pool:
         roll_out_pool(
             runner,
@@ -435,8 +429,7 @@ def _finish_rollout(
         model_broker_enabled=broker_enabled,
         evidence=request.evidence,
         workdir=inputs.workdir,
-        support_images=release_support_images(documents),
-        policy_image=policy_image,
+        pins=pins,
     )
 
 
@@ -469,7 +462,6 @@ def rollout_stage(
     request: RolloutRequest,
 ) -> bool:
     """Render, migrate, upgrade, verify, and wait. Return True when the certificate is Active."""
-    from gcp_catalog import initialize_catalog
     from gcp_control_plane import (
         ensure_gcp_control_plane_namespaces,
         run_gcp_database_migrations,
@@ -484,7 +476,6 @@ def rollout_stage(
     )
     from gcp_openvpn import ensure_pki, pool_output
     from gcp_policy import publish_policy_model, release_model
-    from gcp_rollout import wait_for_certificate, wait_for_ingress_address
     from gcp_runtime import compose_runtime_env, gdc_config
 
     header(f"Rollout: {inputs.environment}")
@@ -553,18 +544,36 @@ def rollout_stage(
             broker_enabled=broker_enabled,
             documents=release.documents,
         )
-        wait_for_ingress_address(runner, {})
-        active = wait_for_certificate(
-            runner, {}, hostname=inputs.public_hostname, require_active=not request.first_install
-        )
-        initialize_catalog(
-            runner,
-            release.documents,
-            credential_file=request.catalog_credential_file,
-            bootstrap_facts=_catalog_bootstrap_facts(inputs, outputs, cutover, request.catalog_credential_file),
-            hostname=inputs.public_hostname,
-        )
+        active = _open_access(runner, inputs, outputs, request, documents=release.documents, cutover=cutover)
     success("Rollout stage complete")
+    return active
+
+
+def _open_access(
+    runner: ProcessRunner,
+    inputs: DeploymentInputs,
+    outputs: Mapping[str, Mapping[str, object]],
+    request: RolloutRequest,
+    *,
+    documents: list[dict[str, object]],
+    cutover: object,
+) -> bool:
+    """Wait for the ingress and the certificate, then register the catalog.
+
+    Return True when the certificate is Active.
+    """
+    from gcp_catalog import initialize_catalog
+    from gcp_rollout import wait_for_certificate, wait_for_ingress_address
+
+    wait_for_ingress_address(runner, {})
+    active = wait_for_certificate(runner, {}, hostname=inputs.public_hostname, require_active=not request.first_install)
+    initialize_catalog(
+        runner,
+        documents,
+        credential_file=request.catalog_credential_file,
+        bootstrap_facts=_catalog_bootstrap_facts(inputs, outputs, cutover, request.catalog_credential_file),
+        hostname=inputs.public_hostname,
+    )
     return active
 
 

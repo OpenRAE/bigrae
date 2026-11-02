@@ -520,6 +520,10 @@ def render_env(outputs: dict[str, object], *, engine_image: str) -> str:
         # ConfigMap-bound env (ADR-008-R6, #963).
         "REDIS_HOST": cache["host"],
         "REDIS_PORT": str(cache["port"]),
+        # Live CTF notifications are a deployment capability (ADR-072); each
+        # event selects its kinds, so an unused event does no work. The shared
+        # Memorystore channel layer above carries cross-process fan-out.
+        "WEBSOCKET_NOTIFICATIONS_ENABLED": "true",
         "DJANGO_ALLOWED_HOSTS": allowed_hosts,
         "DJANGO_CSRF_TRUSTED_ORIGINS": site_url,
         "SITE_URL": site_url,

@@ -22,6 +22,8 @@ from ctf.enums import (
 from shared.field_encryption import EncryptedStringField
 
 from ._base import CTFBaseModel, ImmutableFieldsMixin
+from ._event_defaults import default_reminder_hours
+from ._live_notifications import LiveNotificationsMixin
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -41,7 +43,7 @@ def _scoring_mode_choices() -> list[tuple[str, str]]:
     return ScoringMode.choices() + [(mode, mode.title()) for mode in sorted(registered_scoring_modes())]
 
 
-class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
+class CTFEvent(ImmutableFieldsMixin, LiveNotificationsMixin, CTFBaseModel):
     """CTF competition event.
 
     Represents a single CTF competition with its configuration,
@@ -60,7 +62,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         cleanup_delay_hours: Hours after event end before cleanup.
         max_participants: Optional limit on participant count.
         team_mode: Whether this is a team-based competition.
-        team_size_limit: Max members per team (if team_mode).
+        team_size_limit: Max members per team (if team_mode); 0 or None is unlimited.
         range_spinup_minutes: Minutes before event to start provisioning.
         range_config: Range configuration (agents_by_os, ngfw_enabled, etc.).
     """
@@ -223,8 +225,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
     team_size_limit = models.PositiveIntegerField(
         null=True,
         blank=True,
-        validators=[MinValueValidator(2), MaxValueValidator(10)],
-        help_text="Maximum team members (2-10, only for team mode)",
+        help_text="Maximum team members (1 or more; 0 or empty means unlimited; only for team mode)",
     )
     range_spinup_minutes = models.PositiveIntegerField(
         default=30,
@@ -281,7 +282,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         help_text="Freeze scoreboard at this time. Solves after this time are hidden from participants.",
     )
     reminder_hours = models.JSONField(
-        default=list,
+        default=default_reminder_hours,
         blank=True,
         help_text="Hours before event start to send reminders (e.g. [24, 1]). Empty list disables reminders.",
     )
@@ -363,8 +364,6 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
             errors.setdefault("registration_deadline", []).append("Registration deadline must be before event start.")
 
     def _validate_team_settings(self, errors: dict[str, list[str]]) -> None:
-        if self.team_mode and not self.team_size_limit:
-            errors.setdefault("team_size_limit", []).append("Team size limit is required when team mode is enabled.")
         if not self.team_mode and self.team_size_limit:
             errors.setdefault("team_size_limit", []).append(
                 "Team size limit should only be set when team mode is enabled."

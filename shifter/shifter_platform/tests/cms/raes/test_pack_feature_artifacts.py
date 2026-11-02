@@ -103,5 +103,5 @@ def test_a_pack_revision_claims_artifacts_its_new_version_declares(
     with django_capture_on_commit_callbacks(execute=True):
         register_inbox_packs(actor=native_catalog.credential)
 
-    assert RaesPackageSource.objects.get(scenario_id="smoke-linux-aws").package_version == "0.3.0"
+    assert RaesPackageSource.objects.get(scenario_id="smoke-linux-aws").package_version == shipped.package_version
     assert AcquiredFeatureArtifact.objects.get().source_name == "claude-code"

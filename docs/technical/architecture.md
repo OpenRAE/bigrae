@@ -6,7 +6,8 @@ architecture; subsystem guides provide detail.
 
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
-**Reviewed:** 2026-10-30 for the one-command GCP install (#2679).
+**Reviewed:** 2026-10-31 for live CTF notifications (#665), after the AWS native
+identity bindings (#2313) and the one-command GCP install (#2679).
 This describes source behavior, not a certificate of a live deployment.
 
 BigRAE is the current product name. Public BigRAE config, SDK, client and plugin
@@ -119,10 +120,15 @@ The AWS bundle owns the Terraform modules and environments under
 `platform/terraform`. Vendor connector templates are not part of the package.
 GCP uses one Terraform execution root with separate environment values and state metadata.
 See [deployment configuration](../dev/deployment-configuration.md) for selection and recovery.
-A GCP deployment runs from a published release. Operators and CI use the same
+A GCP deployment runs from a published release. Operators use the
 `deploy.py gcp-deploy` command, which reads the deployment input bundle from the
 deployment config bucket or a local directory. Secret values stay in Secret
-Manager (ADR-070, [GitHub-less GCP deployment guide](handbook/gcp-github-less-deployment.md)). Keep platform
+Manager (ADR-070, [GitHub-less GCP deployment guide](handbook/gcp-github-less-deployment.md)).
+A release also names one signed guest image for each published range role.
+A developer builds and validates those images in a build project that they
+supply. Each release takes the newest verified publication of each role, and
+the deploy imports the release guests after it verifies them
+([GCP guest images](../architecture/gcp-guest-images.md), #2668). Keep platform
 hosting separate from the range guest backend. `gcp-destroy` keeps the Artifact
 Registry key ring and key, which GCP can not delete. A later install adopts them
 with import blocks. The range network peers with the platform network after the
@@ -133,6 +139,10 @@ base range images and carries the OpenFGA authorization model. The first deploy
 generates the OpenFGA credentials, publishes the model, and creates the first
 administrator from the configured operator account. A tenant platform creates no
 image-build infrastructure; only maintainer build environments opt in.
+After each rollout, the deploy checks the image of every running platform
+container (#2698). Release containers must run the release images. The OpenFGA
+servers and the Cloud SQL proxy sidecars must run the images that the release
+chart pins.
 
 | Boundary | GCP | AWS |
 | --- | --- | --- |
@@ -143,6 +153,15 @@ image-build infrastructure; only maintainer build environments opt in.
 | Event transport | Pub/Sub topic/subscriptions | SNS/SQS |
 | Artifacts and secrets | GCS / Secret Manager | S3 / Secrets Manager and SSM |
 | Human provider authentication | Identity Platform | Cognito/OIDC |
+| Human session recheck | Identity Platform user state | Cognito `AdminGetUser` |
+| Service principal proof | Google service ID token | STS `GetWebIdentityToken` JWT |
+| Runtime SQL login | Cloud SQL IAM through the Auth Proxy | RDS IAM, one login per workload |
+| Policy datastore login | Cloud SQL IAM | Rotated password logins |
+| Operator Kubernetes API path | Connect Gateway | Session Manager tunnel |
+
+Both providers use the same principal, credential and OpenFGA contracts. The
+[AWS native identity contract](platform_infrastructure/aws-native-identity.md)
+records the AWS bindings and their approved deviations.
 
 GCP shared-VPC range cells use per-range subnet/tag firewall policy and explicit
 NAT membership. Guests have no external NIC. Any attached identity is
@@ -167,6 +186,12 @@ required path, for example the portal to the in-cluster Guacamole token API.
 These controls do not provide authenticated
 pod-to-pod mTLS; a service mesh remains unadopted. No documentation or unit-test
 result proves complete escape detection or live containment qualification.
+
+On GCP, the external Application Load Balancer reaches the portal and Guacamole
+through container-native network endpoint groups. Each BackendConfig sets an
+explicit health check: `/health/` on port 8000 for the portal and `/guacamole/`
+on port 8080 for Guacamole. The check does not depend on the pods that exist
+when GKE creates the backend.
 
 Control-plane workloads run as the non-root runtime identity UID 10001, with a
 read-only root filesystem, dropped capabilities, and the `RuntimeDefault` seccomp
@@ -232,6 +257,13 @@ is an implementation record. The current input/result definitions are
 with shared [wire envelopes](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/shared/operation_envelope.py).
 Reconciliation, bounded retries and dead-letter handling repair delivery;
 WebSocket notifications are projections and can be recovered by an authorized read.
+
+Supported GCP deployments turn on the shared WebSocket notification capability.
+The AWS EKS root reads the portal Redis posture from SSM Parameter Store. AWS
+turns the capability on only when that posture names a shared Redis host. Each CTF
+event selects its live notification kinds, so an event that selects none does no
+work. The `notification-prune` CronJob deletes expired notification rows in
+bounded batches (ADR-072, [live notifications design](../architecture/ctf-live-notifications-design-665.md)).
 
 ## Data ownership and recovery
 
@@ -323,6 +355,10 @@ published package release nor a qualified live range.
 The 2026-10-28 logging and exception-handling cleanup (#2569) changed only the
 Ruff lint rules in the SDK package manifest. It did not change the adapter ABI,
 the public contracts, or the installation boundary on this page.
+
+The 2026-11-01 move to RAES 10.2 (#2712) changed the in-box manifest only to
+upgrade the smoke packs to new revisions and digests. It did not change the
+registration path or the scenario content boundary on this page.
 
 ## Install, exercise and maintain
 

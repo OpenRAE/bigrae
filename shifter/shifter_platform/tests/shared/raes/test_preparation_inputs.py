@@ -95,6 +95,23 @@ def test_declared_reference_is_insufficient_to_bind_input(material, failure):
         bind_input_material(lock, manifest_bytes=json.dumps(raw).encode(), descriptor_bytes=payload, parent=scenario)
 
 
+@pytest.mark.parametrize("member", ["manifest", "descriptor"])
+def test_ambiguous_json_material_is_invalid_input(material, member):
+    scenario, lock, raw, payload = material
+    manifest_bytes = json.dumps(raw).encode()
+    if member == "manifest":
+        manifest_bytes = b'{"manifest_id":"a",' + manifest_bytes[1:]
+    else:
+        payload = b'{"protocol":"a",' + payload[1:]
+        raw = deepcopy(raw)
+        raw["artifacts"]["base"]["checksum"]["value"] = hashlib.sha256(payload).hexdigest()
+        raw["artifacts"]["base"]["size_bytes"] = len(payload)
+        raw["set_digest"] = associated_artifact_set_digest(AssociatedArtifactManifestModel.model_validate(raw))
+        manifest_bytes = json.dumps(raw).encode()
+    with pytest.raises(ValueError, match="JSON"):
+        bind_input_material(lock, manifest_bytes=manifest_bytes, descriptor_bytes=payload, parent=scenario)
+
+
 def test_only_exact_independently_measured_bytes_and_explicit_trust_admit_input(material):
     bound = bind(material)
     observation = {

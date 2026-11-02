@@ -120,6 +120,11 @@ existing history behavior. See the
 
 ## Services
 
+Flag submission requires a live team in the participant's event when `team_mode` is enabled.
+The service checks membership before flag verification and again against the locked participant before recording the submission.
+Rejection creates no submission or score change.
+The optional `require_team` check preserves team creation, joining, and other actions.
+
 Business logic lives under `ctf.services` (views stay thin):
 
 - `event`, `challenge`, `flag`, `bracket`, `hint`, `award`, `attachment`,
@@ -304,6 +309,16 @@ read access after disqualification where the existing viewing rules permit it;
 banned, deleted and unregistered rows do not qualify. Ordinary participant
 credentials also require current participation policy. Public publication and
 hidden scoreboards keep their separate publication rules.
+
+### Scoreboard refresh
+
+The SPA participant and organizer scoreboard hooks poll their API read every
+15 seconds (`SCOREBOARD_POLL_MS` in `frontend/src/api/ctf.ts`). They also
+refetch on window focus and on network reconnect. Thus a scoring event shows
+within 30 seconds (CTF-401). A frozen participant board withholds later solves
+by design. The ADR-072 `position_changed` hint is optional and only accelerates
+the refresh. See the
+[design note](../../design/ctf-scoreboard-refresh-576.md).
 
 ## Scheduled Work
 

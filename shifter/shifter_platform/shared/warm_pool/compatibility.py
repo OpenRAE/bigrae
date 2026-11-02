@@ -13,9 +13,11 @@ module does not parse scenarios, plans, packages, or images. The immutable
 realization identity is the registered RAES ``package_digest`` plus ``lock_digest``
 (``cms.models.scenarios.RaesPackageSource``): per #1607 the package digest is bound
 to the validated pack bytes and verified at launch, and the lock digest pins the
-resolved image/content/artifact/plan set, so the pair is a complete, user-neutral
-realization identity without re-compiling the plan or re-resolving images here
-(no second scenario parser -- preflight #28).
+resolved image/content/artifact/plan set. The plan producer (transport contract
+and RAES version) completes the user-neutral realization identity, because the
+provisioner realizes only plans from its current producer. None of these values
+requires re-compiling the plan or re-resolving images here (no second scenario
+parser -- preflight #28).
 
 The digest reuses :func:`shared.operation_envelope.canonical_payload_digest` so it
 is byte-stable and key-order independent, exactly like the operation-record digest.
@@ -39,7 +41,7 @@ __all__ = [
 #: compatibility dimensions cannot silently collide with a digest minted under an
 #: older dimension set. Bump when the meaning of a field changes or a field is
 #: added/removed.
-COMPATIBILITY_SCHEMA = "range-warm-compatibility/v1"
+COMPATIBILITY_SCHEMA = "range-warm-compatibility/v2"
 
 
 class WarmPoolCompatibilityError(Exception):
@@ -58,6 +60,7 @@ _REQUIRED_FIELDS = (
     "scenario",
     "package_digest",
     "lock_digest",
+    "plan_producer",
 )
 
 
@@ -93,6 +96,8 @@ class CompatibilityKey:
     scenario: str
     package_digest: str
     lock_digest: str
+    # Plan transport contract and RAES producer version.
+    plan_producer: str
 
     def normalized(self) -> dict[str, str]:
         """Return the validated, canonical mapping the digest is computed over."""

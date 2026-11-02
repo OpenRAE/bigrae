@@ -48,6 +48,8 @@ class NoticeKind(StrEnum):
     RANGE_READY = "range_ready"
     RANGE_FAILURE = "range_failure"
     ORGANIZER_ALERT = "organizer_alert"
+    REGISTRATION = "registration"
+    CANCELLATION = "cancellation"
 
     def __str__(self) -> str:
         """Return the string value for database storage."""

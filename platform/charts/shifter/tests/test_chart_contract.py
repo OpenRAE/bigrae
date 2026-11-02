@@ -62,9 +62,10 @@ AWS_DEV_WAF_ACL_ARN = (
 # initialization alongside the credential-less CTF image egress proxy.
 # Regenerated for #2622/#2633 integration: compile the provisioner policy and
 # inline the shared platform-runtime map without losing native runtime contracts.
+# Regenerated for #665: add the notification-prune CronJob (ADR-072-R5); no other change.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "7d0f23ee4745af91c367625390768138d8fe3ddf917e6fd1119dd070490f6fe5",
-    "gcp-dev": "117efe93cc24f9cc373ffe235f166fc76a4ac6b6c8f6b197438284be31eb9adc",
+    "gcp-prod": "e818fe662e9928612cedc9c056dca883ff8752c6483cd3d97cbaa02163c443a9",
+    "gcp-dev": "e030e65d0377de3b767f8f793b23b89da38abf7b23165749e7257c6e48d42909",
 }
 
 

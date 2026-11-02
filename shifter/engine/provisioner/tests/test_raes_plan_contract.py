@@ -11,7 +11,7 @@ def _plan():
     return {
         "kind": "raes_provisioning_plan",
         "contract_version": "raes-provisioning-plan-v2",
-        "raes_version": "3.5.0",
+        "raes_version": "10.2.0",
         "resources": {},
         "operations": [],
         "realization_authority": [],
@@ -71,7 +71,7 @@ def _semantic_plan():
 
 
 def test_new_transport_is_accepted():
-    assert parse_plan(_plan()).raes_version == "3.5.0"
+    assert parse_plan(_plan()).raes_version == "10.2.0"
 
 
 def test_populated_semantic_metadata_is_accepted():
@@ -91,6 +91,24 @@ def test_populated_semantic_metadata_is_accepted():
         (lambda row: row.update(payload_pointer="spec/node"), "invalid payload pointer"),
         (lambda row: row.update(bounds=[{"minimum": 1}]), "bounds require unsupported"),
         (lambda row: row.update(provenance={}), "malformed optional metadata"),
+        # RAES 10 recursive constraint carriers are checked by shape (#2712).
+        (
+            lambda row: row.update(constraint_document={"contract_id": "recursive-realization-constraint-v1"}),
+            "recursive",
+        ),
+        (
+            lambda row: row.update(
+                constraint_document={"contract_id": "another-contract"}, constraint_binding="sha256:" + "a" * 64
+            ),
+            "recursive",
+        ),
+        (
+            lambda row: row.update(
+                constraint_document={"contract_id": "recursive-realization-constraint-v1"}, constraint_binding="md5:1"
+            ),
+            "recursive",
+        ),
+        (lambda row: row.update(structure=["not", "a", "mapping"]), "recursive"),
     ],
 )
 def test_authority_rows_fail_closed_for_each_guarded_condition(change, error):
@@ -98,6 +116,20 @@ def test_authority_rows_fail_closed_for_each_guarded_condition(change, error):
     change(plan["realization_authority"][0])
     with pytest.raises(RaesPlanError, match=error):
         parse_plan(plan)
+
+
+def test_authority_rows_accept_a_bound_recursive_constraint():
+    """#2712: an exact literal carried as a RAES 10 recursive constraint is admitted."""
+    plan = _semantic_plan()
+    plan["realization_authority"][0].update(
+        constraint_document={
+            "contract_id": "recursive-realization-constraint-v1",
+            "root": {"presence": "required", "origin": "author", "kind": "literal", "value": "compute"},
+        },
+        constraint_binding="sha256:" + "b" * 64,
+        structure=None,
+    )
+    assert [node.address for node in parse_plan(plan).nodes] == ["provision.node.web"]
 
 
 def test_authority_rows_reject_duplicate_resource_field_identity():
@@ -221,7 +253,7 @@ def test_runtime_selected_carrier_must_match_plan_identity():
     plan["backend_realization_envelope"] = carrier
     plan["realization_envelope"] = identity
 
-    assert parse_plan(plan).raes_version == "3.5.0"
+    assert parse_plan(plan).raes_version == "10.2.0"
 
     plan["backend_realization_envelope"]["digest"] = "sha256:" + "3" * 64
     with pytest.raises(RaesPlanError, match="diverges"):
@@ -251,11 +283,33 @@ def test_old_producer_is_cleanup_only_and_input_is_not_rewritten():
     assert old == before
 
 
-def test_cleanup_does_not_accept_an_unreviewed_producer():
+def test_previous_v2_producer_is_cleanup_only_with_current_checks():
+    old = _plan()
+    old["raes_version"] = "3.5.0"
+    before = deepcopy(old)
+    with pytest.raises(RaesPlanError):
+        parse_plan(old)
+    assert parse_plan(old, cleanup_only=True).raes_version == "3.5.0"
+    assert old == before
+
+    old["realization_authority"] = "invalid"
+    with pytest.raises(RaesPlanError, match="realization_authority"):
+        parse_plan(old, cleanup_only=True)
+
+
+@pytest.mark.parametrize(
+    "pair",
+    [
+        ("raes-provisioning-plan-v1", "2.9.0"),
+        ("raes-provisioning-plan-v1", "3.5.0"),
+        ("raes-provisioning-plan-v2", "3.4.0"),
+    ],
+)
+def test_cleanup_does_not_accept_an_unreviewed_producer(pair):
     old = {
         "kind": "raes_provisioning_plan",
-        "contract_version": "raes-provisioning-plan-v1",
-        "raes_version": "2.9.0",
+        "contract_version": pair[0],
+        "raes_version": pair[1],
         "resources": {},
     }
     with pytest.raises(RaesPlanError):

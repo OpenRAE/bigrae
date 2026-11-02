@@ -117,7 +117,8 @@ SUPPORTED_CONTRACT_VERSIONS: frozenset[str] = frozenset({RAES_PROVISIONING_PLAN_
 
 #: Exact ``raes`` producer release this consumer accepts. A different producer
 #: release is a different reviewed contract and is rejected before realization.
-SUPPORTED_RAES_VERSION = "3.5.0"
+#: The plan contract module owns the one literal.
+SUPPORTED_RAES_VERSION = raes_plan_contract.PRODUCER_VERSION
 
 
 #: A strict dotted-numeric release: ``MAJOR[.MINOR[.PATCH...]]`` with no pre-release

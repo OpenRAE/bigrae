@@ -25,6 +25,7 @@ _PARTICIPATE = "event.participate"
 
 
 API_OPERATION_POLICY: dict[str, OperationPolicy] = {
+    "ctf_teams_captain_create": OperationPolicy(("event.manage_teams",), "event", "team"),
     "ctf_awards_delete_create": OperationPolicy((_MANAGE_AWARDS,), "event", "award"),
     "ctf_challenges_retrieve": OperationPolicy((_MANAGE_CHALLENGES,), "event", "challenge"),
     "ctf_challenges_update": OperationPolicy((_MANAGE_CHALLENGES,), "event", "challenge"),
@@ -264,6 +265,9 @@ CTF_COMMAND_POLICY: dict[str, str] = {
 # intrinsic effects of the event's committed schedule; they do not borrow the
 # creator's later authority. A communication release carries its own durable
 # initiating actor/token and reauthorizes inside the locked admission service.
+# Live notices and position reconciles (ADR-072) are system effects of committed
+# event state: they stage fixed-text system notices or content-free hints and
+# recheck the event's live notification choice under the event lock.
 # The retired notification handler fails closed for old rows.
 CTF_SCHEDULED_EFFECT_POLICY: dict[str, str] = {
     "spin_up_ranges": "system_event_lifecycle",
@@ -275,6 +279,8 @@ CTF_SCHEDULED_EFFECT_POLICY: dict[str, str] = {
     "event_end": "system_event_lifecycle",
     "release_challenge": "system_event_lifecycle",
     "release_communication": "reauthorize_initiator",
+    "live_notice": "system_event_lifecycle",
+    "reconcile_positions": "system_event_lifecycle",
 }
 
 

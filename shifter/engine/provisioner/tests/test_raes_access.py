@@ -45,7 +45,7 @@ def _account(
 
 def _plan(nodes=None, accounts=None):
     return RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.2.0",
         nodes=tuple(nodes if nodes is not None else (_node(),)),
         networks=(),
         accounts=tuple(accounts if accounts is not None else (_account(),)),

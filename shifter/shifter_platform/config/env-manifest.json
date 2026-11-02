@@ -29,6 +29,11 @@
     },
     {
       "default": "''",
+      "name": "AWS_ACCOUNT_ID",
+      "source_file": "config/_credential_settings.py"
+    },
+    {
+      "default": "''",
       "name": "AWS_ENDPOINT_URL",
       "source_file": "config/_cloud.py"
     },
@@ -46,6 +51,16 @@
       "default": "'us-east-2'",
       "name": "AWS_S3_REGION",
       "source_file": "config/_cloud.py"
+    },
+    {
+      "default": "''",
+      "name": "AWS_SERVICE_TOKEN_AUDIENCE",
+      "source_file": "config/_credential_settings.py"
+    },
+    {
+      "default": "''",
+      "name": "AWS_SERVICE_TOKEN_ISSUER",
+      "source_file": "config/_credential_settings.py"
     },
     {
       "default": "'email.us-east-2.amazonaws.com'",
@@ -554,6 +569,11 @@
     },
     {
       "default": "''",
+      "name": "GUACAMOLE_CONTROLLER_ROLE_ARN",
+      "source_file": "config/_guacamole_settings.py"
+    },
+    {
+      "default": "''",
       "name": "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL",
       "source_file": "config/_guacamole_settings.py"
     },
@@ -1031,6 +1051,21 @@
       "default": "''",
       "name": "WARM_POOL_SERVICE_CREDENTIAL_UUID",
       "source_file": "config/_warm_pool_settings.py"
+    },
+    {
+      "default": "False",
+      "name": "WEBSOCKET_NOTIFICATIONS_ENABLED",
+      "source_file": "config/settings.py"
+    },
+    {
+      "default": "100",
+      "name": "WEBSOCKET_NOTIFICATION_MAX_REPLAY",
+      "source_file": "config/settings.py"
+    },
+    {
+      "default": "7",
+      "name": "WEBSOCKET_NOTIFICATION_RETENTION_DAYS",
+      "source_file": "config/settings.py"
     }
   ]
 }

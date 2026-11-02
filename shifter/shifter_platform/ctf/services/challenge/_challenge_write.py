@@ -311,6 +311,7 @@ def update_challenge(challenge_id: UUID, challenge_data: dict[str, Any], *, acto
 
     with transaction.atomic():
         from ctf.services.content_hydration import mark_content_hydration_drift
+        from ctf.services.notification.live import request_challenge_released
 
         mark_content_hydration_drift(
             challenge.event_id,
@@ -318,9 +319,11 @@ def update_challenge(challenge_id: UUID, challenge_data: dict[str, Any], *, acto
             reason="challenge_updated",
             allow_live_repair=challenge.event.is_live_flag_repairable,
         )
+        was_released = challenge.is_released
         for key, value in safe_data.items():
             setattr(challenge, key, value)
         challenge.save()
+        request_challenge_released(challenge, was_released=was_released)
         _apply_optional_challenge_associations(challenge, flags_list, tag_names, topic_names, actor_id)
         logger.info("Updated challenge %s", safe_log_value(challenge_id))
 

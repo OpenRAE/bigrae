@@ -33,6 +33,95 @@ class TestLifecycleActions:
         resp = _lifecycle(authenticated_organizer_client, ctf_event_draft, "activate")
         assert resp.status_code == 409
 
+    @pytest.mark.parametrize(
+        "stored,expected",
+        [([], []), ([48, 48, 30], [30, 48]), ([True, 24], [24])],
+    )
+    def test_open_registration_schedules_the_stored_reminder_hours(
+        self, ctf_event_draft, authenticated_organizer_client, stored, expected
+    ):
+        """An empty list disables reminders; duplicates and booleans add no task (#582)."""
+        ctf_event_draft.reminder_hours = stored
+        ctf_event_draft.save(update_fields=["reminder_hours", "updated_at"])
+
+        assert _lifecycle(authenticated_organizer_client, ctf_event_draft, "open_registration").status_code == 200
+
+        reminders = CTFScheduledTask.objects.filter(
+            event=ctf_event_draft, task_type=ScheduledTaskType.SEND_REMINDER.value
+        )
+        assert sorted(task.metadata["hours_before"] for task in reminders) == expected
+
+    def test_changing_reminder_hours_after_registration_opens_replaces_pending_reminders(
+        self, ctf_event_draft, authenticated_organizer_client
+    ):
+        """Clearing the intervals cancels reminders already queued (#582)."""
+        assert _lifecycle(authenticated_organizer_client, ctf_event_draft, "open_registration").status_code == 200
+        url = f"/api/v1/ctf/events/{ctf_event_draft.pk}/"
+        pending = CTFScheduledTask.objects.filter(event=ctf_event_draft, status=ScheduledTaskStatus.PENDING.value)
+
+        def pending_reminder_hours():
+            reminders = pending.filter(task_type=ScheduledTaskType.SEND_REMINDER.value)
+            return sorted(task.metadata["hours_before"] for task in reminders)
+
+        def other_pending_ids():
+            return set(pending.exclude(task_type=ScheduledTaskType.SEND_REMINDER.value).values_list("pk", flat=True))
+
+        others = other_pending_ids()
+        assert pending_reminder_hours() == [1, 24]
+
+        changed = authenticated_organizer_client.put(url, {"reminder_hours": [6]}, content_type="application/json")
+        assert changed.status_code == 200
+        assert pending_reminder_hours() == [6]
+
+        cleared = authenticated_organizer_client.put(url, {"reminder_hours": []}, content_type="application/json")
+        assert cleared.status_code == 200
+        assert pending_reminder_hours() == []
+        assert other_pending_ids() == others
+
+    def test_new_events_remind_24_hours_and_1_hour_before_start(self, organizer_user):
+        from ctf.models import CTFEvent
+        from tests.ctf.conftest import individual_event_scope
+
+        event = CTFEvent.objects.create(
+            name="Defaults",
+            created_by=organizer_user,
+            **individual_event_scope(organizer_user),
+            event_start=timezone.now() + timedelta(days=2),
+            event_end=timezone.now() + timedelta(days=2, hours=8),
+        )
+        assert event.reminder_hours == [24, 1]
+
+    def test_migration_keeps_reminders_for_upcoming_events_that_stored_an_empty_list(
+        self, ctf_event_draft, ctf_event_active
+    ):
+        import importlib
+
+        from django.apps import apps
+
+        from ctf.models import CTFEvent
+
+        CTFEvent.objects.filter(pk__in=[ctf_event_draft.pk, ctf_event_active.pk]).update(reminder_hours=[])
+        migration = importlib.import_module("ctf.migrations.0084_recipient_time_zone_reminder_default")
+
+        migration.keep_default_reminders(apps, None)
+
+        ctf_event_draft.refresh_from_db()
+        ctf_event_active.refresh_from_db()
+        assert ctf_event_draft.reminder_hours == [24, 1]
+        assert ctf_event_active.reminder_hours == []
+
+    def test_event_writes_refuse_an_unknown_time_zone(self, ctf_event_draft, authenticated_organizer_client):
+        url = f"/api/v1/ctf/events/{ctf_event_draft.pk}/"
+        put = authenticated_organizer_client.put
+
+        refused = put(url, {"event_timezone": "Mars/Olympus"}, content_type="application/json")
+        accepted = put(url, {"event_timezone": "Europe/Paris"}, content_type="application/json")
+
+        assert refused.status_code == 400
+        assert accepted.status_code == 200
+        ctf_event_draft.refresh_from_db()
+        assert ctf_event_draft.event_timezone == "Europe/Paris"
+
     def test_open_registration_schedules_automation(self, ctf_event_draft, authenticated_organizer_client):
         resp = _lifecycle(authenticated_organizer_client, ctf_event_draft, "open_registration")
         assert resp.status_code == 200
@@ -42,24 +131,116 @@ class TestLifecycleActions:
         assert ScheduledTaskType.CLEANUP_RANGES.value in types
         assert ScheduledTaskType.CLEANUP_WARNING.value in types
 
-    def test_cancel_notifies_participants(self, ctf_event_active, authenticated_organizer_client, monkeypatch):
-        sent = {}
 
-        def fake_announce(event_id, subject, body, created_by):
-            sent.update({"event_id": event_id, "subject": subject})
+class _NullPublisher:
+    def put_metric_data(self, **kwargs: object) -> None:
+        return None
 
-        monkeypatch.setattr("ctf.services.notification.send_announcement", fake_announce)
-        CTFParticipant.objects.create(
-            event=ctf_event_active,
-            email="p@test.com",
-            name="P",
-            status="active",
-            registered_at=timezone.now(),
-        )
+
+class TestCancellationNotice:
+    """CTF-706: the cancellation notice goes through the real ledger, release task and worker."""
+
+    @pytest.fixture(autouse=True)
+    def _delivery_environment(self, settings, monkeypatch):
+        import boto3
+
+        settings.SITE_URL = "https://ctf.example.test"
+        settings.CLOUD_PROVIDER = "aws"
+        # The worker's metrics go to the cloud SDK; fake it at that external boundary.
+        monkeypatch.setattr(boto3, "client", lambda name: _NullPublisher())
+
+    @staticmethod
+    def _participant(event, name, **fields):
+        values = {"status": "active", "registered_at": timezone.now(), **fields}
+        return CTFParticipant.objects.create(event=event, email=f"{name}@test.com", name=name, **values)
+
+    def test_cancel_emails_each_registered_participant(
+        self, ctf_event_active, authenticated_organizer_client, mailoutbox
+    ):
+        from ctf.services.communication import delivery, run_release_communication_task
+
+        self._participant(ctf_event_active, "ada")
+        self._participant(ctf_event_active, "bob")
+        self._participant(ctf_event_active, "invited", registered_at=None)
+
         resp = _lifecycle(authenticated_organizer_client, ctf_event_active, "cancel")
         assert resp.json()["status"] == "cancelled"
-        assert sent["event_id"] == ctf_event_active.pk
-        assert "cancelled" in sent["subject"]
+
+        task = CTFScheduledTask.objects.get(
+            event=ctf_event_active,
+            task_type=ScheduledTaskType.RELEASE_COMMUNICATION.value,
+            status=ScheduledTaskStatus.PENDING.value,
+        )
+        assert run_release_communication_task(task)["outcome"] == "released"
+        delivery.run_once()
+
+        assert sorted(message.to[0] for message in mailoutbox) == ["ada@test.com", "bob@test.com"]
+        message = mailoutbox[0]
+        assert message.subject == "Event cancelled"
+        assert f"The organizer cancelled {ctf_event_active.name}." in message.body
+        assert f"The organizer cancelled {ctf_event_active.name}." in message.alternatives[0][0]
+
+    def test_only_the_cancellation_notice_passes_the_fence(self, ctf_event_active, authenticated_organizer_client):
+        from uuid import uuid4
+
+        from ctf.exceptions import CTFCommunicationError
+        from ctf.services.communication import AdmissionActor, CampaignDraft, release_campaign
+        from ctf.services.communication.campaigns import create_system_event_campaign
+
+        def draft(kind):
+            return CampaignDraft(
+                title="Notice",
+                origin="system_milestone",
+                target_event_ids=[ctf_event_active.pk],
+                audience_spec={"kind": "event", "event_ids": [str(ctf_event_active.pk)]},
+                trigger_spec={"kind": "manual"},
+                channels=["email"],
+                subject="Notice",
+                body="Fixed text.",
+                notice_kind=kind,
+            )
+
+        with pytest.raises(CTFCommunicationError) as live:
+            create_system_event_campaign(ctf_event_active, draft("cancellation"), campaign_id=uuid4())
+        assert live.value.code == "CTF_COMMUNICATION_EVENT_NOT_CANCELLED"
+
+        self._participant(ctf_event_active, "ada")
+        _lifecycle(authenticated_organizer_client, ctf_event_active, "cancel")
+        ctf_event_active.refresh_from_db()
+        announcement = create_system_event_campaign(ctf_event_active, draft("announcement"), campaign_id=uuid4())
+        with pytest.raises(CTFCommunicationError) as refused:
+            release_campaign(announcement, occurrence_key="notice", admission=AdmissionActor(system=True))
+        assert refused.value.code == "CTF_COMMUNICATION_EVENT_CANCELLED"
+
+    def test_worker_still_suppresses_ordinary_mail_for_a_cancelled_event(self, ctf_event_active, mailoutbox):
+        from uuid import uuid4
+
+        from ctf.enums_communication import DeliveryStatus
+        from ctf.models import CTFEvent, DeliveryAttempt
+        from ctf.services.communication import AdmissionActor, CampaignDraft, delivery, release_campaign
+        from ctf.services.communication.campaigns import create_system_event_campaign
+
+        self._participant(ctf_event_active, "ada")
+        draft = CampaignDraft(
+            title="Notice",
+            origin="system_milestone",
+            target_event_ids=[ctf_event_active.pk],
+            audience_spec={"kind": "event", "event_ids": [str(ctf_event_active.pk)]},
+            trigger_spec={"kind": "manual"},
+            channels=["email"],
+            subject="Notice",
+            body="Fixed text.",
+        )
+        campaign = create_system_event_campaign(ctf_event_active, draft, campaign_id=uuid4())
+        intent = release_campaign(campaign, occurrence_key="notice", admission=AdmissionActor(system=True))
+        # The cancellation lands after release, as it can after a worker claim.
+        CTFEvent.objects.filter(pk=ctf_event_active.pk).update(status="cancelled")
+
+        delivery.run_once()
+
+        assert mailoutbox == []
+        attempt = DeliveryAttempt.objects.get(intent=intent)
+        assert attempt.status == DeliveryStatus.SUPPRESSED.value
 
 
 class TestTaskControls:

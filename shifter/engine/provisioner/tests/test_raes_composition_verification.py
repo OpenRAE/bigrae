@@ -33,7 +33,7 @@ def _node(*, os_family: str = "linux", count: int = 2) -> RaesPlanNode:
 def _plan(*, node: RaesPlanNode | None = None) -> RaesPlan:
     target = node or _node()
     return RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.2.0",
         nodes=(target,),
         networks=(),
         content=(
@@ -254,7 +254,7 @@ def test_duplicate_or_extra_instance_output_fails_exact_fanout_coverage(outputs)
 def test_windows_shell_or_home_is_rejected_before_mutation() -> None:
     node = _node(os_family="windows", count=1)
     plan = RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.2.0",
         nodes=(node,),
         networks=(),
         accounts=(
@@ -274,7 +274,7 @@ def test_windows_shell_or_home_is_rejected_before_mutation() -> None:
 def test_source_less_file_without_inline_bytes_is_not_overclaimed() -> None:
     node = _node(count=1)
     plan = RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.2.0",
         nodes=(node,),
         networks=(),
         content=(

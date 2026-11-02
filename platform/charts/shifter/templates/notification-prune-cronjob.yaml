@@ -1,0 +1,57 @@
+{{- /* Expired shared notification rows are pruned on a schedule (ADR-072-R5). Nothing runs between runs. */ -}}
+{{- $prune := .Values.workers.notificationPrune }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: notification-prune
+  namespace: {{ .Values.namespaces.platform }}
+  labels:
+    {{- include "shifter.partOfLabels" . | nindent 4 }}
+    app.kubernetes.io/component: notification-prune
+spec:
+  schedule: {{ $prune.schedule | quote }}
+  concurrencyPolicy: Forbid
+  startingDeadlineSeconds: 1800
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 900
+      template:
+        metadata:
+          labels:
+            {{- include "shifter.partOfLabels" . | nindent 12 }}
+            app.kubernetes.io/component: notification-prune
+          annotations:
+            checksum/runtime-config: {{ include "shifter.runtimeConfigChecksum" . }}
+        spec:
+          {{- include "shifter.podSecurityContext" . | nindent 10 }}
+          automountServiceAccountToken: false
+          serviceAccountName: {{ .Values.serviceAccounts.workers.name }}
+          restartPolicy: Never
+          {{- include "shifter.cloudSqlProxyPod" (dict "root" . "autoIam" true) | nindent 10 }}
+          containers:
+            - name: notification-prune
+              image: {{ include "shifter.portalImage" . }}
+              imagePullPolicy: {{ .Values.imagePullPolicy }}
+              {{- include "shifter.containerSecurityContextApp" . | nindent 14 }}
+              {{- include "shifter.tmpVolumeMount" . | nindent 14 }}
+              args:
+                - python
+                - manage.py
+                - prune_notifications
+                - --batch-size
+                - {{ $prune.batchSize | quote }}
+                - --max-batches
+                - {{ $prune.maxBatches | quote }}
+              {{- if or .Values.cloudSqlProxy.enabled .Values.openfga.enabled .Values.rdsIam.enabled }}
+              env:
+                {{- include "shifter.databaseUserEnv" (dict "root" . "role" "workers") | nindent 16 }}
+              {{- end }}
+              envFrom:
+                - configMapRef:
+                    name: platform-runtime
+              resources:
+                {{- toYaml $prune.resources | nindent 16 }}
+          {{- include "shifter.tmpVolume" . | nindent 10 }}

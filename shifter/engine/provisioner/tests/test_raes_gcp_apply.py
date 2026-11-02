@@ -82,7 +82,7 @@ def _plan() -> RaesPlan:
         image=RaesPlanImage(name="ubuntu"),
     )
     network = RaesPlanNetwork(address="net.lan", name="lan", cidr="10.9.0.0/24")
-    return RaesPlan(raes_version="3.5.0", nodes=(node,), networks=(network,))
+    return RaesPlan(raes_version="10.2.0", nodes=(node,), networks=(network,))
 
 
 def _resolver(node):
@@ -342,7 +342,7 @@ def _plan_with_domain(*, include_local: bool = False) -> RaesPlan:
         member_addresses=(member.address,),
     )
     return RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.2.0",
         nodes=(controller, member),
         networks=(RaesPlanNetwork(address="net.lan", name="lan", cidr="10.9.0.0/24"),),
         accounts=(authority, service, *((local_operator,) if include_local else ())),
@@ -786,7 +786,7 @@ def _plan_with_content(*content: RaesPlanContent) -> RaesPlan:
         image=RaesPlanImage(name="ubuntu"),
     )
     network = RaesPlanNetwork(address="net.lan", name="lan", cidr="10.9.0.0/24")
-    return RaesPlan(raes_version="3.5.0", nodes=(node,), networks=(network,), content=content)
+    return RaesPlan(raes_version="10.2.0", nodes=(node,), networks=(network,), content=content)
 
 
 class TestCompositionIntegration:
@@ -1435,7 +1435,7 @@ def _access_plan() -> RaesPlan:
         auth_method="key",
     )
     network = RaesPlanNetwork(address="net.lan", name="lan", cidr="10.9.0.0/24")
-    return RaesPlan(raes_version="3.5.0", nodes=(node,), networks=(network,), accounts=(account,))
+    return RaesPlan(raes_version="10.2.0", nodes=(node,), networks=(network,), accounts=(account,))
 
 
 def _access_transport(channel: str = "ssh") -> dict:

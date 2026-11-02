@@ -26,7 +26,7 @@ def config():
 
 def topology():
     return RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.2.0",
         networks=(RaesPlanNetwork(address="net.lan", name="lan"),),
         nodes=(
             RaesPlanNode(address="node.host", name="host", os_family="linux", count=1, network_addresses=("net.lan",)),

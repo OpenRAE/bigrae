@@ -2,9 +2,18 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
 from uuid import UUID
 
-from ctf.services.notification.ledger import participant_notice, stage_notice
+from ctf.services.notification.ledger import (
+    declare_notice,
+    declare_participant_notice,
+    participant_notice,
+    stage_notice,
+)
+
+if TYPE_CHECKING:
+    from ctf.models import CTFEvent
 
 
 def send_cleanup_warning(event_id: UUID) -> dict[str, str]:
@@ -34,6 +43,18 @@ def send_event_results(event_id: UUID) -> dict[str, str]:
     )
 
 
+def declare_cancellation_notice(event: CTFEvent) -> dict[str, str]:
+    """Declare the participant cancellation notice inside the cancel transaction (CTF-706)."""
+
+    return declare_notice(
+        event,
+        kind="cancellation",
+        subject="Event cancelled",
+        body="Submissions are closed. The event ranges are being removed.",
+        occurrence="cancelled",
+    )
+
+
 def send_range_ready(participant_id: UUID) -> dict[str, str]:
     """Stage a participant notice for the current range generation."""
 
@@ -53,4 +74,21 @@ def notify_participant_provision_failure(participant_id: UUID) -> dict[str, str]
         kind="range_failure",
         subject="Range provisioning needs attention",
         body="Open your event range page for the current status and contact your organizer.",
+    )
+
+
+def send_registration_confirmation(participant_id: UUID) -> dict[str, str]:
+    """Declare the registration confirmation for one new participation.
+
+    The occurrence is the participation itself: a later range never changes it.
+    The template adds the event name, start, end and timezone.
+    """
+    from ctf.models import CTFParticipant
+
+    return declare_participant_notice(
+        CTFParticipant.objects.get(pk=participant_id),
+        kind="registration",
+        subject="Registration confirmed",
+        body="Keep this message. Sign in on the event page when the event starts.",
+        occurrence="registered",
     )
