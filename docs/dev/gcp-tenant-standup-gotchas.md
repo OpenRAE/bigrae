@@ -160,8 +160,10 @@ cp ./x/usr/lib/google-cloud-sdk/bin/gke-gcloud-auth-plugin ~/.local/bin/
 ## Range inputs before the first deploy
 
 The GCE range precondition gate stops the deploy when a required range input is
-missing. It requires `settings.range_cells.zone`, the `linux` and `dc` roles in
+missing. It requires `settings.range_cells.zone`, the `linux` role in
 `range-images.json`, and the Terraform output `range_host_service_account_email`.
+The `dc` role is optional, because a content pack supplies its own domain
+controller.
 Each image in `range-images.json` must exist in the range project. A release
 that pins base images supplies them; for an older release, import the images
 with `gcp-images --store` before the first deploy. For a deliberate

@@ -91,6 +91,13 @@ apt-get install -y google-guest-agent google-osconfig-agent google-compute-engin
 systemctl enable google-guest-agent.service || true
 systemctl enable google-osconfig-agent.service || true
 
+echo "=== Removing the Debian packages that the conversion left behind ==="
+# Kali Rolling has no package for some pre-t64 Debian libraries, so the
+# full-upgrade leaves them installed. A later Kali package that ships the same
+# file then fails to unpack (libcurl4-gnutls over libcurl3-gnutls, #2734).
+# Held packages are never removed, so the signed boot chain stays.
+apt-get -y autoremove --purge
+
 echo "=== GCE-native networking: single systemd-networkd stack for Kali guests ==="
 # The debian-12 base uses systemd-networkd, but the Kali metapackages
 # (kali-linux-headless via tools.sh, kali-desktop-xfce via base.sh, installed

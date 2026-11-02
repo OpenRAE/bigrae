@@ -453,13 +453,28 @@ class TestOtherCommands:
         )
         for name in (
             "terraform_init",
-            "apply_destroy_settings",
             "drop_unremovable_kms_resources",
             "terraform_destroy",
         ):
             monkeypatch.setattr(
                 f"gcp_terraform.{name}", lambda *a, _n=name, **k: steps.append((_n, os.environ.get(IMPERSONATION_KEY)))
             )
+        # A rerun after an interrupted destroy adopts the detached keys first (#2564).
+        monkeypatch.setattr(
+            "gcp_terraform.kms_adoption_variables",
+            lambda *a, **k: (
+                steps.append(("kms_adoption_variables", os.environ.get(IMPERSONATION_KEY)))
+                or {"adopt_storage_kms": "true"}
+            ),
+        )
+        settings_variables = []
+        monkeypatch.setattr(
+            "gcp_terraform.apply_destroy_settings",
+            lambda *a, variables=None, **k: (
+                settings_variables.append(variables)
+                or steps.append(("apply_destroy_settings", os.environ.get(IMPERSONATION_KEY)))
+            ),
+        )
         monkeypatch.setattr(
             gcp_destroy,
             "remove_platform_release",
@@ -475,11 +490,13 @@ class TestOtherCommands:
         assert [step[0] for step in steps[1:]] == [
             "terraform_init",
             "remove_platform_release",
+            "kms_adoption_variables",
             "apply_destroy_settings",
             "drop_unremovable_kms_resources",
             "terraform_destroy",
         ]
         assert all(step[1] == destroy for step in steps[1:])
+        assert settings_variables == [{"adopt_storage_kms": "true"}]
         steps.clear()
         run_destroy(
             DestroyOptions(source=str(bundle), confirm="acme", lock="external", identity_mode="ambient"),
@@ -533,6 +550,32 @@ class TestOtherCommands:
 
 
 class TestCli:
+    def test_cmek_migrate_moves_an_operator_owned_bucket_to_its_key(self, monkeypatch):
+        # The pack bucket has no deploy-owned root; the operator runs the same migration (#2564).
+        parser = argparse.ArgumentParser()
+        gcp_cli.add_lifecycle_subparsers(parser.add_subparsers(dest="command"))
+        assert "gcp-cmek-migrate" in gcp_cli.LIFECYCLE_COMMANDS
+        key = "projects/acme/locations/us/keyRings/acme-packs/cryptoKeys/raes-packages"
+        calls = []
+        monkeypatch.setattr(
+            "gcp_storage_cmek.migrate_bucket",
+            lambda runner, bucket, k: calls.append((type(runner).__name__, bucket, k)),
+        )
+        args = parser.parse_args(["gcp-cmek-migrate", "--bucket", "acme-packs", "--key", key])
+        assert gcp_cli._HANDLERS["gcp-cmek-migrate"](args) == 0
+        assert calls == [("ProcessRunner", "acme-packs", key)]
+        for bucket, bad_key in (
+            ("gs://acme-packs", key),
+            ("acme-packs", key + "/cryptoKeyVersions/1"),
+            ("acme-packs", "https://example.invalid/key"),
+            ("acme-packs", key + " "),
+        ):
+            with pytest.raises(ValueError):
+                gcp_cli._HANDLERS["gcp-cmek-migrate"](
+                    parser.parse_args(["gcp-cmek-migrate", "--bucket", bucket, "--key", bad_key])
+                )
+        assert len(calls) == 1
+
     def test_parser_builds_options_and_dispatch_reports_failures(self, monkeypatch, capsys):
         parser = argparse.ArgumentParser()
         gcp_cli.add_lifecycle_subparsers(parser.add_subparsers(dest="command"))

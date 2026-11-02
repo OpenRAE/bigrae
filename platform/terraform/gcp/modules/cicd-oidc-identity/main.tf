@@ -283,6 +283,44 @@ resource "google_project_iam_member" "destroy_roles" {
   member     = "serviceAccount:${local.service_account_emails.destroy}"
 }
 
+# Cloud KMS authority of the lifecycle identities (#2564). Deploy creates key
+# rings, keys, and key grants; destroy reads keys and removes key grants. Neither
+# role can destroy, disable, or delete a key or a key version, so a lifecycle
+# identity can not make retained bucket data unreadable through these roles.
+resource "google_project_iam_custom_role" "deploy_kms" {
+  count       = local.deploy_enabled ? 1 : 0
+  project     = var.project_id
+  role_id     = "${replace(var.name_prefix, "-", "_")}_deploy_kms"
+  title       = "Shifter platform deploy Cloud KMS"
+  description = "Create and grant platform keys; no key or key version destruction."
+  permissions = var.deploy_kms_permissions
+}
+
+resource "google_project_iam_member" "deploy_kms" {
+  depends_on = [google_service_account.deploy, google_project_iam_custom_role.deploy_kms]
+  count      = local.deploy_enabled ? 1 : 0
+  project    = var.project_id
+  role       = "projects/${var.project_id}/roles/${replace(var.name_prefix, "-", "_")}_deploy_kms"
+  member     = "serviceAccount:${local.service_account_emails.deploy}"
+}
+
+resource "google_project_iam_custom_role" "destroy_kms" {
+  count       = local.destroy_enabled ? 1 : 0
+  project     = var.project_id
+  role_id     = "${replace(var.name_prefix, "-", "_")}_destroy_kms"
+  title       = "Shifter platform destroy Cloud KMS"
+  description = "Remove platform key grants at teardown; no key or key version destruction."
+  permissions = var.destroy_kms_permissions
+}
+
+resource "google_project_iam_member" "destroy_kms" {
+  depends_on = [google_service_account.destroy, google_project_iam_custom_role.destroy_kms]
+  count      = local.destroy_enabled ? 1 : 0
+  project    = var.project_id
+  role       = "projects/${var.project_id}/roles/${replace(var.name_prefix, "-", "_")}_destroy_kms"
+  member     = "serviceAccount:${local.service_account_emails.destroy}"
+}
+
 # identityPlatform:initializeAuth checks firebaseauth.configs.create and then
 # adds Firebase to the project, which needs firebase.projects.update. No
 # Identity Platform role holds that permission, so a fresh project fails with
@@ -419,6 +457,22 @@ resource "google_storage_bucket_iam_member" "destroy_bucket_iam_admin" {
   member     = "serviceAccount:${local.service_account_emails.destroy}"
 }
 
+# Foundation bucket keys (#2564). They live in the foundation state and outlive
+# a platform teardown; no foundation bucket uses a platform key.
+module "storage_cmek" {
+  source = "../gcs-cmek"
+
+  project_id    = var.project_id
+  location      = var.region
+  key_ring_name = "${var.name_prefix}-foundation-gcs"
+  key_names     = concat(["release-evidence"], local.deployment_config_enabled ? ["deployment-config"] : [])
+  labels = {
+    environment = replace(var.environment, "_", "-")
+    managed_by  = "terraform"
+    project     = "shifter"
+  }
+}
+
 # Raw release evidence never enters public Actions artifacts. This foundational
 # bucket outlives platform-core and is writable only by the exact purpose that
 # produced each evidence class. ObjectCreator prevents overwrite or deletion;
@@ -435,6 +489,10 @@ resource "google_storage_bucket" "release_evidence" {
     environment = replace(var.environment, "_", "-")
     managed_by  = "terraform"
     project     = "shifter"
+  }
+
+  encryption {
+    default_kms_key_name = module.storage_cmek.key_ids["release-evidence"]
   }
 
   versioning {
@@ -629,6 +687,10 @@ resource "google_storage_bucket" "deployment_config" {
     environment = replace(var.environment, "_", "-")
     managed_by  = "terraform"
     project     = "shifter"
+  }
+
+  encryption {
+    default_kms_key_name = module.storage_cmek.key_ids["deployment-config"]
   }
 
   versioning {

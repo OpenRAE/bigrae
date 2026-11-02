@@ -24,10 +24,10 @@ from gcp_process import GcpCommandError, ProcessResult
 from gcp_terraform import (
     TerraformStepError,
     apply_destroy_settings,
-    artifact_registry_kms_adoption,
     backend_prefix,
     deployment_values,
     drop_unremovable_kms_resources,
+    kms_adoption_variables,
     owned_keys_in_values,
     state_bucket_name,
     terraform_apply,
@@ -172,6 +172,12 @@ class TestTerraformSteps:
                 "module.platform_core.module.portal_gcs.google_storage_bucket_iam_member.assets",
                 "module.platform_core.module.portal_artifact_registry.google_kms_key_ring.artifact_registry",
                 "module.platform_core.module.portal_artifact_registry.google_kms_crypto_key.artifact_registry",
+                "module.platform_core.module.portal_artifact_registry.google_kms_crypto_key_iam_member.artifact_registry",
+                "module.platform_core.module.portal_gcs.module.cmek.google_kms_key_ring.this",
+                'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["assets"]',
+                'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["audit-logs"]',
+                'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key_iam_member.storage_agent["assets"]',
+                "module.other.google_kms_crypto_key.keys",
             ]
         )
         runner = FakeRunner().on(["terraform", f"-chdir={ctx.root}", "state", "list"], ProcessResult(0, state))
@@ -186,7 +192,14 @@ class TestTerraformSteps:
             "google_storage_bucket",
         ]
         removed = [call.argv[-1] for call in runner.find("terraform", f"-chdir={ctx.root}", "state", "rm")]
-        assert [address.rsplit(".", 2)[-2] for address in removed] == ["google_kms_crypto_key", "google_kms_key_ring"]
+        # Only the exact owned key rings and keys leave state; their grants and any other KMS address stay (#2564).
+        assert removed == [
+            "module.platform_core.module.portal_artifact_registry.google_kms_crypto_key.artifact_registry",
+            "module.platform_core.module.portal_artifact_registry.google_kms_key_ring.artifact_registry",
+            'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["assets"]',
+            'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["audit-logs"]',
+            "module.platform_core.module.portal_gcs.module.cmek.google_kms_key_ring.this",
+        ]
         attempts = iter([ProcessResult(1), ProcessResult(0)])
         retrying = FakeRunner().on(["terraform", f"-chdir={ctx.root}", "destroy"], lambda a, e, s: next(attempts))
         sleeps = []
@@ -199,25 +212,68 @@ class TestTerraformSteps:
         apply_destroy_settings(empty, ctx)
         assert not empty.find("terraform", f"-chdir={ctx.root}", "apply")
 
-    def test_reinstall_adopts_the_key_ring_that_a_destroy_left(self, inputs):
-        # gcp-destroy drops the key ring from state; a reinstall adopts it (#2643).
+    def test_an_interrupted_destroy_adopts_detached_keys_before_the_settings_apply(self, inputs):
+        # The keys left state but the buckets survived; the targeted apply must import
+        # the existing keys, not create them (#2564).
+        ctx = terraform_context(inputs, inputs.workdir, {}, destroy=True)
+        state = "module.platform_core.module.portal_gcs.google_storage_bucket.assets\n"
+        runner = FakeRunner().on(["terraform", f"-chdir={ctx.root}", "state", "list"], ProcessResult(0, state))
+        apply_destroy_settings(runner, ctx, variables=kms_adoption_variables(runner, ctx, inputs))
+        (targeted,) = runner.find("terraform", f"-chdir={ctx.root}", "apply")
+        assert "-var=adopt_storage_kms=true" in targeted.argv
+        assert "-target=module.platform_core.module.portal_gcs.google_storage_bucket.assets" in targeted.argv
+
+    def test_reinstall_adopts_the_key_rings_that_a_destroy_left(self, inputs):
+        # gcp-destroy drops the key rings from state; a reinstall adopts them (#2643, #2564).
         ctx = terraform_context(inputs, inputs.workdir, {})
-        assert artifact_registry_kms_adoption(FakeRunner(), ctx, inputs) is True
+        both = FakeRunner()
+        assert kms_adoption_variables(both, ctx, inputs) == {
+            "adopt_artifact_registry_kms": "true",
+            "adopt_storage_kms": "true",
+        }
+        described = [call.argv for call in both.find("gcloud", "kms", "keyrings", "describe")]
+        assert described == [
+            [
+                "gcloud",
+                "kms",
+                "keyrings",
+                "describe",
+                "shifter-acme-ar",
+                "--location",
+                "us-central1",
+                "--project",
+                PROJECT,
+            ],
+            [
+                "gcloud",
+                "kms",
+                "keyrings",
+                "describe",
+                "shifter-acme-gcs",
+                "--location",
+                "us-central1",
+                "--project",
+                PROJECT,
+            ],
+        ]
+        # A deployment from before #2564 has only the Artifact Registry key ring.
+        only_ar = FakeRunner().on(["gcloud", "kms", "keyrings", "describe", "shifter-acme-gcs"], ProcessResult(1))
+        assert kms_adoption_variables(only_ar, ctx, inputs) == {"adopt_artifact_registry_kms": "true"}
         absent = FakeRunner().on(["gcloud", "kms", "keyrings", "describe"], ProcessResult(1))
-        assert artifact_registry_kms_adoption(absent, ctx, inputs) is False
+        assert kms_adoption_variables(absent, ctx, inputs) == {}
         managed = FakeRunner().on(
             ["terraform", f"-chdir={ctx.root}", "state", "list"],
             ProcessResult(
-                0, "module.platform_core.module.portal_artifact_registry.google_kms_key_ring.artifact_registry\n"
+                0,
+                "module.platform_core.module.portal_artifact_registry.google_kms_key_ring.artifact_registry\n"
+                "module.platform_core.module.portal_gcs.module.cmek.google_kms_key_ring.this\n",
             ),
         )
-        assert artifact_registry_kms_adoption(managed, ctx, inputs) is False
+        assert kms_adoption_variables(managed, ctx, inputs) == {}
         assert not managed.find("gcloud", "kms")
         applying = FakeRunner()
-        terraform_apply(applying, ctx, variables={"adopt_artifact_registry_kms": "true"})
-        assert (
-            "-var=adopt_artifact_registry_kms=true" in applying.find("terraform", f"-chdir={ctx.root}", "apply")[0].argv
-        )
+        terraform_apply(applying, ctx, variables={"adopt_storage_kms": "true"})
+        assert "-var=adopt_storage_kms=true" in applying.find("terraform", f"-chdir={ctx.root}", "apply")[0].argv
 
     def test_state_list_failure_is_an_empty_state(self, inputs):
         ctx = terraform_context(inputs, inputs.workdir, {})

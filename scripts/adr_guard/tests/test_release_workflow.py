@@ -495,17 +495,27 @@ class GuestPublicationTests(unittest.TestCase):
             "ADR-037-R9", "without needing the validation job", build=guest_build(validate_job="", needs="[build]")
         )
 
-    def test_validation_is_called_locally_without_secrets(self) -> None:
+    def test_validation_is_called_locally_with_only_its_secret_names(self) -> None:
         remote = GUEST_VALIDATE_JOB.replace(
             "./.github/workflows/packer-gcp-validate.yml", "./.github/workflows/packer-gcp-validate.yml@main"
         )
         found = self.violations(build=guest_build(validate_job=remote))
         self.assertIn("ADR-004-R23", {rule for rule, _, _ in found})
-        self.assert_one(
-            "ADR-004-R23",
-            "pass no secrets",
-            build=guest_build(validate_job=GUEST_VALIDATE_JOB + "    secrets: inherit\n"),
+        named = (
+            "    secrets:\n"
+            "      GCP_WORKLOAD_IDENTITY_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}\n"
+            "      GCP_PACKER_VALIDATE_SERVICE_ACCOUNT: ${{ secrets.GCP_PACKER_VALIDATE_SERVICE_ACCOUNT }}\n"
+            "      GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}\n"
         )
+        self.assertEqual(self.violations(build=guest_build(validate_job=GUEST_VALIDATE_JOB + named)), [])
+        build_line = "      GCP_PACKER_BUILD_SERVICE_ACCOUNT: ${{ secrets.GCP_PACKER_BUILD_SERVICE_ACCOUNT }}\n"
+        renamed = "    secrets:\n      GCP_PROJECT_ID: ${{ secrets.GCP_PACKER_BUILD_SERVICE_ACCOUNT }}\n"
+        for passed in ("    secrets: inherit\n", named + build_line, renamed):
+            self.assert_one(
+                "ADR-004-R23",
+                "must pass validation only",
+                build=guest_build(validate_job=GUEST_VALIDATE_JOB + passed),
+            )
 
     def test_the_pushed_digest_is_attested_to_the_registry(self) -> None:
         unsigned = GUEST_REF_GUARD + GUEST_AUTH + GUEST_PUSH

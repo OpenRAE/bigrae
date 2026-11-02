@@ -27,7 +27,7 @@ import os
 import re
 import tempfile
 import uuid
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +39,7 @@ from bootstrap_core import (
     run_cmd,
     subheader,
     success,
+    warn,
 )
 
 if TYPE_CHECKING:
@@ -48,6 +49,7 @@ if TYPE_CHECKING:
 __all__ = [
     "BASE_IMAGE_ROLES",
     "GUEST_BUILD_REFS",
+    "REQUIRED_BASE_IMAGE_ROLES",
     "BaseImageError",
     "ImportedImage",
     "ResolvedArtifact",
@@ -56,14 +58,18 @@ __all__ = [
     "newest_publications",
     "package_for_role",
     "range_images_from_imports",
+    "range_roles",
     "registry_credentials",
     "render_range_image_env",
     "resolve_selection",
     "transport_identity",
 ]
 
-# The published guest roles that the supported GCE deployment needs.
+# The guest roles that packer-gcp.yml can publish.
 BASE_IMAGE_ROLES = ("kali", "ubuntu", "dc")
+# The roles that every release names. The repository has no DC profile, so a release
+# names dc only when a dc publication exists; a content pack supplies its own DC (#2730).
+REQUIRED_BASE_IMAGE_ROLES = ("kali", "ubuntu")
 # packer-gcp.yml publishes only from these branches (its ref guard and Environments).
 GUEST_BUILD_REFS = ("refs/heads/dev", "refs/heads/main")
 
@@ -240,6 +246,11 @@ def render_range_image_env(imported: dict[str, ImportedImage]) -> dict[str, str]
     return {_ROLE_TO_RANGE_ENV[role]: image.image_ref for role, image in imported.items() if role in _ROLE_TO_RANGE_ENV}
 
 
+def range_roles(roles: Iterable[str]) -> frozenset[str]:
+    """Return the ``range-images.json`` roles that hold the given release guest roles."""
+    return frozenset(_RANGE_ENV_TO_ROLE[_ROLE_TO_RANGE_ENV[role]] for role in roles)
+
+
 def range_images_from_imports(range_image_env: dict[str, str]) -> dict[str, str]:
     """Convert imported ``GCP_RANGE_*_IMAGE`` values to ``range-images.json`` roles."""
     if set(range_image_env) != set(_RANGE_ENV_TO_ROLE):
@@ -285,10 +296,15 @@ def _oras_json(cmd: list[str], *, what: str) -> dict[str, object]:
     return document
 
 
-def _newest_tag(package: str) -> str:
-    """List the publication tags of a guest repository and return the newest."""
+def _newest_tag(package: str, *, required: bool = True) -> str | None:
+    """List the publication tags of a guest repository and return the newest.
+
+    An optional role whose repository cannot be listed has no publication: return None.
+    """
     result = run_cmd(["oras", "repo", "tags", package], check=False, capture=True)
     if result is None or result.returncode != 0:
+        if not required:
+            return None
         stderr = (getattr(result, "stderr", "") or "").strip()
         raise BaseImageError(
             f"no guest image found at {package}; publish it with packer-gcp.yml ({stderr or 'oras repo tags failed'})"
@@ -308,7 +324,10 @@ def newest_publications(registry: str) -> dict[str, str]:
     newest: dict[str, str] = {}
     for role in BASE_IMAGE_ROLES:
         package = package_for_role(role, registry)
-        tag = _newest_tag(package)
+        tag = _newest_tag(package, required=role in REQUIRED_BASE_IMAGE_ROLES)
+        if tag is None:
+            warn(f"No guest image found at {package}; the release names no {role} image")
+            continue
         descriptor = _oras_json(
             ["oras", "manifest", "fetch", "--descriptor", f"{package}:{tag}"],
             what=f"resolving {package}:{tag}",
@@ -340,10 +359,15 @@ def resolve_selection(
 
     if not base_images:
         raise BaseImageError("the release names no guest images; use a release that names them")
-    if set(base_images) != set(BASE_IMAGE_ROLES):
-        raise BaseImageError("the release must name exactly the guest images: " + ", ".join(BASE_IMAGE_ROLES))
+    if not set(REQUIRED_BASE_IMAGE_ROLES) <= set(base_images) <= set(BASE_IMAGE_ROLES):
+        raise BaseImageError(
+            "the release must name the guest images "
+            + ", ".join(REQUIRED_BASE_IMAGE_ROLES)
+            + ", and may name only: "
+            + ", ".join(BASE_IMAGE_ROLES)
+        )
     artifacts: list[ResolvedArtifact] = []
-    for role in BASE_IMAGE_ROLES:
+    for role in (role for role in BASE_IMAGE_ROLES if role in base_images):
         canonical = base_images[role]
         transport = transport_identity(role, canonical, release_source)
         try:
