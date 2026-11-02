@@ -463,3 +463,48 @@ class TestConcurrentReceiptRedemption:
         participant.refresh_from_db()
         assert participant.cached_score == challenge.points
         assert participant.cached_solve_count == 1
+
+
+def test_membership_withdrawn_before_submission_lock(event, participant, challenge, monkeypatch):
+    """A committed team leave during verification prevents a PostgreSQL solve."""
+    from ctf.exceptions import CTFStateError
+    from ctf.extensions import _flag_validators
+    from ctf.models import CTFTeam
+    from ctf.services.team import leave_team
+
+    event.team_mode = True
+    event.team_size_limit = 4
+    event.save(update_fields=["team_mode", "team_size_limit"])
+    team = CTFTeam.objects.create(event=event, name="Concurrent players")
+    participant.team = team
+    participant.save(update_fields=["team"])
+    verifying = threading.Event()
+    withdrawn = threading.Event()
+
+    def external_verifier(flag_obj, submitted):
+        verifying.set()
+        assert withdrawn.wait(timeout=15)
+        return True
+
+    monkeypatch.setitem(_flag_validators, "static", external_verifier)
+
+    def submit():
+        try:
+            return submit_flag(participant.pk, challenge.pk, CORRECT_FLAG)
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=1) as pool:
+        future = pool.submit(submit)
+        try:
+            assert verifying.wait(timeout=15)
+            leave_team(participant.pk)
+        finally:
+            withdrawn.set()
+        with pytest.raises(CTFStateError, match="team"):
+            future.result(timeout=15)
+    assert not CTFSubmission.objects.filter(participant=participant).exists()
+    participant.refresh_from_db()
+    team.refresh_from_db()
+    assert participant.cached_score == team.cached_score == 0
+    assert participant.last_active_at is None

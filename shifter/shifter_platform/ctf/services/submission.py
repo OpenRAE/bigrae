@@ -102,7 +102,7 @@ def _record_submission_locked(
         from ctf.services.challenge import assert_challenge_available_for_participant
         from ctf.services.participant.queries import assert_participant_can_compete
 
-        assert_participant_can_compete(locked_participant)
+        assert_participant_can_compete(locked_participant, require_team=True)
         assert_challenge_available_for_participant(locked_participant, locked_challenge)
         if decision.receipt_evidence is not None:
             revalidate_receipt_for_commit(decision.receipt_evidence, locked_participant, locked_challenge)
@@ -254,7 +254,7 @@ def submit_flag(
     # disqualified, and banned rows plus observers (CTF-604/605/609).
     from ctf.services.participant.queries import assert_participant_can_compete
 
-    assert_participant_can_compete(participant)
+    assert_participant_can_compete(participant, require_team=True)
 
     # Issue #769: shared participant→challenge availability policy. Same
     # contract as use_hint(), so hints can never be easier to obtain than

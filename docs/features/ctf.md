@@ -102,6 +102,9 @@ If the event runs in team mode, you compete as part of a team (up to the event's
 size limit) and your team shares a score. Organizers may also group participants into
 brackets so leaderboards are ranked within a cohort.
 
+In team mode, join or create a team before you submit flags.
+An event in solo mode does not require team membership.
+
 ## Scoreboard
 
 The **Scoreboard** ranks participants (or teams) by score. Organizers can:

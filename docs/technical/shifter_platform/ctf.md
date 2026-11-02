@@ -120,6 +120,11 @@ existing history behavior. See the
 
 ## Services
 
+Flag submission requires a live team in the participant's event when `team_mode` is enabled.
+The service checks membership before flag verification and again against the locked participant before recording the submission.
+Rejection creates no submission or score change.
+The optional `require_team` check preserves team creation, joining, and other actions.
+
 Business logic lives under `ctf.services` (views stay thin):
 
 - `event`, `challenge`, `flag`, `bracket`, `hint`, `award`, `attachment`,
