@@ -198,6 +198,14 @@ class TestReleaseBaseImages:
         assert written == [("gs://acme-shifter-deployment-config", dict(updated.range_images))]
         assert import_release_base_images(runner, options, updated, self._manifest(BASE_IMAGES), trust) is updated
         assert import_release_base_images(runner, options, inputs, self._manifest({}), trust) is inputs
+        # A release without dc needs no import when the bundle holds the roles that it names (#2730).
+        import dataclasses
+
+        without_dc = {role: BASE_IMAGES[role] for role in ("kali", "ubuntu")}
+        partial = dataclasses.replace(
+            updated, range_images={k: v for k, v in updated.range_images.items() if k != "dc"}
+        )
+        assert import_release_base_images(runner, options, partial, self._manifest(without_dc), trust) is partial
         assert len(imported) == 1
 
 
