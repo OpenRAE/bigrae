@@ -325,12 +325,14 @@ def import_release_base_images(
     identity holds no image administration (ADR-004-R23). An unchanged digest reuses the
     existing image, and the references go to ``range-images.json`` in the store.
     """
+    from gcp_base_images import range_roles
+
     if (
         manifest is None
         or trust is None
         or not manifest.base_images
         or inputs.settings.range_cells.backend != "gce"  # type: ignore[attr-defined]
-        or {"linux", "kali", "dc"} <= set(inputs.range_images)
+        or range_roles(manifest.base_images) <= set(inputs.range_images)
     ):
         return inputs
     from gcp_base_images import import_selection, range_images_from_imports, render_range_image_env, resolve_selection

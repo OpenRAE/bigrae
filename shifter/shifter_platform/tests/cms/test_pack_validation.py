@@ -10,6 +10,7 @@ fixtures come from the shared ``make_pack`` factory (see ``tests/cms/conftest``)
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -206,6 +207,36 @@ class TestPackValidationModuleImports:
     def test_unpinned_local_import_is_refused(self, make_pack, tmp_path):
         root = self._modular_pack(make_pack, tmp_path / "pack", pin=False)
         assert any(error.startswith("sdl.imports-denied") for error in check_pack(root))
+
+    @pytest.mark.parametrize(
+        "corruption",
+        ["missing-lock", "stale-lock", "tampered-lock", "missing-pin", "tampered-pin", "tampered-module"],
+    )
+    def test_local_import_integrity_failures_are_refused(self, make_pack, tmp_path, corruption):
+        root = self._modular_pack(make_pack, tmp_path / "pack")
+        lock_path = root / "sdl" / "raes.lock.json"
+        sdl_path = root / "sdl" / "scenario.sdl.yaml"
+        if corruption == "missing-lock":
+            lock_path.unlink()
+        elif corruption in {"stale-lock", "tampered-lock"}:
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            field = "module_version" if corruption == "stale-lock" else "content_digest"
+            lock["imports"][0][field] = "0.2.0" if corruption == "stale-lock" else "sha256:" + "0" * 64
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+        elif corruption in {"missing-pin", "tampered-pin"}:
+            document = yaml.safe_load(sdl_path.read_text(encoding="utf-8"))
+            if corruption == "missing-pin":
+                document["imports"][0].pop("digest")
+            else:
+                document["imports"][0]["digest"] = "sha256:" + "f" * 64
+            sdl_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+        else:
+            module = root / "sdl" / "modules" / "web.sdl.yaml"
+            module.write_text(_MODULE_SDL + "\n# changed bytes\n", encoding="utf-8")
+
+        assert any(error.startswith("sdl.imports-denied") for error in check_pack(root))
+        with pytest.raises(PackValidationError, match=r"sdl\.imports-denied"):
+            validate_pack(root)
 
     def test_registry_import_is_refused(self, make_pack, tmp_path):
         root = self._modular_pack(make_pack, tmp_path / "pack", source="oci:example.invalid/web:0.1.0", pin=False)

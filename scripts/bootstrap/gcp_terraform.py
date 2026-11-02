@@ -220,12 +220,16 @@ def state_addresses(runner: ProcessRunner, ctx: TerraformContext) -> list[str]:
     return [line.strip() for line in result.stdout.splitlines() if line.strip()]
 
 
-def _transient_cause(text: str) -> str | None:
+def transient_cause(text: str) -> str | None:
     """Return the transient cause that ``text`` shows, or None for a failure to report."""
     lowered = text.lower()
     if any(marker in lowered for marker in _RETRYABLE_CAPACITY_MARKERS):
         return "a Compute Engine capacity shortage"
-    if any(marker in lowered for marker in _RETRYABLE_PERMISSION_MARKERS):
+    # A service account that the same apply created can be unknown to IAM for a
+    # short time; a binding to it then fails with "does not exist" (#2732).
+    if any(marker in lowered for marker in _RETRYABLE_PERMISSION_MARKERS) or (
+        "service account" in lowered and "does not exist" in lowered
+    ):
         return "an IAM propagation error"
     return None
 
@@ -251,7 +255,7 @@ def terraform_apply(
             print(result.stdout, end="")
         if result.returncode == 0:
             return
-        cause = _transient_cause(f"{result.stdout}\n{result.stderr}")
+        cause = transient_cause(f"{result.stdout}\n{result.stderr}")
         if attempt < max_attempts and cause:
             # Show the error, so an operator can tell a transient cause from a real failure (#2601).
             if result.stderr:

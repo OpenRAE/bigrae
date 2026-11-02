@@ -344,7 +344,7 @@ class TestCheckDependencies:
                 deploy.check_dependencies()
 
             captured = capsys.readouterr()
-            urls = set(re.findall(r"https://[^\s)]+", captured.out))
+            urls = set(re.findall(r"https://[^\s)]+", captured.err))
             assert "https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html" in urls
             assert "https://developer.hashicorp.com/terraform/downloads" in urls
             assert "https://git-scm.com/downloads" in urls
@@ -636,7 +636,7 @@ class TestRunCmd:
             deploy.run_cmd(argv, check=False)
 
             captured = capsys.readouterr()
-            assert "Command failed (exit 254): aws ssm send-command --parameters *** --password ***" in captured.out
+            assert "Command failed (exit 254): aws ssm send-command --parameters *** --password ***" in captured.err
             assert "synthetic-registration-token" not in captured.out + captured.err
             assert "synthetic-password" not in captured.out + captured.err
 

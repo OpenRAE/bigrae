@@ -448,7 +448,7 @@ def check_dependencies(
     if missing_required:
         error("Missing required dependencies:")
         for item in missing_required:
-            print(item)
+            print(item, file=sys.stderr)
         sys.exit(1)
 
     if missing_optional:

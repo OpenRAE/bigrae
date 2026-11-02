@@ -134,11 +134,17 @@ def _plan_document(inputs_path, *, extra_binding=False):
 class FoundationProcess:
     """Simulate gcloud, terraform, and gh for one foundation bootstrap."""
 
-    def __init__(self, inputs_path, *, outputs=None, extra_binding=False, bucket_exists=False):
+    def __init__(
+        self, inputs_path, *, outputs=None, extra_binding=False, bucket_exists=False, federation=None, applies=None
+    ):
         self.inputs_path = inputs_path
         self.outputs = outputs or {}
         self.extra_binding = extra_binding
         self.bucket_exists = bucket_exists
+        # The state of each federation resource ("pools", "providers"); a missing key means absent.
+        self.federation = federation or {}
+        # The results of the apply calls in order; every later apply succeeds.
+        self.applies = list(applies or [])
         self.calls = []
         self.stdin = {}
         self.envs = []
@@ -158,6 +164,11 @@ class FoundationProcess:
             return subprocess.CompletedProcess(
                 argv, 0, _plan_document(self.inputs_path, extra_binding=self.extra_binding)
             )
+        if argv[:3] == ["gcloud", "iam", "workload-identity-pools"] and "describe" in argv:
+            kind = "providers" if argv[3] == "providers" else "pools"
+            return subprocess.CompletedProcess(argv, 0 if kind in self.federation else 1, self.federation.get(kind, ""))
+        if argv[0] == "terraform" and argv[2] == "apply" and self.applies:
+            return self.applies.pop(0)
         if argv[0] == "terraform" and argv[2:4] == ["output", "-json"]:
             return subprocess.CompletedProcess(argv, 0, json.dumps({k: {"value": v} for k, v in self.outputs.items()}))
         return subprocess.CompletedProcess(argv, 0, "")
@@ -195,6 +206,57 @@ def test_new_foundation_creates_backend_and_checks_the_saved_plan_before_apply(i
     }
     (data_dir,) = data_dirs
     assert data_dir.startswith(tempfile.gettempdir()) and data_dir == str(Path(plan).parent / "terraform-data")
+
+
+def _bootstrap(inputs, process, monkeypatch):
+    monkeypatch.setattr(subprocess, "run", process)
+    monkeypatch.setattr("gcp_foundation.time.sleep", lambda seconds: None)
+    set_assume_yes(True)
+    try:
+        bootstrap_gcp_foundation(str(inputs))
+    finally:
+        set_assume_yes(False)
+
+
+def test_a_soft_deleted_pool_is_restored_and_imported_before_the_plan(inputs, monkeypatch):
+    process = FoundationProcess(inputs, federation={"pools": "DELETED\n", "providers": "DELETED\n"})
+    _bootstrap(inputs, process, monkeypatch)
+    calls = process.calls
+    pool = "projects/example-project/locations/global/workloadIdentityPools/shifter-example-github"
+    undeletes = [
+        i
+        for i, call in enumerate(calls)
+        if call[:3] == ["gcloud", "iam", "workload-identity-pools"] and "undelete" in call
+    ]
+    imports = process.terraform("import")
+    (plan_index,) = process.terraform("plan")
+    assert len(undeletes) == 2 and len(imports) == 2
+    # Each resource is restored before its import, and both before the plan.
+    assert undeletes[0] < imports[0] < undeletes[1] < imports[1] < plan_index
+    assert [calls[i][-2:] for i in imports] == [
+        ["module.cicd_oidc_identity.google_iam_workload_identity_pool.github[0]", pool],
+        ["module.cicd_oidc_identity.google_iam_workload_identity_pool_provider.github[0]", f"{pool}/providers/github"],
+    ]
+    assert f"-var-file={inputs}" in calls[imports[0]]
+    # An absent pool needs no restore: a new foundation goes straight to the plan.
+    fresh = FoundationProcess(inputs)
+    _bootstrap(inputs, fresh, monkeypatch)
+    assert not fresh.terraform("import")
+    assert not any("undelete" in call for call in fresh.calls)
+
+
+def test_an_iam_propagation_error_plans_and_applies_again(inputs, monkeypatch):
+    unknown = subprocess.CompletedProcess(
+        [], 1, "", "Error 400: Service account x@example-project.iam.gserviceaccount.com does not exist., invalid"
+    )
+    process = FoundationProcess(inputs, applies=[unknown])
+    _bootstrap(inputs, process, monkeypatch)
+    # Each attempt applies a new saved plan that passed the trust check.
+    assert len(process.terraform("plan")) == len(process.terraform("show")) == len(process.terraform("apply")) == 2
+    failed = FoundationProcess(inputs, applies=[subprocess.CompletedProcess([], 1, "", "Error 409: already exists")])
+    with pytest.raises(SystemExit):
+        _bootstrap(inputs, failed, monkeypatch)
+    assert len(failed.terraform("apply")) == 1
 
 
 def test_a_saved_plan_with_unauthorized_trust_stops_before_apply(inputs, monkeypatch):
