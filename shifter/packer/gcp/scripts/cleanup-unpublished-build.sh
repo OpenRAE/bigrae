@@ -23,8 +23,9 @@ project=(--project="${GCP_PROJECT_ID}")
 # Each lookup is a plain assignment so that set -e stops on a gcloud error
 # instead of reading it as "nothing to delete".
 list_images() {
+  local status="${1:-}"
   gcloud compute images list "${project[@]}" --no-standard-images \
-    --filter="labels.build-run=${BUILD_ID}${1:+ AND status=$1}" --format='value(name)'
+    --filter="labels.build-run=${BUILD_ID}${status:+ AND status=${status}}" --format='value(name)'
 }
 
 # Packer can stop waiting while GCE still creates the image, and GCE cannot
