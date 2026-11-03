@@ -11,7 +11,7 @@ import sys
 
 from .runtime import (
     ENTRY_POINT_GROUPS,
-    RESULT_SECRET_ENV,
+    PREPARATION_OUTPUT_ENV,
     InspectionInput,
     InspectionResult,
     PluginManifest,
@@ -87,7 +87,7 @@ def main() -> int:
     """Read bounded injected input and emit only the versioned plan response."""
     raw = os.environ.pop("BIGRAE_PLUGIN_INPUT", None)
     legacy = os.environ.pop("SHIFTER_PLUGIN_INPUT", None)
-    result_secret = os.environ.pop(RESULT_SECRET_ENV, "")
+    result_secret = os.environ.pop(PREPARATION_OUTPUT_ENV, "")
     try:
         if raw is not None and legacy is not None and raw != legacy:
             raise ValueError("conflicting plugin input aliases")

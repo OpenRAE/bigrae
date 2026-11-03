@@ -11,7 +11,7 @@ from typing import Any
 
 from shifter_adapter_sdk.runtime import (
     FILE_INPUT_DIRECTORY,
-    RESULT_SECRET_ENV,
+    PREPARATION_OUTPUT_ENV,
     InspectionInput,
     InspectionResult,
     RuntimeInput,
@@ -106,7 +106,7 @@ def launch_plugin(
         else "SHIFTER_PLUGIN_INPUT": request.model_dump_json()
     }
     if result_secret:
-        environment[RESULT_SECRET_ENV] = result_secret
+        environment[PREPARATION_OUTPUT_ENV] = result_secret
     runner.run_task(
         task_definition=request.manifest.worker_image,
         cluster=PLUGIN_NAMESPACE,

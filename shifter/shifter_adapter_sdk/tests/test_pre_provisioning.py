@@ -99,7 +99,7 @@ def test_worker_encrypts_preparation_before_stdout(monkeypatch, capsys):
     request = runtime.RuntimeInput.model_validate(request_payload())
     key = Fernet.generate_key().decode()
     monkeypatch.setenv("BIGRAE_PLUGIN_INPUT", request.model_dump_json())
-    monkeypatch.setenv(runtime.RESULT_SECRET_ENV, key)
+    monkeypatch.setenv(runtime.PREPARATION_OUTPUT_ENV, key)
     monkeypatch.setattr(worker, "_load_plugin", lambda _manifest: SimpleNamespace(plan=planned))
     assert worker.main() == 0
     captured = capsys.readouterr()
@@ -114,7 +114,7 @@ def test_worker_encrypts_preparation_before_stdout(monkeypatch, capsys):
 def test_missing_output_secret_never_prints_clear_preparation(monkeypatch, capsys):
     request = runtime.RuntimeInput.model_validate(request_payload())
     monkeypatch.setenv("BIGRAE_PLUGIN_INPUT", request.model_dump_json())
-    monkeypatch.delenv(runtime.RESULT_SECRET_ENV, raising=False)
+    monkeypatch.delenv(runtime.PREPARATION_OUTPUT_ENV, raising=False)
     monkeypatch.setattr(worker, "_load_plugin", lambda _manifest: SimpleNamespace(plan=planned))
     assert worker.main() == 2
     captured = capsys.readouterr()
