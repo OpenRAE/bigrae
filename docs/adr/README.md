@@ -102,6 +102,14 @@ directory credentials.
 
 ## Runtime Enforcement
 
+ADR-031-R7 separates trial archive custody from operational sidecars.
+CMS stores tenant destination, transfer, and receipt metadata.
+The [custody design](../architecture/trial-archive-custody.md) describes the validation and commit boundaries.
+The [service contract](../technical/shifter_platform/trial-archive-custody.md) defines the receipt and recovery behavior.
+The existing layer checks confine portable RAES validation to `shared.raes`.
+Targeted archive and PostgreSQL service tests verify custody, identity, access, and retention.
+No new guard exception or deployment setting is introduced.
+
 ADR-004-R23 generalizes the GCP CI identity module: purpose-separated build,
 validate, release-scan, deploy and destroy identities are rendered from
 explicit per-deployment inputs rather than tenant-name branches. The source WIF

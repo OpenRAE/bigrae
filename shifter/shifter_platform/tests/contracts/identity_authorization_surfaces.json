@@ -4060,6 +4060,14 @@
       "target": "installation"
     },
     {
+      "decision": "installation.manage_content+org.manage_content:configure;org.manage_content:intake,purge;org.read_content:list,retrieve",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "native credential_from_file;SQL-owned organization ancestry and credential ceiling",
+      "surface": "cms:trial_archive",
+      "target": "organization"
+    },
+    {
       "decision": "deployment-command",
       "disposition": "retained",
       "kind": "management-command",

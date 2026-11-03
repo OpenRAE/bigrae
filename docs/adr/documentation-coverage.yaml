@@ -3,6 +3,24 @@
   "docs_root": "docs",
   "features": [
     {
+      "id": "trial-archive-custody",
+      "title": "Central tenant trial archive custody",
+      "requirement": "GEN-001",
+      "user_docs": [
+        "how-to/retain-trial-archives.md"
+      ],
+      "technical_docs": [
+        "technical/shifter_platform/trial-archive-custody.md"
+      ],
+      "drift_sources": [
+        "shifter/shifter_platform/cms/services/_trial_archives.py",
+        "shifter/shifter_platform/shared/raes/trial_archive.py",
+        "shifter/shifter_platform/shared/raes/trial_archive_jsonl.py",
+        "shifter/shifter_platform/shared/raes/trial_archive_records.py",
+        "shifter/shifter_platform/cms/models/trial_archives.py"
+      ]
+    },
+    {
       "id": "architecture-handbook",
       "title": "Current-state architecture handbook",
       "requirement": "GEN-001",
