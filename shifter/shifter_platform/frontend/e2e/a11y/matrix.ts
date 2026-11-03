@@ -39,6 +39,13 @@ export interface A11ySurface {
 
 export const SURFACES: readonly A11ySurface[] = [
   {
+    id: "mission-control-files",
+    route: "/mission-control/files",
+    actor: "standard",
+    ready: "Files",
+    remediation: "src/features/mission-control/FilesPage.tsx",
+  },
+  {
     id: "access-credentials",
     route: "/access-credentials",
     actor: "standard",

@@ -46,6 +46,24 @@ Plugin authors must build images that run under these constraints. Host callers
 use `parse_result` with their original input to reject replay and undeclared
 targets. Neither a plan nor a compatibility response proves guest readiness.
 
+An adapter can declare `required_files`, a list of up to 16 named input files.
+Administrators upload and replace these in Mission Control → Assets → Files,
+then select each file in the pack's adapter assignment. Each file and their
+combined size must fit 512 KiB. Files are opaque data; the portal does not
+interpret them or install them as executable adapters. A missing, deleted or
+unauthorized selection blocks launch. Replacement retains a logical file
+identity: new ranges get the current version; existing ranges keep the version
+they admitted.
+
+`RuntimeInput.files` contains only each declared file's SHA-256 and byte length.
+The host reauthorizes the original file access and mounts the verified version
+read-only at `/run/plugin-inputs`, using an immutable Secret owned by the
+invocation's Job. Use `bigrae_adapter_sdk.runtime.read_file_input(request, name)`
+to obtain bounded, digest-checked bytes. The worker verifies all required files
+before loading adapter code. Files add no network access or storage credentials
+to the worker. Build the worker image against an SDK candidate containing these
+contracts; older images cannot consume required file inputs.
+
 The RAES GCE and EC2 hosts ask for `validate`, `configure` and `verify` plans before
 creating resources. These requests contain declared node identities and OS
 families, not realized IP addresses, keys, provider credentials or secret URLs.

@@ -1,5 +1,6 @@
 """Reject replay, target escalation and ambiguous worker messages."""
 
+import hashlib
 import json
 from types import SimpleNamespace
 from uuid import uuid4
@@ -13,10 +14,20 @@ from shifter_adapter_sdk.runtime import (
     PluginManifest,
     RuntimeInput,
     RuntimePlan,
+    canonical_digest,
     parse_input,
     parse_result,
 )
 from shifter_adapter_sdk.worker import inspect_invocation, main, plan_invocation
+
+
+def _with_file(request, content=b"synthetic parameters\n"):
+    payload = request.model_dump(mode="json")
+    payload["manifest"]["required_files"] = ["parameters"]
+    payload["files"] = {
+        "parameters": {"sha256": "sha256:" + hashlib.sha256(content).hexdigest(), "size_bytes": len(content)}
+    }
+    return payload
 
 
 @pytest.fixture
@@ -261,3 +272,90 @@ def test_runtime_value_reference_cannot_escape_original_guest_bindings(request_i
     )
     with pytest.raises(ValueError, match="authorized invocation"):
         parse_result(response.model_dump_json(), request_input)
+
+
+def test_file_input_metadata_round_trip_has_no_material_or_storage_authority(request_input):
+    payload = _with_file(request_input)
+    admitted = parse_input(json.dumps(payload))
+    assert admitted.files["parameters"].size_bytes == len(b"synthetic parameters\n")
+    assert admitted.model_dump(mode="json") == payload
+    for field in ("content", "storage_key", "url", "path"):
+        changed = _with_file(request_input)
+        changed["files"]["parameters"][field] = "private-material-marker"
+        with pytest.raises(ValueError):
+            parse_input(json.dumps(changed))
+
+
+@pytest.mark.parametrize("change", ["missing", "extra", "duplicate", "path", "zero", "too-large", "bad-digest"])
+def test_file_input_declarations_are_closed_and_bounded(request_input, change):
+    payload = _with_file(request_input)
+    if change == "missing":
+        payload["files"] = {}
+    elif change == "extra":
+        payload["files"]["other"] = payload["files"]["parameters"]
+    elif change == "duplicate":
+        payload["manifest"]["required_files"].append("parameters")
+    elif change == "path":
+        payload["manifest"]["required_files"] = ["../parameters"]
+        payload["files"] = {"../parameters": payload["files"]["parameters"]}
+    elif change == "bad-digest":
+        payload["files"]["parameters"]["sha256"] = "unverified"
+    else:
+        payload["files"]["parameters"]["size_bytes"] = 0 if change == "zero" else 512 * 1024 + 1
+    with pytest.raises(ValueError):
+        parse_input(json.dumps(payload))
+
+
+def test_file_input_total_budget_is_enforced(request_input):
+    payload = _with_file(request_input)
+    payload["manifest"]["required_files"] = ["first", "second"]
+    descriptor = {"sha256": "sha256:" + "a" * 64, "size_bytes": 300_000}
+    payload["files"] = {"first": descriptor, "second": descriptor}
+    with pytest.raises(ValueError):
+        parse_input(json.dumps(payload))
+
+
+def test_empty_file_fields_preserve_legacy_manifest_and_invocation_digests(request_input):
+    before = request_input.model_dump(mode="json")
+    before.pop("files", None)
+    before["manifest"].pop("required_files", None)
+    payload = {**before, "files": {}, "manifest": {**before["manifest"], "required_files": []}}
+    admitted = parse_input(json.dumps(payload))
+    assert admitted.model_dump(mode="json") == before
+    assert admitted.manifest.digest == canonical_digest(before["manifest"])
+    assert admitted.digest == canonical_digest(before)
+
+
+def test_file_input_reader_verifies_actual_mounted_bytes(request_input, tmp_path, monkeypatch):
+    from shifter_adapter_sdk import runtime
+
+    monkeypatch.setattr(runtime, "_FILE_INPUT_ROOT", tmp_path)
+    content = b"opaque\x00synthetic\xffbytes\n"
+    admitted = parse_input(json.dumps(_with_file(request_input, content)))
+    path = tmp_path / "parameters"
+    path.write_bytes(content)
+    assert runtime.read_file_input(admitted, "parameters") == content
+    for changed in (content + b"changed", b"different".ljust(len(content), b"!")):
+        path.write_bytes(changed)
+        with pytest.raises(ValueError, match="file input"):
+            runtime.read_file_input(admitted, "parameters")
+    path.unlink()
+    with pytest.raises(ValueError, match="file input"):
+        runtime.read_file_input(admitted, "parameters")
+    with pytest.raises(ValueError, match="file input"):
+        runtime.read_file_input(admitted, "../parameters")
+
+
+def test_worker_refuses_missing_file_before_loading_adapter(request_input, tmp_path, monkeypatch):
+    from shifter_adapter_sdk import runtime
+
+    monkeypatch.setattr(runtime, "_FILE_INPUT_ROOT", tmp_path)
+    admitted = parse_input(json.dumps(_with_file(request_input)))
+
+    def forbidden_load(_manifest):
+        pytest.fail("adapter must not load without its required file")
+
+    monkeypatch.setattr("shifter_adapter_sdk.worker._load_plugin", forbidden_load)
+    result = plan_invocation(admitted)
+    assert result.status == "failed"
+    assert not result.actions

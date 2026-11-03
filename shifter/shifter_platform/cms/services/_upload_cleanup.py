@@ -8,12 +8,13 @@ from django.db import transaction
 from django.utils import timezone
 
 from cms.exceptions import CMSError
-from cms.models import AgentConfig, AgentUpload, AgentUploadBudget
-from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log
+from cms.models import AgentConfig, AgentUpload, AgentUploadBudget, FileAssetUse, NamedFileAsset
+from shared.audit import AuditAction, AuditEvent, audit_log
 from shared.cloud import get_object_storage
+from shared.enums import ResourceStatus
 from shared.operation_authority import authority_resource_scope
 
-from ._upload_scope import _scope_digest
+from ._upload_scope import _scope_digest, upload_entity
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +25,7 @@ def _cleanup_upload(row: AgentUpload) -> bool:
     _verify_upload_cleanup_keys(row)
     storage = get_object_storage()
     storage.delete_object(bucket=row.storage_bucket, key=row.staging_key)
-    retired = _retired_installer(row)
+    retired = _retired_asset(row)
     if row.state != "completed" or retired:
         storage.delete_object(bucket=row.storage_bucket, key=row.install_key)
     with transaction.atomic():
@@ -34,7 +35,7 @@ def _cleanup_upload(row: AgentUpload) -> bool:
         current = AgentUpload.objects.select_for_update().get(pk=row.pk)
         if current.state != row.state:
             raise CMSError("Upload cleanup state changed")
-        now_retired = _retired_installer(current)
+        now_retired = _retired_asset(current)
         if now_retired != retired:
             raise CMSError("Upload cleanup retirement changed")
         if current.state == "finalizing":
@@ -43,6 +44,10 @@ def _cleanup_upload(row: AgentUpload) -> bool:
             current.save(update_fields=["updated_at"])
             return False
         was_pending = current.cleanup_pending
+        if retired and current.asset_kind == "file" and current.file_asset_id is not None:
+            NamedFileAsset.all_objects.filter(
+                pk=current.file_asset_id, s3_key=current.install_key, storage_deleted_at__isnull=True
+            ).update(storage_deleted_at=timezone.now())
         current.cleanup_pending = False
         current.save(update_fields=["cleanup_pending", "updated_at"])
         if was_pending:
@@ -56,7 +61,7 @@ def _record_upload_cleanup(row: AgentUpload) -> None:
 
     audit_log(
         AuditEvent(
-            entity_type=AuditEntityType.AGENT,
+            entity_type=upload_entity(row.asset_kind),
             entity_id=0,
             entity_ref=str(row.id),
             action=AuditAction.DELETE,
@@ -97,8 +102,22 @@ def reconcile_upload_cleanup(*, limit: int = 100) -> int:
     return cleaned
 
 
-def _retired_installer(row: AgentUpload) -> bool:
+def _retired_asset(row: AgentUpload) -> bool:
     """Only the exact deleted installer permits cleanup of its retained install key."""
+    if row.asset_kind == "file":
+        if row.file_asset_id is None:
+            if row.state == "completed":
+                raise CMSError("File cleanup binding unavailable")
+            return False
+        retired = NamedFileAsset.all_objects.filter(
+            pk=row.file_asset_id, s3_key=row.install_key, deleted_at__isnull=False
+        ).exists()
+        active_use = (
+            FileAssetUse.objects.filter(file_asset_id=row.file_asset_id)
+            .exclude(range_instance__status=ResourceStatus.DESTROYED.value)
+            .exists()
+        )
+        return retired and not active_use
     return (
         row.agent_id is not None
         and AgentConfig.all_objects.filter(pk=row.agent_id, s3_key=row.install_key, deleted_at__isnull=False).exists()

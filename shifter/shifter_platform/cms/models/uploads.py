@@ -27,6 +27,12 @@ class AgentUpload(RecordedAuthorityFields):
     filename = models.CharField(max_length=255, editable=False)
     os_slug = models.CharField(max_length=100, editable=False)
     agent_type = models.CharField(max_length=30, editable=False)
+    asset_kind = models.CharField(max_length=16, default="agent", editable=False)
+    replaces_file = models.ForeignKey(
+        "cms.NamedFileAsset", null=True, on_delete=models.PROTECT, editable=False, related_name="replacement_uploads"
+    )
+    replacement_generation = models.PositiveBigIntegerField(default=0, editable=False)
+    file_owner_uuid = models.UUIDField(null=True, editable=False)
     file_size = models.PositiveBigIntegerField(editable=False)
     storage_provider = models.CharField(max_length=16, editable=False)
     storage_bucket = models.CharField(max_length=255, editable=False)
@@ -36,7 +42,9 @@ class AgentUpload(RecordedAuthorityFields):
     state = models.CharField(max_length=16, default="issued", editable=False, db_index=True)
     cleanup_pending = models.BooleanField(default=True, editable=False)
     validated_identity = models.JSONField(default=dict, editable=False)
+    validated_sha256 = models.CharField(max_length=64, default="", editable=False)
     agent = models.ForeignKey("cms.AgentConfig", null=True, on_delete=models.PROTECT, editable=False)
+    file_asset = models.ForeignKey("cms.NamedFileAsset", null=True, on_delete=models.PROTECT, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -45,6 +53,16 @@ class AgentUpload(RecordedAuthorityFields):
 
         constraints = [
             models.CheckConstraint(condition=models.Q(file_size__gt=0), name="agent_upload_positive_size"),
+            models.CheckConstraint(condition=models.Q(asset_kind__in=("agent", "file")), name="upload_asset_kind"),
+            models.CheckConstraint(
+                condition=(
+                    models.Q(asset_kind="agent", file_asset__isnull=True, replaces_file__isnull=True)
+                    | models.Q(
+                        asset_kind="file", agent__isnull=True, agent_type="", os_slug="", file_owner_uuid__isnull=False
+                    )
+                ),
+                name="upload_asset_reference_kind",
+            ),
             models.CheckConstraint(
                 condition=models.Q(state__in=("issued", "finalizing", "completed", "cancelled")),
                 name="agent_upload_valid_state",

@@ -9,10 +9,22 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from shifter_adapter_sdk.runtime import InspectionInput, InspectionResult, RuntimeInput, RuntimePlan, parse_result
+from shifter_adapter_sdk.runtime import (
+    FILE_INPUT_DIRECTORY,
+    InspectionInput,
+    InspectionResult,
+    RuntimeInput,
+    RuntimePlan,
+    parse_result,
+)
 
 from shared.cloud.exceptions import CloudTaskError
-from shared.cloud.kubernetes import KubernetesTaskProfile, KubernetesTaskRunner, ProvisionerHardeningProfile
+from shared.cloud.kubernetes import (
+    KubernetesTaskProfile,
+    KubernetesTaskRunner,
+    ProvisionerHardeningProfile,
+    ReadOnlySecretMount,
+)
 from shared.cloud.kubernetes.naming import build_idempotent_job_name
 
 logger = logging.getLogger(__name__)
@@ -27,7 +39,9 @@ _CLEANUP_FAILURE_REASONS = {
 }
 
 
-def plugin_task_profile(*, image_pull_secret: str = "") -> KubernetesTaskProfile:
+def plugin_task_profile(
+    *, image_pull_secret: str = "", file_secret: str = "", file_names: tuple[str, ...] = ()
+) -> KubernetesTaskProfile:
     """The same restricted posture applies to inspection and range invocations."""
     return KubernetesTaskProfile(
         runner_label_value="runtime-plugin",
@@ -49,6 +63,9 @@ def plugin_task_profile(*, image_pull_secret: str = "") -> KubernetesTaskProfile
         runtime_class_name="gvisor",
         node_selector={"node-restriction.kubernetes.io/shifter-pool": "runtime-plugin"},
         tolerations=(("shifter.dev/runtime-plugin", "Equal", "true", "NoSchedule"),),
+        read_only_secret_mounts=(ReadOnlySecretMount("file-inputs", file_secret, FILE_INPUT_DIRECTORY, file_names),)
+        if file_secret
+        else (),
     )
 
 
@@ -74,7 +91,11 @@ def launch_plugin(
     image_pull_secret: str = "",
 ) -> None:
     """Idempotently dispatch a fixed worker profile without application credentials."""
-    runner = KubernetesTaskRunner(plugin_task_profile(image_pull_secret=image_pull_secret))
+    file_names = tuple(sorted(request.files)) if isinstance(request, RuntimeInput) else ()
+    file_secret = plugin_task_ref(request).split("/", 1)[1] + "-inputs" if file_names else ""
+    runner = KubernetesTaskRunner(
+        plugin_task_profile(image_pull_secret=image_pull_secret, file_secret=file_secret, file_names=file_names)
+    )
     runner.run_task(
         task_definition=request.manifest.worker_image,
         cluster=PLUGIN_NAMESPACE,

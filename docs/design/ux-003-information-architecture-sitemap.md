@@ -155,6 +155,7 @@ surface were removed by ADR-027 / issue #1195.
 | --- | --- | --- | --- |
 | Dashboard / ranges | `/mission-control/` | Organizer | Launch and monitor ranges. |
 | Agents | `/mission-control/agents/` | Organizer | Inspect or delete available agents. |
+| Files | `/mission-control/files/` | Content administrator | Upload, list, replace or retire scoped adapter input files. |
 | Terminal | `/mission-control/terminal/` | Both | Access terminal sessions when a range is available. |
 | Platform settings compatibility alias | `/mission-control/settings/` | Staff | Redirect to the staff-owned Administer Platform Settings surface. |
 | Help | `/mission-control/help/` | Both | Read Mission Control help. |

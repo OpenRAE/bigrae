@@ -13,6 +13,7 @@ app_name = "mission_control"
 urlpatterns = [
     path("", platform_spa_host, name="dashboard"),
     path("agents/", platform_spa_host, name="agents"),
+    path("files/", platform_spa_host, name="files"),
     path("terminal/", platform_spa_host, name="terminal"),
     path("settings/", platform_spa_host, name="settings"),
     path("help/", platform_spa_host, name="help"),

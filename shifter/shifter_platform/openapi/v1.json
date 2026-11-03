@@ -19008,6 +19008,340 @@
         }
       }
     },
+    "/api/v1/mission-control/files/": {
+      "get": {
+        "operationId": "api_v1_mission_control_files_list",
+        "description": "Return scoped metadata without signed downloads or material.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "account_uuid",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "organization_uuid",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "query",
+            "name": "workspace_uuid",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "tags": [
+          "mission-control"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileAssetList"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/mission-control/files/{file_id}/": {
+      "delete": {
+        "operationId": "api_v1_mission_control_files_delete",
+        "description": "Use the actual asset's owning scope, never a caller-supplied parent.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "file_id",
+            "schema": {
+              "type": "integer"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "mission-control"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No response body"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/mission-control/files/upload/cancel/": {
+      "post": {
+        "operationId": "api_v1_mission_control_file_upload_cancel",
+        "description": "Keep exact capability cleanup evidence after cancellation.",
+        "tags": [
+          "mission-control"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadToken"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadToken"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SuccessResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/mission-control/files/upload/complete/": {
+      "post": {
+        "operationId": "api_v1_mission_control_file_upload_complete",
+        "description": "Return metadata for the installed immutable version.",
+        "tags": [
+          "mission-control"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadToken"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadToken"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadToken"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileUploadComplete"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/mission-control/files/upload/initiate/": {
+      "post": {
+        "operationId": "api_v1_mission_control_file_upload_initiate",
+        "description": "Issue the existing bounded upload capability for a file asset.",
+        "tags": [
+          "mission-control"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadInitiate"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadInitiate"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/FileUploadInitiate"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UploadInitiateResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
     "/api/v1/mission-control/guacamole/bootstrap/{request_id}/": {
       "get": {
         "operationId": "api_v1_mission_control_guacamole_bootstrap_status_retrieve",
@@ -28369,6 +28703,59 @@
           "name"
         ]
       },
+      "FileAsset": {
+        "type": "object",
+        "description": "Display metadata, with no content, object key, owner or digest.",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string"
+          },
+          "original_filename": {
+            "type": "string"
+          },
+          "file_size_bytes": {
+            "type": "integer"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "created_at",
+          "file_size_bytes",
+          "id",
+          "name",
+          "original_filename",
+          "uuid"
+        ]
+      },
+      "FileAssetList": {
+        "type": "object",
+        "description": "Active files and the same server-owned bound used by upload admission.",
+        "properties": {
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/FileAsset"
+            }
+          },
+          "max_file_size_bytes": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "files",
+          "max_file_size_bytes"
+        ]
+      },
       "FileDownloadResponse": {
         "type": "object",
         "description": "Presigned download URL for a challenge attachment.",
@@ -28385,6 +28772,75 @@
         "required": [
           "filename",
           "url"
+        ]
+      },
+      "FileUploadComplete": {
+        "type": "object",
+        "description": "The new immutable version, not a storage capability.",
+        "properties": {
+          "success": {
+            "type": "boolean"
+          },
+          "file_id": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "file_id",
+          "message",
+          "success"
+        ]
+      },
+      "FileUploadInitiate": {
+        "type": "object",
+        "description": "Closed opaque-file metadata; storage and ownership are server-selected.",
+        "properties": {
+          "account_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organization_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "workspace_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 100
+          },
+          "filename": {
+            "type": "string",
+            "maxLength": 255
+          },
+          "file_size": {},
+          "replaces": {
+            "type": "integer",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "file_size",
+          "filename",
+          "name"
+        ]
+      },
+      "FileUploadToken": {
+        "type": "object",
+        "description": "The signed reference alone selects a retained file-purpose admission.",
+        "properties": {
+          "upload_token": {
+            "type": "string",
+            "maxLength": 16384
+          }
+        },
+        "required": [
+          "upload_token"
         ]
       },
       "FlagCreateResult": {
@@ -34161,6 +34617,14 @@
             "additionalProperties": {
               "$ref": "#/components/schemas/RuntimeTargetImageProfile"
             }
+          },
+          "file_assets": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "maxProperties": 16
           }
         },
         "required": [

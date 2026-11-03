@@ -39,6 +39,25 @@ def _pull_secret(row: RuntimePluginInstallation, request: InspectionInput | Runt
     config = json.dumps({"auths": {registry: credentials}}, separators=(",", ":"))
     encoded = base64.b64encode(config.encode()).decode("ascii")
     name = f"runtime-plugin-pull-{request.invocation_id.hex}"
+    return _owned_secret(request, name, "kubernetes.io/dockerconfigjson", {".dockerconfigjson": encoded})
+
+
+def _file_secret(request: RuntimeInput, material: dict[str, bytes]) -> str:
+    """Only the exact declared bytes can enter this invocation's input Secret."""
+    if set(material) != set(request.files):
+        raise ValueError("Plugin file material changed")
+    if not material:
+        return ""
+    for name, item in request.files.items():
+        item.verify_material(material[name])
+    name = plugin_task_ref(request).split("/", 1)[1] + "-inputs"
+    return _owned_secret(
+        request, name, "Opaque", {key: base64.b64encode(value).decode("ascii") for key, value in material.items()}
+    )
+
+
+def _owned_secret(request: InspectionInput | RuntimeInput, name: str, secret_type: str, data: dict[str, str]) -> str:
+    """Create or verify an immutable Secret owned by this exact reserved Job."""
     batch, core, _, api_exception = load_kubernetes_api()
     job_name = plugin_task_ref(request).split("/", 1)[1]
     job = batch.read_namespaced_job(name=job_name, namespace=PLUGIN_NAMESPACE, _request_timeout=30)
@@ -54,9 +73,9 @@ def _pull_secret(row: RuntimePluginInstallation, request: InspectionInput | Runt
         "apiVersion": "v1",
         "kind": "Secret",
         "metadata": {"name": name, "ownerReferences": [owner]},
-        "type": "kubernetes.io/dockerconfigjson",
+        "type": secret_type,
         "immutable": True,
-        "data": {".dockerconfigjson": encoded},
+        "data": data,
     }
     try:
         # Concurrent plugin launches race on the namespace ResourceQuota; an
@@ -66,17 +85,18 @@ def _pull_secret(row: RuntimePluginInstallation, request: InspectionInput | Runt
         )
     except api_exception as exc:
         if getattr(exc, "status", None) != 409 or is_admission_conflict(exc):
-            raise CloudTaskError("Plugin registry credentials could not be installed") from None
+            raise CloudTaskError("Plugin input Secret could not be installed") from None
         current = core.read_namespaced_secret(name=name, namespace=PLUGIN_NAMESPACE, _request_timeout=30)
         owners = current.metadata.owner_references or []
-        if (
-            current.type != body["type"]
-            or current.data != body["data"]
-            or not current.immutable
-            or len(owners) != 1
-            or owners[0].uid != job.metadata.uid
-        ):
-            raise CloudTaskError("Plugin registry credential identity mismatch") from None
+        if current.type != body["type"] or current.data != body["data"] or not current.immutable or len(owners) != 1:
+            raise CloudTaskError("Plugin input Secret identity mismatch") from None
+        if (owners[0].uid, owners[0].name, owners[0].kind, owners[0].api_version) != (
+            job.metadata.uid,
+            job_name,
+            "Job",
+            "batch/v1",
+        ) or owners[0].controller is not True:
+            raise CloudTaskError("Plugin input Secret identity mismatch") from None
     return name
 
 

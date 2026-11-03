@@ -10,12 +10,12 @@ from uuid import uuid4
 
 from django.conf import settings
 from django.db import transaction
-from django.db.models import Sum
+from django.db.models import Q, Sum
 from django.utils import timezone
 
 from cms.exceptions import CMSError
-from cms.models import AgentConfig, AgentType, AgentUpload, AgentUploadBudget
-from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
+from cms.models import AgentConfig, AgentUpload, AgentUploadBudget, NamedFileAsset
+from shared.audit import AuditAction, AuditEvent, audit_log, principal_actor_fields
 from shared.cloud import get_object_storage
 from shared.cloud.exceptions import ObjectPreconditionError
 from shared.operation_authority import (
@@ -28,7 +28,7 @@ from shared.s3 import sanitize_s3_filename
 from ._content_authority import content_scope_fields, fence_content_scope, require_content_scope
 from ._upload_cleanup import _cleanup_upload as _cleanup_upload
 from ._upload_cleanup import reconcile_upload_cleanup as reconcile_upload_cleanup
-from ._upload_scope import _scope_digest
+from ._upload_scope import UploadOptions, _scope_digest, upload_entity, validated_installer_metadata
 
 if TYPE_CHECKING:
     from typing import Any
@@ -43,10 +43,8 @@ logger = logging.getLogger(__name__)
 
 _INVALID_UPLOAD_REFERENCE = "Invalid upload reference"
 _UPLOAD_UNAVAILABLE = "Upload unavailable"
-_INVALID_UPLOAD_METADATA = "Invalid upload metadata"
-
-
 _CONTENT_UNAVAILABLE = "Content unavailable"
+_DEFAULT_UPLOAD_OPTIONS = UploadOptions()
 
 __all__ = [
     "_cleanup_upload",
@@ -74,12 +72,22 @@ def _upload_values(
     filename: str,
     file_size: int,
     agent_type: str,
+    options: UploadOptions = _DEFAULT_UPLOAD_OPTIONS,
 ) -> dict[str, Any]:
-    """Validate installer metadata and pin its original scope and storage keys."""
+    """Validate bounded asset metadata and pin its original upload custody."""
     from shared.authorization.policy import scope_parent
 
     current = require_content_scope(credential, scope, "manage_content")
-    os_slug = _validated_upload_metadata(name, filename, file_size, agent_type)
+    file_metadata = {}
+    if options.kind == "file" and not agent_type:
+        from ._file_assets import file_upload_metadata
+
+        file_metadata = file_upload_metadata(current, scope, name, filename, file_size, options)
+        os_slug = ""
+    elif options.kind == "agent" and options.replaces is None:
+        os_slug = validated_installer_metadata(name, filename, file_size, agent_type)
+    else:
+        raise CMSError("Invalid upload metadata")
     scope_digest = _scope_digest(scope)
     identity = uuid4()
     root = f"agents/scoped/{scope_digest.removeprefix('sha256:')}/{identity}"
@@ -102,6 +110,8 @@ def _upload_values(
         "os_slug": os_slug,
         "file_size": file_size,
         "agent_type": agent_type,
+        "asset_kind": options.kind,
+        **file_metadata,
         "storage_provider": str(settings.CLOUD_PROVIDER),
         "storage_bucket": settings.AWS_S3_BUCKET_NAME,
         "staging_key": f"{root}/staging",
@@ -112,13 +122,16 @@ def _upload_values(
 
 def _reserve_upload(values: dict[str, Any], scope: ResourceScope) -> AgentUpload:
     """Reserve upload capacity and durable cleanup evidence together."""
+    from ._file_assets import file_storage_used, retained_files
+
     with transaction.atomic():
         AgentUploadBudget.objects.get_or_create(pk=values["scope_digest"])
         AgentUploadBudget.objects.select_for_update().get(pk=values["scope_digest"])
         used = AgentConfig.objects.filter(**content_scope_fields(scope), owner_principal_uuid__isnull=False)
-        used_bytes = used.aggregate(total=Sum("file_size_bytes"))["total"] or 0
+        used_bytes = (used.aggregate(total=Sum("file_size_bytes"))["total"] or 0) + file_storage_used(scope)
         pending = AgentUpload.objects.filter(scope_digest=values["scope_digest"], cleanup_pending=True).exclude(
-            state="completed", agent__deleted_at__isnull=True
+            Q(state="completed", agent_id__isnull=False, agent__deleted_at__isnull=True)
+            | Q(state="completed", file_asset_id__in=retained_files().values("pk"))
         )
         reserved_bytes = pending.aggregate(total=Sum("file_size"))["total"] or 0
         if used_bytes + reserved_bytes + values["file_size"] > settings.AGENT_USER_STORAGE_QUOTA_MB * 1024 * 1024:
@@ -128,7 +141,7 @@ def _reserve_upload(values: dict[str, Any], scope: ResourceScope) -> AgentUpload
 
         audit_log(
             AuditEvent(
-                entity_type=AuditEntityType.AGENT,
+                entity_type=upload_entity(row.asset_kind),
                 entity_id=0,
                 entity_ref=str(row.id),
                 action=AuditAction.CREATE,
@@ -147,13 +160,15 @@ def initiate_scoped_upload(
     filename: str,
     file_size: int,
     agent_type: str,
+    *,
+    options: UploadOptions = _DEFAULT_UPLOAD_OPTIONS,
 ) -> UploadInitiation:
     """Admit a bounded upload and issue its existing signed staging token."""
     from cms.assets.upload_token import generate_scoped_upload_token
 
     if scope is None:
         raise CMSError(_CONTENT_UNAVAILABLE)
-    values = _upload_values(credential, scope, name, filename, file_size, agent_type)
+    values = _upload_values(credential, scope, name, filename, file_size, agent_type, options)
     row = _reserve_upload(values, scope)
     try:
         url = get_object_storage().generate_presigned_upload_url(
@@ -211,6 +226,8 @@ def _authorized_upload(credential: CredentialContext, token: str) -> _UploadAdmi
             raise ValueError(_INVALID_UPLOAD_REFERENCE)
         if row.storage_provider != str(settings.CLOUD_PROVIDER) or payload["s3_key"] != row.staging_key:
             raise ValueError("Invalid storage binding")
+        if payload.get("asset_kind", "agent") != row.asset_kind:
+            raise ValueError("Invalid upload purpose")
         return _UploadAdmission(row, scope, current, initiator)
     except Exception:  # noqa: BLE001  # value-free upload boundary; private storage and token causes are suppressed
         raise CMSError(_UPLOAD_UNAVAILABLE) from None
@@ -237,6 +254,10 @@ def _fence_upload(admission: _UploadAdmission, row: AgentUpload) -> None:
         "filename",
         "name",
         "os_slug",
+        "asset_kind",
+        "replaces_file_id",
+        "replacement_generation",
+        "file_owner_uuid",
     )
     if (
         row.pk != admission.row.pk
@@ -247,7 +268,7 @@ def _fence_upload(admission: _UploadAdmission, row: AgentUpload) -> None:
         raise CMSError(_UPLOAD_UNAVAILABLE)
 
 
-def _validated_object(row: AgentUpload, storage: ObjectStorage) -> dict[str, Any]:
+def _validated_object(row: AgentUpload, storage: ObjectStorage) -> tuple[dict[str, Any], str]:
     """Verify the exact staged object before installing its bytes."""
     from cms.assets.validation import enforce_max_file_size_bytes, validate_file_extension
     from shared.uploads.inspection import validate_magic_bytes
@@ -255,6 +276,10 @@ def _validated_object(row: AgentUpload, storage: ObjectStorage) -> dict[str, Any
     identity = storage.head_object(bucket=row.storage_bucket, key=row.staging_key)
     if type(identity.get("content_length")) is not int or identity["content_length"] != row.file_size:
         raise CMSError("Uploaded object size does not match")
+    if row.asset_kind == "file":
+        from ._file_assets import validate_file_object
+
+        return identity, validate_file_object(row, storage, identity)
     enforce_max_file_size_bytes(row.file_size)
     header = storage.read_object_header(
         bucket=row.storage_bucket,
@@ -263,61 +288,72 @@ def _validated_object(row: AgentUpload, storage: ObjectStorage) -> dict[str, Any
         expected_identity=identity,
     )
     validate_magic_bytes(header, validate_file_extension(row.filename))
-    return identity
+    return identity, ""
 
 
-def _commit_installer(
-    credential: CredentialContext, token: str, expected: AgentUpload, scope: ResourceScope
-) -> AgentConfig:
-    """Commit an installer only while its admitted custody and object identity match."""
-    from cms.models import OperatingSystem
+def _commit_asset(
+    credential: CredentialContext,
+    token: str,
+    expected: AgentUpload,
+    scope: ResourceScope,
+    installed_identity: dict[str, Any] | None,
+) -> AgentConfig | NamedFileAsset:
+    """Commit a version only while its admitted custody and byte identity match."""
+    from ._file_assets import create_uploaded_file
+    from ._scoped_agents import create_uploaded_installer
 
     admission = _authorized_upload(credential, token)
     with transaction.atomic():
         AgentUploadBudget.objects.select_for_update().get(pk=expected.scope_digest)
         row = AgentUpload.objects.select_for_update().get(pk=expected.pk)
         _fence_upload(admission, row)
-        if row.state == "completed" and row.agent_id is not None:
-            return _completed_installer(row, scope)
-        if row.state != "finalizing" or row.validated_identity != expected.validated_identity:
+        if row.state == "completed":
+            return _completed_asset(row, scope)
+        if (
+            row.state != "finalizing"
+            or row.validated_identity != expected.validated_identity
+            or row.validated_sha256 != expected.validated_sha256
+        ):
             raise CMSError(_UPLOAD_UNAVAILABLE)
-        agent = AgentConfig.objects.create(
-            user=None,
-            owner_principal_uuid=row.authority_owner_uuid,
-            **content_scope_fields(scope),
-            name=row.name,
-            os=OperatingSystem.objects.get(slug=row.os_slug),
-            agent_type=row.agent_type,
-            s3_key=row.install_key,
-            original_filename=row.filename,
-            file_size_bytes=row.file_size,
-        )
-        row.agent = agent
+        asset: AgentConfig | NamedFileAsset
+        if row.asset_kind == "file":
+            if installed_identity is None:
+                raise CMSError(_UPLOAD_UNAVAILABLE)
+            asset = create_uploaded_file(row, scope, installed_identity)
+            field = "file_asset"
+        else:
+            asset = create_uploaded_installer(row, scope)
+            field = "agent"
+        setattr(row, field, asset)
         row.state = "completed"
-        row.save(update_fields=["agent", "state", "updated_at"])
+        row.save(update_fields=[field, "state", "updated_at"])
         audit_log(
             AuditEvent(
-                entity_type=AuditEntityType.AGENT,
-                entity_id=agent.pk,
+                entity_type=upload_entity(row.asset_kind),
+                entity_id=asset.pk,
                 action=AuditAction.CREATE,
                 **principal_actor_fields(admission.current.principal),
-                new_state={"upload_id": str(row.id), "scope_generation": agent.scope_generation},
+                new_state={"upload_id": str(row.id), "scope_generation": asset.scope_generation},
             ),
             strict=True,
         )
-        return agent
+        return asset
 
 
-def complete_scoped_upload(credential: CredentialContext, token: str) -> AgentConfig:
+def complete_scoped_upload(
+    credential: CredentialContext, token: str, *, asset_kind: str = "agent"
+) -> AgentConfig | NamedFileAsset:
     """Install validated bytes without changing the admitted upload destination."""
     admission = _authorized_upload(credential, token)
     snapshot, scope = admission.row, admission.scope
+    if snapshot.asset_kind != asset_kind:
+        raise CMSError(_UPLOAD_UNAVAILABLE)
     with transaction.atomic():
         AgentUploadBudget.objects.select_for_update().get(pk=snapshot.scope_digest)
         row = AgentUpload.objects.select_for_update().get(pk=snapshot.pk)
         _fence_upload(admission, row)
-        if row.state == "completed" and row.agent_id is not None:
-            return _completed_installer(row, scope)
+        if row.state == "completed":
+            return _completed_asset(row, scope)
         if row.state != "issued":
             raise CMSError("Upload is unavailable or already being finalized")
         row.state = "finalizing"
@@ -325,7 +361,7 @@ def complete_scoped_upload(credential: CredentialContext, token: str) -> AgentCo
     copy_attempted = copy_settled = False
     try:
         storage = get_object_storage()
-        identity = _validated_object(row, storage)
+        identity, digest = _validated_object(row, storage)
         admission = _authorized_upload(admission.current, token)
         with transaction.atomic():
             AgentUploadBudget.objects.select_for_update().get(pk=snapshot.scope_digest)
@@ -334,7 +370,8 @@ def complete_scoped_upload(credential: CredentialContext, token: str) -> AgentCo
             if row.state != "finalizing":
                 raise CMSError(_UPLOAD_UNAVAILABLE)
             row.validated_identity = identity
-            row.save(update_fields=["validated_identity", "updated_at"])
+            row.validated_sha256 = digest
+            row.save(update_fields=["validated_identity", "validated_sha256", "updated_at"])
         copy_attempted = True
         try:
             storage.copy_object_conditional(
@@ -349,7 +386,10 @@ def complete_scoped_upload(credential: CredentialContext, token: str) -> AgentCo
             raise
         copy_settled = True
         storage.tag_object(bucket=row.storage_bucket, key=row.install_key, tags={"status": "completed"})
-        return _commit_installer(admission.current, token, row, scope)
+        installed = (
+            storage.head_object(bucket=row.storage_bucket, key=row.install_key) if row.asset_kind == "file" else None
+        )
+        return _commit_asset(admission.current, token, row, scope, installed)
     except Exception:  # noqa: BLE001  # value-free upload boundary; private storage and token causes are suppressed
         # Keep the original generation and both storage keys for bounded cleanup.
         state = "finalizing" if copy_attempted and not copy_settled else "cancelled"
@@ -359,7 +399,7 @@ def complete_scoped_upload(credential: CredentialContext, token: str) -> AgentCo
         raise CMSError("Upload could not be finalized") from None
 
 
-def cancel_scoped_upload(credential: CredentialContext, token: str) -> None:
+def cancel_scoped_upload(credential: CredentialContext, token: str, *, asset_kind: str = "agent") -> None:
     """Cancel admitted upload work while preserving uncertain storage cleanup."""
     from uuid import UUID
 
@@ -370,6 +410,8 @@ def cancel_scoped_upload(credential: CredentialContext, token: str) -> None:
             raise ValueError(_INVALID_UPLOAD_REFERENCE)
         payload = verify_upload_token(token, None, allow_expired=True)
         snapshot = AgentUpload.objects.get(pk=UUID(str(payload["upload_id"])))
+        if snapshot.asset_kind != asset_kind or payload.get("asset_kind", "agent") != snapshot.asset_kind:
+            raise CMSError(_UPLOAD_UNAVAILABLE)
         scope = authority_resource_scope(
             {
                 name: getattr(snapshot, name)
@@ -394,7 +436,7 @@ def cancel_scoped_upload(credential: CredentialContext, token: str) -> None:
             row.save(update_fields=["state", "updated_at"])
             audit_log(
                 AuditEvent(
-                    entity_type=AuditEntityType.AGENT,
+                    entity_type=upload_entity(row.asset_kind),
                     entity_id=0,
                     entity_ref=str(row.id),
                     action=AuditAction.DELETE,
@@ -409,42 +451,20 @@ def cancel_scoped_upload(credential: CredentialContext, token: str) -> None:
         raise CMSError(_UPLOAD_UNAVAILABLE) from None
 
 
-def _completed_installer(row: AgentUpload, scope: ResourceScope) -> AgentConfig:
+def _completed_asset(row: AgentUpload, scope: ResourceScope) -> AgentConfig | NamedFileAsset:
     """Project the installed agent only when its durable upload binding matches."""
-    agent = AgentConfig.objects.filter(
-        pk=row.agent_id,
+    model = NamedFileAsset if row.asset_kind == "file" else AgentConfig
+    identifier = row.file_asset_id if row.asset_kind == "file" else row.agent_id
+    owner = row.file_owner_uuid if row.asset_kind == "file" else row.authority_owner_uuid
+    asset = model.objects.filter(
+        pk=identifier,
         s3_key=row.install_key,
-        owner_principal_uuid=row.authority_owner_uuid,
+        owner_principal_uuid=owner,
         **content_scope_fields(scope),
     ).first()
-    if agent is None:
+    if asset is None:
         raise CMSError(_CONTENT_UNAVAILABLE)
-    return agent
-
-
-def _validated_upload_metadata(name: str, filename: str, file_size: int, agent_type: str) -> str:
-    """Validate installer metadata against the incumbent registry and size bound."""
-    from cms.assets.validation import ValidationError as AssetValidationError
-    from cms.assets.validation import enforce_max_file_size_bytes, validate_file_extension
-
-    _bounded_upload_label(name, 100)
-    _bounded_upload_label(filename, 255)
-    if type(file_size) is not int or file_size <= 0 or agent_type not in AgentType.values:
-        raise CMSError(_INVALID_UPLOAD_METADATA)
-    try:
-        enforce_max_file_size_bytes(file_size)
-        file_format = validate_file_extension(filename)
-    except (ValueError, AssetValidationError):
-        raise CMSError(_INVALID_UPLOAD_METADATA) from None
-    if file_format.os_slug is None or not settings.AWS_S3_BUCKET_NAME:
-        raise CMSError(_UPLOAD_UNAVAILABLE)
-    return file_format.os_slug
-
-
-def _bounded_upload_label(value: object, maximum: int) -> None:
-    """Reject blank or oversized installer names and filenames."""
-    if not isinstance(value, str) or not value.strip() or len(value) > maximum:
-        raise CMSError(_INVALID_UPLOAD_METADATA)
+    return asset
 
 
 def _fence_upload_cancellation(

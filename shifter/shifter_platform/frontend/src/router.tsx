@@ -39,6 +39,7 @@ import { TeamPage } from "@/features/ctf/TeamPage";
 import { HomePage } from "@/features/home/HomePage";
 import { AccessCredentialsPage } from "@/features/credentials/AccessCredentialsPage";
 import { AgentsPage } from "@/features/mission-control/AgentsPage";
+import { FilesPage } from "@/features/mission-control/FilesPage";
 import { CredentialsPage } from "@/features/mission-control/CredentialsPage";
 import { NgfwDetailPage } from "@/features/mission-control/NgfwDetailPage";
 import { NgfwListPage } from "@/features/mission-control/NgfwListPage";
@@ -108,6 +109,7 @@ export const router = createBrowserRouter(
             { path: "terminal", element: <TerminalWorkspacePage /> },
             { path: "terminal/:instanceUuid", element: <TerminalWorkspacePage /> },
             { path: "agents", element: <AgentsPage /> },
+            { path: "files", element: <FilesPage /> },
             { path: "ngfw", element: <NgfwListPage /> },
             { path: "ngfw/setup", element: <NgfwWizardPage /> },
             { path: "ngfw/:appId", element: <NgfwDetailPage /> },

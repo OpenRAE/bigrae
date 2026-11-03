@@ -55,6 +55,7 @@ from . import _range_ownership as _api_range_ownership
 from . import _receipt as _api_receipt
 from . import _runtime_plugin_bindings as _api_runtime_plugin_bindings
 from . import _runtime_plugin_controller as _api_runtime_plugin_controller
+from . import _runtime_plugin_file_selection as _api_runtime_plugin_file_selection
 from . import _runtime_plugin_operations as _api_runtime_plugin_operations
 from . import _runtime_plugins as _api_runtime_plugins
 from . import _sharing as _api_sharing
@@ -320,6 +321,7 @@ RuntimePluginBindingRemovalAdmission = _api_runtime_plugin_bindings.RuntimePlugi
 RuntimePluginPackView = _api_runtime_plugin_bindings.RuntimePluginPackView
 bind_runtime_plugin = _api_runtime_plugin_bindings.bind_runtime_plugin
 has_runtime_plugin_binding = _api_runtime_plugin_bindings.has_runtime_plugin_binding
+runtime_plugin_file_selection = _api_runtime_plugin_file_selection.runtime_plugin_file_selection
 list_runtime_plugin_bindings = _api_runtime_plugin_bindings.list_runtime_plugin_bindings
 prepare_runtime_plugin_binding = _api_runtime_plugin_bindings.prepare_runtime_plugin_binding
 prepare_runtime_plugin_pack_binding_removal = _api_runtime_plugin_bindings.prepare_runtime_plugin_pack_binding_removal

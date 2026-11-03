@@ -17,6 +17,7 @@ from .runtime import (
     RuntimeInput,
     RuntimePlan,
     parse_input,
+    read_file_input,
 )
 
 
@@ -47,6 +48,8 @@ def plan_invocation(request: RuntimeInput) -> RuntimePlan:
     """Load one exact installed distribution; all exceptions become bounded failures."""
     original = RuntimeInput.model_validate_json(request.model_dump_json())
     try:
+        for name in original.files:
+            read_file_input(original, name)
         plugin = _load_plugin(request.manifest)
         result = RuntimePlan.model_validate(plugin.plan(request))
         result.authorize(original)

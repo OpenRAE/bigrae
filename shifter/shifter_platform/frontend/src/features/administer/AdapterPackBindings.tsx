@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router";
 
 import {
   useAdapterPackDetail,
@@ -10,6 +11,7 @@ import {
   type AdapterTargetImageProfile,
 } from "@/api/adapter-packs";
 import type { Adapter } from "@/api/adapters";
+import { useFileAssets } from "@/api/files";
 import { ApiError, describeMutationError } from "@/api/errors";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -17,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { missionControlFilesPath } from "@/features/mission-control/routes";
 
 import { manifestPreview } from "./adapter-manifest";
 import { PackUploadForm } from "./PackUploadForm";
@@ -180,6 +183,7 @@ function PackAssignmentForm({ organization, pack, adapters, onSaved }: Readonly<
   const [installation, setInstallation] = useState(pack.binding?.installation_id ?? "");
   const [targets, setTargets] = useState<Record<string, string>>(pack.binding?.bindings.targets ?? {});
   const [parameters, setParameters] = useState<Record<string, string>>(pack.binding?.bindings.parameters ?? {});
+  const [fileAssets, setFileAssets] = useState<Record<string, string>>(pack.binding?.bindings.file_assets ?? {});
   const [imageProfiles, setImageProfiles] = useState<Record<string, AdapterTargetImageProfile>>(
     pack.binding?.bindings.image_profiles ?? {},
   );
@@ -189,17 +193,21 @@ function PackAssignmentForm({ organization, pack, adapters, onSaved }: Readonly<
   const adapter = adapters.find((row) => row.id === installation);
   const requiredTargets = declaredNames(adapter?.manifest, "required_bindings");
   const requiredParameters = declaredNames(adapter?.manifest, "required_parameters");
+  const requiredFiles = declaredNames(adapter?.manifest, "required_files");
+  const files = useFileAssets(requiredFiles.length ? { organization_uuid: organization } : null);
+  const fileChoices = new Set(files.data?.files.map((file) => file.uuid) ?? []);
   const targetChoices = new Set(pack.targets.map((row) => row.address));
   const valid = adapter && (!enabled || adapter.state === "ready") && requiredTargets.length > 0
     && requiredTargets.every((name) => targetChoices.has(targets[name]))
     && requiredParameters.every((name) => parameters[name] !== undefined)
+    && requiredFiles.every((name) => fileChoices.has(fileAssets[name]))
     && Object.entries(imageProfiles).every(([name, profile]) => requiredTargets.includes(name) && validImageProfile(profile));
   const manifest = manifestPreview(adapter?.manifest);
   return <div className="space-y-4 rounded border p-4">
     <h3 className="font-semibold">Assign an adapter to {pack.name}</h3>
     <Label htmlFor="pack-adapter">Installed adapter version</Label>
     <select id="pack-adapter" className="block w-full rounded border bg-background p-2" value={installation}
-      disabled={save.isPending} onChange={(event) => { setInstallation(event.target.value); setTargets({}); setParameters({}); save.reset(); }}>
+      disabled={save.isPending} onChange={(event) => { setInstallation(event.target.value); setTargets({}); setParameters({}); setFileAssets({}); save.reset(); }}>
       <option value="">Choose an adapter</option>
       {adapters.map((row) => { const preview = manifestPreview(row.manifest); return <option key={row.id} value={row.id}
         disabled={row.state !== "ready" && row.id !== pack.binding?.installation_id}>
@@ -231,6 +239,20 @@ function PackAssignmentForm({ organization, pack, adapters, onSaved }: Readonly<
       <Input id={`plugin-parameter-${name}`} maxLength={8192} value={parameters[name] ?? ""} disabled={save.isPending}
         onChange={(event) => setParameters({ ...parameters, [name]: event.target.value })} />
     </div>)}
+    {requiredFiles.length ? <div className="space-y-3">
+      <p>Select the files this adapter requires. New ranges use the current version; existing ranges retain their admitted version.</p>
+      <Link className="underline" to={missionControlFilesPath(organization)}>Manage organization files</Link>
+      {files.isPending ? <output className="block">Loading files…</output> : null}
+      {files.error ? <Alert variant="destructive"><AlertDescription>{describeMutationError(files.error, "Files could not be loaded.")}</AlertDescription></Alert> : null}
+      {requiredFiles.map((name) => <div key={name} className="space-y-2">
+        <Label htmlFor={`plugin-file-${name}`}>File for {name}</Label>
+        <select id={`plugin-file-${name}`} className="block w-full rounded border bg-background p-2" value={fileAssets[name] ?? ""}
+          disabled={save.isPending || !files.data} onChange={(event) => setFileAssets({ ...fileAssets, [name]: event.target.value })}>
+          <option value="">Choose an organization file</option>
+          {files.data?.files.map((file) => <option key={file.uuid} value={file.uuid}>{file.name} ({file.file_size_bytes} bytes)</option>)}
+        </select>
+      </div>)}
+    </div> : null}
     <div className="flex items-center gap-2">
       <input id="pack-adapter-enabled" type="checkbox" checked={enabled} disabled={save.isPending}
         onChange={(event) => setEnabled(event.target.checked)} />
@@ -242,6 +264,7 @@ function PackAssignmentForm({ organization, pack, adapters, onSaved }: Readonly<
       onConfirm={() => save.mutate({ installation_id: installation, pack_digest: pack.pack_digest, enabled,
         bindings: { targets: Object.fromEntries(requiredTargets.map((name) => [name, targets[name]])),
           parameters: Object.fromEntries(requiredParameters.map((name) => [name, parameters[name]])),
+          ...(requiredFiles.length ? { file_assets: Object.fromEntries(requiredFiles.map((name) => [name, fileAssets[name]])) } : {}),
           image_profiles: Object.fromEntries(requiredTargets.filter((name) => imageProfiles[name])
             .map((name) => [name, imageProfiles[name]])) },
       }, { onSuccess: () => { setConfirm(false); onSaved(); } })}>

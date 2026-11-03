@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from shared.identity_scope import ResourceScope
 
@@ -32,7 +32,7 @@ def complete_upload(user: object, upload_token: str) -> AgentConfig:
     """Install only bytes retained by a live native upload admission."""
     from ._scoped_uploads import complete_scoped_upload
 
-    return complete_scoped_upload(require_native_content_credential(user), upload_token)
+    return cast("AgentConfig", complete_scoped_upload(require_native_content_credential(user), upload_token))
 
 
 def cancel_upload(user: object, upload_token: str) -> None:

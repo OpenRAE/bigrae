@@ -196,11 +196,12 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       {
         surface: "Assets",
         routeName: "mission_control:agents",
-        purpose: "Operational resources: agents, NGFW, credentials.",
+        purpose: "Operational resources: agents, files, NGFW, credentials.",
         routePath: "/mission-control/agents/",
         iconKey: "boxes",
         children: [
           { surface: "Agents", routeName: "mission_control:agents", purpose: "Inspect or delete available agents.", routePath: "/mission-control/agents/", iconKey: "bot", external: false },
+          { surface: "Files", routeName: "mission_control:files", purpose: "Upload and manage named adapter files.", routePath: "/mission-control/files/", iconKey: "scroll-text", external: false },
           { surface: "NGFW", routeName: "mission_control:ngfw_list", purpose: "List NGFW instances.", routePath: "/mission-control/ngfw/", iconKey: "shield", external: false },
           { surface: "Credentials", routeName: "mission_control:credentials", purpose: "List reusable credentials.", routePath: "/mission-control/credentials/", iconKey: "key-round", external: false },
         ],
