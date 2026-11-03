@@ -6,9 +6,10 @@ import gzip
 import hashlib
 import re
 import tarfile
+from collections.abc import Buffer
 from contextlib import ExitStack
 from dataclasses import dataclass, field
-from io import BufferedIOBase, RawIOBase
+from io import BufferedIOBase, BufferedReader, RawIOBase
 from pathlib import Path, PurePosixPath
 from typing import IO, TYPE_CHECKING, cast
 
@@ -105,6 +106,17 @@ class _BoundedReader(RawIOBase):
             raise TrialArchiveError("Expanded archive exceeds its bound")
         return raw
 
+    def readable(self) -> bool:
+        """Expose the standard read-only raw stream capability."""
+        return True
+
+    def readinto(self, buffer: Buffer) -> int:
+        """Fill a standard buffered-reader request through the same byte limits."""
+        view = memoryview(buffer).cast("B")
+        raw = self.read(len(view))
+        view[: len(raw)] = raw
+        return len(raw)
+
 
 class _BoundedTarFile(tarfile.TarFile):
     """Keep validation state on the archive that owns the parsing hooks."""
@@ -124,7 +136,8 @@ class _BoundedTarInfo(tarfile.TarInfo):
             cast(_BoundedTarFile, archive).trial_end_marker = True
         member = cls.frombuf(header, archive.encoding, archive.errors)
         member.offset = archive.fileobj.tell() - tarfile.BLOCKSIZE
-        return member._proc_member(archive)  # type: ignore[attr-defined]  # CPython parser hook is absent from typeshed.
+        # CPython parser hook is absent from typeshed.
+        return member._proc_member(archive)  # type: ignore[attr-defined]
 
     def _bound_extension(self, archive: tarfile.TarFile) -> None:
         """Reject oversized extension metadata before the standard parser allocates it."""
@@ -316,7 +329,7 @@ def _scan(
         magic = compressed.read(2)
         compressed.seek(0)
         source = stack.enter_context(gzip.GzipFile(fileobj=compressed)) if magic == b"\x1f\x8b" else compressed
-        bounded = _BoundedReader(source)
+        bounded = stack.enter_context(BufferedReader(_BoundedReader(source), buffer_size=tarfile.RECORDSIZE))
         archive = stack.enter_context(_BoundedTarFile.open(fileobj=bounded, mode="r|", tarinfo=_BoundedTarInfo))
         for index, member in enumerate(archive):
             _consume_member(state, archive, member, index, expected, formats)

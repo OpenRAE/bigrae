@@ -123,7 +123,12 @@ def _verify_byte_reference(value: JsonObject, inventory: dict[str, tuple[int, st
     actual = inventory.get(path)
     if actual is None or checksum.get("algorithm") != "sha256" or actual[1] != checksum.get("value"):
         raise TrialArchiveError("Declared evidence bytes are missing or corrupt")
-    if "size_bytes" in value and (type(value["size_bytes"]) is not int or actual[0] != value["size_bytes"]):
+    _verify_byte_size(value, actual[0])
+
+
+def _verify_byte_size(value: JsonObject, actual_size: int) -> None:
+    """Reject malformed or differing optional sizes on declared byte references."""
+    if "size_bytes" in value and (type(value["size_bytes"]) is not int or actual_size != value["size_bytes"]):
         raise TrialArchiveError("Declared evidence size differs from the inventory")
 
 
@@ -209,11 +214,15 @@ def _has_capture_bytes(
 
 
 @overload
-def _timestamp(value: str) -> datetime: ...
+def _timestamp(value: str) -> datetime:
+    """Parse a required public-contract timestamp."""
+    ...
 
 
 @overload
-def _timestamp(value: None) -> None: ...
+def _timestamp(value: None) -> None:
+    """Preserve an unbounded optional timestamp."""
+    ...
 
 
 def _timestamp(value: str | None) -> datetime | None:
@@ -364,6 +373,13 @@ def _validate_plan_identity(
         raise TrialArchiveError("Archive belongs to another experiment or plan")
     if run.run_id != expected.run_id or run.task_ref != plan.input_refs.task_ref:
         raise TrialArchiveError("Archive run or task identity differs")
+    _validate_entry_identity(plan, run, expected)
+
+
+def _validate_entry_identity(
+    plan: AdmittedTrialPlanModel, run: ExperimentRunModel, expected: TrialArchiveIdentity
+) -> None:
+    """Join the expected entry identity and digest to its admitted run."""
     entry = plan.entries.get(expected.entry_id)
     if entry is None or entry.run_id != run.run_id or entry.entry_digest != expected.entry_digest:
         raise TrialArchiveError("Archive run differs from the expected entry")
