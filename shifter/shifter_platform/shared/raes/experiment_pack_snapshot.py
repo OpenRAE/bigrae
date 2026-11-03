@@ -10,6 +10,23 @@ from pathlib import Path
 from shared.raes.package_loader import RaesPackageError
 
 
+def _copy_file(descriptor: int, name: str, target: Path, remaining: int) -> int:
+    """Copy one regular file with a descriptor fence and an enforced byte budget."""
+    fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor)
+    copied = 0
+    with os.fdopen(fd, "rb") as source:
+        metadata = os.fstat(source.fileno())
+        if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > remaining:
+            raise RaesPackageError("Experiment pack exceeds the byte or file-type bound")
+        with target.open("xb") as output:
+            while chunk := source.read(min(1024**2, remaining - copied + 1)):
+                copied += len(chunk)
+                if copied > remaining:
+                    raise RaesPackageError("Experiment pack exceeds the byte bound")
+                output.write(chunk)
+    return copied
+
+
 @contextmanager
 def stage_local_experiment_pack(
     root: Path,
@@ -33,15 +50,5 @@ def stage_local_experiment_pack(
                     raise RaesPackageError("Experiment pack contains a linked directory")
                 (target / relative / name).mkdir()
             for name in files:
-                fd = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=descriptor)
-                with os.fdopen(fd, "rb") as source:
-                    metadata = os.fstat(source.fileno())
-                    if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > max_bytes - total:
-                        raise RaesPackageError("Experiment pack exceeds the byte or file-type bound")
-                    with (target / relative / name).open("xb") as output:
-                        while chunk := source.read(min(1024**2, max_bytes - total + 1)):
-                            total += len(chunk)
-                            if total > max_bytes:
-                                raise RaesPackageError("Experiment pack exceeds the byte bound")
-                            output.write(chunk)
+                total += _copy_file(descriptor, name, target / relative / name, max_bytes - total)
         yield target

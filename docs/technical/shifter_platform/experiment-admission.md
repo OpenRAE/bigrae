@@ -63,6 +63,7 @@ Destination and resource limits are pinned at admission.
 Database triggers forbid changes to batch inputs and entry identities.
 Tenant plan identity and entry/run uniqueness constraints prevent ambiguous reloads.
 Operational changes cannot replace scientific inputs.
+Immutable service projections live in the private `_experiment_batch_records` module; callers use the public `cms.services` facade.
 
 Reload verifies the retained digest and the released sealed-plan validator.
 It returns a fresh in-memory projection, so caller mutation cannot change the stored record.

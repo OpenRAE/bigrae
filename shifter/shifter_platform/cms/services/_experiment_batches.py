@@ -6,8 +6,9 @@ import hashlib
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass
+from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 from uuid import UUID, uuid4
 
 from django.conf import settings
@@ -36,49 +37,14 @@ from shared.raes.package_loader import RaesPackageError, resolve_pack_root
 from workspaces.services import OrganizationAuthorizationError
 
 from ._content_authority import content_scope, fence_content_scope, require_content_scope
+from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
 from ._tenant_pack_authority import TenantPackAdmission, admit_tenant_pack, fence_tenant_pack
 
 _UNAVAILABLE = "Experiment operation unavailable"
 
 
-@dataclass(frozen=True, slots=True)
-class RetainedExperimentBatch:
-    """A fresh authorized copy; its scientific identities belong to RAES."""
-
-    id: UUID
-    inputs: dict
-
-    @property
-    def expected_trials(self) -> int:
-        """Return the complete admitted entry count."""
-        return len(self.inputs["plan"]["entries"])
-
-    def summary(self) -> dict:
-        """Expose identities and limits without scientific bodies."""
-        return {
-            "id": str(self.id),
-            "plan_id": self.inputs["plan"]["plan_id"],
-            "plan_digest": self.inputs["plan"]["plan_digest"],
-            "expected_trials": self.expected_trials,
-            "resource_limits": self.inputs["resource_limits"],
-        }
-
-
-@dataclass(frozen=True, slots=True)
-class ExperimentClaim:
-    """An exclusive initial attempt over an already allocated run."""
-
-    token: UUID
-    batch_id: UUID
-    plan_entry_id: str
-    run_id: str
-    state: str
-    worker_ref: str
-    collection_receipt_id: UUID | None
-    cleanup_recorded: bool
-
-
 def _authorize(credential: CredentialContext, organization_uuid: UUID, operation: str) -> TenantPackAdmission:
+    """Authorize the native tenant operation without disclosing denial details."""
     try:
         return admit_tenant_pack(credential, organization_uuid, operation)
     except OrganizationAuthorizationError:
@@ -86,6 +52,7 @@ def _authorize(credential: CredentialContext, organization_uuid: UUID, operation
 
 
 def _fence(admission: TenantPackAdmission) -> None:
+    """Recheck credential and ancestry inside the current transaction."""
     try:
         fence_tenant_pack(admission)
     except OrganizationAuthorizationError:
@@ -93,6 +60,7 @@ def _fence(admission: TenantPackAdmission) -> None:
 
 
 def _audit(admission: TenantPackAdmission, reference: UUID, disposition: str) -> None:
+    """Record opaque operational identifiers through the strict audit boundary."""
     audit_log(
         AuditEvent(
             entity_type=AuditEntityType.EXPERIMENT,
@@ -107,6 +75,7 @@ def _audit(admission: TenantPackAdmission, reference: UUID, disposition: str) ->
 
 
 def _project(row: ExperimentBatch) -> RetainedExperimentBatch:
+    """Verify retained integrity before returning a fresh scientific projection."""
     if hashlib.sha256(row.retained_json.encode()).hexdigest() != row.retained_digest:
         raise CMSError(_UNAVAILABLE)
     try:
@@ -133,6 +102,7 @@ def load_experiment_batch(
 
 
 def _load(admission: TenantPackAdmission, batch_id: UUID) -> RetainedExperimentBatch:
+    """Load only a batch owned by the authorized organization."""
     row = ExperimentBatch.objects.filter(pk=batch_id, organization_uuid=admission.organization_uuid).first()
     if row is None:
         raise CMSError(_UNAVAILABLE)
@@ -141,6 +111,7 @@ def _load(admission: TenantPackAdmission, batch_id: UUID) -> RetainedExperimentB
 
 @contextmanager
 def _pack_snapshot(source: RaesPackageSource) -> Iterator[Path]:
+    """Stage installed bytes through the existing local or object-pack boundary."""
     if source.source_kind == "repo":
         root = resolve_pack_root(source.package_ref, package_root=Path(settings.RAES_PACKAGE_ROOT))
         with stage_local_experiment_pack(
@@ -164,7 +135,8 @@ def _pack_snapshot(source: RaesPackageSource) -> Iterator[Path]:
         raise CMSError(_UNAVAILABLE)
 
 
-def _destination(organization_uuid: UUID, *, locked: bool = False) -> dict:
+def _destination(organization_uuid: UUID, *, locked: bool = False) -> dict[str, Any]:
+    """Require an approved archive destination, optionally locking its policy."""
     rows = TrialArchiveDestination.objects.all()
     if locked:
         rows = rows.select_for_update()
@@ -172,6 +144,23 @@ def _destination(organization_uuid: UUID, *, locked: bool = False) -> dict:
     if row is None:
         raise CMSError("Approved experiment archive destination required")
     return dict(row)
+
+
+def _source_unchanged(
+    current: RaesPackageSource | None, source: RaesPackageSource, admission: TenantPackAdmission
+) -> bool:
+    """Compare all source custody fields after acquiring the database fence."""
+    if current is None or content_scope(current) != admission.scope:
+        return False
+    fields = (
+        "scope_generation",
+        "package_digest",
+        "package_ref",
+        "package_version",
+        "source_kind",
+        "owner_principal_uuid",
+    )
+    return all(getattr(current, name) == getattr(source, name) for name in fields)
 
 
 def admit_experiment_batch(
@@ -234,14 +223,7 @@ def admit_experiment_batch(
         _fence(admission)
         current = RaesPackageSource.objects.select_for_update().filter(pk=source.pk).first()
         if (
-            current is None
-            or content_scope(current) != admission.scope
-            or current.scope_generation != source.scope_generation
-            or current.package_digest != source.package_digest
-            or current.package_ref != source.package_ref
-            or current.package_version != source.package_version
-            or current.source_kind != source.source_kind
-            or current.owner_principal_uuid != source.owner_principal_uuid
+            not _source_unchanged(current, source, admission)
             or _destination(organization_uuid, locked=True) != destination
         ):
             raise CMSError(_UNAVAILABLE)
@@ -266,6 +248,7 @@ def admit_experiment_batch(
 
 
 def _claim(row: ExperimentEntry) -> ExperimentClaim:
+    """Project one already bound attempt without changing its identities."""
     if row.token is None:
         raise CMSError(_UNAVAILABLE)
     return ExperimentClaim(
@@ -344,6 +327,7 @@ def recover_experiment_claim(
 
 
 def _attempt(organization_uuid: UUID, token: UUID, *, locked: bool) -> ExperimentEntry:
+    """Resolve the exact tenant-owned attempt and optionally lock its row."""
     if not isinstance(token, UUID):
         raise CMSError(_UNAVAILABLE)
     rows = ExperimentEntry.objects.all()
@@ -434,15 +418,26 @@ def record_experiment_collection(
             .first()
         )
         destination = batch.inputs["destination"]
+        if receipt is None:
+            raise CMSError("Experiment collection receipt mismatch")
+        actual_transfer = (
+            receipt.transfer.organization_uuid,
+            receipt.transfer.state,
+            receipt.transfer.expected,
+            receipt.transfer.bucket,
+            receipt.transfer.retention_days,
+        )
+        expected_transfer = (
+            organization_uuid,
+            "committed",
+            expected,
+            destination["bucket"],
+            destination["retention_days"],
+        )
         if (
-            receipt is None
-            or receipt.transfer.organization_uuid != organization_uuid
-            or receipt.transfer.state != "committed"
-            or receipt.transfer.expected != expected
+            actual_transfer != expected_transfer
             or (receipt.expires_at is not None and receipt.expires_at <= timezone.now())
-            or receipt.transfer.bucket != destination["bucket"]
             or not receipt.transfer.object_key.startswith(destination["prefix"] + "/trial-archives/")
-            or receipt.transfer.retention_days != destination["retention_days"]
             or _destination(organization_uuid, locked=True) != destination
             or (row.receipt_id is not None and row.receipt_id != receipt.id)
         ):

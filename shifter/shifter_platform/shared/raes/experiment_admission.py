@@ -99,7 +99,7 @@ def encode_retained(payload: object) -> str:
     return raw.decode("utf-8")
 
 
-def validate_retained(raw: str) -> dict:
+def validate_retained(raw: str) -> dict[str, Any]:
     """Validate retained plan ingress without compilation, sampling or allocation."""
     payload = cast(dict[str, Any], parse_bounded_json_object(raw, max_bytes=MAX_RETAINED_BYTES, max_depth=128))
     installed = dependency_tuple()
@@ -123,11 +123,13 @@ def validate_retained(raw: str) -> dict:
 
 
 def _concurrency(requested: int, configured: int, isolation: int) -> None:
+    """Keep requested concurrency inside both administrative and owner limits."""
     if type(requested) is not int or not 1 <= requested <= min(configured, isolation):
         raise ValueError("Requested concurrency exceeds configured or admitted limits")
 
 
-def _context(experiment: PackExperiment, authority: ExperimentAuthority) -> dict:
+def _context(experiment: PackExperiment, authority: ExperimentAuthority) -> dict[str, Any]:
+    """Compose explicit owner manifests into the released compiler context."""
     manifests = {}
     references = []
     for kind, manifest in (("backend", authority.backend), ("processor", authority.processor)):
@@ -242,36 +244,44 @@ class _ArtifactCustody:
         self.payload: dict[str, dict[str, Any]] = {}
         self.total = 0
 
+    def _reference(self, reference: ExperimentArtifactRefModel, exact_descriptor: bool) -> tuple[str, str]:
+        """Resolve an installed inventory identity while preserving exact selected pins."""
+        is_pack_uri = urlsplit(reference.uri).scheme == "raes-environment-pack"
+        if exact_descriptor and not is_pack_uri:
+            raise ValueError("Selected control-context content has no supported installed byte binding")
+        relative = pack_artifact_relative_path(reference.uri) if is_pack_uri else safe_archive_path(reference.uri)
+        artifact_id = reference.artifact_id if exact_descriptor else self.by_path.get(relative)
+        if artifact_id is None or (exact_descriptor and self.inventory.artifacts.get(artifact_id) != reference):
+            raise ValueError("Referenced experiment artifact is not exactly installed")
+        return relative, artifact_id
+
+    def _retain_bytes(self, relative: str, reference: ExperimentArtifactRefModel | str, media_type: str) -> int:
+        """Verify and cache original bytes once, enforcing the aggregate byte limit."""
+        if relative in self.payload:
+            return 0
+        resolved = resolve_pack_artifact(
+            self.root,
+            reference,
+            artifact_limits=AssociatedArtifactValidationLimits(max_artifact_bytes=MAX_DOCUMENT_BYTES - self.total),
+        )
+        data = resolved.data
+        self.total += len(data)
+        _check_artifact_credentials(data, media_type)
+        retained = {
+            "base64": base64.b64encode(data).decode("ascii"),
+            "sha256": hashlib.sha256(data).hexdigest(),
+            "size_bytes": len(data),
+        }
+        self.payload[relative] = retained
+        return len(canonical_json_bytes(retained)) + len(canonical_json_bytes(relative)) + 8
+
     def retain(self, references: list[ExperimentArtifactRefModel], *, exact_descriptor: bool = False) -> int:
         """Retain actual bytes once; repeated references must agree with their owner pins."""
         added = 0
         for reference in references:
-            is_pack_uri = urlsplit(reference.uri).scheme == "raes-environment-pack"
-            if exact_descriptor and not is_pack_uri:
-                raise ValueError("Selected control-context content has no supported installed byte binding")
-            relative = pack_artifact_relative_path(reference.uri) if is_pack_uri else safe_archive_path(reference.uri)
-            artifact_id = reference.artifact_id if exact_descriptor else self.by_path.get(relative)
-            if artifact_id is None or (exact_descriptor and self.inventory.artifacts.get(artifact_id) != reference):
-                raise ValueError("Referenced experiment artifact is not exactly installed")
-            retained = self.payload.get(relative)
-            if retained is None:
-                resolved = resolve_pack_artifact(
-                    self.root,
-                    reference if exact_descriptor else artifact_id,
-                    artifact_limits=AssociatedArtifactValidationLimits(
-                        max_artifact_bytes=MAX_DOCUMENT_BYTES - self.total
-                    ),
-                )
-                data = resolved.data
-                self.total += len(data)
-                _check_artifact_credentials(data, reference.media_type)
-                retained = {
-                    "base64": base64.b64encode(data).decode("ascii"),
-                    "sha256": hashlib.sha256(data).hexdigest(),
-                    "size_bytes": len(data),
-                }
-                self.payload[relative] = retained
-                added += len(canonical_json_bytes(retained)) + len(canonical_json_bytes(relative)) + 8
+            relative, artifact_id = self._reference(reference, exact_descriptor)
+            added += self._retain_bytes(relative, reference if exact_descriptor else artifact_id, reference.media_type)
+            retained = self.payload[relative]
             if (
                 reference.checksum.algorithm != "sha256"
                 or retained["sha256"] != reference.checksum.value
@@ -309,7 +319,7 @@ def _selected_control_context_artifacts(
     return references
 
 
-def validate_experiment_cleanup(inputs: dict, entry_id: str, attempt_id: str, receipt: object) -> str:
+def validate_experiment_cleanup(inputs: dict[str, Any], entry_id: str, attempt_id: str, receipt: object) -> str:
     """Validate a trusted owner's cleanup report against the retained trial authority."""
     try:
         parsed = parse_bounded_json_object(canonical_json_bytes(receipt), max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
@@ -327,7 +337,7 @@ def validate_experiment_cleanup(inputs: dict, entry_id: str, attempt_id: str, re
 
 
 def experiment_archive_identity(
-    inputs: dict,
+    inputs: dict[str, Any],
     entry_id: str,
     attempt_id: str,
     run_version: str = "1",
@@ -348,22 +358,8 @@ def experiment_archive_identity(
     )
 
 
-def compile_pack_experiment(
-    root: Path,
-    *,
-    experiment_id: str,
-    authority: object,
-    concurrency: int,
-    experiment_version: str | None = None,
-) -> dict:
-    """Compile one explicitly selected installed experiment and retain its inputs."""
-    dependencies = dependency_tuple()
-    encoded_authority = canonical_json_bytes(authority)
-    parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
-    reject_retained_credentials(parsed)
-    configuration = ExperimentAuthority.model_validate(parsed)
-    if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
-        raise ValueError("Requested concurrency exceeds configured limit")
+def _select_experiment(root: Path, experiment_id: str, experiment_version: str | None) -> PackExperiment:
+    """Select exactly one released pack experiment without rewriting authoring inputs."""
     candidates = [
         item
         for item in load_pack_experiments(root)
@@ -372,7 +368,26 @@ def compile_pack_experiment(
     ]
     if len(candidates) != 1:
         raise ValueError("Experiment selection is absent or ambiguous")
-    experiment = candidates[0]
+    return candidates[0]
+
+
+def compile_pack_experiment(
+    root: Path,
+    *,
+    experiment_id: str,
+    authority: object,
+    concurrency: int,
+    experiment_version: str | None = None,
+) -> dict[str, Any]:
+    """Compile one explicitly selected installed experiment and retain its inputs."""
+    dependencies = dependency_tuple()
+    encoded_authority = canonical_json_bytes(authority)
+    parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
+    reject_retained_credentials(parsed)
+    configuration = ExperimentAuthority.model_validate(parsed)
+    if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
+        raise ValueError("Requested concurrency exceeds configured limit")
+    experiment = _select_experiment(root, experiment_id, experiment_version)
     request = experiment.compilation_request(**_context(experiment, configuration))
     result = compile_admitted_trial_plan(request)
     if result.plan is None:

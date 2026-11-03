@@ -68,10 +68,7 @@ from engine.services import resolve_model_access_range_reference as engine_resol
 from engine.services import resolve_model_access_range_views as engine_resolve_model_access_range_views
 from engine.services import resume_range as engine_resume_range
 from engine.services import validate_sharing_binding as engine_validate_sharing_binding
-from shared.audit import (
-    AuditEvent,
-    audit_log,
-)
+from shared.audit import AuditEvent, audit_log
 
 from ._agents import (
     create_agent,
@@ -85,15 +82,9 @@ from ._content_authority import set_catalog_publication
 from ._content_ingestion import PackRegistrationRequest, RegisteredPack, register_pack
 from ._content_scope_options import content_scope_options
 from ._credential_scope import range_credential_scope
-from ._credentials import (
-    create_credential,
-    delete_credential,
-    get_credential,
-    list_credentials,
-)
+from ._credentials import create_credential, delete_credential, get_credential, list_credentials
+from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
 from ._experiment_batches import (
-    ExperimentClaim,
-    RetainedExperimentBatch,
     admit_experiment_batch,
     claim_experiment_entry,
     load_experiment_batch,
@@ -134,12 +125,7 @@ from ._model_source_selection import list_usable_model_sources as list_usable_mo
 from ._model_source_selection import model_source_alias_options, resolve_model_source_sponsorship
 from ._model_source_selection import project_scenario_model_demands as project_scenario_model_demands
 from ._model_source_selection import resolve_model_source_selection as resolve_model_source_selection
-from ._ngfws import (
-    create_ngfw,
-    destroy_ngfw,
-    get_ngfw,
-    list_ngfws,
-)
+from ._ngfws import create_ngfw, destroy_ngfw, get_ngfw, list_ngfws
 from ._non_user_range_launch import NonUserWorkflow, create_non_user_range
 
 # --- Public service functions ------------------------------------------------
@@ -277,12 +263,7 @@ from ._trial_archives import (
 )
 from ._unified_authorization import range_authorization_binding as range_authorization_binding
 from ._unified_authorization import require_range_action as require_range_action
-from ._uploads import (
-    cancel_upload,
-    complete_upload,
-    get_storage_used,
-    initiate_upload,
-)
+from ._uploads import cancel_upload, complete_upload, get_storage_used, initiate_upload
 from ._user_offboarding import (
     TRANSFERABLE_RESOURCE_KINDS,
     OffboardingAuditContext,

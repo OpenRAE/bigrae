@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections import deque
 from collections.abc import Iterator
 from datetime import datetime
 from typing import overload
@@ -53,8 +54,7 @@ def _walk(value: object) -> Iterator[JsonObject]:
 
 def reject_retained_credentials(value: object) -> None:
     """Apply the same scientific-record credential policy before SQL retention."""
-    for _ in _walk(value):
-        pass
+    deque(_walk(value), maxlen=0)
 
 
 def _artifact_path(uri: str, run_id: str) -> str:
