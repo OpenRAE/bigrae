@@ -42,6 +42,7 @@ These retain their stated design authority and are not historical preflights:
 - [Trial archive custody design](trial-archive-custody.md)
 - [External runtime boundary](external-scenario-runtime-design.md)
 - [Named file assets and adapter inputs](named-file-assets-2719.md)
+- [Adapter values before provisioning](adapter-pre-provisioning-2718.md)
 
 - [Shared deployment configuration](deployment-root-consolidation-2089.md)
 - [Verification and adoption ownership](verification-adoption-ownership-design-2090.md)

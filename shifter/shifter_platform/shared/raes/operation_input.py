@@ -44,6 +44,7 @@ from shared.raes.participant_access import (
     ParticipantAccessError,
 )
 from shared.runtime_plugin_binding import RuntimePluginPin
+from shared.runtime_plugin_preparation import RuntimePreparation
 
 from .operation_input_candidates import MAX_IMAGE_CANDIDATES, MAX_IMAGE_KEYS, _validated_candidates
 from .operation_input_enrollment import _model_enrollments
@@ -93,6 +94,7 @@ class RaesInputBindings:
     access: Sequence[ParticipantAccessBinding] = ()
     artifact: Sequence[ArtifactBinding] = ()
     runtime_plugin: RuntimePluginPin | None = None
+    runtime_preparation: RuntimePreparation | None = None
     model_enrollments: tuple[ModelGuestBinding, ...] = ()
     remote_access: RaesRemoteAccess | None = None
 
@@ -113,6 +115,7 @@ _INPUT_KEYS = frozenset(
         "legacy_range_id",
         "egress_mode",
         "runtime_plugin",
+        "runtime_preparation",
         "model_enrollments",
         "resource_generation",
         "remote_access",
@@ -132,7 +135,15 @@ _INPUT_KEYS = frozenset(
 # ``remote_access`` (#2030) is emitted only for a range holding an OpenVPN
 # capability, so every other input stays byte-identical to the prior shape.
 _OPTIONAL_INPUT_KEYS = frozenset(
-    {"artifact_bindings", "egress_mode", "runtime_plugin", "model_enrollments", "resource_generation", "remote_access"}
+    {
+        "artifact_bindings",
+        "egress_mode",
+        "runtime_plugin",
+        "runtime_preparation",
+        "model_enrollments",
+        "resource_generation",
+        "remote_access",
+    }
 )
 
 # Mirrors ``installation.range_egress.RangeEgressMode`` without importing it (the
@@ -162,6 +173,7 @@ class RaesOperationInput:
     egress_mode: str
     _image_candidates: dict[str, tuple[dict[str, Any], ...]]
     runtime_plugin: RuntimePluginPin | None = None
+    runtime_preparation: RuntimePreparation | None = None
     model_enrollments: tuple[ModelGuestBinding, ...] = ()
     resource_generation: str | None = None
     remote_access: RaesRemoteAccess | None = None
@@ -329,6 +341,23 @@ def _validated_artifact_bindings(value: object) -> tuple[ArtifactBinding, ...]:
     return tuple(bindings)
 
 
+def _validated_preparation(obj: Mapping[str, Any], plugin: RuntimePluginPin | None) -> RuntimePreparation | None:
+    """Require retained selections to belong to this exact admitted executable and plan."""
+    preparation = None
+    if "runtime_preparation" in obj:
+        try:
+            preparation = RuntimePreparation.model_validate(obj["runtime_preparation"])
+            if plugin is None or "provision.prepare" not in plugin.manifest.capabilities:
+                raise ValueError("Missing preparation capability")
+            from shifter_adapter_sdk.runtime import canonical_digest
+
+            if preparation.pin_digest != plugin.digest or preparation.plan_digest != canonical_digest(obj["plan"]):
+                raise ValueError("Preparation identity changed")
+        except ValueError:
+            raise RaesOperationInputError("raes operation input runtime preparation is invalid") from None
+    return preparation
+
+
 def parse_raes_operation_input(payload: object) -> RaesOperationInput:
     """Validate an RAES operation-input payload and return the parsed projection.
 
@@ -346,6 +375,7 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
             plugin.bindings.validate_plan(obj["plan"])
         except ValueError:
             raise RaesOperationInputError("raes operation input runtime plugin binding is invalid") from None
+    preparation = _validated_preparation(obj, plugin)
     resource_generation = obj.get("resource_generation")
     if resource_generation is not None or obj["range_backend"] == "ec2":
         try:
@@ -371,6 +401,7 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
         egress_mode=_validated_egress_mode(obj.get("egress_mode")),
         _image_candidates=_validated_candidates(obj["image_candidates"]),
         runtime_plugin=plugin,
+        runtime_preparation=preparation,
         model_enrollments=_model_enrollments(obj, plugin),
         resource_generation=resource_generation,
         remote_access=remote_access,
@@ -412,6 +443,8 @@ def build_raes_operation_input(
         payload["artifact_bindings"] = [binding.to_transport() for binding in bindings.artifact]
     if bindings.runtime_plugin is not None:
         payload["runtime_plugin"] = bindings.runtime_plugin.model_dump(mode="json")
+    if bindings.runtime_preparation is not None:
+        payload["runtime_preparation"] = bindings.runtime_preparation.model_dump(mode="json")
     if bindings.model_enrollments:
         payload["model_enrollments"] = [row.model_dump(mode="json") for row in bindings.model_enrollments]
     if identity.resource_generation is not None:

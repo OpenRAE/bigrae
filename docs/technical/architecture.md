@@ -371,6 +371,15 @@ worker dispatch. File inputs grant no network access or cloud credentials.
 See the [named-file design](../architecture/named-file-assets-2719.md) for the
 trust boundaries, retention and admission checks.
 
+Adapters declaring `provision.prepare` may propose bounded scalar values for
+explicitly declared provisioning concerns. Core checks every original RAES
+authority, including overlapping exact constraints, before accepting a result.
+The worker encrypts its response with an invocation-specific key; accepted values
+remain encrypted in the existing range binding and invocation projection.
+Provisioning uses an execution-only copy, reports original addresses, and cleanup
+uses the retained selection. See the [pre-provisioning design](../architecture/adapter-pre-provisioning-2718.md)
+for first-effect, retry and cancellation boundaries.
+
 The 2026-10-28 logging and exception-handling cleanup (#2569) changed only the
 Ruff lint rules in the SDK package manifest. It did not change the adapter ABI,
 the public contracts, or the installation boundary on this page.

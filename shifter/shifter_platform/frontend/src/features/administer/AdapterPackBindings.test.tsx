@@ -57,6 +57,22 @@ describe("pack adapter assignments", () => {
     } }));
   });
 
+  it("assigns a preparation-only adapter with no guest selectors", async () => {
+    const preparation = { ...adapter, manifest: { ...(adapter.manifest as object),
+      capabilities: ["provision.prepare"], provisioning_concerns: ["synthetic-values"],
+      required_bindings: [], required_parameters: [], model_bindings: {} } };
+    renderRoute(<AdapterPackBindings organization="org-1" adapters={[preparation]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Configure Example pack" }));
+    fireEvent.change(await screen.findByLabelText("Installed adapter version"), { target: { value: adapter.id } });
+    expect(screen.queryByLabelText("Guest for server")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review assignment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save assignment" }));
+    await waitFor(() => expect(mockApi).toHaveBeenCalledWith(`${base}example/`, { method: "POST", body: {
+      installation_id: adapter.id, pack_digest: digest, enabled: true,
+      bindings: { targets: {}, parameters: {}, image_profiles: {} },
+    } }));
+  });
+
   it("provides accessible guest selectors and confirms the exact pack version before saving", async () => {
     const { container } = renderRoute(<AdapterPackBindings organization="org-1" adapters={[adapter]} />);
     await fillAssignment();
