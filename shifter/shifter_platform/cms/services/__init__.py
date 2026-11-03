@@ -255,6 +255,14 @@ from ._tenant_pack_removal import (
     relocate_tenant_pack_archive,
     request_tenant_pack_removal,
 )
+from ._trial_archives import (
+    TrialArchiveCollection,
+    configure_trial_archive_destination,
+    intake_trial_archive,
+    list_trial_archives,
+    purge_trial_archives,
+    retrieve_trial_archive,
+)
 from ._unified_authorization import range_authorization_binding as range_authorization_binding
 from ._unified_authorization import require_range_action as require_range_action
 from ._uploads import (
@@ -318,6 +326,7 @@ __all__ = (
     "RegisteredPack",
     "RetryKeyConflict",
     "RetrySafeLaunchOutcome",
+    "TrialArchiveCollection",
     "WorkspaceLaunchDenied",
     "WorkspaceLaunchQuotaExceeded",
     "attempt_warm_claim",
@@ -330,6 +339,7 @@ __all__ = (
     "change_range_model_sources",
     "complete_file_upload",
     "complete_upload",
+    "configure_trial_archive_destination",
     "confirm_ctf_receipt_binding",
     "confirm_tenant_pack_archive_absent",
     "connect_range_terminal",
@@ -411,6 +421,7 @@ __all__ = (
     "has_ready_active_range",
     "initiate_file_upload",
     "initiate_upload",
+    "intake_trial_archive",
     "is_event_range_cleanup_verified_absent",
     "list_agents",
     "list_credentials",
@@ -422,6 +433,7 @@ __all__ = (
     "list_range_scope_bindings",
     "list_ranges",
     "list_scenarios",
+    "list_trial_archives",
     "list_usable_model_sources",
     "load_runtime_file_inputs",
     "max_agent_file_size_bytes",
@@ -436,6 +448,7 @@ __all__ = (
     "project_range_cleanup_outcome",
     "project_scenario_images",
     "project_scenario_model_demands",
+    "purge_trial_archives",
     "range_credential_scope",
     "range_egress_compatible_with_event",
     "range_egress_compatible_with_scope",
@@ -467,6 +480,7 @@ __all__ = (
     "resolve_retry_recovery",
     "resume_range",
     "resume_range_by_request_id",
+    "retrieve_trial_archive",
     "revoke_range_model_sources",
     "run_event_range_lifecycle",
     "set_catalog_publication",

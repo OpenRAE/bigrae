@@ -38,6 +38,10 @@ source "googlecompute" "kali" {
   omit_external_ip = var.use_internal_ip
   use_iap          = var.use_internal_ip
 
+  // A run that does not publish deletes this VM, its disk (Packer names the disk
+  // after the VM), and the image with its build-run label (#2747).
+  instance_name = "packer-${var.build_id}"
+
   image_name        = "${var.image_prefix}-kali-{{timestamp}}"
   image_family      = "${var.image_prefix}-kali"
   image_description = "Kali Linux Rolling with kali-linux-headless, sshpass, Caldera, Claude Code (GCE)"
@@ -46,6 +50,7 @@ source "googlecompute" "kali" {
     managed-by      = "packer"
     image-type      = "kali"
     source-revision = var.source_revision
+    build-run       = var.build_id
   }
 }
 

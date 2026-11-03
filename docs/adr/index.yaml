@@ -1722,7 +1722,7 @@
       },
       {
         "id": "ADR-031-R4",
-        "description": "RAES backend diagnostics and operation evidence must be bounded, single-line, and free of backend realization detail (no terraform, ssm, ami-, cidr, subnet, secret, password, credential, or token substrings). Image ids, machine sizes, subnet allocation, provider configuration, and secrets are backend-owned realization and must not surface as authored RAES semantics or as evidence.",
+        "description": "RAES backend diagnostics and operation evidence must be bounded, single-line, and free of backend realization detail (no terraform, ssm, ami-, cidr, subnet, secret, password, credential, or token substrings). Image ids, machine sizes, subnet allocation, provider configuration, and secrets are backend-owned realization and must not surface as authored RAES semantics or as evidence. Restricted tenant trial archives are a separate custody boundary (ADR-031-R7); they do not widen operational sidecar, diagnostic, audit or public projection allowlists.",
         "checks": []
       },
       {
@@ -1733,6 +1733,11 @@
       {
         "id": "ADR-031-R6",
         "description": "The #1310/#1311 hard cut makes the RAES package-source registry the only scenario catalog and launch authority. The public create_range seam always dispatches a conformance-passed, digest-bound RAES package; no catalog selector, native-provisioning flag, legacy YAML/DB authoring path, CyberScript fallback, or same-schema rollback branch exists. Provision, status, and teardown select from persisted validated RAES range state. Private packs are installed independently through the tenant ingestion boundary; cloud qualification remains separately required.",
+        "checks": []
+      },
+      {
+        "id": "ADR-031-R7",
+        "description": "Tenant trial archive intake (#2740) uses the existing ObjectStorage abstraction and an explicitly configured approved tenant destination. CMS owns authorized custody and receipt metadata; portable run/evidence and sealed inventory contracts remain upstream-owned behind shared.raes. Preserve original records and declared evidence, including failed/partial attempts and honest loss disclosures, with credentials excluded under existing redaction rules. Publish a durable collection receipt atomically only after all declared present bytes are verified at the destination. Tenant-scoped identity plus identical bytes is idempotent; changed committed bytes conflict. A collection receipt permits disposal of the worker evidence copy, not trial success, range readiness, resource reuse or cloud cleanup. Retention and incomplete-transfer recovery are explicit and independent of pack removal and operational sidecar expiry. No legacy experiments runtime, duplicate scientific schema, automatic upload destination or new storage service is introduced. Boundary and provider-precondition caveats: docs/architecture/experiments-trial-archive-intake-boundary-2740.md.",
         "checks": []
       }
     ],
@@ -1748,6 +1753,7 @@
       "docs/architecture/aces-runtime-target-backend-manifest-preflight-1233.md",
       "docs/architecture/aces-backend-manifest-realizability-preflight-1563.md",
       "docs/architecture/aces-account-credentials-preflight-1560.md",
+      "docs/architecture/experiments-trial-archive-intake-boundary-2740.md",
       ".importlinter",
       "shifter/shifter_platform/shared/raes/domain_topology.py",
       "shifter/shifter_platform/shared/raes/runtime_target.py",
