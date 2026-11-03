@@ -1513,6 +1513,10 @@ through SQL. Acceptance and cancellation share the Range lock; accepted mapping
 and planned invocation become visible atomically. A destroy input retains that
 mapping, or explicitly records that the mandatory pre-effect gate never opened.
 The latter is a scoped proof of no effects, not an inference from a missing Job.
+Core checks the complete future destroy envelope before accepting a preparation.
+Prepared cleanup uses the original input; unprepared cleanup reads no mutable
+image registry or guest material. Oversized encrypted snapshots are refused
+before any provider effect.
 Accepted preparation continues through normal provider inventory/readback.
 
 Targeted SDK, Engine PostgreSQL, provisioner and admission-policy tests cover

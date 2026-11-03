@@ -16,11 +16,12 @@ from shifter_adapter_sdk.runtime import RuntimeInput, RuntimePlan
 
 from shared.cloud.runtime_plugins import interrupt_plugin, launch_plugin, observe_plugin
 from shared.operation_envelope import validate_operation_envelope
-from shared.raes.operation_input import parse_raes_operation_input
+from shared.raes.operation_input import RaesOperationInput, parse_raes_operation_input
 from shared.runtime_file_inputs import RuntimeFileBinding, load_file_input_material
 from shared.runtime_plugin_binding import runtime_plugin_requests
 from shared.runtime_plugin_preparation import RuntimePreparation
 
+from ._runtime_plugin_cleanup import preparation_cleanup_payload
 from ._runtime_plugin_controller import _file_secret, _pull_secret
 from ._runtime_plugin_preparation import (
     approve_invocation,
@@ -34,7 +35,7 @@ logger = logging.getLogger(__name__)
 
 def queue_runtime_plugin_plans(envelope: dict[str, Any]) -> None:
     """Called in the launch transaction; never imports the installed distribution."""
-    from engine.models import Range, RuntimePluginInvocation
+    from engine.models import RuntimePluginInvocation
 
     if (envelope["resource"], envelope["operation"]) != ("raes-range", "provision"):
         return
@@ -54,9 +55,7 @@ def queue_runtime_plugin_plans(envelope: dict[str, Any]) -> None:
         parsed.legacy_range_id,
         backend=parsed.range_backend,
     )
-    retained = None
-    if "provision.prepare" in parsed.runtime_plugin.manifest.capabilities:
-        retained = retained_preparation(Range.objects.get(pk=parsed.legacy_range_id), parsed.runtime_plugin)
+    retained = _retained_for_operation(parsed, envelope)
     rows = []
     for request in requests:
         row = RuntimePluginInvocation(
@@ -73,6 +72,20 @@ def queue_runtime_plugin_plans(envelope: dict[str, Any]) -> None:
             row.result = retained.model_dump(mode="json")
         rows.append(row)
     RuntimePluginInvocation.objects.bulk_create(rows)
+
+
+def _retained_for_operation(parsed: RaesOperationInput, envelope: dict[str, Any]) -> RuntimePreparation | None:
+    """Reserve enough transport budget even for cancellation before preparation."""
+    from engine.models import Range
+
+    pin = parsed.runtime_plugin
+    if pin is None or "provision.prepare" not in pin.manifest.capabilities:
+        return None
+    record = retained_preparation(Range.objects.get(pk=parsed.legacy_range_id), pin)
+    if record is None:
+        raise ValueError("Runtime preparation is unavailable")
+    preparation_cleanup_payload(envelope, record)
+    return record
 
 
 def _verify_operation_identity(operation: OperationInput, envelope: dict[str, Any]) -> None:
