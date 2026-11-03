@@ -13,6 +13,10 @@ range bindings. Installation administrators use the existing
 native credential and assigned organization. The portal queues an operation;
 cloud inventory runs in the existing provisioner worker with its own identity.
 No cloud IAM credential or permission is added to the portal or adapter worker.
+The CMS operation policy and HTTP authorization inventory bind registration,
+listing, retry and disable to this installation action. Engine resolves the
+registry collection or exact registration; ordinary content authority grants no
+project-administration access.
 
 Use the existing `ProvisionerLaunchIntent`, immutable `OperationInput` and
 append-only result inbox for `range-project/register`. The registration UUID is
