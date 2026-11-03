@@ -9,7 +9,7 @@ from django.db import migrations, models
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("engine", "0118_remove_rangeauthoritychange_range_change_operation_and_more"),
+        ("engine", "0119_runtime_plugin_preparation"),
     ]
 
     operations = [

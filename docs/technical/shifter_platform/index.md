@@ -1,5 +1,7 @@
 # BigRAE Platform
 
+- [Experiment admission](experiment-admission.md) - Immutable inputs and fenced operational claims
+
 Django application architecture for the BigRAE cyber range platform.
 
 - [Unified access credentials](access-credentials.md)—admission, lifecycle and renewable client setup.

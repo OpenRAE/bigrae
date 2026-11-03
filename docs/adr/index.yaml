@@ -1741,6 +1741,11 @@
         "id": "ADR-031-R7",
         "description": "Tenant trial archive intake (#2740) uses the existing ObjectStorage abstraction and an explicitly configured approved tenant destination. CMS owns authorized custody and receipt metadata; portable run/evidence and sealed inventory contracts remain upstream-owned behind shared.raes. Preserve original records and declared evidence, including failed/partial attempts and honest loss disclosures, with credentials excluded under existing redaction rules. Publish a durable collection receipt atomically only after all declared present bytes are verified at the destination. Tenant-scoped identity plus identical bytes is idempotent; changed committed bytes conflict. A collection receipt permits disposal of the worker evidence copy, not trial success, range readiness, resource reuse or cloud cleanup. Retention and incomplete-transfer recovery are explicit and independent of pack removal and operational sidecar expiry. No legacy experiments runtime, duplicate scientific schema, automatic upload destination or new storage service is introduced. Boundary and provider-precondition caveats: docs/architecture/experiments-trial-archive-intake-boundary-2740.md.",
         "checks": []
+      },
+      {
+        "id": "ADR-031-R8",
+        "description": "Pack experiment admission (#2742) consumes released env-packs experiment loading and RAES trial compilation, validation, instantiation and schedule/isolation contracts behind shared.raes. CMS owns tenant-authorized immutable scientific inputs and minimal fenced entry/attempt persistence; scientific identities, selections and allocation never depend on placement, reload or claim retries. Native credentials, approved archive destination/retention, supported apparatus/participant configuration, finite study bounds and trusted configurable concurrency limits remain independent admission gates. Serial is the default without upstream isolation proof; a ceiling is not live capacity, provider quota or execution permission. Reuse existing scoped authority, database immutability guards, claim/lease patterns, safe errors/audit and archive custody; no legacy experiments runtime, duplicate scientific schema/enumerator, silent study reduction/partitioning or remote executor is introduced. Replacement design and implementation documentation obligations: docs/architecture/experiment-admission-boundary-2742.md.",
+        "checks": []
       }
     ],
     "exceptions": [],
@@ -1756,6 +1761,14 @@
       "docs/architecture/aces-backend-manifest-realizability-preflight-1563.md",
       "docs/architecture/aces-account-credentials-preflight-1560.md",
       "docs/architecture/experiments-trial-archive-intake-boundary-2740.md",
+      "docs/architecture/experiment-admission-boundary-2742.md",
+      "docs/architecture/experiment-admission-design-2742.md",
+      "docs/technical/shifter_platform/experiment-admission.md",
+      "docs/how-to/admit-pack-experiments.md",
+      "shifter/shifter_platform/cms/migrations/0076_experiment_input_guards.py",
+      "shifter/shifter_platform/cms/services/_experiment_batches.py",
+      "shifter/shifter_platform/shared/raes/experiment_admission.py",
+      "shifter/shifter_platform/tests/cms/test_experiment_admission_postgres.py",
       ".importlinter",
       "shifter/shifter_platform/shared/raes/domain_topology.py",
       "shifter/shifter_platform/shared/raes/runtime_target.py",
@@ -2541,6 +2554,13 @@
         "checks": [
           "layer-imports"
         ]
+      },
+      {
+        "id": "ADR-041-R12",
+        "description": "An explicitly installed runtime adapter may opt into bounded pre-provisioning scalar selections for declared concerns. Core preserves the original plan and resource identities, validates every replacement against all original authority and public RAES constraints, and refuses exact, closed, missing, ambiguous, unresolved or nonconforming authority before effects. Workers receive only declared inputs and an invocation-scoped derived result key, never the application key or provider credentials. Preparation responses are encrypted before stdout, reauthorized and validated in core, and encrypted at rest using existing field encryption. The existing range binding retains one immutable accepted preparation, committed with the planned invocation under the range mutex. Retries and teardown use the original retained selection; cancellation before acceptance carries an explicit pre-effect absence proof. SDK models, SQL custody guards, synthetic lifecycle tests and rendered admission-policy tests enforce this channel without weakening worker isolation or deploying a tenant. Acceptance must validate the full future destroy envelope against its existing transport limit. Prepared teardown reuses the original immutable operation input; pre-effect absence needs no mutable image or guest-material projection.",
+        "checks": [
+          "layer-imports"
+        ]
       }
     ],
     "exceptions": [],
@@ -2566,7 +2586,9 @@
       "shifter/shifter_platform/tests/shared/cloud/test_runtime_plugin_policy.py",
       "shifter/shifter_adapter_sdk/tests",
       ".github/quality-path-filters.yaml",
-      ".github/workflows/_quality.yml"
+      ".github/workflows/_quality.yml",
+      "docs/architecture/adapter-pre-provisioning-2718.md",
+      "shifter/shifter_platform/engine/services/_runtime_plugin_cleanup.py"
     ]
   },
   {
@@ -4242,7 +4264,7 @@
       },
       {
         "id": "ADR-063-R4",
-        "description": "Status, results, cancellation, and cleanup MUST be published through the existing service projections and explicit DRF serializers as distinct facts: admitted (request/input/intent) is not observed readiness; dispatch/execution truth comes from ProvisionerLaunchStatus and provider task state; applied-result truth is owned by OperationResultInbox/ResultStep/the Engine applier; cancel intent is owned by request_provision_interrupt/InterruptState/launch_interrupt; cleanup-pending/unknown and retained residual obligations arise from incomplete cleanup, unavailable provider/secret/DB evidence, interrupt exhaustion, or missing terminal results; verified terminal cleanup requires successful owning lifecycle plus independent inventory/readback with scope and observation time. Timeout, DLQ, FAILED, or a missing Job MUST NOT be reported as proof of absence, and an unavailable or incomplete inventory MUST produce unknown, never an empty success. Cleanup/unknown values MUST NOT be added to ResourceStatus or RAES status enums merely to fit a public response; extend the owning native contract instead. Only authorized residual categories/counts, reasons, freshness, and permitted next actions are exposed; resource/credential locators and diagnostics remain protected. Cancel targets the admitted generation only, does not cancel a newer generation or guarantee provider abort, and once cleanup is owed, actor revocation MUST NOT orphan it: the trusted system lifecycle continues within persisted ownership while public access is reauthorized.",
+        "description": "Status, results, cancellation, and cleanup MUST be published through the existing service projections and explicit DRF serializers as distinct facts: admitted (request/input/intent) is not observed readiness; dispatch/execution truth comes from ProvisionerLaunchStatus and provider task state; applied-result truth is owned by OperationResultInbox/ResultStep/the Engine applier; cancel intent is owned by request_provision_interrupt/InterruptState/launch_interrupt; cleanup-pending/unknown and retained residual obligations arise from incomplete cleanup, unavailable provider/secret/DB evidence, interrupt exhaustion, or missing terminal results; verified terminal cleanup requires successful owning lifecycle plus independent inventory/readback with scope and observation time. Timeout, DLQ, FAILED, or a missing Job MUST NOT be reported as proof of absence, and an unavailable or incomplete inventory MUST produce unknown, never an empty success. Cleanup/unknown values MUST NOT be added to ResourceStatus or RAES status enums merely to fit a public response; extend the owning native contract instead. Only authorized residual categories/counts, reasons, freshness, and permitted next actions are exposed; resource/credential locators and diagnostics remain protected. Cancel targets the admitted generation only, does not cancel a newer generation or guarantee provider abort, and once cleanup is owed, actor revocation MUST NOT orphan it: the trusted system lifecycle continues within persisted ownership while public access is reauthorized. For a range requiring provision.prepare, an immutable destroy input may instead carry an explicit unprepared snapshot captured under the same Range mutex as preparation acceptance. This proves the mandatory first-effect barrier was never crossed; the controller must reject late acceptance after the destroy generation takes ownership. Only that bounded proof permits VERIFIED_ABSENT without provider inventory. Missing output, timeout, missing Jobs, or failed planning alone never establish absence; any accepted preparation still requires normal provider inventory/readback. See docs/architecture/adapter-pre-provisioning-2718.md.",
         "checks": []
       },
       {

@@ -73,6 +73,37 @@ uses exit status as evidence. Each binding currently targets exactly one guest.
 Guest-only cleanup is performed by core range destruction, independently of the
 image registry.
 
+An adapter can also declare `provision.prepare` with nonempty
+`provisioning_concerns`. The host asks for a `prepare` plan before any provider
+work. Preparation-only adapters declare `required_bindings: []`; guest adapters
+retain their guest bindings and readiness verification. The request carries the
+original `plan_digest` and declared parameters/files. It grants no provider API,
+CMS access, or additional input discovery.
+
+Return `provisioning_values`, each containing an authored resource `address`, a
+declared `concern`, an RFC 6901 `payload_pointer` and a scalar `value`. Only an
+existing payload scalar may change. New paths, collection replacement, resource
+identities and operation graphs are outside this contract. Core evaluates every
+original RAES authority, including exact ancestors and recursive constraints;
+unsupported or unresolved constraints refuse preparation. At most 4096 proposals
+and 512 KiB of clear response are permitted by the SDK. Core additionally
+requires the complete encrypted snapshot plus original input to fit its 256 KiB
+operation envelope before acceptance. Preparation cannot execute guest
+actions. For example, a synthetic concern may propose:
+
+```json
+{"address":"node.example","concern":"synthetic-settings","payload_pointer":"/spec/label","value":"selected"}
+```
+
+The worker seals preparation stdout using the host-supplied
+`BIGRAE_PLUGIN_RESULT_SECRET`. Authors use the standard worker entrypoint and do
+not handle this key. A missing key fails without plaintext output. Host callers
+supply the invocation key to `parse_result(..., result_secret=...)`; cleartext
+preparation output is refused. Guest-only output is unchanged. Accepted values
+remain encrypted in core records and are reused for retries and destruction;
+reports keep original plan addresses. See the
+[pre-provisioning design](../../docs/architecture/adapter-pre-provisioning-2718.md).
+
 An action may request `runtime_values`, a map from local names to closed
 `GuestValueReference(binding=..., field=...)` references. Supported fields are
 `private_address` and `participant_ssh_public_key`. The host resolves these from

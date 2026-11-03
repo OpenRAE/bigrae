@@ -11,6 +11,7 @@ from typing import Any
 
 from shifter_adapter_sdk.runtime import (
     FILE_INPUT_DIRECTORY,
+    PREPARATION_OUTPUT_ENV,
     InspectionInput,
     InspectionResult,
     RuntimeInput,
@@ -89,28 +90,36 @@ def launch_plugin(
     request: RuntimeInput | InspectionInput,
     *,
     image_pull_secret: str = "",
+    result_secret: str = "",
 ) -> None:
     """Idempotently dispatch a fixed worker profile without application credentials."""
+    if bool(result_secret) != (request.phase == "prepare"):
+        raise ValueError("Plugin preparation output key is unavailable")
     file_names = tuple(sorted(request.files)) if isinstance(request, RuntimeInput) else ()
     file_secret = plugin_task_ref(request).split("/", 1)[1] + "-inputs" if file_names else ""
     runner = KubernetesTaskRunner(
         plugin_task_profile(image_pull_secret=image_pull_secret, file_secret=file_secret, file_names=file_names)
     )
+    environment = {
+        "BIGRAE_PLUGIN_INPUT"
+        if request.protocol.startswith("bigrae.runtime-plugin/")
+        else "SHIFTER_PLUGIN_INPUT": request.model_dump_json()
+    }
+    if result_secret:
+        environment[PREPARATION_OUTPUT_ENV] = result_secret
     runner.run_task(
         task_definition=request.manifest.worker_image,
         cluster=PLUGIN_NAMESPACE,
         command=[],
         container_name=PLUGIN_CONTAINER,
-        env_overrides={
-            "BIGRAE_PLUGIN_INPUT"
-            if request.protocol.startswith("bigrae.runtime-plugin/")
-            else "SHIFTER_PLUGIN_INPUT": request.model_dump_json()
-        },
+        env_overrides=environment,
         task_identity=str(request.invocation_id),
     )
 
 
-def observe_plugin(request: RuntimeInput | InspectionInput) -> RuntimePlan | InspectionResult | None:
+def observe_plugin(
+    request: RuntimeInput | InspectionInput, *, result_secret: str = ""
+) -> RuntimePlan | InspectionResult | None:
     """A malformed or replayed response never becomes an accepted result.
 
     Cleanup follows result retrieval and parsing, but it is not part of the
@@ -123,7 +132,7 @@ def observe_plugin(request: RuntimeInput | InspectionInput) -> RuntimePlan | Ins
     raw = runner.get_task_output(PLUGIN_NAMESPACE, task_ref, identity)
     if raw is None:
         return None
-    result = parse_result(raw, request)
+    result = parse_result(raw, request, result_secret=result_secret)
     try:
         runner.delete_completed_task(PLUGIN_NAMESPACE, task_ref, identity)
     except CloudTaskError as exc:

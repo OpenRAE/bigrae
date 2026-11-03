@@ -3,6 +3,23 @@
   "docs_root": "docs",
   "features": [
     {
+      "id": "experiment-admission",
+      "title": "Immutable pack experiment admission",
+      "requirement": "GEN-001",
+      "user_docs": [
+        "how-to/admit-pack-experiments.md"
+      ],
+      "technical_docs": [
+        "technical/shifter_platform/experiment-admission.md"
+      ],
+      "drift_sources": [
+        "shifter/shifter_platform/cms/services/_experiment_batches.py",
+        "shifter/shifter_platform/cms/models/experiment_batches.py",
+        "shifter/shifter_platform/shared/raes/experiment_admission.py",
+        "shifter/shifter_platform/shared/raes/experiment_pack_snapshot.py"
+      ]
+    },
+    {
       "id": "disposable-vm-workers",
       "title": "Disposable VM worker lifecycle",
       "requirement": "GEN-001",

@@ -1,5 +1,7 @@
 # How-To Guides
 
+- [Admit pack experiments](admit-pack-experiments.md) - Retain scientific inputs without dispatch
+
 Step-by-step walkthroughs for common tasks.
 
 ## Getting Started

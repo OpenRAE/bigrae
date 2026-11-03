@@ -68,10 +68,7 @@ from engine.services import resolve_model_access_range_reference as engine_resol
 from engine.services import resolve_model_access_range_views as engine_resolve_model_access_range_views
 from engine.services import resume_range as engine_resume_range
 from engine.services import validate_sharing_binding as engine_validate_sharing_binding
-from shared.audit import (
-    AuditEvent,
-    audit_log,
-)
+from shared.audit import AuditEvent, audit_log
 
 from ._agents import (
     create_agent,
@@ -85,11 +82,17 @@ from ._content_authority import set_catalog_publication
 from ._content_ingestion import PackRegistrationRequest, RegisteredPack, register_pack
 from ._content_scope_options import content_scope_options
 from ._credential_scope import range_credential_scope, range_identity_present
-from ._credentials import (
-    create_credential,
-    delete_credential,
-    get_credential,
-    list_credentials,
+from ._credentials import create_credential, delete_credential, get_credential, list_credentials
+from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
+from ._experiment_batches import (
+    admit_experiment_batch,
+    claim_experiment_entry,
+    load_experiment_batch,
+    observe_experiment_attempt,
+    record_experiment_cleanup,
+    record_experiment_collection,
+    record_experiment_worker,
+    recover_experiment_claim,
 )
 from ._file_assets import (
     cancel_file_upload,
@@ -122,12 +125,7 @@ from ._model_source_selection import list_usable_model_sources as list_usable_mo
 from ._model_source_selection import model_source_alias_options, resolve_model_source_sponsorship
 from ._model_source_selection import project_scenario_model_demands as project_scenario_model_demands
 from ._model_source_selection import resolve_model_source_selection as resolve_model_source_selection
-from ._ngfws import (
-    create_ngfw,
-    destroy_ngfw,
-    get_ngfw,
-    list_ngfws,
-)
+from ._ngfws import create_ngfw, destroy_ngfw, get_ngfw, list_ngfws
 from ._non_user_range_launch import NonUserWorkflow, create_non_user_range
 
 # --- Public service functions ------------------------------------------------
@@ -265,12 +263,7 @@ from ._trial_archives import (
 )
 from ._unified_authorization import range_authorization_binding as range_authorization_binding
 from ._unified_authorization import require_range_action as require_range_action
-from ._uploads import (
-    cancel_upload,
-    complete_upload,
-    get_storage_used,
-    initiate_upload,
-)
+from ._uploads import cancel_upload, complete_upload, get_storage_used, initiate_upload
 from ._user_offboarding import (
     TRANSFERABLE_RESOURCE_KINDS,
     OffboardingAuditContext,
@@ -301,6 +294,7 @@ __all__ = (
     "CtfOpenVpnProfileUnavailable",
     "EngineEventCapacitySignal",
     "EngineSharingError",
+    "ExperimentClaim",
     "LeasePolicyAuditContext",
     "LeasePolicyOverride",
     "MissionControlLeasePolicyAdminError",
@@ -324,11 +318,13 @@ __all__ = (
     "RangeScopeAuditContext",
     "ReceiptRangeBindingUnavailable",
     "RegisteredPack",
+    "RetainedExperimentBatch",
     "RetryKeyConflict",
     "RetrySafeLaunchOutcome",
     "TrialArchiveCollection",
     "WorkspaceLaunchDenied",
     "WorkspaceLaunchQuotaExceeded",
+    "admit_experiment_batch",
     "attempt_warm_claim",
     "audit_log",
     "bind_first_use_launch",
@@ -337,6 +333,7 @@ __all__ = (
     "cancel_range_by_request_id",
     "cancel_upload",
     "change_range_model_sources",
+    "claim_experiment_entry",
     "complete_file_upload",
     "complete_upload",
     "configure_trial_archive_destination",
@@ -435,9 +432,11 @@ __all__ = (
     "list_scenarios",
     "list_trial_archives",
     "list_usable_model_sources",
+    "load_experiment_batch",
     "load_runtime_file_inputs",
     "max_agent_file_size_bytes",
     "model_source_alias_options",
+    "observe_experiment_attempt",
     "pause_range",
     "pause_range_by_request_id",
     "policy_list_range_scope_bindings",
@@ -462,6 +461,10 @@ __all__ = (
     "reconcile_tenant_pack_removal",
     "reconcile_tenant_pack_removals",
     "reconcile_warm_pool",
+    "record_experiment_cleanup",
+    "record_experiment_collection",
+    "record_experiment_worker",
+    "recover_experiment_claim",
     "register_inbox_catalog",
     "register_pack",
     "relocate_tenant_pack_archive",

@@ -143,11 +143,15 @@ spec:
         (!has(variables.container.command) || variables.container.command.size() == 0) &&
         (!has(variables.container.args) || variables.container.args.size() == 0) &&
         (!has(variables.container.envFrom) || variables.container.envFrom.size() == 0) &&
-        variables.container.env.size() == 1 &&
-        variables.container.env[0].name in ['SHIFTER_PLUGIN_INPUT', 'BIGRAE_PLUGIN_INPUT'] &&
-        !has(variables.container.env[0].value) &&
-        variables.container.env[0].valueFrom.secretKeyRef.key == variables.container.env[0].name &&
-        variables.container.env[0].valueFrom.secretKeyRef.name.startsWith('runtime-plugin-secrets-')
+        variables.container.env.size() in [1, 2] &&
+        variables.container.env.filter(e, e.name in ['SHIFTER_PLUGIN_INPUT', 'BIGRAE_PLUGIN_INPUT']).size() == 1 &&
+        variables.container.env.all(e,
+          e.name in ['SHIFTER_PLUGIN_INPUT', 'BIGRAE_PLUGIN_INPUT', 'BIGRAE_PLUGIN_RESULT_SECRET'] &&
+          !has(e.value) &&
+          e.valueFrom.secretKeyRef.key == e.name &&
+          e.valueFrom.secretKeyRef.name.startsWith('runtime-plugin-secrets-') &&
+          e.valueFrom.secretKeyRef.name == variables.container.env[0].valueFrom.secretKeyRef.name
+        )
       message: Plugin jobs may receive only their bounded invocation secret.
     - expression: >-
         variables.container.securityContext.readOnlyRootFilesystem &&

@@ -197,7 +197,7 @@ function PackAssignmentForm({ organization, pack, adapters, onSaved }: Readonly<
   const files = useFileAssets(requiredFiles.length ? { organization_uuid: organization } : null);
   const fileChoices = new Set(files.data?.files.map((file) => file.uuid) ?? []);
   const targetChoices = new Set(pack.targets.map((row) => row.address));
-  const valid = adapter && (!enabled || adapter.state === "ready") && requiredTargets.length > 0
+  const valid = adapter && (!enabled || adapter.state === "ready") && (requiredTargets.length > 0 || manifestPreview(adapter?.manifest)?.capabilities.includes("provision.prepare"))
     && requiredTargets.every((name) => targetChoices.has(targets[name]))
     && requiredParameters.every((name) => parameters[name] !== undefined)
     && requiredFiles.every((name) => fileChoices.has(fileAssets[name]))
