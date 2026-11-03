@@ -6,6 +6,7 @@ from dataclasses import replace
 from typing import Any
 from uuid import UUID
 
+from shared.gcp_runtime_plan import selected_secret_payloads
 from shared.runtime_plugin_binding import runtime_plugin_requests
 from shared.runtime_plugin_preparation import RuntimePreparation, apply_prepared_values
 from shifter_adapter_sdk.runtime import MAX_PREPARATION_BYTES, RuntimePlan, canonical_digest, decode_message
@@ -82,10 +83,17 @@ def prepared_run(
     if snapshot.state != "prepared":
         raise ValueError(_UNAVAILABLE)
     plan = apply_prepared_values(run.input.plan, result, pin.manifest.provisioning_concerns)
+    payloads = selected_secret_payloads(run.input.plan, result, pin.manifest.provisioning_concerns)
     return RaesOperationRun(
         run.operation_id,
         run.request_id,
-        replace(run.input, plan=plan, gcp_projects=snapshot.cloud_projects, runtime_preparation=snapshot),
+        replace(
+            run.input,
+            plan=plan,
+            gcp_projects=snapshot.cloud_projects,
+            runtime_preparation=snapshot,
+            secret_payloads=payloads,
+        ),
     )
 
 

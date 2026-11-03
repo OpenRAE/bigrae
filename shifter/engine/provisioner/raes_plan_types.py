@@ -142,3 +142,4 @@ class RaesPlan:
     accounts: tuple[RaesPlanAccount, ...] = ()
     features: tuple[RaesPlanFeature, ...] = ()
     domains: tuple[RaesPlanDomain, ...] = ()
+    cloud_nodes: tuple[RaesPlanNode, ...] = ()

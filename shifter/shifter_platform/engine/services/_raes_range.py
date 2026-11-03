@@ -28,6 +28,9 @@ from ._raes_range_bindings import (
     _persist_range_bindings as _persist_range_bindings,
 )
 from ._raes_range_bindings import (
+    _verify_existing_cloud_content,
+)
+from ._raes_range_bindings import (
     _verify_existing_participant_access as _verify_existing_participant_access,
 )
 from ._raes_range_bindings import (
@@ -159,6 +162,7 @@ def create_raes_range(
         verify_existing_workspace_binding(existing, request_uuid, workspace_id)
         verify_existing_egress_binding(existing, request_uuid, egress_mode)
         _verify_existing_participant_access(existing, bindings.participant_access)
+        _verify_existing_cloud_content(existing, bindings.cloud_content)
         _verify_existing_plugin_scope(existing, bindings.runtime_plugin_scope)
         _verify_existing_remote_access(existing, bindings.openvpn_deadline)
         return RaesRangeRef(

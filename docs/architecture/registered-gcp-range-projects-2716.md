@@ -83,6 +83,26 @@ access alone cannot retire cloud permissions or authorize a new customer scope.
 
 ## Authored intent and provider readback
 
+### MVP execution
+
+Use the existing Terraform binary and Google provider to realize the native
+cloud declarations. Generate data-only Terraform JSON in a private temporary
+workspace, with locked state in the existing private GCS bucket under the
+lease UUID. Never run pack-supplied Terraform or executable hooks. Provider
+dependency ordering creates service accounts before their grants and removes
+grants before accounts. Existing baseline objects are not imported or replaced.
+After teardown restore the recorded project policy using its current etag and
+independently compare the complete managed inventory with the baseline. Failed
+or uncertain cleanup retains project custody for manual recovery; automatic
+recovery orchestration is outside the MVP. The existing field-encryption
+primitive protects bounded native Content payloads in retained inputs.
+Where a native secret version leaves `payload_content_ref` unspecified, a
+preparation response may select its literal UTF-8 payload by the exact native
+version reference. Core accepts that only for the installed adapter's declared
+platform-application concern, keeps it in the sealed preparation record, and
+never changes an explicit Content reference. This needs no additional guest
+payload files. Declared Content retains its normal native placement semantics.
+
 Cloud intent is the native node payload's `spec.node.runtime.identity_authorities`
 and `platform_applications`. It is not a second set of invented plan resources.
 Keep canonical node addresses, native declaration references and every stated
@@ -98,16 +118,15 @@ capability declaration alone is not realization. Explicitly declared native
 provider IDs must match; generated provider identities remain in the retained
 mapping rather than replacing logical SDL IDs.
 
-Until these effect routes and independent readback are implemented, the worker
-plan reader also refuses nonempty native identity-authority and platform-
-application inventories. Capability refusal at authoring admission alone is
-insufficient: a retained or directly queued input must not drop those declarations
-and report a successful VM-only realization or teardown. Empty native inventories
-remain compatible.
+The worker plan reader requires full cloud admission for nonempty native
+identity-authority and platform-application inventories. Capability refusal at
+authoring admission alone is insufficient: a retained or directly queued input
+must not drop those declarations and report a successful VM-only realization or
+teardown. Empty native inventories remain compatible.
 
 Instantiate the scenario once using the public RAES instantiation API before
-planning. Lower referenced native Content declarations into a bounded sidecar,
-including contents without a guest placement. Reuse pack inventory verification
+planning. Lower referenced native Content declarations into a bounded sidecar.
+Reuse pack inventory verification
 and existing content materialization for source files; preserve inline UTF-8
 bytes exactly. Reject unresolved references, unsupported generators and payloads
 outside the provider's byte budget before effects. Payloads remain encrypted in
@@ -179,3 +198,15 @@ separate and requires explicit user approval.
 - [Recreated service-account identities and attachments](https://docs.cloud.google.com/iam/docs/service-account-overview)
 - [Service-account propagation](https://docs.cloud.google.com/iam/docs/service-accounts-create)
 - [Irreversible secret-version destruction](https://docs.cloud.google.com/secret-manager/docs/destroy-secret-version)
+
+Exercise credentials remain outside this runtime slice. No SDK key-issuance
+capability or guest credential delivery is declared. A scenario-owned credential
+issuer may create and revoke exercise keys after setup; teardown still verifies
+the original project baseline. Required APIs are enabled before registration and
+remain part of project setup, not the range-owned overlay.
+
+A native cloud node with no OS, image, sizing, infrastructure, guest placement,
+or substrate constraint is realized through cloud APIs without adding a VM.
+Its original node remains in completion coverage and receives configuration-bound
+cloud readback. Guest OS/substrate evidence covers actual guest nodes only.
+Any authored guest or substrate demand retains the ordinary workload path.

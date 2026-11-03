@@ -21,7 +21,7 @@ from engine.operation_inputs import operation_input_payload
 from engine.services._gcp_project_inputs import allocate_launch_projects, allocate_plan_projects, projects_for_input
 from engine.services._runtime_plugin_cleanup import preparation_cleanup_payload
 from engine.services._runtime_plugin_preparation import approved_preparation, retain_preparation
-from shared.operation_envelope import MAX_ENVELOPE_BYTES, OperationEnvelopeError, build_operation_envelope
+from shared.operation_envelope import MAX_RAES_INPUT_BYTES, OperationEnvelopeError, build_operation_envelope
 from shared.raes.operation_input import RaesInputBindings, RaesRangeIdentity, build_raes_operation_input
 from shared.runtime_plugin_binding import RuntimePluginPin, runtime_plugin_requests
 from tests.engine.services.test_gcp_range_projects import registration as registration
@@ -218,7 +218,7 @@ def test_cleanup_budget_failure_after_reservation_rolls_back_custody(prepared_so
         payload=initial,
     )
     size = len(json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode())
-    padding = (MAX_ENVELOPE_BYTES - size - 128) // 2
+    padding = (MAX_RAES_INPUT_BYTES - size - 128) // 2
     for resource in [
         source.plan["resources"]["provision.node.web"],
         *[op for op in source.plan["operations"] if op["address"] == "provision.node.web"],

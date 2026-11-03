@@ -25,6 +25,9 @@ def native_plan(tmp_path):
     document = yaml.safe_load(path.read_text())
     scope = document["nodes"]["web"]["runtime"]["identity_authorities"][0]["resource_scopes"][0]
     scope.update(native_id="synthetic-project", incarnation_id="123456789012")
+    # Custody tests need one complete, supported cloud effect, independent of
+    # payload preparation (covered by the native cloud runtime fixtures).
+    document["nodes"]["web"]["runtime"]["platform_applications"] = []
     path.write_text(yaml.safe_dump(document))
     scenario = load_scenario(path)
     target = create_shifter_backend_target(port=NeverDispatch(), scenario=scenario)

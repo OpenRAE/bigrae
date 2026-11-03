@@ -63,6 +63,7 @@ from raes_openvpn import (
     vpn_access_names,
 )
 from raes_plan import RaesPlan, parse_plan
+from raes_range_cloud import cloud_completion, prepare_cloud_plan, realize_cloud_projects, restore_cloud_projects
 from raes_range_contract import _classify_failure, _require_gce_live_fire_binding, verified_composition_addresses
 from raes_range_members import realized_members as _realized_members
 from raes_snapshot import snapshot_resources
@@ -186,7 +187,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         operation_input = effective_run.input
         preparation_ready = True
         enrollment = load_model_enrollment(effective_run)
-        raes_plan = parse_plan(operation_input.plan)
+        raes_plan, cloud = prepare_cloud_plan(run, effective_run)
         if operation_input.range_backend == "ec2":
             from raes_ec2_runtime import provision_ec2_run
 
@@ -198,7 +199,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             backend = _require_gce_live_fire_binding(operation_input)
             config = load_gce_range_cell_config(backend=backend)
             config = _config_for_range_placement(request_id, config)
-            raes_plan = parse_plan(operation_input.plan)
+            cloud_observed = realize_cloud_projects(cloud, config, enrollment)
             network_allocation = _allocated_networks_for_provision(
                 request_id,
                 generation,
@@ -220,6 +221,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
                 registry_image_resolver(operation_input),
                 options=RaesGceApplyOptions(
                     config=config,
+                    cloud_service_accounts=cloud.attachments if cloud is not None else None,
                     egress_mode=operation_input.egress_mode,
                     allocated_network_cidrs=network_allocation.require_available(),
                     runtime_plugin=plugin_plans.execute if plugin_plans is not None else None,
@@ -234,7 +236,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
                 access_bindings=operation_input.access_binding_transport(),
             )
         resources = snapshot_resources(
-            parse_plan(run.input.plan),
+            parse_plan(run.input.plan, cloud_admitted=cloud is not None),
             verified_composition_addresses(apply_result.get("composition_verified_addresses")),
         )
         members = _realized_members(apply_result)
@@ -244,6 +246,9 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             operating_systems=apply_result.get("operating_systems"),
             compute_substrates=apply_result.get("compute_substrates"),
             generation_id=run.operation_id,
+            cloud_projects=cloud_completion(
+                cloud, cloud_observed if cloud is not None else {}, config, apply_result.get("instances")
+            ),
         )
     except Exception as exc:
         _release_failed_provision_allocation(run, raes_plan, config, network_allocation, pre_mutation_release_attempted)
@@ -324,7 +329,7 @@ def _release_failed_provision_allocation(
 
 
 def run_raes_range_activate(request_id: str, *, operation_id: str | None = None) -> None:
-    """Hand a claimed warm generation to its claimant (#28).
+    """Activate a claimed warm generation (#28).
 
     Scrubs every pre-claim credential/access identity, realizes the claimant's
     fresh access, and negatively verifies the pre-claim access is revoked, then
@@ -353,8 +358,8 @@ def run_raes_range_activate(request_id: str, *, operation_id: str | None = None)
     _report(ref, operation, ResultStep.RAES_ACTIVATE_RUNNING, {"raes_status": "running"})
     try:
         operation_input = activation.raes_input
-        if operation_input.runtime_plugin is not None:
-            raise RaesRealizationError("Runtime plugin warm activation is not supported")
+        if operation_input.runtime_plugin is not None or operation_input.gcp_projects or operation_input.cloud_content:
+            raise RaesRealizationError("Runtime plugin and cloud warm activation are not supported")
         backend = _require_gce_live_fire_binding(operation_input)
         config = _config_for_range_placement(request_id, load_gce_range_cell_config(backend=backend))
         raes_plan = parse_plan(operation_input.plan)
@@ -450,7 +455,7 @@ def run_raes_range_destroy(request_id: str, *, operation_id: str | None = None) 
                 {"raes_status": "succeeded", "cleanup_inventory": no_effects},
             )
             return
-        raes_plan = parse_plan(operation_input.plan, cleanup_only=True)
+        raes_plan, cloud = prepare_cloud_plan(run, effective_run, cleanup_only=True)
         if operation_input.range_backend == "ec2":
             from raes_ec2_runtime import destroy_ec2_run
 
@@ -487,6 +492,7 @@ def run_raes_range_destroy(request_id: str, *, operation_id: str | None = None) 
     # reservation remains held until absence is proven so another range cannot
     # reuse an occupied CIDR after a partial or unreadable cleanup.
     cleanup_inventory = _raes_cleanup_inventory(request_id, range_id, raes_plan, destroy_options)
+    cleanup_inventory = restore_cloud_projects(cloud, cleanup_inventory)
     if network_allocation.network_cidrs and cleanup_inventory.get("outcome") == VERIFIED_ABSENT:
         _release_subnet_allocations_best_effort(request_id, operation_id=generation)
     _report(

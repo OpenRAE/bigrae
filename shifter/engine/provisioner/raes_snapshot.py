@@ -42,7 +42,10 @@ def snapshot_resources(
     resources: list[dict[str, str]] = [
         {"address": network.address, "resource_type": "network", "status": _PROVISIONED} for network in plan.networks
     ]
-    resources.extend({"address": node.address, "resource_type": "node", "status": _PROVISIONED} for node in plan.nodes)
+    resources.extend(
+        {"address": node.address, "resource_type": "node", "status": _PROVISIONED}
+        for node in (*plan.nodes, *plan.cloud_nodes)
+    )
     composition = _composition_resources(plan)
     expected = {address for address, _resource_type in composition}
     verified = set(verified_composition_addresses or ())

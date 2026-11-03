@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import base64
+import re
 from collections.abc import Iterator
+from copy import deepcopy
 from typing import TYPE_CHECKING, Protocol
 from urllib.parse import quote
 
@@ -51,6 +54,41 @@ class GcpProjectInventory:
             raise ValueError(_UNAVAILABLE)
         self._session = session
         self._remaining = MAX_BASELINE_BYTES
+
+    def read_owned_payload(self, project_number: str, version: str, owned_secrets: set[str]) -> bytes:
+        """Access only newly owned versions; registration never calls this route."""
+        match = re.fullmatch(r"projects/([1-9][0-9]+)/secrets/([A-Za-z0-9_-]+)/versions/([1-9][0-9]*)", version)
+        if match is None or match[1] != project_number or match[2] not in owned_secrets:
+            raise ValueError(_UNAVAILABLE)
+        self._remaining = MAX_BASELINE_BYTES
+        result = self._read(_SECRETS + version + ":access")
+        try:
+            if result.get("name") != version:
+                raise ValueError()
+            payload = result.get("payload")
+            if not isinstance(payload, dict):
+                raise ValueError()
+            data = payload.get("data")
+            if not isinstance(data, str):
+                raise ValueError()
+            material = base64.b64decode(data, validate=True)
+            if not 0 <= len(material) <= 65536:
+                raise ValueError()
+            return material
+        except (KeyError, TypeError, ValueError):
+            raise ValueError(_UNAVAILABLE) from None
+
+    def restore_policy(self, project_number: str, policy: JsonObject, current: JsonObject) -> None:
+        """Restore the exact baseline policy after owned grants have been removed."""
+        if not project_number.isdecimal() or not current.get("etag"):
+            raise ValueError(_UNAVAILABLE)
+        restored = deepcopy(policy)
+        restored["etag"], restored["version"] = current["etag"], 3
+        self._remaining = MAX_BASELINE_BYTES
+        self._read(
+            _RM + f"projects/{project_number}:setIamPolicy",
+            body={"policy": restored, "updateMask": "bindings,auditConfigs"},
+        )
 
     def read(self, project_id: str) -> GcpProjectState:
         """Enumerate every managed object, requesting IAM policy version three."""

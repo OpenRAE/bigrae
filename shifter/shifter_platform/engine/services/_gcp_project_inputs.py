@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from django.db import transaction
-from shifter_adapter_sdk.runtime import canonical_digest
+from shifter_adapter_sdk.runtime import RuntimePlan, canonical_digest
 
 from shared.gcp_range_projects import GcpProjectLease
 from shared.operation_envelope import validate_operation_envelope
@@ -113,7 +113,28 @@ def allocate_launch_projects(payload: dict[str, object], operation_id: UUID | st
     if pin is not None and "provision.prepare" in pin.manifest.capabilities:
         return
     plan = target.range_config or {}
-    allocate_plan_projects(target, plan, canonical_digest(plan))
+    leases = allocate_plan_projects(target, plan, canonical_digest(plan))
+    validate_project_preparation(target.raes_cloud_content, plan, plan, leases)
+
+
+def validate_project_preparation(
+    sealed: dict[str, Any] | None,
+    original: dict[str, Any],
+    effective: dict[str, Any],
+    leases: tuple[GcpProjectLease, ...],
+    result: RuntimePlan | None = None,
+    pin: RuntimePluginPin | None = None,
+) -> None:
+    """Admit all concrete native cloud shapes and payloads before committing custody."""
+    from shared.field_encryption import decrypt_value
+    from shared.gcp_cloud_content import CloudContentEnvelope, open_cloud_content
+    from shared.gcp_runtime_plan import compile_cloud_work, selected_secret_payloads
+
+    envelope = CloudContentEnvelope.model_validate(sealed) if sealed is not None else None
+    contents = open_cloud_content(envelope, original, decrypt_value)
+    if result is not None and pin is not None:
+        contents.update(selected_secret_payloads(original, result, pin.manifest.provisioning_concerns))
+    compile_cloud_work(effective, leases, contents)
 
 
 def retained_project_cleanup_payload(target: Range) -> dict[str, Any] | None:

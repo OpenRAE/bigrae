@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Protocol
 
@@ -55,6 +55,7 @@ class RaesGceApplyOptions:
     model_enrollment: Callable[..., None] | None = None
     model_broker: dict[str, object] | None = None
     openvpn: RaesGceOpenVpn | None = None
+    cloud_service_accounts: Mapping[str, str] | None = None
 
 
 @dataclass(frozen=True)

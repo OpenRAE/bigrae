@@ -3,8 +3,8 @@
 Issue #2716 introduces Engine-owned project registration and retained range
 leases. Registration, encrypted baseline capture and custody enforcement are
 implemented in code. Native launch and preparation acceptance retain the selected
-projects for retries and cleanup. Scenario overlay realization and independent
-provider qualification remain in development.
+projects for retries and cleanup. The native IAM/Secret Manager runtime and independent readback are implemented
+in the current change; live provider qualification is still pending.
 Nothing in this page claims a tenant deployment or live acceptance.
 
 ## Native capture boundary
@@ -53,8 +53,9 @@ the first object and reads it back; it never captures a later range overlay as a
 replacement baseline.
 
 Only the exact ciphertext hash, size, bucket, generation and semantic state
-digest cross the operation boundary. The existing 256 KiB operation envelope
-budget remains unchanged. Cleanup reads the retained bucket and generation,
+digest cross the operation boundary. Registration and ordinary envelopes retain
+the 256 KiB bound. Native RAES plan inputs alone have a 4 MiB limit; their payload
+parser still validates the complete closed contract. Result budgets are unchanged. Cleanup reads the retained bucket and generation,
 checks the ciphertext before decryption, and verifies the original organization,
 project identity, capture and lease. Changed current configuration cannot redirect
 that read. Provider change tokens are excluded from semantic comparison;
@@ -86,13 +87,36 @@ References are bound to the original plan, range, request and organization; they
 grant no adapter-selected cloud authority. Unreleased project custody blocks
 range ownership and scope moves, including after VPN access is retired.
 
-The worker plan reader currently refuses nonempty native identity-authority and
-platform-application inventories, including retained inputs used for teardown.
-This prevents declarations from being silently dropped while cloud realization
-and independent readback are still in development. Refusal happens before
-provider configuration, network reservation or VM work; empty native inventories
-retain existing behavior. An unaccepted preparation still uses its explicit
-pre-effect cleanup proof.
+The worker admits native cloud families only after all project references,
+original baseline identities, supported shapes and literal payloads have been
+validated. It generates data-only Terraform for the pinned Google provider in a
+private workspace, with encrypted GCS state under the lease UUID and native state
+locking. No pack Terraform, adapter cloud credentials, guest key issuance or new
+storage service is introduced. Provisioning and destruction use original retained
+lease inputs; unsupported shapes fail before effects. An unaccepted preparation
+still uses its explicit pre-effect cleanup proof.
+
+Service accounts precede grants; reverse dependencies remove grants before
+accounts. Independent inventory checks account unique IDs, names/display names,
+secret create times, replication and versions, every policy and audit setting,
+and payload equality only for new range-owned versions. Baseline secret values
+are never accessed. Cleanup refuses changed resource incarnations and restores
+project policy using its current etag, then compares the entire baseline.
+
+A cloud node with no guest, image, hardware, topology or substrate constraint
+retains its original completion identity without adding a VM. Guest observations
+cover actual guests; the host admits cloud configuration only with proof bound to
+the retained lease and accepted preparation. Global open-posture authoring and
+large recursive authority limits must still be admitted by the pinned public RAE
+planner; declaring support does not bypass that gate. Full-size public admission
+is tracked in OpenRAE/rae#1885.
+
+Required APIs are enabled before baseline capture. Their setup is not owned or
+reversed by the range overlay. The worker needs project-scoped account create,
+update/delete and IAM-policy permissions; Secret Manager create/version/access,
+policy and delete permissions; project policy writes; and access to the existing
+bucket's `raes/project-state/` namespace for state and locks. It needs no
+organization-policy administrator role. Exercise key handling remains external.
 
 Release requires the current native destroy result to be applied, the range to
 be destroyed, the overall inventory to report verified absence without residuals,

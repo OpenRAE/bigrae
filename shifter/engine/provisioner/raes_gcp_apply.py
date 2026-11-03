@@ -365,6 +365,11 @@ def _prepare_raes_apply(
         ),
     )
     for instance in plan["instances"]:
+        if options.cloud_service_accounts:
+            selected = options.cloud_service_accounts.get(_node_address_of(instance))
+            if selected is not None:
+                instance["service_account_email"] = selected
+                instance["attach_service_account"] = True
         assert_management_login_separate(raes_plan, _node_address_of(instance), instance["host_ssh_username"])
     return plan, realized_access
 

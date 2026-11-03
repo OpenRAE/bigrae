@@ -77,6 +77,21 @@ _DIGEST_PREFIX = "sha256:"
 # Bounded transport size; operation payloads compose reference-only contracts and
 # must never carry raw provider state, so a few hundred KiB is generous.
 MAX_ENVELOPE_BYTES = 262144
+MAX_RAES_INPUT_BYTES = 4 * 1024 * 1024
+
+
+def envelope_byte_limit(value: dict[str, Any]) -> int:
+    """Only native plan inputs need a larger bound; result budgets stay unchanged."""
+    payload = value.get("payload", {})
+    if (
+        value.get("resource") == "raes-range"
+        and isinstance(payload, dict)
+        and isinstance(payload.get("plan"), dict)
+        and payload["plan"].get("kind") == "raes_provisioning_plan"
+    ):
+        return MAX_RAES_INPUT_BYTES
+    return MAX_ENVELOPE_BYTES
+
 
 ContractDict = dict[str, Any]
 
@@ -164,8 +179,9 @@ def validate_operation_envelope(envelope: object) -> ContractDict:
         normalized["authority_digest"] = digest
 
     serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    if len(serialized) > MAX_ENVELOPE_BYTES:
-        raise OperationEnvelopeError(f"operation envelope exceeds {MAX_ENVELOPE_BYTES} bytes ({len(serialized)} bytes)")
+    limit = envelope_byte_limit(normalized)
+    if len(serialized) > limit:
+        raise OperationEnvelopeError(f"operation envelope exceeds {limit} bytes ({len(serialized)} bytes)")
     return normalized
 
 

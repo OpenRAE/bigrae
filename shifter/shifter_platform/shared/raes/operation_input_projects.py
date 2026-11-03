@@ -6,9 +6,23 @@ from typing import Any
 from pydantic import TypeAdapter
 from shifter_adapter_sdk.runtime import canonical_digest
 
+from shared.gcp_cloud_content import CloudContentEnvelope
 from shared.gcp_range_projects import MAX_PROJECTS_PER_RANGE, GcpProjectLease
 from shared.raes.operation_input_identity import RaesOperationInputError
 from shared.runtime_plugin_preparation import RuntimePreparation
+
+
+def cloud_content_binding(obj: Mapping[str, Any]) -> CloudContentEnvelope | None:
+    """Admit only the sealed payload bound to the exact original native plan."""
+    if "cloud_content" not in obj:
+        return None
+    try:
+        content = CloudContentEnvelope.model_validate(obj["cloud_content"])
+        if content.plan_digest != canonical_digest(obj["plan"]):
+            raise ValueError()
+        return content
+    except (ValueError, KeyError):
+        raise RaesOperationInputError("raes cloud content binding is invalid") from None
 
 
 def project_bindings(obj: Mapping[str, Any], preparation: RuntimePreparation | None) -> tuple[GcpProjectLease, ...]:

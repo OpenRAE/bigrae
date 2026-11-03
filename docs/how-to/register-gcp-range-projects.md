@@ -1,8 +1,8 @@
 # Register GCP range projects
 
 The implementation for #2716 registers an existing dedicated GCP project and
-captures its original managed state. Cloud IAM and Secret Manager scenario
-realization is still under development. Registration alone does not qualify a
+captures its original managed state. The native cloud runtime is implemented in the current change; approved live
+qualification remains pending. Registration alone does not qualify a
 live range, deploy anything, create a project, enable APIs or grant cloud roles.
 
 An installation administrator needs the explicit

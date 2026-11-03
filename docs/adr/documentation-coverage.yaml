@@ -306,6 +306,10 @@
       "drift_sources": [
         "shifter/shifter_platform/shared/gcp_range_projects.py",
         "shifter/shifter_platform/shared/gcp_project_registration.py",
+        "shifter/shifter_platform/shared/gcp_runtime_plan.py",
+        "shifter/shifter_platform/shared/gcp_cloud_content.py",
+        "shifter/shifter_platform/shared/gcp_project_completion.py",
+        "shifter/shifter_platform/shared/raes/cloud_*.py",
         "shifter/shifter_platform/engine/models/_gcp_range_projects.py",
         "shifter/shifter_platform/engine/services/_gcp_project*.py",
         "shifter/shifter_platform/cms/api/gcp_range_projects.py",

@@ -345,6 +345,8 @@ def _validate_completion(row: OperationResultInbox, payload: dict[str, Any], ran
     from engine.models import OperationInput
     from shared.raes.completion import completed_snapshot, load_serialized_plan
 
+    from ._gcp_project_completion import project_completion_context
+
     try:
         record = OperationInput.objects.filter(operation_id=row.operation_id, request_id=row.request_id).first()
         if record is None:
@@ -367,6 +369,7 @@ def _validate_completion(row: OperationResultInbox, payload: dict[str, Any], ran
             payload["completion"],
             generation_id=str(row.operation_id),
             serialized_plan=immutable["plan"],
+            cloud_context=project_completion_context(range_obj, immutable),
         )
     except (KeyError, TypeError, ValueError):
         raise RaesRealizedAccessError("realization completion evidence is missing or invalid") from None

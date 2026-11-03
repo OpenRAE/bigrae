@@ -89,7 +89,7 @@ def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePrep
     from engine.models import OperationInput, RuntimePluginRangeBinding
     from shared.field_encryption import decrypt_value
 
-    from ._gcp_project_inputs import allocate_plan_projects
+    from ._gcp_project_inputs import allocate_plan_projects, validate_project_preparation
     from ._runtime_plugin_cleanup import preparation_cleanup_payload
 
     binding = RuntimePluginRangeBinding.objects.select_for_update().get(range=target)
@@ -111,6 +111,7 @@ def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePrep
     selected = RuntimePlan.model_validate_json(decrypt_value(record.encrypted_result))
     candidate = validate_runtime_preparation(target.range_config, selected, pin)
     leases = allocate_plan_projects(target, candidate, record.plan_digest)
+    validate_project_preparation(target.raes_cloud_content, target.range_config, candidate, leases, selected, pin)
     record = RuntimePreparation.model_validate({**record.model_dump(mode="json"), "cloud_projects": leases})
     source = OperationInput.objects.get(operation_id=source_operation_id, request_id=target.request.request_id)
     preparation_cleanup_payload(source.envelope, record)

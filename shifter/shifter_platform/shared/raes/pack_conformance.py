@@ -36,6 +36,7 @@ class ContractValidationPort:
         self,
         compiled_plan: dict[str, Any],
         participant_access: Sequence[Any] = (),
+        cloud_content: dict[str, dict[str, Any]] | None = None,
     ) -> ShifterDispatchResult:
         _ = (self.request_id, compiled_plan, participant_access)
         raise RuntimeError("contract validation cannot dispatch")
