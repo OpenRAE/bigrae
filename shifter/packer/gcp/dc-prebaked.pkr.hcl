@@ -51,6 +51,10 @@ source "googlecompute" "dc-prebaked" {
     disable-account-manager = "true"
   }
 
+  // A run that does not publish deletes this VM, its disk (Packer names the disk
+  // after the VM), and the image with its build-run label (#2747).
+  instance_name = "packer-${var.build_id}"
+
   image_name        = "${var.image_prefix}-${var.dc_image_purpose}-dc-{{timestamp}}"
   image_family      = "${var.image_prefix}-${var.dc_image_purpose}-dc"
   image_description = "Pre-promoted ${var.dc_domain_name} DC (${var.dc_image_purpose}) with AD content baked in (GCE, un-sysprepped)"
@@ -59,6 +63,7 @@ source "googlecompute" "dc-prebaked" {
     managed-by      = "packer"
     image-type      = "${var.dc_image_purpose}-dc"
     source-revision = var.source_revision
+    build-run       = var.build_id
   }
 }
 
