@@ -36,7 +36,7 @@ def allocate_gcp_projects(*, range_id: int, project_ids: list[str], plan_digest:
         with transaction.atomic():
             target = Range.objects.select_for_update(of=("self",)).select_related("request").get(pk=range_id)
             _require_allocation_state(target)
-            if target.request is None:
+            if target.request is None or target.provisioner_operation_id is None:
                 raise ValueError(_UNAVAILABLE)
             projection = project_range_authority(target.request.request_id)
             if projection.native_id != target.pk or projection.scope.organization_uuid is None:
@@ -61,6 +61,7 @@ def allocate_gcp_projects(*, range_id: int, project_ids: list[str], plan_digest:
                     raise ValueError(_UNAVAILABLE)
                 lease = GcpProjectLease(
                     lease_id=uuid4(),
+                    source_operation_id=target.provisioner_operation_id,
                     project_id=project.project_id,
                     project_number=project.project_number,
                     organization_uuid=project.organization_uuid,
@@ -83,7 +84,12 @@ def allocate_gcp_projects(*, range_id: int, project_ids: list[str], plan_digest:
 
 def _require_allocation_state(target: Range) -> None:
     """A cancellation, wrong backend or terminal range cannot acquire new custody."""
-    if target.request is None or target.range_backend != "gce" or target.status not in {"pending", "provisioning"}:
+    if (
+        target.request is None
+        or target.provisioner_operation_id is None
+        or target.range_backend != "gce"
+        or target.status not in {"pending", "provisioning"}
+    ):
         raise ValueError(_UNAVAILABLE)
     if (
         target.provisioner_operation_id is not None

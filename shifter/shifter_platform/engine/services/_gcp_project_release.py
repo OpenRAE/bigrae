@@ -27,6 +27,7 @@ def project_restoration_uses(
         return ()
     if (
         target.request is None
+        or target.provisioner_operation_id is None
         or not OperationInput.objects.filter(
             operation_id=target.provisioner_operation_id,
             request_id=target.request.request_id,

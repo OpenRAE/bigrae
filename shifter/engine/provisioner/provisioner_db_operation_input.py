@@ -177,6 +177,9 @@ def get_raes_operation_input(operation_id: str, *, request_id: str, operation: s
         projection = parse_raes_operation_input(validated.payload)
     except RaesOperationInputError as exc:
         raise OperationInputError(f"raes operation input is invalid: {exc}") from None
+    for lease in projection.gcp_projects:
+        if str(lease.request_id) != validated.request_id:
+            raise OperationInputError("registered project belongs to another request")
     return RaesOperationRun(operation_id=validated.operation_id, request_id=validated.request_id, input=projection)
 
 

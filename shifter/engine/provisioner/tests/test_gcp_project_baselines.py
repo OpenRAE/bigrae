@@ -54,6 +54,7 @@ def lease(capture, receipt):
     original = capture[0]
     return GcpProjectLease(
         lease_id=uuid4(),
+        source_operation_id=uuid4(),
         project_id=receipt.project_id,
         project_number=receipt.project_number,
         organization_uuid=original.organization_uuid,

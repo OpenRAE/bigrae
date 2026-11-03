@@ -42,6 +42,7 @@ def test_lease_is_bound_to_original_range_request_and_plan(baseline_ref):
     request, organization = uuid4(), uuid4()
     lease = GcpProjectLease(
         lease_id=uuid4(),
+        source_operation_id=uuid4(),
         project_id="synthetic-project",
         project_number="123456789012",
         organization_uuid=organization,
@@ -186,6 +187,7 @@ def test_baseline_decode_is_bounded_and_binds_original_project_organization_and_
     reference = baseline_ref.model_copy(update={"state_digest": state.digest})
     lease = GcpProjectLease(
         lease_id=uuid4(),
+        source_operation_id=uuid4(),
         project_id=baseline.project_id,
         project_number=baseline.project_number,
         organization_uuid=baseline.organization_uuid,

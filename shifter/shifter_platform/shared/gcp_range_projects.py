@@ -56,6 +56,7 @@ class GcpProjectLease(ClosedModel):
 
     binding_version: Literal[1] = 1
     lease_id: UUID
+    source_operation_id: UUID
     project_id: ProjectID
     project_number: ProjectNumber
     organization_uuid: UUID

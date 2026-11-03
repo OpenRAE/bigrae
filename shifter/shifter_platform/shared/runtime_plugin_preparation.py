@@ -9,6 +9,8 @@ from uuid import UUID
 from pydantic import Field, model_validator
 from shifter_adapter_sdk.runtime import ClosedModel, Digest, ProvisioningValue, RuntimePlan, canonical_digest
 
+from shared.gcp_range_projects import MAX_PROJECTS_PER_RANGE, GcpProjectLease
+
 _UNAVAILABLE = "Preparation mapping is unavailable or outside its declared scope"
 
 
@@ -26,6 +28,10 @@ class RuntimePreparation(ClosedModel):
         exclude_if=lambda value: value is None,
     )
 
+    cloud_projects: tuple[GcpProjectLease, ...] = Field(
+        default=(), max_length=MAX_PROJECTS_PER_RANGE, exclude_if=lambda value: not value, repr=False
+    )
+
     @model_validator(mode="after")
     def validate_state(self) -> RuntimePreparation:
         """Never confuse missing material with an accepted preparation."""
@@ -35,7 +41,16 @@ class RuntimePreparation(ClosedModel):
             if self.state == "prepared"
             else all(value is None for value in fields)
         )
-        if not valid:
+        if not valid or (self.state == "unprepared" and self.cloud_projects):
+            raise ValueError(_UNAVAILABLE)
+        if (
+            any(
+                lease.plan_digest != self.plan_digest or lease.source_operation_id != self.source_operation_id
+                for lease in self.cloud_projects
+            )
+            or len({lease.lease_id for lease in self.cloud_projects}) != len(self.cloud_projects)
+            or len({lease.project_id for lease in self.cloud_projects}) != len(self.cloud_projects)
+        ):
             raise ValueError(_UNAVAILABLE)
         return self
 

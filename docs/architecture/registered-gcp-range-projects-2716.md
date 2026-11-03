@@ -65,8 +65,17 @@ adapter prepares values, the controller validates the original RAES authority,
 resolves the resulting project references, and allocates bindings before its
 planned-state commit. Host-native `RuntimePreparation` carries optional binding
 references; the public adapter SDK grants no lease or provider authority. Mapping,
-bindings and planned state commit under the same Range mutex. Retry and cleanup
-consume these retained references, with no fresh project selection.
+bindings and planned state commit under the same Range mutex. The entire future
+cleanup envelope is validated before acceptance; a failure rolls the reservation
+back through a transaction savepoint even when the invocation records a failure.
+Each lease retains the original provisioning operation ID, distinct from its
+baseline capture operation. Retry and cleanup consume these retained references,
+with no fresh project or image selection. Input projection is read-only; only
+admitted launch or preparation acceptance can allocate custody.
+
+An unreleased project also blocks range ownership and scope moves. Preparation
+and commit both check that hold under the existing Range mutex. Retiring VPN
+access alone cannot retire cloud permissions or authorize a new customer scope.
 
 ## Authored intent and provider readback
 
@@ -140,7 +149,7 @@ flowchart LR
 | --- | --- |
 | Operator API and registration worker | Native action, current exact credential, organization ancestry, fixed command/profile and generation fence; no portal cloud I/O. |
 | Project inventory | Closed, bounded metadata; immutable encrypted artifact and digest/identity checks; protected deployment projects refused. |
-| Allocation | Real PostgreSQL uniqueness and row locks; all-or-nothing multi-project allocation; no foreign organization; retained use cannot be reparented. |
+| Allocation | Real PostgreSQL uniqueness and row locks; all-or-nothing multi-project allocation; no foreign organization; retained use cannot be reparented; owner/scope moves blocked while custody remains. |
 | Preparation | Original RAES constraint admission, project allocation and planned state atomic under Range mutex; full future cleanup envelope remains executable. |
 | Provider preflight | All references, shapes, payloads, identifiers, baseline and supported effect routes checked before the first cloud mutation. |
 | Setup | Literal SDK request bodies; scoped resources only; current etags; bounded propagation/readback; no fabricated observations. |

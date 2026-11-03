@@ -248,6 +248,7 @@ def _raes_input_payload(
     access; warm activation later carries the access bindings and realizes the
     claimant's fresh access.
     """
+    from engine.services._gcp_project_inputs import projects_for_input, retained_project_cleanup_payload
     from engine.services._model_guest_bindings import project_model_guest_bindings
     from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
     from engine.services._runtime_plugin_cleanup import retained_cleanup_payload
@@ -258,6 +259,9 @@ def _raes_input_payload(
         retained = retained_cleanup_payload(target, pin)
         if retained is not None:
             return retained
+        retained = retained_project_cleanup_payload(target)
+        if retained is not None:
+            return retained
     return build_raes_operation_input(
         plan=plan,
         bindings=RaesInputBindings(
@@ -265,6 +269,7 @@ def _raes_input_payload(
             access=() if suppress_access else _raes_access_bindings(target),
             artifact=_raes_artifact_bindings(target),
             runtime_plugin=pin,
+            gcp_projects=projects_for_input(target, plan, pin),
             model_enrollments=project_model_guest_bindings(target, pin) if not suppress_access else (),
             remote_access=None if suppress_access else _raes_remote_access(target),
         ),

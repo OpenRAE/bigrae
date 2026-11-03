@@ -50,12 +50,20 @@ def target_range(registration=None, *, organization=None):
             cms_range_uuid=uuid4(),
             owner_principal_uuid=registration.created_by_principal_uuid,
             status="pending",
+            provisioner_operation_id=uuid4(),
             range_backend="gce",
             range_config={},
             **scope,
         )
     request = Request.objects.create(request_id=uuid4(), request_type="range")
-    return Range.objects.create(request=request, status="pending", workspace_id=1, range_backend="gce", range_config={})
+    return Range.objects.create(
+        request=request,
+        status="pending",
+        provisioner_operation_id=uuid4(),
+        workspace_id=1,
+        range_backend="gce",
+        range_config={},
+    )
 
 
 def bind(registration, target):
@@ -63,6 +71,7 @@ def bind(registration, target):
 
     lease = GcpProjectLease(
         lease_id=uuid4(),
+        source_operation_id=target.provisioner_operation_id or uuid4(),
         project_id=registration.project_id,
         project_number=registration.project_number,
         organization_uuid=registration.organization_uuid,

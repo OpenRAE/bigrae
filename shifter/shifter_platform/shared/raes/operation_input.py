@@ -35,6 +35,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
+from shared.gcp_range_projects import GcpProjectLease
 from shared.model_access.guest_binding import ModelGuestBinding
 from shared.raes.artifact_binding import MAX_ARTIFACT_BINDINGS, ArtifactBinding, ArtifactBindingError
 from shared.raes.content_delivery import ContentDeliveryError, DeliveryBinding
@@ -59,6 +60,7 @@ from .operation_input_identity import (
     image_lookup_key,
     plan_image_lookup_keys,
 )
+from .operation_input_projects import project_bindings
 from .operation_input_remote_access import RaesRemoteAccess, parse_remote_access
 
 __all__ = [
@@ -97,6 +99,7 @@ class RaesInputBindings:
     runtime_preparation: RuntimePreparation | None = None
     model_enrollments: tuple[ModelGuestBinding, ...] = ()
     remote_access: RaesRemoteAccess | None = None
+    gcp_projects: tuple[GcpProjectLease, ...] = ()
 
 
 # Bounded per ADR-043-R2/R7: the input is a reference-only projection, never a
@@ -119,6 +122,7 @@ _INPUT_KEYS = frozenset(
         "model_enrollments",
         "resource_generation",
         "remote_access",
+        "gcp_projects",
     }
 )
 
@@ -143,6 +147,7 @@ _OPTIONAL_INPUT_KEYS = frozenset(
         "model_enrollments",
         "resource_generation",
         "remote_access",
+        "gcp_projects",
     }
 )
 
@@ -177,6 +182,7 @@ class RaesOperationInput:
     model_enrollments: tuple[ModelGuestBinding, ...] = ()
     resource_generation: str | None = None
     remote_access: RaesRemoteAccess | None = None
+    gcp_projects: tuple[GcpProjectLease, ...] = ()
 
     def artifact_binding_for(self, target: str) -> ArtifactBinding | None:
         """Return the fenced artifact binding for a node address, or None.
@@ -405,6 +411,7 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
         model_enrollments=_model_enrollments(obj, plugin),
         resource_generation=resource_generation,
         remote_access=remote_access,
+        gcp_projects=project_bindings(obj, preparation),
     )
 
 
@@ -451,5 +458,7 @@ def build_raes_operation_input(
         payload["resource_generation"] = identity.resource_generation
     if bindings.remote_access is not None:
         payload["remote_access"] = bindings.remote_access.to_transport()
+    if bindings.gcp_projects:
+        payload["gcp_projects"] = [lease.model_dump(mode="json") for lease in bindings.gcp_projects]
     parse_raes_operation_input(payload)
     return payload

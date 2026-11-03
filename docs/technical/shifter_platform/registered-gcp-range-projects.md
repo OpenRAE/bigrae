@@ -2,8 +2,9 @@
 
 Issue #2716 introduces Engine-owned project registration and retained range
 leases. Registration, encrypted baseline capture and custody enforcement are
-implemented in code. Scenario overlay realization, integration with range
-preparation and independent provider qualification remain in development.
+implemented in code. Native launch and preparation acceptance retain the selected
+projects for retries and cleanup. Scenario overlay realization and independent
+provider qualification remain in development.
 Nothing in this page claims a tenant deployment or live acceptance.
 
 ## Native capture boundary
@@ -65,6 +66,22 @@ cannot be deleted, and a new use cannot begin already released. Allocation locks
 the Range then project rows in stable order, checks native organization scope,
 and reserves all selected projects atomically. A replay retains its original
 request, range, plan and lease identities.
+
+Only admitted native launch and preparation acceptance allocate projects; reading
+an input cannot reserve one. Concrete native scope references select registered
+project IDs, and any stated project number must match. Preparation validates the
+original RAES authority before allocation. Its sealed mapping, project references
+and invocation result commit together, after validating the full future cleanup
+envelope against the existing transport limit. A caught acceptance failure rolls
+back all newly reserved projects.
+
+Each lease records its original provisioning operation. Cleanup recovers that
+operation's immutable input, retaining its project and image references even after
+registry configuration changes. Prepared workers apply values only to a local
+execution copy and carry the same approved lease references into teardown.
+References are bound to the original plan, range, request and organization; they
+grant no adapter-selected cloud authority. Unreleased project custody blocks
+range ownership and scope moves, including after VPN access is retired.
 
 Release requires the current native destroy result to be applied, the range to
 be destroyed, the overall inventory to report verified absence without residuals,
