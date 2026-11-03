@@ -360,7 +360,7 @@ jobs:
             EXPECTED_DOMAIN="${EXPECTED_DOMAIN}" SSH_KEY="${VALIDATOR_SSH_KEY}" \
             bash shifter/packer/gcp/scripts/validate/gather-evidence.sh
 
-      - name: Create isolated read-only SBOM scanner
+      - name: Create isolated credentialless SBOM scanner
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
           GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
@@ -405,19 +405,6 @@ jobs:
             --metadata=block-project-ssh-keys=TRUE \
             --metadata-from-file="ssh-keys=${VALIDATOR_SSH_KEYS_FILE}" \
             --labels=project=shifter,managed-by=packer-validate,purpose=sbom-scan
-          gcloud compute instances attach-disk "${SBOM_SCANNER_VM}" \
-            --project="${GCP_PROJECT_ID}" \
-            --zone="${ZONE}" \
-            --disk="${SBOM_DISK}" \
-            --device-name=shifter-candidate \
-            --mode=ro
-          ATTACHED_MODE="$(gcloud compute instances describe "${SBOM_SCANNER_VM}" \
-            --project="${GCP_PROJECT_ID}" --zone="${ZONE}" --format=json \
-            | jq -er '[.disks[] | select(.deviceName == "shifter-candidate")][0].mode')"
-          if [ "${ATTACHED_MODE}" != "READ_ONLY" ]; then
-            echo "::error::Candidate disk is not attached to the scanner in read-only mode."
-            exit 1
-          fi
           {
             echo "SBOM_SCANNER_SOURCE_IMAGE=${SCANNER_SOURCE_IMAGE}"
             echo "SBOM_SCANNER_SOURCE_IMAGE_ID=${SCANNER_SOURCE_IMAGE_ID}"
@@ -432,17 +419,38 @@ jobs:
           chmod 700 "${VALIDATION_EVIDENCE_DIR}"
           guest_sbom="${VALIDATION_EVIDENCE_DIR}/guest-sbom.spdx.json"
           common_flags=(--project="${GCP_PROJECT_ID}" --zone="${ZONE}" --tunnel-through-iap --ssh-key-file="${VALIDATOR_SSH_KEY}" --quiet)
+          probe_log="${RUNNER_TEMP}/sbom-scanner-probe.log"
           scanner_ready=0
           for _ in $(seq 1 40); do
             if gcloud compute ssh "validator@${SBOM_SCANNER_VM}" "${common_flags[@]}" \
-              --command=true >/dev/null 2>&1; then
+              --command=true >"${probe_log}" 2>&1; then
               scanner_ready=1
               break
             fi
             sleep 10
           done
           if [ "${scanner_ready}" -ne 1 ]; then
+            echo "Last connection attempt:"
+            tail -n 20 "${probe_log}"
             echo "::error::Trusted SBOM scanner did not become reachable over IAP."
+            exit 1
+          fi
+          # Attach the candidate disk only after the scanner has booted. A
+          # candidate from the same base image has the same filesystem labels
+          # (for example UEFI). If the disk appears during boot, fstab can
+          # resolve to the write-protected candidate partition, the fsck fails,
+          # and the scanner stops in emergency mode without sshd (#2736).
+          gcloud compute instances attach-disk "${SBOM_SCANNER_VM}" \
+            --project="${GCP_PROJECT_ID}" \
+            --zone="${ZONE}" \
+            --disk="${SBOM_DISK}" \
+            --device-name=shifter-candidate \
+            --mode=ro
+          ATTACHED_MODE="$(gcloud compute instances describe "${SBOM_SCANNER_VM}" \
+            --project="${GCP_PROJECT_ID}" --zone="${ZONE}" --format=json \
+            | jq -er '[.disks[] | select(.deviceName == "shifter-candidate")][0].mode')"
+          if [ "${ATTACHED_MODE}" != "READ_ONLY" ]; then
+            echo "::error::Candidate disk is not attached to the scanner in read-only mode."
             exit 1
           fi
           gcloud compute scp "${SYFT_BINARY}" \
