@@ -3,6 +3,24 @@
   "docs_root": "docs",
   "features": [
     {
+      "id": "disposable-vm-workers",
+      "title": "Disposable VM worker lifecycle",
+      "requirement": "GEN-001",
+      "user_docs": [
+        "how-to/disposable-workers.md"
+      ],
+      "technical_docs": [
+        "technical/shifter_platform/disposable-workers.md"
+      ],
+      "drift_sources": [
+        "shifter/shifter_platform/engine/services/_disposable_workers.py",
+        "shifter/shifter_platform/engine/services/_worker_retirement.py",
+        "shifter/shifter_platform/engine/worker_retention.py",
+        "shifter/shifter_platform/shared/disposable_workers.py",
+        "shifter/shifter_platform/engine/management/commands/disposable_workers.py"
+      ]
+    },
+    {
       "id": "trial-archive-custody",
       "title": "Central tenant trial archive custody",
       "requirement": "GEN-001",

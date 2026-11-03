@@ -8,7 +8,7 @@
     "rules": [
       {
         "id": "ADR-001-R1",
-        "description": "Cross-layer imports must conform to scripts/check_layer_imports/layer_imports.yaml; service-package imports expose only the public facade (for example, cms.services), not private split-package implementation submodules such as cms.services._range_pause or from cms.services import _range_pause. CyberScript is retired and no layer, including shared, may import it; retained Shifter-owned contracts live natively under shared.",
+        "description": "Cross-layer imports must conform to scripts/check_layer_imports/layer_imports.yaml; service-package imports expose only the public facade (for example, cms.services), not private split-package implementation submodules such as cms.services._range_pause or from cms.services import _range_pause. CyberScript is retired and no layer, including shared, may import it; retained Shifter-owned contracts live natively under shared. The composition root may resolve Engine-owned disposable worker ancestry through engine.services.worker_credential_scope and rejects UUID collisions with CMS identities.",
         "checks": [
           "layer-imports"
         ]
@@ -48,7 +48,9 @@
       "scripts/adr_guard/adr_guard.py",
       ".importlinter",
       "shifter/shifter_platform/management/management/commands/check_model_fks.py",
-      "docs/architecture/mission-control-runtime-service-boundary-preflight-994.md"
+      "docs/architecture/mission-control-runtime-service-boundary-preflight-994.md",
+      "shifter/shifter_platform/config/credential_scope.py",
+      "shifter/shifter_platform/engine/services/_disposable_workers.py"
     ]
   },
   {
@@ -2676,6 +2678,11 @@
         "id": "ADR-043-R8",
         "description": "Runtime plugin planning MUST remain anchored to the existing operation generation and immutable range pin. Engine creates bounded SDK requests in the launch transaction; the isolated controller validates ownership, exact input digest, phase and expiry and rechecks generation under the range lock before recording terminal output. The provisioner may SELECT only invocation id, operation_id, state, input_digest and result from the operation response projection; it receives no registry or controller-input reads, writes, or Job-launch authority. It MUST reauthorize every plan against its original input before cloud or guest mutation. Configure and verify execute only on core-resolved pinned guests inside the existing cleanup boundary; planning success alone cannot imply readiness. PostgreSQL effective-privilege tests must prove both the narrow grant and denied mutations.",
         "checks": []
+      },
+      {
+        "id": "ADR-043-R9",
+        "description": "Private VM management access is an explicit, bounded target capability in immutable operation input. The provisioner returns its closed credential-reference projection outside participant members. The Engine applier requires exactly the admitted targets and retains accepted operation/resource-generation bindings in private Engine state; participant and public range projections never carry the management credential reference.",
+        "checks": []
       }
     ],
     "exceptions": [],
@@ -2695,7 +2702,10 @@
       "shifter/shifter_platform/shared",
       "shifter/engine/provisioner/provisioner_db.py",
       "shifter/engine/provisioner/state_helpers.py",
-      "docs/architecture/native-ec2-runtime.md"
+      "docs/architecture/native-ec2-runtime.md",
+      "shifter/shifter_platform/shared/range_management.py",
+      "shifter/shifter_platform/engine/services/_range_management.py",
+      "shifter/engine/provisioner/raes_range_members.py"
     ]
   },
   {
@@ -3012,6 +3022,11 @@
         "id": "ADR-047-R6",
         "description": "Capacity assessment (provider reads, decision, budget sizing) and capacity admission (per-range draw-down) are separate operations. Admission performs no provider I/O, is idempotent on a stable identity known before the range exists, refuses before creation rather than after, and returns its draw on failed creation and on teardown. Consumption is bounded by database constraints rather than a read-then-write check alone, and budgets plus their open draws are released when their window ends.",
         "checks": []
+      },
+      {
+        "id": "ADR-047-R7",
+        "description": "Disposable VM workers draw enforcing capacity budgets before native dispatch. Open worker draws retain reservation lifetime and shared headroom beyond a time window until exact-generation provider absence is verified; expiry, explicit release, failure, cancellation and holds cannot release live custody. Global admission uses the deployment-wide durable policy mutex.",
+        "checks": []
       }
     ],
     "exceptions": [],
@@ -3034,7 +3049,10 @@
       "shifter/shifter_platform/tests/ctf/test_capacity_admission_wiring.py",
       "shifter/shifter_platform/engine/services/_capacity_admit.py",
       "shifter/shifter_platform/tests/engine/test_capacity_admit.py",
-      "shifter/shifter_platform/tests/ctf/test_capacity_draw_wiring.py"
+      "shifter/shifter_platform/tests/ctf/test_capacity_draw_wiring.py",
+      "docs/technical/shifter_platform/disposable-workers.md",
+      "shifter/shifter_platform/engine/models/_capacity_assessment.py",
+      "shifter/shifter_platform/tests/engine/services/test_disposable_workers.py"
     ]
   },
   {
@@ -4236,6 +4254,11 @@
         "id": "ADR-063-R6",
         "description": "The public surface MUST be additive within v1 per ADR-040 (new operations and optional inputs/response fields), regenerate openapi/v1.json and the generated frontend types deterministically, and reuse the shared sanitized error envelope, shf_ bearer scopes, session/CSRF, and PageNumberPagination; changed required inputs, status codes, auth, error semantics, or closed response unions require the ADR-040 versioning process. Caller keys, intent JSON, credentials, and environment maps MUST NOT enter process argv, logs, audit context, range error text, events, metric labels, or public error envelopes; only a restricted expiring keyed intent fingerprint for conflict detection is permitted. Evidence of implementation MUST include real-PostgreSQL contention tests on the make test-platform-postgres lane (preserving its fail-on-skip guard and provisioner effective-privilege tests) covering same-key insert races, different-intent contenders, workspace revocation/rebind, quota, and cancel/result races with committed-state checks; worker/provider-loss drills that kill launcher, provisioner, and applier at durable boundaries including after provider mutation but before result append; and live-boundary inventory/readback on a real deployment (mock-only deletion calls are insufficient) recording exact deployed commits/digests, environment, commands, observations, residual owner, and recovery outcome.",
         "checks": []
+      },
+      {
+        "id": "ADR-063-R7",
+        "description": "Disposable worker holds belong to exact caller principals and native generations. Native destructive admission and dispatch must refuse any active hold. Holds begin only on ready workers, and expired holds require operator recovery without deletion. Cleanup uses bounded automatic work, retained ownership, exact-generation provider absence and an audited operator path. Worker custody cannot be transferred or reset for another trial.",
+        "checks": []
       }
     ],
     "exceptions": [],
@@ -4253,7 +4276,10 @@
       "shifter/shifter_platform/engine/operation_inputs.py",
       "shifter/shifter_platform/engine/models",
       "shifter/shifter_platform/shared/operation_envelope.py",
-      "shifter/shifter_platform/mission_control/api"
+      "shifter/shifter_platform/mission_control/api",
+      "docs/architecture/disposable-trial-workers-boundary-2741.md",
+      "shifter/shifter_platform/engine/worker_retention.py",
+      "shifter/shifter_platform/engine/services/_worker_retirement.py"
     ]
   },
   {
@@ -4331,7 +4357,7 @@
       },
       {
         "id": "ADR-066-R3",
-        "description": "Account, organization, and workspace membership targets a principal and remains explicit at its own scope. workspaces.services owns SQL resource-ancestry resolution; cross-domain consumers use validated scalar projections. Delegation proofs enumerate a bounded complete descendant set through SQL-owning domain service boundaries before OpenFGA evaluates it; provider graph discovery is never authoritative ancestry. At S8, OpenFGA is authoritative for application permission relationships while SQL owns identities, resource state/ancestry, and display metadata. SQL does not mirror or evaluate OpenFGA relationships. Provider groups, Django groups, token scopes, CTF roles, cloud IAM, and UI capabilities are not alternate application permission stores or implicit grants. A blocking quality job runs released OpenFGA/PostgreSQL conformance for platform changes and fails when the harness is not configured.",
+        "description": "Account, organization, and workspace membership targets a principal and remains explicit at its own scope. workspaces.services owns SQL resource-ancestry resolution; cross-domain consumers use validated scalar projections. Delegation proofs enumerate a bounded complete descendant set through SQL-owning domain service boundaries before OpenFGA evaluates it; provider graph discovery is never authoritative ancestry. At S8, OpenFGA is authoritative for application permission relationships while SQL owns identities, resource state/ancestry, and display metadata. Engine-owned workers publish their exact native range parent through the existing hierarchy relationship port, retain the provider store/model, and require primary readback before dispatch; uncertain publication retains custody without cloud effects. SQL does not mirror or evaluate OpenFGA relationships. Provider groups, Django groups, token scopes, CTF roles, cloud IAM, and UI capabilities are not alternate application permission stores or implicit grants. A blocking quality job runs released OpenFGA/PostgreSQL conformance for platform changes and fails when the harness is not configured.",
         "checks": []
       },
       {

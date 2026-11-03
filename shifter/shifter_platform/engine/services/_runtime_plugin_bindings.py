@@ -26,7 +26,13 @@ from shared.credentials import (
 )
 from shared.exceptions import ValidationError
 from shared.identity_scope import ResourceScope
-from shared.runtime_plugin_binding import PluginTargetBindings, RuntimePluginPin, RuntimePluginScope
+from shared.runtime_plugin_binding import (
+    PluginTargetBindings,
+    RuntimePin,
+    RuntimePluginPin,
+    RuntimePluginScope,
+    parse_runtime_pin,
+)
 
 from ._runtime_plugin_authority import admit_plugin_authority, current_plugin_credential, fence_plugin_authority
 from ._runtime_plugin_file_selection import assert_file_selection
@@ -362,7 +368,7 @@ def resolve_runtime_plugin_pin(
         raise ValidationError("The installed plugin does not match this pack's compiled guests") from None
 
 
-def persist_runtime_plugin_pin(target: Range, pin: RuntimePluginPin | None) -> None:
+def persist_runtime_plugin_pin(target: Range, pin: RuntimePin | None) -> None:
     """Retain the admitted installation and guest mapping for the range lifetime."""
     from engine.models import RuntimePluginRangeBinding
 
@@ -375,7 +381,7 @@ def persist_runtime_plugin_pin(target: Range, pin: RuntimePluginPin | None) -> N
         )
 
 
-def retained_runtime_plugin_pin(target: Range) -> RuntimePluginPin | None:
+def retained_runtime_plugin_pin(target: Range) -> RuntimePin | None:
     """Read the original pin for retries/cleanup even after registry retirement."""
     from engine.models import RuntimePluginRangeBinding
 
@@ -383,7 +389,7 @@ def retained_runtime_plugin_pin(target: Range) -> RuntimePluginPin | None:
     if row is None:
         return None
     try:
-        pin = RuntimePluginPin.model_validate(row.pin)
+        pin = parse_runtime_pin(row.pin)
         # Check the exact retained bytes, not a re-serialized model: adding a
         # defaulted binding field must not make pre-upgrade pins undeletable.
         if canonical_digest(row.pin) != row.pin_digest or pin.installation_id != row.installation_id:

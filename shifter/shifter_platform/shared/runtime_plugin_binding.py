@@ -279,6 +279,8 @@ class RuntimePluginPin(RuntimePluginScope):
 
     @model_validator(mode="after")
     def validate_pin(self) -> Self:
+        if self.manifest.protocol == "bigrae.runtime-plugin/v2":
+            raise ValueError("Apparatus protocol cannot carry pack identity")
         self.bindings.validate_manifest(self.manifest)
         if set(self.files) != set(self.manifest.required_files) or any(
             self.bindings.file_assets[name] != item.asset_uuid for name, item in self.files.items()
@@ -295,8 +297,49 @@ class RuntimePluginPin(RuntimePluginScope):
         return canonical_digest(self.model_dump(mode="json"))
 
 
+class RuntimeApparatusPin(ClosedModel):
+    """Explicit installed apparatus software, independent of content packs."""
+
+    binding_version: Literal[2] = 2
+    organization_uuid: UUID
+    apparatus_digest: Digest
+    installation_id: UUID
+    manifest: PluginManifest
+    bindings: PluginTargetBindings
+    files: dict[Identifier, RuntimeFileBinding] = Field(default_factory=dict, max_length=0)
+
+    @model_validator(mode="after")
+    def validate_pin(self) -> Self:
+        """Require exact SDK apparatus scope and forbid substrate authority."""
+        if self.manifest.protocol != "bigrae.runtime-plugin/v2" or self.manifest.required_files:
+            raise ValueError("Apparatus software requires its supported SDK protocol")
+        if self.bindings.file_assets or self.bindings.image_profiles or self.manifest.model_bindings:
+            raise ValueError("Apparatus software cannot replace admitted substrate or model authority")
+        self.bindings.validate_manifest(self.manifest)
+        if len(self.model_dump_json().encode()) > 32768:
+            raise ValueError("Apparatus binding exceeds its bound")
+        return self
+
+    @property
+    def digest(self) -> str:
+        """Identify the immutable installed apparatus binding."""
+        return canonical_digest(self.model_dump(mode="json"))
+
+
+RuntimePin = RuntimePluginPin | RuntimeApparatusPin
+
+
+def parse_runtime_pin(value: object) -> RuntimePin:
+    """Preserve each version's closed input shape and explicit identity kind."""
+    if isinstance(value, (RuntimePluginPin, RuntimeApparatusPin)):
+        value = value.model_dump(mode="json")
+    if isinstance(value, dict) and value.get("binding_version") == 2:
+        return RuntimeApparatusPin.model_validate(value)
+    return RuntimePluginPin.model_validate(value)
+
+
 def runtime_plugin_requests(
-    pin: RuntimePluginPin,
+    pin: RuntimePin,
     plan: dict[str, Any],
     operation_id: UUID,
     range_id: int,
@@ -309,7 +352,7 @@ def runtime_plugin_requests(
     the isolated worker cannot observe guests or call a provider. The host later
     resolves actions against its own realized node-to-transport map.
     """
-    pin = RuntimePluginPin.model_validate(pin)
+    pin = parse_runtime_pin(pin)
     providers: dict[str, Literal["aws", "gcp"]] = {"gce": "gcp", "ec2": "aws"}
     if backend not in providers:
         raise ValueError("Runtime plugins are not supported by this range backend")
@@ -324,7 +367,11 @@ def runtime_plugin_requests(
             protocol=pin.manifest.protocol,
             invocation_id=uuid5(operation_id, f"runtime-plugin:{phase}"),
             operation_id=operation_id,
-            pack_digest=pin.pack_digest,
+            **(
+                {"pack_digest": pin.pack_digest}
+                if isinstance(pin, RuntimePluginPin)
+                else {"apparatus_digest": pin.apparatus_digest}
+            ),
             manifest=pin.manifest,
             phase=phase,
             provider=providers[backend],

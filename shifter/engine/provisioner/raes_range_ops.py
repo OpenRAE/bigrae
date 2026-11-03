@@ -64,6 +64,7 @@ from raes_openvpn import (
 )
 from raes_plan import RaesPlan, parse_plan
 from raes_range_contract import _classify_failure, _require_gce_live_fire_binding
+from raes_range_members import realized_management
 from raes_range_members import realized_members as _realized_members
 from raes_snapshot import snapshot_resources
 from range_placement import resolve_range_cell_placement
@@ -242,6 +243,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             raise RaesRealizationError("composition verification proof is invalid")
         resources = snapshot_resources(raes_plan, set(verified_addresses))
         members = _realized_members(apply_result)
+        management = realized_management(apply_result, operation_input.management_targets)
         completion = build_completion_evidence(
             operation_input.plan,
             resources=resources,
@@ -269,6 +271,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         {
             "raes_status": "succeeded",
             "members": members,
+            **({"management_access": management} if management else {}),
             "completion": completion,
             **vpn_access_fragment(apply_result.get("vpn_access")),
         },

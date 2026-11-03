@@ -16,3 +16,7 @@ Step-by-step walkthroughs for common tasks.
 ## Troubleshooting
 
 - [Troubleshooting Guide](troubleshooting) - Common issues and solutions
+
+## Disposable workers
+
+- [Operate disposable VM workers](disposable-workers.md) - Admission, smoke, evidence holds, and recovery.

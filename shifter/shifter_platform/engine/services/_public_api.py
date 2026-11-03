@@ -1,6 +1,21 @@
 """Stable declared export inventory for the Engine service facade."""
 
 PUBLIC_API = (
+    "list_worker_holds",
+    "WorkerQualification",
+    "qualify_disposable_worker",
+    "bind_worker_trial",
+    "WorkerHoldView",
+    "acquire_worker_hold",
+    "release_worker_hold",
+    "retire_disposable_worker",
+    "resume_worker_cleanup",
+    "reconcile_disposable_workers",
+    "WorkerView",
+    "configure_worker_policy",
+    "create_disposable_worker",
+    "get_disposable_worker",
+    "worker_credential_scope",
     "CLEANUP_NOT_APPLICABLE",
     "CLEANUP_PENDING",
     "CLEANUP_UNKNOWN",

@@ -103,7 +103,7 @@ def launch_plugin(
         container_name=PLUGIN_CONTAINER,
         env_overrides={
             "BIGRAE_PLUGIN_INPUT"
-            if request.protocol == "bigrae.runtime-plugin/v1"
+            if request.protocol.startswith("bigrae.runtime-plugin/")
             else "SHIFTER_PLUGIN_INPUT": request.model_dump_json()
         },
         task_identity=str(request.invocation_id),

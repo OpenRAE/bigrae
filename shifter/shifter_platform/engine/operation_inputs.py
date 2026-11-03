@@ -97,6 +97,31 @@ def _raes_image_candidates(plan: dict[str, object], target: Range | None = None)
     """
     from engine.models import RaesImageMapping
 
+    if target is not None:
+        from engine.models import DisposableWorker
+        from shared.disposable_workers import WorkerHostProfile
+        from shared.raes.worker_host import worker_host_shape
+
+        worker = DisposableWorker.objects.filter(range_id=target.pk).first()
+        if worker is not None:
+            profile = WorkerHostProfile.model_validate(worker.profile)
+            if profile.digest != worker.profile_digest or profile.plan != plan:
+                raise ValueError("Worker apparatus binding changed")
+            _, source, version, _, _ = worker_host_shape(plan)
+            image = profile.image
+            return {
+                candidate_key("gce", source): [
+                    {
+                        "source_version": version,
+                        "image_ref": image.image_ref,
+                        "machine_type": image.machine_type,
+                        "disk_size_gb": image.disk_size_gb,
+                        "disk_type": image.disk_type,
+                        "management_ssh_port": image.management_ssh_port,
+                        "management_ssh_username": image.management_ssh_username,
+                    }
+                ]
+            }
     keys = plan_image_lookup_keys(plan)
     if not keys:
         return {}
@@ -255,6 +280,7 @@ def _raes_input_payload(target: Range, request: Request, *, suppress_access: boo
         plan=plan,
         bindings=RaesInputBindings(
             delivery=_raes_delivery_bindings(target),
+            management_targets=_management_targets(target, plan),
             access=() if suppress_access else _raes_access_bindings(target),
             artifact=_raes_artifact_bindings(target),
             runtime_plugin=pin,
@@ -396,3 +422,12 @@ def materialize_operation_input(payload: dict[str, object], operation_id: UUID |
         envelope=envelope,
     )
     queue_runtime_plugin_plans(envelope)
+
+
+def _management_targets(target: Range, plan: dict[str, object]) -> tuple[str, ...]:
+    from engine.models import DisposableWorker
+    from shared.raes.worker_host import worker_host_shape
+
+    if not DisposableWorker.objects.filter(range_id=target.pk).exists():
+        return ()
+    return (worker_host_shape(plan)[0],)

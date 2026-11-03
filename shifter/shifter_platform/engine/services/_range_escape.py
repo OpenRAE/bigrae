@@ -36,6 +36,7 @@ class GuestProbeRequest:
     stdin: str
     port: int = 22
     timeout_s: int = 30
+    max_output_bytes: int | None = None
 
 
 @dataclass(frozen=True)
@@ -103,7 +104,10 @@ async def _run_guest_probe(request: GuestProbeRequest) -> str:
             username=request.username,
             client_keys=[key],
             known_hosts=known_hosts,
+            connect_timeout=request.timeout_s,
         ) as conn:
+            if request.max_output_bytes is not None:
+                return await asyncio.wait_for(_bounded_probe(conn, request), timeout=request.timeout_s)
             result = await conn.run(request.command, input=request.stdin, timeout=request.timeout_s)
     except (asyncssh.Error, OSError, ValueError) as exc:
         # OSError already covers TimeoutError (the asyncssh command timeout).
@@ -111,6 +115,39 @@ async def _run_guest_probe(request: GuestProbeRequest) -> str:
     if result.exit_status not in (0, None):
         raise GuestProbeError(f"in-guest probe exited {result.exit_status} for {request.host}:{request.port}")
     return result.stdout if isinstance(result.stdout, str) else ""
+
+
+async def _bounded_probe(conn: asyncssh.SSHClientConnection, request: GuestProbeRequest) -> str:
+    """Bound both streams before buffering output from an untrusted guest."""
+    limit = request.max_output_bytes
+    if type(limit) is not int or not 1 <= limit <= 1048576:
+        raise GuestProbeError("invalid guest output bound")
+    process = await conn.create_process(request.command)
+    try:
+        process.stdin.write(request.stdin)
+        process.stdin.write_eof()
+        stdout, _ = await asyncio.gather(
+            _read_bounded_stream(process.stdout, limit), _read_bounded_stream(process.stderr, limit)
+        )
+        await process.wait_closed()
+        if process.exit_status != 0:
+            raise GuestProbeError("guest probe failed")
+        return stdout
+    finally:
+        process.close()
+
+
+async def _read_bounded_stream(stream: asyncssh.SSHReader[str], limit: int) -> str:
+    chunks = []
+    size = 0
+    while True:
+        part = await stream.read(limit + 1 - size)
+        if not part:
+            return "".join(chunks)
+        size += len(part.encode())
+        if size > limit:
+            raise GuestProbeError("guest output exceeds its bound")
+        chunks.append(part)
 
 
 __all__ = ["GuestProbeError", "GuestProbeRequest", "RangeMembership", "get_range_membership", "run_guest_probe"]

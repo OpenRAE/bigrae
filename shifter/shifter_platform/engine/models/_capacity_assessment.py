@@ -97,6 +97,10 @@ class CapacityReservation(models.Model):
         default=0.0,
         help_text="Amount of the committed budget drawn down by admitted ranges",
     )
+    release_on_absence = models.BooleanField(
+        default=False,
+        help_text="Open draws retain this budget beyond its window until provider-owned cleanup settles them",
+    )
     unit_amount = models.FloatField(
         default=0.0,
         help_text="Amount one range draws from this budget when admitted",

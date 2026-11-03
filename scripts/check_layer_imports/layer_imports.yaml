@@ -133,6 +133,7 @@ allowed_symbols:
       - hierarchy_target_scope
   config:
     engine.services:
+      - worker_credential_scope
       # S8 composition inventories and converts Engine-owned retained rows.
       - apply_identity_cutover_resources
       - identity_cutover_contract_gaps

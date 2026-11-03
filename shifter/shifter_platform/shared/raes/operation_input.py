@@ -43,7 +43,7 @@ from shared.raes.participant_access import (
     ParticipantAccessBinding,
     ParticipantAccessError,
 )
-from shared.runtime_plugin_binding import RuntimePluginPin
+from shared.runtime_plugin_binding import RuntimePin, parse_runtime_pin
 
 from .operation_input_candidates import MAX_IMAGE_CANDIDATES, MAX_IMAGE_KEYS, _validated_candidates
 from .operation_input_enrollment import _model_enrollments
@@ -92,9 +92,10 @@ class RaesInputBindings:
     delivery: Sequence[DeliveryBinding]
     access: Sequence[ParticipantAccessBinding] = ()
     artifact: Sequence[ArtifactBinding] = ()
-    runtime_plugin: RuntimePluginPin | None = None
+    runtime_plugin: RuntimePin | None = None
     model_enrollments: tuple[ModelGuestBinding, ...] = ()
     remote_access: RaesRemoteAccess | None = None
+    management_targets: tuple[str, ...] = ()
 
 
 # Bounded per ADR-043-R2/R7: the input is a reference-only projection, never a
@@ -116,6 +117,7 @@ _INPUT_KEYS = frozenset(
         "model_enrollments",
         "resource_generation",
         "remote_access",
+        "management_targets",
     }
 )
 
@@ -132,7 +134,15 @@ _INPUT_KEYS = frozenset(
 # ``remote_access`` (#2030) is emitted only for a range holding an OpenVPN
 # capability, so every other input stays byte-identical to the prior shape.
 _OPTIONAL_INPUT_KEYS = frozenset(
-    {"artifact_bindings", "egress_mode", "runtime_plugin", "model_enrollments", "resource_generation", "remote_access"}
+    {
+        "artifact_bindings",
+        "egress_mode",
+        "runtime_plugin",
+        "model_enrollments",
+        "resource_generation",
+        "remote_access",
+        "management_targets",
+    }
 )
 
 # Mirrors ``installation.range_egress.RangeEgressMode`` without importing it (the
@@ -161,10 +171,11 @@ class RaesOperationInput:
     legacy_range_id: int
     egress_mode: str
     _image_candidates: dict[str, tuple[dict[str, Any], ...]]
-    runtime_plugin: RuntimePluginPin | None = None
+    runtime_plugin: RuntimePin | None = None
     model_enrollments: tuple[ModelGuestBinding, ...] = ()
     resource_generation: str | None = None
     remote_access: RaesRemoteAccess | None = None
+    management_targets: tuple[str, ...] = ()
 
     def artifact_binding_for(self, target: str) -> ArtifactBinding | None:
         """Return the fenced artifact binding for a node address, or None.
@@ -342,7 +353,7 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
     plugin = None
     if "runtime_plugin" in obj:
         try:
-            plugin = RuntimePluginPin.model_validate(obj["runtime_plugin"])
+            plugin = parse_runtime_pin(obj["runtime_plugin"])
             plugin.bindings.validate_plan(obj["plan"])
         except ValueError:
             raise RaesOperationInputError("raes operation input runtime plugin binding is invalid") from None
@@ -360,6 +371,9 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
         or remote_access.target_ref in {f"{binding.target_address}#0" for binding in access_bindings},
         "raes operation input remote access target is not a declared participant-access target",
     )
+    from shared.range_management import validate_management_targets
+
+    management_targets = validate_management_targets(obj.get("management_targets", []), obj["plan"])
     return RaesOperationInput(
         plan=_require_mapping(obj["plan"], "raes operation input plan"),
         delivery_bindings=_validated_bindings(obj["delivery_bindings"]),
@@ -374,6 +388,7 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
         model_enrollments=_model_enrollments(obj, plugin),
         resource_generation=resource_generation,
         remote_access=remote_access,
+        management_targets=management_targets,
     )
 
 
@@ -395,6 +410,8 @@ def build_raes_operation_input(
     range egress posture pinned at create (PLAT-238); a newer producer always emits
     it so the provisioner realizes it from the input rather than the deployment env.
     """
+    from shared.range_management import validate_management_targets
+
     payload = {
         "plan": dict(plan),
         "delivery_bindings": [binding.to_transport() for binding in bindings.delivery],
@@ -418,5 +435,7 @@ def build_raes_operation_input(
         payload["resource_generation"] = identity.resource_generation
     if bindings.remote_access is not None:
         payload["remote_access"] = bindings.remote_access.to_transport()
+    if bindings.management_targets:
+        payload["management_targets"] = list(validate_management_targets(bindings.management_targets, dict(plan)))
     parse_raes_operation_input(payload)
     return payload

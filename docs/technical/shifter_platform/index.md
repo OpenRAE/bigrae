@@ -92,3 +92,7 @@ read API.
 - [Communication API and receipt boundaries](ctf-communications.md)
 
 - [Prepared account administration](account-administration.md) - Services, API, browser, migrations and evidence.
+
+## Disposable workers
+
+- [Disposable VM workers](disposable-workers.md) - Native range custody, capacity, holds, and management qualification.
