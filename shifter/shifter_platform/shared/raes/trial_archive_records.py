@@ -51,6 +51,12 @@ def _walk(value: object) -> Iterator[JsonObject]:
         _reject_secret_value("archive", value, error_cls=TrialArchiveError)
 
 
+def reject_retained_credentials(value: object) -> None:
+    """Apply the same scientific-record credential policy before SQL retention."""
+    for _ in _walk(value):
+        pass
+
+
 def _artifact_path(uri: str, run_id: str) -> str:
     """Resolve a local evidence reference without permitting external retrieval."""
     parsed = urlsplit(uri)

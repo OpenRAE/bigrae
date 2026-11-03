@@ -19,6 +19,7 @@ All services require an authenticated `CredentialContext`.
 They resolve current tenancy and evaluate the credential ceiling through the existing native authorization boundary.
 Tenant identifiers and archive contents grant no access.
 The management command uses this same facade.
+Experiment admission reuses the scientific-record credential rejection rules before retaining inputs in SQL.
 The authorization surface inventory records its credential transport and per-operation authority.
 A future dispatcher can call the same intake service.
 

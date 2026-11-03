@@ -1,0 +1,84 @@
+{
+  "schema_version": "experiment-task/v1",
+  "task_id": "fixture-evaluation",
+  "task_version": "1.0.0",
+  "title": "Fixture evaluation task",
+  "description": "Count confirmed findings in the synthetic fixture family.",
+  "scenario_ref": {
+    "ref_kind": "scenario",
+    "ref_id": "experiment-fixture"
+  },
+  "evaluation_protocol": {
+    "protocol_id": "fixture-findings",
+    "protocol_version": "1.0.0",
+    "intent": "Measure confirmed findings per episode.",
+    "unit_of_analysis": "run",
+    "metric_definitions": {
+      "confirmed-findings": {
+        "metric_id": "confirmed-findings",
+        "metric_version": "1.0.0",
+        "name": "Confirmed findings",
+        "measured_construct": "Finding confirmation",
+        "unit_of_analysis": "run",
+        "value_kind": "count",
+        "direction": "higher-is-better",
+        "evidence_requirements": [
+          {
+            "ref_kind": "evidence",
+            "ref_id": "alert-trace"
+          }
+        ]
+      }
+    },
+    "observation_requirements": [
+      {
+        "ref_kind": "evidence",
+        "ref_id": "alert-trace"
+      }
+    ],
+    "aggregation_policy": "Report the per-run count and the mean across runs."
+  },
+  "intended_use": "Exercise pack experiment validation and compilation.",
+  "non_use": [
+    "Do not use as evidence about a real system."
+  ],
+  "population_or_construct": "Synthetic participant behavior in a fixture family.",
+  "split_and_leakage_controls": {
+    "partitioning_strategy": "No partitioning; the fixture has one task.",
+    "hidden_material_policy": "Evaluation material is not participant-visible.",
+    "leakage_checks": [
+      "Confirm participant input excludes evaluation material."
+    ]
+  },
+  "apparatus_constraints": {
+    "allowed_processor_refs": [],
+    "allowed_backend_refs": [],
+    "required_manifest_refs": [],
+    "required_capabilities": [
+      "workflow-results",
+      "evaluation-results"
+    ]
+  },
+  "validity_notes": [
+    {
+      "category": "external",
+      "note": "The fixture family is synthetic."
+    }
+  ],
+  "artifact_refs": [
+    {
+      "artifact_id": "fixture-protocol",
+      "role": "protocol",
+      "media_type": "text/markdown",
+      "uri": "docs/protocol.md",
+      "checksum": {
+        "algorithm": "sha256",
+        "value": "b88127df750c68e16f78960feb47aeea78a2d1c010a3bb2a65a6a2d2e54ab136"
+      },
+      "size_bytes": 58,
+      "created_at": "2026-10-29T00:00:00Z",
+      "source": "fixture-authoring",
+      "sensitivity": "internal"
+    }
+  ]
+}
