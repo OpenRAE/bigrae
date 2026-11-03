@@ -86,7 +86,9 @@ existing payload scalar may change. New paths, collection replacement, resource
 identities and operation graphs are outside this contract. Core evaluates every
 original RAES authority, including exact ancestors and recursive constraints;
 unsupported or unresolved constraints refuse preparation. At most 4096 proposals
-and 512 KiB of clear response are accepted. Preparation cannot execute guest
+and 512 KiB of clear response are permitted by the SDK. Core additionally
+requires the complete encrypted snapshot plus original input to fit its 256 KiB
+operation envelope before acceptance. Preparation cannot execute guest
 actions. For example, a synthetic concern may propose:
 
 ```json

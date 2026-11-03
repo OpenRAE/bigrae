@@ -39,6 +39,12 @@ identities. Bound guest OS/count facts cannot change underneath guest planning.
 Limits reuse the existing request/file/output budgets: 64 KiB request, 16 files
 and 512 KiB aggregate file material, 512 KiB clear preparation response and at
 most 4096 scalar edits. Ciphertext fits the existing 1 MiB bounded log reader.
+The full retained result must also fit the existing 256 KiB operation envelope
+with its original input. Core validates that future cleanup envelope before
+acceptance; an otherwise valid larger response fails before any provider effect.
+Prepared cleanup reuses the immutable source input, avoiding changed registry
+projections. Unprepared cleanup needs only its original plan, pin and absence
+proof, with no image or guest-material selection.
 Unknown, unresolved, unsupported or budget-exhausted constraint relations fail.
 No constraint is inferred from a placeholder's spelling or a missing field.
 

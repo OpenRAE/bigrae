@@ -26,9 +26,37 @@ pytestmark = [pytest.mark.django_db, pytest.mark.postgres]
 
 
 @pytest.fixture
-def pending(pack, preparation, settings, monkeypatch):
+def pending(pack, preparation, settings, monkeypatch, request):
     settings.FIELD_ENCRYPTION_KEY = Fernet.generate_key().decode()
     pin, plan, _ = preparation
+    oversized = getattr(request, "param", "") == "oversized"
+    proposed = [
+        {
+            "address": "node.example",
+            "concern": "synthetic-values",
+            "payload_pointer": "/settings/selected",
+            "value": "PRIVATE_PREPARATION_VALUE",
+        }
+    ]
+    if oversized:
+        proposed = []
+        for index in range(30):
+            key = f"value-{index}"
+            for payload in (plan["resources"]["node.example"]["payload"], plan["operations"][0]["payload"]):
+                payload["settings"][key] = ""
+            proposed.append(
+                {
+                    "address": "node.example",
+                    "concern": "synthetic-values",
+                    "payload_pointer": f"/settings/{key}",
+                    "value": "s" * 8192,
+                }
+            )
+    if oversized:
+        authority = plan["realization_authority"][0]
+        authority["mode"] = "open"
+        authority.pop("constraint_document")
+        authority.pop("constraint_binding")
     plan["resources"]["node.example"]["payload"]["spec"] = {}
     plan["operations"][0]["payload"]["spec"] = {}
     installed = install_runtime_plugin(pack.credential, pack.organization.uuid, pin.manifest.model_dump(mode="json"))
@@ -53,14 +81,7 @@ def pending(pack, preparation, settings, monkeypatch):
         input_digest=request.digest,
         phase="prepare",
         status="planned",
-        provisioning_values=[
-            {
-                "address": "node.example",
-                "concern": "synthetic-values",
-                "payload_pointer": "/settings/selected",
-                "value": "PRIVATE_PREPARATION_VALUE",
-            }
-        ],
+        provisioning_values=proposed,
     )
     dispatch = Mock()
     monkeypatch.setattr(operations, "launch_plugin", dispatch)
@@ -172,3 +193,36 @@ def test_cancel_intent_fences_preparation_even_before_the_range_changes_state(pe
     assert RuntimePluginRangeBinding.objects.get(range=pending.target).preparation is None
     if when == "before-dispatch":
         pending.dispatch.assert_not_called()
+
+
+@pytest.mark.parametrize("pending", ["oversized"], indirect=True)
+def test_valid_values_that_would_overflow_cleanup_are_rejected_before_acceptance(pending):
+    from engine.models import OperationInput
+    from engine.services._runtime_plugin_preparation import approve_invocation
+    from shared.exceptions import ValidationError
+    from shared.operation_envelope import validate_operation_envelope
+
+    with pytest.raises(ValidationError, match="operation envelope exceeds"):
+        approve_invocation(pending.row, pending.request, pending.result)
+    operations._reconcile(pending.row)
+    pending.row.refresh_from_db()
+    assert pending.row.state == "failed" and pending.row.result is None
+    assert RuntimePluginRangeBinding.objects.get(range=pending.target).preparation is None
+    cleanup = operation_input_payload(pending.target, "raes-range", pending.target.request, operation="destroy")
+    source = OperationInput.objects.get(operation_id=pending.row.operation_id).envelope
+    validate_operation_envelope({**source, "operation": "destroy", "payload": cleanup})
+    assert cleanup["runtime_preparation"]["state"] == "unprepared"
+
+
+def test_prepared_cleanup_uses_original_input_even_when_registry_projection_changes(pending, monkeypatch):
+    from engine.models import OperationInput
+
+    operations._reconcile(pending.row)
+    source = OperationInput.objects.get(operation_id=pending.row.operation_id).envelope["payload"]
+
+    def changed(*_args):
+        raise AssertionError("cleanup must not consult a changed registry")
+
+    monkeypatch.setattr("engine.operation_inputs._raes_image_candidates", changed)
+    cleanup = operation_input_payload(pending.target, "raes-range", pending.target.request, operation="destroy")
+    assert {key: value for key, value in cleanup.items() if key != "runtime_preparation"} == source
