@@ -1739,6 +1739,11 @@
         "id": "ADR-031-R7",
         "description": "Tenant trial archive intake (#2740) uses the existing ObjectStorage abstraction and an explicitly configured approved tenant destination. CMS owns authorized custody and receipt metadata; portable run/evidence and sealed inventory contracts remain upstream-owned behind shared.raes. Preserve original records and declared evidence, including failed/partial attempts and honest loss disclosures, with credentials excluded under existing redaction rules. Publish a durable collection receipt atomically only after all declared present bytes are verified at the destination. Tenant-scoped identity plus identical bytes is idempotent; changed committed bytes conflict. A collection receipt permits disposal of the worker evidence copy, not trial success, range readiness, resource reuse or cloud cleanup. Retention and incomplete-transfer recovery are explicit and independent of pack removal and operational sidecar expiry. No legacy experiments runtime, duplicate scientific schema, automatic upload destination or new storage service is introduced. Boundary and provider-precondition caveats: docs/architecture/experiments-trial-archive-intake-boundary-2740.md.",
         "checks": []
+      },
+      {
+        "id": "ADR-031-R8",
+        "description": "Pack experiment admission (#2742) consumes released env-packs experiment loading and RAES trial compilation, validation, instantiation and schedule/isolation contracts behind shared.raes. CMS owns tenant-authorized immutable scientific inputs and minimal fenced entry/attempt persistence; scientific identities, selections and allocation never depend on placement, reload or claim retries. Native credentials, approved archive destination/retention, supported apparatus/participant configuration, finite study bounds and trusted configurable concurrency limits remain independent admission gates. Serial is the default without upstream isolation proof; a ceiling is not live capacity, provider quota or execution permission. Reuse existing scoped authority, database immutability guards, claim/lease patterns, safe errors/audit and archive custody; no legacy experiments runtime, duplicate scientific schema/enumerator, silent study reduction/partitioning or remote executor is introduced. Replacement design and implementation documentation obligations: docs/architecture/experiment-admission-boundary-2742.md.",
+        "checks": []
       }
     ],
     "exceptions": [],
@@ -1754,6 +1759,14 @@
       "docs/architecture/aces-backend-manifest-realizability-preflight-1563.md",
       "docs/architecture/aces-account-credentials-preflight-1560.md",
       "docs/architecture/experiments-trial-archive-intake-boundary-2740.md",
+      "docs/architecture/experiment-admission-boundary-2742.md",
+      "docs/architecture/experiment-admission-design-2742.md",
+      "docs/technical/shifter_platform/experiment-admission.md",
+      "docs/how-to/admit-pack-experiments.md",
+      "shifter/shifter_platform/cms/migrations/0076_experiment_input_guards.py",
+      "shifter/shifter_platform/cms/services/_experiment_batches.py",
+      "shifter/shifter_platform/shared/raes/experiment_admission.py",
+      "shifter/shifter_platform/tests/cms/test_experiment_admission_postgres.py",
       ".importlinter",
       "shifter/shifter_platform/shared/raes/domain_topology.py",
       "shifter/shifter_platform/shared/raes/runtime_target.py",

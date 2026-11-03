@@ -1,0 +1,280 @@
+schema_version: experiment-authoring-input/v1
+spec_id: fixture-crossed-design
+spec_version: 1.0.0
+title: Fixture crossed design
+description: Cross two participants' models and prompts with sensor presence.
+task_ref:
+  ref_kind: task
+  ref_id: fixture-evaluation
+  ref_version: 1.0.0
+intended_scenario_ref:
+  ref_kind: scenario
+  ref_id: experiment-fixture
+apparatus_intent:
+  required_capabilities:
+  - workflow-results
+  - evaluation-results
+capture_spec_refs:
+- ref_kind: capture-spec
+  ref_id: fixture-alert-capture
+  ref_version: 1.0.0
+factors:
+  operator-model:
+    name: operator model
+    factor_kind: treatment
+    levels:
+    - lite
+    - full
+  operator-prompt:
+    name: operator prompt
+    factor_kind: treatment
+    levels:
+    - terse
+    - rich
+  defender-model:
+    name: defender model
+    factor_kind: treatment
+    levels:
+    - lite
+    - full
+  defender-prompt:
+    name: defender prompt
+    factor_kind: treatment
+    levels:
+    - terse
+    - rich
+  sensor:
+    name: Sensor presence
+    factor_kind: treatment
+    levels:
+    - absent
+    - present
+factorial_design:
+  profile: factorial-treatments-v1
+  factor_ids:
+  - operator-model
+  - operator-prompt
+  - defender-model
+  - defender-prompt
+  - sensor
+  level_effects:
+    operator-model:
+      lite:
+        bindings:
+        - target:
+            plane: participant-implementation
+            participant_address: agents.operator
+            implementation_name: fixture-agent
+            implementation_version: 2.0.0
+            manifest_version: participant-implementation-manifest/v1
+            target_id: engine.model
+          value_type: string
+          value:
+            kind: literal
+            value: small-model
+          owner:
+            contract_id: participant-configuration-result-v1
+            contract_version: '1'
+            validator_id: participant-config
+            validator_version: '1'
+      full:
+        bindings:
+        - target:
+            plane: participant-implementation
+            participant_address: agents.operator
+            implementation_name: fixture-agent
+            implementation_version: 2.0.0
+            manifest_version: participant-implementation-manifest/v1
+            target_id: engine.model
+          value_type: string
+          value:
+            kind: literal
+            value: large-model
+          owner:
+            contract_id: participant-configuration-result-v1
+            contract_version: '1'
+            validator_id: participant-config
+            validator_version: '1'
+    operator-prompt:
+      terse:
+        bindings:
+        - target:
+            plane: participant-implementation
+            participant_address: agents.operator
+            implementation_name: fixture-agent
+            implementation_version: 2.0.0
+            manifest_version: participant-implementation-manifest/v1
+            target_id: context.brief
+          value_type: string
+          value:
+            kind: literal
+            value: control_context_assets.brief-terse
+          owner:
+            contract_id: participant-configuration-result-v1
+            contract_version: '1'
+            validator_id: participant-config
+            validator_version: '1'
+      rich:
+        bindings:
+        - target:
+            plane: participant-implementation
+            participant_address: agents.operator
+            implementation_name: fixture-agent
+            implementation_version: 2.0.0
+            manifest_version: participant-implementation-manifest/v1
+            target_id: context.brief
+          value_type: string
+          value:
+            kind: literal
+            value: control_context_assets.brief-rich
+          owner:
+            contract_id: participant-configuration-result-v1
+            contract_version: '1'
+            validator_id: participant-config
+            validator_version: '1'
+    defender-model:
+      lite:
+        bindings:
+        - target:
+            plane: participant-implementation
+            participant_address: agents.defender
+            implementation_name: fixture-agent
+            implementation_version: 2.0.0
+            manifest_version: participant-implementation-manifest/v1
+            target_id: engine.model
+          value_type: string
+          value:
+            kind: literal
+            value: small-model
+          owner:
+            contract_id: participant-configuration-result-v1
+            contract_version: '1'
+            validator_id: participant-config
+            validator_version: '1'
+      full:
+        bindings:
+        - target:
+            plane: participant-implementation
+            participant_address: agents.defender
+            implementation_name: fixture-agent
+            implementation_version: 2.0.0
+            manifest_version: participant-implementation-manifest/v1
+            target_id: engine.model
+          value_type: string
+          value:
+            kind: literal
+            value: large-model
+          owner:
+            contract_id: participant-configuration-result-v1
+            contract_version: '1'
+            validator_id: participant-config
+            validator_version: '1'
+    defender-prompt:
+      terse:
+        bindings:
+        - target:
+            plane: participant-implementation
+            participant_address: agents.defender
+            implementation_name: fixture-agent
+            implementation_version: 2.0.0
+            manifest_version: participant-implementation-manifest/v1
+            target_id: context.brief
+          value_type: string
+          value:
+            kind: literal
+            value: control_context_assets.brief-terse
+          owner:
+            contract_id: participant-configuration-result-v1
+            contract_version: '1'
+            validator_id: participant-config
+            validator_version: '1'
+      rich:
+        bindings:
+        - target:
+            plane: participant-implementation
+            participant_address: agents.defender
+            implementation_name: fixture-agent
+            implementation_version: 2.0.0
+            manifest_version: participant-implementation-manifest/v1
+            target_id: context.brief
+          value_type: string
+          value:
+            kind: literal
+            value: control_context_assets.brief-rich
+          owner:
+            contract_id: participant-configuration-result-v1
+            contract_version: '1'
+            validator_id: participant-config
+            validator_version: '1'
+    sensor:
+      absent:
+        selections:
+        - target:
+            plane: scenario
+            scenario_family_id: experiment-fixture
+            variation_point_id: sensor-layout
+            target_id: nodes.sensor-9.presence
+          scenario_family_digest: sha256:fe1de1f361eae2401efbfabc653434ec3b415b93419bdc697b46aa8290957729
+          owner:
+            contract_id: sdl-authoring-input-v1
+            contract_version: '1'
+            validator_id: raes-selected-scenario
+            validator_version: '1'
+          outcome:
+            kind: member
+            member_id: dark
+      present:
+        selections:
+        - target:
+            plane: scenario
+            scenario_family_id: experiment-fixture
+            variation_point_id: sensor-layout
+            target_id: nodes.sensor-9.presence
+          scenario_family_digest: sha256:fe1de1f361eae2401efbfabc653434ec3b415b93419bdc697b46aa8290957729
+          owner:
+            contract_id: sdl-authoring-input-v1
+            contract_version: '1'
+            validator_id: raes-selected-scenario
+            validator_version: '1'
+          outcome:
+            kind: member
+            member_id: watching
+  target_runs_per_condition: 2
+  condition_bound: 32
+run_plan:
+  episode_control:
+    description: Fixed-horizon episode.
+    max_steps: 50
+    termination_rule: Stop after 50 logical steps.
+    turn_order: sequential
+  selection_policies:
+    fixed-drop-dir:
+      kind: fixed
+      policy_id: fixed-drop-dir
+      purpose: fixed-configuration
+      point_ref: drop-dir
+      outcome:
+        kind: literal
+        value: /srv/outbox
+      output_bound: 1
+  stochastic_controls:
+  - control_id: allocation-control
+    role: randomization
+    executable_binding:
+      profile_ref:
+        ref_kind: profile
+        ref_id: blake3-xof-v1
+        ref_version: random-stream-profile/v1
+      namespace: fixture-allocation
+      root_entropy:
+        kind: public-seed
+        encoding: hex-fixed-width
+        value: '0202020202020202020202020202020202020202020202020202020202020202'
+  allocation_policy:
+    kind: randomized
+    policy_id: fixture-shuffle
+    algorithm_profile: fisher-yates-allocation-v1
+    stochastic_control_ref: allocation-control
+validity_notes:
+- category: internal
+  note: Every condition uses the same fixed drop directory and seeded allocation.

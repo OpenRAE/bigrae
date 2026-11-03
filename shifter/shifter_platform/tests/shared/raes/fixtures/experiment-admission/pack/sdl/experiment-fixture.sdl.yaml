@@ -1,0 +1,119 @@
+name: experiment-fixture
+description: Synthetic scenario family for the experiment artifact set fixture.
+variables:
+  drop_dir:
+    type: string
+    default: /srv/inbox
+    allowed_values:
+    - /srv/inbox
+    - /srv/outbox
+nodes:
+  gateway:
+    type: compute
+    os: linux
+    resources:
+      ram: 1 gib
+      cpu: 1
+  sensor-9:
+    type: compute
+    os: linux
+    resources:
+      ram: 1 gib
+      cpu: 1
+    runtime:
+      scheduled_jobs:
+      - scheduled_job_id: sweep
+      - scheduled_job_id: prune
+infrastructure:
+  gateway:
+    count: 1
+  sensor-9:
+    count: 1
+content:
+  drop-manifest:
+    type: file
+    target: gateway
+    path: ${drop_dir}
+agents:
+  operator:
+    role: red
+  defender:
+    role: blue
+control_context_assets:
+  brief-terse:
+    schema_version: participant-control-context-asset/v1
+    asset_id: finding-report-instruction
+    asset_version: brief-terse
+    kind: instruction
+    role_refs:
+    - red
+    - blue
+    participant_addresses: []
+    provenance_refs:
+    - provenance.fixture-authoring
+    publication_authority_ref: authorities.fixture-publisher
+    retention_policy_ref: retention.fixture
+    content:
+      artifact_id: instruction-brief-terse
+      role: documentation
+      media_type: text/plain
+      uri: raes-environment-pack:/prompts/brief-terse.txt
+      checksum:
+        algorithm: sha256
+        value: ed4a6c43759db938e4672d7844cd2a58a985388e69e37106797fa0a417495a43
+      size_bytes: 45
+      created_at: '2026-10-29T00:00:00Z'
+      source: fixture-authoring
+      sensitivity: restricted
+  brief-rich:
+    schema_version: participant-control-context-asset/v1
+    asset_id: finding-report-instruction
+    asset_version: brief-rich
+    kind: instruction
+    role_refs:
+    - red
+    - blue
+    participant_addresses: []
+    provenance_refs:
+    - provenance.fixture-authoring
+    publication_authority_ref: authorities.fixture-publisher
+    retention_policy_ref: retention.fixture
+    content:
+      artifact_id: instruction-brief-rich
+      role: documentation
+      media_type: text/plain
+      uri: raes-environment-pack:/prompts/brief-rich.txt
+      checksum:
+        algorithm: sha256
+        value: 3fa29beb9b101b4fef8f52ca8a2e053b54dabdec31a7102af682bc220478d016
+      size_bytes: 68
+      created_at: '2026-10-29T00:00:00Z'
+      source: fixture-authoring
+      sensitivity: restricted
+variation_points:
+  sensor-layout:
+    kind: alternative
+    target:
+      kind: structural
+      owner: sensor-9
+      slot: nodes.presence
+    alternatives:
+      dark:
+        kind: node-presence
+        present: false
+      watching:
+        kind: node-presence
+        present: true
+        inventory:
+          nodes.runtime.scheduled_jobs:
+          - nodes.sensor-9.runtime.scheduled_jobs.sweep
+  drop-dir:
+    kind: parameter
+    target:
+      kind: variable
+      variable: drop_dir
+    domain:
+      kind: enum
+      values:
+      - /srv/inbox
+      - /srv/outbox

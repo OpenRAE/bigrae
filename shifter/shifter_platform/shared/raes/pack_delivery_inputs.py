@@ -23,6 +23,7 @@ __all__ = [
     "InventoryEntry",
     "build_inventory_index",
     "load_pack_projection",
+    "pack_artifact_relative_path",
     "resolve_pack_input",
     "verify_input_against_inventory",
     "verify_projection_against_inventory",
@@ -200,3 +201,8 @@ def _uri_to_relpath(uri: str) -> str:
     if not rel or ".." in rel.split("/"):
         raise ContentDeliveryError("pack inventory artifact has an invalid path")
     return rel
+
+
+def pack_artifact_relative_path(uri: str) -> str:
+    """Project one canonical pack artifact URI for other verified input consumers."""
+    return _uri_to_relpath(uri)

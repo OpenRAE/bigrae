@@ -433,3 +433,11 @@ PostgreSQL guards enforce exclusive unreleased project use and require current
 applied destroy/restoration evidence before release. Provider overlay realization
 and integration into range preparation remain in development. See the
 [registered-project contract](shifter_platform/registered-gcp-range-projects.md).
+
+## Experiment admission
+
+CMS retains immutable experiment inputs through released env-packs and RAES contracts.
+A native management command admits an installed tenant pack without dispatch.
+Operational claims and worker observations remain separate from scientific inputs.
+The current compiler permits serial execution; configured concurrency grants no provider capacity.
+See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).

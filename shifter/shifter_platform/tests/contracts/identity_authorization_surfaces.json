@@ -4514,6 +4514,14 @@
       "scope": "resource-account",
       "surface": "shared-vpn-secret-delivery",
       "target": "vpn-profile"
+    },
+    {
+      "decision": "installation.manage_content+organization.manage_content:admit;organization.read_content:show",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "native credential_from_file;SQL organization ancestry and approved apparatus configuration",
+      "surface": "cms:experiment_batch",
+      "target": "organization"
     }
   ],
   "schema": "shifter.identity-authorization-surfaces/v1"
