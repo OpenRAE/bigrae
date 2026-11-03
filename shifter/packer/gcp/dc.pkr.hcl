@@ -43,6 +43,10 @@ source "googlecompute" "dc" {
     windows-startup-script-ps1 = local.winrm_https_bootstrap_ps1
   }
 
+  // A run that does not publish deletes this VM, its disk (Packer names the disk
+  // after the VM), and the image with its build-run label (#2747).
+  instance_name = "packer-${var.build_id}"
+
   image_name        = "${var.image_prefix}-dc-{{timestamp}}"
   image_family      = "${var.image_prefix}-dc"
   image_description = "Windows Server 2022 Domain Controller with AD DS, RDP, OpenSSH, Claude Code (GCE)"
@@ -51,6 +55,7 @@ source "googlecompute" "dc" {
     managed-by      = "packer"
     image-type      = "dc"
     source-revision = var.source_revision
+    build-run       = var.build_id
   }
 }
 
