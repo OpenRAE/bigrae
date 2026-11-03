@@ -69,7 +69,11 @@ def approve_invocation(row: RuntimePluginInvocation, request: RuntimeInput, resu
     payload = parse_raes_operation_input(validate_operation_envelope(operation.envelope)["payload"])
     if payload.runtime_plugin is None:
         raise ValueError(_IDENTITY_CHANGED)
-    return approved_preparation(request, result, payload.runtime_plugin, payload.plan)
+    record = approved_preparation(request, result, payload.runtime_plugin, payload.plan)
+    from ._runtime_plugin_cleanup import preparation_cleanup_payload
+
+    preparation_cleanup_payload(operation.envelope, record)
+    return record
 
 
 def preparation_identity(record: RuntimePreparation, pin: RuntimePluginPin, plan: object) -> None:

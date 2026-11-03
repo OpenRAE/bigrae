@@ -2536,7 +2536,7 @@
       },
       {
         "id": "ADR-041-R12",
-        "description": "An explicitly installed runtime adapter may opt into bounded pre-provisioning scalar selections for declared concerns. Core preserves the original plan and resource identities, validates every replacement against all original authority and public RAES constraints, and refuses exact, closed, missing, ambiguous, unresolved or nonconforming authority before effects. Workers receive only declared inputs and an invocation-scoped derived result key, never the application key or provider credentials. Preparation responses are encrypted before stdout, reauthorized and validated in core, and encrypted at rest using existing field encryption. The existing range binding retains one immutable accepted preparation, committed with the planned invocation under the range mutex. Retries and teardown use the original retained selection; cancellation before acceptance carries an explicit pre-effect absence proof. SDK models, SQL custody guards, synthetic lifecycle tests and rendered admission-policy tests enforce this channel without weakening worker isolation or deploying a tenant.",
+        "description": "An explicitly installed runtime adapter may opt into bounded pre-provisioning scalar selections for declared concerns. Core preserves the original plan and resource identities, validates every replacement against all original authority and public RAES constraints, and refuses exact, closed, missing, ambiguous, unresolved or nonconforming authority before effects. Workers receive only declared inputs and an invocation-scoped derived result key, never the application key or provider credentials. Preparation responses are encrypted before stdout, reauthorized and validated in core, and encrypted at rest using existing field encryption. The existing range binding retains one immutable accepted preparation, committed with the planned invocation under the range mutex. Retries and teardown use the original retained selection; cancellation before acceptance carries an explicit pre-effect absence proof. SDK models, SQL custody guards, synthetic lifecycle tests and rendered admission-policy tests enforce this channel without weakening worker isolation or deploying a tenant. Acceptance must validate the full future destroy envelope against its existing transport limit. Prepared teardown reuses the original immutable operation input; pre-effect absence needs no mutable image or guest-material projection.",
         "checks": [
           "layer-imports"
         ]
@@ -2566,7 +2566,8 @@
       "shifter/shifter_adapter_sdk/tests",
       ".github/quality-path-filters.yaml",
       ".github/workflows/_quality.yml",
-      "docs/architecture/adapter-pre-provisioning-2718.md"
+      "docs/architecture/adapter-pre-provisioning-2718.md",
+      "shifter/shifter_platform/engine/services/_runtime_plugin_cleanup.py"
     ]
   },
   {
