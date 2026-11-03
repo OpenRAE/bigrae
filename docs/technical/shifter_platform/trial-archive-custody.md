@@ -19,6 +19,7 @@ All services require an authenticated `CredentialContext`.
 They resolve current tenancy and evaluate the credential ceiling through the existing native authorization boundary.
 Tenant identifiers and archive contents grant no access.
 The management command uses this same facade.
+The authorization surface inventory records its credential transport and per-operation authority.
 A future dispatcher can call the same intake service.
 
 `TrialArchiveIdentity` carries expected experiment, plan, entry, run, and attempt identifiers.
