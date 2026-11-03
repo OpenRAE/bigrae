@@ -318,6 +318,19 @@ class TestGcpValidationEvidenceBinding:
         assert "/tmp/validator_key" not in validate  # noqa: S108
         assert "Remove validation credentials and evidence" in validate
 
+    def test_scanner_boots_before_the_candidate_disk_attaches(self):
+        # A same-base candidate shares filesystem labels with the scanner boot disk.
+        # Attached during boot, it can break the scanner fstab and stop sshd (#2736).
+        validate = (WORKFLOWS_DIR / "packer-gcp-validate.yml").read_text()
+        create = validate.index('gcloud compute instances create "${SBOM_SCANNER_VM}"')
+        reachable = validate.index('--command=true >"${probe_log}" 2>&1')
+        attach = validate.index('gcloud compute instances attach-disk "${SBOM_SCANNER_VM}"')
+        mode_check = validate.index('if [ "${ATTACHED_MODE}" != "READ_ONLY" ]')
+        scan = validate.index("sudo /tmp/scan-attached-disk.sh")
+        assert create < reachable < attach < mode_check < scan
+        assert validate.count("gcloud compute instances attach-disk") == 1
+        assert 'tail -n 20 "${probe_log}"' in validate
+
     @staticmethod
     def _run_attached_disk_scanner(
         tmp_path,
