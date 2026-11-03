@@ -29,6 +29,7 @@ from cms.models.catalogs import (
     InstanceType,
     OperatingSystem,
 )
+from cms.models.files import FileAssetUse, NamedFileAsset
 from cms.models.lease_policy import (
     MissionControlGroupLeasePolicy,
     MissionControlGroupLeasePolicyRevision,
@@ -63,12 +64,14 @@ __all__ = [
     "CredentialType",
     "EntityBase",
     "FileAsset",
+    "FileAssetUse",
     "Instance",
     "InstanceType",
     "MissionControlGroupLeasePolicy",
     "MissionControlGroupLeasePolicyRevision",
     "MissionControlTenantLeasePolicy",
     "MissionControlTenantLeasePolicyRevision",
+    "NamedFileAsset",
     "OperatingSystem",
     "RaesPackageSource",
     "RangeInstance",

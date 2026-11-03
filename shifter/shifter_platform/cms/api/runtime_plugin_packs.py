@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Any
 from uuid import UUID
 
+from django.core.validators import MaxLengthValidator
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.filters import BaseFilterBackend
@@ -56,6 +57,9 @@ class RuntimePluginBindingsSerializer(PreparationSerializer):
         default=dict,
     )
     image_profiles = serializers.DictField(child=RuntimeTargetImageProfileSerializer(), default=dict)
+    file_assets = serializers.DictField(
+        child=serializers.UUIDField(), default=dict, validators=[MaxLengthValidator(16)]
+    )
 
 
 class RuntimePluginPackBindingSerializer(serializers.Serializer):

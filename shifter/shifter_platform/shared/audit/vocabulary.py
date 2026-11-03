@@ -86,6 +86,7 @@ class AuditEntityType(models.TextChoices):
     RANGE = "range", "Range"
     CREDENTIAL = "credential", "Credential"
     AGENT = "agent", "Agent"
+    FILE_ASSET = "file_asset", "File Asset"
     USER = "user", "User"
     SESSION = "session", "Session"
     NGFW = "ngfw", "NGFW"

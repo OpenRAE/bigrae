@@ -17,9 +17,10 @@ from shifter_adapter_sdk.runtime import RuntimeInput, RuntimePlan
 from shared.cloud.runtime_plugins import interrupt_plugin, launch_plugin, observe_plugin
 from shared.operation_envelope import validate_operation_envelope
 from shared.raes.operation_input import parse_raes_operation_input
+from shared.runtime_file_inputs import RuntimeFileBinding, load_file_input_material
 from shared.runtime_plugin_binding import runtime_plugin_requests
 
-from ._runtime_plugin_controller import _pull_secret
+from ._runtime_plugin_controller import _file_secret, _pull_secret
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,9 @@ def _verify_operation_identity(operation: OperationInput, envelope: dict[str, An
         raise ValueError("Plugin operation identity mismatch")
 
 
-def _authorized_request(row: RuntimePluginInvocation) -> tuple[RuntimeInput, RuntimePluginInstallation]:
+def _authorized_request(
+    row: RuntimePluginInvocation,
+) -> tuple[RuntimeInput, RuntimePluginInstallation, dict[str, RuntimeFileBinding]]:
     """Reconstruct the authorized request from durable operation and executable pins."""
     from engine.models import OperationInput, Range, RuntimePluginInstallation
 
@@ -98,7 +101,7 @@ def _authorized_request(row: RuntimePluginInvocation) -> tuple[RuntimeInput, Run
     )
     if installation.manifest_digest != pin.manifest.digest:
         raise ValueError("Plugin executable identity mismatch")
-    return request, installation
+    return request, installation, pin.files
 
 
 def _verify_invocation(row: RuntimePluginInvocation, requests: tuple[RuntimeInput, ...]) -> RuntimeInput:
@@ -135,6 +138,21 @@ def _observe_plan(request: RuntimeInput) -> tuple[RuntimePlan | None, str]:
     return result, state
 
 
+def _invocation_material(
+    row: RuntimePluginInvocation,
+    request: RuntimeInput,
+    installation: RuntimePluginInstallation,
+    files: dict[str, RuntimeFileBinding],
+) -> tuple[RuntimePluginInstallation, dict[str, bytes]]:
+    """Load exact bytes, then recheck generation and cancellation before any Job."""
+    material = load_file_input_material(row.request_id, files)
+    if files:
+        current_request, installation, current_files = _authorized_request(row)
+        if current_request != request or current_files != files or row.expires_at <= timezone.now():
+            raise ValueError("Plugin planning changed during file preparation")
+    return installation, material
+
+
 def _reconcile(row: RuntimePluginInvocation) -> None:
     """Record only planning evidence still authorized by the locked range generation."""
     from engine.models import Range, RuntimePluginInvocation
@@ -142,11 +160,13 @@ def _reconcile(row: RuntimePluginInvocation) -> None:
     result, state = None, "pending"
     request = None
     try:
-        request, installation = _authorized_request(row)
+        request, installation, files = _authorized_request(row)
         if row.expires_at <= timezone.now():
             raise ValueError("Plugin planning expired")
+        installation, material = _invocation_material(row, request, installation, files)
         secret_name = f"runtime-plugin-pull-{request.invocation_id.hex}" if installation.registry_credentials else ""
         launch_plugin(request, image_pull_secret=secret_name)
+        _file_secret(request, material)
         _pull_secret(installation, request)
         result, state = _observe_plan(request)
     except Exception as exc:  # noqa: BLE001  # plugin and registry errors can carry private output; log the type only

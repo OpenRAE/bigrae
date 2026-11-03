@@ -1,5 +1,5 @@
 {
-  "current_operation_count": 319,
+  "current_operation_count": 324,
   "historical_baseline": {
     "commit": "8aee758331286293cdc837d94eb95fafa5674ae0",
     "operation_count": 220
@@ -2974,6 +2974,61 @@
       "method": "POST",
       "operation_id": "api_v1_mission_control_credentials_delete",
       "path": "/api/v1/mission-control/credentials/{credential_id}/delete/"
+    },
+    {
+      "authority": {
+        "decision": "account.read_content|organization.read_content|workspace.read_content",
+        "scope": "sql:asset_collection",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "GET",
+      "operation_id": "api_v1_mission_control_files_list",
+      "path": "/api/v1/mission-control/files/"
+    },
+    {
+      "authority": {
+        "decision": "account.manage_content|organization.manage_content|workspace.manage_content",
+        "scope": "sql:upload_intent",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "api_v1_mission_control_file_upload_cancel",
+      "path": "/api/v1/mission-control/files/upload/cancel/"
+    },
+    {
+      "authority": {
+        "decision": "account.manage_content|organization.manage_content|workspace.manage_content",
+        "scope": "sql:upload_intent",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "api_v1_mission_control_file_upload_complete",
+      "path": "/api/v1/mission-control/files/upload/complete/"
+    },
+    {
+      "authority": {
+        "decision": "account.manage_content|organization.manage_content|workspace.manage_content",
+        "scope": "sql:upload_parent",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "api_v1_mission_control_file_upload_initiate",
+      "path": "/api/v1/mission-control/files/upload/initiate/"
+    },
+    {
+      "authority": {
+        "decision": "account.manage_content|organization.manage_content|workspace.manage_content",
+        "scope": "sql:file_asset",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "DELETE",
+      "operation_id": "api_v1_mission_control_files_delete",
+      "path": "/api/v1/mission-control/files/{file_id}/"
     },
     {
       "authority": {

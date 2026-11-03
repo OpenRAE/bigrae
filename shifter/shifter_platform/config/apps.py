@@ -11,7 +11,7 @@ class PortalConfig(AppConfig):
     name = "config"
 
     def ready(self) -> None:
-        from cms.services import engine_invalidate_sharing_authority
+        from cms.services import engine_invalidate_sharing_authority, load_runtime_file_inputs
         from config.credential_reference import resolve_credential_reference, resolve_local_credential_reference
         from config.credential_scope import credential_target_scope, temporary_participant_credential
         from config.health_checks import (
@@ -36,11 +36,13 @@ class PortalConfig(AppConfig):
         )
         from shared.model_access.authority_port import bind_authority_invalidator
         from shared.model_access.projection_port import bind_projection_refresher
+        from shared.runtime_file_inputs import bind_file_input_provider
         from shared.service_proof import bind_service_proof_profile
 
         # Bind the one concrete audit writer to the neutral port. A missing or
         # conflicting binding is a startup configuration error (#1523).
         bind_audit_writer(audit_log_writer)
+        bind_file_input_provider(load_runtime_file_inputs)
         bind_authority_invalidator(engine_invalidate_sharing_authority)
         bind_projection_refresher(refresh_model_launch_projections)
         bind_authorization_provider_factory(configured_authorization_provider)

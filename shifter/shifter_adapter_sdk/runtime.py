@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Annotated, Final, Literal, Protocol, Self
 from uuid import UUID
 
@@ -19,6 +20,10 @@ ENTRY_POINT_GROUPS = (ENTRY_POINT_GROUP, "bigrae.runtime.plugins")
 # Fits one injected environment value on Linux, including its name and terminator.
 MAX_INPUT_BYTES = 65_536
 MAX_OUTPUT_BYTES = 1_048_576
+MAX_FILE_INPUT_BYTES = 512 * 1024
+MAX_FILE_INPUTS = 16
+FILE_INPUT_DIRECTORY = "/run/plugin-inputs"
+_FILE_INPUT_ROOT = Path(FILE_INPUT_DIRECTORY)
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[a-z0-9][a-z0-9._-]*$")]
 Digest = Annotated[str, Field(pattern=r"^sha256:[a-f0-9]{64}$")]
@@ -77,11 +82,14 @@ class PluginManifest(ClosedModel):
     capabilities: list[Capability] = Field(min_length=1, max_length=2)
     required_bindings: list[Identifier] = Field(min_length=1, max_length=64)
     required_parameters: list[Identifier] = Field(default_factory=list, max_length=64)
+    required_files: list[Identifier] = Field(
+        default_factory=list, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
+    )
     model_bindings: dict[Identifier, Identifier] = Field(default_factory=dict, max_length=16)
 
     @model_validator(mode="after")
     def unique_declarations(self) -> Self:
-        for values in (self.capabilities, self.required_bindings, self.required_parameters):
+        for values in (self.capabilities, self.required_bindings, self.required_parameters, self.required_files):
             if len(values) != len(set(values)):
                 raise ValueError("plugin declarations must be unique")
         if not set(self.model_bindings.values()).issubset(self.required_bindings):
@@ -141,6 +149,22 @@ class InspectionResult(ClosedModel):
             raise ValueError("plugin inspection does not match its invocation")
 
 
+class FileInput(ClosedModel):
+    """Byte-free identity for one declared file supplied by the host."""
+
+    sha256: Digest
+    size_bytes: Annotated[int, Field(strict=True, gt=0, le=MAX_FILE_INPUT_BYTES)]
+
+    def verify_material(self, material: bytes) -> None:
+        """Reject bytes that differ from this admitted identity without echoing them."""
+        if (
+            not isinstance(material, bytes)
+            or len(material) != self.size_bytes
+            or "sha256:" + hashlib.sha256(material).hexdigest() != self.sha256
+        ):
+            raise ValueError("file input does not match its admitted bytes")
+
+
 class RuntimeInput(ClosedModel):
     """Exactly one operation and phase; values are never taken from plugin output."""
 
@@ -154,6 +178,9 @@ class RuntimeInput(ClosedModel):
     range_id: Annotated[int, Field(strict=True, ge=1)]
     targets: dict[Identifier, GuestTarget] = Field(min_length=1, max_length=64)
     parameters: dict[Identifier, Annotated[str, Field(max_length=8192)]] = Field(default_factory=dict, max_length=64)
+    files: dict[Identifier, FileInput] = Field(
+        default_factory=dict, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
+    )
 
     @model_validator(mode="after")
     def validate_bindings(self) -> Self:
@@ -163,6 +190,10 @@ class RuntimeInput(ClosedModel):
             raise ValueError("target bindings must exactly match the installed declaration")
         if set(self.parameters) != set(self.manifest.required_parameters):
             raise ValueError("parameter bindings must exactly match the installed declaration")
+        if set(self.files) != set(self.manifest.required_files):
+            raise ValueError("file inputs must exactly match the installed declaration")
+        if sum(item.size_bytes for item in self.files.values()) > MAX_FILE_INPUT_BYTES:
+            raise ValueError("file inputs exceed their total byte budget")
         if len(self.model_dump_json().encode("utf-8")) > MAX_INPUT_BYTES:
             raise ValueError("plugin input exceeds its bound")
         return self
@@ -170,6 +201,24 @@ class RuntimeInput(ClosedModel):
     @property
     def digest(self) -> str:
         return canonical_digest(self.model_dump(mode="json"))
+
+
+def read_file_input(request: RuntimeInput, name: str) -> bytes:
+    """Read a declared mounted file, checking its bound size and SHA-256.
+
+    Kubernetes projects Secret keys through symlinks in its read-only volume.
+    Input names cannot select a path outside that host-owned mount.
+    """
+    expected = request.files.get(name)
+    if expected is None or name not in request.manifest.required_files:
+        raise ValueError("file input is unavailable")
+    try:
+        with (_FILE_INPUT_ROOT / name).open("rb") as stream:
+            material = stream.read(expected.size_bytes + 1)
+    except OSError:
+        raise ValueError("file input is unavailable") from None
+    expected.verify_material(material)
+    return material
 
 
 class GuestValueReference(ClosedModel):

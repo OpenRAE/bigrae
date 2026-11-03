@@ -200,6 +200,7 @@ PUBLIC_API = (
     "reconcile_retained_warm_generations",
     "reconcile_runtime_plugin_operations",
     "reconcile_runtime_plugins",
+    "runtime_plugin_file_selection",
     "record_capacity_declaration",
     "record_cleanup_verification",
     "record_model_observations",

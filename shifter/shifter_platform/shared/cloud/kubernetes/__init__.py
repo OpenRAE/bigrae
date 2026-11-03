@@ -19,6 +19,7 @@ from ._profile import (
     PROVISIONER_RESOURCE_REQUESTS,
     KubernetesTaskProfile,
     ProvisionerHardeningProfile,
+    ReadOnlySecretMount,
     standard_provisioner_hardening,
 )
 from ._runner import KubernetesTaskRunner
@@ -29,5 +30,6 @@ __all__ = (
     "KubernetesTaskProfile",
     "KubernetesTaskRunner",
     "ProvisionerHardeningProfile",
+    "ReadOnlySecretMount",
     "standard_provisioner_hardening",
 )

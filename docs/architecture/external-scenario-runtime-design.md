@@ -3,6 +3,12 @@
 Status: implementation design. This document does not claim the extraction or
 runtime support is complete.
 
+The [named file input design](named-file-assets-2719.md) extends this boundary
+with explicitly selected opaque file assets. It preserves native CMS scope,
+immutable upload custody, byte-free operation pins and worker isolation.
+File material must use the bounded read-only invocation channel; declaring an
+input does not grant credentials, provider permissions or network access.
+
 ## Current implementation boundary
 
 The working implementation contains the independently buildable SDK, bounded

@@ -91,6 +91,13 @@ from ._credentials import (
     get_credential,
     list_credentials,
 )
+from ._file_assets import (
+    cancel_file_upload,
+    complete_file_upload,
+    delete_file_asset,
+    initiate_file_upload,
+    list_file_assets,
+)
 from ._identity_cutover import (
     apply_identity_cutover_resources as apply_identity_cutover_resources,
 )
@@ -224,6 +231,7 @@ from ._range_workspace_admin import (
 from ._receipt import ReceiptRangeBindingUnavailable, confirm_ctf_receipt_binding, project_ctf_receipt_binding
 from ._remote_authority import assert_remote_authority_binding as assert_remote_authority_binding
 from ._retry_safe_launch import RetrySafeLaunchOutcome, bind_first_use_launch, resolve_retry_recovery
+from ._runtime_file_material import load_runtime_file_inputs
 from ._scenarios import (
     get_scenario,
     list_launchable_scenarios,
@@ -315,10 +323,12 @@ __all__ = (
     "attempt_warm_claim",
     "audit_log",
     "bind_first_use_launch",
+    "cancel_file_upload",
     "cancel_range",
     "cancel_range_by_request_id",
     "cancel_upload",
     "change_range_model_sources",
+    "complete_file_upload",
     "complete_upload",
     "confirm_ctf_receipt_binding",
     "confirm_tenant_pack_archive_absent",
@@ -333,6 +343,7 @@ __all__ = (
     "create_range_dispatch",
     "delete_agent",
     "delete_credential",
+    "delete_file_asset",
     "destroy_event_range_for_deletion",
     "destroy_event_range_for_recovery",
     "destroy_ngfw",
@@ -398,10 +409,12 @@ __all__ = (
     "has_ctf_openvpn_profile",
     "has_mission_control_openvpn_profile",
     "has_ready_active_range",
+    "initiate_file_upload",
     "initiate_upload",
     "is_event_range_cleanup_verified_absent",
     "list_agents",
     "list_credentials",
+    "list_file_assets",
     "list_launchable_scenarios",
     "list_mission_control_range_history",
     "list_ngfws",
@@ -410,6 +423,7 @@ __all__ = (
     "list_ranges",
     "list_scenarios",
     "list_usable_model_sources",
+    "load_runtime_file_inputs",
     "max_agent_file_size_bytes",
     "model_source_alias_options",
     "pause_range",

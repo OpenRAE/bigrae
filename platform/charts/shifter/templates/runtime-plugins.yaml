@@ -55,7 +55,8 @@ spec:
     # ceilings below still cap concurrent plugin execution. Terminal Jobs and
     # their Secrets are deleted after their results are accepted.
     count/jobs.batch: "512"
-    count/secrets: "768"
+    # At most invocation, registry and declared-file Secrets per reserved Job.
+    count/secrets: "1536"
     requests.cpu: "2"
     requests.memory: 1Gi
     limits.cpu: "16"
@@ -156,14 +157,34 @@ spec:
         !variables.container.securityContext.allowPrivilegeEscalation &&
         variables.container.securityContext.capabilities.drop == ['ALL'] &&
         variables.pod.securityContext.seccompProfile.type == 'RuntimeDefault' &&
-        variables.pod.volumes.size() == 1 &&
+        variables.pod.securityContext.fsGroup == 65532 &&
+        variables.pod.volumes.size() in [1, 2] &&
         variables.pod.volumes[0].name == 'tmp' &&
         variables.pod.volumes[0].emptyDir.medium == 'Memory' &&
         variables.pod.volumes[0].emptyDir.sizeLimit == '16Mi' &&
-        variables.container.volumeMounts.size() == 1 &&
+        variables.container.volumeMounts.size() == variables.pod.volumes.size() &&
         variables.container.volumeMounts[0].name == 'tmp' &&
         variables.container.volumeMounts[0].mountPath == '/tmp'
       message: Plugin jobs require the restricted filesystem and process profile.
+    - expression: >-
+        variables.pod.volumes.size() == 1 || (
+          variables.pod.volumes[1].name == 'file-inputs' &&
+          has(variables.pod.volumes[1].secret) &&
+          variables.pod.volumes[1].secret.secretName == object.metadata.name + '-inputs' &&
+          variables.pod.volumes[1].secret.defaultMode == 288 &&
+          (!has(variables.pod.volumes[1].secret.optional) || !variables.pod.volumes[1].secret.optional) &&
+          variables.pod.volumes[1].secret.items.size() > 0 && variables.pod.volumes[1].secret.items.size() <= 16 &&
+          variables.pod.volumes[1].secret.items.all(item,
+            item.key.matches('^[a-z0-9][a-z0-9._-]{0,127}$') && item.path == item.key &&
+            (!has(item.mode) || item.mode == 288)) &&
+          variables.container.volumeMounts[1].name == 'file-inputs' &&
+          variables.container.volumeMounts[1].mountPath == '/run/plugin-inputs' &&
+          variables.container.volumeMounts[1].readOnly &&
+          !has(variables.container.volumeMounts[1].subPath) &&
+          !has(variables.container.volumeMounts[1].subPathExpr) &&
+          !has(variables.container.volumeMounts[1].mountPropagation)
+        )
+      message: File inputs require the invocation's bounded read-only Secret projection.
     - expression: >-
         object.spec.backoffLimit == 0 && object.spec.activeDeadlineSeconds == 120 &&
         object.spec.ttlSecondsAfterFinished == 600 &&
