@@ -450,6 +450,7 @@ def run_raes_range_destroy(request_id: str, *, operation_id: str | None = None) 
                 {"raes_status": "succeeded", "cleanup_inventory": no_effects},
             )
             return
+        raes_plan = parse_plan(operation_input.plan, cleanup_only=True)
         if operation_input.range_backend == "ec2":
             from raes_ec2_runtime import destroy_ec2_run
 
@@ -464,7 +465,6 @@ def run_raes_range_destroy(request_id: str, *, operation_id: str | None = None) 
         backend = _require_gce_live_fire_binding(operation_input)
         config = load_gce_range_cell_config(backend=backend)
         config = _config_for_range_placement(request_id, config)
-        raes_plan = parse_plan(operation_input.plan, cleanup_only=True)
         network_allocation = _allocated_networks_for_destroy(
             request_id,
             generation,

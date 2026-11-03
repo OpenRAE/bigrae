@@ -77,6 +77,7 @@ from raes_plan_values import (
     _os_family,
     _os_identity_term,
     _resource_name,
+    _validate_cloud_runtime,
     _vcpus,
 )
 from raes_service import build_node_services
@@ -320,6 +321,7 @@ def _node(
     ``to_net`` endpoint that no declared network resolves, rather than silently
     dropping it (which would provision a wrong topology or an unintended ACL).
     """
+    _validate_cloud_runtime(payload)
     resolved = _resolved_networks(address, payload, network_lookup)
     count = _node_count(payload)
     assignments = _network_ip_assignments(

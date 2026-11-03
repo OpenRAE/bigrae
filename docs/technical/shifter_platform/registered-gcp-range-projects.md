@@ -23,6 +23,9 @@ artifact before re-enabling. A retry never replaces an accepted baseline.
 Canonical command validation and the provisioner Job admission
 policy admit only the registration command; launched registration Jobs require
 an operation UUID. No cloud role is added to portal or adapter processes.
+The worker also validates the existing keyed image-profile configuration and
+excludes every image-owning project, including machine-image projects, before
+creating an inventory client. A malformed profile cannot remove an exclusion.
 
 The worker uses Google's ADC transport against fixed official REST endpoints.
 It reads project IAM with policy version 3, service-account metadata and IAM,
@@ -82,6 +85,14 @@ execution copy and carry the same approved lease references into teardown.
 References are bound to the original plan, range, request and organization; they
 grant no adapter-selected cloud authority. Unreleased project custody blocks
 range ownership and scope moves, including after VPN access is retired.
+
+The worker plan reader currently refuses nonempty native identity-authority and
+platform-application inventories, including retained inputs used for teardown.
+This prevents declarations from being silently dropped while cloud realization
+and independent readback are still in development. Refusal happens before
+provider configuration, network reservation or VM work; empty native inventories
+retain existing behavior. An unaccepted preparation still uses its explicit
+pre-effect cleanup proof.
 
 Release requires the current native destroy result to be applied, the range to
 be destroyed, the overall inventory to report verified absence without residuals,

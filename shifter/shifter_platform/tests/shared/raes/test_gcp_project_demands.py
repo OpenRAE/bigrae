@@ -88,3 +88,11 @@ def test_no_cloud_runtime_retains_empty_custody_selection():
     assert node_gcp_project_demands("web", {}) == ()
     with pytest.raises(ValueError, match="unsupported"):
         node_gcp_project_demands("web", False)
+
+
+def test_native_cloud_plan_is_refused_by_worker_until_effect_routes_exist(native_plan):
+    from tests.shared.raes.test_plan_provisioner_parity import _load_provisioner_reader
+
+    reader = _load_provisioner_reader()
+    with pytest.raises(reader.RaesPlanError, match="native cloud runtime realization is not available"):
+        reader.parse_plan(native_plan[1])

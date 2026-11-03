@@ -25,6 +25,10 @@ Registration accepts existing dedicated projects. It neither creates projects,
 enables services nor grants itself cloud roles. Deployment control, shared VM
 infrastructure, image-build and dynamic-secret projects are excluded. Required
 APIs and narrowly scoped worker permissions are operator prerequisites.
+The registration worker excludes image-owning projects from both legacy image
+settings and every entry in the existing validated keyed image-profile map,
+including machine images. Invalid profile configuration fails before inventory;
+it cannot erase the protected-project set.
 
 The baseline covers the managed surface: project IAM and audit policy, service
 accounts and their policies and user-managed key metadata, and Secret Manager
@@ -93,6 +97,13 @@ produce a bounded refusal before any VM, network, IAM or secret effect. A
 capability declaration alone is not realization. Explicitly declared native
 provider IDs must match; generated provider identities remain in the retained
 mapping rather than replacing logical SDL IDs.
+
+Until these effect routes and independent readback are implemented, the worker
+plan reader also refuses nonempty native identity-authority and platform-
+application inventories. Capability refusal at authoring admission alone is
+insufficient: a retained or directly queued input must not drop those declarations
+and report a successful VM-only realization or teardown. Empty native inventories
+remain compatible.
 
 Instantiate the scenario once using the public RAES instantiation API before
 planning. Lower referenced native Content declarations into a bounded sidecar,

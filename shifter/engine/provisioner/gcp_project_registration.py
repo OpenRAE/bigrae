@@ -17,6 +17,7 @@ from shared.gcp_project_registration import (
 def run_project_registration(request_id: str, operation_id: str, *, operation: str = "register") -> None:
     """Inventory metadata and retain encrypted evidence; never grant roles or create projects."""
     from config import resolve_cloud_provider
+    from config._gce_image_keys import _load_gce_image_key_profiles
     from gcp_project_baselines import GcsBaselineStore, capture_project_baseline, verify_project_baseline
     from gcp_project_inventory import GcpProjectInventory
     from provisioner_db_appends import OperationRef, append_operation_step_result
@@ -30,9 +31,16 @@ def run_project_registration(request_id: str, operation_id: str, *, operation: s
     ref = OperationRef(validated.request_id, validated.operation_id)
     try:
         original = GcpProjectRegistrationInput.model_validate(validated.payload)
+        profiles = _load_gce_image_key_profiles()
+        images = [os.environ.get(name, "") for name in PROTECTED_IMAGE_ENV_NAMES]
+        images.extend(
+            profile.source_image or profile.source_machine_image
+            for entries in profiles.values()
+            for profile in entries.values()
+        )
         protected = configured_project_ids(
             (os.environ.get(name, "") for name in PROTECTED_PROJECT_ENV_NAMES),
-            (os.environ.get(name, "") for name in PROTECTED_IMAGE_ENV_NAMES),
+            images,
         )
         if (
             resolve_cloud_provider() != "gcp"

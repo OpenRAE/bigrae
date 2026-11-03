@@ -136,3 +136,37 @@ def test_changed_control_project_is_refused_before_provider_inventory(native_wor
     with pytest.raises(ValueError, match=r"^Registered project capture failed$"):
         run_project_registration(str(original.registration_id), str(operation_id))
     assert appended(cursor)[0][6] == "gcp_project_failed"
+
+
+@pytest.mark.parametrize("source", ["image", "machine-image"])
+def test_all_configured_keyed_image_projects_are_protected_before_inventory(native_worker, monkeypatch, source):
+    from config._gce_image_keys import _load_gce_image_key_profiles
+    from config._gce_profile import GCE_BOOTSTRAP_PRECONFIGURED_MACHINE_HOST, GCE_PARTICIPANT_READINESS_CONTRACT_V1
+
+    original, operation_id, cursor, _routes = native_worker
+    profile = {
+        "machine_type": "n2-standard-8",
+        "bootstrap_capability": GCE_BOOTSTRAP_PRECONFIGURED_MACHINE_HOST,
+        "participant_container_name": "synthetic-desktop",
+        "participant_username": "operator",
+        "host_ssh_username": "hostadmin",
+        "participant_readiness_contract": GCE_PARTICIPANT_READINESS_CONTRACT_V1,
+        "participant_readiness_manifest_sha256": "a" * 64,
+    }
+    if source == "image":
+        profile.update(
+            source_image=f"projects/{original.project_id}/global/images/synthetic-host",
+            disk_size_gb=220,
+            disk_type="pd-balanced",
+        )
+    else:
+        profile["source_machine_image"] = f"projects/{original.project_id}/global/machineImages/synthetic-host"
+    monkeypatch.setenv("GCP_RANGE_IMAGE_KEY_PROFILES_JSON", json.dumps({"kali": {"synthetic-host": profile}}))
+    # Verify a complete valid profile, rather than exercising a malformed-config refusal.
+    assert _load_gce_image_key_profiles()["kali"]["synthetic-host"].machine_type == "n2-standard-8"
+    inventory_factory = MagicMock(side_effect=AssertionError("Protected projects must not reach inventory"))
+    monkeypatch.setattr("gcp_project_inventory.GcpProjectInventory", inventory_factory)
+    with pytest.raises(ValueError, match=r"^Registered project capture failed$"):
+        run_project_registration(str(original.registration_id), str(operation_id))
+    assert appended(cursor)[0][6] == "gcp_project_failed"
+    inventory_factory.assert_not_called()
