@@ -49,7 +49,7 @@ export function FilesPage() {
       <Label htmlFor="file-location">Location</Label>
       <select id="file-location" className="block rounded border bg-background p-2" value={scope ? contentScopeKey(scope) : ""}
         disabled={!choices.length} onChange={event => setSelected(choices.find(row => contentScopeKey(row) === event.target.value) ?? null)}>
-        {!scope ? <option value="">Choose a file location</option> : null}
+        {scope ? null : <option value="">Choose a file location</option>}
         {choices.map(row => <option key={contentScopeKey(row)} value={contentScopeKey(row)}>{titleCase(row.kind)}: {row.name}</option>)}
       </select>
       {offset > 0 || (locations.data?.count ?? 0) > 50 ? <nav aria-label="File location pages" className="flex gap-2">
@@ -59,7 +59,7 @@ export function FilesPage() {
     </div>
     {locations.isError ? <Alert variant="destructive"><AlertTitle>Could not load file locations</AlertTitle>
       <AlertDescription>Please retry.</AlertDescription></Alert> : null}
-    {locations.isPending ? <p role="status">Loading file locations…</p> : null}
+    {locations.isPending ? <output className="block">Loading file locations…</output> : null}
     {locations.isSuccess && !choices.length ? <p>No file locations are available.</p> : null}
     {target && scope ? <FileAssetsPanel key={contentScopeKey(scope)} scope={target} /> : null}
   </div>;
@@ -77,7 +77,7 @@ function FileAssetsPanel({ scope }: Readonly<{ scope: FileScope }>) {
       maxSize={files.data?.max_file_size_bytes} onFinished={() => setReplacement(null)} />
     <section aria-label="Uploaded files" className="space-y-3">
       <h2 className="text-lg font-semibold">Uploaded files</h2>
-      {files.isPending ? <p role="status">Loading files…</p> : null}
+      {files.isPending ? <output className="block">Loading files…</output> : null}
       {files.data?.files.length === 0 ? <p>No files uploaded yet.</p> : null}
       {files.data?.files.length ? <Table><TableHeader><TableRow>
         <TableHead>Name</TableHead><TableHead>Filename</TableHead><TableHead>Size</TableHead>

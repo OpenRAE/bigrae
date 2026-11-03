@@ -27,6 +27,18 @@ def file_selection_digest(binding: RuntimePluginPackBinding, installation: Runti
     )
 
 
+def assert_file_selection(
+    scope: RuntimePluginScope, binding: RuntimePluginPackBinding | None, installation: RuntimePluginInstallation | None
+) -> None:
+    """Fence an admitted selection, including deletion before native creation."""
+    if binding is None or installation is None:
+        if scope.binding_digest is not None or scope.files:
+            raise ValidationError("The pack's runtime plugin changed during launch; retry the launch")
+        return
+    if scope.binding_digest is not None and file_selection_digest(binding, installation) != scope.binding_digest:
+        raise ValidationError("The pack's runtime plugin changed during launch; retry the launch")
+
+
 def runtime_plugin_file_selection(scope: RuntimePluginScope) -> tuple[str | None, dict[str, UUID]]:
     """Called only after CMS authorizes the source and its actual launch scope."""
     from engine.models import RuntimePluginPackBinding

@@ -154,8 +154,7 @@ def set_runtime_plugin_pack(
             or locked_scope != source_scope
         ):
             raise ValidationError(_PACK_CHANGED)
-        if files:
-            fence_file_selection(user, tenant_scope, files, assignment=True)
+        fence_file_selection(user, tenant_scope, files, assignment=True)
         return bind_runtime_plugin(
             admission,
             plugin_scope,

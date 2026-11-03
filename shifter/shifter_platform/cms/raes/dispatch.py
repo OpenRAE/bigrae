@@ -175,17 +175,17 @@ class CmsRaesDispatchPort:
         instance = RangeInstance.objects.select_related("request").get(request__request_id=self.request_id)
         from cms.services._runtime_file_admission import prepare_runtime_files
 
-        plugin_scope = self.runtime_plugin_scope
-        if instance.range_id is None:
-            plugin_scope = prepare_runtime_files(current, self.scope, plugin_scope)
-        prepare_files = bool(plugin_scope is not None and plugin_scope.files)
+        plugin_scope, prepare_files = prepare_runtime_files(
+            current, self.scope, self.runtime_plugin_scope, existing_range_id=instance.range_id
+        )
         prepare_models = needs_model_preparation(self.request_id)
+        prepare_inputs = prepare_models or prepare_files
         bindings = RangeBindings(
             delivery=delivery,
             participant_access=tuple(participant_access),
             artifact=artifacts,
             runtime_plugin_scope=plugin_scope,
-            defer_dispatch=prepare_models or prepare_files or self.authority_target is not None,
+            defer_dispatch=prepare_inputs or self.authority_target is not None,
             openvpn_deadline=self._openvpn_deadline(),
             credential=current,
             resource_scope=self.scope,
@@ -198,7 +198,7 @@ class CmsRaesDispatchPort:
         ref = self._commit_principal_runtime(instance, current, metadata, bindings, prepared, compiled_plan)
         if prepare_models:
             prepare_model_access_for_dispatch(UUID(self.request_id), range_id=UUID(ref.range_id))
-        if (prepare_models or prepare_files) and self.authority_target is None:
+        if prepare_inputs and self.authority_target is None:
             ref = dispatch_created_raes_range(UUID(self.request_id), credential=current, prepared_creation=prepared)
         return ShifterDispatchResult(
             request_id=ref.request_id, accepted=ref.accepted, status=ref.status, range_id=ref.range_id

@@ -13,6 +13,8 @@ from shared.operation_envelope import canonical_payload_digest
 
 from ._content_authority import content_scope_fields
 
+_INVALID_UPLOAD_METADATA = "Invalid upload metadata"
+
 
 @dataclass(frozen=True, slots=True)
 class UploadOptions:
@@ -35,7 +37,7 @@ def bounded_upload_label(value: object, maximum: int) -> None:
         or len(value) > maximum
         or any(ord(character) < 32 or ord(character) == 127 for character in value)
     ):
-        raise CMSError("Invalid upload metadata")
+        raise CMSError(_INVALID_UPLOAD_METADATA)
 
 
 def validated_installer_metadata(name: str, filename: str, file_size: int, agent_type: str) -> str:
@@ -46,12 +48,12 @@ def validated_installer_metadata(name: str, filename: str, file_size: int, agent
     bounded_upload_label(name, 100)
     bounded_upload_label(filename, 255)
     if type(file_size) is not int or file_size <= 0 or agent_type not in AgentType.values:
-        raise CMSError("Invalid upload metadata")
+        raise CMSError(_INVALID_UPLOAD_METADATA)
     try:
         enforce_max_file_size_bytes(file_size)
         file_format = validate_file_extension(filename)
     except (ValueError, AssetValidationError):
-        raise CMSError("Invalid upload metadata") from None
+        raise CMSError(_INVALID_UPLOAD_METADATA) from None
     if file_format.os_slug is None or not settings.AWS_S3_BUCKET_NAME:
         raise CMSError("Upload unavailable")
     return file_format.os_slug

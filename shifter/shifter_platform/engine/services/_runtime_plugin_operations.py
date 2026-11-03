@@ -138,6 +138,21 @@ def _observe_plan(request: RuntimeInput) -> tuple[RuntimePlan | None, str]:
     return result, state
 
 
+def _invocation_material(
+    row: RuntimePluginInvocation,
+    request: RuntimeInput,
+    installation: RuntimePluginInstallation,
+    files: dict[str, RuntimeFileBinding],
+) -> tuple[RuntimePluginInstallation, dict[str, bytes]]:
+    """Load exact bytes, then recheck generation and cancellation before any Job."""
+    material = load_file_input_material(row.request_id, files)
+    if files:
+        current_request, installation, current_files = _authorized_request(row)
+        if current_request != request or current_files != files or row.expires_at <= timezone.now():
+            raise ValueError("Plugin planning changed during file preparation")
+    return installation, material
+
+
 def _reconcile(row: RuntimePluginInvocation) -> None:
     """Record only planning evidence still authorized by the locked range generation."""
     from engine.models import Range, RuntimePluginInvocation
@@ -148,13 +163,7 @@ def _reconcile(row: RuntimePluginInvocation) -> None:
         request, installation, files = _authorized_request(row)
         if row.expires_at <= timezone.now():
             raise ValueError("Plugin planning expired")
-        material = load_file_input_material(row.request_id, files)
-        if files:
-            # Storage and policy can be slow. Recheck cancellation/generation
-            # before creating any Job or installing private file material.
-            current_request, installation, current_files = _authorized_request(row)
-            if current_request != request or current_files != files or row.expires_at <= timezone.now():
-                raise ValueError("Plugin planning changed during file preparation")
+        installation, material = _invocation_material(row, request, installation, files)
         secret_name = f"runtime-plugin-pull-{request.invocation_id.hex}" if installation.registry_credentials else ""
         launch_plugin(request, image_pull_secret=secret_name)
         _file_secret(request, material)

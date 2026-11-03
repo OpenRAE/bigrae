@@ -29,7 +29,7 @@ from shared.identity_scope import ResourceScope
 from shared.runtime_plugin_binding import PluginTargetBindings, RuntimePluginPin, RuntimePluginScope
 
 from ._runtime_plugin_authority import admit_plugin_authority, current_plugin_credential, fence_plugin_authority
-from ._runtime_plugin_file_selection import runtime_plugin_file_selection as runtime_plugin_file_selection
+from ._runtime_plugin_file_selection import assert_file_selection
 from ._runtime_plugins import _authorize
 
 if TYPE_CHECKING:
@@ -327,8 +327,7 @@ def resolve_runtime_plugin_pin(
         .first()
     )
     if candidate is None:
-        if scope.binding_digest is not None or scope.files:
-            raise ValidationError("The pack's runtime plugin changed during launch; retry the launch")
+        assert_file_selection(scope, None, None)
         return None
     # All writers lock installation before binding. Recheck after acquiring both
     # locks: a concurrent version switch must not admit a partially old pin.
@@ -344,11 +343,7 @@ def resolve_runtime_plugin_pin(
         manifest = PluginManifest.model_validate(installation.manifest)
         if manifest.digest != installation.manifest_digest:
             raise ValueError("Stored plugin identity mismatch")
-        if scope.binding_digest is not None:
-            from ._runtime_plugin_file_selection import file_selection_digest
-
-            if file_selection_digest(binding, installation) != scope.binding_digest:
-                raise ValueError("The file selection changed during admission")
+        assert_file_selection(scope, binding, installation)
         pin = RuntimePluginPin(
             installation_id=installation.id,
             organization_uuid=organization_uuid,

@@ -49,6 +49,7 @@ def _within(file_scope: ResourceScope, launch_scope: ResourceScope, *, assignmen
 
 
 def _binding(row: NamedFileAsset) -> RuntimeFileBinding:
+    """Project one immutable file version without its storage authority."""
     return RuntimeFileBinding(
         asset_uuid=row.asset_uuid,
         version_id=row.pk,
@@ -75,18 +76,23 @@ def prepare_file_selection(
 
 
 def prepare_runtime_files(
-    credential: CredentialContext, scope: ResourceScope, plugin: RuntimePluginScope | None
-) -> RuntimePluginScope | None:
+    credential: CredentialContext,
+    scope: ResourceScope,
+    plugin: RuntimePluginScope | None,
+    *,
+    existing_range_id: int | None = None,
+) -> tuple[RuntimePluginScope | None, bool]:
     """Bind CMS's admission to the exact executable and administrator selection."""
-    if plugin is None:
-        return None
+    if plugin is None or existing_range_id is not None:
+        return plugin, False
     from engine.services import runtime_plugin_file_selection
 
     digest, selections = runtime_plugin_file_selection(plugin)
     files = prepare_file_selection(credential, scope, selections)
-    return RuntimePluginScope(
+    prepared = RuntimePluginScope(
         **plugin.model_dump(exclude={"files", "binding_digest"}), files=files, binding_digest=digest
     )
+    return prepared, bool(files)
 
 
 def fence_file_selection(

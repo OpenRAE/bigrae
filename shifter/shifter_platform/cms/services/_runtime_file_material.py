@@ -19,6 +19,7 @@ from ._runtime_file_admission import UNAVAILABLE, _binding, _within, file_use_ra
 
 
 def _check_use(use: FileAssetUse, item: RuntimeFileBinding, instance: RangeInstance) -> None:
+    """Require the original range, read authority and exact retained version."""
     row = use.file_asset
     actual = content_scope(row)
     parent = scope_parent(actual)
@@ -28,23 +29,38 @@ def _check_use(use: FileAssetUse, item: RuntimeFileBinding, instance: RangeInsta
         organization_id=instance.organization_id,
         workspace_id=instance.workspace_id,
     )
+    recorded = (
+        use.authority_kind,
+        use.authority_resource_uuid,
+        use.authority_owner_uuid,
+        use.authority_binding_digest,
+        use.authority_target_type,
+        use.authority_target_uuid,
+        use.authority_action,
+        use.authority_scope_kind,
+        use.authority_account_uuid,
+        use.authority_organization_uuid,
+        use.authority_workspace_uuid,
+    )
+    expected = (
+        "content",
+        instance.uuid,
+        row.owner_principal_uuid,
+        file_use_range_digest(instance),
+        parent.type,
+        parent.uuid,
+        f"{parent.type}.read_content",
+        actual.kind,
+        actual.account_uuid,
+        actual.organization_uuid,
+        actual.workspace_uuid,
+    )
+    if recorded != expected:
+        raise CMSError(UNAVAILABLE)
     if (
         _binding(row) != item
         or row.storage_deleted_at is not None
-        or use.authority_kind != "content"
-        or use.authority_resource_uuid != instance.uuid
-        or use.authority_owner_uuid != row.owner_principal_uuid
-        or use.authority_binding_digest != file_use_range_digest(instance)
-        or (use.authority_target_type, use.authority_target_uuid, use.authority_action)
-        != (parent.type, parent.uuid, f"{parent.type}.read_content")
         or not _within(actual, launch_scope, assignment=False)
-        or (
-            use.authority_scope_kind,
-            use.authority_account_uuid,
-            use.authority_organization_uuid,
-            use.authority_workspace_uuid,
-        )
-        != (actual.kind, actual.account_uuid, actual.organization_uuid, actual.workspace_uuid)
         or instance.status not in {"pending", "provisioning"}
         or instance.range_id is None
         or row.storage_provider != str(settings.CLOUD_PROVIDER)

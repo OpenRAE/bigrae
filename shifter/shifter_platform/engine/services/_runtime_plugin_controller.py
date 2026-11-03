@@ -88,17 +88,14 @@ def _owned_secret(request: InspectionInput | RuntimeInput, name: str, secret_typ
             raise CloudTaskError("Plugin input Secret could not be installed") from None
         current = core.read_namespaced_secret(name=name, namespace=PLUGIN_NAMESPACE, _request_timeout=30)
         owners = current.metadata.owner_references or []
-        if (
-            current.type != body["type"]
-            or current.data != body["data"]
-            or not current.immutable
-            or len(owners) != 1
-            or owners[0].uid != job.metadata.uid
-            or owners[0].name != job_name
-            or owners[0].kind != "Job"
-            or owners[0].api_version != "batch/v1"
-            or owners[0].controller is not True
-        ):
+        if current.type != body["type"] or current.data != body["data"] or not current.immutable or len(owners) != 1:
+            raise CloudTaskError("Plugin input Secret identity mismatch") from None
+        if (owners[0].uid, owners[0].name, owners[0].kind, owners[0].api_version) != (
+            job.metadata.uid,
+            job_name,
+            "Job",
+            "batch/v1",
+        ) or owners[0].controller is not True:
             raise CloudTaskError("Plugin input Secret identity mismatch") from None
     return name
 
