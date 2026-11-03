@@ -56,6 +56,7 @@ class RaesGceApplyOptions:
     model_broker: dict[str, object] | None = None
     openvpn: RaesGceOpenVpn | None = None
     cloud_service_accounts: Mapping[str, str] | None = None
+    before_provider_mutation: Callable[[], None] | None = None
 
 
 @dataclass(frozen=True)

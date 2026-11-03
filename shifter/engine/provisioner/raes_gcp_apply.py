@@ -449,6 +449,8 @@ def apply_raes_range_cell(
         )
         runtime = _apply_runtime(resolved_options, config=resolved_config)
         _preflight_existing_hosts(plan, runtime.clients)
+        if resolved_options.before_provider_mutation is not None:
+            resolved_options.before_provider_mutation()
         mutation_started = True
         instance_outputs = _provision_raes_resources(
             plan,

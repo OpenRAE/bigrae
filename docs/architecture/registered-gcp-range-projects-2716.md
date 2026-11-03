@@ -113,8 +113,11 @@ The first implementation realizes GCP project scopes, service accounts,
 explicit role bindings and conditions, audit-log settings, attached GCE identity
 use, and Secret Manager resources with literal version content and replication.
 Unsupported authority, policy, identity-use, service or content shapes must
-produce a bounded refusal before any VM, network, IAM or secret effect. A
-capability declaration alone is not realization. Explicitly declared native
+produce a bounded refusal before any VM, network, IAM or secret effect.
+Cloud apply runs inside the GCE driver's first-effect boundary, after guest
+image, content, access and existing-host preflight and before guest mutations.
+An unsupported guest therefore cannot create a partial cloud overlay.
+A capability declaration alone is not realization. Explicitly declared native
 provider IDs must match; generated provider identities remain in the retained
 mapping rather than replacing logical SDL IDs.
 

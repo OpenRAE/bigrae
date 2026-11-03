@@ -1,29 +1,11 @@
-"""RAES-native range lifecycle entry for the provisioner ``raes-range`` command.
+"""RAES-native range lifecycle over immutable operation inputs and closed results.
 
-Parallel to ``terraform_ops.run_range_terraform`` but for the RAES-native path
-(ADR-031, default off behind the platform feature flag). It realizes the
-serialized RAES plan into a real GCE range cell. It performs no cyberscript
-scenario setup, NGFW attachment, or Vertex credential management -- those are
-cyberscript/participant concerns. It invokes tenant subnet coordination only for
-the GCE adapter's backend-owned realization of open portable network intent.
-
-ADR-043 phase 5 (#1837) moved both sides of this path onto the operation
-contract:
-
-* **Inputs** come from the immutable operation-input projection, selected by the
-  canonical ``operation_id``. The plan, the byte-free content-delivery bindings,
-  and the tenant image candidates the plan can ask for all ride that one row --
-  no ``mission_control_range`` / ``engine_raes_content_delivery_binding`` /
-  ``engine_raes_image_mapping`` reads remain.
-* **Outcomes** are appended as closed results on the operation contract. The
-  Engine applier is the authoritative writer for range status and the RAES
-  sidecar evidence, so this module publishes no lifecycle events: one operation
-  generation has exactly one authoritative path.
-
-Image/sizing is still resolved at realization from the authored RAES source
-against the tenant-managed registry (ADR-032-R2) via the pure
-``resolve_gce_image`` policy -- only the candidate rows now arrive by projection
-rather than by direct SQL.
+The generation-bound input carries the native plan, content/access bindings and
+tenant image candidates. Engine alone applies results to range status and
+completion evidence; this worker publishes no competing lifecycle events.
+Image selection uses the projected tenant registry through the existing pure
+policy. Guest and cloud preflight precede provider effects. Teardown retains the
+original plan and custody until provider absence and restoration are verified.
 """
 
 from __future__ import annotations
@@ -31,6 +13,7 @@ from __future__ import annotations
 import logging
 from typing import Any
 
+from shared.gcp_range_projects import GcpProjectState
 from shared.operation_results import MAX_DIAGNOSTIC_CHARS, ResultStep
 from shared.raes.completion_evidence import build_completion_evidence
 from shared.raes.operation_input import RaesOperationInput
@@ -199,7 +182,12 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             backend = _require_gce_live_fire_binding(operation_input)
             config = load_gce_range_cell_config(backend=backend)
             config = _config_for_range_placement(request_id, config)
-            cloud_observed = realize_cloud_projects(cloud, config, enrollment)
+            cloud_observed: dict[str, GcpProjectState] = {}
+            selected_config = config
+
+            def realize_cloud_before_guests() -> None:
+                cloud_observed.update(realize_cloud_projects(cloud, selected_config, enrollment))
+
             network_allocation = _allocated_networks_for_provision(
                 request_id,
                 generation,
@@ -222,6 +210,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
                 options=RaesGceApplyOptions(
                     config=config,
                     cloud_service_accounts=cloud.attachments if cloud is not None else None,
+                    before_provider_mutation=realize_cloud_before_guests if cloud is not None else None,
                     egress_mode=operation_input.egress_mode,
                     allocated_network_cidrs=network_allocation.require_available(),
                     runtime_plugin=plugin_plans.execute if plugin_plans is not None else None,
