@@ -421,3 +421,11 @@ support claims. New boundaries extend the manifest. Run the
 links and diagrams. Historical
 [preflights and reviews](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/index.md)
 explain implementation decisions; they are not prerequisites or current authority.
+
+## Experiment admission
+
+CMS retains immutable experiment inputs through released env-packs and RAES contracts.
+A native management command admits an installed tenant pack without dispatch.
+Operational claims and worker observations remain separate from scientific inputs.
+The current compiler permits serial execution; configured concurrency grants no provider capacity.
+See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).

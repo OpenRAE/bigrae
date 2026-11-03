@@ -1,0 +1,58 @@
+{
+  "attempt_timeout_seconds": 600,
+  "on_timeout": "cleanup-and-fail",
+  "on_cancellation": "cleanup-and-fail",
+  "cleanup": {
+    "clean_state": {
+      "mode": "fresh",
+      "boundary_refs": [
+        "range"
+      ],
+      "verification_probe_refs": [
+        "probe:fresh"
+      ],
+      "reusable_state_claim_ref": null
+    },
+    "resource_boundaries": {
+      "range": {
+        "boundary_id": "range",
+        "resource_kind": "range-instance",
+        "owner_ref": "apparatus:range",
+        "resource_refs": [
+          "range:compiler-fixture"
+        ]
+      }
+    },
+    "cleanup_obligations": {
+      "destroy": {
+        "obligation_id": "destroy",
+        "boundary_refs": [
+          "range"
+        ],
+        "action_kind": "destroy",
+        "action_profile_ref": null,
+        "triggers": [
+          "success",
+          "failure",
+          "cancellation",
+          "timeout",
+          "abort"
+        ],
+        "requirement": "required",
+        "depends_on": [],
+        "idempotency": "idempotent",
+        "compensation_refs": [],
+        "verification_probe_refs": [
+          "probe:absent"
+        ],
+        "timeout_seconds": 120
+      }
+    },
+    "retry_policy": {
+      "max_attempts": 1,
+      "after_effect_policy": "disallow",
+      "reset_obligation_refs": [],
+      "compensation_refs": []
+    }
+  }
+}

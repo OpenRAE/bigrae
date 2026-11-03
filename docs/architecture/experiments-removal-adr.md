@@ -46,6 +46,14 @@ Future experiment capability must start from an RAES-backed design and an
 accepted replacement contract. It must not reuse the deleted `cms.experiments`
 runtime path or revive the removed feature flag as a shortcut.
 
+The [pack experiment admission boundary](experiment-admission-boundary-2742.md)
+records the replacement design for #2742: released RAES trial contracts behind
+`shared.raes`, CMS-owned immutable inputs and fenced operational persistence,
+and the existing native tenant authority and archive custody services. It does
+not restore the removed app or authorize remote execution. Implementation must
+include the user and technical documentation and security/retention coverage
+specified there; this guidance is not evidence that the replacement is delivered.
+
 ## Consequences
 
 - Existing legacy experiment rows and uploaded experiment-script records are
