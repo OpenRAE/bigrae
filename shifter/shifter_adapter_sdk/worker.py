@@ -11,6 +11,7 @@ import sys
 
 from .runtime import (
     ENTRY_POINT_GROUPS,
+    RESULT_SECRET_ENV,
     InspectionInput,
     InspectionResult,
     PluginManifest,
@@ -86,6 +87,7 @@ def main() -> int:
     """Read bounded injected input and emit only the versioned plan response."""
     raw = os.environ.pop("BIGRAE_PLUGIN_INPUT", None)
     legacy = os.environ.pop("SHIFTER_PLUGIN_INPUT", None)
+    result_secret = os.environ.pop(RESULT_SECRET_ENV, "")
     try:
         if raw is not None and legacy is not None and raw != legacy:
             raise ValueError("conflicting plugin input aliases")
@@ -99,7 +101,17 @@ def main() -> int:
     # host still rejects polluted/malformed output and bounds the log read.
     with open(os.devnull, "w") as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
         result = inspect_invocation(request) if isinstance(request, InspectionInput) else plan_invocation(request)
-    sys.stdout.write(json.dumps(result.model_dump(mode="json"), separators=(",", ":")) + "\n")
+    if result.phase == "prepare":
+        from .runtime_sealing import seal_result
+
+        try:
+            output = seal_result(result.model_dump_json(), result_secret).decode("ascii")
+        except ValueError:
+            sys.stderr.write("plugin output unavailable\n")
+            return 2
+    else:
+        output = json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
+    sys.stdout.write(output + "\n")
     return 1 if result.status == "failed" else 0
 
 

@@ -148,3 +148,58 @@ def test_api_server_admits_the_canonical_provisioner_job_and_denies_violations(k
             kubectl, _malformed_admission_job(canonical, mutation), username=PROVISIONER_LAUNCHER_USERNAME
         )
         assert _denied_by_policy(denied), f"{mutation}: {denied.stderr or denied.stdout}"
+
+
+@pytest.mark.parametrize("input_key", ["SHIFTER_PLUGIN_INPUT", "BIGRAE_PLUGIN_INPUT"])
+def test_preparation_worker_secret_is_admitted_and_cannot_expand(kubectl: Kubectl, input_key: str) -> None:
+    """The real CEL compiler admits both keys only from one invocation Secret."""
+    from copy import deepcopy
+    from uuid import uuid4
+
+    from shared.cloud.kubernetes._job_manifest import _build_env, _build_job
+    from shared.cloud.runtime_plugins import PLUGIN_CONTAINER, plugin_task_profile
+    from tests.shared.cloud.test_preparation_installation import ManifestClient
+
+    _apply_admission(kubectl, _load_helm_documents())
+    kubectl("create", "namespace", "shifter-plugins")
+    client = ManifestClient()
+    env = _build_env(
+        client,
+        {input_key: "synthetic input", "BIGRAE_PLUGIN_RESULT_SECRET": "synthetic key"},
+        "runtime-plugin-secrets-" + "1" * 16,
+    )
+    job = _build_job(
+        client,
+        "registry.example.test/plugin@sha256:" + "a" * 64,
+        PLUGIN_CONTAINER,
+        [],
+        env,
+        plugin_task_profile(),
+        str(uuid4()),
+    )
+    canonical = _submittable(job)
+    invalid = deepcopy(canonical)
+    invalid["spec"]["template"]["spec"]["containers"][0]["env"][0]["valueFrom"]["secretKeyRef"]["name"] = (
+        "runtime-plugin-secrets-other"
+    )
+
+    def submit(value: dict[str, Any]) -> subprocess.CompletedProcess[str]:
+        return kubectl(
+            "create",
+            "--dry-run=server",
+            f"--as={PROVISIONER_LAUNCHER_USERNAME}",
+            "--namespace",
+            "shifter-plugins",
+            "-f",
+            "-",
+            stdin=json.dumps(value),
+        )
+
+    deadline = time.monotonic() + 60
+    while True:
+        admitted, denied = submit(canonical), submit(invalid)
+        if admitted.returncode == 0 and "ValidatingAdmissionPolicy 'restrict-runtime-plugin-jobs'" in denied.stderr:
+            assert denied.returncode != 0
+            break
+        assert time.monotonic() < deadline, admitted.stderr or denied.stderr
+        time.sleep(1)

@@ -68,6 +68,7 @@ from raes_range_members import realized_members as _realized_members
 from raes_snapshot import snapshot_resources
 from range_placement import resolve_range_cell_placement
 from range_subnet_allocation import _release_subnet_allocations_best_effort
+from runtime_plugin_preparation import cleanup_preparation, prepared_run
 
 logger = logging.getLogger(__name__)
 _GceNetworkAllocation = GceNetworkAllocation
@@ -79,12 +80,6 @@ _FAILURE_REASON_CODE = "cloud_operation_failed"
 
 #: Reported when this generation's immutable input cannot be read or validated.
 _INPUT_REASON_CODE = "dependency_unavailable"
-
-#: Reported when the realization contract itself was violated (bad plan, missing proof).
-
-
-#: Reported when a cloud operation exceeded its budget.
-
 
 _RESOURCE = "raes-range"
 
@@ -182,12 +177,16 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
     raes_plan: RaesPlan | None = None
     config: GCERangeCellConfig | None = None
     pre_mutation_release_attempted = False
+    preparation_ready = False
     try:
         from model_enrollment import load_model_enrollment
         from runtime_plugin_execution import load_guest_plugin_plans
 
         plugin_plans = load_guest_plugin_plans(run)
-        enrollment = load_model_enrollment(run)
+        effective_run = prepared_run(run, plugin_plans.preparation if plugin_plans is not None else None)
+        operation_input = effective_run.input
+        preparation_ready = True
+        enrollment = load_model_enrollment(effective_run)
         raes_plan = parse_plan(operation_input.plan)
         if operation_input.range_backend == "ec2":
             from raes_ec2_runtime import provision_ec2_run
@@ -195,7 +194,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             if operation_input.remote_access is not None:
                 # The EC2 shared pool is #2481; never launch without it silently.
                 raise RaesRealizationError("OpenVPN access is not realized by the EC2 range backend")
-            apply_result = provision_ec2_run(run, plugin_plans, enrollment)
+            apply_result = provision_ec2_run(effective_run, plugin_plans, enrollment)
         else:
             backend = _require_gce_live_fire_binding(operation_input)
             config = load_gce_range_cell_config(backend=backend)
@@ -240,10 +239,10 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             isinstance(address, str) for address in verified_addresses
         ):
             raise RaesRealizationError("composition verification proof is invalid")
-        resources = snapshot_resources(raes_plan, set(verified_addresses))
+        resources = snapshot_resources(parse_plan(run.input.plan), set(verified_addresses))
         members = _realized_members(apply_result)
         completion = build_completion_evidence(
-            operation_input.plan,
+            run.input.plan,
             resources=resources,
             operating_systems=apply_result.get("operating_systems"),
             compute_substrates=apply_result.get("compute_substrates"),
@@ -251,7 +250,8 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         )
     except Exception as exc:
         _release_failed_provision_allocation(run, raes_plan, config, network_allocation, pre_mutation_release_attempted)
-        cleanup_failed_provision_openvpn(run.request_id, run.input.legacy_range_id, run.input.remote_access)
+        if preparation_ready:
+            cleanup_failed_provision_openvpn(run.request_id, run.input.legacy_range_id, run.input.remote_access)
         reason_code, diagnostic = _classify_failure(exc, "raes range provision")
         logger.error(
             "RAES range provision failed for request_id=%s exc_type=%s", request_id, type(exc).__name__, exc_info=False
@@ -443,10 +443,20 @@ def run_raes_range_destroy(request_id: str, *, operation_id: str | None = None) 
     logger.info("Starting RAES range destroy for request_id=%s", request_id)
     _report(ref, operation, ResultStep.RAES_DESTROY_RUNNING, {"raes_status": "running"})
     try:
+        effective_run, no_effects = cleanup_preparation(run)
+        operation_input = effective_run.input
+        if no_effects is not None:
+            _report(
+                ref,
+                operation,
+                ResultStep.RAES_TERMINAL_DESTROYED,
+                {"raes_status": "succeeded", "cleanup_inventory": no_effects},
+            )
+            return
         if operation_input.range_backend == "ec2":
             from raes_ec2_runtime import destroy_ec2_run
 
-            cleanup_inventory = destroy_ec2_run(run)
+            cleanup_inventory = destroy_ec2_run(effective_run)
             _report(
                 ref,
                 operation,

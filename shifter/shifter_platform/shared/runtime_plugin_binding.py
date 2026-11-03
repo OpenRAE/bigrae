@@ -200,7 +200,6 @@ class PluginTargetBindings(ClosedModel):
     """The logical guest names requested by an installed plugin and exact nodes."""
 
     targets: dict[Identifier, Annotated[str, Field(min_length=1, max_length=1024)]] = Field(
-        min_length=1,
         max_length=64,
     )
     parameters: dict[Identifier, Annotated[str, Field(max_length=8192)]] = Field(
@@ -318,7 +317,11 @@ def runtime_plugin_requests(
         name: GuestTarget(node_address=address, os_family=plan["resources"][address]["payload"]["os_family"])
         for name, address in pin.bindings.targets.items()
     }
-    phases: tuple[Phase, ...] = ("validate", "configure", "verify")
+    phases: list[Phase] = []
+    if "provision.prepare" in pin.manifest.capabilities:
+        phases.append("prepare")
+    if targets:
+        phases.extend(("validate", "configure", "verify"))
     return tuple(
         RuntimeInput(
             protocol=pin.manifest.protocol,
@@ -327,6 +330,7 @@ def runtime_plugin_requests(
             pack_digest=pin.pack_digest,
             manifest=pin.manifest,
             phase=phase,
+            plan_digest=canonical_digest(plan) if phase == "prepare" else None,
             provider=providers[backend],
             range_id=range_id,
             targets=targets,

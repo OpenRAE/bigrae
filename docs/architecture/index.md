@@ -39,6 +39,7 @@ These retain their stated design authority and are not historical preflights:
 - [RAES 10.6 contract-pair adoption boundary](raes-contract-pair-adoption-2722.md)
 - [External runtime boundary](external-scenario-runtime-design.md)
 - [Named file assets and adapter inputs](named-file-assets-2719.md)
+- [Adapter values before provisioning](adapter-pre-provisioning-2718.md)
 
 - [Shared deployment configuration](deployment-root-consolidation-2089.md)
 - [Verification and adoption ownership](verification-adoption-ownership-design-2090.md)

@@ -233,7 +233,9 @@ def _raes_remote_access(target: Range) -> RaesRemoteAccess | None:
     return parse_remote_access({"capability": capability})
 
 
-def _raes_input_payload(target: Range, request: Request, *, suppress_access: bool = False) -> dict[str, object]:
+def _raes_input_payload(
+    target: Range, request: Request, *, suppress_access: bool = False, preparation_for_cleanup: bool = False
+) -> dict[str, object]:
     """Compose the RAES operation input (ADR-043 phase 5, #1837).
 
     Replaces direct provisioner reads with one immutable row: the serialized
@@ -248,6 +250,7 @@ def _raes_input_payload(target: Range, request: Request, *, suppress_access: boo
     """
     from engine.services._model_guest_bindings import project_model_guest_bindings
     from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
+    from engine.services._runtime_plugin_preparation import retained_preparation
 
     plan = target.range_config or {}
     pin = retained_runtime_plugin_pin(target)
@@ -258,6 +261,7 @@ def _raes_input_payload(target: Range, request: Request, *, suppress_access: boo
             access=() if suppress_access else _raes_access_bindings(target),
             artifact=_raes_artifact_bindings(target),
             runtime_plugin=pin,
+            runtime_preparation=retained_preparation(target, pin) if preparation_for_cleanup else None,
             model_enrollments=project_model_guest_bindings(target, pin) if not suppress_access else (),
             remote_access=None if suppress_access else _raes_remote_access(target),
         ),
@@ -340,7 +344,12 @@ def _range_operation_payload(target: Range, resource: str, request: Request, ope
         # A warm-prepare provision suppresses participant access so the realized
         # generation is system-owned and quarantined until it is claimed and
         # activated (#28).
-        return _raes_input_payload(target, request, suppress_access=_request_has_pending_warm_generation(request))
+        return _raes_input_payload(
+            target,
+            request,
+            suppress_access=_request_has_pending_warm_generation(request),
+            preparation_for_cleanup=operation == "destroy",
+        )
     return {
         "range_spec": target.range_config or {},
         "legacy_range_backend": _resolved_range_backend(target, request),

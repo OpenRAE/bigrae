@@ -270,3 +270,12 @@ Publication and live acceptance still need to establish the deployed isolation,
 tenant installation, participant access, model traffic and cleanup behavior.
 Both cloud qualification targets remain pending the user's choice of deployment
 and time.
+
+## Pre-provisioning selection
+
+The optional `provision.prepare` capability is implemented by the independent
+SDK and isolated runtime worker. Its response proposes scalar values under
+explicit provisioning concerns; the host enforces the complete original RAES
+authority and keeps accepted selections encrypted for the range lifetime.
+The worker receives declared files and parameters, never CMS or cloud access.
+See [the design and enforcement boundaries](adapter-pre-provisioning-2718.md).
