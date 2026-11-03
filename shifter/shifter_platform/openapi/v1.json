@@ -6191,6 +6191,252 @@
         }
       }
     },
+    "/api/v1/cms/gcp-range-projects/": {
+      "get": {
+        "operationId": "cms_gcp_range_projects_retrieve",
+        "description": "List one authorized page without provider inventory or credentials.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "tags": [
+          "cms"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProjectPage"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      },
+      "post": {
+        "operationId": "cms_gcp_range_projects_create",
+        "description": "Queue metadata capture for the operator-selected existing project.",
+        "tags": [
+          "cms"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectRegistration"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectRegistration"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/ProjectRegistration"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredProject"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/cms/gcp-range-projects/{registration_id}/disable/": {
+      "post": {
+        "operationId": "cms_gcp_range_projects_disable_create",
+        "description": "Fence new allocations while retaining existing range custody.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registration_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "cms"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredProject"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/cms/gcp-range-projects/{registration_id}/retry/": {
+      "post": {
+        "operationId": "cms_gcp_range_projects_retry_create",
+        "description": "Queue capture or original-baseline verification with current authority.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "registration_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "cms"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RegisteredProject"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
     "/api/v1/cms/model-source-options/": {
       "get": {
         "operationId": "cms_model_source_options_retrieve",
@@ -32958,6 +33204,46 @@
           "principal_uuid"
         ]
       },
+      "ProjectPage": {
+        "type": "object",
+        "description": "Bounded administrative inventory.",
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/RegisteredProject"
+            }
+          },
+          "next_cursor": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "next_cursor",
+          "results"
+        ]
+      },
+      "ProjectRegistration": {
+        "type": "object",
+        "description": "The operator chooses only an existing project and its organization.",
+        "properties": {
+          "organization_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string",
+            "maxLength": 30,
+            "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$"
+          }
+        },
+        "required": [
+          "organization_uuid",
+          "project_id"
+        ]
+      },
       "PublicRegistrationDisposition": {
         "type": "object",
         "description": "Closed organizer decision vocabulary.",
@@ -34399,6 +34685,54 @@
           "code",
           "message"
         ]
+      },
+      "RegisteredProject": {
+        "type": "object",
+        "description": "No baseline metadata, artifact locators or credentials are exposed.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "organization_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "project_id": {
+            "type": "string"
+          },
+          "project_number": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/RegisteredProjectStatusEnum"
+          },
+          "failure_code": {
+            "type": "string"
+          },
+          "in_use": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "failure_code",
+          "id",
+          "in_use",
+          "organization_uuid",
+          "project_id",
+          "project_number",
+          "status"
+        ]
+      },
+      "RegisteredProjectStatusEnum": {
+        "enum": [
+          "pending",
+          "ready",
+          "failed",
+          "disabled"
+        ],
+        "type": "string",
+        "description": "* `pending` - pending\n* `ready` - ready\n* `failed` - failed\n* `disabled` - disabled"
       },
       "RegistryCredentials": {
         "type": "object",

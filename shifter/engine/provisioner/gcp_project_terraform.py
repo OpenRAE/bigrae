@@ -230,7 +230,7 @@ def _secret_resources(resources: dict[str, dict[str, Any]], work: GcpProjectWork
             resources["google_secret_manager_secret_version"][version_key] = {
                 "secret": "${" + secret_address + ".id}",
                 "secret_data": base64.b64encode(version["payload"]).decode("ascii"),
-                "is_secret_data_base64": True,
+                "is_secret_data_base64": True,  # nosec B105 # provider encoding boolean
                 "enabled": version["enabled"],
                 "deletion_policy": "DELETE",
                 "depends_on": [previous],

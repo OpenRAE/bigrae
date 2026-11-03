@@ -435,6 +435,9 @@ PostgreSQL guards enforce exclusive unreleased project use and require current
 applied destroy/restoration evidence before release. The worker lowers admitted
 native cloud declarations to data-only Terraform using the pinned provider.
 State stays encrypted in the existing private bucket under the lease identity.
+The Terraform validation inventory classifies this runtime root under the
+provisioner's Terraform version with the Google provider family, so CI validates
+its committed provider lock without credentials.
 Independent inventory and payload readback must match the baseline plus overlay;
 teardown releases custody only after exact baseline restoration. Cloud-only
 nodes retain their native identities without allocating extra guest VMs.
