@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from datetime import datetime
+from typing import overload
 from urllib.parse import urlsplit
 
 from raes import SDLParseError, load_sdl_fragment
@@ -22,10 +23,10 @@ from raes_contracts.timestamps import parse_rfc3339_datetime
 
 from shared.audit.integrity import _SECRET_KEY_SUFFIXES, _SECRET_KEYS
 from shared.raes.trial_archive import MAX_JSON_BYTES, TrialArchiveError, TrialArchiveIdentity, _json, safe_archive_path
-from shared.schemas._raes_validation import _reject_secret_value
+from shared.schemas._raes_validation import JsonObject, _reject_secret_value
 
 
-def _walk(value: object) -> Iterator[dict]:
+def _walk(value: object) -> Iterator[JsonObject]:
     """Visit bounded parsed documents without changing their original bytes."""
     if isinstance(value, dict):
         yield value
@@ -51,6 +52,7 @@ def _walk(value: object) -> Iterator[dict]:
 
 
 def _artifact_path(uri: str, run_id: str) -> str:
+    """Resolve a local evidence reference without permitting external retrieval."""
     parsed = urlsplit(uri)
     if parsed.scheme == "run" and parsed.netloc == run_id and not parsed.query and not parsed.fragment:
         return safe_archive_path(parsed.path.removeprefix("/"))
@@ -59,7 +61,7 @@ def _artifact_path(uri: str, run_id: str) -> str:
     return safe_archive_path(uri.removeprefix(f"{run_id}/"))
 
 
-def validate_record_binding(payload: dict, expected: TrialArchiveIdentity) -> set[str]:
+def validate_record_binding(payload: JsonObject, expected: TrialArchiveIdentity) -> set[str]:
     """Check explicit record ownership without confusing historical source refs."""
     if payload.get("run_id", expected.run_id) != expected.run_id:
         raise TrialArchiveError("Structured evidence belongs to another run")
@@ -81,7 +83,8 @@ def validate_record_binding(payload: dict, expected: TrialArchiveIdentity) -> se
     return {attempt_id}
 
 
-def _binding_objects(value: object, expected: TrialArchiveIdentity) -> Iterator[dict]:
+def _binding_objects(value: object, expected: TrialArchiveIdentity) -> Iterator[JsonObject]:
+    """Visit current records while leaving published admitted-plan nesting intact."""
     if isinstance(value, dict):
         if value.get("schema_version") == "admitted-trial-plan/v1":
             # A complete admitted plan legitimately contains other entries.
@@ -89,16 +92,16 @@ def _binding_objects(value: object, expected: TrialArchiveIdentity) -> Iterator[
             plan = AdmittedTrialPlanModel.model_validate(value)
             if (plan.plan_id, plan.plan_digest) != (expected.plan_id, expected.plan_digest):
                 raise TrialArchiveError("Structured evidence contains another admitted plan")
-            return
-        yield value
-        for child in value.values():
-            yield from _binding_objects(child, expected)
+        else:
+            yield value
+            for child in value.values():
+                yield from _binding_objects(child, expected)
     elif isinstance(value, list):
         for child in value:
             yield from _binding_objects(child, expected)
 
 
-def validate_structured_bindings(payload: dict, expected: TrialArchiveIdentity) -> set[str]:
+def validate_structured_bindings(payload: JsonObject, expected: TrialArchiveIdentity) -> set[str]:
     """Validate nested current records; reference objects are historical links."""
     attempts = set()
     for record in _binding_objects(payload, expected):
@@ -108,50 +111,66 @@ def validate_structured_bindings(payload: dict, expected: TrialArchiveIdentity) 
     return attempts
 
 
-def _verify_byte_references(payloads: list[dict], inventory: dict, run_id: str) -> None:
+def _verify_byte_reference(value: JsonObject, inventory: dict[str, tuple[int, str]], run_id: str) -> None:
+    """Join one declared original artifact URI, checksum, and optional byte size."""
+    uri = value.get("uri") or value.get("content_uri")
+    checksum = value.get("checksum") or value.get("content_checksum")
+    if not uri or checksum is None:
+        return
+    if not isinstance(uri, str) or not isinstance(checksum, dict):
+        raise TrialArchiveError("Invalid declared evidence byte reference")
+    path = _artifact_path(uri, run_id)
+    actual = inventory.get(path)
+    if actual is None or checksum.get("algorithm") != "sha256" or actual[1] != checksum.get("value"):
+        raise TrialArchiveError("Declared evidence bytes are missing or corrupt")
+    if "size_bytes" in value and (type(value["size_bytes"]) is not int or actual[0] != value["size_bytes"]):
+        raise TrialArchiveError("Declared evidence size differs from the inventory")
+
+
+def _verify_byte_references(payloads: list[JsonObject], inventory: dict[str, tuple[int, str]], run_id: str) -> None:
+    """Verify every nested byte reference without fetching external content."""
     for payload in payloads:
         for value in _walk(payload):
-            # Existing artifact references and URI-backed raw evidence use
-            # these owner-defined fields. No remote dereference is allowed.
-            uri = value.get("uri") or value.get("content_uri")
-            checksum = value.get("checksum") or value.get("content_checksum")
-            if not uri or checksum is None:
-                continue
-            path = _artifact_path(uri, run_id)
-            actual = inventory.get(path)
-            if actual is None or checksum.get("algorithm") != "sha256" or actual[1] != checksum.get("value"):
-                raise TrialArchiveError("Declared evidence bytes are missing or corrupt")
-            if "size_bytes" in value and actual[0] != value["size_bytes"]:
-                raise TrialArchiveError("Declared evidence size differs from the inventory")
+            _verify_byte_reference(value, inventory, run_id)
+
+
+def _join_record(
+    payload: JsonObject,
+    run: ExperimentRunModel,
+    by_receipt: dict[str, TrialCleanupReceiptModel],
+    evidence_ids: set[tuple[str, str]],
+) -> None:
+    """Validate one retained scientific identity against the original run."""
+    schema = payload.get("schema_version")
+    if schema == "trial-cleanup-receipt/v1":
+        receipt = TrialCleanupReceiptModel.model_validate(payload)
+        if receipt.receipt_id in by_receipt and by_receipt[receipt.receipt_id] != receipt:
+            raise TrialArchiveError("Conflicting cleanup records")
+        by_receipt[receipt.receipt_id] = receipt
+    elif schema == "experiment-evidence-record/v1":
+        evidence = ExperimentEvidenceRecordModel.model_validate(payload)
+        identity = (evidence.evidence_record_id, evidence.record_version)
+        if identity in evidence_ids or (
+            evidence.run_ref.ref_kind,
+            evidence.run_ref.ref_id,
+            evidence.run_ref.ref_version,
+        ) != ("run", run.run_id, run.run_version):
+            raise TrialArchiveError("Duplicate or foreign evidence record")
+        evidence_ids.add(identity)
+    elif schema == "experiment-run/v1":
+        retained_run = ExperimentRunModel.model_validate(payload)
+        if retained_run != run:
+            raise TrialArchiveError("Conflicting or foreign archival run record")
 
 
 def _join_retained_records(
-    payloads: list[dict], run: ExperimentRunModel, receipts: list[TrialCleanupReceiptModel]
+    payloads: list[JsonObject], run: ExperimentRunModel, receipts: list[TrialCleanupReceiptModel]
 ) -> list[TrialCleanupReceiptModel]:
     """Validate current-run evidence identities and complete retained references."""
     by_receipt = {item.receipt_id: item for item in receipts}
-    evidence_ids = set()
+    evidence_ids: set[tuple[str, str]] = set()
     for payload in (item for document in payloads for item in _walk(document)):
-        schema = payload.get("schema_version")
-        if schema == "trial-cleanup-receipt/v1":
-            receipt = TrialCleanupReceiptModel.model_validate(payload)
-            if receipt.receipt_id in by_receipt and by_receipt[receipt.receipt_id] != receipt:
-                raise TrialArchiveError("Conflicting cleanup records")
-            by_receipt[receipt.receipt_id] = receipt
-        elif schema == "experiment-evidence-record/v1":
-            evidence = ExperimentEvidenceRecordModel.model_validate(payload)
-            identity = (evidence.evidence_record_id, evidence.record_version)
-            if identity in evidence_ids or (
-                evidence.run_ref.ref_kind,
-                evidence.run_ref.ref_id,
-                evidence.run_ref.ref_version,
-            ) != ("run", run.run_id, run.run_version):
-                raise TrialArchiveError("Duplicate or foreign evidence record")
-            evidence_ids.add(identity)
-        elif schema == "experiment-run/v1":
-            retained_run = ExperimentRunModel.model_validate(payload)
-            if retained_run != run:
-                raise TrialArchiveError("Conflicting or foreign archival run record")
+        _join_record(payload, run, by_receipt, evidence_ids)
     references = list(run.traceability.evidence_record_refs) if run.traceability else []
     if run.execution_accounting is not None:
         references.extend(
@@ -162,8 +181,11 @@ def _join_retained_records(
     return list(by_receipt.values())
 
 
-def _coverage(marker: dict, run: ExperimentRunModel, payloads: list[dict]) -> tuple[bool, int]:
+def _coverage(marker: JsonObject, run: ExperimentRunModel, payloads: list[JsonObject]) -> tuple[bool, int]:
+    """Combine original loss disclosures independently of scientific outcomes."""
     completeness = marker["completeness"]
+    if not isinstance(completeness, dict):
+        raise TrialArchiveError("Invalid archive completeness disclosure")
     complete, gaps = completeness["complete"], completeness["limitations"]
     if type(complete) is not bool or not isinstance(gaps, list) or complete != (not gaps):
         raise TrialArchiveError("Invalid archive completeness disclosure")
@@ -180,16 +202,27 @@ def _coverage(marker: dict, run: ExperimentRunModel, payloads: list[dict]) -> tu
 def _has_capture_bytes(
     record: ExperimentEvidenceRecordModel, inventory: dict[str, tuple[int, str]], run_id: str
 ) -> bool:
+    """Require nonempty original content for a declared captured artifact."""
     content = record.raw_content
     uri = content.artifact_ref.uri if content.artifact_ref is not None else content.content_uri
     return uri is not None and inventory.get(_artifact_path(uri, run_id), (0, ""))[0] > 0
 
 
+@overload
+def _timestamp(value: str) -> datetime: ...
+
+
+@overload
+def _timestamp(value: None) -> None: ...
+
+
 def _timestamp(value: str | None) -> datetime | None:
+    """Parse an optional capture boundary through the public timestamp contract."""
     return parse_rfc3339_datetime("capture coverage", value) if value is not None else None
 
 
 def _window_applies(window: ExperimentCaptureWindowModel, start: datetime, end: datetime | None) -> bool:
+    """Determine whether two observed capture intervals can overlap."""
     window_start, window_end = _timestamp(window.starts_at), _timestamp(window.ends_at)
     return not (
         (window_end is not None and window_end < start)
@@ -225,9 +258,11 @@ def _attempt_captures(
 
 
 def _capture_inputs(
-    payloads: list[dict], run: ExperimentRunModel, plan: AdmittedTrialPlanModel
+    payloads: list[JsonObject], run: ExperimentRunModel, plan: AdmittedTrialPlanModel
 ) -> tuple[dict[tuple[str, str], ExperimentCaptureSpecModel], list[ExperimentEvidenceRecordModel], int]:
-    specifications, records = {}, []
+    """Validate retained capture declarations and identify missing specifications."""
+    specifications: dict[tuple[str, str], ExperimentCaptureSpecModel] = {}
+    records: list[ExperimentEvidenceRecordModel] = []
     for value in (item for payload in payloads for item in _walk(payload)):
         if value.get("schema_version") == "experiment-capture-spec/v1":
             spec = ExperimentCaptureSpecModel.model_validate(value)
@@ -244,40 +279,69 @@ def _capture_inputs(
     return specifications, records, len(declared - specifications.keys())
 
 
+def _specification_gaps(
+    specification: ExperimentCaptureSpecModel,
+    key: tuple[str, str],
+    start: datetime,
+    end: datetime | None,
+    records: list[ExperimentEvidenceRecordModel],
+    inventory: dict[str, tuple[int, str]],
+    run_id: str,
+) -> int:
+    """Count absent capture windows within one applicable execution attempt."""
+    windows = {window.window_id: window for window in specification.capture_windows}
+    gaps = 0
+    for requirement_id, requirement in specification.capture_requirements.items():
+        for window_id in requirement.window_refs:
+            window = windows[window_id]
+            if _window_applies(window, start, end):
+                matching = [
+                    record
+                    for record in records
+                    if _matches_capture(record, key, requirement_id, requirement.output_contract, window)
+                ]
+                gaps += not any(
+                    record.raw_content.loss_disclosure or _has_capture_bytes(record, inventory, run_id)
+                    for record in matching
+                )
+    return gaps
+
+
+def _matches_capture(
+    record: ExperimentEvidenceRecordModel,
+    key: tuple[str, str],
+    requirement_id: str,
+    output_contract: str,
+    window: ExperimentCaptureWindowModel,
+) -> bool:
+    """Join record declarations and timestamp to one specified capture window."""
+    captured = _timestamp(record.captured_at)
+    return (
+        (record.capture_spec_ref.ref_id, record.capture_spec_ref.ref_version) == key
+        and record.capture_requirement_ref == requirement_id
+        and record.output_contract == output_contract
+        and record.capture_window_ref == window.window_id
+        and _window_applies(window, captured, captured)
+    )
+
+
 def _capture_gaps(
-    payloads: list[dict], inventory: dict[str, tuple[int, str]], run: ExperimentRunModel, plan: AdmittedTrialPlanModel
+    payloads: list[JsonObject],
+    inventory: dict[str, tuple[int, str]],
+    run: ExperimentRunModel,
+    plan: AdmittedTrialPlanModel,
 ) -> int:
     """Count missing or empty declared captures without changing scientific status."""
     specifications, records, gaps = _capture_inputs(payloads, run, plan)
     attempts = _attempt_captures(run, records)
     for key, specification in specifications.items():
-        windows = {window.window_id: window for window in specification.capture_windows}
-        for requirement_id, requirement in specification.capture_requirements.items():
-            for window_id in requirement.window_refs:
-                for start, end, retained in attempts:
-                    if not _window_applies(windows[window_id], start, end):
-                        continue
-                    matching = (
-                        record
-                        for record in retained
-                        if (record.capture_spec_ref.ref_id, record.capture_spec_ref.ref_version) == key
-                        and record.capture_requirement_ref == requirement_id
-                        and record.output_contract == requirement.output_contract
-                        and record.capture_window_ref == window_id
-                        and _window_applies(
-                            windows[window_id], _timestamp(record.captured_at), _timestamp(record.captured_at)
-                        )
-                    )
-                    # Explicit loss remains original and _coverage counts it.
-                    observed = any(
-                        record.raw_content.loss_disclosure or _has_capture_bytes(record, inventory, run.run_id)
-                        for record in matching
-                    )
-                    gaps += not observed
+        for start, end, retained in attempts:
+            gaps += _specification_gaps(specification, key, start, end, retained, inventory, run.run_id)
     return gaps
 
 
-def _structured_document(raw: bytes, kind: str) -> dict:
+def _structured_document(raw: bytes, kind: str) -> JsonObject:
+    """Parse original JSON or safe YAML without rewriting accepted bytes."""
     if kind != "yaml":
         root = "array" if raw.lstrip().startswith(b"[") else "object"
         value = parse_bounded_json(raw, max_bytes=MAX_JSON_BYTES, root=root)
@@ -292,6 +356,7 @@ def _structured_document(raw: bytes, kind: str) -> dict:
 def _validate_plan_identity(
     plan: AdmittedTrialPlanModel, run: ExperimentRunModel, expected: TrialArchiveIdentity
 ) -> None:
+    """Join expected admission identities to the released plan and run models."""
     if plan.plan_digest != expected.plan_digest or run.run_version != expected.run_version:
         raise TrialArchiveError("Archive contract digest or version differs")
     experiment = plan.input_refs.study_ref or plan.input_refs.authoring_input_ref
@@ -304,25 +369,8 @@ def _validate_plan_identity(
         raise TrialArchiveError("Archive run differs from the expected entry")
 
 
-def validate_archive_records(
-    documents: dict,
-    inventory: dict,
-    marker: dict,
-    expected: TrialArchiveIdentity,
-    *,
-    trace_attempts: set[str],
-    formats: dict[str, str],
-) -> tuple:
-    """Keep collection and scientific success independent, including partial runs."""
-    payloads = [
-        _structured_document(raw, formats.get(name, "json"))
-        for name, raw in documents.items()
-        if name != "checksums.sha256"
-    ]
-    for payload in payloads:
-        trace_attempts.update(validate_structured_bindings(payload, expected))
-    _verify_byte_references(payloads, inventory, expected.run_id)
-    run = ExperimentRunModel.model_validate(_json(documents["manifest.json"]))
+def _retained_plan(payloads: list[JsonObject]) -> AdmittedTrialPlanModel:
+    """Require exactly one original admitted plan from nested retained records."""
     plans = [
         AdmittedTrialPlanModel.model_validate(item)
         for payload in payloads
@@ -331,8 +379,13 @@ def validate_archive_records(
     ]
     if len(plans) != 1:
         raise TrialArchiveError("Archive must retain one admitted trial plan")
-    plan = plans[0]
-    _validate_plan_identity(plan, run, expected)
+    return plans[0]
+
+
+def _execution_history(
+    run: ExperimentRunModel, expected: TrialArchiveIdentity, trace_attempts: set[str]
+) -> list[TrialCleanupReceiptModel]:
+    """Bind the independently expected attempt to retained accounting and trace links."""
     accounting, lineage = run.execution_accounting, run.trial_provenance
     if accounting is not None:
         entry_id = accounting.plan_entry_id
@@ -348,6 +401,31 @@ def validate_archive_records(
         raise TrialArchiveError("Archive differs from the expected execution attempt")
     if not trace_attempts <= attempt_ids:
         raise TrialArchiveError("Structured trace references an undeclared execution attempt")
+    return receipts
+
+
+def validate_archive_records(
+    documents: dict[str, bytes],
+    inventory: dict[str, tuple[int, str]],
+    marker: JsonObject,
+    expected: TrialArchiveIdentity,
+    *,
+    trace_attempts: set[str],
+    formats: dict[str, str],
+) -> tuple[str, str, bool, int]:
+    """Keep collection and scientific success independent, including partial runs."""
+    payloads = [
+        _structured_document(raw, formats.get(name, "json"))
+        for name, raw in documents.items()
+        if name != "checksums.sha256"
+    ]
+    for payload in payloads:
+        trace_attempts.update(validate_structured_bindings(payload, expected))
+    _verify_byte_references(payloads, inventory, expected.run_id)
+    run = ExperimentRunModel.model_validate(_json(documents["manifest.json"]))
+    plan = _retained_plan(payloads)
+    _validate_plan_identity(plan, run, expected)
+    receipts = _execution_history(run, expected, trace_attempts)
     receipts = _join_retained_records(payloads, run, receipts)
     validate_admitted_trial_run(plan, run, receipts)
     if any(

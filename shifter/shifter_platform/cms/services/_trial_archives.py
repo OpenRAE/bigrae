@@ -44,6 +44,7 @@ from ._tenant_pack_authority import fence_tenant_pack as _fence_tenant_pack
 def _admit(
     credential: CredentialContext, organization_uuid: UUID, operation: str = "manage_content"
 ) -> TenantPackAdmission:
+    """Resolve current tenant content authority with a body-free refusal."""
     try:
         return _admit_tenant_pack(credential, organization_uuid, operation)
     except OrganizationAuthorizationError:
@@ -51,6 +52,7 @@ def _admit(
 
 
 def _fence(admission: TenantPackAdmission) -> None:
+    """Hold tenant ancestry and local credential state through a custody write."""
     try:
         _fence_tenant_pack(admission)
     except OrganizationAuthorizationError:
@@ -78,6 +80,7 @@ class TrialArchiveCollection:
 def _audit(
     credential: CredentialContext, organization_uuid: UUID, reference: UUID, action: AuditAction, disposition: str
 ) -> None:
+    """Write an opaque custody event through the existing strict audit boundary."""
     audit_log(
         AuditEvent(
             entity_type=AuditEntityType.EXPERIMENT,
@@ -120,11 +123,13 @@ def configure_trial_archive_destination(
 def _identity_digest(expected: TrialArchiveIdentity) -> str:
     # Digests bind admission, but changing them cannot evade a committed
     # scientific identity's conflict check. Run versions are scientific identity.
+    """Bind scientific identity independently of admission digest changes."""
     identity = {key: value for key, value in asdict(expected).items() if key not in {"plan_digest", "entry_digest"}}
     return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
 def _reserve(admission: TenantPackAdmission, expected: TrialArchiveIdentity) -> TrialArchiveTransfer:
+    """Persist a unique owned object key and pinned policy before storage I/O."""
     with transaction.atomic(durable=True):
         _fence(admission)
         destination = TrialArchiveDestination.objects.filter(organization_uuid=admission.organization_uuid).first()
@@ -150,6 +155,7 @@ def _reserve(admission: TenantPackAdmission, expected: TrialArchiveIdentity) -> 
 
 
 def _snapshot(source: BinaryIO, path: Path) -> tuple[int, str]:
+    """Copy and hash one bounded input stream to private staging disk."""
     digest, size = hashlib.sha256(), 0
     path.touch(mode=0o600, exist_ok=False)
     with path.open("wb") as target:
@@ -162,7 +168,8 @@ def _snapshot(source: BinaryIO, path: Path) -> tuple[int, str]:
     return size, digest.hexdigest()
 
 
-def _verify_destination(storage: ObjectStorage, transfer: TrialArchiveTransfer, target: Path) -> dict:
+def _verify_destination(storage: ObjectStorage, transfer: TrialArchiveTransfer, target: Path) -> dict[str, object]:
+    """Verify the pinned object version, byte count, and complete SHA-256."""
     identity = storage.head_object(transfer.bucket, transfer.object_key)
     if transfer.object_identity and identity != transfer.object_identity:
         raise CMSError("Archive destination version changed")
@@ -185,6 +192,7 @@ def _verify_destination(storage: ObjectStorage, transfer: TrialArchiveTransfer, 
 
 
 def _view(receipt: TrialArchiveReceipt) -> TrialArchiveCollection:
+    """Project receipt disposition without exposing retained scientific content."""
     expired = receipt.state == "expired" or (receipt.expires_at is not None and receipt.expires_at <= timezone.now())
     return TrialArchiveCollection(
         id=receipt.id,
@@ -202,6 +210,7 @@ def _view(receipt: TrialArchiveReceipt) -> TrialArchiveCollection:
 
 
 def _prior(transfer: TrialArchiveTransfer) -> TrialArchiveReceipt | None:
+    """Resolve an existing identity and reject changed committed bytes."""
     prior = (
         TrialArchiveReceipt.objects.select_related("transfer")
         .filter(organization_uuid=transfer.organization_uuid, identity_digest=transfer.identity_digest)
@@ -213,10 +222,14 @@ def _prior(transfer: TrialArchiveTransfer) -> TrialArchiveReceipt | None:
 
 
 def _publish(
-    admission: TenantPackAdmission, transfer: TrialArchiveTransfer, facts: VerifiedTrialArchive, identity: dict
+    admission: TenantPackAdmission,
+    transfer: TrialArchiveTransfer,
+    facts: VerifiedTrialArchive,
+    identity: dict[str, object],
 ) -> TrialArchiveCollection:
     # The unique constraint handles concurrent finalizers. Each contender owns
     # a distinct object; get_or_create never overwrites the winning receipt.
+    """Atomically commit verified custody or converge with an identical receipt."""
     with transaction.atomic(durable=True):
         _fence(admission)
         current = TrialArchiveTransfer.objects.select_for_update().get(pk=transfer.pk)
@@ -307,25 +320,25 @@ def list_trial_archives(
     rows = TrialArchiveTransfer.objects.filter(organization_uuid=organization_uuid).select_related(
         "trialarchivereceipt"
     )[offset : offset + limit]
-    result = []
-    for row in rows:
-        receipt = getattr(row, "trialarchivereceipt", None)
-        result.append(
-            _view(receipt)
-            if receipt
-            else TrialArchiveCollection(
-                id=row.id,
-                transfer_id=row.id,
-                collection_status=row.state,
-                worker_copy_disposable=False,
-                expected=row.expected,
-                archive_digest=row.archive_digest,
-                gap_count=1 if row.failure_code else 0,
-                failure_code=row.failure_code,
-                expires_at=row.expires_at,
-            )
-        )
-    return result
+    return [_transfer_view(row) for row in rows]
+
+
+def _transfer_view(row: TrialArchiveTransfer) -> TrialArchiveCollection:
+    """Project a receipt or a journal row without a nested disposition expression."""
+    receipt = getattr(row, "trialarchivereceipt", None)
+    if receipt:
+        return _view(receipt)
+    return TrialArchiveCollection(
+        id=row.id,
+        transfer_id=row.id,
+        collection_status=row.state,
+        worker_copy_disposable=False,
+        expected=row.expected,
+        archive_digest=row.archive_digest,
+        gap_count=1 if row.failure_code else 0,
+        failure_code=row.failure_code,
+        expires_at=row.expires_at,
+    )
 
 
 def retrieve_trial_archive(

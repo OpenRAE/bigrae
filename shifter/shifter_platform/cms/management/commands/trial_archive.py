@@ -7,6 +7,7 @@ import os
 import stat
 from dataclasses import asdict
 from pathlib import Path
+from typing import TypedDict, cast
 from uuid import UUID
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
@@ -22,6 +23,30 @@ from shared.api_tokens.cli import credential_from_file
 from shared.credentials import CredentialContext
 from shared.exceptions import CMSError, ValidationError
 from shared.raes.trial_archive import MAX_ARCHIVE_BYTES, TrialArchiveIdentity
+
+
+class _CommandOptions(TypedDict):
+    """Values supplied by the command's declared argument parser."""
+
+    operation: str
+    organization: UUID
+    bucket: str | None
+    prefix: str | None
+    retention_days: int | None
+    keep_indefinitely: bool
+    archive: str | None
+    receipt: UUID | None
+    output: str | None
+    offset: int
+    limit: int
+    experiment: str | None
+    plan: str | None
+    entry: str | None
+    run: str | None
+    attempt: str | None
+    plan_digest: str | None
+    entry_digest: str | None
+    run_version: str | None
 
 
 class Command(BaseCommand):
@@ -52,15 +77,22 @@ class Command(BaseCommand):
     def handle(self, *args: object, **options: object) -> None:
         """Run one custody operation with body-free errors and metadata output."""
         try:
-            credential = credential_from_file(options["credential_file"])
-            result = self._execute(credential, options)
+            proof_file = options["credential_file"]
+            if not isinstance(proof_file, (str, Path)):
+                raise ValueError("Credential file path required")
+            credential = credential_from_file(proof_file)
+            result = self._execute(credential, cast(_CommandOptions, options))
         except (CMSError, ValidationError, ValueError, TypeError, OSError):
             raise CommandError(
                 "Trial archive operation failed; retain worker evidence and inspect authorized collection status"
             ) from None
         self.stdout.write(json.dumps(result, default=str, sort_keys=True))
 
-    def _execute(self, credential: CredentialContext, options: dict) -> dict | list:
+    def _execute(
+        self, credential: CredentialContext, options: _CommandOptions
+    ) -> dict[str, object] | list[dict[str, object]]:
+        """Dispatch one authenticated operation using parsed command values."""
+        result: dict[str, object] | list[dict[str, object]]
         organization = options["organization"]
         match options["operation"]:
             case "configure":
@@ -80,10 +112,14 @@ class Command(BaseCommand):
                 result = {"configured": True}
             case "intake":
                 identity = TrialArchiveIdentity(
-                    **{f"{name}_id": options[name] for name in ("experiment", "plan", "entry", "run", "attempt")},
-                    plan_digest=options["plan_digest"],
-                    entry_digest=options["entry_digest"],
-                    run_version=options["run_version"],
+                    experiment_id=_identity_argument(options["experiment"]),
+                    plan_id=_identity_argument(options["plan"]),
+                    entry_id=_identity_argument(options["entry"]),
+                    run_id=_identity_argument(options["run"]),
+                    attempt_id=_identity_argument(options["attempt"]),
+                    plan_digest=_identity_argument(options["plan_digest"]),
+                    entry_digest=_identity_argument(options["entry_digest"]),
+                    run_version=_identity_argument(options["run_version"]),
                 )
                 if not options["archive"]:
                     raise ValueError("Archive required")
@@ -108,3 +144,10 @@ class Command(BaseCommand):
             case "purge":
                 result = {"purged": purge_trial_archives(credential, organization, limit=options["limit"])}
         return result
+
+
+def _identity_argument(value: str | None) -> str:
+    """Require each independently expected identity from the parsed command."""
+    if value is None:
+        raise ValueError("Expected archive identity required")
+    return value

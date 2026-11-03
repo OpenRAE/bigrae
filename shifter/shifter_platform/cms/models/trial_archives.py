@@ -15,6 +15,8 @@ class TrialArchiveDestination(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Declare database constraints for tenant archive custody."""
+
         constraints = [
             models.CheckConstraint(
                 condition=models.Q(retention_days__isnull=True) | models.Q(retention_days__gt=0),
@@ -23,6 +25,7 @@ class TrialArchiveDestination(models.Model):
         ]
 
     def __str__(self) -> str:
+        """Return an opaque custody identifier for administrative displays."""
         return f"Trial archive destination {self.organization_uuid}"
 
 
@@ -49,6 +52,8 @@ class TrialArchiveTransfer(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Declare database constraints for tenant archive custody."""
+
         ordering = ["-created_at", "id"]
         constraints = [
             models.CheckConstraint(
@@ -58,6 +63,7 @@ class TrialArchiveTransfer(models.Model):
         ]
 
     def __str__(self) -> str:
+        """Return an opaque custody identifier for administrative displays."""
         return f"Trial archive transfer {self.id} ({self.state})"
 
 
@@ -80,6 +86,8 @@ class TrialArchiveReceipt(models.Model):
     expires_at = models.DateTimeField(null=True, db_index=True)
 
     class Meta:
+        """Declare database constraints for tenant archive custody."""
+
         constraints = [
             models.UniqueConstraint(
                 fields=["organization_uuid", "identity_digest"], name="unique_tenant_trial_archive_identity"
@@ -88,4 +96,5 @@ class TrialArchiveReceipt(models.Model):
         ]
 
     def __str__(self) -> str:
+        """Return an opaque custody identifier for administrative displays."""
         return f"Trial archive receipt {self.id} ({self.state})"

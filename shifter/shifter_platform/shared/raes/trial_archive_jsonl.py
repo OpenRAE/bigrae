@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from shared.raes.trial_archive import TrialArchiveError, TrialArchiveIdentity
 from shared.raes.trial_archive_records import _artifact_path, _walk, validate_structured_bindings
+from shared.schemas._raes_validation import JsonObject
 
 _SCIENTIFIC_RECORDS = {
     "experiment-run/v1",
@@ -20,6 +21,7 @@ class StructuredTraceReader:
     def __init__(
         self, expected: TrialArchiveIdentity, *, record_bound: int, metadata_budget: int, reference_budget: int
     ) -> None:
+        """Initialize invocation-local streaming limits and bounded indexes."""
         self.expected = expected
         self.record_bound = record_bound
         self.metadata_budget = metadata_budget
@@ -48,6 +50,7 @@ class StructuredTraceReader:
         self.pending = b""
 
     def _line(self, raw: bytes) -> None:
+        """Validate a complete trace object and index its original scientific records."""
         from shared.raes.trial_archive import _json
 
         self.lines += 1
@@ -61,32 +64,49 @@ class StructuredTraceReader:
             raise TrialArchiveError("Structured trace attempt identities exceed their bound")
         scientific = False
         for value in _walk(payload):
-            scientific = scientific or value.get("schema_version") in _SCIENTIFIC_RECORDS
-            self.disclosed_gaps += bool(value.get("loss_disclosure"))
-            uri = value.get("uri") or value.get("content_uri")
-            checksum = value.get("checksum") or value.get("content_checksum")
-            if uri and checksum is not None:
-                self._reference(uri, checksum, value.get("size_bytes"))
+            scientific = self._index_record(value) or scientific
         if scientific:
-            self.metadata_bytes += len(raw)
-            if self.metadata_bytes > self.metadata_budget:
-                raise TrialArchiveError("Scientific trace records exceed the metadata bound")
-            self.records[f"{self.lines}.json"] = raw
-            if len(self.records) > self.reference_budget:
-                raise TrialArchiveError("Scientific trace records exceed their count bound")
+            self._retain_scientific(raw)
 
-    def _reference(self, uri: str, checksum: dict, size: int | None) -> None:
+    def _index_record(self, value: JsonObject) -> bool:
+        """Index every declared byte reference and original loss disclosure."""
+        self.disclosed_gaps += bool(value.get("loss_disclosure"))
+        uri = value.get("uri") or value.get("content_uri")
+        checksum = value.get("checksum") or value.get("content_checksum")
+        if uri and checksum is not None:
+            self._reference(uri, checksum, value.get("size_bytes"))
+        return value.get("schema_version") in _SCIENTIFIC_RECORDS
+
+    def _retain_scientific(self, raw: bytes) -> None:
+        """Retain one containing line within the shared scientific metadata budget."""
+        self.metadata_bytes += len(raw)
+        if self.metadata_bytes > self.metadata_budget:
+            raise TrialArchiveError("Scientific trace records exceed the metadata bound")
+        self.records[f"{self.lines}.json"] = raw
+        if len(self.records) > self.reference_budget:
+            raise TrialArchiveError("Scientific trace records exceed their count bound")
+
+    def _reference(self, uri: object, checksum: object, size: object) -> None:
+        """Retain one bounded, internally resolvable trace byte identity."""
         if size is not None and (type(size) is not int or size < 0):
             raise TrialArchiveError("Invalid structured trace byte size")
+        if not isinstance(uri, str):
+            raise TrialArchiveError("Invalid structured trace byte URI")
         path = _artifact_path(uri, self.expected.run_id)
-        if not isinstance(checksum, dict) or checksum.get("algorithm") != "sha256":
-            raise TrialArchiveError("Invalid structured trace checksum")
-        digest = checksum.get("value")
-        if not isinstance(digest, str) or len(digest) != 64:
-            raise TrialArchiveError("Invalid structured trace checksum")
+        digest = _trace_checksum(checksum)
         identity = (size, digest)
         if path in self.references and self.references[path] != identity:
             raise TrialArchiveError("Conflicting structured trace byte references")
         self.references[path] = identity
         if len(self.references) > self.reference_budget:
             raise TrialArchiveError("Structured trace references exceed their bound")
+
+
+def _trace_checksum(checksum: object) -> str:
+    """Require the declared SHA-256 identity before retaining a trace reference."""
+    if not isinstance(checksum, dict) or checksum.get("algorithm") != "sha256":
+        raise TrialArchiveError("Invalid structured trace checksum")
+    digest = checksum.get("value")
+    if not isinstance(digest, str) or len(digest) != 64:
+        raise TrialArchiveError("Invalid structured trace checksum")
+    return digest

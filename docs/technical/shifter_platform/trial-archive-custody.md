@@ -79,6 +79,9 @@ Scientific records retain the shared metadata budget and use released RAES valid
 The service stages one bounded archive and one readback on private temporary disk.
 Provision at least twice the maximum compressed archive size in temporary disk capacity.
 Archive content is never extracted to host paths.
+The standard tar reader receives a bounded binary stream.
+Its metadata hooks reject oversized extension bodies before allocation.
+Each scan keeps only typed byte indexes and bounded structured metadata.
 Links, traversal, duplicate names, special files, sparse files, and undeclared bytes are rejected.
 
 ## Receipt and failure semantics
