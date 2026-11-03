@@ -1502,3 +1502,20 @@ These guardrails changed with it:
   `container-images-lint-security` runs the BuildKit check and the Trivy
   configuration scan of the deployer Dockerfile. `gcp-deployer-image` builds
   the image with a fixture release manifest and starts it.
+
+### Adapter preparation (ADR-041-R12, ADR-063-R4)
+
+The SDK restricts `prepare` to declared provisioning concerns, existing scalar
+payload leaves and bounded responses. Core evaluates the original RAES domains,
+recursive constraints and all overlapping authority before accepting any value.
+Migration 0119 makes accepted preparation and its pin/parent identities immutable
+through SQL. Acceptance and cancellation share the Range lock; accepted mapping
+and planned invocation become visible atomically. A destroy input retains that
+mapping, or explicitly records that the mandatory pre-effect gate never opened.
+The latter is a scoped proof of no effects, not an inference from a missing Job.
+Accepted preparation continues through normal provider inventory/readback.
+
+Targeted SDK, Engine PostgreSQL, provisioner and admission-policy tests cover
+confidential output, exact-value rejection, retention, tampering, replay and late
+acceptance. The chart allows only one input key and an optional result key from
+the same invocation Secret. See [the design](../../architecture/adapter-pre-provisioning-2718.md).

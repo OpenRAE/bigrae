@@ -220,3 +220,31 @@ def test_file_projection_overrides_are_denied(policy, file_job, override):
     else:
         secret["items"] = [{"key": f"input{index}", "path": f"input{index}"} for index in range(17)]
     assert not accepted(policy, file_job)
+
+
+def test_sealed_result_key_uses_the_same_bounded_invocation_secret(policy, job):
+    env = job["spec"]["template"]["spec"]["containers"][0]["env"]
+    result = deepcopy(env[0])
+    result["name"] = result["valueFrom"]["secretKeyRef"]["key"] = "BIGRAE_PLUGIN_RESULT_SECRET"
+    # The actual builder sorts env names; the output key can precede the input.
+    env.insert(0, result)
+    assert accepted(policy, job)
+    result["valueFrom"]["secretKeyRef"]["name"] = "runtime-plugin-secrets-other"
+    assert not accepted(policy, job)
+
+
+@pytest.mark.parametrize("change", ["literal", "foreign-key", "duplicate-input", "duplicate-result"])
+def test_preparation_env_cannot_expand_worker_authority(policy, job, change):
+    env = job["spec"]["template"]["spec"]["containers"][0]["env"]
+    second = deepcopy(env[0])
+    second["name"] = second["valueFrom"]["secretKeyRef"]["key"] = "BIGRAE_PLUGIN_RESULT_SECRET"
+    env.append(second)
+    if change == "literal":
+        second["value"] = "literal-secret"
+    elif change == "foreign-key":
+        second["valueFrom"]["secretKeyRef"]["key"] = "FIELD_ENCRYPTION_KEY"
+    elif change == "duplicate-input":
+        env[1] = deepcopy(env[0])
+    else:
+        env[0] = deepcopy(second)
+    assert not accepted(policy, job)
