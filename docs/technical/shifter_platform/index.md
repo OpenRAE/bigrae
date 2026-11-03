@@ -92,3 +92,5 @@ read API.
 - [Communication API and receipt boundaries](ctf-communications.md)
 
 - [Prepared account administration](account-administration.md) - Services, API, browser, migrations and evidence.
+
+- [Registered GCP range projects](registered-gcp-range-projects.md): native capture, encrypted baselines and exclusive custody.

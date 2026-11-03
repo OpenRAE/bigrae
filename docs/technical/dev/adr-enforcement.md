@@ -1523,3 +1523,23 @@ Targeted SDK, Engine PostgreSQL, provisioner and admission-policy tests cover
 confidential output, exact-value rejection, retention, tampering, replay and late
 acceptance. The chart allows only one input key and an optional result key from
 the same invocation Secret. See [the design](../../architecture/adapter-pre-provisioning-2718.md).
+
+
+### Registered GCP range projects (ADR-032-R11)
+
+The implementation for #2716 adds Engine-owned project registration and retained
+range-use records. Migration 0120 enforces immutable accepted baseline and project
+identity, one unreleased use per project, immutable lease custody, and refusal to
+delete an active use. A release update requires the current applied native destroy
+receipt, verified absence without residuals, and matching original-lease baseline
+readback. The targeted PostgreSQL tests exercise those guards through bulk SQL
+writes, plus atomic multi-project allocation, organization isolation and replay.
+Shared contract tests cover ciphertext identity, bounded baseline decoding and
+semantic parity, including changed policy conditions and resource incarnations.
+
+Registration uses the existing native operation input, recorded initiating proof
+and append-only result inbox. Installation policy and the exact live credential
+are checked before dispatch. No cloud I/O belongs in the portal or adapter worker.
+These checks establish custody; they do not claim live provider realization or
+deployment qualification. The [design](../../architecture/registered-gcp-range-projects-2716.md)
+describes the remaining provider preflight, execution and readback boundaries.

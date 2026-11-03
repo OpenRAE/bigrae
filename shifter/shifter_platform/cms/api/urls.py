@@ -7,6 +7,7 @@ from django.urls import path
 from cms.api import (
     artifact_preparation,
     content_scopes,
+    gcp_range_projects,
     model_source_options,
     model_sources,
     preparation_adapters,
@@ -24,6 +25,17 @@ from cms.api import (
 app_name = "cms"
 
 urlpatterns = [
+    path(
+        "gcp-range-projects/<uuid:registration_id>/retry/",
+        gcp_range_projects.GcpRangeProjectRetryView.as_view(),
+        name="gcp-range-project-retry",
+    ),
+    path("gcp-range-projects/", gcp_range_projects.GcpRangeProjectListCreateView.as_view(), name="gcp-range-projects"),
+    path(
+        "gcp-range-projects/<uuid:registration_id>/disable/",
+        gcp_range_projects.GcpRangeProjectDisableView.as_view(),
+        name="gcp-range-project-disable",
+    ),
     path(
         "organizations/<uuid:organization_uuid>/model-ranges/",
         range_model_sources.OrganizationModelRangesView.as_view(),

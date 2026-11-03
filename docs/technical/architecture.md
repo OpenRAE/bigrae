@@ -421,3 +421,15 @@ support claims. New boundaries extend the manifest. Run the
 links and diagrams. Historical
 [preflights and reviews](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/index.md)
 explain implementation decisions; they are not prerequisites or current authority.
+
+### Registered range-project custody
+
+The implementation for #2716 adds an installation-authorized project registry
+owned by Engine. The portal queues native metadata capture through the existing
+provisioner outbox/input/result boundary; it gains no project IAM client.
+Encrypted baseline metadata stays in the existing private object store, with
+only original bucket/generation and integrity references retained in leases.
+PostgreSQL guards enforce exclusive unreleased project use and require current
+applied destroy/restoration evidence before release. Provider overlay realization
+and integration into range preparation remain in development. See the
+[registered-project contract](shifter_platform/registered-gcp-range-projects.md).

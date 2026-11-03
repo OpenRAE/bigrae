@@ -312,6 +312,12 @@ def _apply_uncancelled_raes_result(
         # Record scoped provider inventory/readback evidence BEFORE the DESTROYED
         # transition so verified_terminal, pruning, and CTF capacity release gate on
         # it, not on the logical status (#2086, ADR-063-R4/R5). Same transaction.
+        from ._gcp_project_release import project_restoration_uses
+
+        try:
+            project_restoration_uses(range_obj, payload.get("cleanup_inventory"))
+        except ValueError:
+            raise RaesRealizedAccessError("Registered project restoration is unverified") from None
         _record_cleanup_inventory(row, payload)
 
     return _apply_observation(row, step, payload, range_obj)
