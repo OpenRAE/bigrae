@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
 from pydantic import Field, model_validator
@@ -49,18 +49,18 @@ def pointer_tokens(pointer: object) -> tuple[str, ...]:
     return tuple(token.replace("~1", "/").replace("~0", "~") for token in pointer[1:].split("/"))
 
 
-def _member(value: Any, token: str) -> Any:
+def _member(value: object, token: str) -> object:
     """Select existing members; array append, negative and ambiguous indices fail."""
     if isinstance(value, dict) and token in value:
-        return value[token]
+        return cast(object, value[token])
     if isinstance(value, list) and token.isascii() and token.isdecimal():
         index = int(token)
         if str(index) == token and index < len(value):
-            return value[index]
+            return cast(object, value[index])
     raise ValueError(_UNAVAILABLE)
 
 
-def pointer_value(value: Any, pointer: str) -> Any:
+def pointer_value(value: object, pointer: str) -> object:
     """Read exactly an existing JSON leaf without interpreting it as a path or code."""
     for token in pointer_tokens(pointer):
         value = _member(value, token)
@@ -85,14 +85,18 @@ def governing_authorities(plan: dict[str, Any], edit: ProvisioningValue) -> list
 def _replace_scalar(payload: dict[str, Any], edit: ProvisioningValue) -> None:
     """Change an existing scalar only; collection shape and keys cannot be replaced."""
     tokens = pointer_tokens(edit.payload_pointer)
-    parent: Any = payload
+    parent: object = payload
     for token in tokens[:-1]:
         parent = _member(parent, token)
     previous = _member(parent, tokens[-1])
     if isinstance(previous, (dict, list)):
         raise ValueError(_UNAVAILABLE)
-    key: Any = int(tokens[-1]) if isinstance(parent, list) else tokens[-1]
-    parent[key] = edit.value
+    if isinstance(parent, list):
+        parent[int(tokens[-1])] = edit.value
+    elif isinstance(parent, dict):
+        parent[tokens[-1]] = edit.value
+    else:
+        raise ValueError(_UNAVAILABLE)
 
 
 def _operation_payload(plan: dict[str, Any], address: str) -> dict[str, Any]:

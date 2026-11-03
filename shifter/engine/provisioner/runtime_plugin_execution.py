@@ -18,7 +18,7 @@ from executors.factory import build_guest_execution_context
 from provisioner_db import get_db_connection
 from provisioner_db_operation_input import RaesOperationRun
 from raes_plan import RaesPlan
-from runtime_plugin_preparation import approved_plan
+from runtime_plugin_preparation import approved_plan, prepared_run
 from runtime_plugin_values import resolve_runtime_values
 
 logger = logging.getLogger(__name__)
@@ -108,6 +108,12 @@ def load_guest_plugin_plans(run: RaesOperationRun) -> GuestPluginPlans | None:
     except Exception:  # noqa: BLE001  # value-free boundary: plugin plans and runtime values stay out
         raise RuntimePluginExecutionError("Runtime plugin planning failed") from None
     raise RuntimePluginExecutionError("Runtime plugin planning timed out")
+
+
+def load_prepared_plugin_run(run: RaesOperationRun) -> tuple[RaesOperationRun, GuestPluginPlans | None]:
+    """Open the preparation barrier only after the complete authorized phase set."""
+    bundle = load_guest_plugin_plans(run)
+    return prepared_run(run, bundle.preparation if bundle is not None else None), bundle
 
 
 def _complete_bundle(

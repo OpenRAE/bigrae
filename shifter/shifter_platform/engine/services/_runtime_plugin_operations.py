@@ -255,9 +255,18 @@ def _persist_observation(
                 )
             state, result = "failed", None
         current.state = state
-        current.result = (
-            approval.model_dump(mode="json")
-            if approval is not None and state == "planned"
-            else (result.model_dump(mode="json") if result is not None else None)
-        )
+        current.result = _result_payload(state, result, approval)
         current.save(update_fields=["state", "result", "updated_at"])
+
+
+def _result_payload(
+    state: str,
+    result: RuntimePlan | None,
+    approval: RuntimePreparation | None,
+) -> dict[str, Any] | None:
+    """Persist only sealed accepted preparation or an ordinary bounded phase result."""
+    if approval is not None and state == "planned":
+        return approval.model_dump(mode="json")
+    if result is not None:
+        return result.model_dump(mode="json")
+    return None

@@ -19,6 +19,9 @@ if TYPE_CHECKING:
     from engine.models import Range, RuntimePluginInvocation
 
 
+_IDENTITY_CHANGED = "Runtime preparation identity changed"
+
+
 def preparation_result_secret(request: RuntimeInput) -> str:
     """Derive only this invocation's output key; never disclose the application key."""
     if request.phase != "prepare":
@@ -44,7 +47,7 @@ def approved_preparation(
     """Admit all values before protecting the complete response with the application key."""
     result.authorize(request)
     if request.plan_digest != canonical_digest(plan):
-        raise ValueError("Runtime preparation identity changed")
+        raise ValueError(_IDENTITY_CHANGED)
     validate_runtime_preparation(plan, result, pin)
     return RuntimePreparation(
         state="prepared",
@@ -65,14 +68,14 @@ def approve_invocation(row: RuntimePluginInvocation, request: RuntimeInput, resu
     operation = OperationInput.objects.get(operation_id=row.operation_id, request_id=row.request_id)
     payload = parse_raes_operation_input(validate_operation_envelope(operation.envelope)["payload"])
     if payload.runtime_plugin is None:
-        raise ValueError("Runtime preparation identity changed")
+        raise ValueError(_IDENTITY_CHANGED)
     return approved_preparation(request, result, payload.runtime_plugin, payload.plan)
 
 
 def preparation_identity(record: RuntimePreparation, pin: RuntimePluginPin, plan: object) -> None:
     """Retained approval belongs to this exact original executable, input and plan."""
     if not isinstance(plan, dict) or record.pin_digest != pin.digest or record.plan_digest != canonical_digest(plan):
-        raise ValueError("Runtime preparation identity changed")
+        raise ValueError(_IDENTITY_CHANGED)
 
 
 def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePreparation:
@@ -81,7 +84,7 @@ def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePrep
 
     binding = RuntimePluginRangeBinding.objects.select_for_update().get(range=target)
     if binding.pin_digest != record.pin_digest or canonical_digest(target.range_config) != record.plan_digest:
-        raise ValueError("Runtime preparation identity changed")
+        raise ValueError(_IDENTITY_CHANGED)
     if binding.preparation is not None:
         raise ValueError("Runtime preparation is already retained")
     binding.preparation = record.model_dump(mode="json")

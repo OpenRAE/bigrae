@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import re
-from typing import Any
+from typing import Any, cast
 
 from pydantic import TypeAdapter
 from raes_contracts.bounded_domains import DomainDescriptor, scalar_in_domain
+from raes_contracts.canonical import JsonValue
 from raes_contracts.realization_structure import (
     RealizationConstraintDocument,
     RealizationRelationStatus,
@@ -75,7 +76,7 @@ def _validate_authority(row: dict[str, Any], original: dict[str, Any], candidate
     _validate_bounds(bounds, after)
 
 
-def _validate_bounds(bounds: list[dict[str, Any]], after: Any) -> None:
+def _validate_bounds(bounds: list[dict[str, Any]], after: object) -> None:
     """Require every typed bound and refuse unsupported identity-relative selection."""
     for bound in bounds:
         if bound.get("identity_digest") is not None:
@@ -85,7 +86,7 @@ def _validate_bounds(bounds: list[dict[str, Any]], after: Any) -> None:
             raise ValueError(_INVALID)
 
 
-def _validate_structure(row: dict[str, Any], before: Any, after: Any) -> None:
+def _validate_structure(row: dict[str, Any], before: object, after: object) -> None:
     """Use current recursive and legacy contracts through their public owner only."""
     if row.get("constraint_document") is not None:
         if re.fullmatch(r"sha256:[0-9a-f]{64}", row.get("constraint_binding", "")) is None:
@@ -96,6 +97,6 @@ def _validate_structure(row: dict[str, Any], before: Any, after: Any) -> None:
     elif row.get("constraint_binding") is not None:
         raise ValueError(_INVALID)
     if row.get("structure") is not None and not structure_matches(
-        _STRUCTURE.validate_python(row["structure"]), before, after, observed=False
+        _STRUCTURE.validate_python(row["structure"]), cast(JsonValue, before), cast(JsonValue, after), observed=False
     ):
         raise ValueError(_INVALID)

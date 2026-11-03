@@ -177,3 +177,10 @@ def test_pre_effect_cleanup_never_creates_provider_clients(approval, patched, mo
     patched.load_config.assert_not_called()
     patched.destroy.assert_not_called()
     assert patched.append.call_args.kwargs["result_payload"]["cleanup_inventory"]["outcome"] == "VERIFIED_ABSENT"
+
+
+def test_unprepared_cleanup_proof_must_match_the_original_plan(approval):
+    run, _, snapshot = approval
+    absent = RuntimePreparation(state="unprepared", pin_digest=snapshot.pin_digest, plan_digest="sha256:" + "f" * 64)
+    with pytest.raises(ValueError, match="unavailable"):
+        cleanup_preparation(replace(run, input=replace(run.input, runtime_preparation=absent)))

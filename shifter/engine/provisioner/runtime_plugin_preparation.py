@@ -26,12 +26,10 @@ def approved_plan(run: RaesOperationRun, record: object) -> RuntimePlan:
 def _approved_plan(run: RaesOperationRun, record: object) -> RuntimePlan:
     """Check the sealed response against its reconstructed source request."""
     pin = run.input.runtime_plugin
-    snapshot = RuntimePreparation.model_validate(record)
+    snapshot = _bound_snapshot(run, record)
     if (
         pin is None
         or snapshot.state != "prepared"
-        or snapshot.pin_digest != pin.digest
-        or snapshot.plan_digest != canonical_digest(run.input.plan)
         or snapshot.source_operation_id is None
         or snapshot.encrypted_result is None
         or run.input.range_backend not in {"gce", "ec2"}
@@ -55,6 +53,15 @@ def _approved_plan(run: RaesOperationRun, record: object) -> RuntimePlan:
     return result
 
 
+def _bound_snapshot(run: RaesOperationRun, record: object) -> RuntimePreparation:
+    """Bind every retained state to the original plan and executable."""
+    pin = run.input.runtime_plugin
+    snapshot = RuntimePreparation.model_validate(record)
+    if pin is None or snapshot.pin_digest != pin.digest or snapshot.plan_digest != canonical_digest(run.input.plan):
+        raise ValueError(_UNAVAILABLE)
+    return snapshot
+
+
 def prepared_run(run: RaesOperationRun, result: RuntimePlan | None) -> RaesOperationRun:
     """Create an execution-only copy; reports continue to use authored identities."""
     pin = run.input.runtime_plugin
@@ -65,7 +72,7 @@ def prepared_run(run: RaesOperationRun, result: RuntimePlan | None) -> RaesOpera
     if result is None:
         raise ValueError(_UNAVAILABLE)
     plan = apply_prepared_values(run.input.plan, result, pin.manifest.provisioning_concerns)
-    return replace(run, input=replace(run.input, plan=plan))
+    return RaesOperationRun(run.operation_id, run.request_id, replace(run.input, plan=plan))
 
 
 def cleanup_preparation(run: RaesOperationRun) -> tuple[RaesOperationRun, dict[str, Any] | None]:
@@ -76,6 +83,7 @@ def cleanup_preparation(run: RaesOperationRun) -> tuple[RaesOperationRun, dict[s
     snapshot = run.input.runtime_preparation
     if snapshot is None:
         raise ValueError(_UNAVAILABLE)
+    snapshot = _bound_snapshot(run, snapshot)
     if snapshot.state == "unprepared":
         # The Engine snapshots this under the same Range lock used to accept
         # preparation. No consumer can cross the first-effect barrier without

@@ -85,3 +85,10 @@ def _classify_failure(exc: BaseException, stage: str) -> tuple[str, str]:
     if isinstance(exc, TimeoutError):
         return _TIMEOUT_REASON_CODE, f"{stage} timed out ({type(exc).__name__})"
     return _FAILURE_REASON_CODE, f"{stage} failed ({type(exc).__name__})"
+
+
+def verified_composition_addresses(value: object) -> set[str]:
+    """Require the complete bounded composition proof before reporting original IDs."""
+    if not isinstance(value, list) or not all(isinstance(address, str) for address in value):
+        raise RaesRealizationError("composition verification proof is invalid")
+    return set(value)

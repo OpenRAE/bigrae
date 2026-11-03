@@ -63,12 +63,12 @@ from raes_openvpn import (
     vpn_access_names,
 )
 from raes_plan import RaesPlan, parse_plan
-from raes_range_contract import _classify_failure, _require_gce_live_fire_binding
+from raes_range_contract import _classify_failure, _require_gce_live_fire_binding, verified_composition_addresses
 from raes_range_members import realized_members as _realized_members
 from raes_snapshot import snapshot_resources
 from range_placement import resolve_range_cell_placement
 from range_subnet_allocation import _release_subnet_allocations_best_effort
-from runtime_plugin_preparation import cleanup_preparation, prepared_run
+from runtime_plugin_preparation import cleanup_preparation
 
 logger = logging.getLogger(__name__)
 _GceNetworkAllocation = GceNetworkAllocation
@@ -180,10 +180,9 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
     preparation_ready = False
     try:
         from model_enrollment import load_model_enrollment
-        from runtime_plugin_execution import load_guest_plugin_plans
+        from runtime_plugin_execution import load_prepared_plugin_run
 
-        plugin_plans = load_guest_plugin_plans(run)
-        effective_run = prepared_run(run, plugin_plans.preparation if plugin_plans is not None else None)
+        effective_run, plugin_plans = load_prepared_plugin_run(run)
         operation_input = effective_run.input
         preparation_ready = True
         enrollment = load_model_enrollment(effective_run)
@@ -234,12 +233,10 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
                 delivery_bindings=operation_input.binding_transport(),
                 access_bindings=operation_input.access_binding_transport(),
             )
-        verified_addresses = apply_result.get("composition_verified_addresses")
-        if not isinstance(verified_addresses, list) or not all(
-            isinstance(address, str) for address in verified_addresses
-        ):
-            raise RaesRealizationError("composition verification proof is invalid")
-        resources = snapshot_resources(parse_plan(run.input.plan), set(verified_addresses))
+        resources = snapshot_resources(
+            parse_plan(run.input.plan),
+            verified_composition_addresses(apply_result.get("composition_verified_addresses")),
+        )
         members = _realized_members(apply_result)
         completion = build_completion_evidence(
             run.input.plan,
