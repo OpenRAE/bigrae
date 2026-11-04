@@ -153,6 +153,14 @@ policy and delete permissions; project policy writes; and access to the existing
 bucket's `raes/project-state/` namespace for state and locks. It needs no
 organization-policy administrator role. Exercise key handling remains external.
 
+The GCP portal IAM module supplies the storage grants (#2775). Only the
+provisioner receives `roles/storage.objectCreator` for the configured assets
+bucket's `raes/project-baselines/` prefix, and `roles/storage.objectUser` for
+its `raes/project-state/` prefix. The first grant cannot overwrite or delete
+baselines. The second supports Terraform state replacement and lock removal.
+The existing bucket read grant supplies listing; neither new grant permits
+writes to other assets or gives another workload these permissions.
+
 Release requires the current native destroy result to be applied, the range to
 be destroyed, the overall inventory to report verified absence without residuals,
 and exact restoration proof for the original lease/baseline. The release update
