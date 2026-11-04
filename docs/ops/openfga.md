@@ -54,12 +54,16 @@ Transfer bundle payloads through process input, never command arguments or logs.
 3. Add new runtime and admin secret versions with the replacement TLS material
    and the existing authentication keys. Synchronize the bundles, then roll
    `openfga` and `openfga-admin` and wait for both Deployments to become ready.
-4. Run the normal deployment. Require the publisher's verified HTTPS connection,
+4. Verify each live server with strict TLS and the new CA alone, including its
+   expected certificate identity. After all servers and clients have completed
+   the change, publish the new CA alone, synchronize it, restart policy clients
+   and verify native identity readiness. Retain previous secret versions for recovery.
+5. Run the normal deployment. Require the publisher's verified HTTPS connection,
    native identity activation, workload readiness and running-image checks.
-5. Publish the new CA alone, synchronize it, restart policy clients and verify
-   native identity readiness again. Retain previous secret versions for recovery.
 
 Keep both CAs trusted until every server and client has completed the change.
-On failure, retain that trust bundle while restoring the recorded server bundle
-versions and restarting affected servers. Never disable certificate or hostname
-verification to complete publication.
+An overlap bundle that still includes an invalid legacy CA can fail strict
+verification; complete the verified rollover before running the publisher.
+On failure, restore the overlap trust bundle on clients before restoring the
+recorded server bundle versions and restarting affected servers. Never disable
+certificate or hostname verification to complete publication.
