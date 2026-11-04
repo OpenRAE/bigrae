@@ -15,8 +15,10 @@ from raes_contracts.realization_structure import (
     evaluate_realization_constraint,
     structure_matches,
 )
+from raes_processor.semantics.realization_concerns import project_realization_concern
 from shifter_adapter_sdk.runtime import RuntimePlan, canonical_digest
 
+from shared.gcp_runtime_plan import selected_secret_payloads
 from shared.runtime_plugin_binding import RuntimePluginPin
 from shared.runtime_plugin_preparation import apply_prepared_values, governing_authorities, pointer_value
 
@@ -31,6 +33,7 @@ def validate_runtime_preparation(plan: dict[str, Any], result: RuntimePlan, pin:
         candidate = apply_prepared_values(plan, result, pin.manifest.provisioning_concerns)
         _validate_all_authorities(plan, candidate, result)
         _validate_guest_identity(plan, candidate, pin)
+        selected_secret_payloads(plan, result, pin.manifest.provisioning_concerns)
         return candidate
     except Exception:  # noqa: BLE001  # constraint and value diagnostics may contain private supplied material
         raise ValueError(_INVALID) from None
@@ -92,11 +95,18 @@ def _validate_structure(row: dict[str, Any], before: object, after: object) -> N
         if re.fullmatch(r"sha256:[0-9a-f]{64}", row.get("constraint_binding", "")) is None:
             raise ValueError(_INVALID)
         document = RealizationConstraintDocument.model_validate(row["constraint_document"])
-        if evaluate_realization_constraint(document, after).status is not RealizationRelationStatus.CONFORMANT:
+        projected = project_realization_concern(row["requirement_kind"], after, recursive=True)
+        if evaluate_realization_constraint(document, projected).status is not RealizationRelationStatus.CONFORMANT:
             raise ValueError(_INVALID)
     elif row.get("constraint_binding") is not None:
         raise ValueError(_INVALID)
-    if row.get("structure") is not None and not structure_matches(
-        _STRUCTURE.validate_python(row["structure"]), cast(JsonValue, before), cast(JsonValue, after), observed=False
-    ):
-        raise ValueError(_INVALID)
+    if row.get("structure") is not None:
+        projected_before = project_realization_concern(row["requirement_kind"], before)
+        projected_after = project_realization_concern(row["requirement_kind"], after)
+        if not structure_matches(
+            _STRUCTURE.validate_python(row["structure"]),
+            cast(JsonValue, projected_before),
+            cast(JsonValue, projected_after),
+            observed=False,
+        ):
+            raise ValueError(_INVALID)

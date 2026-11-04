@@ -59,6 +59,7 @@ class Shape(StrEnum):
     RAES_SNAPSHOT = "raes_snapshot"
     RAES_READY = "raes_ready"
     VPN_PKI = "vpn_pki"
+    GCP_PROJECT = "gcp_project"
 
 
 # Result kinds mirror ``engine.models.OperationResultKind`` without importing
@@ -471,7 +472,18 @@ def _parse_vpn_pki(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]:
         raise OperationResultError("VPN PKI receipt unavailable") from None
 
 
+def _parse_gcp_project(payload: dict[str, Any], _spec: StepSpec) -> dict[str, Any]:
+    """Validate a reference-only project capture without leaking provider metadata."""
+    from shared.gcp_project_registration import GcpProjectRegistrationReceipt
+
+    try:
+        return GcpProjectRegistrationReceipt.model_validate(payload).model_dump(mode="json")
+    except ValueError:
+        raise OperationResultError("Registered project receipt unavailable") from None
+
+
 PARSERS = {
+    Shape.GCP_PROJECT: _parse_gcp_project,
     Shape.VPN_PKI: _parse_vpn_pki,
     Shape.INSTANCES: _parse_instances,
     Shape.NGFW: _parse_ngfw,

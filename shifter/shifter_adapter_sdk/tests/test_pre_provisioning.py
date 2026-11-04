@@ -8,6 +8,40 @@ from cryptography.fernet import Fernet
 from shifter_adapter_sdk import runtime, worker
 
 
+@pytest.mark.parametrize("phase", ["validate", "configure", "verify", "cleanup"])
+def test_secret_payload_selection_is_preparation_only(phase):
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    with pytest.raises(ValueError, match="only preparation"):
+        runtime.RuntimePlan(
+            protocol=request.protocol,
+            invocation_id=request.invocation_id,
+            input_digest=request.digest,
+            phase=phase,
+            status="planned",
+            secret_payloads=[{"version_ref": "nodes.synthetic.version", "value": "private"}],
+            actions=[{"action_id": "verify", "binding": "synthetic", "script": "true"}] if phase == "verify" else [],
+        )
+
+
+def test_secret_payload_selections_reject_duplicates_and_enforce_utf8_byte_limit():
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    kwargs = dict(
+        protocol=request.protocol,
+        invocation_id=request.invocation_id,
+        input_digest=request.digest,
+        phase="prepare",
+        status="planned",
+    )
+    with pytest.raises(ValueError, match="unique"):
+        runtime.RuntimePlan(
+            **kwargs, secret_payloads=[{"version_ref": "nodes.synthetic.version", "value": "private"}] * 2
+        )
+    with pytest.raises(ValueError, match="byte limit"):
+        runtime.RuntimePlan(
+            **kwargs, secret_payloads=[{"version_ref": "nodes.synthetic.version", "value": "é" * 40000}]
+        )
+
+
 def request_payload():
     return {
         "protocol": runtime.PROTOCOL,

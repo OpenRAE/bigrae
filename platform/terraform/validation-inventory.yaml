@@ -34,10 +34,13 @@ profiles:
   provisioner-1.16.3:
     terraform_version: "1.16.3"
     provider_family: aws
+  provisioner-gcp-1.16.3:
+    terraform_version: "1.16.3"
+    provider_family: gcp
 
-# Execution roots: the provisioner stages/executes the two `modules/{range,ngfw}`
-# directories, so despite the name they are runtime roots (each declares a
-# backend and owns a lockfile).
+# Execution roots: the provisioner stages/executes `modules/range`, `modules/ngfw`
+# and `modules/registered-gcp-project`, so despite their names they are runtime
+# roots (each declares a backend and owns a lockfile).
 # A root may declare an optional `test` (relative to `path`): a credential-free
 # `terraform test` suite run with the root's own toolchain against its committed
 # lockfile, for behavior that lives in the root rather than a reusable module.
@@ -164,6 +167,12 @@ roots:
     providers:
       - registry.terraform.io/hashicorp/aws
       - registry.terraform.io/hashicorp/tls
+  - id: provisioner-registered-gcp-project
+    path: shifter/engine/provisioner/terraform/modules/registered-gcp-project
+    owner: "@Brad-Edwards"
+    toolchain: provisioner-gcp-1.16.3
+    providers:
+      - registry.terraform.io/hashicorp/google
 
 # Reusable modules. Root validation covers them transitively via their
 # consuming roots; they are never init/validated standalone. `contract`

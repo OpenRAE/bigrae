@@ -79,7 +79,7 @@ def _cloud_contract(tmp_path: Path, *, mode: str = "automatic") -> Path:
     return path
 
 
-def test_released_cloud_contract_reaches_refusal_before_dispatch(tmp_path, monkeypatch):
+def test_released_cloud_contract_reaches_native_admission_without_dispatch(tmp_path, monkeypatch):
     dispatch = Mock(side_effect=AssertionError("assessment must not dispatch"))
     monkeypatch.setattr("shared.raes.realizability._NeverDispatchPort.realize", dispatch)
     path = _cloud_contract(tmp_path)
@@ -89,9 +89,8 @@ def test_released_cloud_contract_reaches_refusal_before_dispatch(tmp_path, monke
     application = runtime.platform_applications[0]
     assert application.secrets[0].replication.mode == "automatic"
     assessment = assess_scenario_capability(path)
-    assert assessment.outcome is RealizabilityOutcome.NOT_REALIZABLE
-    for family in ("runtime-identity-authorities", "runtime-platform-applications"):
-        assert any(family in gap.code + gap.message for gap in assessment.gaps)
+    assert assessment.outcome is RealizabilityOutcome.REALIZABLE
+    assert not assessment.gaps
     dispatch.assert_not_called()
 
 

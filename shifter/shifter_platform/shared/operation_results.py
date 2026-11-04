@@ -79,6 +79,9 @@ __all__ = [
 class ResultStep(StrEnum):
     """Closed, deterministic step keys. Scoped to a ``(resource, operation)``."""
 
+    GCP_PROJECT_READY = "gcp_project_ready"
+    GCP_PROJECT_FAILED = "gcp_project_failed"
+
     VPN_PKI_READY = "vpn_pki_ready"
     VPN_PKI_FAILED = "vpn_pki_failed"
 
@@ -214,7 +217,14 @@ _VPN_PKI_STEPS = {
     ResultStep.VPN_PKI_FAILED: failure(10),
 }
 
+_GCP_PROJECT_STEPS = {
+    ResultStep.GCP_PROJECT_READY: StepSpec(10, "TERMINAL_SUCCESS", Shape.GCP_PROJECT, None, True),
+    ResultStep.GCP_PROJECT_FAILED: failure(10),
+}
+
 _CONTRACT: dict[tuple[str, str], dict[ResultStep, StepSpec]] = {
+    ("range-project", "register"): _GCP_PROJECT_STEPS,
+    ("range-project", "verify"): _GCP_PROJECT_STEPS,
     ("vpn-profile", "issue"): _VPN_PKI_STEPS,
     ("vpn-profile", "revoke"): _VPN_PKI_STEPS,
     ("vpn-profile", "refresh-crl"): _VPN_PKI_STEPS,

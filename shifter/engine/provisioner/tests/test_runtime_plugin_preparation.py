@@ -12,6 +12,9 @@ from shifter_adapter_sdk.runtime import RuntimePlan, canonical_digest
 
 import runtime_plugin_execution as execution
 from runtime_plugin_preparation import approved_plan, cleanup_preparation, prepared_run
+from tests.test_gcp_project_baselines import capture as capture
+from tests.test_gcp_project_baselines import lease
+from tests.test_gcp_project_baselines import run as capture_baseline
 from tests.test_raes_range_ops import _serialized_plan
 from tests.test_raes_range_ops import patched as patched
 from tests.test_runtime_plugin_execution import run as run
@@ -78,7 +81,7 @@ def test_execution_and_cleanup_use_same_retained_copy_without_changing_original(
     original = deepcopy(run.input.plan)
     accepted = approved_plan(run, snapshot)
     assert accepted == result
-    effective = prepared_run(run, accepted)
+    effective = prepared_run(run, accepted, snapshot)
     assert effective.input.plan["resources"]["node.web"]["payload"]["name"] == "private-selection"
     cleanup, proof = cleanup_preparation(replace(run, input=replace(run.input, runtime_preparation=snapshot)))
     assert proof is None and cleanup.input.plan == effective.input.plan
@@ -146,12 +149,23 @@ def test_prepare_is_separated_from_guest_phases_before_execution(approval, monke
     assert [request.phase for request in bundle.requests] == ["validate", "configure", "verify"]
 
 
+def test_malformed_preparation_response_cannot_echo_worker_values(approval, monkeypatch):
+    run, _, snapshot = approval
+    response = {**snapshot.model_dump(mode="json"), "encrypted_result": "PRIVATE_MALFORMED_VALUE"}
+    monkeypatch.setattr(execution, "_read_response", lambda _: response)
+    with pytest.raises(execution.RuntimePluginExecutionError, match="planning failed") as error:
+        execution.load_guest_plugin_plans(run)
+    assert "PRIVATE_MALFORMED_VALUE" not in str(error.value)
+
+
 def test_range_entry_applies_effective_values_and_reports_original_addresses(approval, patched, monkeypatch):
     import raes_range_ops as ops
 
-    run, result, _ = approval
+    run, result, snapshot = approval
     monkeypatch.setattr(ops, "get_raes_operation_input", lambda *_args, **_kwargs: run)
-    monkeypatch.setattr(execution, "load_guest_plugin_plans", lambda _: execution.GuestPluginPlans((), (), result))
+    monkeypatch.setattr(
+        execution, "load_guest_plugin_plans", lambda _: execution.GuestPluginPlans((), (), result, snapshot)
+    )
     ops.run_raes_range_provision(run.request_id, operation_id=run.operation_id)
     assert patched.apply.call_args.args[2].nodes[0].name == "private-selection"
     snapshots = [
@@ -184,3 +198,28 @@ def test_unprepared_cleanup_proof_must_match_the_original_plan(approval):
     absent = RuntimePreparation(state="unprepared", pin_digest=snapshot.pin_digest, plan_digest="sha256:" + "f" * 64)
     with pytest.raises(ValueError, match="unavailable"):
         cleanup_preparation(replace(run, input=replace(run.input, runtime_preparation=absent)))
+
+
+def test_provision_and_destroy_keep_same_host_approved_project_references(approval, capture):
+    run, result, snapshot = approval
+    binding = lease(capture, capture_baseline(capture)).model_copy(
+        update={
+            "request_id": UUID(run.request_id),
+            "range_id": run.input.legacy_range_id,
+            "plan_digest": snapshot.plan_digest,
+            "source_operation_id": snapshot.source_operation_id,
+        }
+    )
+    snapshot = RuntimePreparation.model_validate({**snapshot.model_dump(), "cloud_projects": (binding,)})
+    effective = prepared_run(run, approved_plan(run, snapshot), snapshot)
+    destroy = replace(
+        run, operation_id=str(uuid4()), input=replace(run.input, runtime_preparation=snapshot, gcp_projects=(binding,))
+    )
+    cleanup, proof = cleanup_preparation(destroy)
+    assert proof is None
+    assert effective.input.gcp_projects == cleanup.input.gcp_projects == (binding,)
+    assert effective.input.plan == cleanup.input.plan
+    assert not run.input.gcp_projects and run.input.runtime_preparation is None
+    foreign = replace(run, request_id=str(uuid4()))
+    with pytest.raises(ValueError, match="unavailable"):
+        prepared_run(foreign, result, snapshot)

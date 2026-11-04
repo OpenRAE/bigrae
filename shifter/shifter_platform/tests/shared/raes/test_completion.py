@@ -131,6 +131,24 @@ def test_published_completion_cardinality_fits_the_byte_transport():
     assert validate_completion_evidence(evidence) == evidence
 
 
+@pytest.mark.parametrize("field", ["plan_digest", "operation_id", "generation_id"])
+@pytest.mark.parametrize("identity", [None, 17, "", "x" * 129])
+def test_completion_transport_refuses_invalid_identity_bounds(field, identity):
+    evidence = _evidence(_plan())
+    evidence[field] = identity
+
+    with pytest.raises(ValueError, match="invalid RAES completion identity"):
+        validate_completion_evidence(evidence)
+
+
+@pytest.mark.parametrize("field", ["plan_digest", "operation_id", "generation_id"])
+def test_completion_transport_accepts_maximum_identity_length(field):
+    evidence = _evidence(_plan())
+    evidence[field] = "x" * 128
+
+    assert validate_completion_evidence(evidence) == evidence
+
+
 @pytest.mark.parametrize("mutation", ["missing", "tampered", "other-scenario"])
 def test_completion_requires_the_exact_runtime_selected_carrier(mutation):
     plan = _plan()

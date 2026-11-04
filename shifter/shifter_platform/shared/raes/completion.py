@@ -20,6 +20,7 @@ from raes_contracts.runtime_state import RealizationObservationDisclosure, Runti
 from raes_contracts.vocabulary import ObservationStrength, RealizationVerificationScope
 from raes_processor.planner import realization_authority_disclosure
 
+from shared.gcp_runtime_plan import GcpProjectWork, cloud_only_node_addresses
 from shared.raes.completion_evidence import plan_digest, validate_completion_evidence
 
 
@@ -128,6 +129,7 @@ def completed_snapshot(
     baseline: RuntimeSnapshot | None = None,
     generation_id: str | None = None,
     serialized_plan: Mapping[str, Any] | None = None,
+    cloud_context: tuple[dict[str, Any], tuple[GcpProjectWork, ...]] | None = None,
 ) -> RuntimeSnapshot:
     """Gate exact input, complete readback coverage and upstream realization semantics."""
     from shared.raes.manifest import create_shifter_backend_manifest
@@ -139,7 +141,9 @@ def completed_snapshot(
     manifest = create_shifter_backend_manifest(realization_envelope=carrier)
     resources = _verified_resources(plan, value)
     nodes = {address: resource for address, resource in resources.items() if resource.resource_type == "node"}
-    observations = _node_observations(plan, nodes, value, carrier.identity)
+    logical = cloud_only_node_addresses(serialized_plan)
+    guests = {address: resource for address, resource in nodes.items() if address not in logical}
+    observations = _node_observations(plan, guests, value, carrier.identity)
     snapshot = deepcopy(baseline) if baseline is not None else RuntimeSnapshot()
     # Composition is projected only after its exact guest verification coverage
     # succeeded. OS/substrate are carried separately as actual observed values.
@@ -157,6 +161,9 @@ def completed_snapshot(
     )
     snapshot.realization_envelope = carrier.identity
     snapshot.realization_observations = tuple(observations)
+    from shared.raes.cloud_completion import admit_cloud_completion
+
+    admit_cloud_completion(plan, serialized_plan, value, snapshot, cloud_context)
     # Check the evidence against the admitted contract. RAES 10 owns the
     # snapshot's realization provenance and derives it after this result.
     diagnostics, _provenance = realization_authority_disclosure(plan, snapshot, manifest=manifest)

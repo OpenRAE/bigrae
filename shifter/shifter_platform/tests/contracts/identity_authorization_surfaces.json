@@ -1,5 +1,5 @@
 {
-  "current_operation_count": 324,
+  "current_operation_count": 328,
   "historical_baseline": {
     "commit": "8aee758331286293cdc837d94eb95fafa5674ae0",
     "operation_count": 220
@@ -950,6 +950,50 @@
       "method": "GET",
       "operation_id": "cms_content_scopes_retrieve",
       "path": "/api/v1/cms/content-scopes/"
+    },
+    {
+      "authority": {
+        "decision": "installation.manage_cloud_authority",
+        "scope": "sql:gcp_range_project_registry",
+        "target": "installation"
+      },
+      "disposition": "added",
+      "method": "GET",
+      "operation_id": "cms_gcp_range_projects_retrieve",
+      "path": "/api/v1/cms/gcp-range-projects/"
+    },
+    {
+      "authority": {
+        "decision": "installation.manage_cloud_authority",
+        "scope": "sql:gcp_range_project_registry",
+        "target": "installation"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "cms_gcp_range_projects_create",
+      "path": "/api/v1/cms/gcp-range-projects/"
+    },
+    {
+      "authority": {
+        "decision": "installation.manage_cloud_authority",
+        "scope": "sql:gcp_range_project",
+        "target": "installation"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "cms_gcp_range_projects_disable_create",
+      "path": "/api/v1/cms/gcp-range-projects/{registration_id}/disable/"
+    },
+    {
+      "authority": {
+        "decision": "installation.manage_cloud_authority",
+        "scope": "sql:gcp_range_project",
+        "target": "installation"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "cms_gcp_range_projects_retry_create",
+      "path": "/api/v1/cms/gcp-range-projects/{registration_id}/retry/"
     },
     {
       "authority": {

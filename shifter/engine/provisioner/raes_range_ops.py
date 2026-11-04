@@ -1,36 +1,20 @@
-"""RAES-native range lifecycle entry for the provisioner ``raes-range`` command.
+"""RAES-native range lifecycle over immutable operation inputs and closed results.
 
-Parallel to ``terraform_ops.run_range_terraform`` but for the RAES-native path
-(ADR-031, default off behind the platform feature flag). It realizes the
-serialized RAES plan into a real GCE range cell. It performs no cyberscript
-scenario setup, NGFW attachment, or Vertex credential management -- those are
-cyberscript/participant concerns. It invokes tenant subnet coordination only for
-the GCE adapter's backend-owned realization of open portable network intent.
-
-ADR-043 phase 5 (#1837) moved both sides of this path onto the operation
-contract:
-
-* **Inputs** come from the immutable operation-input projection, selected by the
-  canonical ``operation_id``. The plan, the byte-free content-delivery bindings,
-  and the tenant image candidates the plan can ask for all ride that one row --
-  no ``mission_control_range`` / ``engine_raes_content_delivery_binding`` /
-  ``engine_raes_image_mapping`` reads remain.
-* **Outcomes** are appended as closed results on the operation contract. The
-  Engine applier is the authoritative writer for range status and the RAES
-  sidecar evidence, so this module publishes no lifecycle events: one operation
-  generation has exactly one authoritative path.
-
-Image/sizing is still resolved at realization from the authored RAES source
-against the tenant-managed registry (ADR-032-R2) via the pure
-``resolve_gce_image`` policy -- only the candidate rows now arrive by projection
-rather than by direct SQL.
+The generation-bound input carries the native plan, content/access bindings and
+tenant image candidates. Engine alone applies results to range status and
+completion evidence; this worker publishes no competing lifecycle events.
+Image selection uses the projected tenant registry through the existing pure
+policy. Guest and cloud preflight precede provider effects. Teardown retains the
+original plan and custody until provider absence and restoration are verified.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any
+from dataclasses import replace
+from typing import TYPE_CHECKING, Any
 
+from shared.gcp_range_projects import GcpProjectState
 from shared.operation_results import MAX_DIAGNOSTIC_CHARS, ResultStep
 from shared.raes.completion_evidence import build_completion_evidence
 from shared.raes.operation_input import RaesOperationInput
@@ -63,12 +47,18 @@ from raes_openvpn import (
     vpn_access_names,
 )
 from raes_plan import RaesPlan, parse_plan
+from raes_range_cloud import cloud_completion, prepare_cloud_plan, realize_cloud_projects, restore_cloud_projects
 from raes_range_contract import _classify_failure, _require_gce_live_fire_binding, verified_composition_addresses
 from raes_range_members import realized_members as _realized_members
 from raes_snapshot import snapshot_resources
 from range_placement import resolve_range_cell_placement
 from range_subnet_allocation import _release_subnet_allocations_best_effort
 from runtime_plugin_preparation import cleanup_preparation
+
+if TYPE_CHECKING:
+    from gcp_project_runtime import RegisteredProjectRuntime
+    from model_enrollment import EnrollmentDelivery
+    from runtime_plugin_execution import GuestPluginPlans
 
 logger = logging.getLogger(__name__)
 _GceNetworkAllocation = GceNetworkAllocation
@@ -101,15 +91,7 @@ def _config_for_range_placement(request_id: str, config: GCERangeCellConfig) -> 
 
 
 def _require_generation(request_id: str, operation_id: str | None, operation: str) -> tuple[OperationRef, str]:
-    """Return the operation ref and its proven generation id, or refuse.
-
-    A cut-over family has no non-contract path: with no generation there is no
-    immutable input to realize from and no fence to report results against, so
-    proceeding would mutate cloud resources the Engine cannot reconcile. The id
-    is returned alongside the ref because ``OperationRef.operation_id`` is
-    optional by contract, and every caller past this point needs the proven
-    non-null value.
-    """
+    """Require the immutable input generation before any effect or result publication."""
     if not operation_id:
         raise RaesGenerationError(
             f"raes-range {operation} requires a canonical operation id; refusing to mutate cloud state without one"
@@ -135,19 +117,7 @@ def _report_failure(
 
 
 def _load_input(ref: OperationRef, operation_id: str, operation: str, request_id: str) -> RaesOperationRun:
-    """Read and validate this generation's input, reporting failure if it cannot.
-
-    An operation generation that never reports a terminal result is only visible
-    through the inbox-lag signal (ADR-043-R7), leaving the range stuck until an
-    operator notices. The generation comes from argv, so a bad input is still
-    reportable -- and reporting it lets the applier fail the range explicitly.
-    The provisional ref used for that report is argv-derived, which is safe: no
-    cloud mutation has happened, and the applier fences the result on ownership
-    before applying anything.
-
-    The diagnostic is authored, not derived: the underlying error can carry a
-    table name or driver text, which must not cross the result boundary.
-    """
+    """Validate input or report a bounded failure before effects; Engine fences the provisional ref."""
     try:
         return get_raes_operation_input(operation_id, request_id=request_id, operation=operation)
     except Exception:
@@ -186,7 +156,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         operation_input = effective_run.input
         preparation_ready = True
         enrollment = load_model_enrollment(effective_run)
-        raes_plan = parse_plan(operation_input.plan)
+        raes_plan, cloud = prepare_cloud_plan(run, effective_run)
         if operation_input.range_backend == "ec2":
             from raes_ec2_runtime import provision_ec2_run
 
@@ -198,7 +168,13 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             backend = _require_gce_live_fire_binding(operation_input)
             config = load_gce_range_cell_config(backend=backend)
             config = _config_for_range_placement(request_id, config)
-            raes_plan = parse_plan(operation_input.plan)
+            cloud_observed: dict[str, GcpProjectState] = {}
+            selected_config = config
+
+            def realize_cloud_before_guests() -> None:
+                """Run admitted cloud work only after the guest driver's complete preflight."""
+                cloud_observed.update(realize_cloud_projects(cloud, selected_config, enrollment))
+
             network_allocation = _allocated_networks_for_provision(
                 request_id,
                 generation,
@@ -218,32 +194,30 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
                 range_id,
                 raes_plan,
                 registry_image_resolver(operation_input),
-                options=RaesGceApplyOptions(
-                    config=config,
-                    egress_mode=operation_input.egress_mode,
-                    allocated_network_cidrs=network_allocation.require_available(),
-                    runtime_plugin=plugin_plans.execute if plugin_plans is not None else None,
-                    model_enrollment=enrollment.execute if enrollment is not None else None,
-                    model_broker=enrollment.gce_egress_capability() if enrollment is not None else None,
-                    on_pre_mutation_failure=(
-                        release_pre_mutation_allocation if network_allocation.network_cidrs else None
+                options=_apply_guest_callbacks(
+                    RaesGceApplyOptions(
+                        config=config,
+                        cloud_service_accounts=cloud.attachments if cloud is not None else None,
+                        before_provider_mutation=realize_cloud_before_guests if cloud is not None else None,
+                        egress_mode=operation_input.egress_mode,
+                        allocated_network_cidrs=network_allocation.require_available(),
+                        on_pre_mutation_failure=(
+                            release_pre_mutation_allocation if network_allocation.network_cidrs else None
+                        ),
+                        openvpn=openvpn,
                     ),
-                    openvpn=openvpn,
+                    plugin_plans,
+                    enrollment,
                 ),
                 delivery_bindings=operation_input.binding_transport(),
                 access_bindings=operation_input.access_binding_transport(),
             )
-        resources = snapshot_resources(
-            parse_plan(run.input.plan),
-            verified_composition_addresses(apply_result.get("composition_verified_addresses")),
-        )
-        members = _realized_members(apply_result)
-        completion = build_completion_evidence(
-            run.input.plan,
-            resources=resources,
-            operating_systems=apply_result.get("operating_systems"),
-            compute_substrates=apply_result.get("compute_substrates"),
-            generation_id=run.operation_id,
+        resources, members, completion = _provision_evidence(
+            run,
+            cloud,
+            cloud_observed if cloud is not None else {},
+            config,
+            apply_result,
         )
     except Exception as exc:
         _release_failed_provision_allocation(run, raes_plan, config, network_allocation, pre_mutation_release_attempted)
@@ -272,6 +246,42 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
     )
 
 
+def _apply_guest_callbacks(
+    options: RaesGceApplyOptions, plugins: GuestPluginPlans | None, enrollment: EnrollmentDelivery | None
+) -> RaesGceApplyOptions:
+    """Bind only admitted adapter and model callbacks to the existing guest driver."""
+    return replace(
+        options,
+        runtime_plugin=plugins.execute if plugins is not None else None,
+        model_enrollment=enrollment.execute if enrollment is not None else None,
+        model_broker=enrollment.gce_egress_capability() if enrollment is not None else None,
+    )
+
+
+def _provision_evidence(
+    run: RaesOperationRun,
+    cloud: RegisteredProjectRuntime | None,
+    observed: dict[str, GcpProjectState],
+    config: GCERangeCellConfig | None,
+    result: dict[str, Any],
+) -> tuple[list[dict[str, str]], list[dict[str, object]], dict[str, Any]]:
+    """Retain original plan identities and require provider-backed completion for cloud nodes."""
+    resources = snapshot_resources(
+        parse_plan(run.input.plan, cloud_admitted=cloud is not None),
+        verified_composition_addresses(result.get("composition_verified_addresses")),
+    )
+    members = _realized_members(result)
+    completion = build_completion_evidence(
+        run.input.plan,
+        resources=resources,
+        operating_systems=result.get("operating_systems"),
+        compute_substrates=result.get("compute_substrates"),
+        generation_id=run.operation_id,
+        cloud_projects=cloud_completion(cloud, observed, config, result.get("instances")),
+    )
+    return resources, members, completion
+
+
 def _report_realized_provision(
     ref: OperationRef, request_id: str, resources: list[dict[str, str]], ready: dict[str, Any]
 ) -> None:
@@ -281,12 +291,8 @@ def _report_realized_provision(
         _report(ref, operation, ResultStep.RAES_PROVISION_SNAPSHOT, {"resources": resources})
         _report(ref, operation, ResultStep.RAES_TERMINAL_READY, ready)
     except Exception as exc:
-        # The appends validate the result contract. A rejected realized result must
-        # still end the generation with a terminal failure; otherwise the range stays
-        # PROVISIONING indefinitely and occupies the owner's active-range slot. The
-        # cloud resources are realized, so allocations are not released here: the
-        # failed range is torn down through the normal destroy operation, which also
-        # removes its OpenVPN access.
+        # A rejected result must terminate its generation. Retain allocations for
+        # normal destroy, which also removes OpenVPN and registered cloud state.
         reason_code, diagnostic = _classify_failure(exc, "raes range provision result")
         logger.error(
             "RAES range provision result was rejected for request_id=%s exc_type=%s",
@@ -324,14 +330,9 @@ def _release_failed_provision_allocation(
 
 
 def run_raes_range_activate(request_id: str, *, operation_id: str | None = None) -> None:
-    """Hand a claimed warm generation to its claimant (#28).
+    """Activate a warm claim only after old access is revoked and claimant access is verified.
 
-    Scrubs every pre-claim credential/access identity, realizes the claimant's
-    fresh access, and negatively verifies the pre-claim access is revoked, then
-    reports ``running`` -> snapshot -> ``ready`` with the claimant's realized
-    member/access projection. Any failure reports a terminal failure with a closed
-    reason code; the Engine applier fails the generation and it is retired through
-    the canonical destroy lifecycle rather than handed over.
+    A failed generation terminates and retains its normal destroy authority.
     """
     from uuid import UUID
 
@@ -353,8 +354,8 @@ def run_raes_range_activate(request_id: str, *, operation_id: str | None = None)
     _report(ref, operation, ResultStep.RAES_ACTIVATE_RUNNING, {"raes_status": "running"})
     try:
         operation_input = activation.raes_input
-        if operation_input.runtime_plugin is not None:
-            raise RaesRealizationError("Runtime plugin warm activation is not supported")
+        if operation_input.runtime_plugin is not None or operation_input.gcp_projects or operation_input.cloud_content:
+            raise RaesRealizationError("Runtime plugin and cloud warm activation are not supported")
         backend = _require_gce_live_fire_binding(operation_input)
         config = _config_for_range_placement(request_id, load_gce_range_cell_config(backend=backend))
         raes_plan = parse_plan(operation_input.plan)
@@ -450,6 +451,7 @@ def run_raes_range_destroy(request_id: str, *, operation_id: str | None = None) 
                 {"raes_status": "succeeded", "cleanup_inventory": no_effects},
             )
             return
+        raes_plan, cloud = prepare_cloud_plan(run, effective_run, cleanup_only=True)
         if operation_input.range_backend == "ec2":
             from raes_ec2_runtime import destroy_ec2_run
 
@@ -464,7 +466,6 @@ def run_raes_range_destroy(request_id: str, *, operation_id: str | None = None) 
         backend = _require_gce_live_fire_binding(operation_input)
         config = load_gce_range_cell_config(backend=backend)
         config = _config_for_range_placement(request_id, config)
-        raes_plan = parse_plan(operation_input.plan, cleanup_only=True)
         network_allocation = _allocated_networks_for_destroy(
             request_id,
             generation,
@@ -487,6 +488,7 @@ def run_raes_range_destroy(request_id: str, *, operation_id: str | None = None) 
     # reservation remains held until absence is proven so another range cannot
     # reuse an occupied CIDR after a partial or unreadable cleanup.
     cleanup_inventory = _raes_cleanup_inventory(request_id, range_id, raes_plan, destroy_options)
+    cleanup_inventory = restore_cloud_projects(cloud, cleanup_inventory)
     if network_allocation.network_cidrs and cleanup_inventory.get("outcome") == VERIFIED_ABSENT:
         _release_subnet_allocations_best_effort(request_id, operation_id=generation)
     _report(

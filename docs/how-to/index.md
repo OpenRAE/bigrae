@@ -10,6 +10,8 @@ Step-by-step walkthroughs for common tasks.
 
 ## Advanced Setups
 
+- [Register GCP range projects](register-gcp-range-projects.md) - Dedicated project capture and custody
+
 - [Set Up NGFW Demo](ngfw-demo) - Full NGFW integration walkthrough
 - [Manage the RAES Image Registry](manage-raes-image-registry) - Register, list, and disable RAES image mappings
 - [Retain trial archives](retain-trial-archives.md) - Configure approved tenant custody, collect evidence, and recover transfers

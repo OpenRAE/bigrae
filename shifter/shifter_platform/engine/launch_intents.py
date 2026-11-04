@@ -61,6 +61,7 @@ __all__ = [
 ]
 
 _OPERATIONS = {
+    "range-project": {"register", "verify"},
     "range": {"provision", "destroy", "pause", "resume"},
     # ``activate`` (#28) hands an atomically claimed warm generation to its
     # claimant. Only the ownership-neutral raes-range path carries it; the legacy
@@ -269,6 +270,11 @@ def _authorize_request_ngfw(
 
 def assert_provisioner_input_matches(payload: dict[str, object], operation_id: UUID) -> None:
     """Fence immutable input at effect admission, independently of failure evidence."""
+    if payload.get("resource") == "range-project":
+        from engine.services._gcp_project_operations import validate_project_operation
+
+        validate_project_operation(payload, operation_id)
+        return
     if payload.get("resource") == "vpn-profile":
         from engine.services._vpn_profile_operations import validate_vpn_operation
 
@@ -286,6 +292,11 @@ def validate_provisioner_generation(
     expected_operation_id: UUID | str | None = None,
 ) -> None:
     """Fence domain facts only; callers admitting effects first authorize policy."""
+    if payload.get("resource") == "range-project":
+        from engine.services._gcp_project_operations import validate_project_operation
+
+        validate_project_operation(payload, expected_operation_id)
+        return
     if payload.get("resource") == "vpn-profile":
         from engine.services._vpn_profile_operations import validate_vpn_operation
 
@@ -410,6 +421,9 @@ def _enqueue_admitted_provisioner_launch(
         from engine.services._model_allocation_launch import allocate_launch_models
 
         allocate_launch_models(payload, operation_id)
+        from engine.services._gcp_project_inputs import allocate_launch_projects
+
+        allocate_launch_projects(payload, operation_id)
         existing = ProvisionerLaunchIntent.objects.filter(operation_id=operation_id).first()
         if existing is not None:
             assert_launch_authority_replay(existing, authority)

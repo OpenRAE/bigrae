@@ -194,7 +194,9 @@ class _NeverDispatchPort:
         return "realizability-assessment"
 
     @staticmethod
-    def realize(compiled_plan: dict[str, Any], participant_access: object = ()) -> NoReturn:
+    def realize(
+        compiled_plan: dict[str, Any], participant_access: object = (), cloud_content: object = None
+    ) -> NoReturn:
         """Refuse to dispatch -- assessment is an authoring check, not a launch."""
         raise AssertionError("realizability assessment must never dispatch a provisioning plan")
 

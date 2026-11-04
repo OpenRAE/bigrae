@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 from typing import Any
+from uuid import UUID
 
+from shared.gcp_runtime_plan import selected_secret_payloads
 from shared.runtime_plugin_binding import runtime_plugin_requests
 from shared.runtime_plugin_preparation import RuntimePreparation, apply_prepared_values
 from shifter_adapter_sdk.runtime import MAX_PREPARATION_BYTES, RuntimePlan, canonical_digest, decode_message
@@ -59,20 +61,40 @@ def _bound_snapshot(run: RaesOperationRun, record: object) -> RuntimePreparation
     snapshot = RuntimePreparation.model_validate(record)
     if pin is None or snapshot.pin_digest != pin.digest or snapshot.plan_digest != canonical_digest(run.input.plan):
         raise ValueError(_UNAVAILABLE)
+    for lease in snapshot.cloud_projects:
+        lease.authorize(
+            request_id=UUID(run.request_id), range_id=run.input.legacy_range_id, plan_digest=snapshot.plan_digest
+        )
     return snapshot
 
 
-def prepared_run(run: RaesOperationRun, result: RuntimePlan | None) -> RaesOperationRun:
+def prepared_run(
+    run: RaesOperationRun, result: RuntimePlan | None, snapshot: RuntimePreparation | None = None
+) -> RaesOperationRun:
     """Create an execution-only copy; reports continue to use authored identities."""
     pin = run.input.runtime_plugin
     if pin is None or "provision.prepare" not in pin.manifest.capabilities:
-        if result is not None:
+        if result is not None or snapshot is not None:
             raise ValueError(_UNAVAILABLE)
         return run
-    if result is None:
+    if result is None or snapshot is None:
+        raise ValueError(_UNAVAILABLE)
+    snapshot = _bound_snapshot(run, snapshot)
+    if snapshot.state != "prepared":
         raise ValueError(_UNAVAILABLE)
     plan = apply_prepared_values(run.input.plan, result, pin.manifest.provisioning_concerns)
-    return RaesOperationRun(run.operation_id, run.request_id, replace(run.input, plan=plan))
+    payloads = selected_secret_payloads(run.input.plan, result, pin.manifest.provisioning_concerns)
+    return RaesOperationRun(
+        run.operation_id,
+        run.request_id,
+        replace(
+            run.input,
+            plan=plan,
+            gcp_projects=snapshot.cloud_projects,
+            runtime_preparation=snapshot,
+            secret_payloads=payloads,
+        ),
+    )
 
 
 def cleanup_preparation(run: RaesOperationRun) -> tuple[RaesOperationRun, dict[str, Any] | None]:
@@ -99,4 +121,4 @@ def cleanup_preparation(run: RaesOperationRun) -> tuple[RaesOperationRun, dict[s
                 "operation_id": run.operation_id,
             },
         }
-    return prepared_run(run, approved_plan(run, snapshot)), None
+    return prepared_run(run, approved_plan(run, snapshot), snapshot), None
