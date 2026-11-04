@@ -73,6 +73,7 @@ The experiment reference conveys no permission.
 Management access uses the private address, provider secret reference, and pinned host key from accepted range output.
 Immutable operation input explicitly requests the management targets.
 The provisioner returns their closed management projection separately from participant members.
+Native member parsing keeps the existing count bound and rejects duplicate guest identities.
 Engine validates the requested targets before it stores private generation-bound references.
 Participant state and ordinary range projections contain no management credential reference.
 The fixed probe addresses the local Unix Docker socket.

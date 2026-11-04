@@ -150,7 +150,6 @@ def create_disposable_worker(
             _validate_replay(existing, scope, experiment_id, trial_id, current.principal.uuid)
             if existing.profile_digest != profile.digest:
                 raise ValueError("Worker replay conflicts")
-            worker = existing
         else:
             _check_worker_limits(policy)
             _reserve_capacity(profile, worker_id, now)

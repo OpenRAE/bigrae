@@ -87,6 +87,7 @@ class Command(BaseCommand):
         try:
 
             def create(identifier: UUID) -> None:
+                """Admit one owned worker and close its thread-local database connection."""
                 close_old_connections()
                 try:
                     create_disposable_worker(parent, scope=scope, worker_id=identifier, experiment_id=experiment)

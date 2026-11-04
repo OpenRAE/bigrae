@@ -42,6 +42,15 @@ from shared.model_access.messages import ContractError, strict_json
 from shared.private_files import read_private_file
 from workspaces.services import identity_cutover_disposition, plan_identity_cutover_accounts
 
+__all__ = [
+    "IdentityBootstrapFacts",
+    "IdentityCutoverFacts",
+    "ProviderIdentityFact",
+    "build_identity_cutover_plan",
+    "load_identity_bootstrap_facts",
+    "load_identity_cutover_facts",
+]
+
 _FACTS_DOCUMENT_IS_INVALID = "facts document is invalid"
 
 _MAX_FACTS_BYTES = 65_536

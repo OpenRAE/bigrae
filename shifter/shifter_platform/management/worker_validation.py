@@ -40,6 +40,7 @@ def issue_worker_validation_credentials(
     try:
 
         def credential(target: TargetRef) -> CredentialContext:
+            """Authenticate exact proof only after native target-scope resolution."""
             if target not in proofs:
                 raise ValueError("Worker validation target is unavailable")
             if target.type != "installation" and resolve_credential_scope(target) != scope:

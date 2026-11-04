@@ -43,6 +43,24 @@ RAES_MEMBER_OPTIONAL_KEYS = _RAES_MEMBER_REF_KEYS | frozenset({"sftp_root_direct
 RAES_MEMBER_CHANNELS = frozenset({"ssh", "rdp"})
 
 
+def _parse_raes_members(raw: object, *, limit: int, field: str) -> list[dict[str, Any]]:
+    """Parse a bounded realized-member list and reject duplicate guest identities."""
+    if not isinstance(raw, list):
+        raise OperationResultError(f"{field} members must be a list")
+    if len(raw) > limit:
+        raise OperationResultError(f"{field} carries more than {limit} members")
+    members = []
+    for index, item in enumerate(raw):
+        entry_field = f"{field} members[{index}]"
+        if not isinstance(item, dict):
+            raise OperationResultError(f"{entry_field} must be an object")
+        members.append(_parse_raes_member(item, entry_field))
+    identities = [member["uuid"] for member in members]
+    if len(set(identities)) != len(identities):
+        raise OperationResultError(f"{field} members contains a duplicate uuid")
+    return members
+
+
 def _member_identity(entry: dict[str, Any], field: str) -> dict[str, Any]:
     """Return the member's flat, non-empty string identity fields."""
     identity: dict[str, Any] = {}
