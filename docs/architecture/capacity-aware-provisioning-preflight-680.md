@@ -86,6 +86,12 @@ warning and audit record. Unsupported, unavailable, or stale measurements are
 headroom. Any future privileged override must be explicit, authorized, and
 audited; it is not an organizer-provided hint.
 
+Assessment audit events use the shared `CAPACITY_ASSESSMENT` entity vocabulary
+and `CAPACITY_ASSESS` action. The real append-only audit writer validates and
+stores the event; a choice-state migration keeps the model vocabulary aligned.
+Audit context remains limited to the partition, outcome, policy version and
+bounded reason codes.
+
 Capacity-sensitive changes invalidate the prior assessment/reservation before
 spinup: roster, spare count, scenario or range configuration, event window,
 placement policy, and typed hints. In particular,

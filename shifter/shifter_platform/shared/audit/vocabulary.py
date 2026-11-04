@@ -91,6 +91,7 @@ class AuditEntityType(models.TextChoices):
     SESSION = "session", "Session"
     NGFW = "ngfw", "NGFW"
     CONFIG = "config", "Configuration"
+    CAPACITY_ASSESSMENT = "capacity_assessment", "Capacity Assessment"
     EXPERIMENT = "experiment", "Experiment"
     SCENARIO = "scenario", "Scenario"
     SCRIPT = "script", "Script"
