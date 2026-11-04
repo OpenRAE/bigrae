@@ -75,7 +75,7 @@ def canonical_digest(value: object) -> str:
 class PluginManifest(ClosedModel):
     """Executable identity and capabilities requested by an author-provided plugin."""
 
-    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1"]
+    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1", "bigrae.runtime-plugin/v2"]
     plugin_id: Identifier
     version: Version
     distribution: Identifier
@@ -130,7 +130,7 @@ class GuestTarget(ClosedModel):
 class InspectionInput(ClosedModel):
     """Installation probe with no range, guest, credential, or operation context."""
 
-    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1"]
+    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1", "bigrae.runtime-plugin/v2"]
     invocation_id: UUID
     phase: Literal["inspect"]
     manifest: PluginManifest
@@ -149,7 +149,7 @@ class InspectionInput(ClosedModel):
 class InspectionResult(ClosedModel):
     """Checks packaging compatibility, never claims guest readiness."""
 
-    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1"]
+    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1", "bigrae.runtime-plugin/v2"]
     invocation_id: UUID
     phase: Literal["inspect"]
     input_digest: Digest
@@ -183,10 +183,11 @@ class FileInput(ClosedModel):
 class RuntimeInput(ClosedModel):
     """Exactly one operation and phase; values are never taken from plugin output."""
 
-    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1"]
+    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1", "bigrae.runtime-plugin/v2"]
     invocation_id: UUID
     operation_id: UUID
-    pack_digest: Digest
+    pack_digest: Digest | None = Field(default=None, exclude_if=lambda value: value is None)
+    apparatus_digest: Digest | None = Field(default=None, exclude_if=lambda value: value is None)
     manifest: PluginManifest
     phase: Phase
     provider: Literal["aws", "gcp"]
@@ -200,6 +201,11 @@ class RuntimeInput(ClosedModel):
 
     @model_validator(mode="after")
     def validate_bindings(self) -> Self:
+        if self.protocol == "bigrae.runtime-plugin/v2":
+            if self.pack_digest is not None or self.apparatus_digest is None:
+                raise ValueError("apparatus protocol requires only apparatus identity")
+        elif self.pack_digest is None or self.apparatus_digest is not None:
+            raise ValueError("pack protocol requires only pack identity")
         self._validate_phase()
         if self.protocol != self.manifest.protocol:
             raise ValueError("plugin input and manifest protocols must agree")
@@ -300,7 +306,7 @@ class SecretPayloadValue(ClosedModel):
 class RuntimePlan(ClosedModel):
     """Untrusted worker response. Core must bind it to input before execution."""
 
-    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1"]
+    protocol: Literal["shifter.runtime-plugin/v1", "bigrae.runtime-plugin/v1", "bigrae.runtime-plugin/v2"]
     invocation_id: UUID
     input_digest: Digest
     phase: Phase

@@ -108,8 +108,10 @@ def release_range_capacity(draw_key: UUID, *, now: datetime | None = None) -> in
     """
     from django.utils import timezone
 
-    from engine.models import CapacityDraw, CapacityReservation
+    from engine.models import CapacityDraw, CapacityReservation, DisposableWorker
 
+    if DisposableWorker.objects.filter(pk=draw_key, terminal_at__isnull=True).exists():
+        return 0
     moment = now or timezone.now()
     released = 0
 
@@ -148,10 +150,12 @@ def reconcile_capacity_budgets(*, now: datetime | None = None) -> int:
 
     with transaction.atomic():
         expired = list(
-            CapacityReservation.objects.select_for_update().filter(
+            CapacityReservation.objects.select_for_update()
+            .filter(
                 released_at__isnull=True,
                 window_end__lte=moment,
             )
+            .exclude(release_on_absence=True, consumed__gt=0)
         )
         if not expired:
             return 0

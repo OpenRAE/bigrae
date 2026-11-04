@@ -197,3 +197,14 @@ or refresh failure must stop client model access.
 The current delivery implementation requires trusted private SSH on Linux. It
 rejects transports that would persist enrollment in a remote command service.
 Client protocol compatibility and both cloud deployments require live qualification.
+
+## Apparatus runtime inputs
+
+`bigrae.runtime-plugin/v2` supports administrator-bound worker software without a content pack.
+Its runtime input requires `apparatus_digest` and forbids `pack_digest`.
+The manifest and response must declare that same protocol.
+Version 1 inputs continue to require their original pack identity.
+The host still pins the installed executable, target bindings, operation, phase, and input digest.
+An adapter cannot install itself through content or choose provider resources.
+Apparatus planning uses the existing isolated worker and bounded guest-action contract.
+A compatible installation probe does not prove guest readiness.

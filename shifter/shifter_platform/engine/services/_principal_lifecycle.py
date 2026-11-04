@@ -98,6 +98,9 @@ def _commit_destroy(prepared: PreparedRangeLifecycle, *, _verification_retry: bo
         row = Range.objects.select_for_update(of=("self",)).select_related("request").get(pk=prepared.native_id)
         assert_admitted_launch_binding(fields, row)
         _require_prepared_lifecycle_row(row, prepared)
+        from engine.worker_retention import fence_worker_retirement
+
+        fence_worker_retirement(row, admit=True)
         if row.status == "destroyed" and not _reset_unverified_destroy(row, fields, _verification_retry):
             return False
         if row.status in {"pending", "provisioning"} and not (

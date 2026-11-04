@@ -10,14 +10,26 @@ architecture; subsystem guides provide detail.
 identity bindings (#2313) and the one-command GCP install (#2679).
 This describes source behavior, not a certificate of a live deployment.
 
+Portal and deployer images install dependencies during the build and remove
+`pip` and its vendored libraries from the runtime image. The shared deployment
+preflight owns tool checks, including the Git exemption for a sealed release
+with an embedded source revision; required security tools remain mandatory.
+The [OpenFGA operations guide](../ops/openfga.md) describes staged replacement
+of retained TLS certificates through the existing provider secret bundles.
+Clients receive both CA certificates before server rotation; authentication
+keys and policy records remain unchanged.
+Strict live-server verification and client migration precede removal of the
+old CA and the next authorization-model publication.
+GCP rollout restarts and readiness checks consume the same closed release
+Deployment inventory, including background workers and optional broker clients.
+
 BigRAE is the current product name. Public BigRAE config, SDK, client and plugin
 names converge on their existing validation and execution owners; legacy names
 remain compatible. Conflicting old/new configuration fails before use. The
 [identifier ledger](../architecture/bigrae-rename-inventory.md) distinguishes
 branding from persisted, wire and infrastructure identity, and the
 [cutover procedure](../how-to/bigrae-rename-cutover.md) verifies GitHub repository
-configuration and future-deployment templates. The user directs that no
-deployments exist, so no live cloud trust or workload migration is required. Plugin jobs
+configuration and future-deployment templates. Existing deployments require their own verified trust and workload migration. Plugin jobs
 remain isolated and receive one Secret-backed invocation input under either
 exact supported name. The source preparation does not change deployed resource
 names, authorization, internal imports, historical provenance or metric identity.
@@ -35,6 +47,7 @@ flowchart LR
     App -->|Authorized domain services| Workers[Application workers]
     Workers -->|Immutable operation and workload identity| Job[Provisioner Job]
     Job -->|Scoped cloud API and guest management| Guest[Untrusted range guests]
+    Job -->|Closed generation-bound results and safe host observations| Workers
     Human -->|Authorized terminal or VPN session| Access[Guacamole or access gateway]
     Access -->|Bound target and allowed channels| Guest
     Guest -->|Configured scenario telemetry| Telemetry[Operator selected integrations]
@@ -52,6 +65,17 @@ resources and operation state. CTF adds event and participant authority through
 CMS services. Event membership, organization/workspace membership, range
 ownership, application administration and cloud administration remain distinct.
 
+Disposable trial workers reuse Engine's native lifecycle and capacity ledger.
+Only the provisioner reads host-management keys and runs the fixed bounded SSH
+probe; the shared result/member parsers validate the closed observation shape.
+Engine validates credential-free host observations against the accepted
+operation, generation, membership, apparatus profile and freshness. Numeric VM
+identity comes from authenticated provider readback. PostgreSQL prevents reuse of
+VM, machine or Docker identity. The portal's participant-secret grant stays
+unchanged; no additional identity or Job type is needed. The
+[worker guide](shifter_platform/disposable-workers.md) describes holds, exact
+cleanup and the migration that retires the old management-reference projection.
+
 [ADR-066](../adr/066-account-principal-resource-scope.md) defines Accounts,
 independent Principals and explicit ResourceScope. Issue #2321 implements S8 as
 one coordinated hard cut: referenced credentials and the pinned OpenFGA model
@@ -64,8 +88,8 @@ bootstraps one exact provider-bound administrator, and invalidates pre-cutover
 sessions and API tokens before activation. On an empty database, a preparation
 step before the plan creates that administrator's user, principal, and provider
 binding from the bootstrap facts (#2671). It creates nothing when any user
-already exists. No live deployment currently exists,
-so repository and clean/legacy fixture evidence is not live-cloud acceptance.
+already exists. Repository and clean/legacy fixture evidence alone does not
+establish live-cloud acceptance.
 [Content/range authority](shifter_platform/content-range-authority.md) and
 [account administration](shifter_platform/account-administration.md) explain the
 implemented slices. ADR-054's dedicated-customer model is superseded by ADR-066;
@@ -246,6 +270,11 @@ digests and legal ordering. Undeclared compatibility families remain
 validation-only shadow results while their incumbent writer is retained; do not
 assume all direct provisioner SQL is gone.
 
+Ranges with a retained operation ID take lifecycle state from the result applier.
+The compatibility event handler locks the row and refuses state writes for those
+ranges, including legacy-user ranges. A delayed notification cannot overwrite
+accepted teardown.
+
 A launch acknowledgment, queue delivery or successful cloud command is not
 READY. Required guest verification and accepted Engine results establish
 realized state. Retry identity recovers an existing operation; it never creates
@@ -286,7 +315,29 @@ replaces any other value. Audit attribution trusts only the load balancer's own
 Load Balancer (`AUDIT_TRUSTED_PROXY_HOPS`, set by the GCP runtime renderer). Existing structured
 logging and sanitized error builders exclude raw provider responses, credentials,
 signed URLs and private scenario material. Audit evidence is not a work queue.
+Engine capacity decisions use the shared capacity-assessment audit vocabulary
+and the same validated, append-only store as other administrative events.
 Backup existence is not evidence of a successful restore rehearsal.
+
+### Disposable VM workers
+
+Engine owns disposable VM workers through its native range lifecycle.
+Account-scoped worker identities use Engine's SQL ancestry through the composition root.
+Worker and CMS public identities cannot overlap.
+Each worker retains one apparatus profile, one experiment reference, and at most one trial reference.
+Global count limits and enforcing capacity draws precede durable launch.
+Active worker draws survive capacity-window expiry until exact-generation provider absence.
+Ready workers can carry caller-owned evidence holds that fence native destructive admission and dispatch.
+Overdue holds and exhausted cleanup retain tracked custody for explicit operator recovery.
+Optional installed software uses the existing isolated adapter machinery with explicit apparatus identity.
+The generic management probe requires no experiment runtime.
+Native result validation preserves guest count limits, unique identities, and the separate private management boundary.
+Engine's qualification command selects the recorded bootstrap administrator through exact private facts.
+Management issues short-lived native credentials for fixed actions and exact targets, then revokes them on exit.
+The command creates no identity or policy grant and preserves ordinary scope, membership and authorization checks.
+The apparatus pins the numeric provider image identity and a capacity partition that matches deployment placement.
+Linux image capture clears machine and Docker identities before independent workers boot.
+See [disposable workers](shifter_platform/disposable-workers.md) for contracts, data flows, controls, and references.
 
 ## Package and dependency ownership
 

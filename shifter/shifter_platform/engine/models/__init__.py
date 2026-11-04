@@ -109,6 +109,7 @@ __all__ = [
     "CapacityDraw",
     "CapacityReservation",
     "CleanupVerificationOutcome",
+    "DisposableWorker",
     "GcpRangeProject",
     "GcpRangeProjectUse",
     "Instance",
@@ -177,4 +178,9 @@ __all__ = [
     "VpnSessionEndReason",
     "VpnSessionState",
     "WarmRangeGeneration",
+    "WorkerHostObservation",
+    "WorkerPolicyRecord",
+    "WorkerRetirementHold",
 ]
+
+from ._disposable_worker import DisposableWorker, WorkerHostObservation, WorkerPolicyRecord, WorkerRetirementHold

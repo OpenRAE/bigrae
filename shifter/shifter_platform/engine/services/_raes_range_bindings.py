@@ -16,6 +16,7 @@ from shared.raes.artifact_binding import ArtifactBinding
 from shared.raes.content_delivery import DeliveryBinding
 from shared.raes.participant_access import ParticipantAccessBinding
 from shared.remote_access import build_openvpn_capability, raes_member_target_ref
+from shared.runtime_plugin_binding import RuntimePluginPin
 
 from ._runtime_plugin_bindings import retained_runtime_plugin_pin
 
@@ -137,7 +138,8 @@ def _verify_existing_plugin_scope(existing: Range, scope: RuntimePluginScope | N
     """Reject replay that changes the administrator-selected tenant or pack revision."""
     pin = retained_runtime_plugin_pin(existing)
     if pin is not None and (
-        scope is None
+        not isinstance(pin, RuntimePluginPin)
+        or scope is None
         or pin.organization_uuid != scope.organization_uuid
         or pin.pack_digest != scope.pack_digest
         or pin.pack_id != scope.pack_id

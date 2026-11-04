@@ -8,7 +8,7 @@ from shifter_adapter_sdk.runtime import canonical_digest
 
 from shared.operation_envelope import validate_operation_envelope
 from shared.raes.operation_input import RaesInputBindings, RaesRangeIdentity, build_raes_operation_input
-from shared.runtime_plugin_binding import RuntimePluginPin
+from shared.runtime_plugin_binding import RuntimePin, parse_runtime_pin
 from shared.runtime_plugin_preparation import RuntimePreparation
 
 if TYPE_CHECKING:
@@ -23,7 +23,7 @@ def preparation_cleanup_payload(envelope: dict[str, Any], record: RuntimePrepara
     if (source["resource"], source["operation"]) != ("raes-range", "provision"):
         raise ValueError(_UNAVAILABLE)
     original = source["payload"]
-    pin = RuntimePluginPin.model_validate(original.get("runtime_plugin"))
+    pin = parse_runtime_pin(original.get("runtime_plugin"))
     if record.plan_digest != canonical_digest(original.get("plan")) or record.pin_digest != pin.digest:
         raise ValueError(_UNAVAILABLE)
     payload = {**original, "runtime_preparation": record.model_dump(mode="json")}
@@ -35,7 +35,7 @@ def preparation_cleanup_payload(envelope: dict[str, Any], record: RuntimePrepara
     return payload
 
 
-def retained_cleanup_payload(target: Range, pin: RuntimePluginPin | None) -> dict[str, Any] | None:
+def retained_cleanup_payload(target: Range, pin: RuntimePin | None) -> dict[str, Any] | None:
     """Never rebuild accepted cleanup from a changed registry or guest selection."""
     from engine.models import OperationInput
 

@@ -407,8 +407,9 @@ def _required_tools(command: str | None, cloud: str | None) -> set[str]:
         return {"gcloud", "terraform"}
     if command == "gcp-images":
         return {"gcloud", "oras"}
-    if command == "gcp-images-verify":
-        # Verification reads the registry and Sigstore in-process; it runs no tool.
+    if command in {"gcp-images-verify", "preflight"}:
+        # Image verification runs in-process. Preflight owns its revision-aware
+        # cloud tool checks in the shared gate.
         return set()
     if command == "gdc-bootstrap":
         return {"gcloud", "ssh-keygen"}
@@ -427,7 +428,7 @@ def _required_tools(command: str | None, cloud: str | None) -> set[str]:
 
 
 # GCP commands that never use GitHub (#2571); they get no gh recommendation.
-_GITHUB_FREE_COMMANDS = frozenset({"gcp-foundation", "gcp-images", "gcp-images-verify", "gdc-bootstrap"})
+_GITHUB_FREE_COMMANDS = frozenset({"gcp-foundation", "gcp-images", "gcp-images-verify", "gdc-bootstrap", "preflight"})
 
 
 def check_dependencies(
