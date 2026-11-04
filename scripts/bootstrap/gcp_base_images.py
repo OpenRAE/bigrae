@@ -252,9 +252,10 @@ def range_roles(roles: Iterable[str]) -> frozenset[str]:
 
 
 def range_images_from_imports(range_image_env: dict[str, str]) -> dict[str, str]:
-    """Convert imported ``GCP_RANGE_*_IMAGE`` values to ``range-images.json`` roles."""
-    if set(range_image_env) != set(_RANGE_ENV_TO_ROLE):
-        raise BaseImageError("the guest image import did not return the complete range-image set")
+    """Convert required and optional verified imports to ``range-images.json`` roles."""
+    required = {_ROLE_TO_RANGE_ENV[role] for role in REQUIRED_BASE_IMAGE_ROLES}
+    if not required <= set(range_image_env) <= set(_RANGE_ENV_TO_ROLE):
+        raise BaseImageError("the guest image import has missing required or unsupported roles")
     return {_RANGE_ENV_TO_ROLE[key]: value for key, value in range_image_env.items()}
 
 
