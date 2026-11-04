@@ -1,16 +1,13 @@
-# Get Started
+# Get started
 
-BigRAE provides isolated cyber range environments for XDR/XSIAM demos. You bring an agent installer, BigRAE provisions the infrastructure.
+Choose the procedure for your task.
 
-## First Time?
+| Task | Read |
+| --- | --- |
+| Install with a coding agent | [Deploy with a coding agent](deploy-with-agent.md) |
+| Install by hand | [Install on Google Cloud](install-gcp.md) |
+| Use an installed portal | [First sign-in and first range](../technical/handbook/gcp-first-run.md) |
+| Learn the terms | [Key concepts](concepts.md) |
 
-Start with the [Quickstart](quickstart) to launch your first range.
-
-## Need Context?
-
-See [Key Concepts](concepts) for terminology and how things connect.
-
-## Ready to Go Deeper?
-
-- [Scenarios](../scenarios/) - Different range configurations
-- [Features](../features/) - Detailed feature guides
+Google Cloud is the current installation path. AWS support is coming.
+The installation uses a published container. You do not need a repository clone.

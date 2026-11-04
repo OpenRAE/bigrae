@@ -1,5 +1,11 @@
 # Deploy secrets and repository variables
 
+For a new installation, use [Install on Google Cloud](../getting-started/install-gcp.md).
+That procedure uses a release container and creates the initial secrets.
+The GitHub settings on this page are for repository-managed deployment jobs.
+They are not prerequisites for the release-container procedure.
+AWS support is coming; the AWS sections are development references.
+
 Part of the BigRAE deploy and operations docs; start at the [documentation home](../index.md).
 
 The committed `terraform.tfvars` files in `platform/terraform/environments/...`

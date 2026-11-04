@@ -2,51 +2,65 @@
 
 Platform architecture, infrastructure, and development documentation.
 
+For installation, use [Install on Google Cloud](../getting-started/install-gcp.md)
+or [Deploy with a coding agent](../getting-started/deploy-with-agent.md).
+Both use the published release container. AWS support is coming.
+
 ## Architecture
 
 - [BigRAE identifier inventory](../architecture/bigrae-rename-inventory.md)
 - [BigRAE rename cutover and rollback](../how-to/bigrae-rename-cutover.md)
 
 - [Current-state architecture handbook](architecture.md) - System, authority, lifecycle and package ownership
-- [GCP installation and first exercise](handbook/gcp-first-run.md) - Bootstrap and a synthetic smoke range
-- [GitHub-less GCP deployment](handbook/gcp-github-less-deployment.md) - Release, foundation, inputs, deploy, update, teardown, and bucket encryption keys without GitHub
+- [First sign-in and first range](handbook/gcp-first-run.md) - Verify access and a small range
+- [GCP deployment reference](handbook/gcp-github-less-deployment.md) - Release, foundation, inputs, deploy, update, teardown, and bucket encryption keys without GitHub
 - [Scenario contract transition](handbook/scenario-contract-transition.md) - CyberScript, ACES and current RAES
 - [Per-range model-access design](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/index.md) - Proposed architecture, security, operations, ADRs, and implementation backlog for #681
 - [Model-access contracts](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/architecture.md) - Proposed ownership, allocation, accounting, protocol, and lifecycle contracts
 
 ## Platform Domains
 
-- [Platform Overview](shifter_platform/) - Domain architecture
-- [Mission Control](shifter_platform/mission_control) - Presentation layer
-- [Engine](shifter_platform/engine) - Range orchestration
-- [CMS](shifter_platform/cms) - Content management
-- [Management](shifter_platform/management) - Administration
+- [Platform Overview](shifter_platform/index.md) - Domain architecture
+- [Mission Control](shifter_platform/mission_control.md) - Presentation layer
+- [Engine](shifter_platform/engine.md) - Range orchestration
+- [CMS](shifter_platform/cms.md) - Content management
+- [Management](shifter_platform/management.md) - Administration
 
 ## Infrastructure
 
-- [Infrastructure Overview](platform_infrastructure/) - AWS and GCP components
-- [GCP Infrastructure](platform_infrastructure/gcp-infrastructure) - GKE, Cloud SQL, Helm, Cloud Armor, and GCP services
-- [GCP Event Capacity](platform_infrastructure/gcp-event-capacity) - Versioned shared-service profiles, projections, drift, and the p30 gate
-- [GDC Provisioning](platform_infrastructure/gdc-provisioning) - Range guests on GDC (KubeVirt, pods)
-- [Range Instantiation Policy](platform_infrastructure/range-instantiation-policy) - Which range backend may serve which kind of launch
-- [Networking](platform_infrastructure/networking) - Network architecture (both clouds)
-- [CI/CD](platform_infrastructure/cicd) - Deployment pipelines
-- [Machine Images](platform_infrastructure/ami-management) - AMIs (AWS) and GDC images
-- [Guacamole](platform_infrastructure/guacamole) - Terminal infrastructure
-- [Manual Deployment](platform_infrastructure/manual-deployment) - Manual setup steps
+- [Infrastructure Overview](platform_infrastructure/index.md) - AWS and GCP components
+- [GCP Infrastructure](platform_infrastructure/gcp-infrastructure.md) - GKE, Cloud SQL, Helm, Cloud Armor, and GCP services
+- [GCP Event Capacity](platform_infrastructure/gcp-event-capacity.md) - Versioned shared-service profiles, projections, drift, and the p30 gate
+- [GDC Provisioning](platform_infrastructure/gdc-provisioning.md) - Range guests on GDC (KubeVirt, pods)
+- [Range Instantiation Policy](platform_infrastructure/range-instantiation-policy.md) - Which range backend may serve which kind of launch
+- [Networking](platform_infrastructure/networking.md) - Network architecture (both clouds)
+- [CI/CD](platform_infrastructure/cicd.md) - Deployment pipelines
+- [Machine Images](platform_infrastructure/ami-management.md) - AMIs (AWS) and GDC images
+- [Guacamole](platform_infrastructure/guacamole.md) - Terminal infrastructure
+- [Manual Deployment](platform_infrastructure/manual-deployment.md) - Manual setup steps
 
 ## Development
 
-- [Development Overview](dev/) - Getting started with development
-- [Local Setup](dev/local-setup) - Local environment
-- [Full Setup](dev/setup) - Complete environment setup
-- [Terraform](dev/terraform) - Infrastructure patterns
-- [CI/CD](dev/ci-cd) - Pipeline configuration
-- [Secrets](dev/secrets) - Secrets management
-- [Platform API Development](dev/api) - DRF endpoint, schema, scope, and error-envelope conventions
-- [Cloud Adapters](dev/cloud-adapters) - Cloud abstraction layer
-- [Principles](dev/principles) - Engineering philosophy
-- [ADR Enforcement](dev/adr-enforcement) - Architecture guardrails and policy checks
+- [Development Overview](dev/index.md) - Getting started with development
+- [Local Setup](dev/local-setup.md) - Local environment
+- [Installation setup](dev/setup.md) - Current release installation path
+- [Terraform](dev/terraform.md) - Infrastructure patterns
+- [CI/CD](dev/ci-cd.md) - Pipeline configuration
+- [Secrets](dev/secrets.md) - Secrets management
+- [Platform API Development](dev/api.md) - DRF endpoint, schema, scope, and error-envelope conventions
+- [Cloud Adapters](dev/cloud-adapters.md) - Cloud abstraction layer
+- [Principles](dev/principles.md) - Engineering philosophy
+- [ADR Enforcement](dev/adr-enforcement.md) - Architecture guardrails and policy checks
+
+## Operations reference
+
+- [GCP native identity](../ops/gcp-native-identity.md)
+- [GCP range audit telemetry](../ops/gcp-range-audit-telemetry.md)
+
+These AWS pages describe existing implementation work. AWS installation support is coming.
+
+- [AWS native identity reference](../ops/aws-native-identity.md)
+- [EKS operations reference](../ops/portal-eks-operations.md)
 
 ## Planning & Notes
 

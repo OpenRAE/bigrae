@@ -1,55 +1,27 @@
 # BigRAE documentation
 
-BigRAE is a cyber-range platform for running XDR and NGFW demos and CTF events
-on AWS and GCP. This site is the single home for using, deploying, operating,
-and developing it. See the [product overview](product-overview.md) for what
-BigRAE does.
+## Install
 
-Start with the [current-state architecture handbook](technical/architecture.md) and
-[GCP installation and first exercise](technical/handbook/gcp-first-run.md).
+The current installation path uses Google Cloud and a published release container.
+You do not need a repository clone or a development environment.
+AWS support is coming.
 
-## Use BigRAE
+| Task | Procedure |
+| --- | --- |
+| Give the deployment to a coding agent | [Deploy with a coding agent](getting-started/deploy-with-agent.md) |
+| Run each installation step yourself | [Install on Google Cloud](getting-started/install-gcp.md) |
+| Update or remove an installation | [Installation operations](getting-started/install-gcp.md#update-an-installation) |
+| Fix a failed deployment | [GCP deployment runbook](runbooks/rb023-gcp-deployment.md) |
 
-| Section | Read this when |
-|---|---|
-| [Getting started](getting-started/index.md) | You are new and want the quickstart and core concepts. |
-| [How-to guides](how-to/index.md) | You want step-by-step guides such as running your first demo. |
-| [Features](features/index.md) | You need details on agents, ranges, the terminal, credentials, NGFW, or CTF. |
-| [Scenarios](scenarios/index.md) | You are running a specific scenario such as the AD attack lab or an NGFW range. |
-| [Reference](reference/index.md) | You need the FAQ or support pointers. |
+## Use an installation
 
-## Deploy and operate
+Start with [First sign-in and first range](technical/handbook/gcp-first-run.md).
+Then use the [feature guides](features/index.md),
+[scenario guides](scenarios/index.md), and [operations runbooks](runbooks/index.md).
 
-Read these when you stand up or run an environment. The
-[deploy preflight](https://github.com/Brad-Edwards/bigrae/blob/dev/scripts/bootstrap/preflight.py)
-enforces the prerequisites documented here before any Terraform apply.
+## Technical reference
 
-| Doc | Read this when |
-|---|---|
-| [Deploy secrets and variables](dev/deploy-secrets.md) | You are configuring the GitHub secrets and repository variables a fresh AWS or GCP standup needs. This is the authoritative checklist. |
-| [AWS Terraform apply order](dev/aws-terraform-apply-order.md) | You need the order the AWS stacks apply in and the preconditions each one has. |
-| [AWS AMI seeding](dev/aws-ami-seeding-runbook.md) | You are seeding the range guest AMIs the portal stack reads. |
-| [AWS runner provisioning](dev/aws-runner-provisioning-runbook.md) | You are provisioning and registering the self-hosted CI runners. |
-| [AWS environment teardown](dev/aws-teardown-runbook.md) | You are tearing an AWS environment down. |
-| [GCP range-cell deploy](dev/gcp-range-cell-deploy.md) | You are deploying the GCP GCE range-cell backend. |
-| [Native CTF scenario content](dev/ctf-scenario-content.md) | You are publishing and binding private, digest-pinned native challenges to a scenario. |
-| [Secrets rotation](dev/secrets-rotation-runbook.md) | You are rotating deployment or runtime secrets. |
-| [Service Discovery ForceNew](dev/service-discovery-forcenew.md) | You hit a Service Discovery replacement and need the operational rule. |
-| [Portal on EKS operations](ops/portal-eks-operations.md) | You are monitoring, scaling, deploying, troubleshooting, or rolling back the Portal on EKS. |
-| [Disaster recovery](ops/disaster-recovery.md) | You are recovering the AWS portal stack after a failure. |
-| [GitHub runner health alerts](ops/github-runner-health-alerts.md) | A runner-health alert fired and you need the response steps. |
-| [Model-access operations design](ops/model-access.md) | You are implementing or reviewing planned model access, budgets, revocation, migration, and recovery under #681. |
-| [GCP event capacity profiles](ops/gcp-event-capacity.md) | You are scaling a GCP tenant for an event, running the p30 public-path gate, checking drift, or scaling down. |
-| [Operations runbooks](runbooks/index.md) | You are diagnosing or recovering a deployed BigRAE environment. |
-| [AWS native identity](ops/aws-native-identity.md) | You are enabling the AWS policy service, admitting an AWS service principal, opening operator access or handling datastore rotation. |
-| [GCP native identity](ops/gcp-native-identity.md) | You are enabling native SQL, separating policy administration or qualifying live renewal and authority. |
-| [GCP range audit telemetry](ops/gcp-range-audit-telemetry.md) | You are changing GCP range flow, NAT, or Vertex AI audit logging, or reading the deploy readback. |
-
-## Develop and govern
-
-| Section | Read this when |
-|---|---|
-| [Technical docs](technical/index.md) | You are developing the platform: setup, secrets, Terraform, CI/CD, architecture, and subsystem docs. |
-| [ADR enforcement](adr/README.md) | You need how architecture decisions are recorded and enforced in CI. |
-
-- [Deployment configuration and recovery](dev/deployment-configuration.md)
+- [Deployment commands and configuration](technical/handbook/gcp-github-less-deployment.md)
+- [System architecture](technical/architecture.md)
+- [Local development](technical/dev/local-setup.md)
+- [Technical documentation](technical/index.md)
