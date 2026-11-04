@@ -9,8 +9,9 @@ import pytest
 from engine.services import GuestProbeError, GuestProbeRequest, run_guest_probe
 
 
+@pytest.mark.parametrize("output_stream", ["stdout", "stderr"])
 @pytest.mark.parametrize("chunks,expected", [(["ab", "cd", ""], "abcd"), (["ab", "cde", ""], None)])
-def test_probe_reads_to_eof_and_refuses_overflow(monkeypatch, chunks, expected):
+def test_probe_reads_to_eof_and_refuses_overflow(monkeypatch, chunks, expected, output_stream):
     key = asyncssh.generate_private_key("ssh-ed25519")
     process = SimpleNamespace(
         stdout=SimpleNamespace(read=AsyncMock(side_effect=chunks)),
@@ -20,6 +21,11 @@ def test_probe_reads_to_eof_and_refuses_overflow(monkeypatch, chunks, expected):
         exit_status=0,
         close=lambda: None,
     )
+
+    if output_stream == "stderr":
+        process.stdout, process.stderr = process.stderr, process.stdout
+        if expected is not None:
+            expected = ""
 
     class Connection:
         async def __aenter__(self):

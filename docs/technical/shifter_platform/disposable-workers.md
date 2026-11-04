@@ -63,22 +63,29 @@ The worker UUID is the native public range identity.
 The composition root resolves worker scope through Engine before ordinary CMS scope resolution.
 SQL supplies the exact parent and ancestry.
 OpenFGA receives the corresponding native parent relationship.
-The parent grants existing account administration permissions; experiment identity grants none.
+The parent relationship supplies ancestry to existing authorization policy; it creates no permission grant.
 Create uses parent launch authority.
 Inspect uses range read authority.
 Probe uses range access authority.
 Holds and retirement use range manage authority.
 The experiment reference conveys no permission.
 
-Management access uses the private address, provider secret reference, and pinned host key from accepted range output.
+Qualification keeps management credentials inside the provisioner (ADR-008-R7 and ADR-066).
+Management access uses the private address, provider secret reference, and pinned host key inside the existing provisioner operation.
 Immutable operation input explicitly requests the management targets.
-The provisioner returns their closed management projection separately from participant members.
+The provisioner returns bounded host observations separately from participant members, without management references or access material.
 Native member parsing keeps the existing count bound and rejects duplicate guest identities.
-Engine validates the requested targets before it stores private generation-bound references.
+Engine validates exact requested targets, operation, generation, membership, profile and observation freshness before qualification.
+Both result producer and consumer use the same closed shared parser; historical result bytes remain immutable.
 Participant state and ordinary range projections contain no management credential reference.
-The fixed probe addresses the local Unix Docker socket.
+The fixed provisioner probe addresses the local Unix Docker socket over bounded, host-key-pinned private SSH.
 It checks daemon count, daemon ID, machine identity, and the pinned runtime version.
-The service stores bounded qualification facts only.
+Provider VM identity uses authenticated numeric ID readback in the admitted project and zone.
+The participant `instance_id` output remains a reusable name.
+Engine stores bounded qualification facts and never reads a host-management key.
+Qualification expires after 15 minutes or at worker retirement, deadline, or a generation change.
+The forward migration requires all existing workers to be retired before it clears old duplicate management references.
+Historical operation results remain immutable.
 It exposes no SSH material, provider output, or guest output.
 
 Holds begin on ready workers.
@@ -109,13 +116,13 @@ flowchart LR
     Command -->|handled exit| Revoke[Native credential revocation]
     Admin[Installation administrator] -->|validated apparatus policy| Engine
     Engine -->|custody, holds, draws, audit| DB[(PostgreSQL)]
-    Engine -->|exact parent grant and primary readback| Policy[Existing OpenFGA provider]
+    Engine -->|exact parent relation and primary readback| Policy[Existing OpenFGA provider]
     DB -->|immutable input and launch intent| Launcher[Existing launcher]
     Launcher -->|pinned operation| Provisioner[Existing provisioner]
     Provisioner -->|private management and owned resources| VM[Untrusted VM]
     Provisioner -->|closed results and provider absence| DB
-    Engine -->|fixed probe over pinned private SSH| VM
-    VM -->|bounded qualification facts| Engine
+    Provisioner -->|fixed probe over pinned private SSH| VM
+    Provisioner -->|bounded host observations in native results| Engine
 ```
 
 The control plane, provider, and guest are separate trust boundaries.

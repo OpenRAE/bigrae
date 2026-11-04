@@ -29,8 +29,7 @@ remain compatible. Conflicting old/new configuration fails before use. The
 [identifier ledger](../architecture/bigrae-rename-inventory.md) distinguishes
 branding from persisted, wire and infrastructure identity, and the
 [cutover procedure](../how-to/bigrae-rename-cutover.md) verifies GitHub repository
-configuration and future-deployment templates. The user directs that no
-deployments exist, so no live cloud trust or workload migration is required. Plugin jobs
+configuration and future-deployment templates. Existing deployments require their own verified trust and workload migration. Plugin jobs
 remain isolated and receive one Secret-backed invocation input under either
 exact supported name. The source preparation does not change deployed resource
 names, authorization, internal imports, historical provenance or metric identity.
@@ -48,6 +47,7 @@ flowchart LR
     App -->|Authorized domain services| Workers[Application workers]
     Workers -->|Immutable operation and workload identity| Job[Provisioner Job]
     Job -->|Scoped cloud API and guest management| Guest[Untrusted range guests]
+    Job -->|Closed generation-bound results and safe host observations| Workers
     Human -->|Authorized terminal or VPN session| Access[Guacamole or access gateway]
     Access -->|Bound target and allowed channels| Guest
     Guest -->|Configured scenario telemetry| Telemetry[Operator selected integrations]
@@ -65,6 +65,16 @@ resources and operation state. CTF adds event and participant authority through
 CMS services. Event membership, organization/workspace membership, range
 ownership, application administration and cloud administration remain distinct.
 
+Disposable trial workers reuse Engine's native lifecycle and capacity ledger.
+Only the provisioner reads host-management keys and runs the fixed bounded SSH
+probe; Engine validates credential-free host observations against the accepted
+operation, generation, membership, apparatus profile and freshness. Numeric VM
+identity comes from authenticated provider readback. PostgreSQL prevents reuse of
+VM, machine or Docker identity. The portal's participant-secret grant stays
+unchanged; no additional identity or Job type is needed. The
+[worker guide](shifter_platform/disposable-workers.md) describes holds, exact
+cleanup and the migration that retires the old management-reference projection.
+
 [ADR-066](../adr/066-account-principal-resource-scope.md) defines Accounts,
 independent Principals and explicit ResourceScope. Issue #2321 implements S8 as
 one coordinated hard cut: referenced credentials and the pinned OpenFGA model
@@ -77,8 +87,8 @@ bootstraps one exact provider-bound administrator, and invalidates pre-cutover
 sessions and API tokens before activation. On an empty database, a preparation
 step before the plan creates that administrator's user, principal, and provider
 binding from the bootstrap facts (#2671). It creates nothing when any user
-already exists. No live deployment currently exists,
-so repository and clean/legacy fixture evidence is not live-cloud acceptance.
+already exists. Repository and clean/legacy fixture evidence alone does not
+establish live-cloud acceptance.
 [Content/range authority](shifter_platform/content-range-authority.md) and
 [account administration](shifter_platform/account-administration.md) explain the
 implemented slices. ADR-054's dedicated-customer model is superseded by ADR-066;

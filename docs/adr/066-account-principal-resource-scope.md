@@ -398,6 +398,16 @@ the read-only cutover-state facade for this selection. Shared owns the existing
 bootstrap-facts contract and private-file reader; Config retains compatible
 imports. No control-plane write allowance is added to Config.
 
+Worker host qualification also preserves the existing cloud credential boundary
+(ADR-008-R7). The portal retains participant-secret access only. The existing
+provisioner performs the fixed bounded host probe using its management authority
+and pinned private SSH, then returns only generation-bound observations through
+the native closed result contract. Engine authorizes qualification and validates
+those observations without reading management secrets. No portal IAM expansion,
+new identity, Job type, arbitrary command capability or participant credential
+projection is introduced. The worker boundary note records the historical-result
+compatibility, freshness and standalone transport dependency requirements.
+
 Principal RAES creation carries exact customer scope and public identity through
 the incumbent dispatch port and `RangeBindings`. Engine evaluates parent
 authority before the creation transaction. CMS linkage, native input, queued

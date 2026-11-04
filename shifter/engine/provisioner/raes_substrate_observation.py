@@ -90,3 +90,25 @@ def _verify_boot_image(plan: RangeCellPlan, guest: _GuestInstance, clients: GCEC
     disk = cast(_Disk, clients.disks.get(project=plan["project_id"], zone=plan["zone"], disk=name))
     if str(disk.source_image_id) != expected:
         raise ValueError("prepared image provider identity changed")
+
+
+def observe_gce_worker_identity(instance: dict[str, object], clients: GCEClients) -> dict[str, str]:
+    """Read immutable numeric VM identity under the existing provisioner authority."""
+    scope = {}
+    for key in ("gcp_project_id", "gcp_zone", "gcp_instance_name"):
+        value = instance.get(key)
+        if not isinstance(value, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,62}", value):
+            raise ValueError("Worker provider scope is invalid")
+        scope[key] = value
+    actual = cast(
+        _GuestInstance,
+        clients.instances.get(
+            project=scope["gcp_project_id"],
+            zone=scope["gcp_zone"],
+            instance=scope["gcp_instance_name"],
+        ),
+    )
+    identity = str(actual.id)
+    if actual.name != scope["gcp_instance_name"] or not re.fullmatch(r"[1-9][0-9]{0,19}", identity):
+        raise ValueError("Worker provider identity is unavailable")
+    return {"project": scope["gcp_project_id"], "zone": scope["gcp_zone"], "instance_id": identity}

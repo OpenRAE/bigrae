@@ -44,12 +44,12 @@ from raes_openvpn import (
 from raes_plan import RaesPlan, parse_plan
 from raes_range_cloud import cloud_completion, prepare_cloud_plan, realize_cloud_projects, restore_cloud_projects
 from raes_range_contract import _classify_failure, _require_gce_live_fire_binding, verified_composition_addresses
-from raes_range_members import management_fragment
 from raes_range_members import realized_members as _realized_members
 from raes_snapshot import snapshot_resources
 from range_placement import resolve_range_cell_placement
 from range_subnet_allocation import _release_subnet_allocations_best_effort
 from runtime_plugin_preparation import cleanup_preparation
+from worker_host_observation import worker_observations_fragment
 
 if TYPE_CHECKING:
     from gcp_project_runtime import RegisteredProjectRuntime
@@ -148,6 +148,8 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         from model_enrollment import load_model_enrollment
         from runtime_plugin_execution import load_prepared_plugin_run
 
+        if operation_input.management_targets and operation_input.range_backend != "gce":
+            raise ValueError("Worker host observation backend is unsupported")
         effective_run, plugin_plans = load_prepared_plugin_run(run)
         operation_input = effective_run.input
         preparation_ready = True
@@ -208,7 +210,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
                 delivery_bindings=operation_input.binding_transport(),
                 access_bindings=operation_input.access_binding_transport(),
             )
-        management = management_fragment(apply_result, operation_input.management_targets)
+        observations = worker_observations_fragment(apply_result, operation_input.management_targets)
         resources, members, completion = _provision_evidence(
             run,
             cloud,
@@ -237,7 +239,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         {
             "raes_status": "succeeded",
             "members": members,
-            **management,
+            **observations,
             "completion": completion,
             **vpn_access_fragment(apply_result.get("vpn_access")),
         },

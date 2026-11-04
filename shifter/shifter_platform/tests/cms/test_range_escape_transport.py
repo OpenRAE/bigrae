@@ -13,8 +13,8 @@ from typing import Any
 
 import pytest
 
-from engine.services import _range_escape
 from engine.services._range_escape import GuestProbeError, GuestProbeRequest, run_guest_probe
+from shared import guest_probe
 
 
 class _FakeResult:
@@ -64,7 +64,7 @@ class _FakeAsyncssh:
 
 def _install_fake(monkeypatch: pytest.MonkeyPatch, result: _FakeResult) -> _FakeAsyncssh:
     fake = _FakeAsyncssh(result)
-    monkeypatch.setattr(_range_escape, "asyncssh", fake)
+    monkeypatch.setattr(guest_probe, "asyncssh", fake)
     return fake
 
 
@@ -104,3 +104,29 @@ def test_nonzero_remote_exit_is_rejected(monkeypatch: pytest.MonkeyPatch) -> Non
 
     with pytest.raises(GuestProbeError, match="exited 1"):
         run_guest_probe(request)
+
+
+def test_nonstandard_port_pins_the_port_specific_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    fake = _install_fake(monkeypatch, _FakeResult(stdout="ok", exit_status=0))
+    assert run_guest_probe(_request(port=2222)) == "ok"
+    assert fake.known_hosts_input == "[10.0.0.4]:2222 ssh-ed25519 AAAAKEY\n"
+
+
+def test_total_timeout_includes_connection_setup(monkeypatch: pytest.MonkeyPatch) -> None:
+    import asyncio
+
+    from shared import guest_probe
+
+    class SlowConnection:
+        async def __aenter__(self):
+            await asyncio.sleep(2)
+            pytest.fail("Connection exceeded the total probe deadline")
+
+        async def __aexit__(self, *args):
+            return None
+
+    fake = _install_fake(monkeypatch, _FakeResult(stdout="ok", exit_status=0))
+    fake.connect = lambda *args, **kwargs: SlowConnection()
+    monkeypatch.setattr(guest_probe, "asyncssh", fake)
+    with pytest.raises(GuestProbeError, match="timed out"):
+        run_guest_probe(_request(timeout_s=1))

@@ -342,7 +342,9 @@ def _authorized_worker(credential: CredentialContext, worker_id: UUID, action: s
 
 def _view(row: DisposableWorker) -> WorkerView:
     """Project lifecycle facts without apparatus inputs or guest credentials."""
-    row.range.refresh_from_db(fields=["status"])
+    from ._worker_qualification import has_current_qualification
+
+    row.range.refresh_from_db()
     return WorkerView(
         row.pk,
         row.experiment_id,
@@ -352,7 +354,7 @@ def _view(row: DisposableWorker) -> WorkerView:
         row.terminal_at is not None,
         row.holds.filter(released_at__isnull=True).exists(),
         row.recovery_required,
-        bool(row.qualification),
+        has_current_qualification(row),
         row.recovery_reason,
         row.recovery_attempts,
         row.next_recovery_at,

@@ -102,10 +102,13 @@ preparation/artifact binding and provider numeric image-ID checks in
 `shared.raes.artifact_binding`, provisioner `raes_gce_image` and
 `raes_substrate_observation` before credential installation and against the actual
 boot disk. The current worker candidate projection in `engine.operation_inputs`
-does not carry that image ID; this is a binding gap to close in the incumbent
-image path, not a reason to introduce another image registry or trust a name.
-If the host has no artifact requirement, extend the owning image-binding seam;
-do not fabricate an SDL artifact declaration to obtain a provider check.
+already carries `profile.image_id` through `operation_input_candidates` and
+`raes_gce_image._profile` into these checks. Preserve this path; do not introduce
+another image registry or trust a name. The existing source observation requires
+the pinned image in the admitted range project; do not silently claim arbitrary
+cross-project image support or broaden cloud access to satisfy a profile.
+Keep image verification independent of an SDL artifact requirement; do not
+fabricate an artifact declaration to obtain a provider check.
 
 `preconfigured-machine-host` requires participant container/readiness fields. It
 is not a generic Docker-host shortcut: do not invent a participant container to
@@ -127,6 +130,82 @@ cleanup after disable, retirement or configuration change.
 If later callers select among approved profiles, an explicit selection resolves
 to that same immutable binding; aggregate ceilings remain shared across profiles.
 This delivery needs no new profile catalog or scheduling framework.
+
+### Host observations stay inside the provisioner credential boundary
+
+The portal's dynamic-secret IAM grant intentionally permits participant
+credentials only. Host-management keys remain provisioner-only. Engine must
+never fetch such a key to qualify a worker, and this feature must not widen the
+portal grant or create another cloud identity.
+
+Reuse the immutable `management_targets` capability already derived from an
+Engine-owned worker row. In the existing native GCE creation operation, after
+host setup and optional approved apparatus installation, the provisioner runs
+one fixed, bounded probe over host-key-pinned private SSH. It uses its existing
+management-secret authority. No arbitrary probe script or experiment SDL is
+accepted through this capability.
+
+The private terminal-result sidecar carries only the observed Docker version,
+one-daemon count, provider VM, machine and daemon fingerprints, and a UTC
+observation time, keyed by the exact admitted member. Keys, key references and host-access material
+do not cross back into Engine for this purpose. Ordinary ranges request no host
+observations and retain their existing behavior.
+
+Provider identity comes from authenticated GCE readback of the numeric VM ID
+in its admitted project and zone, through `raes_substrate_observation`. The
+participant member's `instance_id` remains its reusable name. Hashing that name
+cannot establish immutable VM identity; do not trust a guest-supplied cloud ID.
+Guest machine/daemon fingerprints prove the synthetic check only, not attestation
+of an uncompromised host or a completed trial.
+
+Engine accepts the sidecar only for its immutable requested targets and the
+accepted operation, generation and realized membership. Store it as
+`WorkerHostObservation`, separate from participant output. Qualification checks
+the retained profile, current READY generation, unexpired worker deadline and an
+observation at most 15 minutes old (with five seconds of clock skew), then
+retains the existing global machine/daemon uniqueness constraints. Qualification
+does not open SSH or read a host-management secret in the portal.
+An inspection's qualification fact must retain its generation/profile/freshness
+meaning; a historical nonempty JSON value is not current qualification.
+
+Both the append-only result writer and inbox parser pass through
+`shared.operation_result_payloads._parse_raes_ready`, whose closed keys
+accept credential-free `worker_observations` and bounded legacy
+`management_access`. Keep the shared validator,
+provisioner projection and Engine applier consistent, including duplicate,
+unsolicited, missing, stale and cross-generation observations. Probe failure
+after VM creation retains native failure/cleanup custody and capacity; it cannot
+become successful qualification or evidence of resource absence.
+
+The active portal-side management-reference model and probe path are removed. A
+forward migration requires retirement of existing workers before clearing the
+old duplicate reference projection and renaming it to the observation model.
+Historical operation results remain immutable and retain bounded legacy
+decoding; new results never emit the legacy management-reference sidecar.
+
+Reuse the existing bounded, pinned SSH transport in a neutral shared module,
+with explicit runtime dependencies in each consumer. The Engine participant
+probe retains its existing service entry point. Never import Engine internals
+into the provisioner or add a second provisioner, Job type or public listener.
+`shared.guest_probe` owns the extracted asyncssh transport; Engine's
+`_range_escape` entry point retains its participant membership service. The
+provisioner's `GuestSSHExecutor._invoke_ssh` buffers ordinary command output
+without that bound. Preserve bounds on both guest streams and total execution,
+host-key verification and fixed-command/stdin separation. The provisioner image
+installs hashed `requirements.lock` / `requirements-gcp.lock`, not the portal's
+dependencies; an extracted transport must be present in the standalone runtime
+and locks without importing Django or RAES tooling.
+
+```mermaid
+flowchart LR
+    Engine -->|immutable admitted host targets and image pins| Provisioner[Existing native provisioner Job]
+    Provisioner -->|existing scoped authority| Secrets[Management secret store]
+    Provisioner -->|fixed bounded probe over pinned private SSH| Host[Worker VM]
+    Provisioner -->|safe observations, operation and generation| Results[Native append-only results]
+    Results -->|exact target and membership validation| Observation[WorkerHostObservation]
+    Observation -->|profile, freshness and uniqueness checks| Engine
+```
+
 
 ## Admission, holds and recovery invariants
 
@@ -206,6 +285,10 @@ allow `_range_lease.expire_due_ranges` to bypass this policy.
 
 Bound retries, per-pass work and backoff, with a persisted next action/deadline and
 operator-visible recovery-required state when automatic recovery is exhausted.
+The deployed `cms.management.commands.reconcile_range_events` already invokes
+the public `reconcile_disposable_workers` service in its isolated bounded pass.
+Preserve that wiring and heartbeat/failure behavior; smoke polling alone is not
+the production recovery mechanism and requires no new scheduler.
 Hold review expiry or a dead evidence collector escalates to that state; it does
 not silently authorize deletion. Keep containment and count retained resources.
 The authorized operator path explicitly releases/overrides the exact hold with

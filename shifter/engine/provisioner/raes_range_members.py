@@ -74,6 +74,8 @@ def realized_management(apply_result: dict[str, object], targets: tuple[str, ...
     for instance in instances:
         if instance.get("uuid") not in expected:
             continue
+        if instance["uuid"] in result:
+            raise RaesRealizationError("private management target is duplicated")
         result[instance["uuid"]] = {
             "ssh_key_secret_ref": instance.get("gcp_host_ssh_key_secret_ref", ""),
             "host_public_key": instance.get("gcp_host_public_key", ""),
@@ -83,9 +85,3 @@ def realized_management(apply_result: dict[str, object], targets: tuple[str, ...
     if set(result) != expected:
         raise RaesRealizationError("admitted private management targets are missing")
     return validate_management_access(result)
-
-
-def management_fragment(apply_result: dict[str, object], targets: tuple[str, ...]) -> dict[str, object]:
-    """Emit a private result fragment only for explicitly admitted management targets."""
-    management = realized_management(apply_result, targets)
-    return {"management_access": management} if management else {}

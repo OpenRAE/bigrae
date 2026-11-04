@@ -420,7 +420,8 @@ def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]
     """Parse an RAES terminal-ready result plus its realized access projection."""
     required = frozenset({"raes_status", "members"})
     unexpected = sorted(
-        frozenset(payload) - (required | {"status_reason", "completion", "vpn_access", "management_access"})
+        frozenset(payload)
+        - (required | {"status_reason", "completion", "vpn_access", "management_access", "worker_observations"})
     )
     if unexpected:
         raise OperationResultError(f"{_PAYLOAD_FIELD} has unexpected field(s): {', '.join(unexpected)}")
@@ -432,19 +433,12 @@ def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]
         {
             key: payload[key]
             for key in payload
-            if key not in {"members", "completion", "vpn_access", "management_access"}
+            if key not in {"members", "completion", "vpn_access", "management_access", "worker_observations"}
         },
         spec,
     )
     members = _parse_raes_members(payload["members"], limit=MAX_RAES_MEMBERS, field=_PAYLOAD_FIELD)
-    result = {**operation, "members": members}
-    if "management_access" in payload:
-        from shared.range_management import validate_management_access
-
-        try:
-            result["management_access"] = validate_management_access(payload["management_access"])
-        except ValueError:
-            raise OperationResultError("invalid private management projection") from None
+    result = {**operation, "members": members, **_parse_private_host_results(payload)}
     if "completion" in payload:
         from shared.raes.completion_evidence import validate_completion_evidence
 
@@ -461,6 +455,24 @@ def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]
             result["vpn_access"] = parse_openvpn_realization(payload["vpn_access"])
         except OpenVpnBindingError:
             raise OperationResultError(f"{_PAYLOAD_FIELD} vpn_access is invalid") from None
+    return result
+
+
+def _parse_private_host_results(payload: dict[str, Any]) -> dict[str, Any]:
+    """Decode safe observations and immutable historical management references."""
+    from shared.range_management import validate_management_access
+    from shared.worker_observations import validate_worker_observations
+
+    result = {}
+    for field, validator in (
+        ("worker_observations", validate_worker_observations),
+        ("management_access", validate_management_access),
+    ):
+        if field in payload:
+            try:
+                result[field] = validator(payload[field])
+            except (ValueError, TypeError):
+                raise OperationResultError("invalid private host projection") from None
     return result
 
 
