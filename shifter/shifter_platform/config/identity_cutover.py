@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import stat
 from pathlib import Path
 from typing import Literal
 from uuid import UUID
@@ -37,8 +36,20 @@ from management.services import (
     identity_cutover_token_count,
 )
 from shared.audit import retained_audit_event_count
+from shared.bootstrap_facts import IdentityBootstrapFacts as IdentityBootstrapFacts
+from shared.bootstrap_facts import load_identity_bootstrap_facts as load_identity_bootstrap_facts
 from shared.model_access.messages import ContractError, strict_json
+from shared.private_files import read_private_file
 from workspaces.services import identity_cutover_disposition, plan_identity_cutover_accounts
+
+__all__ = [
+    "IdentityBootstrapFacts",
+    "IdentityCutoverFacts",
+    "ProviderIdentityFact",
+    "build_identity_cutover_plan",
+    "load_identity_bootstrap_facts",
+    "load_identity_cutover_facts",
+]
 
 _FACTS_DOCUMENT_IS_INVALID = "facts document is invalid"
 
@@ -66,42 +77,15 @@ class IdentityCutoverFacts(BaseModel):
     provider_bindings_by_user: dict[int, ProviderIdentityFact] = Field(default_factory=dict)
 
 
-class IdentityBootstrapFacts(BaseModel):
-    """Exact immutable provider identity selected for the one-time first grant."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    schema_version: Literal["shifter.identity-bootstrap-facts/v1"] = Field(alias="schema")
-    issuer: str = Field(min_length=1, max_length=255)
-    subject: str = Field(min_length=1, max_length=255)
-
-
 def load_identity_cutover_facts(path_value: str) -> IdentityCutoverFacts:
     """Load a bounded owner-only facts file without exposing its content."""
     path = Path(path_value)
     try:
-        if stat.S_IMODE(path.stat().st_mode) != 0o600:
-            raise ValueError("mode")
-        payload = strict_json(path.read_bytes(), limit=_MAX_FACTS_BYTES)
+        payload = strict_json(read_private_file(path, limit=_MAX_FACTS_BYTES), limit=_MAX_FACTS_BYTES)
         facts = IdentityCutoverFacts.model_validate(payload)
     except (OSError, ValueError, ValidationError, ContractError) as exc:
         raise ValueError(_FACTS_DOCUMENT_IS_INVALID) from exc
     _validate_cutover_identifiers(facts)
-    return facts
-
-
-def load_identity_bootstrap_facts(path_value: str) -> IdentityBootstrapFacts:
-    """Load one owner-only bootstrap selection without accepting email lookup."""
-    path = Path(path_value)
-    try:
-        if stat.S_IMODE(path.stat().st_mode) != 0o600:
-            raise ValueError("mode")
-        payload = strict_json(path.read_bytes(), limit=_MAX_FACTS_BYTES)
-        facts = IdentityBootstrapFacts.model_validate(payload)
-    except (OSError, ValueError, ValidationError, ContractError) as exc:
-        raise ValueError("bootstrap facts document is invalid") from exc
-    if facts.issuer != facts.issuer.strip() or facts.subject != facts.subject.strip():
-        raise ValueError("bootstrap facts document is invalid")
     return facts
 
 

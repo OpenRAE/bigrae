@@ -30,6 +30,7 @@ from . import policy as _policy
 from . import principals as _principals
 from . import session_backend as _session_backend
 from . import temporary_accounts as _temporary_accounts
+from . import worker_validation as _worker_validation
 from .audit_context import AuditContext
 from .models import ActivityLog, UserProfile
 
@@ -43,6 +44,7 @@ prepare_empty_installation_bootstrap = _identity_cutover.prepare_empty_installat
 installation_user_count = _identity_cutover.installation_user_count
 issue_installation_catalog_credential = _personal_credentials.issue_installation_catalog_credential
 revoke_installation_catalog_credential = _personal_credentials.revoke_installation_catalog_credential
+issue_worker_validation_credentials = _worker_validation.issue_worker_validation_credentials
 
 save_session_assurance = _session_backend.save_session_assurance
 session_for_credential = _session_backend.session_for_credential

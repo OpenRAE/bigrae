@@ -40,6 +40,8 @@ Platform architecture, infrastructure, and development documentation.
 - [Development Overview](dev/) - Getting started with development
 - [Local Setup](dev/local-setup) - Local environment
 - [Developer environment setup](dev/setup) - Deploy a development environment from a fork with GitHub Actions
+- [AWS native identity](../ops/aws-native-identity.md) - Identity and policy operations for AWS development deployments
+- [Portal on EKS operations](../ops/portal-eks-operations.md) - Operate the portal in AWS development deployments
 - [Terraform](dev/terraform) - Infrastructure patterns
 - [CI/CD](dev/ci-cd) - Pipeline configuration
 - [Secrets](dev/secrets) - Secrets management

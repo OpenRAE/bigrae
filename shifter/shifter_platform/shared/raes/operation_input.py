@@ -45,7 +45,7 @@ from shared.raes.participant_access import (
     ParticipantAccessBinding,
     ParticipantAccessError,
 )
-from shared.runtime_plugin_binding import RuntimePluginPin
+from shared.runtime_plugin_binding import RuntimePin, parse_runtime_pin
 from shared.runtime_plugin_preparation import RuntimePreparation
 
 from .operation_input_candidates import MAX_IMAGE_CANDIDATES, MAX_IMAGE_KEYS, _validated_candidates
@@ -96,10 +96,11 @@ class RaesInputBindings:
     delivery: Sequence[DeliveryBinding]
     access: Sequence[ParticipantAccessBinding] = ()
     artifact: Sequence[ArtifactBinding] = ()
-    runtime_plugin: RuntimePluginPin | None = None
+    runtime_plugin: RuntimePin | None = None
     runtime_preparation: RuntimePreparation | None = None
     model_enrollments: tuple[ModelGuestBinding, ...] = ()
     remote_access: RaesRemoteAccess | None = None
+    management_targets: tuple[str, ...] = ()
     gcp_projects: tuple[GcpProjectLease, ...] = ()
     cloud_content: CloudContentEnvelope | None = None
 
@@ -124,6 +125,7 @@ _INPUT_KEYS = frozenset(
         "model_enrollments",
         "resource_generation",
         "remote_access",
+        "management_targets",
         "gcp_projects",
         "cloud_content",
     }
@@ -150,6 +152,7 @@ _OPTIONAL_INPUT_KEYS = frozenset(
         "model_enrollments",
         "resource_generation",
         "remote_access",
+        "management_targets",
         "gcp_projects",
         "cloud_content",
     }
@@ -181,11 +184,12 @@ class RaesOperationInput:
     legacy_range_id: int
     egress_mode: str
     _image_candidates: dict[str, tuple[dict[str, Any], ...]]
-    runtime_plugin: RuntimePluginPin | None = None
+    runtime_plugin: RuntimePin | None = None
     runtime_preparation: RuntimePreparation | None = None
     model_enrollments: tuple[ModelGuestBinding, ...] = ()
     resource_generation: str | None = None
     remote_access: RaesRemoteAccess | None = None
+    management_targets: tuple[str, ...] = ()
     gcp_projects: tuple[GcpProjectLease, ...] = ()
 
     cloud_content: CloudContentEnvelope | None = None
@@ -355,7 +359,7 @@ def _validated_artifact_bindings(value: object) -> tuple[ArtifactBinding, ...]:
     return tuple(bindings)
 
 
-def _validated_preparation(obj: Mapping[str, Any], plugin: RuntimePluginPin | None) -> RuntimePreparation | None:
+def _validated_preparation(obj: Mapping[str, Any], plugin: RuntimePin | None) -> RuntimePreparation | None:
     """Require retained selections to belong to this exact admitted executable and plan."""
     preparation = None
     if "runtime_preparation" in obj:
@@ -385,7 +389,7 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
     plugin = None
     if "runtime_plugin" in obj:
         try:
-            plugin = RuntimePluginPin.model_validate(obj["runtime_plugin"])
+            plugin = parse_runtime_pin(obj["runtime_plugin"])
             plugin.bindings.validate_plan(obj["plan"])
         except ValueError:
             raise RaesOperationInputError("raes operation input runtime plugin binding is invalid") from None
@@ -404,6 +408,9 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
         or remote_access.target_ref in {f"{binding.target_address}#0" for binding in access_bindings},
         "raes operation input remote access target is not a declared participant-access target",
     )
+    from shared.range_management import validate_management_targets
+
+    management_targets = validate_management_targets(obj.get("management_targets", []), obj["plan"])
     return RaesOperationInput(
         plan=_require_mapping(obj["plan"], "raes operation input plan"),
         delivery_bindings=_validated_bindings(obj["delivery_bindings"]),
@@ -419,6 +426,7 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
         model_enrollments=_model_enrollments(obj, plugin),
         resource_generation=resource_generation,
         remote_access=remote_access,
+        management_targets=management_targets,
         gcp_projects=project_bindings(obj, preparation),
         cloud_content=cloud_content_binding(obj),
     )
@@ -442,7 +450,9 @@ def build_raes_operation_input(
     range egress posture pinned at create (PLAT-238); a newer producer always emits
     it so the provisioner realizes it from the input rather than the deployment env.
     """
-    payload = {
+    from shared.range_management import validate_management_targets
+
+    payload: dict[str, Any] = {
         "plan": dict(plan),
         "delivery_bindings": [binding.to_transport() for binding in bindings.delivery],
         "access_bindings": [binding.to_transport() for binding in bindings.access],
@@ -467,6 +477,8 @@ def build_raes_operation_input(
         payload["resource_generation"] = identity.resource_generation
     if bindings.remote_access is not None:
         payload["remote_access"] = bindings.remote_access.to_transport()
+    if bindings.management_targets:
+        payload["management_targets"] = list(validate_management_targets(bindings.management_targets, dict(plan)))
     if bindings.gcp_projects:
         payload["gcp_projects"] = [lease.model_dump(mode="json") for lease in bindings.gcp_projects]
     if bindings.cloud_content is not None:

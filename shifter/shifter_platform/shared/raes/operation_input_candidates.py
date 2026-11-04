@@ -9,7 +9,11 @@ from __future__ import annotations
 from collections.abc import Sequence
 from typing import Any
 
-from shared.raes.image_policy import validate_management_ssh_port, validate_management_ssh_username
+from shared.raes.image_policy import (
+    validate_management_ssh_port,
+    validate_management_ssh_username,
+    validate_provider_image_id,
+)
 
 from .operation_input_identity import (
     _KEY_SEPARATOR,
@@ -26,6 +30,7 @@ MAX_IMAGE_KEYS = 256
 # participant-host fields for a preconfigured machine image.
 _CANDIDATE_KEYS = frozenset(
     {
+        "image_id",
         "source_version",
         "image_ref",
         "machine_type",
@@ -43,6 +48,7 @@ _CANDIDATE_KEYS = frozenset(
 )
 _OPTIONAL_CANDIDATE_KEYS = frozenset(
     {
+        "image_id",
         "management_ssh_port",
         "management_ssh_username",
         "image_kind",
@@ -95,6 +101,7 @@ def _validated_candidate(raw: object, field: str) -> dict[str, Any]:
             raise RaesOperationInputError(f"{field}: {exc}") from None
     try:
         validate_management_ssh_username(candidate.get("management_ssh_username", ""))
+        validate_provider_image_id(candidate.get("image_id", ""))
     except ValueError as exc:
         raise RaesOperationInputError(f"{field}: {exc}") from None
     image_ref = candidate["image_ref"]

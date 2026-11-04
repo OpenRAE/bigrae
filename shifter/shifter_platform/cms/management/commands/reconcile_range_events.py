@@ -373,6 +373,7 @@ class Command(BaseCommand):
         lease_counts = cms_services.expire_due_ranges(batch_size=batch_size)
 
         self._reconcile_model_access(batch_size)
+        self._reconcile_workers(batch_size)
 
         total_reconciled = ri_counts["reconciled"]
         total_converged = ri_counts["converged"]
@@ -408,3 +409,12 @@ class Command(BaseCommand):
             reconcile_model_allocations(limit=batch_size)
         except Exception:
             logger.exception("reconcile_range_events: model-access reconciliation failed")
+
+    def _reconcile_workers(self, batch_size: int) -> None:
+        """Retire only due, unheld native workers through their owning service."""
+        from engine.services import reconcile_disposable_workers
+
+        try:
+            reconcile_disposable_workers(limit=min(batch_size, 100))
+        except Exception:  # noqa: BLE001  # isolate bounded cleanup without exposing provider diagnostics
+            logger.warning("reconcile_range_events: worker recovery pass failed")

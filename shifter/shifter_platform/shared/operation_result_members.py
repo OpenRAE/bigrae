@@ -1,9 +1,9 @@
 """Realized RAES member parsing for the closed operation-result contract (ADR-043).
 
 Split out of ``operation_result_payloads`` for Sonar S104: that module owns the
-step tables and payload shapes, while this leaf owns the bounded per-member key
-set and its fail-closed parser (#1710, #375). Dependency-light on purpose — no
-Django — so the standalone provisioner image keeps importing it transitively
+step tables and payload shapes, while this leaf owns bounded per-member keys,
+private host sidecars and their fail-closed parsers (#1710, #375). No Django
+dependency, so the standalone provisioner image keeps importing it transitively
 through ``operation_result_payloads``.
 """
 
@@ -41,6 +41,24 @@ RAES_MEMBER_OPTIONAL_KEYS = _RAES_MEMBER_REF_KEYS | frozenset({"sftp_root_direct
 #: Mirrors ``shared.raes.participant_access.SUPPORTED_ACCESS_CHANNELS`` without
 #: importing it, keeping this transport module dependency-light.
 RAES_MEMBER_CHANNELS = frozenset({"ssh", "rdp"})
+
+
+def _parse_raes_members(raw: object, *, limit: int, field: str) -> list[dict[str, Any]]:
+    """Parse a bounded realized-member list and reject duplicate guest identities."""
+    if not isinstance(raw, list):
+        raise OperationResultError(f"{field} members must be a list")
+    if len(raw) > limit:
+        raise OperationResultError(f"{field} carries more than {limit} members")
+    members = []
+    for index, item in enumerate(raw):
+        entry_field = f"{field} members[{index}]"
+        if not isinstance(item, dict):
+            raise OperationResultError(f"{entry_field} must be an object")
+        members.append(_parse_raes_member(item, entry_field))
+    identities = [member["uuid"] for member in members]
+    if len(set(identities)) != len(identities):
+        raise OperationResultError(f"{field} members contains a duplicate uuid")
+    return members
 
 
 def _member_identity(entry: dict[str, Any], field: str) -> dict[str, Any]:
@@ -136,3 +154,21 @@ def _parse_raes_member(entry: dict[str, Any], field: str) -> dict[str, Any]:
         **_member_credential_refs(entry, channels, field),
         **_member_sftp_root(entry, field),
     }
+
+
+def _parse_private_host_results(payload: dict[str, Any]) -> dict[str, Any]:
+    """Decode safe observations and immutable historical management references."""
+    from shared.range_management import validate_management_access
+    from shared.worker_observations import validate_worker_observations
+
+    result = {}
+    for field, validator in (
+        ("worker_observations", validate_worker_observations),
+        ("management_access", validate_management_access),
+    ):
+        if field in payload:
+            try:
+                result[field] = validator(payload[field])
+            except (ValueError, TypeError):
+                raise OperationResultError("invalid private host projection") from None
+    return result

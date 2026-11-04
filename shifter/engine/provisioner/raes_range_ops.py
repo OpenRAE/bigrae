@@ -1,11 +1,6 @@
-"""RAES-native range lifecycle over immutable operation inputs and closed results.
+"""Realize admitted RAES ranges and publish bounded native results (ADR-043).
 
-The generation-bound input carries the native plan, content/access bindings and
-tenant image candidates. Engine alone applies results to range status and
-completion evidence; this worker publishes no competing lifecycle events.
-Image selection uses the projected tenant registry through the existing pure
-policy. Guest and cloud preflight precede provider effects. Teardown retains the
-original plan and custody until provider absence and restoration are verified.
+Engine owns custody and authorization; cleanup reports exact provider absence.
 """
 
 from __future__ import annotations
@@ -54,6 +49,7 @@ from raes_snapshot import snapshot_resources
 from range_placement import resolve_range_cell_placement
 from range_subnet_allocation import _release_subnet_allocations_best_effort
 from runtime_plugin_preparation import cleanup_preparation
+from worker_host_observation import worker_observations_fragment
 
 if TYPE_CHECKING:
     from gcp_project_runtime import RegisteredProjectRuntime
@@ -61,7 +57,6 @@ if TYPE_CHECKING:
     from runtime_plugin_execution import GuestPluginPlans
 
 logger = logging.getLogger(__name__)
-_GceNetworkAllocation = GceNetworkAllocation
 
 #: The single closed failure code an RAES realization/teardown failure reports.
 #: The bounded diagnostic rides the result payload; only this code reaches the
@@ -119,7 +114,10 @@ def _report_failure(
 def _load_input(ref: OperationRef, operation_id: str, operation: str, request_id: str) -> RaesOperationRun:
     """Validate input or report a bounded failure before effects; Engine fences the provisional ref."""
     try:
-        return get_raes_operation_input(operation_id, request_id=request_id, operation=operation)
+        run = get_raes_operation_input(operation_id, request_id=request_id, operation=operation)
+        if operation == "provision" and run.input.management_targets and run.input.range_backend != "gce":
+            raise ValueError("Worker host observation backend is unsupported")
+        return run
     except Exception:
         _report_failure(ref, operation, "operation input could not be read or validated", _INPUT_REASON_CODE)
         raise
@@ -212,6 +210,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
                 delivery_bindings=operation_input.binding_transport(),
                 access_bindings=operation_input.access_binding_transport(),
             )
+        observations = worker_observations_fragment(apply_result, operation_input.management_targets)
         resources, members, completion = _provision_evidence(
             run,
             cloud,
@@ -240,6 +239,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         {
             "raes_status": "succeeded",
             "members": members,
+            **observations,
             "completion": completion,
             **vpn_access_fragment(apply_result.get("vpn_access")),
         },

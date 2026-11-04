@@ -7,6 +7,11 @@ from shared.identity_scope import ResourceScope
 from workspaces.services import resource_scope_from_ids
 
 
+def range_identity_present(range_uuid: UUID) -> bool:
+    """Composition rejects public identities claimed by two owning domains."""
+    return RangeInstance.all_objects.filter(uuid=range_uuid).exists()
+
+
 def range_credential_scope(range_uuid: UUID) -> ResourceScope:
     """Resolve a live range and its validated account hierarchy."""
     instance = RangeInstance.all_objects.filter(uuid=range_uuid).first()

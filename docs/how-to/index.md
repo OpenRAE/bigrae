@@ -20,3 +20,7 @@ Step-by-step walkthroughs for common tasks.
 ## Troubleshooting
 
 - [Troubleshooting Guide](troubleshooting) - Common issues and solutions
+
+## Disposable workers
+
+- [Qualify disposable VM workers](disposable-workers.md) - Operator qualification and exact-worker recovery.

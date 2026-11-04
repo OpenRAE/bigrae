@@ -25,6 +25,9 @@ def commit_range_cancellation(prepared: PreparedRangeLifecycle) -> bool:
     with transaction.atomic():
         row = Range.objects.select_for_update(of=("self",)).select_related("request").get(pk=prepared.native_id)
         assert_admitted_launch_binding(fields, row)
+        from engine.worker_retention import fence_worker_retirement
+
+        fence_worker_retirement(row, admit=True)
         if row.request is None or row.request.request_id != prepared.request_id or row.status != prepared.status:
             raise ValueError("Range operation changed")
         intent = _cancellable_intent(row, prepared.request_id)
