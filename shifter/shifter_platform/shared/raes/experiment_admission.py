@@ -51,7 +51,7 @@ ExperimentInputError = RaesError
 MAX_RETAINED_BYTES = 64 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
-SUPPORTED_DEPENDENCIES = {"raes": "10.6.0", "raes-env-packs": "7.2.2"}
+SUPPORTED_DEPENDENCIES = {"raes": "10.7.2", "raes-env-packs": "7.2.2"}
 
 
 class ParticipantAuthority(BaseModel):

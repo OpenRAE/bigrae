@@ -127,6 +127,13 @@ is tracked in OpenRAE/rae#1885.
 selection and node-projection entry points. Node helpers live in
 `shared.gcp_runtime_nodes`; existing imports through the plan module remain valid.
 
+RAE 10.7.2 admits full-size native cloud authorities and preserves scalar-only
+project delegation. Adapter preparation evaluates those authorities with the
+same published `PLAN_AUTHORITY_LIMITS` profile. It retains every exact sibling
+and closed collection, and refuses work beyond the fixed profile. The worker
+accepts new plans only from that producer; retained 10.6.0 inputs remain eligible
+for cleanup under the existing closed transport checks.
+
 Required APIs are enabled before baseline capture. Their setup is not owned or
 reversed by the range overlay. The worker needs project-scoped account create,
 update/delete and IAM-policy permissions; Secret Manager create/version/access,

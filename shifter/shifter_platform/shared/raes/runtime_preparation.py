@@ -15,6 +15,7 @@ from raes_contracts.realization_structure import (
     evaluate_realization_constraint,
     structure_matches,
 )
+from raes_contracts.runtime_value_limits import PLAN_AUTHORITY_LIMITS
 from raes_processor.semantics.realization_concerns import project_realization_concern
 from shifter_adapter_sdk.runtime import RuntimePlan, canonical_digest
 
@@ -96,7 +97,8 @@ def _validate_structure(row: dict[str, Any], before: object, after: object) -> N
             raise ValueError(_INVALID)
         document = RealizationConstraintDocument.model_validate(row["constraint_document"])
         projected = project_realization_concern(row["requirement_kind"], after, recursive=True)
-        if evaluate_realization_constraint(document, projected).status is not RealizationRelationStatus.CONFORMANT:
+        relation = evaluate_realization_constraint(document, projected, limits=PLAN_AUTHORITY_LIMITS)
+        if relation.status is not RealizationRelationStatus.CONFORMANT:
             raise ValueError(_INVALID)
     elif row.get("constraint_binding") is not None:
         raise ValueError(_INVALID)
