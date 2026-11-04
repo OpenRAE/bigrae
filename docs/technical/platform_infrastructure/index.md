@@ -8,6 +8,11 @@ Terraform owns the supporting cloud infrastructure and workload identity grants.
 - [GCP native identity](gcp-native-identity.md)
 - [GCP range audit telemetry](gcp-range-audit-telemetry.md)
 
+AWS support is planned for an upcoming release. See the operations guides:
+
+- [AWS native identity operations](../../ops/aws-native-identity.md)
+- [Portal EKS operations](../../ops/portal-eks-operations.md)
+
 ## AWS
 
 | Surface | Source | Responsibility |
