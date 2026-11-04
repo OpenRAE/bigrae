@@ -123,3 +123,14 @@ They exclude prompts, traces, parser inputs, and provider error bodies.
 No new HTTP endpoint, role system, storage service, worker dispatcher, or analytics schema is introduced.
 
 See [operator instructions](../../how-to/retain-trial-archives.md) and the [architecture design](../../architecture/trial-archive-custody.md).
+
+## Derived experiment exports
+
+The batch export service uses the custody inventory and verified retrieval
+operations. Inventory pages have stable ordering and can select the retained
+experiment identity. Custody also owns publication of the derived manifest and
+CSV/JSON indexes to the current approved tenant destination. This write requires
+current tenant content-management authority. The content digest names each export;
+original archives remain unchanged. The manifest is published after the indexes
+verify. These derived objects use the operator's existing storage retention policy.
+See [the result export design](../../architecture/experiment-result-exports.md).

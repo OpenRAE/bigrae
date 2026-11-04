@@ -1523,3 +1523,16 @@ Targeted SDK, Engine PostgreSQL, provisioner and admission-policy tests cover
 confidential output, exact-value rejection, retention, tampering, replay and late
 acceptance. The chart allows only one input key and an optional result key from
 the same invocation Secret. See [the design](../../architecture/adapter-pre-provisioning-2718.md).
+
+## Local implementation design checks
+
+The `.ground-control.yaml` module mappings select existing implementations and
+governing architecture decisions. Repository-wide decisions apply to all paths;
+CMS and `shared.raes` also select their admission and archive designs.
+The design stage compiles platform modules, checks the existing import rules,
+and generates a dependency view from Python imports. It then runs each named
+acceptance test on the local design commit through `tests/design_checks.py`.
+An assertion failure establishes missing behavior; collection errors, fixture
+errors, skipped tests, and ambiguous selection do not. The design review runs
+before implementation. These commands add no runtime dependency or deployment.
+Existing CI, pre-commit, architecture and completed-work review checks still apply.

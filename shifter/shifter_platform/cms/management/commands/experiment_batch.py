@@ -10,7 +10,7 @@ from uuid import UUID
 
 from django.core.management.base import BaseCommand, CommandError, CommandParser
 
-from cms.services import admit_experiment_batch, load_experiment_batch
+from cms.services import admit_experiment_batch, export_experiment_batch, load_experiment_batch
 from shared.api_tokens.cli import credential_from_file
 from shared.exceptions import CMSError, ValidationError
 from shared.raes.experiment_admission import MAX_AUTHORITY_BYTES
@@ -24,7 +24,7 @@ class Command(BaseCommand):
 
     def add_arguments(self, parser: CommandParser) -> None:
         """Keep proof transport in the existing private credential-file boundary."""
-        parser.add_argument("operation", choices=["admit", "show"])
+        parser.add_argument("operation", choices=["admit", "show", "export"])
         parser.add_argument("--credential-file", required=True)
         parser.add_argument("--organization", type=UUID, required=True)
         parser.add_argument("--batch", type=UUID)
@@ -39,6 +39,12 @@ class Command(BaseCommand):
         try:
             credential = credential_from_file(str(options["credential_file"]))
             organization = UUID(str(options["organization"]))
+            if options["operation"] == "export":
+                if options.get("batch") is None:
+                    raise ValueError("Batch required")
+                exported = export_experiment_batch(credential, organization, UUID(str(options["batch"])))
+                self.stdout.write(json.dumps(exported, sort_keys=True))
+                return
             if options["operation"] == "show":
                 if options.get("batch") is None:
                     raise ValueError("Batch required")

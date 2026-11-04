@@ -91,3 +91,12 @@ Its license remains beside the fixture.
 Tests use published manifests and no private pack content.
 
 See the [architecture](../../architecture/experiment-admission-design-2742.md) and [operator instructions](../../how-to/admit-pack-experiments.md).
+
+## Result organization
+
+The authenticated `experiment_batch export` operation reads retained admission
+inputs and the complete operational entry inventory through CMS services.
+It does not claim, start, retry or replace an entry. Assignment metadata is
+reported separately from observed start times and scientific outcomes.
+See [the result export design](../../architecture/experiment-result-exports.md)
+for the manifest, CSV/JSON indexes and explicit size limits.

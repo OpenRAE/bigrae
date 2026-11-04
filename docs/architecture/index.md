@@ -40,6 +40,7 @@ These retain their stated design authority and are not historical preflights:
 - [Tenant trial archive intake boundary](experiments-trial-archive-intake-boundary-2740.md)
 - [Pack experiment admission boundary](experiment-admission-boundary-2742.md)
 - [Trial archive custody design](trial-archive-custody.md)
+- [Retained experiment result exports](experiment-result-exports.md)
 - [External runtime boundary](external-scenario-runtime-design.md)
 - [Named file assets and adapter inputs](named-file-assets-2719.md)
 - [Adapter values before provisioning](adapter-pre-provisioning-2718.md)

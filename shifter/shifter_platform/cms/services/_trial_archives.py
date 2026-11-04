@@ -311,7 +311,12 @@ def intake_trial_archive(
 
 
 def list_trial_archives(
-    credential: CredentialContext, organization_uuid: UUID, *, offset: int = 0, limit: int = 100
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    *,
+    offset: int = 0,
+    limit: int = 100,
+    experiment_id: str | None = None,
 ) -> list[TrialArchiveCollection]:
     """List tenant-filtered receipts and incomplete custody without bucket scans."""
     _admit(credential, organization_uuid, "read_content")
@@ -321,6 +326,13 @@ def list_trial_archives(
         "trialarchivereceipt"
     )[offset : offset + limit]
     return [_transfer_view(row) for row in rows]
+
+
+def publish_experiment_export(
+    credential: CredentialContext, organization_uuid: UUID, batch_id: UUID, files: dict[str, bytes]
+) -> dict[str, object]:
+    """Publish derived indexes only within the tenant's configured approved destination."""
+    raise CMSError("Experiment export publication is not implemented")
 
 
 def _transfer_view(row: TrialArchiveTransfer) -> TrialArchiveCollection:

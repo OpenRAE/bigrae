@@ -87,6 +87,7 @@ from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
 from ._experiment_batches import (
     admit_experiment_batch,
     claim_experiment_entry,
+    list_experiment_entries,
     load_experiment_batch,
     observe_experiment_attempt,
     record_experiment_cleanup,
@@ -94,6 +95,7 @@ from ._experiment_batches import (
     record_experiment_worker,
     recover_experiment_claim,
 )
+from ._experiment_exports import export_experiment_batch
 from ._file_assets import (
     cancel_file_upload,
     complete_file_upload,
@@ -258,6 +260,7 @@ from ._trial_archives import (
     configure_trial_archive_destination,
     intake_trial_archive,
     list_trial_archives,
+    publish_experiment_export,
     purge_trial_archives,
     retrieve_trial_archive,
 )
@@ -388,6 +391,7 @@ __all__ = (
     "engine_resume_range",
     "engine_validate_sharing_binding",
     "expire_due_ranges",
+    "export_experiment_batch",
     "extend_mission_control_range",
     "fence_pack_reference",
     "find_model_access_selected_ranges",
@@ -422,6 +426,7 @@ __all__ = (
     "is_event_range_cleanup_verified_absent",
     "list_agents",
     "list_credentials",
+    "list_experiment_entries",
     "list_file_assets",
     "list_launchable_scenarios",
     "list_mission_control_range_history",
@@ -447,6 +452,7 @@ __all__ = (
     "project_range_cleanup_outcome",
     "project_scenario_images",
     "project_scenario_model_demands",
+    "publish_experiment_export",
     "purge_trial_archives",
     "range_credential_scope",
     "range_egress_compatible_with_event",

@@ -101,6 +101,13 @@ def load_experiment_batch(
     return _load(admission, batch_id)
 
 
+def list_experiment_entries(
+    credential: CredentialContext, organization_uuid: UUID, batch_id: UUID
+) -> list[dict[str, Any]]:
+    """Read the batch's operational assignments without manufacturing scientific facts."""
+    raise CMSError("Experiment entry inventory is not implemented")
+
+
 def _load(admission: TenantPackAdmission, batch_id: UUID) -> RetainedExperimentBatch:
     """Load only a batch owned by the authorized organization."""
     row = ExperimentBatch.objects.filter(pk=batch_id, organization_uuid=admission.organization_uuid).first()
