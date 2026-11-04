@@ -4,31 +4,47 @@ Self-service agentic cyber-range platform for authorized purple, red and blue
 team exercises, with isolated guest workloads and operator-selected telemetry.
 Canonical repository: [OpenRAE/bigrae](https://github.com/OpenRAE/bigrae).
 
-Start with the [current-state architecture handbook](docs/technical/architecture.md)
-for system context, deployment components, authority, lifecycle, data ownership,
-package boundaries and supported extensions. Documentation is authored under
-`docs/` and published through the single
-[MkDocs site](https://openrae.github.io/bigrae/) (ADR-038).
+Documentation: [openrae.github.io/bigrae](https://openrae.github.io/bigrae/).
 
-The repository was renamed on 2026-10-25 and moved to the `OpenRAE`
-organization on 2026-10-29. Old repository URLs redirect to `OpenRAE/bigrae`.
-The documentation site is now `https://openrae.github.io/bigrae/`. GitHub Pages
-does not redirect the old site paths, so update bookmarks.
+## Install
 
-## Get started
+BigRAE installs on GCP from a published release. The install needs no GitHub
+account, no fork, and no repository checkout. AWS support comes in an upcoming
+release.
 
-- [GCP installation and first exercise](docs/technical/handbook/gcp-first-run.md):
-  configuration, bootstrap, health checks and the shipped synthetic smoke pack.
-- [Full installation setup](docs/technical/dev/setup.md): prerequisites, cloud
-  identity, Terraform inputs, DNS, operator bootstrap and deployment flow.
-- [Deployment secrets and variables](docs/dev/deploy-secrets.md): the authoritative
-  checklist of references and environment-specific configuration.
-- [Scenario contracts](docs/technical/handbook/scenario-contract-transition.md):
-  CyberScript and ACES history, the current RAES hard cut and rollback constraints.
+1. Select a release (see [Releases](#releases)).
+2. Follow [Install BigRAE on GCP](docs/technical/handbook/gcp-first-run.md).
+   You need a GCP project with billing on, a domain that you control, Docker,
+   the `gcloud` CLI, ORAS, and cosign.
+3. [Launch your first range](docs/getting-started/quickstart.md).
 
-CyberScript is retired. Current scenario authoring uses the pinned RAES and
-RAES environment-pack releases. Install dependencies from each maintained
-package's manifest; do not install a local CyberScript package.
+## Releases
+
+A release is a [GitHub release](https://github.com/OpenRAE/bigrae/releases)
+`vX.Y.Z` of `main`. Each release publishes these images to the public registry
+`ghcr.io/openrae/bigrae`, with signed build provenance:
+
+- the deployer image `deployer-gcp`, which holds the install commands, the
+  Terraform roots, the Helm chart, and the pinned tools;
+- the control-plane images `portal`, `provisioner`, `guacd`,
+  `guacamole-client`, and `openvpn`.
+
+Each image tag is the full commit SHA of the release, not the version. Releases
+v4.1.1 and earlier have no deployer image. [CHANGELOG.md](CHANGELOG.md) lists
+the changes in each release.
+
+## Documentation
+
+- [Get started](docs/getting-started/index.md): install, first range, and key
+  concepts.
+- [GitHub-less GCP deployment guide](docs/technical/handbook/gcp-github-less-deployment.md):
+  release, install, update, mirror, and teardown in full detail.
+- [Architecture handbook](docs/technical/architecture.md): system context,
+  components, authority, lifecycle, and package boundaries.
+
+The documentation is in `docs/`. The
+[documentation site](https://openrae.github.io/bigrae/) publishes it from
+`main` (ADR-038).
 
 ## Develop
 
@@ -46,8 +62,8 @@ pre-commit install
 
 Use [local development setup](docs/technical/dev/local-setup.md) and
 [contribution guidance](CONTRIBUTING.md) for the development workflow.
-Production control planes use the shared Helm chart on GKE or EKS. Runtime,
-cloud and image prerequisites depend on the selected installation bundle.
+To deploy a development environment from your own fork with GitHub Actions,
+on AWS or GCP, see [developer environment setup](docs/technical/dev/setup.md).
 
 ## Test and document
 
@@ -75,12 +91,19 @@ only in environments you are authorized to control, with human oversight.
 The maintainer is [Brad Edwards](https://github.com/Brad-Edwards). The repository
 is MIT licensed; [LICENSE](LICENSE) retains the copyright holders' notices.
 
-## Contributing and releases
+## Contributing
 
 Read [CONTRIBUTING.md](CONTRIBUTING.md). Feature PRs target `dev` and use
 Conventional Commit titles. Release Please owns the version and `CHANGELOG.md`
 from the history promoted to `main`; see
 [the release workflow](docs/DEVELOPMENT_WORKFLOW.md).
+
+## Repository history
+
+The repository was renamed on 2026-10-25 and moved to the `OpenRAE`
+organization on 2026-10-29. Old repository URLs redirect to `OpenRAE/bigrae`.
+GitHub Pages does not redirect the old documentation site paths, so update
+bookmarks.
 
 ## Citation
 

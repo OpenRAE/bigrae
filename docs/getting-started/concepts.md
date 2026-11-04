@@ -1,37 +1,31 @@
-# Key Concepts
+# Key concepts
 
-## Agent
+## Release
 
-Your XDR or XSIAM installer. Download it from your console, upload it to BigRAE. Gets deployed to victim machines when you launch a range.
+One published version of BigRAE: the control-plane images and the deployer
+image, with signed build provenance. A deployment runs exactly one release.
+See [Install BigRAE on GCP](../technical/handbook/gcp-first-run.md#2-select-a-release).
 
-## Range
+## Deployment
 
-An isolated demo environment. Contains attacker machines and victim machines in a private network. Each range is independent - your attacks don't affect other users.
+One installation of BigRAE in one GCP project, with one portal hostname.
 
 ## Scenario
 
-A template that defines what a range contains. Different scenarios for different demo needs:
+A template that defines the devices, networks, and access of a range. An
+administrator registers each scenario as an environment pack. A new deployment
+has one scenario, `smoke-linux`: a Kali attacker and an Ubuntu victim.
 
-| Scenario | What It Includes | Use Case |
-|----------|------------------|----------|
-| Basic Range | Kali + 1 victim | Quick demos, simple attacks |
-| AD Attack Lab | Kali + DC + domain victim | Active Directory attacks |
-| Basic Range with NGFW | Basic Range + firewall | Traffic logging to XDR/XSIAM |
-| Cortex BYOT | Full enterprise setup | Complex multi-machine scenarios |
+## Range
+
+A running copy of a scenario. Each range has its own isolated network. A range
+does not affect other ranges.
+
+## Agent
+
+An installer file that you upload. A scenario can install it on its devices
+when the range launches.
 
 ## Terminal
 
-Browser-based access to your range instances. SSH for command line, RDP for graphical access (Windows, Kali desktop).
-
-## Credentials
-
-Authentication info for integrations:
-
-- **SCM Credentials** - For Strata Cloud Manager device association
-- **Deployment Profiles** - For software NGFW deployment
-
-Only needed for NGFW scenarios.
-
-## NGFW
-
-Next-Generation Firewall. A persistent firewall instance that logs traffic to your XDR/XSIAM. Set it up once, reuse across range launches.
+Browser access to the devices of a range.
