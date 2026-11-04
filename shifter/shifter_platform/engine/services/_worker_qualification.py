@@ -17,6 +17,8 @@ from ._worker_retirement import _lock_worker
 if TYPE_CHECKING:
     from engine.models import DisposableWorker, Range
 
+_BINDING_CHANGED = "Worker qualification binding changed"
+
 
 @dataclass(frozen=True, slots=True)
 class WorkerQualification:
@@ -127,7 +129,7 @@ def _store_qualification(
             or (fresh.resource_generation, fresh.provisioner_operation_id) != generation
             or fresh.provisioned_instances != runtime.provisioned_instances
         ):
-            raise ValueError("Worker qualification binding changed")
+            raise ValueError(_BINDING_CHANGED)
         _require_current_qualification(current, result)
         require_fresh_observation({"observed_at": result.observed_at}, timezone.now())
         from engine.models import DisposableWorker
@@ -153,6 +155,6 @@ def _require_current_qualification(worker: DisposableWorker, result: WorkerQuali
     try:
         current = _qualification(worker)
     except (ValueError, TypeError):
-        raise ValueError("Worker qualification binding changed") from None
+        raise ValueError(_BINDING_CHANGED) from None
     if current != result:
-        raise ValueError("Worker qualification binding changed")
+        raise ValueError(_BINDING_CHANGED)
