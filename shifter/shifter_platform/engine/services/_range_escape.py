@@ -138,7 +138,8 @@ async def _bounded_probe(conn: asyncssh.SSHClientConnection, request: GuestProbe
 
 
 async def _read_bounded_stream(stream: asyncssh.SSHReader[str], limit: int) -> str:
-    chunks = []
+    """Stop before an untrusted stream can exceed its byte allowance."""
+    chunks: list[str] = []
     size = 0
     while True:
         part = await stream.read(limit + 1 - size)

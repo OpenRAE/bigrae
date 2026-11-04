@@ -18,6 +18,9 @@ def apparatus(tenant, settings, allow_all_policy, monkeypatch):
     from engine.models import CapacityReservation
     from engine.services import configure_worker_policy
     from shared.authorization import RelationshipState
+    from shared.capacity import PartitionRef
+    from shared.capacity.catalog import CapacityCatalog
+    from shared.deployment import resolve_audit_deployment_scope
     from workspaces.services import add_account_member, hierarchy_target_scope
 
     relationships = set()
@@ -27,6 +30,17 @@ def apparatus(tenant, settings, allow_all_policy, monkeypatch):
     actor.policy_accounts.add(None)
     add_account_member(organization.account.uuid, actor.credential.principal)
     settings.CLOUD_PROVIDER = "gcp"
+    settings.AUDIT_DEPLOYMENT_SCOPE = resolve_audit_deployment_scope()
+    settings.GCP_PROJECT_ID = "synthetic"
+    settings.GCP_REGION = "synthetic-region"
+    settings.CAPACITY_PLANNING_ENABLED = True
+    settings.CAPACITY_PLANNING_CATALOG = CapacityCatalog(
+        partitions={
+            "synthetic": PartitionRef(
+                name="synthetic", provider="gcp", account="synthetic", region="synthetic-region", backend="gce"
+            )
+        }
+    )
     monkeypatch.setenv("GCP_RANGE_BACKEND", "gce")
     settings.ENGINE_TASK_CLUSTER = "synthetic-jobs"
     settings.ENGINE_TASK_DEFINITION = "example.test/provisioner@sha256:" + "1" * 64
@@ -81,6 +95,8 @@ def test_create_commits_native_launch_and_durable_custody(apparatus):
     intent = ProvisionerLaunchIntent.objects.get()
     payload = OperationInput.objects.get(operation_id=intent.operation_id).envelope["payload"]
     assert payload["plan"] == apparatus.profile["plan"]
+    candidate = next(iter(payload["image_candidates"].values()))[0]
+    assert candidate["image_id"] == apparatus.profile["image_id"]
     assert intent.payload["resource"] == "raes-range"
 
 
@@ -91,6 +107,50 @@ def test_idempotent_replay_rejects_changed_experiment_and_trial(apparatus):
     for kwargs in ({"experiment_id": uuid4(), "trial_id": trial_id}, {"trial_id": uuid4()}):
         with pytest.raises(ValueError):
             create(apparatus, worker_id=worker_id, **kwargs)
+
+
+def test_create_replay_retains_apparatus_after_operator_policy_change(apparatus):
+    from engine.models import DisposableWorker, ProvisionerLaunchIntent, WorkerPolicyRecord
+    from engine.services import configure_worker_policy
+
+    worker = create(apparatus)
+    original = DisposableWorker.objects.get(pk=worker.worker_id).profile
+    policy = WorkerPolicyRecord.objects.get().configuration
+    policy["profile"]["docker_version"] = "28.5.2"
+    configure_worker_policy(apparatus.credential, policy)
+    assert create(apparatus, worker_id=worker.worker_id).worker_id == worker.worker_id
+    assert DisposableWorker.objects.get(pk=worker.worker_id).profile == original
+    assert ProvisionerLaunchIntent.objects.count() == 1
+
+
+def test_wrong_partition_budget_cannot_admit_a_worker(apparatus):
+    from engine.models import CapacityReservation, DisposableWorker
+
+    CapacityReservation.objects.update(partition_name="another-region")
+    with pytest.raises(ValueError):
+        create(apparatus)
+    assert not DisposableWorker.objects.exists()
+
+
+@pytest.mark.parametrize("change", ["experiment", "profile", "trial-reset", "scope", "delete"])
+def test_bulk_updates_cannot_erase_worker_custody(apparatus, change):
+    from django.db import IntegrityError, transaction
+
+    from engine.models import DisposableWorker, Range
+
+    worker = create(apparatus, trial_id=uuid4())
+    row = DisposableWorker.objects.get(pk=worker.worker_id)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        if change == "experiment":
+            DisposableWorker.objects.filter(pk=row.pk).update(experiment_id=uuid4())
+        elif change == "profile":
+            DisposableWorker.objects.filter(pk=row.pk).update(profile_digest="sha256:" + "b" * 64)
+        elif change == "trial-reset":
+            DisposableWorker.objects.filter(pk=row.pk).update(trial_id=None)
+        elif change == "scope":
+            Range.objects.filter(pk=row.range_id).update(owner_principal_uuid=uuid4())
+        else:
+            DisposableWorker.objects.filter(pk=row.pk).delete()
 
 
 def test_global_limit_counts_failed_and_provisioning_workers(apparatus):
@@ -172,7 +232,8 @@ def test_holds_fence_native_destruction_and_expiry(apparatus):
     assert Range.objects.get(pk=row.range_id).status == "ready"
 
 
-def test_optional_software_uses_apparatus_protocol_without_pack(apparatus):
+@pytest.mark.parametrize("preparing", [False, True])
+def test_optional_software_uses_apparatus_protocol_without_pack(apparatus, preparing, settings):
     from shifter_adapter_sdk.runtime import RuntimeInput
 
     from engine.models import RuntimePluginInstallation, RuntimePluginInvocation, WorkerPolicyRecord
@@ -188,6 +249,9 @@ def test_optional_software_uses_apparatus_protocol_without_pack(apparatus):
         "capabilities": ["guest.configure", "guest.verify"],
         "required_bindings": ["host"],
     }
+    if preparing:
+        manifest["capabilities"].append("provision.prepare")
+        manifest["provisioning_concerns"] = ["worker-settings"]
     installation = install_runtime_plugin(apparatus.credential, apparatus.scope.organization_uuid, manifest)
     RuntimePluginInstallation.objects.filter(pk=installation.id).update(state="ready")
     configuration = WorkerPolicyRecord.objects.get().configuration
@@ -208,11 +272,55 @@ def test_optional_software_uses_apparatus_protocol_without_pack(apparatus):
             ]
         )
     )
-    assert len(invocations) == 3
+    assert len(invocations) == (4 if preparing else 3)
     for invocation in invocations:
         request = RuntimeInput.model_validate(invocation.input)
         assert request.apparatus_digest and request.pack_digest is None
         assert set(request.targets) == {"host"}
+
+    if preparing:
+        from cryptography.fernet import Fernet
+        from django.db import transaction
+        from shifter_adapter_sdk.runtime import RuntimePlan
+
+        from engine.models import DisposableWorker, OperationInput, ProvisionerLaunchIntent
+        from engine.services import retire_disposable_worker
+        from engine.services._runtime_plugin_preparation import approve_invocation, retain_preparation
+        from shared.raes.operation_input import parse_raes_operation_input
+
+        settings.FIELD_ENCRYPTION_KEY = Fernet.generate_key().decode()
+        invocation = next(item for item in invocations if item.phase == "prepare")
+        request = RuntimeInput.model_validate(invocation.input)
+        result = RuntimePlan(
+            protocol=request.protocol,
+            invocation_id=request.invocation_id,
+            input_digest=request.digest,
+            phase="prepare",
+            status="planned",
+            provisioning_values=[],
+        )
+        approval = approve_invocation(invocation, request, result)
+        retained = DisposableWorker.objects.get(pk=worker.worker_id)
+        with transaction.atomic():
+            retain_preparation(retained.range, approval)
+        from shared.operation_results import ResultStep
+        from tests.engine.services.test_native_warm_retirement import _apply_result
+
+        provision = ProvisionerLaunchIntent.objects.get(payload__operation="provision")
+        _apply_result(
+            provision,
+            ResultStep.RAES_TERMINAL_FAILED,
+            {"reason_code": "cloud_operation_failed", "diagnostic": "Synthetic guest configuration failure"},
+        )
+        retire_disposable_worker(apparatus.credential, worker.worker_id)
+        cleanup = ProvisionerLaunchIntent.objects.filter(payload__operation="destroy").get()
+        payload = parse_raes_operation_input(
+            OperationInput.objects.get(operation_id=cleanup.operation_id).envelope["payload"]
+        )
+        assert payload.runtime_preparation == approval
+        assert payload.runtime_plugin.apparatus_digest and "pack_digest" not in payload.runtime_plugin.model_dump(
+            mode="json"
+        )
 
 
 def test_trial_binding_is_single_use_and_identity_does_not_grant_access(apparatus):

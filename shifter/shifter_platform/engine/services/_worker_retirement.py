@@ -21,9 +21,13 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
+_RANGE_MANAGE = "range.manage"
+
 
 @dataclass(frozen=True, slots=True)
 class WorkerHoldView:
+    """Public hold custody and review state without guest material."""
+
     hold_id: UUID
     worker_id: UUID
     owner_principal_uuid: UUID
@@ -33,6 +37,7 @@ class WorkerHoldView:
 
 
 def _lock_worker(worker_id: UUID) -> DisposableWorker:
+    """Lock native runtime before its retained worker custody row."""
     from engine.models import DisposableWorker, Range
 
     native_id = DisposableWorker.objects.values_list("range_id", flat=True).get(pk=worker_id)
@@ -46,7 +51,7 @@ def acquire_worker_hold(credential: CredentialContext, worker_id: UUID, *, reaso
     """Hold a generation until its caller explicitly releases evidence custody."""
     from engine.models import WorkerRetirementHold
 
-    _authorized_worker(credential, worker_id, "range.manage")
+    _authorized_worker(credential, worker_id, _RANGE_MANAGE)
     if reason not in {"evidence", "capture", "operator"}:
         raise ValueError("Worker hold reason is invalid")
     with transaction.atomic():
@@ -87,7 +92,7 @@ def release_worker_hold(
     if operator_override:
         _installation_authority(credential)
     else:
-        _authorized_worker(credential, hold.worker_id, "range.manage")
+        _authorized_worker(credential, hold.worker_id, _RANGE_MANAGE)
         if hold.owner_principal_uuid != credential.principal.uuid:
             raise PermissionError("Worker hold belongs to another caller")
     with transaction.atomic():
@@ -108,12 +113,14 @@ def release_worker_hold(
 
 
 def _hold_view(hold: WorkerRetirementHold) -> WorkerHoldView:
+    """Project exact hold ownership and review facts."""
     return WorkerHoldView(
         hold.pk, hold.worker_id, hold.owner_principal_uuid, hold.review_at, hold.released_at is not None, hold.reason
     )
 
 
 def list_worker_holds(credential: CredentialContext, worker_id: UUID) -> tuple[WorkerHoldView, ...]:
+    """List bounded active holds after current range-read authorization."""
     worker = _authorized_worker(credential, worker_id, "range.read")
     return tuple(_hold_view(hold) for hold in worker.holds.filter(released_at__isnull=True).order_by("created_at")[:32])
 
@@ -122,7 +129,7 @@ def retire_disposable_worker(credential: CredentialContext, worker_id: UUID) -> 
     """Retain capacity and ownership while native cleanup converges."""
     from engine.worker_retention import fence_worker_retirement
 
-    _authorized_worker(credential, worker_id, "range.manage")
+    _authorized_worker(credential, worker_id, _RANGE_MANAGE)
     with transaction.atomic():
         worker = _lock_worker(worker_id)
         if resolve_local_credential(credential) != credential:
@@ -163,14 +170,16 @@ def reconcile_disposable_workers(
 ) -> int:
     """One bounded pass; expired holds escalate without silently releasing them."""
     from engine.models import DisposableWorker
-    from engine.worker_retention import fence_worker_retirement
 
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("Worker reconciliation limit is invalid")
     if credential is not None:
         _installation_authority(credential)
-    if worker_ids is not None and (len(worker_ids) > 100 or any(not isinstance(value, UUID) for value in worker_ids)):
-        raise ValueError("Worker reconciliation selection is invalid")
+    if worker_ids is not None:
+        if len(worker_ids) > 100:
+            raise ValueError("Worker reconciliation selection is invalid")
+        if any(not isinstance(value, UUID) for value in worker_ids):
+            raise ValueError("Worker reconciliation selection is invalid")
     moment = now or timezone.now()
     rows = DisposableWorker.objects.all()
     if worker_ids is not None:
@@ -188,23 +197,30 @@ def reconcile_disposable_workers(
         .distinct()[:limit]
     )
     for identifier in identifiers:
-        with transaction.atomic():
-            worker = _lock_worker(identifier)
-            if worker.terminal_at is not None:
-                continue
-            holds = worker.holds.filter(released_at__isnull=True)
-            if holds.exists():
-                if holds.filter(review_at__lte=moment).exists():
-                    worker.recovery_required = True
-                    worker.recovery_reason = "hold-review-overdue"
-                    worker.save(update_fields=["recovery_required", "recovery_reason"])
-                continue
-            if worker.retirement_at is None and worker.deadline > moment:
-                continue
-            fence_worker_retirement(worker.range, admit=True)
-            worker.refresh_from_db()
-            _advance_retirement(worker, moment)
+        _reconcile_worker(identifier, moment)
     return len(identifiers)
+
+
+def _reconcile_worker(identifier: UUID, now: datetime) -> None:
+    """Advance one retained worker while holding its native destruction fence."""
+    from engine.worker_retention import fence_worker_retirement
+
+    with transaction.atomic():
+        worker = _lock_worker(identifier)
+        if worker.terminal_at is not None:
+            return
+        holds = worker.holds.filter(released_at__isnull=True)
+        if holds.exists():
+            if holds.filter(review_at__lte=now).exists():
+                worker.recovery_required = True
+                worker.recovery_reason = "hold-review-overdue"
+                worker.save(update_fields=["recovery_required", "recovery_reason"])
+            return
+        if worker.retirement_at is None and worker.deadline > now:
+            return
+        fence_worker_retirement(worker.range, admit=True)
+        worker.refresh_from_db()
+        _advance_retirement(worker, now)
 
 
 def _advance_retirement(worker: DisposableWorker, now: datetime) -> None:
@@ -225,13 +241,12 @@ def _advance_retirement(worker: DisposableWorker, now: datetime) -> None:
         worker.recovery_reason = ""
         worker.save(update_fields=["terminal_at", "recovery_required", "recovery_reason"])
         release_range_capacity(worker.pk, now=now)
-    elif worker.recovery_required or (worker.next_recovery_at > now and worker.recovery_attempts):
+    elif _cleanup_retry_waits(worker, now):
         return
     elif worker.recovery_attempts >= worker.max_recovery_attempts:
         worker.recovery_required = True
         worker.recovery_reason = "cleanup-incomplete"
         worker.save(update_fields=["recovery_required", "recovery_reason"])
-        return
     else:
         # The savepoint preserves a failed native dispatch without committing half
         # an operation; the outer transaction retains this recovery obligation.
@@ -248,3 +263,8 @@ def _advance_retirement(worker: DisposableWorker, now: datetime) -> None:
         worker.recovery_required = worker.recovery_attempts >= worker.max_recovery_attempts
         worker.recovery_reason = "cleanup-incomplete" if worker.recovery_required else "cleanup-pending"
         worker.save(update_fields=["recovery_attempts", "next_recovery_at", "recovery_required", "recovery_reason"])
+
+
+def _cleanup_retry_waits(worker: DisposableWorker, now: datetime) -> bool:
+    """Retain explicit recovery and retry backoff without suppressing accepted absence."""
+    return worker.recovery_required or (worker.next_recovery_at > now and worker.recovery_attempts > 0)

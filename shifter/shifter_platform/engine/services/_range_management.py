@@ -11,12 +11,15 @@ if TYPE_CHECKING:
 
 
 def persist_realized_management(row: OperationResultInbox, payload: dict[str, object], runtime: Range) -> None:
+    """Retain private access only for admitted targets and the accepted generation."""
     from engine.models import OperationInput, RangeManagementAccess
 
     immutable = OperationInput.objects.filter(operation_id=row.operation_id).first()
     input_payload = immutable.envelope["payload"] if immutable is not None else {}
     targets = validate_management_targets(input_payload.get("management_targets", []), input_payload.get("plan", {}))
     realized = validate_management_access(payload.get("management_access", {}))
+    if not isinstance(runtime.provisioned_instances, list):
+        raise ValueError("Management membership is unavailable")
     expected = {f"{target}#0" for target in targets}
     if set(realized) != expected or not expected.issubset({item["uuid"] for item in runtime.provisioned_instances}):
         raise ValueError("Management projection does not match admitted targets")

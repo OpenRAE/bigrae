@@ -68,7 +68,10 @@ def realized_management(apply_result: dict[str, object], targets: tuple[str, ...
         return {}
     expected = {f"{target}#0" for target in targets}
     result = {}
-    for instance in apply_result.get("instances", []):
+    instances = apply_result.get("instances", [])
+    if not isinstance(instances, list) or any(not isinstance(item, dict) for item in instances):
+        raise RaesRealizationError("private management membership is invalid")
+    for instance in instances:
         if instance.get("uuid") not in expected:
             continue
         result[instance["uuid"]] = {
@@ -80,3 +83,9 @@ def realized_management(apply_result: dict[str, object], targets: tuple[str, ...
     if set(result) != expected:
         raise RaesRealizationError("admitted private management targets are missing")
     return validate_management_access(result)
+
+
+def management_fragment(apply_result: dict[str, object], targets: tuple[str, ...]) -> dict[str, object]:
+    """Emit a private result fragment only for explicitly admitted management targets."""
+    management = realized_management(apply_result, targets)
+    return {"management_access": management} if management else {}

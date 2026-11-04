@@ -1,82 +1,13 @@
-"""Worker CLI authenticates native proof and exposes bounded operator state."""
+"""External cloud, secret-store and guest observations for native worker tests."""
 
 import json
-from io import StringIO
 
 import pytest
-from django.core.management import CommandError, call_command
-
-from tests.engine.services.test_disposable_workers import apparatus, create, tenant
-
-__all__ = ["apparatus", "tenant"]
-pytestmark = [pytest.mark.django_db, pytest.mark.postgres]
 
 
 @pytest.fixture
-def proof(apparatus, tmp_path):
-    from django.contrib.auth import get_user_model
-
-    from management.services import human_principal_user_id
-    from shared.api_tokens.models import ApiToken
-
-    user = get_user_model().objects.get(pk=human_principal_user_id(apparatus.credential.principal))
-    _, raw = ApiToken.create_token(
-        name="Synthetic worker command",
-        created_by=user,
-        scopes=[
-            "authorization:installation.manage_cloud_authority",
-            "authorization:organization.launch_range",
-            "authorization:range.read",
-            "authorization:range.manage",
-            "authorization:range.access",
-        ],
-    )
-    path = tmp_path / "worker-proof"
-    path.write_text(raw)
-    path.chmod(0o600)
-    return path
-
-
-def test_inspect_uses_native_proof_and_returns_no_guest_credentials(apparatus, proof):
-    worker = create(apparatus)
-    output = StringIO()
-    call_command("disposable_workers", "inspect", credential_file=str(proof), worker_id=worker.worker_id, stdout=output)
-    result = json.loads(output.getvalue())
-    assert result["worker_id"] == str(worker.worker_id)
-    assert result["status"] == "provisioning"
-    assert "profile" not in result and "private_key" not in result
-
-
-def test_command_rejects_public_proof_without_leaking_input(apparatus, proof):
-    proof.chmod(0o644)
-    with pytest.raises(CommandError) as failure:
-        call_command(
-            "disposable_workers",
-            "smoke",
-            credential_file=str(proof),
-            scope_kind="organization",
-            scope_id=apparatus.scope.organization_uuid,
-        )
-    assert str(proof) not in str(failure.value)
-
-
-def test_invalid_smoke_timeout_refuses_before_creating_workers(apparatus, proof):
-    from engine.models import DisposableWorker
-
-    with pytest.raises(CommandError):
-        call_command(
-            "disposable_workers",
-            "smoke",
-            credential_file=str(proof),
-            scope_kind="organization",
-            scope_id=apparatus.scope.organization_uuid,
-            timeout=0,
-        )
-    assert not DisposableWorker.objects.exists()
-
-
-@pytest.mark.django_db(transaction=True)
-def test_smoke_uses_two_real_native_lifecycles_and_verifies_cleanup(apparatus, proof, monkeypatch):
+def worker_cloud(apparatus, monkeypatch):
+    """Drive native result application while replacing only external peers."""
     import sys
     import time
     from types import SimpleNamespace
@@ -179,15 +110,3 @@ def test_smoke_uses_two_real_native_lifecycles_and_verifies_cleanup(apparatus, p
                 )
 
     monkeypatch.setattr(time, "sleep", provider_progress)
-    output = StringIO()
-    call_command(
-        "disposable_workers",
-        "smoke",
-        credential_file=str(proof),
-        scope_kind="organization",
-        scope_id=apparatus.scope.organization_uuid,
-        stdout=output,
-    )
-    result = json.loads(output.getvalue())
-    assert result["independent_workers"] == 2 and result["cleanup_verified"]
-    assert DisposableWorker.objects.filter(terminal_at__isnull=False).count() == 2

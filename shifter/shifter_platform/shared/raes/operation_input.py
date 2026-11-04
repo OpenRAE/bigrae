@@ -436,7 +436,7 @@ def build_raes_operation_input(
     """
     from shared.range_management import validate_management_targets
 
-    payload = {
+    payload: dict[str, Any] = {
         "plan": dict(plan),
         "delivery_bindings": [binding.to_transport() for binding in bindings.delivery],
         "access_bindings": [binding.to_transport() for binding in bindings.access],

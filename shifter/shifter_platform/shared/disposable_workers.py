@@ -24,9 +24,11 @@ class WorkerHostProfile(ClosedModel):
 
     plan: dict[str, Any]
     image: RuntimeTargetImageProfile
+    image_id: Annotated[str, Field(pattern=r"^[1-9]\d{0,19}$")]
     provenance_digest: Digest
     docker_version: Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.]+)?$")]
     capacity_scope_ref: UUID
+    capacity_partition: Annotated[str, Field(min_length=1, max_length=128)]
     capacity_demand: dict[str, Annotated[float, Field(gt=0, allow_inf_nan=False)]] = Field(min_length=1, max_length=32)
     egress_mode: Literal["none", "status-quo"] = "none"
     software: WorkerSoftwareBinding | None = None
@@ -35,17 +37,7 @@ class WorkerHostProfile(ClosedModel):
     def validate_host(self) -> Self:
         """Reject ambiguous topology and mutable or undersized apparatus inputs."""
         _, _, _, cpu, ram = worker_host_shape(self.plan)
-        image = self.image
-        if (
-            image.provider != "gcp"
-            or image.image_kind != "image"
-            or image.bootstrap_capability != "standard"
-            or image.machine_type
-            or image.disk_size_gb is None
-            or not image.management_ssh_username
-            or image.allow_public_web_egress
-        ):
-            raise ValueError("Worker host requires an exact standard GCE image profile")
+        _validate_worker_image(self.image)
         # The incumbent GCE realizer derives e2-custom from the plan when the
         # image profile has no override. Keep quota demand and physical size in
         # agreement, including its 256 MiB alignment, before any effects.
@@ -79,3 +71,17 @@ class WorkerPolicy(ClosedModel):
         if self.max_provisioning > self.max_live:
             raise ValueError("Worker concurrency exceeds live capacity")
         return self
+
+
+def _validate_worker_image(image: RuntimeTargetImageProfile) -> None:
+    """Accept only an exact standard GCE host without resource or egress overrides."""
+    if (
+        image.provider != "gcp"
+        or image.image_kind != "image"
+        or image.bootstrap_capability != "standard"
+        or image.machine_type
+        or image.disk_size_gb is None
+        or not image.management_ssh_username
+        or image.allow_public_web_egress
+    ):
+        raise ValueError("Worker host requires an exact standard GCE image profile")

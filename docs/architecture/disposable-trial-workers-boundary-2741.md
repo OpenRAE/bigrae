@@ -1,8 +1,9 @@
 # Disposable trial worker boundary (#2741)
 
-Architecture preflight, 2026-11-03. The supplied issue title, body and acceptance
-criteria are the delivery contract. This note constrains the forthcoming design;
-it is not an implementation plan or evidence of implemented or qualified workers.
+Architecture preflight, refreshed 2026-11-04. The supplied issue title, body and
+acceptance criteria are the delivery contract. This note constrains the
+forthcoming design; it is not an implementation plan or evidence of implemented
+or qualified workers.
 There is no new implementation prerequisite.
 
 ## Ownership and reuse
@@ -15,6 +16,9 @@ experiment orchestrator or permission grant. A future dispatcher consumes the
 public `engine.services` facade; it cannot write Engine models. Inspection returns
 bounded native lifecycle, qualification, hold and recovery facts, not credentials
 or raw guest/provider output.
+Native experiment/trial custody UUIDs are distinct from upstream scientific
+study/entry/run identities, which may be strings. The caller retains that join;
+do not coerce upstream identities into UUIDs or add a scientific journal to Engine.
 
 Use the existing RAES realization path for the outer host. The apparatus profile
 is configuration beside the serialized host plan; it is not the inner experiment
@@ -27,7 +31,8 @@ state or create another repository framework.
 ```mermaid
 flowchart LR
     C[Authenticated caller or management command] -->|credential, scope, owner reference, profile| E[Engine service admission]
-    E -->|atomic custody, capacity, operation input and launch intent| D[(PostgreSQL)]
+    E -->|atomic custody and capacity, then fenced durable dispatch| D[(PostgreSQL)]
+    E -->|SQL-owned parent publication and primary readback before dispatch| F[Existing authorization provider]
     D -->|exact immutable operation| P[Pinned provisioner Job]
     E -->|optional separately installed software| A[Isolated adapter planning Job]
     A -->|bounded validated SDK plan| P
@@ -39,34 +44,34 @@ flowchart LR
 Apply ADR-001/025/027/030/031/032/039/043/045/047/056/063/066 and the
 current [architecture handbook](../technical/architecture.md). The dependency
 model remains `.importlinter` and `scripts/check_layer_imports/layer_imports.yaml`.
-No new ADR or general workflow abstraction is needed. These are issue-specific
-applications of existing boundaries, with the following **real gaps**, not
-permission to bypass them:
+No new ADR or general workflow abstraction is needed. The current tree already
+contains worker contracts; they are reuse anchors, not delivery or qualification
+evidence. Preserve the following boundaries:
 
-- `_principal_range_create`, `_range_authority_history` and installation launch
-  authority currently specialize installation-owned creation to
-  `WarmRangeGeneration`/`warm_pool`. Do not fabricate warm generations or claim
-  workers into a pool. Use explicit customer scope and a real principal; if
-  installation-owned workers are supported, separate their admitted custody from
-  the warm-specific branch through the existing native authority seam. Missing
-  customer IDs never imply installation scope.
-- Native public range identity is currently named `cms_range_uuid`.
-  `config.credential_scope` resolves `range` targets through
-  `cms.services.range_credential_scope`. Engine-only workers must have genuine
-  durable identity and SQL-owned scope resolution through the composition root,
-  including policy inventory and ancestry, without fake CMS/event records or an
-  Engine import of CMS. Do not treat a generated UUID or constructed admission
-  dataclass as authority. Preserve existing range resolution and lock order.
-- `RuntimePluginPin` inherits pack scope, and `_runtime_plugin_bindings` selects
-  executable versions through exact pack bindings. Optional worker software needs
-  an explicit administrator-authorized apparatus binding using the installed SDK
-  and invocation machinery. SDK `RuntimeInput.pack_digest` is mandatory today:
-  do not relabel an apparatus digest as a pack digest or omit it behind an
-  unvalidated dict. Any necessary contract extension belongs in that SDK and its
-  existing version-negotiation/consumer checks; no parallel bootstrap protocol.
-- Existing event capacity windows and range leases do not supply worker
-  capacity-until-absence or evidence-retirement holds. Narrowly extend their
-  owning contracts where required; do not copy their workflows into experiments.
+- `shared.disposable_workers.WorkerHostProfile` / `WorkerPolicy` and Engine's
+  `_disposable_workers`, `_worker_qualification`, `_worker_retirement` and native
+  worker models own this feature. Use explicit account scope (with resolved
+  optional organization/workspace ancestry). Installation-owned creation remains
+  warm-specific in `_principal_range_create` / `_range_authority_history` and is
+  unsupported for workers; do not fabricate warm generations or customer IDs.
+- The native public range field is named `cms_range_uuid`, but does not require a
+  CMS record. Reuse `worker_credential_scope` and `config.credential_scope`'s
+  ambiguity refusal alongside normal CMS resolution. `_worker_relationships`
+  publishes the SQL-owned parent through the existing relationship port, retains
+  its store/model and requires primary readback before dispatch. SQL and OpenFGA
+  are not one transaction: unresolved publication must retain recoverable custody
+  and capacity without launching. No fake event, policy grant or Engine CMS import.
+- `RuntimeApparatusPin`, `parse_runtime_pin` and SDK `RuntimeInput` already
+  distinguish apparatus identity (`bigrae.runtime-plugin/v2`) from pack identity.
+  Build on `_worker_software` and the existing invocation machinery; do not add a
+  third pin/bootstrap protocol or put an apparatus digest in `pack_digest`.
+  Preserve old protocol bytes and deny unsupported producer/consumer versions.
+  Apparatus pins cannot select image overrides, model authority or pack files;
+  organization-owned installations require matching resolved organization scope.
+  Missing ancestry grants no cross-tenant software access.
+- `CapacityReservation.release_on_absence` and `engine.worker_retention` already
+  extend the native ledger and destructive fence. Complete their integration
+  across readers and lifecycle entry points; do not duplicate either in experiments.
 
 ## Apparatus and backend contract
 
@@ -91,6 +96,17 @@ and bootstrap contracts for the fields they actually own. A worker profile is
 only the missing apparatus policy; do not copy image grammars or topology models.
 Image aliases, mutable tags or later registry edits must not alter admitted work.
 
+An exact GCE image **name** can be deleted and recreated. A caller-supplied
+`provenance_digest` alone authenticates no substrate. Reuse the trusted image
+preparation/artifact binding and provider numeric image-ID checks in
+`shared.raes.artifact_binding`, provisioner `raes_gce_image` and
+`raes_substrate_observation` before credential installation and against the actual
+boot disk. The current worker candidate projection in `engine.operation_inputs`
+does not carry that image ID; this is a binding gap to close in the incumbent
+image path, not a reason to introduce another image registry or trust a name.
+If the host has no artifact requirement, extend the owning image-binding seam;
+do not fabricate an SDL artifact declaration to obtain a provider check.
+
 `preconfigured-machine-host` requires participant container/readiness fields. It
 is not a generic Docker-host shortcut: do not invent a participant container to
 satisfy it. Use an applicable host bootstrap and a synthetic guest probe. Separate
@@ -108,6 +124,9 @@ software version changes configuration, not scenario-name branches. A later
 backend adds qualified capability at that boundary, not a second provisioner or
 provider switches in the worker service. Retain original profile/adapter pins for
 cleanup after disable, retirement or configuration change.
+If later callers select among approved profiles, an explicit selection resolves
+to that same immutable binding; aggregate ceilings remain shared across profiles.
+This delivery needs no new profile catalog or scheduling framework.
 
 ## Admission, holds and recovery invariants
 
@@ -129,6 +148,21 @@ a final serialized reservation check. Missing, stale, advisory or indeterminate
 capacity is not proof of safe worker admission; do not inherit the event API's
 permissive no-budget behavior as a worker bypass.
 
+Keep the admitted profile separate from current policy. An unchanged caller
+retry recovers the original worker/input even after policy or backend selection
+changes; it cannot silently rebind to today's profile. Reauthorize any remaining
+dispatch under current policy. Changed explicit caller intent conflicts. Reuse
+the database-guard conventions in Engine migrations `0099` / `0116` for retained
+worker/request/scope/profile custody and a trial reference that can be set once.
+Service checks and `on_delete=PROTECT` alone do not prevent queryset/bulk rewrites
+or deletion of the custody row that enforces single use.
+
+Admission and deferred dispatch must share the existing lock order: resolved
+ancestry, worker-policy mutex, then native range and worker rows. Native subnet
+allocation also takes a range-table lock. Reversing this order deadlocks parallel
+startup; an absent-row lock does not serialize first admission. Preserve the
+launcher's existing target-lock/submission fence against concurrent cancellation.
+
 Count provisioning, failed, held, retiring and cleanup-unknown workers against
 the live bound while resources may remain. An expired launcher lease does not
 prove its provisioner has stopped creating resources. Reuse native interruption,
@@ -143,13 +177,15 @@ result: use existing deterministic request/generation identities and scoped
 inventory/readback. Delete only generation-owned resources, never shared network,
 NAT, access infrastructure or another worker's disks/secrets.
 
-**Capacity gotcha:** `_capacity_admit.reconcile_capacity_budgets` releases expired
-budgets and draws; `_capacity_plan_persistence._committed_reservation` counts
-overlapping windows only. Worker reservations must remain effective until verified
-absence, including across holds and recovery. A worker-only release check cannot
-fix expiry or omission in these shared readers. Extend lifetime/ownership
-semantics in the existing ledger rather than using a far-future timestamp or a
-second counter that other range admissions cannot see. Preserve event semantics.
+**Capacity gotcha:** preserve `release_on_absence` in budget expiry, explicit
+reservation release and `_capacity_plan_persistence._committed_reservation`, as
+well as the worker check in draw release. Outstanding worker draws must remain
+visible to other range admissions beyond their original window, across holds and
+recovery. Validate the budget's partition/backend and per-metric unit costs
+against actual pinned resources; a large enough amount in a different partition
+is not capacity for this worker. Policy reductions stop new admission without
+evicting existing workers. No far-future timestamp, second ledger or direct smoke
+SQL reservation inserts; preserve ordinary event semantics.
 
 Persist hold custody against the exact worker generation, including caller owner,
 bounded reason code, timestamps and recovery/review deadline. Acquisition and
@@ -194,12 +230,12 @@ qualified provisioner, installation, script and chart paths.
 | Layer / incumbent | Required behavior |
 | --- | --- |
 | Authentication, scope and policy: `shared.credentials`, `shared.identity_scope`, `shared.authorization` catalog/model/inventory, public `workspaces.services`, `config.credential_scope`; Engine `_principal_range_create`, `_range_authority`, `_launch_authority` | Authenticate actual proof and enforce current registered action, SQL-owned target/ancestry and original credential ceiling for direct services and CLI alike. Cover create, inspect, retire, hold/release and operator recovery. Persist experiment ownership separately from principal ownership, execution identity and resource scope. Reauthorize dispatch/retry and fence local credential/custody under locks; provider/policy failure denies rather than grants. Keep explicit bounded system cleanup derived from an admitted generation, never a missing-actor fallback. Reuse applicable range actions; no experiment role/token/policy engine. |
-| Profile/config shapes: `shifter/installation/{schema,registry,settings_gcp,settings_aws,bundle_gcp,bundle_aws,runtime_inventory*}.py`; `config._cloud`, `_runtime_env`, `_product_env`, `_env_manifest`, `config/env-manifest.json`; `scripts/gcp/render_runtime_env.py`, `scripts/bootstrap/aws_eks.py`; Helm `values.schema.json` and runtime templates | Root settings is a mapping; the selected bundle's closed settings model validates its keys/values. Any necessary profile/limit settings must pass that model, runtime inventory, env manifest and deployed projection together, including aliases/conflicts and forwarded process roles. Use bounded JSON ingress where JSON is accepted. No local env parser, worker provider selector, unknown-key fallback or committed renderer-owned values. Separate operator-configured maxima from caller requests. |
-| Host plan and wire validation: `shared.raes.runtime_target`, `operation_input` and binding parsers; `shared.operation_envelope`, `operation_results`, `operation_result_payloads`; provisioner `raes_plan_contract`, `raes_plan*`, config loaders and `range_backend_resolution` | Use existing RAES validation/capability assessment for the outer host and the standalone reader for untrusted serialized input. Preserve closed keys, finite JSON, UUIDs, exact producer/transport compatibility, digest and size bounds (outer envelope currently 262144 bytes). Carry only necessary immutable profile/binding facts beside the plan. A new sidecar must pass both producer and consumer parsers; do not invent an inner SDL, public status enum or duplicate semantic validator. |
-| Durable execution and persistence: `engine.launch_intents`, `operation_inputs`, `models._operation_io`; `services._operation_apply*`, `_principal_lifecycle`, `_principal_cancellation`; provisioner `provisioner_db_operation_input` and result writer | Commit custody, capacity, immutable input, launch intent and strict audit together. Preserve exact operation/request/generation/authority/input-digest and deterministic Job fences, append-only result steps, inbox deduplication and outbox delivery. Do not call the provider while holding SQL locks. Provisioner reads exact immutable inputs and appends results through existing grants; no new direct domain-table writes or business-state owner. Cancellation uses incumbent interruption and task-absence evidence. |
+| Profile/config shapes: `shared.disposable_workers`, Engine `WorkerPolicyRecord`; `shifter/installation/{schema,registry,settings_gcp,settings_aws,bundle_gcp,bundle_aws,runtime_inventory*}.py`; `config._cloud`, `_runtime_env`, `_product_env`, `_env_manifest`, `config/env-manifest.json`; `scripts/gcp/render_runtime_env.py`, `scripts/bootstrap/aws_eks.py`; Helm `values.schema.json` and runtime templates | Revalidate operator-published policy on write and retained profile on use through the existing closed models; do not mirror database policy into new env settings. Root settings is a mapping validated by the selected bundle. Any necessary new deployment setting must pass that model, runtime inventory, env manifest and deployed projection together, including aliases/conflicts and forwarded roles. Use bounded JSON ingress. No local env parser, worker provider selector or unknown-key fallback. Keep caller requests separate from operator maxima. |
+| Host plan and wire validation: `shared.raes.runtime_target`, `operation_input` and binding parsers; `shared.range_management`; `shared.operation_envelope`, `operation_results`, `operation_result_payloads`; provisioner `raes_plan_contract`, `raes_plan*`, config loaders and `range_backend_resolution` | Reuse RAES validation/capability assessment for the outer host and the standalone reader for serialized input. Preserve closed keys, finite JSON, UUIDs, producer/transport compatibility and digest/size bounds (outer envelope currently 262144 bytes). Validate the complete provision and future cleanup envelopes before effects, including optional accepted preparation. Management targets must be admitted explicitly; apply their closed private result projection only for matching operation/generation/membership, separately from participant outputs. Both producer and consumer must accept every sidecar. No inner SDL, new public status enum or duplicate semantic validator. |
+| Durable execution and persistence: `engine.launch_intents`, `operation_inputs`, `models._operation_io`; `services._operation_apply*`, `_principal_lifecycle`, `_principal_cancellation`; provisioner `provisioner_db_operation_input` and result writer | Commit custody, capacity and strict audit atomically; after confirmed authority publication, commit immutable input, launch intent and dispatch audit atomically under the retirement fence. Retain a recoverable dispatch obligation between them. Preserve operation/request/generation/authority/input-digest and deterministic Job fences, append-only results, inbox deduplication and outbox delivery. Keep inventory, policy publication, planning and guest I/O outside admission locks; preserve the incumbent launcher submission/cancellation lock boundary. Provisioner uses existing input/result grants, never direct domain-table writes. Cancellation requires incumbent interruption and task-absence evidence. |
 | Optional executable software: `shifter/shifter_adapter_sdk/{runtime,worker,guest}.py`; Engine `_runtime_plugins`, `_runtime_plugin_authority`, `_runtime_plugin_operations`; `shared.runtime_plugin_binding`, `shared.cloud.runtime_plugins`; provisioner `runtime_plugin_execution` | Separate administrator installation from apparatus binding and pack content. Pin supported protocol, manifest, image digest, exact target/actions and invocation identity; validate bounded SDK output before execution. Keep the existing networkless planning Job without database/cloud credentials, host mounts or service-account token. The VM worker, plugin planning worker and artifact-preparation worker are different concepts. No portal/provisioner import of plugin code, guest-selected image authority, `pip install` in core or new generic job runner. Generic worker qualification requires no optional software. |
 | Cloud/network/guest containment: range-cell/provider adapters, `shared.range_instantiation_policy`, `shifter/installation/range_egress.py`, existing Terraform range firewall/NAT and Helm NetworkPolicies/Job admission | Keep private NICs and management ingress separate from participant access; open no Docker TCP API/public listener. Docker access is root-equivalent and remains scoped management access to that VM's local socket. Enforce approved egress, DNS, metadata/cloud-identity restrictions and cross-worker isolation at the provider/host boundary; Docker bridge NAT must not bypass them. No shared Docker socket/data disk, privileged control-plane Pod or broad control-plane/secret IAM on a guest. Bootstrap downloads require approved pinned sources and egress; profile booleans do not authorize arbitrary internet access. Preserve non-root/read-only/seccomp/capability limits and pinned namespace/service account/image/command of control-plane Jobs. |
-| Secrets and OS exposure: `engine.secrets`, provider secret stores and management credential/host-key bindings; provisioner `executors.guest_ssh_executor`, `runtime_plugin_execution`; `shared.cloud.sensitive_env`, Kubernetes `_secrets` / `_job_manifest`; `shared.api_tokens.cli.credential_from_file` | Resolve management material only for the exact authorized generation over private access with trusted host-key verification. Never broker the reserved management identity as participant credentials. Use owner-only temporary files with cleanup and fixed argv; no credentials, signed URLs, config bodies or guest scripts with embedded secrets in argv. The SSH executor can base64-encode scripts into argv: encoding is not secrecy; runtime secrets belong in the separate stdin/data channel. Sensitive Job env uses Secret references; names ending `_REF`/`_URL` are not automatically proof their values are harmless. CLI proof uses the incumbent bounded no-follow regular `0600` file, not a token flag or username impersonation. |
+| Secrets and OS exposure: `engine.secrets`, provider secret stores and management credential/host-key bindings; provisioner `executors.guest_ssh_executor`, `runtime_plugin_execution`; `shared.cloud.sensitive_env`, Kubernetes `_secrets` / `_job_manifest`; `shared.api_tokens.cli` | Resolve management material only for the exact authorized generation over private access with trusted host-key verification. Never broker management identity as participant credentials. Use owner-only temporary files with cleanup and fixed argv; no credentials, signed URLs, config bodies or secret-bearing scripts in argv. Base64 encoding is not secrecy; runtime secrets use the separate stdin/data channel. Sensitive Job env uses Secret references; `_REF`/`_URL` names do not prove harmless values. The server-only smoke authenticates management-issued in-process proof through `credential_from_proof`; external CLI proof, if accepted, uses `credential_from_file`'s bounded no-follow regular `0600` transport. No token flag or username impersonation. |
 | Exceptions, public envelopes and observability: existing `EngineError`, shared validation/envelope/result errors, provider `CloudError`, `executors.base`; provisioner `raes_range_contract._classify_failure`; `shared.errors`, `shared.api.errors`, `shared.audit`, `shared.log_sanitize`, provisioner `log_redact` and logging config | Reuse existing failure classifications and retry dispositions, not another worker exception hierarchy. Surface fixed authored errors with correlation IDs; `safe_user_message`, truncation and `safe_log_value` are not confidential-data redaction. Do not stringify SDK/Pydantic/provider/guest errors into range errors, results, API details, CLI output or logs. Record safe operation/worker IDs, transitions, durations, refusal categories, hold/recovery age and residual categories; strict audit covers admission, ownership, holds, overrides and retirement. No prompts, commands, secret references/values, private scenario data, raw inventories or unbounded metric labels. Audit is not a work queue. Any HTTP exposure uses existing auth/session-CSRF/scopes, sanitized envelope and ADR-040 schema generation; a new HTTP/UI surface is not required here. |
 
 ## Verification and implementation boundaries
@@ -215,11 +251,68 @@ atomic global admission. Target partial provider creation, crash after mutation
 before result append, lost dispatch/response, cancellation/late-result races,
 failed/unknown teardown, configuration drift, replay conflicts, hold/destroy races,
 hold expiry/escalation, quota exhaustion and cross-tenant/credential revocation.
-Mutation checks should detect removal of capacity, hold and absence fences.
+Include bulk custody/trial rewrites, recreated image names, wrong-partition
+budgets, parallel creation versus deferred dispatch and command death after only
+one worker is admitted. Mutation checks should detect removal of capacity, hold,
+image-identity and absence fences. Architecture-guard success alone proves none
+of these runtime properties.
 
-The management smoke is a thin adapter to the same authorized service, following
-the credential-file/service composition of `cms/management/commands/register_pack.py`,
-not its raw exception-string forwarding. Create two independent workers through
+The management smoke is a server-only Engine command, following the
+recorded-administrator pattern of `initialize_installation_catalog`, not the
+older user-based range smoke. It requires the private bootstrap facts and an
+activated cutover whose recorded administrator matches that exact provider
+tuple. Management owns issuance and revocation. No identity, membership, policy
+grant, service admission, browser session, or cloud IAM binding is created.
+
+The fixed qualification workflow issues native Knox credentials for four exact
+targets: installation configuration, the chosen launch parent, and two fresh
+worker UUIDs generated by the command. Action lists are fixed by target role.
+The credentials live for at most 35 minutes, stay inside the process, and are
+revoked on every handled exit. Partial issuance rolls back or revokes earlier
+issues.
+The ordinary personal-token eligibility check remains mandatory. The command
+checks current installation policy and parent launch permission before effects;
+Engine checks exact leaf policy, membership and ceilings on every operation.
+Neither bootstrap facts nor workload IAM is an application grant.
+The catalog initializer's credential and permissions stay unchanged.
+
+Parent proof authorizes creation; a fresh worker UUID is not yet a resolvable
+credential target. Authenticate/use leaf proof only after native custody and
+parent publication exist, without weakening `resolve_credential_scope` or token
+eligibility to make issuance work. `initialize_installation_catalog` and
+`management.personal_credentials` supply the composition and Knox lifecycle
+patterns; their content-only issuer is not a general worker issuer.
+
+Process death cannot run `finally`: expiry bounds abandoned proof, while durable
+worker custody and the existing explicit system-cleanup origin must retain the
+retirement obligation after proof revocation/expiry. Revocation failure is a
+failed smoke with bounded output, never reported success. Shared owns the existing
+closed bootstrap-facts contract; `config.identity_cutover` retains compatible
+imports. The shared private-file reader uses bounded descriptor-based,
+owner/mode/regular-file checks and refuses symlinks. Both facts loaders and the
+credential-file transport reuse it, without another JSON or provider-identity
+parser. Map failures to authored `CommandError` messages and
+suppress confidential cause chains, including Django's `--traceback` path.
+
+The command uses an approved host policy and existing enforcing capacity
+reservations. It must refuse unavailable budgets, and must not create SQL
+reservation rows directly. Profile and capacity setup are separate from the
+two-worker run. A bounded recovery mode can retire only explicitly named native
+workers through the same credential and policy checks.
+
+```mermaid
+flowchart LR
+    Operator[Deployment operator] -->|existing cluster access| Command[Server-only qualification command]
+    Facts[Private bootstrap facts] --> Command
+    State[Activated cutover and exact principal binding] --> Command
+    Command -->|fixed targets and actions| Management[Native Knox issuance and strict audit]
+    Management -->|short-lived exact credentials| Engine[Existing worker services]
+    Engine -->|current policy and ceilings| Policy[OpenFGA]
+    Engine -->|existing operations and results| VM[Two private VM workers]
+    Command -->|every handled exit| Revoke[Native credential revocation]
+```
+
+Create two independent workers through
 bounded parallel startup, verify private management and separate VM/daemon
 identities with synthetic probes, and retire only this smoke's owned generations.
 Use deadlines and guaranteed cleanup/recovery recording even when the second
@@ -233,6 +326,12 @@ authorizes no cloud effects, new hosting, uploads or external processing. Keep
 live evidence and deployment inputs in their approved owning location and public
 records synthetic. Unit tests, a compatibility probe and a command implementation
 do not establish live qualification.
+
+The supporting references are Django 6.0 custom management commands,
+django-rest-knox's expiry and revocation contracts, and OWASP's authorization
+guidance to deny by default and check every operation, including server-side
+operations. The implementation reuses the installed Knox library; it introduces
+no token format, credential broker, new cloud identity, or reusable API key.
 
 Whole-repository checks include `.ground-control.yaml`, `.gc/plan-rules.md`, ADR
 registry/exceptions, `.importlinter`, layer-import allowlists, operation grants and

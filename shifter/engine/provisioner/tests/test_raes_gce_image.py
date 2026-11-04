@@ -42,6 +42,12 @@ def _candidate(version: str, image_ref: str, **extra) -> dict:
 
 
 class TestRegistryResolution:
+    def test_worker_candidate_preserves_numeric_image_identity(self):
+        candidate = _candidate("v1", "projects/example/global/images/worker-v1")
+        candidate["image_id"] = "1234567890123456789"
+        profile = resolve_gce_image(_node(image=RaesPlanImage(name="worker", version="v1")), [candidate])
+        assert profile.source_image_id == candidate["image_id"]
+
     @pytest.mark.parametrize("image_ref", ["family/nested-host", "projects/example/global/images/family/nested-host"])
     def test_adapter_custom_host_requires_exact_image(self, image_ref):
         with pytest.raises(ValueError, match="exact custom-image"):

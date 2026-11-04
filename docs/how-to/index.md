@@ -21,4 +21,4 @@ Step-by-step walkthroughs for common tasks.
 
 ## Disposable workers
 
-- [Operate disposable VM workers](disposable-workers.md) - Admission, smoke, evidence holds, and recovery.
+- [Qualify disposable VM workers](disposable-workers.md) - Operator qualification and exact-worker recovery.

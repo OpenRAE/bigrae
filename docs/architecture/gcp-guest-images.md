@@ -260,6 +260,21 @@ verdict, and the evidence digest. It returns the validated ID to the caller. It
 always deletes the VMs. The labels are locators only; the publish job also needs
 the successful validation job of the same run.
 
+### Linux identity at capture
+
+The shared cleanup script stops Docker and its socket before removing the
+persisted daemon identity. It preserves the image cache. The final GCP step runs
+`cloud-init clean --logs --seed --machine-id`, so each clone generates a fresh
+machine identity and applies its own first-boot configuration.
+
+Docker stores its current daemon identity in `engine-id` under its data root;
+older engines use `/etc/docker/key.json`. See the
+[Moby identity implementation](https://github.com/moby/moby/blob/v28.5.1/daemon/id.go)
+and the [cloud-init clean reference](https://docs.cloud-init.io/en/24.2/reference/cli.html#clean).
+Images captured before this cleanup need a new build and publication before
+they qualify as independent disposable workers. Application releases do not
+rebuild guests or repair identities in an existing image.
+
 ### Pre-promoted DC (`dc-prebaked`) vs. generic Windows/DC
 
 The `windows` and `dc` images are **sysprepped** (GCESysprep), so sysprep

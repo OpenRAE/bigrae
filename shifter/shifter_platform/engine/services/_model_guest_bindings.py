@@ -5,14 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from shared.model_access import ContractError
-from shared.runtime_plugin_binding import RuntimePluginPin
+from shared.runtime_plugin_binding import RuntimePin
 
 if TYPE_CHECKING:
     from engine.models import Range
 from shared.model_access.guest_binding import ModelGuestBinding
 
 
-def project_model_guest_bindings(target: Range, pin: RuntimePluginPin | None) -> tuple[ModelGuestBinding, ...]:
+def project_model_guest_bindings(target: Range, pin: RuntimePin | None) -> tuple[ModelGuestBinding, ...]:
     """Bind every admitted workload role to its pinned administrator-selected guest."""
     from engine.models import ModelAllocation
 

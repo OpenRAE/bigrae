@@ -4,6 +4,8 @@ from typing import Any
 
 from shared.raes.image_policy import validate_management_ssh_port, validate_management_ssh_username
 
+_INVALID = "Management projection is invalid"
+
 
 def validate_management_targets(value: object, plan: dict[str, Any]) -> tuple[str, ...]:
     """Select unique single-guest targets from the admitted plan."""
@@ -30,7 +32,7 @@ def validate_management_targets(value: object, plan: dict[str, Any]) -> tuple[st
 def validate_management_access(value: object) -> dict[str, dict[str, Any]]:
     """Validate the closed private management-reference projection."""
     if not isinstance(value, dict) or len(value) > 64:
-        raise ValueError("Management projection is invalid")
+        raise ValueError(_INVALID)
     result = {}
     for target, access in value.items():
         if (
@@ -39,11 +41,16 @@ def validate_management_access(value: object) -> dict[str, dict[str, Any]]:
             or not isinstance(access, dict)
             or set(access) != {"ssh_key_secret_ref", "host_public_key", "username", "port"}
         ):
-            raise ValueError("Management projection is invalid")
-        for key, limit in (("ssh_key_secret_ref", 1024), ("host_public_key", 16384), ("username", 32)):
-            if not isinstance(access[key], str) or not access[key].strip() or len(access[key]) > limit:
-                raise ValueError("Management projection is invalid")
-        validate_management_ssh_port(access["port"])
-        validate_management_ssh_username(access["username"])
-        result[target] = dict(access)
+            raise ValueError(_INVALID)
+        result[target] = _validated_management_values(access)
     return result
+
+
+def _validated_management_values(access: dict[str, Any]) -> dict[str, Any]:
+    """Bound each private reference and validate its fixed SSH transport."""
+    for key, limit in (("ssh_key_secret_ref", 1024), ("host_public_key", 16384), ("username", 32)):
+        if not isinstance(access[key], str) or not access[key].strip() or len(access[key]) > limit:
+            raise ValueError(_INVALID)
+    validate_management_ssh_port(access["port"])
+    validate_management_ssh_username(access["username"])
+    return dict(access)

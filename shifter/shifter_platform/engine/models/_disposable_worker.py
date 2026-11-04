@@ -14,6 +14,8 @@ class WorkerPolicyRecord(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        """Enforce worker identity and retention constraints in the database."""
+
         constraints = [models.CheckConstraint(condition=models.Q(id=1), name="worker_policy_singleton")]
 
     def __str__(self) -> str:
@@ -59,6 +61,8 @@ class DisposableWorker(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
+        """Enforce worker identity and retention constraints in the database."""
+
         constraints = [
             models.UniqueConstraint(
                 KeyTextTransform("daemon_identity", "qualification"),
@@ -90,6 +94,8 @@ class WorkerRetirementHold(models.Model):
     released_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
+        """Enforce worker identity and retention constraints in the database."""
+
         constraints = [
             models.UniqueConstraint(
                 fields=["worker", "owner_principal_uuid"],

@@ -300,6 +300,11 @@ Ready workers can carry caller-owned evidence holds that fence native destructiv
 Overdue holds and exhausted cleanup retain tracked custody for explicit operator recovery.
 Optional installed software uses the existing isolated adapter machinery with explicit apparatus identity.
 The generic management probe requires no experiment runtime.
+Engine's qualification command selects the recorded bootstrap administrator through exact private facts.
+Management issues short-lived native credentials for fixed actions and exact targets, then revokes them on exit.
+The command creates no identity or policy grant and preserves ordinary scope, membership and authorization checks.
+The apparatus pins the numeric provider image identity and a capacity partition that matches deployment placement.
+Linux image capture clears machine and Docker identities before independent workers boot.
 See [disposable workers](shifter_platform/disposable-workers.md) for contracts, data flows, controls, and references.
 
 ## Package and dependency ownership

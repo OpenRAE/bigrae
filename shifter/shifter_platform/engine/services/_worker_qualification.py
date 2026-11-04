@@ -2,6 +2,7 @@
 
 from dataclasses import asdict, dataclass
 from ipaddress import ip_address
+from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
@@ -13,6 +14,11 @@ from shared.disposable_workers import WorkerHostProfile
 from ._disposable_workers import _audit, _authorized_worker
 from ._range_escape import GuestProbeRequest, run_guest_probe
 from ._worker_retirement import _lock_worker
+
+if TYPE_CHECKING:
+    from engine.models import Range
+
+_UNAVAILABLE = "Worker management identity is unavailable"
 
 # Fixed input only. Docker always uses this VM's Unix socket, ignoring client
 # context/environment. No plugin or inner SDL is needed for qualification.
@@ -30,6 +36,8 @@ print(json.dumps({
 
 @dataclass(frozen=True, slots=True)
 class WorkerQualification:
+    """Bounded fingerprints of one qualified VM, machine and Docker daemon."""
+
     vm_identity: str
     machine_identity: str
     daemon_identity: str
@@ -51,14 +59,16 @@ def qualify_disposable_worker(credential: CredentialContext, worker_id: UUID) ->
     from engine.models import RangeManagementAccess
     from shared.range_management import validate_management_access
 
+    if runtime.provisioner_operation_id is None or runtime.resource_generation is None:
+        raise ValueError("Worker management generation is unavailable")
     record = RangeManagementAccess.objects.filter(
         range=runtime, operation_id=runtime.provisioner_operation_id, resource_generation=runtime.resource_generation
     ).first()
     if record is None:
-        raise ValueError("Worker management identity is unavailable")
+        raise ValueError(_UNAVAILABLE)
     management = validate_management_access(record.bindings).get(member["uuid"])
     if management is None:
-        raise ValueError("Worker management identity is unavailable")
+        raise ValueError(_UNAVAILABLE)
     generation = (runtime.resource_generation, runtime.provisioner_operation_id)
     output = run_guest_probe(
         GuestProbeRequest(
@@ -74,6 +84,18 @@ def qualify_disposable_worker(credential: CredentialContext, worker_id: UUID) ->
         )
     )
     result = _qualified_output(output, member, profile)
+    _store_qualification(credential, worker_id, runtime, result, generation)
+    return result
+
+
+def _store_qualification(
+    credential: CredentialContext,
+    worker_id: UUID,
+    runtime: Range,
+    result: WorkerQualification,
+    generation: tuple[UUID, UUID],
+) -> None:
+    """Fence the observed generation and persist independent identity fingerprints."""
     with transaction.atomic():
         current = _lock_worker(worker_id)
         fresh = current.range
@@ -100,28 +122,47 @@ def qualify_disposable_worker(credential: CredentialContext, worker_id: UUID) ->
         except IntegrityError:
             raise ValueError("Worker identity is not independent") from None
         _audit(credential, current, "worker_qualify")
-    return result
 
 
-def _management_member(value: object) -> dict[str, object]:
+def _management_member(value: object) -> dict[str, str]:
+    """Select the one private GCE guest from accepted native membership."""
     if not isinstance(value, list) or len(value) != 1 or not isinstance(value[0], dict):
         raise ValueError("Worker management membership is unavailable")
     member = value[0]
+    if member.get("asset_type") != "gce_vm":
+        raise ValueError(_UNAVAILABLE)
+    result = _management_strings(member)
+    _private_management_address(result["private_ip"])
+    return result
+
+
+def _management_strings(member: dict[str, object]) -> dict[str, str]:
+    """Project only bounded identity and transport strings from accepted membership."""
     required = (
+        "uuid",
         "private_ip",
         "instance_id",
     )
-    if member.get("asset_type") != "gce_vm" or any(
-        not isinstance(member.get(key), str) or not member[key].strip() for key in required
-    ):
-        raise ValueError("Worker management identity is unavailable")
-    address = ip_address(member["private_ip"])
+    result: dict[str, str] = {}
+    for field in (*required, "gcp_project_id", "gcp_zone"):
+        item = member.get(field, "")
+        if not isinstance(item, str):
+            raise ValueError(_UNAVAILABLE)
+        result[field] = item
+    if any(not result[key].strip() for key in required):
+        raise ValueError(_UNAVAILABLE)
+    return result
+
+
+def _private_management_address(value: str) -> None:
+    """Require a routable private management address without local or link-local aliases."""
+    address = ip_address(value)
     if not address.is_private or address.is_loopback or address.is_link_local or address.is_unspecified:
         raise ValueError("Worker management address is not private")
-    return member
 
 
-def _qualified_output(output: str, member: dict[str, object], profile: WorkerHostProfile) -> WorkerQualification:
+def _qualified_output(output: str, member: dict[str, str], profile: WorkerHostProfile) -> WorkerQualification:
+    """Validate the fixed probe response and retain only identity fingerprints."""
     try:
         payload = decode_message(output, limit=4096)
         if not isinstance(payload, dict) or set(payload) != {
@@ -137,20 +178,26 @@ def _qualified_output(output: str, member: dict[str, object], profile: WorkerHos
             or payload["docker_version"] != profile.docker_version
         ):
             raise ValueError
-        for key in ("machine_id", "daemon_id"):
-            if (
-                not isinstance(payload[key], str)
-                or not 16 <= len(payload[key]) <= 128
-                or not payload[key].isascii()
-                or not all(c.isalnum() or c in "-:" for c in payload[key])
-            ):
-                raise ValueError
+        machine = _guest_identity(payload["machine_id"])
+        daemon = _guest_identity(payload["daemon_id"])
         vm = {key: member.get(key, "") for key in ("gcp_project_id", "gcp_zone", "instance_id")}
         return WorkerQualification(
             canonical_digest(vm),
-            canonical_digest(payload["machine_id"]),
-            canonical_digest(payload["daemon_id"]),
+            canonical_digest(machine),
+            canonical_digest(daemon),
             profile.digest,
         )
     except (ValueError, KeyError, TypeError):
         raise ValueError("Worker qualification failed") from None
+
+
+def _guest_identity(value: object) -> str:
+    """Reject oversized or executable guest identity data before hashing it."""
+    if (
+        not isinstance(value, str)
+        or not 16 <= len(value) <= 128
+        or not value.isascii()
+        or not all(character.isalnum() or character in "-:" for character in value)
+    ):
+        raise ValueError("Worker identity is invalid")
+    return value

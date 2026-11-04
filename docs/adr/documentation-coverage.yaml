@@ -34,7 +34,8 @@
         "shifter/shifter_platform/engine/services/_worker_retirement.py",
         "shifter/shifter_platform/engine/worker_retention.py",
         "shifter/shifter_platform/shared/disposable_workers.py",
-        "shifter/shifter_platform/engine/management/commands/disposable_workers.py"
+        "shifter/shifter_platform/engine/management/commands/qualify_disposable_workers.py",
+        "shifter/shifter_platform/management/worker_validation.py"
       ]
     },
     {

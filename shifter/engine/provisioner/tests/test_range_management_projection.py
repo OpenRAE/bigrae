@@ -51,3 +51,9 @@ def test_incomplete_or_foreign_management_refuses_readiness(change):
         member["gcp_host_ssh_port"] = 0
     with pytest.raises(ValueError):
         realized_management(value, ("provision.node.host",))
+
+
+@pytest.mark.parametrize("instances", [None, "bad", ["bad"]])
+def test_malformed_management_membership_is_rejected(instances):
+    with pytest.raises(ValueError):
+        realized_management({"instances": instances}, ("provision.node.host",))

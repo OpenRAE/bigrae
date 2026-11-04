@@ -1,29 +1,10 @@
-"""RAES-native range lifecycle entry for the provisioner ``raes-range`` command.
+"""Realize RAES ranges through immutable operation inputs and native results.
 
-Parallel to ``terraform_ops.run_range_terraform`` but for the RAES-native path
-(ADR-031, default off behind the platform feature flag). It realizes the
-serialized RAES plan into a real GCE range cell. It performs no cyberscript
-scenario setup, NGFW attachment, or Vertex credential management -- those are
-cyberscript/participant concerns. It invokes tenant subnet coordination only for
-the GCE adapter's backend-owned realization of open portable network intent.
-
-ADR-043 phase 5 (#1837) moved both sides of this path onto the operation
-contract:
-
-* **Inputs** come from the immutable operation-input projection, selected by the
-  canonical ``operation_id``. The plan, the byte-free content-delivery bindings,
-  and the tenant image candidates the plan can ask for all ride that one row --
-  no ``mission_control_range`` / ``engine_raes_content_delivery_binding`` /
-  ``engine_raes_image_mapping`` reads remain.
-* **Outcomes** are appended as closed results on the operation contract. The
-  Engine applier is the authoritative writer for range status and the RAES
-  sidecar evidence, so this module publishes no lifecycle events: one operation
-  generation has exactly one authoritative path.
-
-Image/sizing is still resolved at realization from the authored RAES source
-against the tenant-managed registry (ADR-032-R2) via the pure
-``resolve_gce_image`` policy -- only the candidate rows now arrive by projection
-rather than by direct SQL.
+The Engine owns range status, custody and authorization. This process reads the
+exact admitted operation generation, realizes its selected VM backend, and
+appends bounded snapshots and terminal results. Image and management bindings
+come from that immutable input. Cleanup retains native provider ownership and
+reports absence through the same operation contract (ADR-043).
 """
 
 from __future__ import annotations
@@ -64,7 +45,7 @@ from raes_openvpn import (
 )
 from raes_plan import RaesPlan, parse_plan
 from raes_range_contract import _classify_failure, _require_gce_live_fire_binding, verified_composition_addresses
-from raes_range_members import realized_management
+from raes_range_members import management_fragment
 from raes_range_members import realized_members as _realized_members
 from raes_snapshot import snapshot_resources
 from range_placement import resolve_range_cell_placement
@@ -239,7 +220,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             verified_composition_addresses(apply_result.get("composition_verified_addresses")),
         )
         members = _realized_members(apply_result)
-        management = realized_management(apply_result, operation_input.management_targets)
+        management = management_fragment(apply_result, operation_input.management_targets)
         completion = build_completion_evidence(
             run.input.plan,
             resources=resources,
@@ -268,7 +249,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         {
             "raes_status": "succeeded",
             "members": members,
-            **({"management_access": management} if management else {}),
+            **management,
             "completion": completion,
             **vpn_access_fragment(apply_result.get("vpn_access")),
         },

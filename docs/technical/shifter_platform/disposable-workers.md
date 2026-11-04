@@ -6,20 +6,29 @@ Each worker has one immutable experiment reference and at most one trial referen
 The worker service accepts account scope and a current native credential.
 Installation scope is unsupported.
 
+The operator qualification command uses the existing recorded bootstrap administrator.
+It obtains fixed, exact-target native credentials through Management, retains proof inside the process, and revokes it on each handled exit.
+Application policy, personal-token eligibility, and customer membership remain mandatory.
+Live qualification remains required before delivery.
+
 ## Apparatus and admission
 
 An installation administrator publishes the worker policy through an authenticated service.
 The policy contains global limits and one host profile.
-The profile contains a validated outer RAES plan, an exact image profile, provenance, resources, Docker version, capacity scope, and approved egress.
+The profile contains a validated outer RAES plan, an exact image profile and numeric provider image ID, provenance, resources, Docker version, capacity scope and partition, and approved egress.
 This plan describes apparatus, separately from the experiment SDL.
 The service supports the deployment-selected GCE backend.
 Other backends fail before reservation or dispatch.
 Policy changes affect new workers only.
+An unchanged replay recovers retained custody and the original apparatus.
+Database guards prevent bulk custody rewrites, trial reset, and deletion of the single-use worker record.
 Workers retain the admitted profile for their complete lifetime.
 
 The host plan has one Linux VM and one private network.
 The existing RAES validator checks its realization contract.
 The existing image profile validator checks its exact image and resource settings.
+The immutable input carries the numeric image ID through the native image resolver.
+Existing provider checks verify it before credential installation and against the actual boot disk.
 The first worker path uses the existing E2 custom shape derived from the host plan.
 The image profile cannot override that machine type.
 This keeps physical CPU allocation consistent with capacity demand.
@@ -33,7 +42,8 @@ A singleton policy row serializes global count admission.
 Provisioning, failed, held, retiring, and recovery workers count until verified provider absence.
 Only accepted native readiness frees a provisioning slot before retirement.
 Admission draws from an existing enforcing capacity reservation for the pinned resource demand.
-Missing, expired, advisory, or insufficient reservations refuse admission.
+Missing, expired, advisory, insufficient, or wrong-partition reservations refuse admission.
+The catalog partition must match the deployment project, region, backend, and selected placement.
 The administrator assesses the capacity scope through the existing capacity service before admission.
 Active worker draws prevent reservation expiry and remain visible in shared headroom calculations.
 Creation first commits worker custody, capacity draws, deferred native range creation, and strict audit together.
@@ -43,6 +53,8 @@ Unknown publication outcomes retain custody without launching a VM.
 An identical create request can retry publication and dispatch.
 The existing native launch outbox commits operation input, launch intent, and dispatch audit together.
 A range lock fences retirement against this deferred dispatch.
+Deferred dispatch takes ancestry, the worker policy mutex, and then the range lock, matching admission order.
+This prevents lock inversion with another creation's exclusive native subnet allocator.
 Provider calls remain outside SQL transactions.
 
 ## Identity, access, and retirement
@@ -91,6 +103,9 @@ Database protection prevents deletion of retained ownership through a range casc
 ```mermaid
 flowchart LR
     Caller[Authenticated caller] -->|credential, scope, experiment, trial| Engine[Engine worker service]
+    Command[Engine qualification command] -->|exact recorded operator| Management[Native Knox issuance and audit]
+    Management -->|exact targets and fixed ceilings| Engine
+    Command -->|handled exit| Revoke[Native credential revocation]
     Admin[Installation administrator] -->|validated apparatus policy| Engine
     Engine -->|custody, holds, draws, audit| DB[(PostgreSQL)]
     Engine -->|exact parent grant and primary readback| Policy[Existing OpenFGA provider]
@@ -136,6 +151,8 @@ Reference evidence:
 | Source | Version and section | Application |
 | --- | --- | --- |
 | [Django QuerySet API](https://docs.djangoproject.com/en/6.0/ref/models/querysets/) | 6.0, select_for_update | Admission and hold locks |
+| [Knox token lifecycle](https://jazzband.github.io/django-rest-knox/views/) | Installed Knox library, expiry and logout | Native proof and revocation |
+| [OWASP authorization](https://cheatsheetseries.owasp.org/cheatsheets/Authorization_Cheat_Sheet.html) | Deny by default, validate every request | Checks on server-side worker operations |
 | [Django transactions](https://docs.djangoproject.com/en/6.0/topics/db/transactions/) | 6.0, atomic | Custody and durable dispatch |
 | [Compute custom images](https://docs.cloud.google.com/compute/docs/instances/create-vm-from-custom-image) | Compute Engine, image creation | Exact host image and independent VMs |
 | [Compute custom machine types](https://docs.cloud.google.com/compute/docs/instances/creating-instance-with-custom-machine-type) | Compute Engine, E2 limits | Resource bounds and exact capacity demand |

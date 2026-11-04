@@ -128,6 +128,8 @@ allowed_symbols:
       # ADR-066-R8: exact scalar ancestry/owner facts for a CMS-orchestrated
       # range move. No tenancy policy, CRUD, or role mutation crosses this seam.
       - resolve_range_scope_binding
+      # ADR-066-R9: read-only recorded operator selection; no cutover mutation.
+      - get_identity_cutover_state
       # Model-source admission validates the persisted organization ancestry
       # before evaluating its exact policy action.
       - hierarchy_target_scope

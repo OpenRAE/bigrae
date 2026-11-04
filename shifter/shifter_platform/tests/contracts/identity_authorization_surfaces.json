@@ -4522,6 +4522,14 @@
       "scope": "native credential_from_file;SQL organization ancestry and approved apparatus configuration",
       "surface": "cms:experiment_batch",
       "target": "organization"
+    },
+    {
+      "decision": "recorded activated bootstrap administrator;installation.manage_cloud_authority:configuration/recovery;parent.launch_range:create;range.read:inspect;range.access:qualification;range.manage:retirement",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "server-only private bootstrap facts;native Knox exact-target credentials;35-minute maximum;personal eligibility;current application policy and SQL membership;revocation on every exit",
+      "surface": "engine:qualify_disposable_workers",
+      "target": "installation;exact account/organization/workspace parent;two exact native workers"
     }
   ],
   "schema": "shifter.identity-authorization-surfaces/v1"
