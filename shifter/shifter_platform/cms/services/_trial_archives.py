@@ -75,6 +75,7 @@ class TrialArchiveCollection:
     gap_count: int = 0
     failure_code: str = ""
     expires_at: datetime | None = None
+    plan_metadata: dict[str, object] | None = None
 
 
 def _audit(
@@ -206,6 +207,7 @@ def _view(receipt: TrialArchiveReceipt) -> TrialArchiveCollection:
         evidence_complete=receipt.evidence_complete,
         gap_count=receipt.gap_count,
         expires_at=receipt.expires_at,
+        plan_metadata=receipt.transfer.plan_metadata,
     )
 
 
@@ -241,7 +243,7 @@ def _publish(
             defaults={
                 "transfer": current,
                 "archive_digest": current.archive_digest,
-                **asdict(facts),
+                **{key: value for key, value in asdict(facts).items() if key != "plan_metadata"},
                 "expires_at": timezone.now() + timedelta(days=current.retention_days)
                 if current.retention_days
                 else None,
@@ -272,7 +274,8 @@ def intake_trial_archive(
             source_path, downloaded = Path(temporary) / "source", Path(temporary) / "verified"
             transfer.archive_bytes, transfer.archive_digest = _snapshot(source, source_path)
             facts = validate_trial_archive(source_path, expected)
-            transfer.save(update_fields=["archive_bytes", "archive_digest", "updated_at"])
+            transfer.plan_metadata = facts.plan_metadata
+            transfer.save(update_fields=["archive_bytes", "archive_digest", "plan_metadata", "updated_at"])
             prior = _prior(transfer)
             if prior is not None:
                 if _view(prior).worker_copy_disposable:
@@ -311,16 +314,35 @@ def intake_trial_archive(
 
 
 def list_trial_archives(
-    credential: CredentialContext, organization_uuid: UUID, *, offset: int = 0, limit: int = 100
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    *,
+    offset: int = 0,
+    limit: int = 100,
+    experiment_id: str | None = None,
 ) -> list[TrialArchiveCollection]:
     """List tenant-filtered receipts and incomplete custody without bucket scans."""
     _admit(credential, organization_uuid, "read_content")
     if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 100:
         raise CMSError("Invalid archive page")
-    rows = TrialArchiveTransfer.objects.filter(organization_uuid=organization_uuid).select_related(
-        "trialarchivereceipt"
-    )[offset : offset + limit]
+    rows = TrialArchiveTransfer.objects.filter(organization_uuid=organization_uuid).exclude(
+        expected__has_key="artifact_kind"
+    )
+    if experiment_id is not None:
+        if not isinstance(experiment_id, str) or not re.fullmatch(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}", experiment_id):
+            raise CMSError("Invalid experiment archive selector")
+        rows = rows.filter(expected__experiment_id=experiment_id)
+    rows = rows.select_related("trialarchivereceipt").order_by("created_at", "id")[offset : offset + limit]
     return [_transfer_view(row) for row in rows]
+
+
+def publish_experiment_export(
+    credential: CredentialContext, organization_uuid: UUID, batch_id: UUID, files: dict[str, bytes]
+) -> dict[str, object]:
+    """Publish derived files through the archive custody publication implementation."""
+    from ._trial_archive_exports import publish_experiment_export as publish
+
+    return publish(credential, organization_uuid, batch_id, files)
 
 
 def _transfer_view(row: TrialArchiveTransfer) -> TrialArchiveCollection:
@@ -338,6 +360,7 @@ def _transfer_view(row: TrialArchiveTransfer) -> TrialArchiveCollection:
         gap_count=1 if row.failure_code else 0,
         failure_code=row.failure_code,
         expires_at=row.expires_at,
+        plan_metadata=row.plan_metadata,
     )
 
 
