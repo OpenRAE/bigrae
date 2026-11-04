@@ -72,3 +72,34 @@ This feature supplies no automatic scientific-input retention or deletion policy
 Archive retention remains the existing destination policy.
 
 See the [service contract](../technical/shifter_platform/experiment-admission.md) for dispatch and collection operations.
+
+## Export retained results
+
+Use organization `manage_content` authority and the existing approved archive
+storage destination. The command works from retained batch inputs and archives.
+
+```bash
+uv run python manage.py experiment_batch export \
+  --credential-file /run/operator/credential \
+  --organization 11111111-1111-4111-8111-111111111111 \
+  --batch 22222222-2222-4222-8222-222222222222
+```
+
+The command returns storage references to `manifest.json`, `index.json` and
+`index.csv`. The manifest lists original source receipts, archive digests and
+members, counts, collection completeness, and missing or incomplete data.
+The indexes include every expected entry and the known run versions and attempts.
+Read collection status, capture completeness and scientific outcome separately.
+A failed trial can have a completely collected archive. An assigned worker does
+not establish a start or scientific outcome. Unknown values remain null in JSON
+and empty in CSV; nested CSV fields contain JSON. Original archive bytes remain
+unchanged. Repeating the command with unchanged inputs produces the same file
+content. Repeat it after new archives arrive to update the inventory.
+
+Exports are limited to 10000 expected entries, 10000 experiment archive inventory
+observations and 128 MiB of derived output and retained export metadata.
+The command refuses unsupported sizes without truncation. Each exported file has
+an explicit transfer record and the configured retention expiry. The existing
+`trial_archive purge` operation removes expired, settled export objects as well
+as expired original archives. Failed publication returns no successful manifest
+reference; retain the original archives and retry with current authority.

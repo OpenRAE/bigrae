@@ -100,3 +100,9 @@ It does not claim, start, retry or replace an entry. Assignment metadata is
 reported separately from observed start times and scientific outcomes.
 See [the result export design](../../architecture/experiment-result-exports.md)
 for the manifest, CSV/JSON indexes and explicit size limits.
+
+Result indexes retain condition, block, replicate, plan-entry, run-version and
+execution-attempt identities. Selected configurations remain admission facts;
+execution accounting alone does not prove an observed configuration. Run
+realization records and referenced original usage disclosures supply observations
+where present. Replacement origins retain their root and parent identities.

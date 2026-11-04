@@ -13,7 +13,7 @@ from django.core.management import CommandError, call_command
 
 from shared.exceptions import CMSError
 from shared.raes.trial_archive import TrialArchiveIdentity
-from tests.cms.experiment_admission_fixtures import FIXTURE, admit
+from tests.cms.experiment_admission_fixtures import FIXTURE, admit, write_experiment_content_manifest
 from tests.cms.experiment_admission_fixtures import experiment_inputs as experiment_inputs
 from tests.cms.test_runtime_plugins import tenant as tenant
 from tests.cms.test_trial_archives import custody as custody
@@ -25,16 +25,23 @@ pytestmark = pytest.mark.django_db
 @pytest.fixture
 def exports(experiment_inputs, monkeypatch):
     import yaml
+    from raes_contracts.versions import BACKEND_OPERATION_CONTRACT_IDS
 
     from cms.scenarios.pack_validation import pack_digest
     from cms.services import _trial_archives
 
     source, root, authority = experiment_inputs[2:]
+    authority["backend"]["supported_contract_versions"].extend(BACKEND_OPERATION_CONTRACT_IDS)
     authority["execution_authority"]["cleanup"]["retry_policy"]["max_attempts"] = 2
+    authority["backend"]["capabilities"]["operation_supervision"] = {
+        "name": "synthetic-supervision",
+        "guarantees": ["cessation-evidence", "effect-observation"],
+    }
     path = root / "experiments/crossed-design.exp.yaml"
     spec = yaml.safe_load(path.read_text())
     spec["run_plan"]["replacement_policy"] = {"max_replacements": 1, "replace_on": ["failed"]}
     path.write_text(yaml.safe_dump(spec))
+    write_experiment_content_manifest(root)
     source.package_digest = pack_digest(root)
     source.save(update_fields=["package_digest"])
     batch = admit(experiment_inputs)
