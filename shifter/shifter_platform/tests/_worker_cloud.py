@@ -1,68 +1,19 @@
 """External cloud, secret-store and guest observations for native worker tests."""
 
-import json
-
 import pytest
 
 
 @pytest.fixture
 def worker_cloud(apparatus, monkeypatch):
     """Drive native result application while replacing only external peers."""
-    import sys
     import time
-    from types import SimpleNamespace
-    from unittest.mock import AsyncMock
 
-    import asyncssh
+    from django.utils import timezone
+    from shifter_adapter_sdk.runtime import canonical_digest
 
     from engine.models import DisposableWorker, ProvisionerLaunchIntent
     from shared.operation_results import ResultStep
     from tests.engine.services.test_native_warm_retirement import _apply_result, _ready_payload
-
-    key = asyncssh.generate_private_key("ssh-ed25519")
-    private = key.export_private_key()
-    public = key.export_public_key().decode()
-    monkeypatch.setitem(
-        sys.modules,
-        "google.cloud.secretmanager",
-        SimpleNamespace(
-            SecretManagerServiceClient=lambda: SimpleNamespace(
-                access_secret_version=lambda **kwargs: SimpleNamespace(payload=SimpleNamespace(data=private))
-            )
-        ),
-    )
-
-    class Connection:
-        def __init__(self, host):
-            self.host = host
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *args):
-            return None
-
-        async def create_process(self, command):
-            assert command == "sudo -n python3 -"
-            identity = self.host.rsplit(".", 1)[1].zfill(32)
-            payload = json.dumps(
-                {
-                    "machine_id": identity,
-                    "daemon_id": identity,
-                    "docker_version": apparatus.profile["docker_version"],
-                    "daemon_count": 1,
-                }
-            )
-            return SimpleNamespace(
-                stdout=SimpleNamespace(read=AsyncMock(side_effect=[payload, ""])),
-                stderr=SimpleNamespace(read=AsyncMock(return_value="")),
-                stdin=SimpleNamespace(write=lambda value: None, write_eof=lambda: None),
-                wait_closed=AsyncMock(),
-                exit_status=0,
-                close=lambda: None,
-            )
-
-    monkeypatch.setattr(asyncssh, "connect", lambda host, **kwargs: Connection(host))
 
     def provider_progress(_seconds):
         for worker in DisposableWorker.objects.select_related("range"):
@@ -85,12 +36,14 @@ def worker_cloud(apparatus, monkeypatch):
                     _ready_payload(intent)
                     | {
                         "members": [member],
-                        "management_access": {
+                        "worker_observations": {
                             member["uuid"]: {
-                                "ssh_key_secret_ref": "projects/synthetic/secrets/key/versions/1",
-                                "username": "range-management",
-                                "port": 22,
-                                "host_public_key": public,
+                                "vm_identity": canonical_digest(f"vm-{runtime.pk}"),
+                                "machine_identity": canonical_digest(f"machine-{runtime.pk}"),
+                                "daemon_identity": canonical_digest(f"daemon-{runtime.pk}"),
+                                "docker_version": apparatus.profile["docker_version"],
+                                "daemon_count": 1,
+                                "observed_at": timezone.now().isoformat(),
                             }
                         },
                     },

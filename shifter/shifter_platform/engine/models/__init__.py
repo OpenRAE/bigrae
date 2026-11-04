@@ -158,7 +158,6 @@ __all__ = [
     "RangeCancellationAuthority",
     "RangeCleanupVerification",
     "RangeEventOutbox",
-    "RangeManagementAccess",
     "ReceiptVerifierRegistration",
     "Request",
     "RetryBindingStatus",
@@ -179,8 +178,9 @@ __all__ = [
     "VpnSessionEndReason",
     "VpnSessionState",
     "WarmRangeGeneration",
+    "WorkerHostObservation",
     "WorkerPolicyRecord",
     "WorkerRetirementHold",
 ]
 
-from ._disposable_worker import DisposableWorker, RangeManagementAccess, WorkerPolicyRecord, WorkerRetirementHold
+from ._disposable_worker import DisposableWorker, WorkerHostObservation, WorkerPolicyRecord, WorkerRetirementHold

@@ -22,16 +22,16 @@ class WorkerPolicyRecord(models.Model):
         return "Disposable worker policy"
 
 
-class RangeManagementAccess(models.Model):
-    """Private generation-bound management references, outside participant state."""
+class WorkerHostObservation(models.Model):
+    """Credential-free observations bound to one accepted worker generation."""
 
     range = models.OneToOneField("Range", on_delete=models.CASCADE)
     operation_id = models.UUIDField()
     resource_generation = models.UUIDField()
-    bindings = models.JSONField()
+    observations = models.JSONField()
 
     def __str__(self) -> str:
-        return f"Private management for range {self.range_id}"
+        return f"Worker observations for range {self.range_id}"
 
 
 class DisposableWorker(models.Model):
@@ -64,6 +64,11 @@ class DisposableWorker(models.Model):
         """Enforce worker identity and retention constraints in the database."""
 
         constraints = [
+            models.UniqueConstraint(
+                KeyTextTransform("vm_identity", "qualification"),
+                condition=models.Q(qualification__has_key="vm_identity"),
+                name="worker_independent_vm",
+            ),
             models.UniqueConstraint(
                 KeyTextTransform("daemon_identity", "qualification"),
                 condition=models.Q(qualification__has_key="daemon_identity"),

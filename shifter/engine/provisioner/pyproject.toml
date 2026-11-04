@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "Arpeggio>=2.0.3",
+    "asyncssh==2.24.0",
     "attrs>=25.4.0",
     "asgiref>=3.11.1",
     "boto3>=1.43.8",
