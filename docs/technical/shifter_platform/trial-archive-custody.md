@@ -123,3 +123,31 @@ They exclude prompts, traces, parser inputs, and provider error bodies.
 No new HTTP endpoint, role system, storage service, worker dispatcher, or analytics schema is introduced.
 
 See [operator instructions](../../how-to/retain-trial-archives.md) and the [architecture design](../../architecture/trial-archive-custody.md).
+
+## Derived experiment exports
+
+The batch export service uses the custody inventory and verified retrieval
+operations. Inventory pages have stable ordering and can select the retained
+experiment identity. Custody also owns publication of the derived manifest and
+CSV/JSON indexes to the current approved tenant destination. This write requires
+current tenant content-management authority. The content digest names each export;
+original archives remain unchanged. The manifest is published after the indexes
+verify. Each derived file has its own transfer journal and pinned expiry. The existing
+settled-write fence and purge operation enforce retention for these objects.
+Archive inventory excludes records marked as derived exports.
+See [the result export design](../../architecture/experiment-result-exports.md).
+
+Export inspection reuses the complete archive validator. It optionally retains
+usage-bearing JSON Lines records under the existing metadata bound, with their
+original member and line references. Intake keeps its existing scientific-only
+metadata retention. Unsupported export metadata sizes cause an explicit refusal.
+
+Validated intake also retains bounded plan and entry identity, coordinates and
+replacement origin in `TrialArchiveTransfer.plan_metadata` before upload. It
+contains no configuration bodies and grants no custody receipt. Exports use it
+to report unavailable replacement collections; unknown legacy associations
+require matching verified evidence or an explicit refusal.
+
+Derived file publication lives in `_trial_archive_exports` behind the existing
+custody service entry point. It reuses the same authority, verification, audit
+and retention primitives; record formatting remains in the export record module.
