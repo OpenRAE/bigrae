@@ -6,6 +6,23 @@ from shared.raes.trial_archive import TrialArchiveError, TrialArchiveIdentity
 from shared.raes.trial_archive_records import _artifact_path, _walk, validate_structured_bindings
 from shared.schemas._raes_validation import JsonObject
 
+USAGE_FIELDS = frozenset(
+    {
+        "usage",
+        "usage_metadata",
+        "resource_usage",
+        "input_tokens",
+        "output_tokens",
+        "total_tokens",
+        "prompt_tokens",
+        "completion_tokens",
+        "cost",
+        "cost_usd",
+        "cpu_seconds",
+        "memory_bytes",
+    }
+)
+
 _SCIENTIFIC_RECORDS = {
     "experiment-run/v1",
     "experiment-evidence-record/v1",
@@ -19,9 +36,16 @@ class StructuredTraceReader:
     """Validate each line while indexing only bounded joins and record documents."""
 
     def __init__(
-        self, expected: TrialArchiveIdentity, *, record_bound: int, metadata_budget: int, reference_budget: int
+        self,
+        expected: TrialArchiveIdentity,
+        *,
+        record_bound: int,
+        metadata_budget: int,
+        reference_budget: int,
+        retain_usage: bool = False,
     ) -> None:
         """Initialize invocation-local streaming limits and bounded indexes."""
+        self.retain_usage = retain_usage
         self.expected = expected
         self.record_bound = record_bound
         self.metadata_budget = metadata_budget
@@ -75,7 +99,9 @@ class StructuredTraceReader:
         checksum = value.get("checksum") or value.get("content_checksum")
         if uri and checksum is not None:
             self._reference(uri, checksum, value.get("size_bytes"))
-        return value.get("schema_version") in _SCIENTIFIC_RECORDS
+        return value.get("schema_version") in _SCIENTIFIC_RECORDS or (
+            self.retain_usage and bool(value.keys() & (USAGE_FIELDS | {"loss_disclosure"}))
+        )
 
     def _retain_scientific(self, raw: bytes) -> None:
         """Retain one containing line within the shared scientific metadata budget."""

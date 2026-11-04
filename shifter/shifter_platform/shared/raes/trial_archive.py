@@ -70,6 +70,7 @@ class VerifiedTrialArchive:
     outcome_status: str
     evidence_complete: bool
     gap_count: int
+    plan_metadata: JsonObject | None = None
 
 
 def safe_archive_path(value: object) -> str:
@@ -210,14 +211,20 @@ def _retain_document(name: str, size: int, kind: str, *, strict: bool) -> bool:
     return document
 
 
-def _structured_reader(kind: str, expected: TrialArchiveIdentity, metadata_budget: int) -> StructuredTraceReader | None:
+def _structured_reader(
+    kind: str, expected: TrialArchiveIdentity, metadata_budget: int, retain_usage: bool = False
+) -> StructuredTraceReader | None:
     """Create an incremental reader only for declared JSON Lines streams."""
     from shared.raes.trial_archive_jsonl import StructuredTraceReader
 
     if kind != "jsonl":
         return None
     return StructuredTraceReader(
-        expected, record_bound=MAX_JSON_BYTES, metadata_budget=metadata_budget, reference_budget=MAX_MEMBERS
+        expected,
+        record_bound=MAX_JSON_BYTES,
+        metadata_budget=metadata_budget,
+        reference_budget=MAX_MEMBERS,
+        retain_usage=retain_usage,
     )
 
 
@@ -226,7 +233,7 @@ def _merge_structured(
     documents: dict[str, bytes],
     references: dict[str, tuple[int | None, str]],
     attempts: set[str],
-    index: int,
+    index: str,
 ) -> None:
     """Merge bounded trace indexes without retaining complete trace bodies."""
     for key, value in reader.records.items():
@@ -284,6 +291,7 @@ class _ScanState:
     attempts: set[str] = field(default_factory=set)
     gaps: int = 0
     metadata_bytes: int = 0
+    retain_usage: bool = False
 
 
 def _consume_member(
@@ -307,23 +315,23 @@ def _consume_member(
         state.metadata_bytes += member.size
         if state.metadata_bytes > MAX_METADATA_BYTES:
             raise TrialArchiveError("Archive documents exceed their bound")
-    structured = _structured_reader(kind, expected, MAX_METADATA_BYTES - state.metadata_bytes)
+    structured = _structured_reader(kind, expected, MAX_METADATA_BYTES - state.metadata_bytes, state.retain_usage)
     with _archive_body(archive, member) as body:
         checksum, raw = _read_member(body, member.size, retain=retain, structured=structured)
     if structured is not None:
         state.metadata_bytes += structured.metadata_bytes
         state.gaps += structured.disclosed_gaps
-        _merge_structured(structured, state.documents, state.references, state.attempts, index)
+        _merge_structured(structured, state.documents, state.references, state.attempts, relative)
     state.members[relative] = (member.size, checksum)
     if retain:
         state.documents[relative] = raw
 
 
 def _scan(
-    path: Path, expected: TrialArchiveIdentity, formats: dict[str, str] | None = None
+    path: Path, expected: TrialArchiveIdentity, formats: dict[str, str] | None = None, *, retain_usage: bool = False
 ) -> tuple[dict[str, tuple[int, str]], dict[str, bytes], dict[str, tuple[int | None, str]], int, set[str]]:
     """Stream one archive pass and verify its complete tar termination."""
-    state = _ScanState()
+    state = _ScanState(retain_usage=retain_usage)
     with ExitStack() as stack:
         compressed = stack.enter_context(path.open("rb"))
         magic = compressed.read(2)
@@ -430,7 +438,9 @@ def _inventory(
     return declared
 
 
-def validate_trial_archive(path: Path, expected: TrialArchiveIdentity) -> VerifiedTrialArchive:
+def _validated_archive(
+    path: Path, expected: TrialArchiveIdentity, *, retain_usage: bool = False
+) -> tuple[VerifiedTrialArchive, dict[str, bytes], dict[str, tuple[int, str]], JsonObject, dict[str, str]]:
     """Validate all declared bytes before any destination upload is authorized."""
     from shared.raes.trial_archive_records import validate_archive_records
 
@@ -441,7 +451,9 @@ def validate_trial_archive(path: Path, expected: TrialArchiveIdentity) -> Verifi
         marker = _json(documents[SEAL_NAME])
         inventory = _inventory(marker, members, documents)
         formats = _declared_formats(marker, members)
-        checked_members, documents, trace_references, trace_gaps, trace_attempts = _scan(path, expected, formats)
+        checked_members, documents, trace_references, trace_gaps, trace_attempts = _scan(
+            path, expected, formats, retain_usage=retain_usage
+        )
         if checked_members != members:
             raise TrialArchiveError("Archive bytes changed during validation")
         for name, (size, digest) in trace_references.items():
@@ -458,9 +470,14 @@ def validate_trial_archive(path: Path, expected: TrialArchiveIdentity) -> Verifi
             documents, inventory, marker, expected, trace_attempts=trace_attempts, formats=formats
         )
         if trace_gaps:
-            facts = (facts[0], facts[1], False, max(facts[3], trace_gaps))
-        return VerifiedTrialArchive(len(members), run_digest, *facts)
+            facts = (facts[0], facts[1], False, max(facts[3], trace_gaps), facts[4])
+        return VerifiedTrialArchive(len(members), run_digest, *facts), documents, members, marker, formats
     except TrialArchiveError:
         raise
     except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OSError, EOFError, tarfile.TarError):
         raise TrialArchiveError("Archive structure or record validation failed") from None
+
+
+def validate_trial_archive(path: Path, expected: TrialArchiveIdentity) -> VerifiedTrialArchive:
+    """Validate all original bytes without retaining export-only usage metadata."""
+    return _validated_archive(path, expected)[0]
