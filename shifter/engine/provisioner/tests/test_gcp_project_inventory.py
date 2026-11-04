@@ -171,7 +171,11 @@ def test_provider_resource_cannot_redirect_followup_reads_to_another_project(rou
         GcpProjectInventory(Session(routes)).read(_PROJECT)
 
 
-@pytest.mark.parametrize("raw", [b'{"accounts":[],"accounts":[]}', b"x" * 1_048_577])
+@pytest.mark.parametrize(
+    "raw",
+    [b'{"accounts":[],"accounts":[]}', b"x" * 1_048_577],
+    ids=["duplicate-fields", "response-over-byte-limit"],
+)
 def test_ambiguous_or_oversized_provider_response_is_refused(routes, raw):
     key = next(key for key in routes if key[0].endswith("/serviceAccounts") and not key[1])
     routes[key] = Response(raw)
