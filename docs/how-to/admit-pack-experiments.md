@@ -88,11 +88,14 @@ uv run python manage.py experiment_batch export \
 The command returns storage references to `manifest.json`, `index.json` and
 `index.csv`. The manifest lists original source receipts, archive digests and
 members, counts, collection completeness, and missing or incomplete data.
+Missing archive versions remain visible even when an earlier version of the
+same attempt was collected.
 The indexes include every expected entry and the known run versions and attempts.
 Read collection status, capture completeness and scientific outcome separately.
 A failed trial can have a completely collected archive. An assigned worker does
 not establish a start or scientific outcome. Unknown values remain null in JSON
-and empty in CSV; nested CSV fields contain JSON. Original archive bytes remain
+and empty in CSV; nested CSV fields contain JSON. CSV text that can start a
+spreadsheet formula is prefixed with an apostrophe. Original archive bytes remain
 unchanged. Repeating the command with unchanged inputs produces the same file
 content. Repeat it after new archives arrive to update the inventory.
 

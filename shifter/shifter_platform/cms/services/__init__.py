@@ -95,7 +95,12 @@ from ._experiment_batches import (
     record_experiment_worker,
     recover_experiment_claim,
 )
-from ._experiment_exports import export_experiment_batch
+from ._experiment_exports import (
+    ExperimentExportAssociationError,
+    ExperimentExportDataError,
+    ExperimentExportLimitError,
+    export_experiment_batch,
+)
 from ._file_assets import (
     cancel_file_upload,
     complete_file_upload,
@@ -298,6 +303,9 @@ __all__ = (
     "EngineEventCapacitySignal",
     "EngineSharingError",
     "ExperimentClaim",
+    "ExperimentExportAssociationError",
+    "ExperimentExportDataError",
+    "ExperimentExportLimitError",
     "LeasePolicyAuditContext",
     "LeasePolicyOverride",
     "MissionControlLeasePolicyAdminError",

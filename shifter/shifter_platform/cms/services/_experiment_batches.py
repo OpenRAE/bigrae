@@ -105,7 +105,23 @@ def list_experiment_entries(
     credential: CredentialContext, organization_uuid: UUID, batch_id: UUID
 ) -> list[dict[str, Any]]:
     """Read the batch's operational assignments without manufacturing scientific facts."""
-    raise CMSError("Experiment entry inventory is not implemented")
+    admission = _authorize(credential, organization_uuid, "read_content")
+    if not ExperimentBatch.objects.filter(pk=batch_id, organization_uuid=admission.organization_uuid).exists():
+        raise CMSError(_UNAVAILABLE)
+    return [
+        {
+            "plan_entry_id": row.plan_entry_id,
+            "run_id": row.run_id,
+            "execution_attempt_id": str(row.token) if row.token else None,
+            "state": row.state,
+            "worker_ref": row.worker_ref or None,
+            "collection_receipt_id": str(row.receipt_id) if row.receipt_id else None,
+            "cleanup_recorded": bool(row.cleanup_receipt_json),
+        }
+        for row in ExperimentEntry.objects.filter(batch_id=batch_id, organization_uuid=organization_uuid).order_by(
+            "plan_entry_id"
+        )
+    ]
 
 
 def _load(admission: TenantPackAdmission, batch_id: UUID) -> RetainedExperimentBatch:

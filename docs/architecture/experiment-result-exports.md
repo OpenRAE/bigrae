@@ -26,6 +26,11 @@ Archive custody owns tenant-filtered inventory, verified retrieval, destination
 configuration and publication. Only `shared.raes` interprets portable records,
 using the released RAES models and existing archive validator.
 No new application, database model, cloud adapter or external dependency is needed.
+The existing transfer journal retains a bounded, validated plan/entry identity
+and replacement origin before upload. This association survives archive expiry
+or interrupted storage. Older unavailable collections require a verified peer
+with the same immutable plan and entry identities; otherwise export refuses
+explicitly rather than omitting potentially relevant replacement evidence.
 The existing import rules enforce these owners (ADR-001 and ADR-031).
 
 ## Derived records

@@ -136,3 +136,14 @@ verify. Each derived file has its own transfer journal and pinned expiry. The ex
 settled-write fence and purge operation enforce retention for these objects.
 Archive inventory excludes records marked as derived exports.
 See [the result export design](../../architecture/experiment-result-exports.md).
+
+Export inspection reuses the complete archive validator. It optionally retains
+usage-bearing JSON Lines records under the existing metadata bound, with their
+original member and line references. Intake keeps its existing scientific-only
+metadata retention. Unsupported export metadata sizes cause an explicit refusal.
+
+Validated intake also retains bounded plan and entry identity, coordinates and
+replacement origin in `TrialArchiveTransfer.plan_metadata` before upload. It
+contains no configuration bodies and grants no custody receipt. Exports use it
+to report unavailable replacement collections; unknown legacy associations
+require matching verified evidence or an explicit refusal.
