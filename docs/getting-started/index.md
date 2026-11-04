@@ -1,16 +1,14 @@
-# Get Started
+# Get started
 
-BigRAE provides isolated cyber range environments for XDR/XSIAM demos. You bring an agent installer, BigRAE provisions the infrastructure.
+BigRAE is a self-service cyber-range platform for authorized purple, red, and
+blue team exercises. Do these steps in order:
 
-## First Time?
+1. [Install BigRAE on GCP](../technical/handbook/gcp-first-run.md) from a
+   published release.
+2. [Launch your first range](quickstart.md).
+3. Read the [key concepts](concepts.md).
 
-Start with the [Quickstart](quickstart) to launch your first range.
+AWS support comes in an upcoming release.
 
-## Need Context?
-
-See [Key Concepts](concepts) for terminology and how things connect.
-
-## Ready to Go Deeper?
-
-- [Scenarios](../scenarios/) - Different range configurations
-- [Features](../features/) - Detailed feature guides
+After the first range, see the [features](../features/index.md) and the
+[scenarios](../scenarios/index.md).

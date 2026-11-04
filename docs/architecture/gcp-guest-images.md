@@ -158,6 +158,12 @@ guest features, is reused with no download. An all-reused set creates no
 transfer bucket. The command writes `range-images.json` only after every role is
 ready, then releases the lock.
 
+The conversion to `range-images.json` uses the same required-role set as release
+validation. Required Kali and Ubuntu imports are sufficient. A DC import is
+retained when present; its absence does not invalidate a required-only release.
+Unknown roles and incomplete required sets fail before the configuration is
+written. This rule applies to both fresh imports and reused images.
+
 The transfer bucket is private and run-owned, in the range project and region.
 The command deletes its objects and the bucket on success and on failure. Raw
 disk import does not keep image-level guest features, so every import sets

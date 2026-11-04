@@ -1,109 +1,150 @@
-# GCP installation and first exercise
+# Install BigRAE on GCP
 
-Use this route from an empty deployment to a small verified range. Commands run
-from the repository root. The
-[GitHub-less GCP deployment guide](gcp-github-less-deployment.md) owns the exact
-commands; the [full setup](../dev/setup.md#gcp-deployment) owns prerequisite
-details; the [handbook](../architecture.md) explains the boundaries.
+This page installs BigRAE in a GCP project from a published release. You do
+these steps in order. Each step links to the
+[GitHub-less GCP deployment guide](gcp-github-less-deployment.md), which has the
+full detail. The install needs no GitHub account, no fork, and no repository
+checkout.
 
-## Prepare the deployment
+AWS support comes in an upcoming release.
 
-Have Python 3.12+, uv, gcloud, and Docker available. The deploy runs from the
-deployer image of a published release. A deploy from a checkout instead needs
-Terraform, Helm, kubectl, gke-gcloud-auth-plugin, ORAS, Trivy, and git on
-`PATH`; `deploy.py preflight --cloud gcp` checks them. A deployment without GitHub needs
-no GitHub CLI. Use a billing-enabled project and domain under your control.
-An authorized operator must do these steps, as the guide and
-[deployment secrets](../../dev/deploy-secrets.md) describe:
+## What you need
 
-- create the foundation: the purpose identities, the impersonation grants, and
-  the deployment config bucket;
-- grant read access to the release registry;
-- store the first operator password in Secret Manager;
-- own the DNS of the public hostname.
+- A GCP project with billing on.
+- A Google identity that can administer the IAM of the project: `roles/owner`,
+  or `roles/resourcemanager.projectIamAdmin`, `roles/iam.roleAdmin`, and
+  `roles/iam.serviceAccountAdmin`.
+- A domain that you control, and access to its DNS records.
+- An email address in that domain for the first administrator.
+- Docker, the `gcloud` CLI, [ORAS](https://oras.land/), and
+  [cosign](https://docs.sigstore.dev/cosign/) on your workstation.
+- If your configuration uses Vertex AI models, enable each model in the
+  project. The Vertex AI API alone does not enable a model.
 
-Do not put credentials in commands, source control or examples. Configuration
-stores secret references.
+The install creates billable resources. Run it only in a project that you are
+authorized to use.
 
-```bash
-uv run --project shifter/installation bigrae-config init --backend gcp
-# Edit the generated bigrae.yaml for the selected deployment.
-uv run --project shifter/installation bigrae-config validate bigrae.yaml
-uv run --project shifter/installation bigrae-config doctor bigrae.yaml
-```
-
-`init` scaffolds local configuration; it does not create a cloud account,
-identity, cluster or secret. For a new foundation, run `gcp-foundation` in its
-GitHub-less mode
-([Apply the foundation without GitHub](gcp-github-less-deployment.md#apply-the-foundation-without-github)).
-The [bootstrap guide](https://github.com/Brad-Edwards/bigrae/blob/dev/scripts/bootstrap/README.md)
-lists the checked inputs and the apply order.
-Put `bigrae.yaml` and the Terraform values of the deployment in one directory;
-stale tenant values from another deployment must not be reused.
-
-Once these prerequisites and the range-plane settings are configured, publish
-the deployment inputs and import the range images:
+## 1. Sign in to Google Cloud
 
 ```bash
-./scripts/bootstrap/deploy.py gcp-config publish \
-  --store gs://YOUR_CONFIG_BUCKET --inputs ./YOUR_INPUTS_DIRECTORY
-./scripts/bootstrap/deploy.py gcp-images --project-id YOUR_PROJECT \
-  --source YOUR_RELEASE_REGISTRY --region YOUR_REGION \
-  --store gs://YOUR_CONFIG_BUCKET
+gcloud auth login
+gcloud auth application-default login
 ```
 
-Then verify the deployer image of the release and run
-`gcp-deploy --store gs://YOUR_CONFIG_BUCKET --first-install` from it, as the
-guide describes
-([Get and verify the deployer image](gcp-github-less-deployment.md#get-and-verify-the-deployer-image),
-[First install](gcp-github-less-deployment.md#first-install)). Replace the
-uppercase placeholders.
-`settings.range_cells.backend` selects the range backend. The default is `gce`:
-GKE hosts the control plane and GCE hosts guests. `gdc` is an
-operator-validation substrate, not a participant deployment shortcut. The
-deploy creates billable resources; run it only in your authorized environment.
-The live test of this path is issue #2572. Updates run `gcp-deploy` again from
-the deployer image of a newer release. A CI-deployed environment runs the same
-command through the deploy workflow.
+The commands use your credentials only to impersonate the deployment
+identities that the install creates.
 
-After rollout and DNS/TLS convergence, run:
+## 2. Select a release
+
+A release is a [GitHub release](https://github.com/OpenRAE/bigrae/releases)
+`vX.Y.Z`. Its deployer image is `ghcr.io/openrae/bigrae/deployer-gcp`, tagged
+with the full commit SHA of the release. The registry is public. Releases
+v4.1.1 and earlier have no deployer image.
+
+Set the registry and the release commit:
 
 ```bash
-uv run --project shifter/installation bigrae-config doctor bigrae.yaml --checks cloud
+REG=ghcr.io/openrae/bigrae
+REV=$(git ls-remote https://github.com/OpenRAE/bigrae refs/tags/vX.Y.Z | cut -f1)
 ```
 
-This checks configured health probes, not scenario acceptance. For a failed
-deploy or update, use [RB023](../../runbooks/rb023-gcp-deployment.md): inspect
-bounded diagnostics, and confirm the selected tenant and configuration. Do not
-conceal an unknown cleanup state by deleting application records.
+## 3. Get and verify the deployer image
 
-## Run a useful scenario
+```bash
+DIGEST=$(oras resolve "$REG/deployer-gcp:$REV")
+cosign verify-attestation --type https://slsa.dev/provenance/v1 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity "https://github.com/OpenRAE/bigrae/.github/workflows/release-gcp.yml@refs/heads/main" \
+  --certificate-github-workflow-sha "$REV" "$REG/deployer-gcp@$DIGEST"
+```
 
-The shipped synthetic
-[smoke-linux pack](https://github.com/Brad-Edwards/bigrae/tree/dev/shifter/environment-packs/smoke-linux)
-is the initial GCP RAES path. The
-[in-box manifest](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/cms/scenarios/inbox_packs/manifest.yaml)
-registers it through the normal CMS validator during catalog bootstrap. It is a
-bootstrap seed, not a promise of a full production scenario catalog.
+Use the digest, not the tag, in every later command. See
+[Get and verify the deployer image](gcp-github-less-deployment.md#get-and-verify-the-deployer-image).
 
-1. Sign in as the initialized operator and confirm that the pack is registered
-   and realizable for the selected backend and exact image inventory.
-2. Select the registered scenario through the range UI. Launch with an authorized
-   principal in the actual resource scope; wait for Engine's READY projection.
-3. Open the authorized terminal/access surface and exercise the expected guest
-   behavior. A successful Job alone is not guest-readiness evidence.
-4. Destroy through the same owning lifecycle API/UI. Confirm verified absence
-   and resolve any residual cleanup before releasing event capacity.
+## 4. Write the deployment input bundle
 
-For your own current RAES pack, use the
-[registration/preparation guide](../../ops/artifact-preparation.md), public
-adapter SDK and administrator-controlled installation. Never copy private
-content or answers into core. For native CTF events, use the
-[organizer guide](../../features/ctf-organizer-guide.md) and
-[digest-bound content guide](../../dev/ctf-scenario-content.md).
+Create a private directory, for example `~/bigrae-bundle`. Write two files in
+it:
 
-The [GCE deployment runbook](../../dev/gcp-range-cell-deploy.md) lists image,
-network and access prerequisites. Domain scenarios require compatible prepared
-images and actual guest verification. GCE does not supply NGFW attachment;
-GDC or Pods are not an automatic fallback. Contract tests, a deploy health check
-and one smoke range do not qualify every scenario, release or event capacity.
+- `bigrae.yaml`: the deployment name, the hostname, the project, the region,
+  the range zone, and the first administrator.
+- `terraform.tfvars.json`: the network ranges and the allowed email domain.
+
+Copy both examples from
+[Author and publish the deployment input bundle](gcp-github-less-deployment.md#author-and-publish-the-deployment-input-bundle),
+steps 2 to 4. For a release from `OpenRAE/bigrae`, set `settings.release_trust`
+to these values:
+
+```yaml
+release_trust:
+  github_repository_id: "1241599684"
+  github_owner_id: "308592074"
+```
+
+Keep the bundle out of source control. It holds the identity of your
+deployment.
+
+## 5. Run the install
+
+```bash
+docker run --rm -it --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e CLOUDSDK_CONFIG=/gcloud \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcloud/application_default_credentials.json \
+  -v "$HOME/.config/gcloud:/gcloud" \
+  -v "$HOME/bigrae-bundle:/bundle:ro" \
+  "$REG/deployer-gcp@$DIGEST" gcp-install --inputs /bundle
+```
+
+The install applies the foundation, creates the first operator password,
+publishes the bundle to `gs://<project>-deployment-config`, and runs the first
+deploy. A first install takes about 40 minutes. When a step fails, fix the
+cause and run the same command again. See [Install](gcp-github-less-deployment.md#install).
+
+The output shows two values. Record them:
+
+- the ingress address;
+- the command that reads the first operator password.
+
+## 6. Point DNS at the deployment
+
+Create a DNS A record for `deployment.domain` at the ingress address. Do not
+proxy the record.
+
+## 7. Complete the install
+
+```bash
+docker run --rm -it --user "$(id -u):$(id -g)" -e HOME=/tmp \
+  -e CLOUDSDK_CONFIG=/gcloud \
+  -e GOOGLE_APPLICATION_CREDENTIALS=/gcloud/application_default_credentials.json \
+  -v "$HOME/.config/gcloud:/gcloud" \
+  "$REG/deployer-gcp@$DIGEST" gcp-deploy --store gs://<project>-deployment-config
+```
+
+The deploy waits up to 60 minutes for the managed certificate to become
+Active. It then runs the post-deploy smoke, which creates and destroys one
+range. Exit status 0 means the deployment is current. Exit status 3 means the
+deployment is current but the smoke failed. See
+[Smoke and exit status](gcp-github-less-deployment.md#smoke-and-exit-status).
+
+## 8. Sign in
+
+Open `https://<deployment.domain>`. Sign in with the first administrator email
+and the password from step 5. The in-box catalog holds the `smoke-linux`
+scenario: a Kali attacker and an Ubuntu victim.
+
+Next, [launch your first range](../../getting-started/quickstart.md).
+
+## When something fails
+
+- [RB023](../../runbooks/rb023-gcp-deployment.md) lists the failure symptoms
+  and the fix for each deploy stage.
+- [GCP tenant standup gotchas](../../dev/gcp-tenant-standup-gotchas.md) lists
+  known problems and their fixes.
+
+## Update and remove
+
+- To update, verify the deployer image of the newer release, then run
+  `gcp-deploy` from it. See
+  [Update and roll back](gcp-github-less-deployment.md#update-and-roll-back).
+- To remove the deployment, see
+  [Tear down](gcp-github-less-deployment.md#tear-down).
