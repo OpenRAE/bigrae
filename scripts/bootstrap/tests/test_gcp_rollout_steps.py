@@ -200,11 +200,31 @@ class TestHelm:
 
 
 class TestRolloutChecks:
-    def test_restarts_inventory_and_waits(self):
-        runner = FakeRunner()
-        restart_workloads(runner, {}, model_broker_enabled=True)
+    @pytest.mark.parametrize("model_broker_enabled", [False, True])
+    def test_restarts_complete_release_inventory(self, model_broker_enabled):
+        verifier = _load_python_script_module(
+            get_repo_root() / "scripts/gcp/verify_running_image_ids.py", "test_restart_inventory"
+        )
+        inventory = verifier.release_deployments(model_broker_enabled=model_broker_enabled)
+        runner = FakeRunner().on(
+            [],
+            lambda a, e, s: ProcessResult(0, "\n".join(inventory)) if "--list-deployments" in a else ProcessResult(0),
+        )
+        restart_workloads(runner, {}, model_broker_enabled=model_broker_enabled)
+        discovery = [call for call in runner.calls if "--list-deployments" in call.argv]
+        assert len(discovery) == 1
+        assert discovery[0].argv[-4:] == [
+            "--model-broker-enabled",
+            str(model_broker_enabled).lower(),
+            "--policy-enabled",
+            "false",
+        ]
         restarted = [call.argv[3] for call in runner.find("kubectl", "rollout", "restart")]
-        assert restarted[0] == "deployment/portal-web" and restarted[-1] == "deployment/model-access-control"
+        assert restarted == ["deployment/" + name for name in inventory]
+        assert "deployment/worker-outbox-drainer" in restarted
+        assert ("deployment/model-broker" in restarted) is model_broker_enabled
+
+    def test_waits_for_inventory_and_superseded_pods(self):
         with pytest.raises(RolloutError):
             release_deployments(FakeRunner(), {}, model_broker_enabled=False)
         pods = iter(
@@ -241,6 +261,12 @@ class TestRolloutChecks:
         ticks = iter([0.0, 400.0])
         with pytest.raises(RolloutError, match="superseded"):
             wait_for_rollouts(stuck, {}, model_broker_enabled=False, sleep=lambda _: None, clock=lambda: next(ticks))
+
+    def test_restart_refuses_an_empty_release_inventory(self):
+        runner = FakeRunner()
+        with pytest.raises(RolloutError, match="no deployments"):
+            restart_workloads(runner, {}, model_broker_enabled=False)
+        assert not runner.find("kubectl", "rollout", "restart")
 
     def test_running_images_are_verified_and_stored(self, tmp_path: Path):
         def verifier(argv, env, stdin):
