@@ -67,7 +67,8 @@ ownership, application administration and cloud administration remain distinct.
 
 Disposable trial workers reuse Engine's native lifecycle and capacity ledger.
 Only the provisioner reads host-management keys and runs the fixed bounded SSH
-probe; Engine validates credential-free host observations against the accepted
+probe; the shared result/member parsers validate the closed observation shape.
+Engine validates credential-free host observations against the accepted
 operation, generation, membership, apparatus profile and freshness. Numeric VM
 identity comes from authenticated provider readback. PostgreSQL prevents reuse of
 VM, machine or Docker identity. The portal's participant-secret grant stays

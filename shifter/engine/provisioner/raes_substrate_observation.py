@@ -8,6 +8,8 @@ from typing import Protocol, cast
 from gcp_range_cell_clients import GCEClients
 from gcp_range_cell_types import InstancePlan, RangeCellPlan
 
+_GCE_RESOURCE_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
+
 
 class _AttachedDisk(Protocol):
     """Represent AttachedDisk."""
@@ -45,7 +47,7 @@ def verify_prepared_source(plan: RangeCellPlan, instance: InstancePlan, clients:
         return
     prefix = f"projects/{plan['project_id']}/global/images/"
     name = profile.source_image.removeprefix(prefix)
-    if not profile.source_image.startswith(prefix) or not re.fullmatch(r"[a-z][a-z0-9-]{0,62}", name):
+    if not profile.source_image.startswith(prefix) or not _GCE_RESOURCE_NAME.fullmatch(name):
         raise ValueError("prepared source is outside the range project")
     if clients.images is None:
         raise ValueError("prepared source observation is unavailable")
@@ -83,7 +85,7 @@ def _verify_boot_image(plan: RangeCellPlan, guest: _GuestInstance, clients: GCEC
     )
     prefix = f"projects/{plan['project_id']}/zones/{plan['zone']}/disks/"
     name = source.removeprefix(prefix)
-    if not source.startswith(prefix) or not re.fullmatch(r"[a-z][a-z0-9-]{0,62}", name):
+    if not source.startswith(prefix) or not _GCE_RESOURCE_NAME.fullmatch(name):
         raise ValueError("prepared image boot disk is outside the range scope")
     if clients.disks is None:
         raise ValueError("prepared image boot disk observation is unavailable")
@@ -97,7 +99,7 @@ def observe_gce_worker_identity(instance: dict[str, object], clients: GCEClients
     scope = {}
     for key in ("gcp_project_id", "gcp_zone", "gcp_instance_name"):
         value = instance.get(key)
-        if not isinstance(value, str) or not re.fullmatch(r"[a-z][a-z0-9-]{0,62}", value):
+        if not isinstance(value, str) or not _GCE_RESOURCE_NAME.fullmatch(value):
             raise ValueError("Worker provider scope is invalid")
         scope[key] = value
     actual = cast(
@@ -109,6 +111,6 @@ def observe_gce_worker_identity(instance: dict[str, object], clients: GCEClients
         ),
     )
     identity = str(actual.id)
-    if actual.name != scope["gcp_instance_name"] or not re.fullmatch(r"[1-9][0-9]{0,19}", identity):
+    if actual.name != scope["gcp_instance_name"] or not re.fullmatch(r"[1-9]\d{0,19}", identity, flags=re.ASCII):
         raise ValueError("Worker provider identity is unavailable")
     return {"project": scope["gcp_project_id"], "zone": scope["gcp_zone"], "instance_id": identity}

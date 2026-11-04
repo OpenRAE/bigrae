@@ -111,17 +111,29 @@ def test_expired_or_old_generation_qualification_is_not_current(apparatus, guest
     assert not get_disposable_worker(apparatus.credential, guest.worker.worker_id).qualified
 
 
-def test_effect_transaction_rechecks_deadline(apparatus, guest, monkeypatch):
+@pytest.mark.parametrize("change", ["deadline", "status", "retirement", "terminal", "observation"])
+def test_effect_transaction_rechecks_current_binding(apparatus, guest, monkeypatch, change):
     from engine.services import _worker_qualification, qualify_disposable_worker
 
     original = _worker_qualification._store_qualification
 
-    def expired_before_store(*args, **kwargs):
-        future = guest.row.deadline + timedelta(seconds=1)
-        monkeypatch.setattr(timezone, "now", lambda: future)
+    def changed_before_store(*args, **kwargs):
+        from engine.models import DisposableWorker, Range
+
+        if change == "deadline":
+            future = guest.row.deadline + timedelta(seconds=1)
+            monkeypatch.setattr(timezone, "now", lambda: future)
+        elif change == "status":
+            Range.objects.filter(pk=guest.row.range_id).update(status="destroying")
+        elif change == "observation":
+            guest.record.observations[guest.member["uuid"]]["vm_identity"] = canonical_digest("changed-vm")
+            guest.record.save()
+        else:
+            field = "retirement_at" if change == "retirement" else "terminal_at"
+            DisposableWorker.objects.filter(pk=guest.row.pk).update(**{field: timezone.now()})
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(_worker_qualification, "_store_qualification", expired_before_store)
+    monkeypatch.setattr(_worker_qualification, "_store_qualification", changed_before_store)
     with pytest.raises(ValueError, match="binding changed"):
         qualify_disposable_worker(apparatus.credential, guest.worker.worker_id)
 

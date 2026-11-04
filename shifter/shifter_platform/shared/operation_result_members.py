@@ -1,9 +1,9 @@
 """Realized RAES member parsing for the closed operation-result contract (ADR-043).
 
 Split out of ``operation_result_payloads`` for Sonar S104: that module owns the
-step tables and payload shapes, while this leaf owns the bounded per-member key
-set and its fail-closed parser (#1710, #375). Dependency-light on purpose — no
-Django — so the standalone provisioner image keeps importing it transitively
+step tables and payload shapes, while this leaf owns bounded per-member keys,
+private host sidecars and their fail-closed parsers (#1710, #375). No Django
+dependency, so the standalone provisioner image keeps importing it transitively
 through ``operation_result_payloads``.
 """
 
@@ -154,3 +154,21 @@ def _parse_raes_member(entry: dict[str, Any], field: str) -> dict[str, Any]:
         **_member_credential_refs(entry, channels, field),
         **_member_sftp_root(entry, field),
     }
+
+
+def _parse_private_host_results(payload: dict[str, Any]) -> dict[str, Any]:
+    """Decode safe observations and immutable historical management references."""
+    from shared.range_management import validate_management_access
+    from shared.worker_observations import validate_worker_observations
+
+    result = {}
+    for field, validator in (
+        ("worker_observations", validate_worker_observations),
+        ("management_access", validate_management_access),
+    ):
+        if field in payload:
+            try:
+                result[field] = validator(payload[field])
+            except (ValueError, TypeError):
+                raise OperationResultError("invalid private host projection") from None
+    return result
