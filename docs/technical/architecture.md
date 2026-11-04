@@ -14,6 +14,10 @@ Portal and deployer images install dependencies during the build and remove
 `pip` and its vendored libraries from the runtime image. The shared deployment
 preflight owns tool checks, including the Git exemption for a sealed release
 with an embedded source revision; required security tools remain mandatory.
+The [OpenFGA operations guide](../ops/openfga.md) describes staged replacement
+of retained TLS certificates through the existing provider secret bundles.
+Clients receive both CA certificates before server rotation; authentication
+keys and policy records remain unchanged.
 
 BigRAE is the current product name. Public BigRAE config, SDK, client and plugin
 names converge on their existing validation and execution owners; legacy names
