@@ -341,6 +341,25 @@ resource "google_storage_bucket_iam_member" "ctf_content_image_copies" {
   }
 }
 
+# Native registered projects retain immutable baselines and mutable encrypted
+# Terraform state in separate prefixes of the existing assets bucket (#2775).
+resource "google_storage_bucket_iam_member" "registered_project_storage" {
+  for_each = {
+    baselines = { prefix = "raes/project-baselines/", role = "roles/storage.objectCreator" }
+    state     = { prefix = "raes/project-state/", role = "roles/storage.objectUser" }
+  }
+
+  bucket = var.assets_bucket_name
+  role   = each.value.role
+  member = "serviceAccount:${google_service_account.workload["provisioner"].email}"
+
+  condition {
+    title       = "registered-project-${each.key}-prefix"
+    description = "Only registered-project ${each.key} objects."
+    expression  = "resource.name.startsWith(\"projects/_/buckets/${var.assets_bucket_name}/objects/${each.value.prefix}\")"
+  }
+}
+
 # Secret creation is authorized on the parent project before a Secret resource
 # (and therefore resource.name) exists. This custom role contains only create
 # and is deliberately unconditioned on the selected project. In one project,
