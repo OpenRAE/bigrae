@@ -201,3 +201,56 @@ def test_array_selection_cannot_append_or_change_member_identity(preparation, in
     else:
         with pytest.raises(ValueError):
             validate_runtime_preparation(plan, selected, pin)
+
+
+def _large_preparation(preparation, groups=6):
+    """Retain a closed exact inventory beside the one delegated scalar."""
+    pin, plan, result = preparation
+    inventory = {f"group-{group}": {f"item-{item}": item for item in range(1000)} for group in range(groups)}
+    for payload in (plan["resources"]["node.example"]["payload"], plan["operations"][0]["payload"]):
+        payload["settings"].update(deepcopy(inventory))
+    fields = plan["realization_authority"][0]["constraint_document"]["root"]["fields"]
+    fields.update(
+        {
+            group: {
+                "kind": "recursive-record",
+                "fields": {name: {"kind": "literal", "value": value} for name, value in items.items()},
+            }
+            for group, items in inventory.items()
+        }
+    )
+    (request,) = runtime_plugin_requests(pin, plan, uuid4(), 1)
+    result = result.model_copy(update={"invocation_id": request.invocation_id, "input_digest": request.digest})
+    result.authorize(request)
+    return pin, plan, result
+
+
+def test_large_admitted_authority_uses_the_supported_plan_budget(preparation):
+    pin, plan, result = _large_preparation(preparation)
+    original = deepcopy(plan)
+    effective = validate_runtime_preparation(plan, result, pin)
+    assert plan == original
+    settings = effective["resources"]["node.example"]["payload"]["settings"]
+    assert settings["selected"] == "PRIVATE_SUPPLIED_VALUE"
+    assert settings["group-5"] == original["resources"]["node.example"]["payload"]["settings"]["group-5"]
+
+
+def test_large_authority_keeps_closed_nested_values_exact(preparation):
+    pin, plan, result = _large_preparation(preparation)
+    raw = result.model_dump(mode="json")
+    raw["provisioning_values"].append(
+        {
+            "address": "node.example",
+            "concern": "synthetic-values",
+            "payload_pointer": "/settings/group-0/item-0",
+            "value": 42,
+        }
+    )
+    with pytest.raises(ValueError, match="original admitted plan"):
+        validate_runtime_preparation(plan, RuntimePlan.model_validate(raw), pin)
+
+
+def test_authority_beyond_the_fixed_plan_budget_is_refused(preparation):
+    pin, plan, result = _large_preparation(preparation, groups=66)
+    with pytest.raises(ValueError, match="original admitted plan"):
+        validate_runtime_preparation(plan, result, pin)
