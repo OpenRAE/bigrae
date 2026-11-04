@@ -23,7 +23,7 @@ from uuid import UUID
 
 from shared.enums import ResourceStatus
 from shared.exceptions import ValidationError as OperationResultError
-from shared.operation_result_members import _parse_raes_member
+from shared.operation_result_members import _parse_raes_members
 from shared.raes.status import RAES_OPERATION_STATES, RAES_STATE_SUCCEEDED
 
 __all__ = [
@@ -436,18 +436,7 @@ def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]
         },
         spec,
     )
-    raw = payload["members"]
-    if not isinstance(raw, list):
-        raise OperationResultError(f"{_PAYLOAD_FIELD} members must be a list")
-    if len(raw) > MAX_RAES_MEMBERS:
-        raise OperationResultError(f"{_PAYLOAD_FIELD} carries more than {MAX_RAES_MEMBERS} members")
-    members = []
-    for index, item in enumerate(raw):
-        field = f"{_PAYLOAD_FIELD} members[{index}]"
-        members.append(_parse_raes_member(_require_dict(item, field), field))
-    identities = [member["uuid"] for member in members]
-    if len(set(identities)) != len(identities):
-        raise OperationResultError(f"{_PAYLOAD_FIELD} members contains a duplicate uuid")
+    members = _parse_raes_members(payload["members"], limit=MAX_RAES_MEMBERS, field=_PAYLOAD_FIELD)
     result = {**operation, "members": members}
     if "management_access" in payload:
         from shared.range_management import validate_management_access

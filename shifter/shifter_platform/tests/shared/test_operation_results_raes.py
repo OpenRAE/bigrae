@@ -300,6 +300,49 @@ class TestIdentityIsRetryStable:
         assert identity == replay
 
 
+@pytest.mark.parametrize(
+    "change,message",
+    [
+        ("not-list", "must be a list"),
+        ("not-object", "must be an object"),
+        ("duplicate", "duplicate uuid"),
+        ("overflow", "more than"),
+    ],
+)
+def test_ready_members_preserve_closed_bounds_and_unique_identity(change, message):
+    """The public ready-result parser rejects malformed and ambiguous guest lists."""
+    from shared.operation_result_payloads import MAX_RAES_MEMBERS
+
+    member = {
+        "uuid": "worker",
+        "name": "node",
+        "os_type": "linux",
+        "private_ip": "10.0.0.2",
+        "instance_id": "vm",
+        "subnet_name": "lan",
+        "participant_access_channels": [],
+        "participant_access_usernames": {},
+    }
+
+    def parse(members):
+        return parse_result_payload(
+            "raes-range",
+            "provision",
+            step=ResultStep.RAES_TERMINAL_READY,
+            payload={"raes_status": RAES_STATE_SUCCEEDED, "members": members},
+        )
+
+    assert parse([member])["members"] == [member]
+    invalid = {
+        "not-list": {},
+        "not-object": [None],
+        "duplicate": [member, member],
+        "overflow": [dict(member, uuid=str(index)) for index in range(MAX_RAES_MEMBERS + 1)],
+    }
+    with pytest.raises(OperationResultError, match=message):
+        parse(invalid[change])
+
+
 class TestReadyVpnAccess:
     """The owner-free OpenVPN realization rides the terminal result (#2030)."""
 

@@ -300,6 +300,7 @@ Ready workers can carry caller-owned evidence holds that fence native destructiv
 Overdue holds and exhausted cleanup retain tracked custody for explicit operator recovery.
 Optional installed software uses the existing isolated adapter machinery with explicit apparatus identity.
 The generic management probe requires no experiment runtime.
+Native result validation preserves guest count limits, unique identities, and the separate private management boundary.
 Engine's qualification command selects the recorded bootstrap administrator through exact private facts.
 Management issues short-lived native credentials for fixed actions and exact targets, then revokes them on exit.
 The command creates no identity or policy grant and preserves ordinary scope, membership and authorization checks.

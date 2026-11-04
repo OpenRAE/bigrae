@@ -39,6 +39,6 @@ def credential_from_file(path: str | Path) -> CredentialContext:
     """Authenticate actual bearer proof, never a credential reference or a username."""
     try:
         proof = read_private_file(path, limit=_MAX_BYTES).decode("ascii").strip()
-    except (ValueError, UnicodeError):
+    except ValueError:
         raise CredentialFileError(_UNAVAILABLE) from None
     return credential_from_proof(proof)

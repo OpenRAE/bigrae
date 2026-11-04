@@ -1,10 +1,6 @@
-"""Realize RAES ranges through immutable operation inputs and native results.
+"""Realize admitted RAES ranges and publish bounded native results (ADR-043).
 
-The Engine owns range status, custody and authorization. This process reads the
-exact admitted operation generation, realizes its selected VM backend, and
-appends bounded snapshots and terminal results. Image and management bindings
-come from that immutable input. Cleanup retains native provider ownership and
-reports absence through the same operation contract (ADR-043).
+Engine owns custody and authorization; cleanup reports exact provider absence.
 """
 
 from __future__ import annotations

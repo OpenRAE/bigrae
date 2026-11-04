@@ -16,7 +16,7 @@ from shared.field_encryption import decrypt_value
 from shared.gcp_cloud_content import open_cloud_content
 from shared.gcp_runtime_plan import compile_cloud_work, native_cloud_nodes, selected_secret_payloads
 from shared.raes.operation_input import RaesOperationInput, parse_raes_operation_input
-from shared.runtime_plugin_binding import RuntimePluginPin, runtime_plugin_requests
+from shared.runtime_plugin_binding import RuntimePin, runtime_plugin_requests
 from shared.runtime_plugin_preparation import RuntimePreparation
 
 
@@ -49,7 +49,7 @@ def project_completion_context(
 def _completion_preparation(
     target: Range,
     original: RaesOperationInput,
-    pin: RuntimePluginPin,
+    pin: RuntimePin,
     leases: tuple[GcpProjectLease, ...],
     backend: str,
 ) -> RuntimePlan:

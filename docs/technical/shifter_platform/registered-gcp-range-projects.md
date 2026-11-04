@@ -88,7 +88,8 @@ back all newly reserved projects.
 Runtime preparation accepts content plugin pins and installed worker apparatus
 pins through the shared parser. Both retain the original plan, executable digest
 and operation identity. A worker apparatus with no native cloud resources
-allocates no project lease.
+allocates no project lease. Completion validates both pin forms against the
+same accepted preparation.
 
 Each lease records its original provisioning operation. Cleanup recovers that
 operation's immutable input, retaining its project and image references even after

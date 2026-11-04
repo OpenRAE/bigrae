@@ -42,12 +42,19 @@ def _guards(vendor):
         (
             "worker_runtime_custody",
             "mission_control_range",
-            f"EXISTS (SELECT 1 FROM engine_disposableworker w WHERE w.range_id = OLD.id) AND ({runtime})",
+            " AND ".join(
+                ("EXISTS (SELECT 1 FROM engine_disposableworker w WHERE w.range_id = OLD.id)", f"({runtime})")
+            ),
         ),
         (
             "worker_request_custody",
             "engine_request",
-            f"EXISTS (SELECT 1 FROM engine_disposableworker w WHERE w.request_id = OLD.request_id) AND ({request})",
+            " AND ".join(
+                (
+                    "EXISTS (SELECT 1 FROM engine_disposableworker w WHERE w.request_id = OLD.request_id)",
+                    f"({request})",
+                )
+            ),
         ),
     )
 
