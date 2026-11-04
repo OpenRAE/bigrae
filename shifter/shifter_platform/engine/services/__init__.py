@@ -19,6 +19,7 @@ from . import _common as _api_common
 from . import _device_authority as _api_device_authority
 from . import _feature_artifact_launcher as _api_feature_artifact_launcher
 from . import _feature_artifacts as _api_feature_artifacts
+from . import _gcp_project_registration as _api_gcp_project_registration
 from . import _lifecycle as _api_lifecycle
 from . import _model_admission as _api_model_admission
 from . import _model_broker_control as _api_model_broker_control
@@ -361,6 +362,11 @@ confirm_receipt_verifier_binding = _api_receipt.confirm_receipt_verifier_binding
 project_receipt_verifier_binding = _api_receipt.project_receipt_verifier_binding
 register_receipt_verifier = _api_receipt.register_receipt_verifier
 revoke_receipt_verifier = _api_receipt.revoke_receipt_verifier
+
+retry_gcp_range_project = _api_gcp_project_registration.retry_gcp_range_project
+register_gcp_range_project = _api_gcp_project_registration.register_gcp_range_project
+list_gcp_range_projects = _api_gcp_project_registration.list_gcp_range_projects
+disable_gcp_range_project = _api_gcp_project_registration.disable_gcp_range_project
 
 RuntimePluginBindingRemovalAdmission = _api_runtime_plugin_bindings.RuntimePluginBindingRemovalAdmission
 RuntimePluginPackView = _api_runtime_plugin_bindings.RuntimePluginPackView

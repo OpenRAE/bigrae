@@ -104,6 +104,15 @@ remain encrypted in core records and are reused for retries and destruction;
 reports keep original plan addresses. See the
 [pre-provisioning design](../../docs/architecture/adapter-pre-provisioning-2718.md).
 
+A preparation response may include `secret_payloads`, each with an exact native
+`version_ref` and a literal UTF-8 `value`. Core accepts a selection only for an
+otherwise unspecified native payload and the installed adapter's declared
+`runtime-platform-applications` concern. Explicit Content references cannot be
+overridden. Values remain in the sealed response, are excluded from object
+representations, and are bounded by the provider byte limit and the existing
+preparation-output budget. This selection grants no cloud API or key-issuance
+authority to an adapter.
+
 An action may request `runtime_values`, a map from local names to closed
 `GuestValueReference(binding=..., field=...)` references. Supported fields are
 `private_address` and `participant_ssh_public_key`. The host resolves these from

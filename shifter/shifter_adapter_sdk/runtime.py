@@ -290,6 +290,19 @@ class ProvisioningValue(ClosedModel):
     ) = Field(repr=False)
 
 
+class SecretPayloadValue(ClosedModel):
+    """A literal backend selection for an otherwise unspecified native secret version."""
+
+    version_ref: Annotated[str, Field(min_length=1, max_length=2048)]
+    value: Annotated[str, Field(strict=True, max_length=65536)] = Field(repr=False)
+
+    @model_validator(mode="after")
+    def bounded_bytes(self) -> Self:
+        if len(self.value.encode("utf-8")) > 65536:
+            raise ValueError("secret payload exceeds the provider byte limit")
+        return self
+
+
 class RuntimePlan(ClosedModel):
     """Untrusted worker response. Core must bind it to input before execution."""
 
@@ -303,6 +316,9 @@ class RuntimePlan(ClosedModel):
     provisioning_values: list[ProvisioningValue] = Field(
         default_factory=list, max_length=4096, repr=False, exclude_if=lambda value: not value
     )
+    secret_payloads: list[SecretPayloadValue] = Field(
+        default_factory=list, max_length=1024, repr=False, exclude_if=lambda value: not value
+    )
 
     @model_validator(mode="after")
     def validate_plan(self) -> Self:
@@ -310,6 +326,8 @@ class RuntimePlan(ClosedModel):
         identities = {(item.address, item.payload_pointer) for item in self.provisioning_values}
         if len(identities) != len(self.provisioning_values):
             raise ValueError("preparation replacements must be unique")
+        if len({item.version_ref for item in self.secret_payloads}) != len(self.secret_payloads):
+            raise ValueError("secret payload selections must be unique")
         if len({action.action_id for action in self.actions}) != len(self.actions):
             raise ValueError("action identifiers must be unique")
         if sum(action.timeout_seconds for action in self.actions) > 1200:
@@ -322,7 +340,7 @@ class RuntimePlan(ClosedModel):
     def _validate_phase(self) -> None:
         """Enforce closed failure and phase-specific effect contracts."""
         if self.status == "failed":
-            if not self.failure_code or self.actions or self.provisioning_values:
+            if not self.failure_code or self.actions or self.provisioning_values or self.secret_payloads:
                 raise ValueError("failed planning must carry only a bounded failure code")
         elif self.failure_code:
             raise ValueError("planned actions cannot carry a failure code")
@@ -330,7 +348,7 @@ class RuntimePlan(ClosedModel):
             raise ValueError("validation cannot execute guest actions")
         elif self.phase == "verify" and not self.actions:
             raise ValueError("readiness requires at least one verification action")
-        if self.provisioning_values and self.phase != "prepare":
+        if (self.provisioning_values or self.secret_payloads) and self.phase != "prepare":
             raise ValueError("only preparation can propose provisioning values")
 
     def authorize(self, request: RuntimeInput) -> None:

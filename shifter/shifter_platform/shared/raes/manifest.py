@@ -177,10 +177,31 @@ def create_shifter_backend_manifest(
             RealizationSupportDeclaration(
                 domain="runtime-realization",
                 support_mode=RealizationSupportMode.CONSTRAINED,
-                supported_constraint_kinds=frozenset({"node-type", "os-family", "source-artifact"}),
-                supported_exact_requirement_kinds=frozenset({"declared-capability-match", "source-artifact"}),
+                supported_constraint_kinds=frozenset(
+                    {
+                        "node-type",
+                        "os-family",
+                        "source-artifact",
+                        "runtime-identity-authorities",
+                        "runtime-platform-applications",
+                    }
+                ),
+                supported_exact_requirement_kinds=frozenset(
+                    {
+                        "declared-capability-match",
+                        "source-artifact",
+                        "runtime-identity-authorities",
+                        "runtime-platform-applications",
+                    }
+                ),
                 artifact_mechanisms=shifter_artifact_mechanism_capabilities(),
                 observation_capabilities={
+                    "runtime-identity-authorities": RealizationObservationCapability(
+                        RealizationVerificationScope.CONFIGURATION, ObservationStrength.DAEMON_OBSERVED
+                    ),
+                    "runtime-platform-applications": RealizationObservationCapability(
+                        RealizationVerificationScope.CONFIGURATION, ObservationStrength.DAEMON_OBSERVED
+                    ),
                     "operating-system": RealizationObservationCapability(
                         RealizationVerificationScope.CONFIGURATION, ObservationStrength.GUEST_OBSERVED
                     ),

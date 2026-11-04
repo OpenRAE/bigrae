@@ -95,6 +95,8 @@ read API.
 
 - [Prepared account administration](account-administration.md) - Services, API, browser, migrations and evidence.
 
+- [Registered GCP range projects](registered-gcp-range-projects.md): native capture, encrypted baselines and exclusive custody.
+
 ## Disposable workers
 
 - [Disposable VM workers](disposable-workers.md) - Native range custody, capacity, holds, and management qualification.

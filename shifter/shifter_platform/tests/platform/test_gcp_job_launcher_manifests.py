@@ -707,3 +707,31 @@ def test_admission_image_pin_is_independent_of_the_submitted_job(inline_params, 
         _canonical_admission_job(),
         parameter_data=parameters,
     )
+
+
+@pytest.mark.parametrize("inline_params", [True, False])
+def test_registered_project_job_requires_exact_read_only_operation_and_generation(inline_params):
+    parameters = _canonical_admission_parameters()
+    policy = _policy(_load_helm_documents(runtime_env=parameters, inline_params=inline_params))
+    canonical = _canonical_admission_job()
+    correlation = "11111111-1111-1111-1111-111111111111"
+    generation = "22222222-2222-2222-2222-222222222222"
+    for operation, trailing, admitted in (
+        ("register", ["--operation-id", generation], True),
+        ("verify", ["--operation-id", generation], True),
+        ("register", [], False),
+        ("verify", [], False),
+        ("destroy", ["--operation-id", generation], False),
+        ("register", ["--operation-id", "invalid"], False),
+    ):
+        job = copy.deepcopy(canonical)
+        job["spec"]["template"]["spec"]["containers"][0]["args"] = [
+            "range-project",
+            operation,
+            "--request-id",
+            correlation,
+            *trailing,
+        ]
+        assert (
+            _semantic_policy_allows(policy, PROVISIONER_LAUNCHER_USERNAME, job, parameter_data=parameters) is admitted
+        )

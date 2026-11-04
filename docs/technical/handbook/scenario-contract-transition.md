@@ -67,6 +67,16 @@ and realization envelope bound claims. Parsing a field, retaining a projection,
 or passing unit conformance is not proof of live scenario support. Private packs
 and executable adapters remain separately owned and authorized.
 
+The registered-project implementation (#2716) adds constrained identity-authority
+and platform-application support, with configuration readback from the provider.
+The published manifest matches that capability builder; synthetic native plans
+must produce nonempty account, policy, audit and secret work behind those claims.
+Unsupported shapes are rejected before effects. Large-authority admission and
+scalar-only delegation still require the owning fixes
+([RAE #1885](https://github.com/OpenRAE/rae/issues/1885) and
+[RAE #1886](https://github.com/OpenRAE/rae/issues/1886));
+live scenario qualification remains outstanding.
+
 Package upgrades require coordinated producer/consumer pins, serialized-plan
 parity, genuine guest-effect verification and cleanup compatibility. Do not
 advertise full catalog parity from a language/package rename.

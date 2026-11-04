@@ -2,10 +2,10 @@
 
 from uuid import UUID
 
-from engine.models import Instance, Range, VpnAccessProfile
+from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile
 
 
-def lock_provisioner_target(payload: dict[str, object]) -> Range | Instance | VpnAccessProfile | None:
+def lock_provisioner_target(payload: dict[str, object]) -> Range | Instance | VpnAccessProfile | GcpRangeProject | None:
     """Lock the named target before its intent, inside the caller's transaction.
 
     A missing or malformed target cannot authorize an effect. Returning None
@@ -13,9 +13,11 @@ def lock_provisioner_target(payload: dict[str, object]) -> Range | Instance | Vp
     Generation, custody and input checks remain with the owning validators.
     """
     resource = payload.get("resource")
-    target: Range | Instance | VpnAccessProfile | None = None
+    target: Range | Instance | VpnAccessProfile | GcpRangeProject | None = None
     try:
-        if resource == "vpn-profile":
+        if resource == "range-project":
+            target = GcpRangeProject.objects.select_for_update().filter(pk=UUID(str(payload.get("request_id")))).first()
+        elif resource == "vpn-profile":
             target = (
                 VpnAccessProfile.objects.select_for_update(of=("self",))
                 .filter(pk=UUID(str(payload.get("profile_id"))))

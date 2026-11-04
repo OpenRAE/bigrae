@@ -173,6 +173,24 @@ class TestGenerationFence:
         patched.read_input.assert_called_once_with(_OPERATION_ID, request_id="req-1", operation="provision")
 
 
+@pytest.mark.parametrize("operation", ["provision", "destroy"])
+@pytest.mark.parametrize("field", ["identity_authorities", "platform_applications"])
+def test_unsupported_cloud_inventory_fails_before_vm_network_or_guest_effects(patched, operation, field):
+    from raes_plan import RaesPlanError
+
+    plan = _serialized_plan()
+    plan["resources"]["node.web"]["payload"]["spec"]["node"]["runtime"] = {field: [{"name": "synthetic"}]}
+    patched.read_input.side_effect = lambda *_args, **_kwargs: _run(plan=plan)
+    entry = getattr(raes_range_ops, f"run_raes_range_{operation}")
+    with pytest.raises(RaesPlanError, match="native cloud runtime"):
+        entry("req-1", operation_id=_OPERATION_ID)
+    patched.load_config.assert_not_called()
+    patched.apply.assert_not_called()
+    patched.destroy.assert_not_called()
+    patched.reserve_subnet.assert_not_called()
+    assert _steps(patched)[-1] == str(ResultStep.RAES_TERMINAL_FAILED)
+
+
 class TestProvision:
     def test_reports_running_snapshot_then_ready(self, patched):
         raes_range_ops.run_raes_range_provision("req-1", operation_id=_OPERATION_ID)

@@ -8,11 +8,12 @@ from typing import TYPE_CHECKING, Any
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
 from django.conf import settings
+from django.db import transaction
 from shifter_adapter_sdk.runtime import RuntimeInput, RuntimePlan, canonical_digest
 
 from shared.field_encryption import encrypt_value
 from shared.raes.runtime_preparation import validate_runtime_preparation
-from shared.runtime_plugin_binding import RuntimePin
+from shared.runtime_plugin_binding import RuntimePin, parse_runtime_pin
 from shared.runtime_plugin_preparation import RuntimePreparation
 
 if TYPE_CHECKING:
@@ -82,15 +83,38 @@ def preparation_identity(record: RuntimePreparation, pin: RuntimePin, plan: obje
         raise ValueError(_IDENTITY_CHANGED)
 
 
+@transaction.atomic
 def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePreparation:
     """Called under the range/operation mutex; an accepted mapping cannot be replaced."""
-    from engine.models import RuntimePluginRangeBinding
+    from engine.models import OperationInput, RuntimePluginRangeBinding
+    from shared.field_encryption import decrypt_value
+
+    from ._gcp_project_inputs import allocate_plan_projects, validate_project_preparation
+    from ._runtime_plugin_cleanup import preparation_cleanup_payload
 
     binding = RuntimePluginRangeBinding.objects.select_for_update().get(range=target)
     if binding.pin_digest != record.pin_digest or canonical_digest(target.range_config) != record.plan_digest:
         raise ValueError(_IDENTITY_CHANGED)
     if binding.preparation is not None:
         raise ValueError("Runtime preparation is already retained")
+    if (
+        record.state != "prepared"
+        or record.encrypted_result is None
+        or record.source_operation_id is None
+        or record.source_operation_id != target.provisioner_operation_id
+        or target.request is None
+        or not isinstance(target.range_config, dict)
+    ):
+        raise ValueError(_IDENTITY_CHANGED)
+    pin = parse_runtime_pin(binding.pin)
+    source_operation_id = record.source_operation_id
+    selected = RuntimePlan.model_validate_json(decrypt_value(record.encrypted_result))
+    candidate = validate_runtime_preparation(target.range_config, selected, pin)
+    leases = allocate_plan_projects(target, candidate, record.plan_digest)
+    validate_project_preparation(target.raes_cloud_content, target.range_config, candidate, leases, selected, pin)
+    record = RuntimePreparation.model_validate({**record.model_dump(mode="json"), "cloud_projects": leases})
+    source = OperationInput.objects.get(operation_id=source_operation_id, request_id=target.request.request_id)
+    preparation_cleanup_payload(source.envelope, record)
     binding.preparation = record.model_dump(mode="json")
     binding.save(update_fields=["preparation"])
     return record

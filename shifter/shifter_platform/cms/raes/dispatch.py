@@ -105,9 +105,13 @@ class CmsRaesDispatchPort:
         self,
         compiled_plan: dict[str, Any],
         participant_access: Sequence[ParticipantAccessBinding] = (),
+        cloud_content: dict[str, dict[str, Any]] | None = None,
     ) -> ShifterDispatchResult:
         if self.credential is not None:
-            return self._realize_principal(compiled_plan, participant_access)
+            return self._realize_principal(compiled_plan, participant_access, cloud_content)
+        from shared.raes.cloud_content import prepare_cloud_content
+
+        sealed_content = prepare_cloud_content(cloud_content, compiled_plan, self.pack_root)
         delivery_bindings = self._prepare_delivery(compiled_plan)
         artifact_bindings = self._resolve_artifact_bindings(compiled_plan)
         from uuid import UUID
@@ -123,6 +127,7 @@ class CmsRaesDispatchPort:
                 compiled_plan=compiled_plan,
                 backend_admission=self.backend_admission,
                 bindings=RangeBindings(
+                    cloud_content=sealed_content,
                     delivery=delivery_bindings,
                     participant_access=tuple(participant_access),
                     artifact=artifact_bindings,
@@ -141,7 +146,10 @@ class CmsRaesDispatchPort:
         )
 
     def _realize_principal(
-        self, compiled_plan: dict[str, Any], participant_access: Sequence[ParticipantAccessBinding]
+        self,
+        compiled_plan: dict[str, Any],
+        participant_access: Sequence[ParticipantAccessBinding],
+        cloud_content: dict[str, dict[str, Any]] | None = None,
     ) -> ShifterDispatchResult:
         """Stage policy before locks; native creation, source fences and queue commit together."""
         from uuid import UUID
@@ -160,6 +168,9 @@ class CmsRaesDispatchPort:
             authority_action=self.authority_action,
             authority_target=self.authority_target,
         )
+        from shared.raes.cloud_content import prepare_cloud_content
+
+        sealed_content = prepare_cloud_content(cloud_content, compiled_plan, self.pack_root)
         delivery = self._prepare_delivery(compiled_plan)
         artifacts = self._resolve_artifact_bindings(compiled_plan)
         current = revalidate_scoped_launch(
@@ -181,6 +192,7 @@ class CmsRaesDispatchPort:
         prepare_models = needs_model_preparation(self.request_id)
         prepare_inputs = prepare_models or prepare_files
         bindings = RangeBindings(
+            cloud_content=sealed_content,
             delivery=delivery,
             participant_access=tuple(participant_access),
             artifact=artifacts,

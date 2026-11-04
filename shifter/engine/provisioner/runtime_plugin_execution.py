@@ -11,6 +11,7 @@ from uuid import UUID
 
 from shared.raes.participant_access import ParticipantAccessBinding
 from shared.runtime_plugin_binding import runtime_plugin_requests
+from shared.runtime_plugin_preparation import RuntimePreparation
 from shifter_adapter_sdk.guest import RUNTIME_VALUES_ENV
 from shifter_adapter_sdk.runtime import GuestAction, GuestTarget, RuntimeInput, RuntimePlan
 
@@ -42,6 +43,7 @@ class GuestPluginPlans:
     requests: tuple[RuntimeInput, ...]
     plans: tuple[RuntimePlan, ...]
     preparation: RuntimePlan | None = None
+    preparation_snapshot: RuntimePreparation | None = None
 
     def execute(self, _raes_plan: RaesPlan, instances: list[dict[str, Any]]) -> None:
         """Run configure then verify inside apply's existing cleanup boundary."""
@@ -70,18 +72,19 @@ def _read_response(request: RuntimeInput) -> object | None:
     return row[2]
 
 
-def _read_plan(request: RuntimeInput, run: RaesOperationRun) -> RuntimePlan | None:
+def _read_plan(request: RuntimeInput, run: RaesOperationRun) -> tuple[RuntimePlan, RuntimePreparation | None] | None:
     """Read a sealed preparation or a legacy guest plan from the same projection."""
     response = _read_response(request)
     if response is None:
         return None
     if request.phase == "prepare":
-        return approved_plan(run, response)
+        result = approved_plan(run, response)
+        return result, RuntimePreparation.model_validate(response)
     result = RuntimePlan.model_validate(response)
     result.authorize(request)
     if result.status != "planned":
         raise RuntimePluginExecutionError("Runtime plugin planning failed")
-    return result
+    return result, None
 
 
 def load_guest_plugin_plans(run: RaesOperationRun) -> GuestPluginPlans | None:
@@ -113,25 +116,30 @@ def load_guest_plugin_plans(run: RaesOperationRun) -> GuestPluginPlans | None:
 def load_prepared_plugin_run(run: RaesOperationRun) -> tuple[RaesOperationRun, GuestPluginPlans | None]:
     """Open the preparation barrier only after the complete authorized phase set."""
     bundle = load_guest_plugin_plans(run)
-    return prepared_run(run, bundle.preparation if bundle is not None else None), bundle
+    return prepared_run(
+        run,
+        bundle.preparation if bundle is not None else None,
+        bundle.preparation_snapshot if bundle is not None else None,
+    ), bundle
 
 
 def _complete_bundle(
     requests: tuple[RuntimeInput, ...],
-    plans: tuple[RuntimePlan | None, ...],
+    plans: tuple[tuple[RuntimePlan, RuntimePreparation | None] | None, ...],
     access_bindings: tuple[ParticipantAccessBinding, ...],
 ) -> GuestPluginPlans:
     """Keep preparation out of the guest action set and verify all access needs."""
     guests = tuple(
-        (request, plan)
-        for request, plan in zip(requests, plans, strict=True)
-        if request.phase != "prepare" and plan is not None
+        (request, response[0])
+        for request, response in zip(requests, plans, strict=True)
+        if request.phase != "prepare" and response is not None
     )
     guest_requests = tuple(item[0] for item in guests)
     guest_plans = tuple(item[1] for item in guests)
-    preparation = next((plan for plan in plans if plan is not None and plan.phase == "prepare"), None)
+    prepared = next((response for response in plans if response is not None and response[0].phase == "prepare"), None)
+    preparation, snapshot = prepared if prepared is not None else (None, None)
     _validate_value_requirements(guest_requests, guest_plans, access_bindings)
-    return GuestPluginPlans(guest_requests, guest_plans, preparation)
+    return GuestPluginPlans(guest_requests, guest_plans, preparation, snapshot)
 
 
 def _validate_value_requirements(

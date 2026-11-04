@@ -27,6 +27,8 @@ def preparation_cleanup_payload(envelope: dict[str, Any], record: RuntimePrepara
     if record.plan_digest != canonical_digest(original.get("plan")) or record.pin_digest != pin.digest:
         raise ValueError(_UNAVAILABLE)
     payload = {**original, "runtime_preparation": record.model_dump(mode="json")}
+    if record.cloud_projects:
+        payload["gcp_projects"] = [lease.model_dump(mode="json") for lease in record.cloud_projects]
     # Correlation UUIDs and the authority digest have fixed wire lengths for
     # the new destroy generation. The original references must all still fit.
     validate_operation_envelope({**source, "operation": "destroy", "payload": payload})

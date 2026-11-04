@@ -311,6 +311,29 @@
       "requirement": "PLAT-202",
       "user_docs": ["features/model-access.md"],
       "technical_docs": ["architecture/model-access/source-management.md"]
+    },
+    {
+      "id": "registered-gcp-range-projects",
+      "title": "Registered GCP range projects",
+      "requirement": "GEN-001",
+      "user_docs": [
+        "how-to/register-gcp-range-projects.md"
+      ],
+      "technical_docs": [
+        "technical/shifter_platform/registered-gcp-range-projects.md"
+      ],
+      "drift_sources": [
+        "shifter/shifter_platform/shared/gcp_range_projects.py",
+        "shifter/shifter_platform/shared/gcp_project_registration.py",
+        "shifter/shifter_platform/shared/gcp_runtime_plan.py",
+        "shifter/shifter_platform/shared/gcp_cloud_content.py",
+        "shifter/shifter_platform/shared/gcp_project_completion.py",
+        "shifter/shifter_platform/shared/raes/cloud_*.py",
+        "shifter/shifter_platform/engine/models/_gcp_range_projects.py",
+        "shifter/shifter_platform/engine/services/_gcp_project*.py",
+        "shifter/shifter_platform/cms/api/gcp_range_projects.py",
+        "shifter/engine/provisioner/gcp_project_*.py"
+      ]
     }
   ]
 }

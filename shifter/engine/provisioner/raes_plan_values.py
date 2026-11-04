@@ -30,6 +30,19 @@ def _node_spec(payload: Mapping[str, Any]) -> Mapping[str, Any]:
     return _mapping(_spec(payload).get("node"))
 
 
+def _validate_cloud_runtime(payload: Mapping[str, Any]) -> None:
+    """Unimplemented native cloud inventories must not become VM-only success.
+
+    Authoring admission also refuses these families. Retained inputs still
+    need a worker-side barrier until literal effects and readback exist.
+    """
+    runtime = _mapping(_node_spec(payload).get("runtime"))
+    for field in ("identity_authorities", "platform_applications"):
+        value = runtime.get(field, [])
+        if not isinstance(value, list) or value:
+            raise RaesPlanError("native cloud runtime realization is not available")
+
+
 def _infrastructure_spec(payload: Mapping[str, Any]) -> Mapping[str, Any]:
     """Return the payload's ``spec.infrastructure`` mapping, or an empty mapping."""
     return _mapping(_spec(payload).get("infrastructure"))

@@ -1177,6 +1177,58 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cms/gcp-range-projects/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description List one authorized page without provider inventory or credentials. */
+        get: operations["cms_gcp_range_projects_retrieve"];
+        put?: never;
+        /** @description Queue metadata capture for the operator-selected existing project. */
+        post: operations["cms_gcp_range_projects_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cms/gcp-range-projects/{registration_id}/disable/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Fence new allocations while retaining existing range custody. */
+        post: operations["cms_gcp_range_projects_disable_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cms/gcp-range-projects/{registration_id}/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Queue capture or original-baseline verification with current authority. */
+        post: operations["cms_gcp_range_projects_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cms/model-source-options/": {
         parameters: {
             query?: never;
@@ -7773,6 +7825,18 @@ export interface components {
             /** Format: uuid */
             event_uuid: string;
         };
+        /** @description Bounded administrative inventory. */
+        ProjectPage: {
+            results: components["schemas"]["RegisteredProject"][];
+            /** Format: uuid */
+            next_cursor: string | null;
+        };
+        /** @description The operator chooses only an existing project and its organization. */
+        ProjectRegistration: {
+            /** Format: uuid */
+            organization_uuid: string;
+            project_id: string;
+        };
         /** @description Closed organizer decision vocabulary. */
         PublicRegistrationDisposition: {
             action: components["schemas"]["PublicRegistrationDispositionActionEnum"];
@@ -8272,6 +8336,26 @@ export interface components {
             readonly category: string;
             readonly message: string;
         };
+        /** @description No baseline metadata, artifact locators or credentials are exposed. */
+        RegisteredProject: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            organization_uuid: string;
+            project_id: string;
+            project_number: string;
+            status: components["schemas"]["RegisteredProjectStatusEnum"];
+            failure_code: string;
+            in_use: boolean;
+        };
+        /**
+         * @description * `pending` - pending
+         *     * `ready` - ready
+         *     * `failed` - failed
+         *     * `disabled` - disabled
+         * @enum {string}
+         */
+        RegisteredProjectStatusEnum: "pending" | "ready" | "failed" | "disabled";
         /** @description Write-only credentials for the isolated image pull. */
         RegistryCredentials: {
             username: string;
@@ -12550,6 +12634,166 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ContentScopePage"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    cms_gcp_range_projects_retrieve: {
+        parameters: {
+            query?: {
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProjectPage"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    cms_gcp_range_projects_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProjectRegistration"];
+                "application/x-www-form-urlencoded": components["schemas"]["ProjectRegistration"];
+                "multipart/form-data": components["schemas"]["ProjectRegistration"];
+            };
+        };
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisteredProject"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    cms_gcp_range_projects_disable_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisteredProject"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    cms_gcp_range_projects_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                registration_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisteredProject"];
                 };
             };
             /** @description Authentication failed. */

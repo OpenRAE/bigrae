@@ -65,9 +65,10 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #665: add the notification-prune CronJob (ADR-072-R5); no other change.
 # Regenerated for #2719: only the plugin file-input admission policy and Secret object quota change.
 # Regenerated for #2718: optional sealed result key in the same invocation Secret; only plugin admission changes.
+# Regenerated for #2716: generation-bound registered-project capture/verification; only provisioner admission changes.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "414bad97145d64c3c747e54e24b15e95e75688b4830340cb1ef2246ead0d0919",
-    "gcp-dev": "927edcb61d2ecf3b522d88b80ccea815889a6cfbf93ccb4b2b652c312822b84f",
+    "gcp-prod": "0528a8c4bec27346e40b961ea74fe9b533100ebdcbac54314aa8fd4acccf741b",
+    "gcp-dev": "3defac47c89fdd6aa1eda621f27b87193892a4907b8d1dea4b958deb3bd68af9",
 }
 
 

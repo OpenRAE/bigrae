@@ -11,6 +11,7 @@ from uuid import UUID
 from django.db import transaction
 from django.utils import timezone
 
+from shared.gcp_cloud_content import CloudContentEnvelope
 from shared.raes.artifact_binding import ArtifactBinding
 from shared.raes.content_delivery import DeliveryBinding
 from shared.raes.participant_access import ParticipantAccessBinding
@@ -41,6 +42,7 @@ class RangeBindings:
     """
 
     delivery: tuple[DeliveryBinding, ...] = ()
+    cloud_content: CloudContentEnvelope | None = None
     participant_access: tuple[ParticipantAccessBinding, ...] = ()
     artifact: tuple[ArtifactBinding, ...] = ()
     runtime_plugin_scope: RuntimePluginScope | None = None
@@ -145,6 +147,19 @@ def _verify_existing_plugin_scope(existing: Range, scope: RuntimePluginScope | N
         raise ValueError("Range replay cannot change its runtime plugin pack identity")
 
 
+def _verify_existing_cloud_content(existing: Range, content: CloudContentEnvelope | None) -> None:
+    """Retries retain ciphertext; a fresh encryption nonce grants no new content."""
+    stored = (
+        CloudContentEnvelope.model_validate(existing.raes_cloud_content)
+        if existing.raes_cloud_content is not None
+        else None
+    )
+    expected = None if stored is None else (stored.plan_digest, stored.content_digest)
+    actual = None if content is None else (content.plan_digest, content.content_digest)
+    if expected != actual:
+        raise ValueError("Range replay cannot change its cloud content")
+
+
 def _persist_range_bindings(range_obj: Range, bindings: RangeBindings) -> None:
     """Persist every byte-free RAES sidecar binding in the range transaction."""
     from engine.models import (
@@ -153,6 +168,9 @@ def _persist_range_bindings(range_obj: Range, bindings: RangeBindings) -> None:
         RaesParticipantAccessBinding,
     )
 
+    if bindings.cloud_content is not None:
+        range_obj.raes_cloud_content = bindings.cloud_content.model_dump(mode="json")
+        range_obj.save(update_fields=["raes_cloud_content"])
     RaesContentDeliveryBinding.objects.bulk_create(
         RaesContentDeliveryBinding(
             range=range_obj,

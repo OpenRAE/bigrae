@@ -64,6 +64,7 @@ class ShifterProvisioningDispatchPort(Protocol):
         self,
         compiled_plan: dict[str, Any],
         participant_access: Sequence[Any] = (),
+        cloud_content: dict[str, dict[str, Any]] | None = None,
     ) -> ShifterDispatchResult:
         """Persist + dispatch the serialized ``compiled_plan``; return a receipt and optional completed observations.
 
