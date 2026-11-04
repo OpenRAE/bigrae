@@ -6,8 +6,8 @@ architecture; subsystem guides provide detail.
 
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
-**Reviewed:** 2026-10-31 for live CTF notifications (#665), after the AWS native
-identity bindings (#2313) and the one-command GCP install (#2679).
+**Reviewed:** 2026-11-04 for registered-project IAM policy requests (#2773), after
+the one-command GCP install (#2679).
 This describes source behavior, not a certificate of a live deployment.
 
 Portal and deployer images install dependencies during the build and remove
