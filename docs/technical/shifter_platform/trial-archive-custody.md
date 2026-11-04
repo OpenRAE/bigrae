@@ -147,3 +147,7 @@ replacement origin in `TrialArchiveTransfer.plan_metadata` before upload. It
 contains no configuration bodies and grants no custody receipt. Exports use it
 to report unavailable replacement collections; unknown legacy associations
 require matching verified evidence or an explicit refusal.
+
+Derived file publication lives in `_trial_archive_exports` behind the existing
+custody service entry point. It reuses the same authority, verification, audit
+and retention primitives; record formatting remains in the export record module.

@@ -1,21 +1,7 @@
-"""CMS service interface.
+"""Public CMS services and legacy patch bindings.
 
-Content and asset management for Shifter platform. The implementation is
-split across private submodules (``_common``, ``_agents``, ``_credentials``,
-``_range_queries``, ``_raes_range_create``, ``_range_destroy``, ``_range_pause``,
-``_range_resume``, ``_uploads``, ``_scenarios``, ``_ngfws``, ``_queries``)
-and re-exported here so callers continue to use
-``from cms.services import X``.
-
-The re-exports also rebind names that tests historically patch at
-``cms.services.<name>`` (``audit_log``, the ``engine_*`` aliases, ``RangeInstance``) so existing
-``unittest.mock.patch`` targets still work.
-
-The cross-layer re-export (``cms.signals.*``) is
-preserved on the facade so the layer-imports gate
-(``scripts/check_layer_imports/layer_imports.yaml``) continues to allow
-only ``cms.services`` from mission_control / ctf rather than reaching into
-``cms.signals`` directly.
+Private modules own implementations; this facade preserves existing caller and
+patch targets. Cross-layer imports remain confined to this service interface.
 """
 
 from __future__ import annotations
@@ -95,12 +81,12 @@ from ._experiment_batches import (
     record_experiment_worker,
     recover_experiment_claim,
 )
-from ._experiment_exports import (
+from ._experiment_export_records import (
     ExperimentExportAssociationError,
     ExperimentExportDataError,
     ExperimentExportLimitError,
-    export_experiment_batch,
 )
+from ._experiment_exports import export_experiment_batch
 from ._file_assets import (
     cancel_file_upload,
     complete_file_upload,

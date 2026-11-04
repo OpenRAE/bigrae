@@ -14,6 +14,7 @@ flowchart LR
     Export --> Admission[CMS retained batch and entry services]
     Export --> Custody[CMS archive inventory and retrieval services]
     Custody --> Originals[Approved tenant storage]
+    Export --> Records[CMS record reconciliation and formatting]
     Export --> Reader[shared.raes validation and record inspection]
     Reader --> Export
     Export --> Publisher[CMS authorized export publication]
@@ -21,6 +22,9 @@ flowchart LR
 ```
 
 `cms.services.export_experiment_batch` composes the existing owners.
+Private CMS modules keep record reconciliation and file formatting separate
+from inventory reads and from custody-owned export publication. These modules
+share the existing custody primitives and add no service or trust boundary.
 Admission owns retained plan integrity and operational assignments.
 Archive custody owns tenant-filtered inventory, verified retrieval, destination
 configuration and publication. Only `shared.raes` interprets portable records,

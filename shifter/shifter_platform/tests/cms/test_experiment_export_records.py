@@ -6,7 +6,8 @@ from uuid import uuid4
 import pytest
 
 from cms.services._experiment_batch_records import RetainedExperimentBatch
-from cms.services._experiment_exports import _csv_cell, _entry_row, _manifest, _reconcile_rows, _source_rows
+from cms.services._experiment_export_records import _csv_cell, _entry_row, _manifest, _reconcile_rows
+from cms.services._experiment_exports import _source_rows
 from shared.raes.trial_archive import VerifiedTrialArchive
 from shared.raes.trial_results import TrialArchiveContents, _metadata
 

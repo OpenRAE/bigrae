@@ -126,3 +126,7 @@ Interrupted transfers and identical-byte successful retries remain separate cust
 observations. When the archive becomes unavailable, reconciliation preserves
 receipt summaries and every source reference; different custody states alone
 do not create a scientific conflict.
+
+The private `_experiment_export_records` module owns deterministic projections
+and formatting. `_experiment_exports` composes inventory reads, while
+`_trial_archive_exports` publishes through existing custody primitives.
