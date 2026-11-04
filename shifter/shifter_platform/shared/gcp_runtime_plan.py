@@ -12,9 +12,16 @@ from typing import Any
 from shifter_adapter_sdk.runtime import RuntimePlan
 
 from shared.gcp_range_projects import GcpProjectLease
-from shared.gcp_runtime_nodes import cloud_only_node_addresses as cloud_only_node_addresses
-from shared.gcp_runtime_nodes import native_cloud_nodes as native_cloud_nodes
+from shared.gcp_runtime_nodes import cloud_only_node_addresses, native_cloud_nodes
 from shared.gcp_runtime_types import UNSUPPORTED, GcpProjectWork, SubjectMap, TargetMap, records, supported, token
+
+__all__ = [
+    "GcpProjectWork",
+    "cloud_only_node_addresses",
+    "compile_cloud_work",
+    "native_cloud_nodes",
+    "selected_secret_payloads",
+]
 
 
 def compile_cloud_work(

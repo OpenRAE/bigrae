@@ -117,6 +117,10 @@ large recursive authority limits must still be admitted by the pinned public RAE
 planner; declaring support does not bypass that gate. Full-size public admission
 is tracked in OpenRAE/rae#1885.
 
+`shared.gcp_runtime_plan` explicitly exports the existing compilation, payload
+selection and node-projection entry points. Node helpers live in
+`shared.gcp_runtime_nodes`; existing imports through the plan module remain valid.
+
 Required APIs are enabled before baseline capture. Their setup is not owned or
 reversed by the range overlay. The worker needs project-scoped account create,
 update/delete and IAM-policy permissions; Secret Manager create/version/access,
