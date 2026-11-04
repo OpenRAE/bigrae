@@ -134,6 +134,30 @@ Completion identity bounds are validated separately from observation rows; both
 principal and ordinary dispatch pass optional content through the same host
 validation boundary.
 
+### Preparation relation budget (#2758)
+
+The host evaluates admitted recursive authorities with the same fixed plan
+profile as their public compiler and runtime. RAE 10.7.2 and the host use the
+published `PLAN_AUTHORITY_LIMITS` instead of the smaller generic relation
+default, so a full-size admitted authority remains usable in preparation.
+
+RAE #1885 owns the profile for the complete projected concern. The dependency
+also includes RAE #1886's scalar-scope correction. Keep one published,
+hash-pinned dependency version
+across compilation, native transport, preparation and completion. Do not copy
+profile constants into the host or let adapters select their own budgets.
+
+This follow-up changes no ownership, data flow, custody transaction or provider
+permission. Exact values, closed collection membership and the original binding
+remain authoritative. Exhausted work must still refuse before effects.
+
+Verify a synthetic full-size declaration through public planning and actual
+adapter preparation, then reject changed roles, principals, native IDs and
+payload references. Include a larger-than-supported refusal and mutation checks
+that remove the explicit profile or weaken exact-value validation. Run the
+existing native transport, completion and worker-version parity checks with the
+released dependency. These checks require no cloud operation.
+
 The worker plan reader requires full cloud admission for nonempty native
 identity-authority and platform-application inventories. Capability refusal at
 authoring admission alone is insufficient: a retained or directly queued input
