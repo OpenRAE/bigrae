@@ -10,6 +10,11 @@ architecture; subsystem guides provide detail.
 identity bindings (#2313) and the one-command GCP install (#2679).
 This describes source behavior, not a certificate of a live deployment.
 
+Portal and deployer images install dependencies during the build and remove
+`pip` and its vendored libraries from the runtime image. The shared deployment
+preflight owns tool checks, including the Git exemption for a sealed release
+with an embedded source revision; required security tools remain mandatory.
+
 BigRAE is the current product name. Public BigRAE config, SDK, client and plugin
 names converge on their existing validation and execution owners; legacy names
 remain compatible. Conflicting old/new configuration fails before use. The

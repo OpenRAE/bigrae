@@ -485,6 +485,7 @@ The preflight checks the tools on `PATH`, loads the bundle, and renders the
 Terraform values. It reports an insecure control-plane input, for example a
 world-open authorized network. From a checkout, the tool check includes `git`.
 The deployer image embeds its source revision, so the check omits `git` there.
+The CLI delegates these tool checks to the shared preflight gate.
 
 ## First install
 

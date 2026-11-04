@@ -120,6 +120,11 @@ RUN groupadd --gid 10001 appgroup && \
 COPY --from=builder /usr/local/lib/python3.14/site-packages /usr/local/lib/python3.14/site-packages
 COPY --from=builder /usr/local/bin/gunicorn /usr/local/bin/daphne /usr/local/bin/django-admin /usr/local/bin/
 
+# Dependencies are installed at build time. Remove the base image's package
+# manager and its vulnerable vendored libraries after the builder copy, just as
+# the deployer image does; the portal never installs packages at runtime.
+RUN python -m pip uninstall --yes --no-input pip
+
 # First-party installation config on PYTHONPATH. It is first-party source with
 # no external dependency to lock/hash, so it rides on PYTHONPATH rather than a
 # pip install, which Sonar flags as an unlocked/unhashed resolution
