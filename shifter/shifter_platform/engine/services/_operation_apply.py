@@ -35,23 +35,25 @@ from ._operation_apply_domain import apply_validated_result
 # engine.models is imported lazily inside functions below (app-registry load
 # order); this block is type-check-only.
 if TYPE_CHECKING:
-    from engine.models import Instance, OperationResultInbox, Range, VpnAccessProfile
+    from engine.models import GcpRangeProject, Instance, OperationResultInbox, Range, VpnAccessProfile
 
 logger = logging.getLogger(__name__)
 
 _RANGE_RESOURCES = frozenset({"range", "raes-range"})
 
 
-def _resolve_operation_target(resource: str, operation_id: UUID | str) -> Range | Instance | VpnAccessProfile | None:
+def _resolve_operation_target(
+    resource: str, operation_id: UUID | str
+) -> Range | Instance | VpnAccessProfile | GcpRangeProject | None:
     """Return the domain row that currently owns this operation generation, or None.
 
     A row is returned only when its ``provisioner_operation_id`` still equals the
     result's ``operation_id`` — i.e. the generation is current. A rotated (or
     absent) generation resolves to None, which the caller treats as stale.
     """
-    from engine.models import Instance, Range, VpnAccessProfile
+    from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile
 
-    target: Range | Instance | VpnAccessProfile | None
+    target: Range | Instance | VpnAccessProfile | GcpRangeProject | None
     if resource in _RANGE_RESOURCES:
         target = Range.objects.filter(provisioner_operation_id=operation_id).select_related("request").first()
     elif resource == "ngfw":
@@ -60,6 +62,8 @@ def _resolve_operation_target(resource: str, operation_id: UUID | str) -> Range 
             .select_related("request")
             .first()
         )
+    elif resource == "range-project":
+        target = GcpRangeProject.objects.filter(provisioner_operation_id=operation_id).first()
     elif resource == "vpn-profile":
         target = (
             VpnAccessProfile.objects.filter(provisioner_operation_id=operation_id)
@@ -71,8 +75,14 @@ def _resolve_operation_target(resource: str, operation_id: UUID | str) -> Range 
     return target
 
 
-def _request_matches(target: Range | Instance | VpnAccessProfile, expected_request_id: object) -> bool:
+def _request_matches(
+    target: Range | Instance | VpnAccessProfile | GcpRangeProject, expected_request_id: object
+) -> bool:
     """Return True if the target row's request matches the result's request_id."""
+    from engine.models import GcpRangeProject
+
+    if isinstance(target, GcpRangeProject):
+        return str(target.pk) == str(expected_request_id)
     request = getattr(target, "request", None)
     actual_request_id = getattr(request, "request_id", None)
     return actual_request_id is not None and str(actual_request_id) == str(expected_request_id)
@@ -150,5 +160,8 @@ def apply_pending_operation_results(*, batch_size: int = 50) -> int:
             row.disposition_detail = detail
             row.applied_at = timezone.now()
             row.save(update_fields=["disposition", "disposition_detail", "applied_at"])
+            from ._gcp_project_release import release_applied_project_restorations
+
+            release_applied_project_restorations(row)
             evaluated += 1
     return evaluated

@@ -37,10 +37,19 @@ These retain their stated design authority and are not historical preflights:
 - [Artifact preparation](raes-in-tenant-artifact-preparation-design-1583.md)
 - [RAES hard cut](raes-migration-adr.md)
 - [RAES 10.6 contract-pair adoption boundary](raes-contract-pair-adoption-2722.md)
+- [Tenant trial archive intake boundary](experiments-trial-archive-intake-boundary-2740.md)
+- [Pack experiment admission boundary](experiment-admission-boundary-2742.md)
+- [Trial archive custody design](trial-archive-custody.md)
 - [External runtime boundary](external-scenario-runtime-design.md)
+- [Named file assets and adapter inputs](named-file-assets-2719.md)
+- [Adapter values before provisioning](adapter-pre-provisioning-2718.md)
+- [Registered GCP range projects](registered-gcp-range-projects-2716.md)
 
 - [Shared deployment configuration](deployment-root-consolidation-2089.md)
 - [Verification and adoption ownership](verification-adoption-ownership-design-2090.md)
 - [Browser CSP enforcement](browser-csp-enforcement-design-2090.md)
+- [GCS CMEK](gcp-gcs-cmek-design-2564.md)
 
 - [Team captain controls (#646)](ctf-team-captain-preflight-646.md)
+
+- [Pack experiment admission design](experiment-admission-design-2742.md) — retained inputs, security boundaries, and claim persistence.

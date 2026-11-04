@@ -141,6 +141,7 @@ COPY engine/provisioner/ .
 RUN mkdir -p /opt/terraform-providers && \
     terraform -chdir=terraform/modules/range providers mirror /opt/terraform-providers && \
     terraform -chdir=terraform/modules/ngfw providers mirror /opt/terraform-providers && \
+    terraform -chdir=terraform/modules/registered-gcp-project providers mirror /opt/terraform-providers && \
     chown -R root:root /opt/terraform-providers
 
 # Set HOME explicitly so Terraform finds the writable cache/config

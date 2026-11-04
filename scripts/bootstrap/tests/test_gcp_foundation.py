@@ -131,6 +131,12 @@ def _plan_document(inputs_path, *, extra_binding=False):
     )
 
 
+_EVIDENCE_KEY = (
+    "projects/example-project/locations/us-central1/keyRings/shifter-example-foundation-gcs/cryptoKeys/release-evidence"
+)
+_CMEK_BUCKETS = {"example-project-evidence": _EVIDENCE_KEY}
+
+
 class FoundationProcess:
     """Simulate gcloud, terraform, and gh for one foundation bootstrap."""
 
@@ -138,7 +144,7 @@ class FoundationProcess:
         self, inputs_path, *, outputs=None, extra_binding=False, bucket_exists=False, federation=None, applies=None
     ):
         self.inputs_path = inputs_path
-        self.outputs = outputs or {}
+        self.outputs = {"storage_cmek_buckets": _CMEK_BUCKETS, **(outputs or {})}
         self.extra_binding = extra_binding
         self.bucket_exists = bucket_exists
         # The state of each federation resource ("pools", "providers"); a missing key means absent.
@@ -158,6 +164,13 @@ class FoundationProcess:
             return subprocess.CompletedProcess(argv, 0, "123\n")
         if argv[:2] == ["gh", "api"] and argv[2].startswith("repos/") and "/environments/" not in argv[2]:
             return subprocess.CompletedProcess(argv, 0, '{"id":456,"owner":{"id":789}}')
+        if argv[:4] == ["gcloud", "storage", "buckets", "describe"] and "--raw" in argv:
+            # The object migration reads the bucket default key that the apply set (#2564).
+            bucket = argv[4].removeprefix("gs://")
+            metadata = {"encryption": {"defaultKmsKeyName": self.outputs["storage_cmek_buckets"][bucket]}}
+            return subprocess.CompletedProcess(argv, 0, json.dumps(metadata))
+        if argv[:4] == ["gcloud", "storage", "objects", "list"]:
+            return subprocess.CompletedProcess(argv, 0, "[]")
         if argv[:4] == ["gcloud", "storage", "buckets", "describe"]:
             return subprocess.CompletedProcess(argv, 0 if self.bucket_exists else 1, "")
         if argv[0] == "terraform" and argv[2:4] == ["show", "-json"]:
@@ -195,6 +208,15 @@ def test_new_foundation_creates_backend_and_checks_the_saved_plan_before_apply(i
     assert plan.startswith(tempfile.gettempdir())
     assert calls[show][2:] == ["show", "-json", plan]
     assert calls[apply][2:] == ["apply", "-input=false", plan]
+    # Cloud KMS is on before the first key operation (#2564).
+    services = next(c for c in calls if c[:3] == ["gcloud", "services", "enable"])
+    assert services.count("cloudkms.googleapis.com") == 1 and calls.index(services) < init
+    # After the apply, each foundation bucket moves its live objects to its key (#2564).
+    migrated = [
+        i for i, c in enumerate(calls) if c[:4] == ["gcloud", "storage", "buckets", "describe"] and "--raw" in c
+    ]
+    assert [calls[i][4] for i in migrated] == ["gs://example-project-evidence"] and min(migrated) > apply
+    assert any(c[:5] == ["gcloud", "storage", "objects", "list", "gs://example-project-evidence/**"] for c in calls)
     # A destroy-only foundation writes no image Environment.
     assert not any(call[:2] == ["gh", "secret"] for call in calls)
     # Every child uses the foundation project as its quota project (#2584).
@@ -269,6 +291,55 @@ def test_a_saved_plan_with_unauthorized_trust_stops_before_apply(inputs, monkeyp
     finally:
         set_assume_yes(False)
     assert process.terraform("show") and not process.terraform("apply")
+
+
+def test_an_iam_propagation_error_replans_and_applies_again(inputs, monkeypatch):
+    # A new Storage service agent grant can take time to reach the bucket update (#2564).
+    denied = subprocess.CompletedProcess(
+        [],
+        1,
+        "",
+        "Error 403: Permission denied on Cloud KMS key. Please ensure that your Cloud Storage "
+        "service account has been authorized to use this key.",
+    )
+    process = FoundationProcess(inputs, applies=[denied])
+    monkeypatch.setattr(subprocess, "run", process)
+    monkeypatch.setattr("gcp_foundation.time.sleep", lambda seconds: None)
+    set_assume_yes(True)
+    try:
+        bootstrap_gcp_foundation(str(inputs))
+    finally:
+        set_assume_yes(False)
+    plans, shows, applies = (process.terraform(verb) for verb in ("plan", "show", "apply"))
+    # Every apply uses a fresh saved plan that passed the trust check.
+    assert len(applies) == 2 and plans[1] < shows[1] < applies[1] and applies[0] < plans[1]
+
+
+def test_a_real_apply_failure_stops_without_a_retry_or_migration(inputs, monkeypatch):
+    process = FoundationProcess(
+        inputs, applies=[subprocess.CompletedProcess([], 1, "", "Error: Invalid value for variable")]
+    )
+    monkeypatch.setattr(subprocess, "run", process)
+    monkeypatch.setattr("gcp_foundation.time.sleep", lambda seconds: pytest.fail("retried a real failure"))
+    set_assume_yes(True)
+    try:
+        with pytest.raises(SystemExit):
+            bootstrap_gcp_foundation(str(inputs))
+    finally:
+        set_assume_yes(False)
+    assert len(process.terraform("apply")) == 1
+    assert not any(c[:4] == ["gcloud", "storage", "objects", "list"] for c in process.calls)
+
+
+def test_a_foundation_without_the_bucket_key_output_fails_closed(inputs, monkeypatch):
+    process = FoundationProcess(inputs, outputs={"storage_cmek_buckets": None})
+    monkeypatch.setattr(subprocess, "run", process)
+    set_assume_yes(True)
+    try:
+        with pytest.raises(RuntimeError, match="storage_cmek_buckets"):
+            bootstrap_gcp_foundation(str(inputs))
+    finally:
+        set_assume_yes(False)
 
 
 def _builder_inputs(path):

@@ -159,6 +159,8 @@ class TestGcpKaliSourceImage:
         assert "../scripts/kali/gce-debian-to-kali.sh" in content
         # The imported-base path (and its variable) is fully retired.
         assert "kali_source_image" not in content
+        # Registering the full Kali image takes longer than the 5m default (#2734).
+        assert 'state_timeout = "30m"' in content
 
     def test_kali_conversion_script_preserves_guest_agent(self):
         script = (PACKER_DIR / "scripts" / "kali" / "gce-debian-to-kali.sh").read_text()
@@ -315,6 +317,19 @@ class TestGcpValidationEvidenceBinding:
         assert "VALIDATOR_SSH_KEY=${RUNNER_TEMP}" in validate
         assert "/tmp/validator_key" not in validate  # noqa: S108
         assert "Remove validation credentials and evidence" in validate
+
+    def test_scanner_boots_before_the_candidate_disk_attaches(self):
+        # A same-base candidate shares filesystem labels with the scanner boot disk.
+        # Attached during boot, it can break the scanner fstab and stop sshd (#2736).
+        validate = (WORKFLOWS_DIR / "packer-gcp-validate.yml").read_text()
+        create = validate.index('gcloud compute instances create "${SBOM_SCANNER_VM}"')
+        reachable = validate.index('--command=true >"${probe_log}" 2>&1')
+        attach = validate.index('gcloud compute instances attach-disk "${SBOM_SCANNER_VM}"')
+        mode_check = validate.index('if [ "${ATTACHED_MODE}" != "READ_ONLY" ]')
+        scan = validate.index("sudo /tmp/scan-attached-disk.sh")
+        assert create < reachable < attach < mode_check < scan
+        assert validate.count("gcloud compute instances attach-disk") == 1
+        assert 'tail -n 20 "${probe_log}"' in validate
 
     @staticmethod
     def _run_attached_disk_scanner(
@@ -763,3 +778,105 @@ class TestGcpGuestPublication:
         assert "push-to-registry: true" in build
         # release-gcp.yml takes the highest run-<number>.<attempt> tag of each role.
         assert '"${PACKAGE}:run-${GITHUB_RUN_NUMBER}.${GITHUB_RUN_ATTEMPT}"' in build
+
+
+FAKE_GCLOUD = r"""#!/usr/bin/env bash
+# Test double: log each call, answer lookups, and fail on request.
+echo "$*" >> "${FAKE_LOG}"
+if [[ -n "${FAKE_FAIL_ON:-}" && "$*" == *"${FAKE_FAIL_ON}"* ]]; then
+  echo "permission denied" >&2
+  exit 1
+fi
+case "$*" in
+  *"images list"*"status=PENDING"*)
+    count=$(($(cat "${FAKE_STATE}" 2>/dev/null || echo 0) + 1))
+    echo "${count}" > "${FAKE_STATE}"
+    if ((count <= ${FAKE_PENDING_POLLS:-0})); then echo "shifter-kali-1"; fi ;;
+  *"images list"*) printf 'shifter-kali-1\nshifter-kali-2\n' ;;
+  *"instances list"*|*"disks list"*) echo "packer-123-1" ;;
+esac
+"""
+
+
+class TestGcpUnpublishedBuildCleanup:
+    """A run that does not publish deletes the image, VM, and disk that it created (#2747)."""
+
+    @pytest.fixture
+    def run_cleanup(self, tmp_path):
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        gcloud = bin_dir / "gcloud"
+        gcloud.write_text(FAKE_GCLOUD)
+        gcloud.chmod(0o755)
+        log = tmp_path / "gcloud.log"
+        bash_path = shutil.which("bash")
+        assert bash_path is not None
+
+        def run(**env_updates):
+            env = dict(os.environ)
+            env.update(
+                {
+                    "PATH": f"{bin_dir}{os.pathsep}{env['PATH']}",
+                    "FAKE_LOG": str(log),
+                    "FAKE_STATE": str(tmp_path / "pending-polls"),
+                    "GCP_PROJECT_ID": "example-build-project",
+                    "ZONE": "us-central1-a",
+                    "BUILD_ID": "123-1",
+                    "POLL_SECONDS": "0",
+                }
+            )
+            env.update(env_updates)
+            result = subprocess.run(  # noqa: S603
+                [bash_path, str(GCP_SCRIPTS_DIR / "cleanup-unpublished-build.sh")],
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            calls = log.read_text().splitlines() if log.exists() else []
+            return result, calls
+
+        return run
+
+    def test_waits_for_pending_image_then_deletes_image_vm_and_disk(self, run_cleanup):
+        result, calls = run_cleanup(FAKE_PENDING_POLLS="2")
+        assert result.returncode == 0, result.stderr
+        assert sum("status=PENDING" in call for call in calls) == 3
+        deletes = [call for call in calls if " delete " in call]
+        assert deletes == [
+            "compute images delete shifter-kali-1 shifter-kali-2 --project=example-build-project --quiet",
+            "compute instances delete packer-123-1 --project=example-build-project --zone=us-central1-a "
+            "--delete-disks=all --quiet",
+            "compute disks delete packer-123-1 --project=example-build-project --zone=us-central1-a --quiet",
+        ]
+        assert all("labels.build-run=123-1" in call for call in calls if "images list" in call)
+
+    def test_never_deletes_on_bad_input_lookup_error_or_pending_timeout(self, run_cleanup):
+        cases = [
+            ({"BUILD_ID": "123"}, "BUILD_ID must be"),
+            ({"BUILD_ID": "123-1 OR labels.x=y"}, "BUILD_ID must be"),
+            ({"FAKE_FAIL_ON": "instances list"}, "permission denied"),
+            ({"FAKE_PENDING_POLLS": "99", "IMAGE_WAIT_SECONDS": "0"}, "still PENDING"),
+        ]
+        for env_updates, message in cases:
+            result, calls = run_cleanup(**env_updates)
+            assert result.returncode != 0, env_updates
+            assert message in result.stderr, env_updates
+            assert not any(" instances delete " in call or " disks delete " in call for call in calls), env_updates
+
+    def test_workflow_runs_cleanup_whenever_the_run_does_not_publish(self):
+        build = (WORKFLOWS_DIR / "packer-gcp.yml").read_text()
+        cleanup = build[build.index("\n  cleanup:") :]
+        assert "needs: [build, validate, publish]" in cleanup
+        assert "if: always() && needs.build.outputs.build_id != '' && needs.publish.result != 'success'" in cleanup
+        assert cleanup.index("refs/heads/dev|refs/heads/main) ;;") < cleanup.index("google-github-actions/auth@")
+        assert "BUILD_ID: ${{ needs.build.outputs.build_id }}" in cleanup
+        assert "shifter/packer/gcp/scripts/cleanup-unpublished-build.sh" in cleanup
+        assert "build_id: ${{ steps.build_id.outputs.build_id }}" in build
+        assert 'echo "PKR_VAR_build_id=${BUILD_ID}" >> "$GITHUB_ENV"' in build
+
+    @pytest.mark.parametrize("image_type", GCE_IMAGE_TYPES)
+    def test_template_names_vm_and_labels_image_with_the_build_id(self, image_type):
+        content = (GCP_DIR / f"{image_type}.pkr.hcl").read_text()
+        assert 'instance_name = "packer-${var.build_id}"' in content
+        assert re.search(r"\n\s+build-run\s+= var\.build_id\n", content)
+        assert "disk_name" not in content

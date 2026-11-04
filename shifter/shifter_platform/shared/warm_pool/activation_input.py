@@ -157,6 +157,7 @@ def parse_activation_input(payload: object) -> ActivationInput:
             _uuid(obj["organization_uuid"], "organization_uuid", optional=True),
             _uuid(obj["workspace_uuid"], "workspace_uuid", optional=True),
         )
+        _require(not raes_input.gcp_projects, "registered project ranges are not eligible for warm activation")
         return ActivationInput(
             claimant=principal,
             scope=scope,

@@ -9,7 +9,7 @@ from django.db.models import Sum
 from django.utils import timezone
 
 from cms.exceptions import CMSError
-from cms.models import AgentConfig
+from cms.models import AgentConfig, AgentUpload, OperatingSystem
 
 from ._common import _agent_projection_dict
 from ._content_authority import content_scope, content_scope_fields, fence_content_scope, require_content_scope
@@ -21,6 +21,21 @@ if TYPE_CHECKING:
 
 
 _CONTENT_UNAVAILABLE = "Content unavailable"
+
+
+def create_uploaded_installer(row: AgentUpload, scope: ResourceScope) -> AgentConfig:
+    """Create only the catalog projection of an already-fenced upload."""
+    return AgentConfig.objects.create(
+        user=None,
+        owner_principal_uuid=row.authority_owner_uuid,
+        **content_scope_fields(scope),
+        name=row.name,
+        os=OperatingSystem.objects.get(slug=row.os_slug),
+        agent_type=row.agent_type,
+        s3_key=row.install_key,
+        original_filename=row.filename,
+        file_size_bytes=row.file_size,
+    )
 
 
 def list_scoped_agents(credential: CredentialContext, scope: ResourceScope | None) -> list[AgentListItem]:
@@ -62,8 +77,10 @@ def scoped_storage_used(credential: CredentialContext, scope: ResourceScope | No
     if scope is None:
         raise CMSError(_CONTENT_UNAVAILABLE)
     require_content_scope(credential, scope, "read_content")
+    from ._file_assets import file_storage_used
+
     rows = AgentConfig.objects.filter(**content_scope_fields(scope), owner_principal_uuid__isnull=False)
-    return rows.aggregate(total=Sum("file_size_bytes"))["total"] or 0
+    return (rows.aggregate(total=Sum("file_size_bytes"))["total"] or 0) + file_storage_used(scope)
 
 
 def delete_scoped_agent(credential: CredentialContext, identifier: int) -> None:

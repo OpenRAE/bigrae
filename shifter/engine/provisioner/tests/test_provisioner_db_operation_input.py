@@ -11,6 +11,11 @@ from pathlib import Path
 from unittest.mock import MagicMock
 
 import pytest
+from shifter_adapter_sdk.runtime import canonical_digest
+
+from tests.test_gcp_project_baselines import capture as capture
+from tests.test_gcp_project_baselines import lease
+from tests.test_gcp_project_baselines import run as capture_baseline
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -193,6 +198,30 @@ class TestRaesProjection:
         monkeypatch.setattr(reader, "get_db_connection", MagicMock(return_value=conn))
         with pytest.raises(reader.OperationInputError):
             reader.get_raes_operation_input(_OPERATION_ID, request_id=_REQUEST_ID, operation="provision")
+
+    @pytest.mark.parametrize("foreign", [False, True])
+    def test_project_reference_must_belong_to_the_proven_request(self, monkeypatch, capture, foreign):
+        from uuid import UUID, uuid4
+
+        import provisioner_db_operation_input as reader
+
+        payload = _payload()
+        binding = lease(capture, capture_baseline(capture)).model_copy(
+            update={
+                "request_id": uuid4() if foreign else UUID(_REQUEST_ID),
+                "range_id": payload["legacy_range_id"],
+                "plan_digest": canonical_digest(payload["plan"]),
+            }
+        )
+        payload["gcp_projects"] = [binding.model_dump(mode="json")]
+        conn, _cursor = _mock_conn(fetchone=_row(_envelope(payload=payload)))
+        monkeypatch.setattr(reader, "get_db_connection", MagicMock(return_value=conn))
+        if foreign:
+            with pytest.raises(reader.OperationInputError, match="another request"):
+                reader.get_raes_operation_input(_OPERATION_ID, request_id=_REQUEST_ID, operation="provision")
+        else:
+            run = reader.get_raes_operation_input(_OPERATION_ID, request_id=_REQUEST_ID, operation="provision")
+            assert run.input.gcp_projects == (binding,)
 
 
 class TestRequestIdentityBinding:

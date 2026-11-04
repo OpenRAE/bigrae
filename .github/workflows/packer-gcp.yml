@@ -50,6 +50,7 @@ jobs:
     outputs:
       image_name: ${{ steps.build_gce_image.outputs.image_name }}
       image_id: ${{ steps.build_gce_image.outputs.image_id }}
+      build_id: ${{ steps.build_id.outputs.build_id }}
     permissions:
       contents: read
       id-token: write
@@ -79,6 +80,15 @@ jobs:
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           persist-credentials: false
+
+      # The build ID names the builder VM and its disk and labels the image, so
+      # the cleanup job can find what this run created (#2747).
+      - name: Set the build ID
+        id: build_id
+        run: |
+          BUILD_ID="${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          echo "PKR_VAR_build_id=${BUILD_ID}" >> "$GITHUB_ENV"
+          echo "build_id=${BUILD_ID}" >> "$GITHUB_OUTPUT"
 
       - name: Validate DC profile
         run: |
@@ -525,3 +535,51 @@ jobs:
             gcloud storage rm --quiet "gs://${GCP_GCE_BASE_IMAGE_BUCKET}/${EXPORT_OBJECT}" \
               || echo "::warning::The exported disk stays until the bucket lifecycle deletes it."
           fi
+
+  cleanup:
+    name: Delete unpublished ${{ inputs.image_type }} build resources
+    # A run that does not publish deletes the image, builder VM, and disk that it
+    # created: a failed, timed-out, or cancelled build, validation, or
+    # publication (#2747). The build ID exists only after the build job set it.
+    needs: [build, validate, publish]
+    if: always() && needs.build.outputs.build_id != '' && needs.publish.result != 'success'
+    runs-on: ubuntu-latest
+    environment: gcp-image-build
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - name: Reject non-protected dispatch refs
+        run: |
+          case "${GITHUB_REF}" in
+            refs/heads/dev|refs/heads/main) ;;
+            *)
+              echo "::error::Build cleanup requires refs/heads/dev or refs/heads/main, not '${GITHUB_REF}'."
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
+        with:
+          persist-credentials: false
+
+      - id: auth
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_PACKER_BUILD_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db
+        with:
+          version: ">= 416.0.0"
+
+      - name: Delete the image, builder VM, and disk of this build
+        env:
+          GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}
+          GCP_REGION: ${{ vars.GCP_REGION || 'us-central1' }}
+          GCP_PACKER_ZONE: ${{ vars.GCP_PACKER_ZONE }}
+          BUILD_ID: ${{ needs.build.outputs.build_id }}
+        run: |
+          ZONE="${GCP_PACKER_ZONE:-${GCP_REGION}-a}" \
+            bash shifter/packer/gcp/scripts/cleanup-unpublished-build.sh

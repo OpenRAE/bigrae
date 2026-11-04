@@ -11,7 +11,7 @@ Safety controls:
 - in operator mode, tooling whose revision equals a release whose images verify against
   the deployment trust anchor (this replaces the protected-branch rule of the workflow);
 - the same private Terraform inputs as the deploy, with Cloud SQL deletion protection
-  lifted and the permanent KMS key ring and key removed from state first.
+  lifted and the permanent KMS key rings and keys removed from state first.
 """
 
 from __future__ import annotations
@@ -120,6 +120,7 @@ def run_destroy(options: DestroyOptions, *, runner: ProcessRunner | None = None)
         apply_destroy_settings,
         backend_prefix,
         drop_unremovable_kms_resources,
+        kms_adoption_variables,
         state_bucket_name,
         terraform_context,
         terraform_destroy,
@@ -164,7 +165,9 @@ def run_destroy(options: DestroyOptions, *, runner: ProcessRunner | None = None)
                 prefix=backend_prefix(inputs.environment),
             )
             remove_platform_release(runner, inputs)
-            apply_destroy_settings(runner, ctx)
+            # A rerun after an interrupted destroy finds the keys out of state;
+            # the settings apply adopts them, and the next step detaches them again (#2564).
+            apply_destroy_settings(runner, ctx, variables=kms_adoption_variables(runner, ctx, inputs))
             drop_unremovable_kms_resources(runner, ctx)
             terraform_destroy(runner, ctx)
         success(f"GCP deployment {inputs.environment} platform resources are destroyed")

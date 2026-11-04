@@ -120,6 +120,17 @@ creates the pack bucket:
 - a lifecycle rule that deletes noncurrent archive generations after
   `noncurrent_version_retention_days` (default 7), so removed packs do not stay
   in the bucket.
+- a customer-managed key in the bucket location. The key ring takes the bucket
+  name with dots changed to hyphens. The key rotates every 90 days and has
+  `prevent_destroy`.
+
+Your Terraform root owns this key. A plan that deletes the module stops on the
+key. To rewrite the existing pack objects with the key, pass the
+`package_bucket_kms_key` output to this command:
+
+```bash
+./scripts/bootstrap/deploy.py gcp-cmek-migrate --bucket <pack-bucket> --key <key>
+```
 
 Set the module's `access_log_bucket_name` input to the tenant's terminal GCS
 audit-log bucket. Set `SHIFTER_RAES_PACKAGE_BUCKET` and optionally

@@ -129,9 +129,11 @@ A developer builds and validates those images in a build project that they
 supply. Each release takes the newest verified publication of each role, and
 the deploy imports the release guests after it verifies them
 ([GCP guest images](../architecture/gcp-guest-images.md), #2668). Keep platform
-hosting separate from the range guest backend. `gcp-destroy` keeps the Artifact
-Registry key ring and key, which GCP can not delete. A later install adopts them
-with import blocks. The range network peers with the platform network after the
+hosting separate from the range guest backend. Each Terraform-owned GCS bucket
+uses a customer-managed key in its location, and the owner command rewrites the
+live objects with that key (ADR-008-R5, [GCS CMEK](../architecture/gcp-gcs-cmek-design-2564.md)).
+`gcp-destroy` keeps the Artifact Registry and platform bucket key rings and keys,
+which GCP can not delete. A later install adopts them with import blocks. The range network peers with the platform network after the
 Service Networking connection, because GCP runs one peering operation for each
 network at a time (#2643). `deploy.py gcp-install` installs a tenant from a
 release and one bundle with no checkout (#2679). The release manifest pins the
@@ -352,6 +354,34 @@ image recipes, answers and acceptance evidence stay in their owner's repository.
 A compatibility probe, buildable SDK, or accepted manifest proves neither a
 published package release nor a qualified live range.
 
+Named adapter input files use CMS's existing content scope, signed upload,
+immutable object installation, quota and cleanup. Administrators manage them in
+Mission Control → Assets → Files and bind declared input names to logical file
+identities in the pack assignment. New launches pin the active immutable version;
+replacement or retirement cannot substitute bytes for an admitted range.
+CMS retains the original non-secret read authority and reauthorizes it before
+each planning invocation. The composition root connects this CMS service through
+a neutral material port; Engine imports no CMS implementation.
+
+Only SHA-256, size and exact version references enter the operation pin.
+The worker receives bounded bytes through its own Job-owned immutable Secret,
+mounted read-only at `/run/plugin-inputs`. The aggregate limit is 512 KiB across
+at most 16 inputs. Missing files, revoked authority or changed material prevent
+worker dispatch. File inputs grant no network access or cloud credentials.
+See the [named-file design](../architecture/named-file-assets-2719.md) for the
+trust boundaries, retention and admission checks.
+
+Adapters declaring `provision.prepare` may propose bounded scalar values and
+literal UTF-8 secret payloads for explicitly declared provisioning concerns.
+Secret payload selection addresses an unbound native version; it cannot replace
+an authored Content reference. Core checks every original RAES
+authority, including overlapping exact constraints, before accepting a result.
+The worker encrypts its response with an invocation-specific key; accepted values
+remain encrypted in the existing range binding and invocation projection.
+Provisioning uses an execution-only copy, reports original addresses, and cleanup
+uses the retained selection. See the [pre-provisioning design](../architecture/adapter-pre-provisioning-2718.md)
+for first-effect, retry and cancellation boundaries.
+
 The 2026-10-28 logging and exception-handling cleanup (#2569) changed only the
 Ruff lint rules in the SDK package manifest. It did not change the adapter ABI,
 the public contracts, or the installation boundary on this page.
@@ -393,3 +423,33 @@ support claims. New boundaries extend the manifest. Run the
 links and diagrams. Historical
 [preflights and reviews](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/index.md)
 explain implementation decisions; they are not prerequisites or current authority.
+
+### Registered range-project custody
+
+The implementation for #2716 adds an installation-authorized project registry
+owned by Engine. The portal queues native metadata capture through the existing
+provisioner outbox/input/result boundary; it gains no project IAM client.
+Encrypted baseline metadata stays in the existing private object store, with
+only original bucket/generation and integrity references retained in leases.
+PostgreSQL guards enforce exclusive unreleased project use and require current
+applied destroy/restoration evidence before release. The worker lowers admitted
+native cloud declarations to data-only Terraform using the pinned provider.
+State stays encrypted in the existing private bucket under the lease identity.
+The Terraform validation inventory classifies this runtime root under the
+provisioner's Terraform version with the Google provider family, so CI validates
+its committed provider lock without credentials.
+Independent inventory and payload readback must match the baseline plus overlay;
+teardown releases custody only after exact baseline restoration. Cloud-only
+nodes retain their native identities without allocating extra guest VMs.
+These routes have local contract and lifecycle checks; live qualification is
+still required. Native provisioning inputs have a 4 MiB transport limit; other
+operation inputs retain the existing 256 KiB limit. See the
+[registered-project contract](shifter_platform/registered-gcp-range-projects.md).
+
+## Experiment admission
+
+CMS retains immutable experiment inputs through released env-packs and RAES contracts.
+A native management command admits an installed tenant pack without dispatch.
+Operational claims and worker observations remain separate from scientific inputs.
+The current compiler permits serial execution; configured concurrency grants no provider capacity.
+See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).

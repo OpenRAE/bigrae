@@ -534,8 +534,12 @@
       },
       {
         "id": "ADR-008-R5",
-        "description": "GCP GCS bucket encryption stays on Google-managed keys for the current scope; CMEK is deferred until a compliance driver justifies the operational cost of bucket-role-specific KMS keys, KMS service-agent IAM, and a state-bucket bootstrap KMS contract. Owner: platform infra. Review trigger: an external compliance requirement (FedRAMP, SOC 2 Type II contract, GovCloud-style customer asks, or an explicit security review). Recorded 2026-05-11 from issue #962.",
-        "checks": []
+        "description": "Terraform-owned GCP GCS buckets (portal/gcs, cicd-oidc-identity, image-export-storage and raes-package-storage) use a bucket default customer-managed key from the gcs-cmek module: one key ring for each owner and location, one 90-day rotating key for each bucket role, prevent_destroy, and a grant to the bucket project's Storage service agent before the bucket uses the key. Foundation keys never depend on platform keys. gcp-destroy removes the exact platform key ring and key addresses from state, and gcp-deploy adopts them again. The deploy and destroy identities hold custom KMS roles that can not destroy, disable or delete keys or key versions. gcp-deploy, gcp-foundation and gcp-cmek-migrate rewrite each live object that does not use the bucket key, with a generation precondition, and report noncurrent, soft-deleted, retention-locked and wildcard-named objects as residuals. The bootstrap-owned Terraform state bucket keeps its pre-init ownership and Google-managed encryption. Issue #2564 supersedes the #962 decision; see docs/architecture/gcp-gcs-cmek-design-2564.md.",
+        "checks": [
+          "scripts/bootstrap/tests/test_gcp_storage_cmek.py::TestMigrateBucket::test_rewrites_only_live_objects_that_do_not_use_the_bucket_key",
+          "scripts/bootstrap/tests/test_gcp_storage_cmek.py::TestMigrateBucket::test_a_retention_locked_bucket_is_inventoried_and_never_rewritten",
+          "scripts/bootstrap/tests/test_gcp_foundation.py::test_new_foundation_creates_backend_and_checks_the_saved_plan_before_apply"
+        ]
       },
       {
         "id": "ADR-008-R6",
@@ -600,6 +604,9 @@
       "docs/architecture/gcp-range-host-artifact-delivery-preflight-1644.md",
       "scripts/check_tf_gcp_iam_resource_scope/check_tf_gcp_iam_resource_scope.py",
       "docs/architecture/gcp-gcs-cmek-preflight.md",
+      "docs/architecture/gcp-gcs-cmek-design-2564.md",
+      "platform/terraform/gcp/modules/gcs-cmek/main.tf",
+      "scripts/bootstrap/gcp_storage_cmek.py",
       "docs/architecture/gcp-redis-auth-tls-preflight.md",
       "scripts/check_tf_gcp_runner_network/check_tf_gcp_runner_network.py",
       "platform/terraform/gcp/modules/github-runner-network/main.tf",
@@ -1715,7 +1722,7 @@
       },
       {
         "id": "ADR-031-R4",
-        "description": "RAES backend diagnostics and operation evidence must be bounded, single-line, and free of backend realization detail (no terraform, ssm, ami-, cidr, subnet, secret, password, credential, or token substrings). Image ids, machine sizes, subnet allocation, provider configuration, and secrets are backend-owned realization and must not surface as authored RAES semantics or as evidence.",
+        "description": "RAES backend diagnostics and operation evidence must be bounded, single-line, and free of backend realization detail (no terraform, ssm, ami-, cidr, subnet, secret, password, credential, or token substrings). Image ids, machine sizes, subnet allocation, provider configuration, and secrets are backend-owned realization and must not surface as authored RAES semantics or as evidence. Restricted tenant trial archives are a separate custody boundary (ADR-031-R7); they do not widen operational sidecar, diagnostic, audit or public projection allowlists.",
         "checks": []
       },
       {
@@ -1726,6 +1733,16 @@
       {
         "id": "ADR-031-R6",
         "description": "The #1310/#1311 hard cut makes the RAES package-source registry the only scenario catalog and launch authority. The public create_range seam always dispatches a conformance-passed, digest-bound RAES package; no catalog selector, native-provisioning flag, legacy YAML/DB authoring path, CyberScript fallback, or same-schema rollback branch exists. Provision, status, and teardown select from persisted validated RAES range state. Private packs are installed independently through the tenant ingestion boundary; cloud qualification remains separately required.",
+        "checks": []
+      },
+      {
+        "id": "ADR-031-R7",
+        "description": "Tenant trial archive intake (#2740) uses the existing ObjectStorage abstraction and an explicitly configured approved tenant destination. CMS owns authorized custody and receipt metadata; portable run/evidence and sealed inventory contracts remain upstream-owned behind shared.raes. Preserve original records and declared evidence, including failed/partial attempts and honest loss disclosures, with credentials excluded under existing redaction rules. Publish a durable collection receipt atomically only after all declared present bytes are verified at the destination. Tenant-scoped identity plus identical bytes is idempotent; changed committed bytes conflict. A collection receipt permits disposal of the worker evidence copy, not trial success, range readiness, resource reuse or cloud cleanup. Retention and incomplete-transfer recovery are explicit and independent of pack removal and operational sidecar expiry. No legacy experiments runtime, duplicate scientific schema, automatic upload destination or new storage service is introduced. Boundary and provider-precondition caveats: docs/architecture/experiments-trial-archive-intake-boundary-2740.md.",
+        "checks": []
+      },
+      {
+        "id": "ADR-031-R8",
+        "description": "Pack experiment admission (#2742) consumes released env-packs experiment loading and RAES trial compilation, validation, instantiation and schedule/isolation contracts behind shared.raes. CMS owns tenant-authorized immutable scientific inputs and minimal fenced entry/attempt persistence; scientific identities, selections and allocation never depend on placement, reload or claim retries. Native credentials, approved archive destination/retention, supported apparatus/participant configuration, finite study bounds and trusted configurable concurrency limits remain independent admission gates. Serial is the default without upstream isolation proof; a ceiling is not live capacity, provider quota or execution permission. Reuse existing scoped authority, database immutability guards, claim/lease patterns, safe errors/audit and archive custody; no legacy experiments runtime, duplicate scientific schema/enumerator, silent study reduction/partitioning or remote executor is introduced. Replacement design and implementation documentation obligations: docs/architecture/experiment-admission-boundary-2742.md.",
         "checks": []
       }
     ],
@@ -1741,6 +1758,15 @@
       "docs/architecture/aces-runtime-target-backend-manifest-preflight-1233.md",
       "docs/architecture/aces-backend-manifest-realizability-preflight-1563.md",
       "docs/architecture/aces-account-credentials-preflight-1560.md",
+      "docs/architecture/experiments-trial-archive-intake-boundary-2740.md",
+      "docs/architecture/experiment-admission-boundary-2742.md",
+      "docs/architecture/experiment-admission-design-2742.md",
+      "docs/technical/shifter_platform/experiment-admission.md",
+      "docs/how-to/admit-pack-experiments.md",
+      "shifter/shifter_platform/cms/migrations/0076_experiment_input_guards.py",
+      "shifter/shifter_platform/cms/services/_experiment_batches.py",
+      "shifter/shifter_platform/shared/raes/experiment_admission.py",
+      "shifter/shifter_platform/tests/cms/test_experiment_admission_postgres.py",
       ".importlinter",
       "shifter/shifter_platform/shared/raes/domain_topology.py",
       "shifter/shifter_platform/shared/raes/runtime_target.py",
@@ -1853,6 +1879,11 @@
         "id": "ADR-032-R10",
         "description": "RAES agents.interactive_access remains participant-domain intent and MUST NOT be injected into the serialized ProvisioningPlan, RaesPlan, provisioning node payloads, backend capability manifest, or redacted runtime snapshot. shared.raes may lower only the released compiler's typed ParticipantBehaviorRuntime interactive-access projection into a versioned, bounded, non-secret sidecar of resolved compiled node address, closed channel, and resolved compiled account address. The sidecar is persisted separately from range_config, carried through the generation-fenced RAES operation input, and joined fail-closed to the separately parsed provisioning nodes/accounts before any provider or secret mutation. Shifter continues to claim no RAES participant_runtime capability. Because current product authorization has no trusted Shifter-actor to RAES-participant mapping, participant-local binding sets may be used only when they are invariant across compiled participant behaviors; they MUST NOT be unioned, guessed from role/name/team, or selected by an endpoint request. Each current binding requires an explicit enabled local account on the same single-instance target, a channel-compatible existing account credential strategy, and exact declaration-to-result equality; omitted/default accounts, domain accounts, count fan-out/implicit #0 selection, and exposure of the reserved provisioner-management account/key fail closed. The bounded realized member/access projection travels only in the authoritative terminal-ready operation result and is atomically persisted with READY, while credential values remain confined to guest installation and the existing terminal/Guacamole connection boundary.",
         "checks": []
+      },
+      {
+        "id": "ADR-032-R11",
+        "description": "GCP projects used by native cloud IAM and Secret Manager intent require an installation-authorized operator registration. Engine owns immutable encrypted baseline references and exclusive range leases; provider inventory stays in the existing private object store and never enters the reference-only operation envelope. An immutable lease retains the original organization, range/request, provisioning operation, plan digest, provider project identity, object bucket/generation and baseline digest. Only admitted launch or preparation acceptance allocates projects; input projection is read-only. Preparation admission, reservation, full future cleanup-envelope validation and planned state commit atomically, with rollback on acceptance failure. Retry and cleanup retain original projections. Unreleased custody blocks owner and scope moves. SQL prevents simultaneous unreleased uses, custody rewrites and deletion of active uses. Release requires the current applied native destroy receipt, verified absence with no residuals, and exact independent baseline restoration proof for that original lease. Range terminal status, cancellation, missing Jobs, timeouts or actor revocation never release custody. Authored cloud intent remains native RAES plan payload and literal referenced Content; unsupported intent must fail before effects. The worker admits nonempty identity-authority and platform-application inventories only after full native cloud preflight. Cloud-only nodes retain native identity without extra VMs; generated data-only Terraform uses the pinned provider and encrypted lease-scoped state, with independent inventory and payload readback before completion and exact baseline restoration before custody release. Registration excludes image-owning projects from every validated keyed image profile, including machine images, before provider inventory. Registration grants no portal or adapter cloud IAM authority.",
+        "checks": []
       }
     ],
     "exceptions": [],
@@ -1893,7 +1924,12 @@
       "shifter/shifter_platform/shared/raes/domain_topology.py",
       "shifter/shifter_platform/shared/raes/runtime_target.py",
       "docs/architecture/native-ec2-runtime.md",
-      "docs/architecture/raes-feature-artifact-acquisition-preflight-2463.md"
+      "docs/architecture/raes-feature-artifact-acquisition-preflight-2463.md",
+      "docs/architecture/registered-gcp-range-projects-2716.md",
+      "shifter/shifter_platform/shared/gcp_range_projects.py",
+      "shifter/shifter_platform/engine/models/_gcp_range_projects.py",
+      "shifter/shifter_platform/engine/migrations/0120_registered_gcp_range_projects.py",
+      "shifter/shifter_platform/tests/engine/services/test_gcp_range_projects.py"
     ]
   },
   {
@@ -2519,6 +2555,20 @@
         "id": "ADR-041-R10",
         "description": "Core image workflows and quality jobs must not build, seed, validate, or publish private scenario images or execute private pack tests. Pack-owned content, image recipes, private scripts, and their behavioral tests live in the owning repository. Shared base-image and domain-controller build tools remain generic, require explicit domain/content inputs, and retain first-boot, reboot, credential-cleanup, encryption and protected-ref checks. Private source must be preserved with a hash inventory before removal; history rewriting is not part of extraction.",
         "checks": []
+      },
+      {
+        "id": "ADR-041-R11",
+        "description": "Named adapter file inputs use the incumbent CMS scoped upload, immutable-copy, quota, soft-delete and cleanup boundaries. Required names and digest/size descriptors are closed SDK contracts; empty additions preserve retained manifest and invocation identities. CMS authorizes actual file custody and pins exact versions before dispatch, retaining admitted range uses through destruction. File material is bounded to 512 KiB total and 16 declared inputs, verified against installed object identity and SHA-256, and supplied only through an immutable invocation-owned read-only file Secret. Metadata and operation pins remain byte-free. A file selection grants no platform credential, provider permission, network access, arbitrary mount or application-process code execution. Missing, changed, unauthorized or undeclared inputs fail closed. Native custody constraints, rendered admission-policy tests and synthetic SDK/lifecycle tests enforce the channel; no live tenant effect is needed to test it.",
+        "checks": [
+          "layer-imports"
+        ]
+      },
+      {
+        "id": "ADR-041-R12",
+        "description": "An explicitly installed runtime adapter may opt into bounded pre-provisioning scalar selections for declared concerns. Core preserves the original plan and resource identities, validates every replacement against all original authority and public RAES constraints, and refuses exact, closed, missing, ambiguous, unresolved or nonconforming authority before effects. Workers receive only declared inputs and an invocation-scoped derived result key, never the application key or provider credentials. Preparation responses are encrypted before stdout, reauthorized and validated in core, and encrypted at rest using existing field encryption. The existing range binding retains one immutable accepted preparation, committed with the planned invocation under the range mutex. Retries and teardown use the original retained selection; cancellation before acceptance carries an explicit pre-effect absence proof. SDK models, SQL custody guards, synthetic lifecycle tests and rendered admission-policy tests enforce this channel without weakening worker isolation or deploying a tenant. Acceptance must validate the full future destroy envelope against its existing transport limit. Prepared teardown reuses the original immutable operation input; pre-effect absence needs no mutable image or guest-material projection.",
+        "checks": [
+          "layer-imports"
+        ]
       }
     ],
     "exceptions": [],
@@ -2531,6 +2581,7 @@
       "docs/technical/shifter_platform/scenario-verification.md",
       "shifter/shifter_adapter_sdk/verification",
       "docs/architecture/external-scenario-runtime-design.md",
+      "docs/architecture/named-file-assets-2719.md",
       "shifter/shifter_adapter_sdk/runtime.py",
       "shifter/shifter_platform/engine/services/_runtime_plugins.py",
       "shifter/shifter_platform/engine/services/_runtime_plugin_controller.py",
@@ -2543,7 +2594,9 @@
       "shifter/shifter_platform/tests/shared/cloud/test_runtime_plugin_policy.py",
       "shifter/shifter_adapter_sdk/tests",
       ".github/quality-path-filters.yaml",
-      ".github/workflows/_quality.yml"
+      ".github/workflows/_quality.yml",
+      "docs/architecture/adapter-pre-provisioning-2718.md",
+      "shifter/shifter_platform/engine/services/_runtime_plugin_cleanup.py"
     ]
   },
   {
@@ -2633,7 +2686,7 @@
       },
       {
         "id": "ADR-043-R4",
-        "description": "Operation payloads MUST compose the existing shared persisted RangeSpec/RAES ProvisioningPlan, range-cell, backend-admission, remote-access, RAES content/evidence, ResourceStatus, NGFW attachment, audit, error, and logging contracts. They MUST NOT introduce table-shaped DTOs, a second authored/runtime state model, duplicate validators/status enums/event constants/exception hierarchies, raw provider-response persistence, or a generic repository/query/patch interface.",
+        "description": "Operation payloads MUST compose the existing shared persisted RangeSpec/RAES ProvisioningPlan, range-cell, backend-admission, remote-access, RAES content/evidence, ResourceStatus, NGFW attachment, audit, error, and logging contracts. They MUST NOT introduce table-shaped DTOs, a second authored/runtime state model, duplicate validators/status enums/event constants/exception hierarchies, raw provider-response persistence, or a generic repository/query/patch interface. Native RAES plan inputs MAY use the bounded 4 MiB transport profile; registration, ordinary envelopes and results retain their existing limits, and the native payload parser remains mandatory.",
         "checks": []
       },
       {
@@ -4203,7 +4256,7 @@
       },
       {
         "id": "ADR-063-R4",
-        "description": "Status, results, cancellation, and cleanup MUST be published through the existing service projections and explicit DRF serializers as distinct facts: admitted (request/input/intent) is not observed readiness; dispatch/execution truth comes from ProvisionerLaunchStatus and provider task state; applied-result truth is owned by OperationResultInbox/ResultStep/the Engine applier; cancel intent is owned by request_provision_interrupt/InterruptState/launch_interrupt; cleanup-pending/unknown and retained residual obligations arise from incomplete cleanup, unavailable provider/secret/DB evidence, interrupt exhaustion, or missing terminal results; verified terminal cleanup requires successful owning lifecycle plus independent inventory/readback with scope and observation time. Timeout, DLQ, FAILED, or a missing Job MUST NOT be reported as proof of absence, and an unavailable or incomplete inventory MUST produce unknown, never an empty success. Cleanup/unknown values MUST NOT be added to ResourceStatus or RAES status enums merely to fit a public response; extend the owning native contract instead. Only authorized residual categories/counts, reasons, freshness, and permitted next actions are exposed; resource/credential locators and diagnostics remain protected. Cancel targets the admitted generation only, does not cancel a newer generation or guarantee provider abort, and once cleanup is owed, actor revocation MUST NOT orphan it: the trusted system lifecycle continues within persisted ownership while public access is reauthorized.",
+        "description": "Status, results, cancellation, and cleanup MUST be published through the existing service projections and explicit DRF serializers as distinct facts: admitted (request/input/intent) is not observed readiness; dispatch/execution truth comes from ProvisionerLaunchStatus and provider task state; applied-result truth is owned by OperationResultInbox/ResultStep/the Engine applier; cancel intent is owned by request_provision_interrupt/InterruptState/launch_interrupt; cleanup-pending/unknown and retained residual obligations arise from incomplete cleanup, unavailable provider/secret/DB evidence, interrupt exhaustion, or missing terminal results; verified terminal cleanup requires successful owning lifecycle plus independent inventory/readback with scope and observation time. Timeout, DLQ, FAILED, or a missing Job MUST NOT be reported as proof of absence, and an unavailable or incomplete inventory MUST produce unknown, never an empty success. Cleanup/unknown values MUST NOT be added to ResourceStatus or RAES status enums merely to fit a public response; extend the owning native contract instead. Only authorized residual categories/counts, reasons, freshness, and permitted next actions are exposed; resource/credential locators and diagnostics remain protected. Cancel targets the admitted generation only, does not cancel a newer generation or guarantee provider abort, and once cleanup is owed, actor revocation MUST NOT orphan it: the trusted system lifecycle continues within persisted ownership while public access is reauthorized. For a range requiring provision.prepare, an immutable destroy input may instead carry an explicit unprepared snapshot captured under the same Range mutex as preparation acceptance. This proves the mandatory first-effect barrier was never crossed; the controller must reject late acceptance after the destroy generation takes ownership. Only that bounded proof permits VERIFIED_ABSENT without provider inventory. Missing output, timeout, missing Jobs, or failed planning alone never establish absence; any accepted preparation still requires normal provider inventory/readback. See docs/architecture/adapter-pre-provisioning-2718.md.",
         "checks": []
       },
       {
@@ -4566,7 +4619,7 @@
       },
       {
         "id": "ADR-070-R7",
-        "description": "gcp-destroy runs as the destroy identity and requires --confirm with the deployment name. It renders the same Terraform inputs as the deploy and lifts Cloud SQL deletion protection. It removes the permanent KMS key ring and key from state and runs terraform destroy with bounded retries. It keeps the foundation identities and the state, evidence, and config buckets. In operator mode the release tooling check (ADR-070-R6) and a release provenance check replace the protected-branch rule. The CI destroy workflow keeps its protected-ref check.",
+        "description": "gcp-destroy runs as the destroy identity and requires --confirm with the deployment name. It renders the same Terraform inputs as the deploy and lifts Cloud SQL deletion protection. It removes the exact permanent KMS key rings and keys from state and runs terraform destroy with bounded retries. It keeps the foundation identities and the state, evidence, and config buckets. In operator mode the release tooling check (ADR-070-R6) and a release provenance check replace the protected-branch rule. The CI destroy workflow keeps its protected-ref check.",
         "checks": []
       },
       {

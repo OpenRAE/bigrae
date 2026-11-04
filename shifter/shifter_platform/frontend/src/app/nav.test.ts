@@ -112,7 +112,7 @@ describe("visibleNavGroups", () => {
     const bs = bootstrap();
     const operate = visibleNavGroups("operator", bs).find((g) => g.group === "Operate");
     const assets = operate?.entries.find((e) => e.surface === "Assets");
-    expect(assets?.children?.map((c) => c.surface)).toEqual(["Agents", "NGFW", "Credentials"]);
+    expect(assets?.children?.map((c) => c.surface)).toEqual(["Agents", "Files", "NGFW", "Credentials"]);
   });
 
   it("exposes CTF participant entries as internal SPA routes (#1372)", () => {

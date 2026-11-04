@@ -9,10 +9,23 @@ from __future__ import annotations
 import logging
 from typing import Any
 
-from shifter_adapter_sdk.runtime import InspectionInput, InspectionResult, RuntimeInput, RuntimePlan, parse_result
+from shifter_adapter_sdk.runtime import (
+    FILE_INPUT_DIRECTORY,
+    PREPARATION_OUTPUT_ENV,
+    InspectionInput,
+    InspectionResult,
+    RuntimeInput,
+    RuntimePlan,
+    parse_result,
+)
 
 from shared.cloud.exceptions import CloudTaskError
-from shared.cloud.kubernetes import KubernetesTaskProfile, KubernetesTaskRunner, ProvisionerHardeningProfile
+from shared.cloud.kubernetes import (
+    KubernetesTaskProfile,
+    KubernetesTaskRunner,
+    ProvisionerHardeningProfile,
+    ReadOnlySecretMount,
+)
 from shared.cloud.kubernetes.naming import build_idempotent_job_name
 
 logger = logging.getLogger(__name__)
@@ -27,7 +40,9 @@ _CLEANUP_FAILURE_REASONS = {
 }
 
 
-def plugin_task_profile(*, image_pull_secret: str = "") -> KubernetesTaskProfile:
+def plugin_task_profile(
+    *, image_pull_secret: str = "", file_secret: str = "", file_names: tuple[str, ...] = ()
+) -> KubernetesTaskProfile:
     """The same restricted posture applies to inspection and range invocations."""
     return KubernetesTaskProfile(
         runner_label_value="runtime-plugin",
@@ -49,6 +64,9 @@ def plugin_task_profile(*, image_pull_secret: str = "") -> KubernetesTaskProfile
         runtime_class_name="gvisor",
         node_selector={"node-restriction.kubernetes.io/shifter-pool": "runtime-plugin"},
         tolerations=(("shifter.dev/runtime-plugin", "Equal", "true", "NoSchedule"),),
+        read_only_secret_mounts=(ReadOnlySecretMount("file-inputs", file_secret, FILE_INPUT_DIRECTORY, file_names),)
+        if file_secret
+        else (),
     )
 
 
@@ -72,24 +90,36 @@ def launch_plugin(
     request: RuntimeInput | InspectionInput,
     *,
     image_pull_secret: str = "",
+    result_secret: str = "",
 ) -> None:
     """Idempotently dispatch a fixed worker profile without application credentials."""
-    runner = KubernetesTaskRunner(plugin_task_profile(image_pull_secret=image_pull_secret))
+    if bool(result_secret) != (request.phase == "prepare"):
+        raise ValueError("Plugin preparation output key is unavailable")
+    file_names = tuple(sorted(request.files)) if isinstance(request, RuntimeInput) else ()
+    file_secret = plugin_task_ref(request).split("/", 1)[1] + "-inputs" if file_names else ""
+    runner = KubernetesTaskRunner(
+        plugin_task_profile(image_pull_secret=image_pull_secret, file_secret=file_secret, file_names=file_names)
+    )
+    environment = {
+        "BIGRAE_PLUGIN_INPUT"
+        if request.protocol == "bigrae.runtime-plugin/v1"
+        else "SHIFTER_PLUGIN_INPUT": request.model_dump_json()
+    }
+    if result_secret:
+        environment[PREPARATION_OUTPUT_ENV] = result_secret
     runner.run_task(
         task_definition=request.manifest.worker_image,
         cluster=PLUGIN_NAMESPACE,
         command=[],
         container_name=PLUGIN_CONTAINER,
-        env_overrides={
-            "BIGRAE_PLUGIN_INPUT"
-            if request.protocol == "bigrae.runtime-plugin/v1"
-            else "SHIFTER_PLUGIN_INPUT": request.model_dump_json()
-        },
+        env_overrides=environment,
         task_identity=str(request.invocation_id),
     )
 
 
-def observe_plugin(request: RuntimeInput | InspectionInput) -> RuntimePlan | InspectionResult | None:
+def observe_plugin(
+    request: RuntimeInput | InspectionInput, *, result_secret: str = ""
+) -> RuntimePlan | InspectionResult | None:
     """A malformed or replayed response never becomes an accepted result.
 
     Cleanup follows result retrieval and parsing, but it is not part of the
@@ -102,7 +132,7 @@ def observe_plugin(request: RuntimeInput | InspectionInput) -> RuntimePlan | Ins
     raw = runner.get_task_output(PLUGIN_NAMESPACE, task_ref, identity)
     if raw is None:
         return None
-    result = parse_result(raw, request)
+    result = parse_result(raw, request, result_secret=result_secret)
     try:
         runner.delete_completed_task(PLUGIN_NAMESPACE, task_ref, identity)
     except CloudTaskError as exc:

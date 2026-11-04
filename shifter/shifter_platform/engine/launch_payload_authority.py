@@ -20,6 +20,11 @@ def authorize_provisioner_payload(
     """Fail closed unless current domain state authorizes the queued operation."""
     from engine.launch_intents import assert_provisioner_input_matches, validate_provisioner_generation
 
+    if payload.get("resource") == "range-project":
+        from engine.services._gcp_project_operations import authorize_project_operation
+
+        authorize_project_operation(payload, expected_operation_id)
+        return
     if payload.get("resource") == "vpn-profile":
         from engine.services._vpn_profile_operations import authorize_vpn_operation
 

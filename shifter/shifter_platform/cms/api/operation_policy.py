@@ -4,6 +4,7 @@ from shared.authorization.operations import OperationPolicy, scope_actions
 
 _INSTALLATION_PREPARE_CONTENT = "installation.prepare_content"
 _INSTALLATION_MANAGE_ADAPTERS = "installation.manage_adapters"
+_INSTALLATION_MANAGE_CLOUD_AUTHORITY = "installation.manage_cloud_authority"
 
 
 _READ = scope_actions("read_content", installation=True)
@@ -13,6 +14,18 @@ _MODELS = ("organization.manage_model_sources",)
 _ADAPTERS = ("organization.manage_adapters",)
 
 API_OPERATION_POLICY: dict[str, OperationPolicy] = {
+    "cms_gcp_range_projects_retrieve": OperationPolicy(
+        (_INSTALLATION_MANAGE_CLOUD_AUTHORITY,), "installation", "gcp_range_project_registry"
+    ),
+    "cms_gcp_range_projects_create": OperationPolicy(
+        (_INSTALLATION_MANAGE_CLOUD_AUTHORITY,), "installation", "gcp_range_project_registry"
+    ),
+    "cms_gcp_range_projects_retry_create": OperationPolicy(
+        (_INSTALLATION_MANAGE_CLOUD_AUTHORITY,), "installation", "gcp_range_project"
+    ),
+    "cms_gcp_range_projects_disable_create": OperationPolicy(
+        (_INSTALLATION_MANAGE_CLOUD_AUTHORITY,), "installation", "gcp_range_project"
+    ),
     "cms_content_scopes_retrieve": OperationPolicy(
         _READ, "scope", "content_scope_collection", selector="policy_filtered_ancestry"
     ),

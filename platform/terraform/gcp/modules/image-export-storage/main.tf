@@ -41,6 +41,16 @@ variable "staging_object_retention_days" {
   default     = 7
 }
 
+# One key for each export bucket, in the export region (#2564).
+module "cmek" {
+  source = "../gcs-cmek"
+
+  project_id    = var.project_id
+  location      = var.region
+  key_ring_name = "${var.name_prefix}-image-export-gcs"
+  key_names     = ["staging", "daisy-scratch"]
+}
+
 resource "google_storage_bucket" "staging" {
   project                     = var.project_id
   name                        = "${var.project_id}-${var.name_prefix}-image-export"
@@ -48,6 +58,10 @@ resource "google_storage_bucket" "staging" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = false
+
+  encryption {
+    default_kms_key_name = module.cmek.key_ids["staging"]
+  }
 
   versioning {
     enabled = true
@@ -97,6 +111,10 @@ resource "google_storage_bucket" "daisy_export_scratch" {
   uniform_bucket_level_access = true
   public_access_prevention    = "enforced"
   force_destroy               = true
+
+  encryption {
+    default_kms_key_name = module.cmek.key_ids["daisy-scratch"]
+  }
 
   # Storage baseline: versioning (CKV_GCP_78) and access logging (CKV_GCP_62).
   # Versioning is paired with a noncurrent-version expiry below so retained old
@@ -167,4 +185,12 @@ output "staging_bucket_name" {
 output "daisy_scratch_bucket_name" {
   description = "Daisy scratch bucket that gcloud compute images export reuses."
   value       = google_storage_bucket.daisy_export_scratch.name
+}
+
+output "storage_cmek_buckets" {
+  description = "Customer-managed key of each export bucket; gcp-foundation rewrites the live objects that do not use it (#2564)."
+  value = {
+    (google_storage_bucket.staging.name)              = module.cmek.key_ids["staging"]
+    (google_storage_bucket.daisy_export_scratch.name) = module.cmek.key_ids["daisy-scratch"]
+  }
 }

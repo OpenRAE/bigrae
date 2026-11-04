@@ -10,6 +10,11 @@ variable "environment" {
   type = string
 }
 
+variable "name_prefix" {
+  description = "Stable resource name prefix; the bucket key ring is <name_prefix>-gcs."
+  type        = string
+}
+
 variable "common_labels" {
   type = map(string)
 }

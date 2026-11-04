@@ -14,13 +14,17 @@ to the AWS `amazon-ebs` templates in the parent directory.
 There is no GCP equivalent of the AWS `/shifter/ami/*` SSM parameter. Instead:
 
 - Each build creates image `shifter-<type>-<timestamp>` in the developer build
-  project, with labels (`project`, `managed-by`, `image-type`).
+  project, with labels (`project`, `managed-by`, `image-type`, `source-revision`,
+  `build-run`).
 - `packer-gcp.yml` calls the **candidate-boot validation gate**
   (`packer-gcp-validate.yml`) for the exact candidate. The gate boots the image
   in a disposable, isolated VM and, on success, labels it `validated=passed`.
 - Only after that gate passes, the same run exports the validated image and
   publishes it to `ghcr.io/<owner>/<repository>/gce-<role>` with signed build
   provenance.
+- A run that does not publish deletes the image, the builder VM
+  `packer-<run ID>-<run attempt>`, and its disk. To retry, start a new run. A
+  re-run of only the failed jobs fails, because the image no longer exists.
 - Each release names the newest verified publication of each role. The deploy
   verifies the provenance and imports those images into the range project.
 
@@ -45,7 +49,8 @@ packer build -only='googlecompute.ubuntu' \
   -var="network=default" -var="subnetwork=default" \
   -var="service_account_email=packer-builder@my-proj.iam.gserviceaccount.com" \
   -var="image_prefix=shifter" -var="machine_type=e2-standard-2" \
-  -var="use_internal_ip=false" .
+  -var="use_internal_ip=false" -var="source_revision=$(git rev-parse HEAD)" \
+  -var="build_id=0-1" .
 ```
 
 In CI, variables are passed as `PKR_VAR_*` environment variables (never `-var`
@@ -84,7 +89,8 @@ packer build -only='googlecompute.kali' \
   -var="network=default" -var="subnetwork=default" \
   -var="service_account_email=packer-builder@my-proj.iam.gserviceaccount.com" \
   -var="image_prefix=shifter" -var="machine_type=e2-standard-2" \
-  -var="use_internal_ip=false" .
+  -var="use_internal_ip=false" -var="source_revision=$(git rev-parse HEAD)" \
+  -var="build_id=0-1" .
 ```
 
 See `docs/architecture/gcp-guest-images.md` for the full build, validate,

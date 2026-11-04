@@ -93,6 +93,11 @@ output "assets_bucket_name" {
   value       = module.portal_gcs.assets_bucket_name
 }
 
+output "storage_cmek_buckets" {
+  description = "Customer-managed key of each platform bucket (#2564)."
+  value       = module.portal_gcs.storage_cmek_buckets
+}
+
 output "audit_logs_bucket_name" {
   description = "Terminal GCS access-log sink for deployment-owned buckets."
   value       = module.portal_gcs.audit_logs_bucket_name

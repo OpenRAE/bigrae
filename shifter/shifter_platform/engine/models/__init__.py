@@ -31,6 +31,7 @@ from ._capacity import CapacityDeclaration
 from ._capacity_assessment import CapacityAssessment, CapacityDraw, CapacityReservation
 from ._cleanup_verification import CleanupVerificationOutcome, RangeCleanupVerification
 from ._feature_artifacts import AcquiredFeatureArtifact
+from ._gcp_range_projects import GcpRangeProject, GcpRangeProjectUse
 from ._launch import InterruptState, ProvisionerLaunchIntent, ProvisionerLaunchStatus, RangeCancellationAuthority
 from ._model_allocation import (
     ModelAliasAssignment,
@@ -108,6 +109,8 @@ __all__ = [
     "CapacityDraw",
     "CapacityReservation",
     "CleanupVerificationOutcome",
+    "GcpRangeProject",
+    "GcpRangeProjectUse",
     "Instance",
     "Instantiation",
     "InterruptState",

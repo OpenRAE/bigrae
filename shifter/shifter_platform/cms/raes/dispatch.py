@@ -105,9 +105,13 @@ class CmsRaesDispatchPort:
         self,
         compiled_plan: dict[str, Any],
         participant_access: Sequence[ParticipantAccessBinding] = (),
+        cloud_content: dict[str, dict[str, Any]] | None = None,
     ) -> ShifterDispatchResult:
         if self.credential is not None:
-            return self._realize_principal(compiled_plan, participant_access)
+            return self._realize_principal(compiled_plan, participant_access, cloud_content)
+        from shared.raes.cloud_content import prepare_cloud_content
+
+        sealed_content = prepare_cloud_content(cloud_content, compiled_plan, self.pack_root)
         delivery_bindings = self._prepare_delivery(compiled_plan)
         artifact_bindings = self._resolve_artifact_bindings(compiled_plan)
         from uuid import UUID
@@ -123,6 +127,7 @@ class CmsRaesDispatchPort:
                 compiled_plan=compiled_plan,
                 backend_admission=self.backend_admission,
                 bindings=RangeBindings(
+                    cloud_content=sealed_content,
                     delivery=delivery_bindings,
                     participant_access=tuple(participant_access),
                     artifact=artifact_bindings,
@@ -141,7 +146,10 @@ class CmsRaesDispatchPort:
         )
 
     def _realize_principal(
-        self, compiled_plan: dict[str, Any], participant_access: Sequence[ParticipantAccessBinding]
+        self,
+        compiled_plan: dict[str, Any],
+        participant_access: Sequence[ParticipantAccessBinding],
+        cloud_content: dict[str, dict[str, Any]] | None = None,
     ) -> ShifterDispatchResult:
         """Stage policy before locks; native creation, source fences and queue commit together."""
         from uuid import UUID
@@ -160,6 +168,9 @@ class CmsRaesDispatchPort:
             authority_action=self.authority_action,
             authority_target=self.authority_target,
         )
+        from shared.raes.cloud_content import prepare_cloud_content
+
+        sealed_content = prepare_cloud_content(cloud_content, compiled_plan, self.pack_root)
         delivery = self._prepare_delivery(compiled_plan)
         artifacts = self._resolve_artifact_bindings(compiled_plan)
         current = revalidate_scoped_launch(
@@ -173,13 +184,20 @@ class CmsRaesDispatchPort:
         if not metadata[0]:
             raise ValueError("Range source unavailable")
         instance = RangeInstance.objects.select_related("request").get(request__request_id=self.request_id)
+        from cms.services._runtime_file_admission import prepare_runtime_files
+
+        plugin_scope, prepare_files = prepare_runtime_files(
+            current, self.scope, self.runtime_plugin_scope, existing_range_id=instance.range_id
+        )
         prepare_models = needs_model_preparation(self.request_id)
+        prepare_inputs = prepare_models or prepare_files
         bindings = RangeBindings(
+            cloud_content=sealed_content,
             delivery=delivery,
             participant_access=tuple(participant_access),
             artifact=artifacts,
-            runtime_plugin_scope=self.runtime_plugin_scope,
-            defer_dispatch=prepare_models or self.authority_target is not None,
+            runtime_plugin_scope=plugin_scope,
+            defer_dispatch=prepare_inputs or self.authority_target is not None,
             openvpn_deadline=self._openvpn_deadline(),
             credential=current,
             resource_scope=self.scope,
@@ -192,8 +210,8 @@ class CmsRaesDispatchPort:
         ref = self._commit_principal_runtime(instance, current, metadata, bindings, prepared, compiled_plan)
         if prepare_models:
             prepare_model_access_for_dispatch(UUID(self.request_id), range_id=UUID(ref.range_id))
-            if self.authority_target is None:
-                ref = dispatch_created_raes_range(UUID(self.request_id), credential=current, prepared_creation=prepared)
+        if prepare_inputs and self.authority_target is None:
+            ref = dispatch_created_raes_range(UUID(self.request_id), credential=current, prepared_creation=prepared)
         return ShifterDispatchResult(
             request_id=ref.request_id, accepted=ref.accepted, status=ref.status, range_id=ref.range_id
         )
@@ -218,6 +236,16 @@ class CmsRaesDispatchPort:
             self._assert_principal_launch_row(row, current, metadata)
             ref: ShifterDispatchResult | RaesRangeRef | None = self._replay_runtime(row)
             if ref is None:
+                if (
+                    row.range_id is None
+                    and bindings.runtime_plugin_scope is not None
+                    and bindings.runtime_plugin_scope.files
+                ):
+                    from cms.services._runtime_file_admission import pin_runtime_file_uses
+
+                    if self.scope is None:
+                        raise ValueError(_RANGE_CREATION_AUTHORITY_UNAVAILABLE)
+                    pin_runtime_file_uses(current, self.scope, row, bindings.runtime_plugin_scope.files)
                 ref = create_raes_range(
                     request_id=self.request_id,
                     user_id=row.user_id,

@@ -46,6 +46,16 @@ variable "source_revision" {
   }
 }
 
+variable "build_id" {
+  type        = string
+  description = "<workflow run ID>-<run attempt>. Names the builder VM and its disk and labels the image, so a failed run can delete them (#2747)"
+
+  validation {
+    condition     = can(regex("^[0-9]+-[0-9]+$", var.build_id))
+    error_message = "Build ID must be <run ID>-<run attempt>, for example 12345-1."
+  }
+}
+
 variable "machine_type" {
   type        = string
   description = "Builder VM machine type (e.g. e2-standard-2)"

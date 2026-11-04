@@ -73,6 +73,24 @@ def test_preserves_authored_os_identity_for_guest_readback():
     assert (node.os_distribution, node.os_version) == ("ubuntu", "22.04")
 
 
+@pytest.mark.parametrize("field", ["identity_authorities", "platform_applications"])
+@pytest.mark.parametrize("value", [[{"name": "PRIVATE_UNSUPPORTED_INTENT"}], None, {}, "malformed"])
+@pytest.mark.parametrize("cleanup", [False, True])
+def test_unimplemented_cloud_intent_cannot_be_dropped_by_plan_reader(field, value, cleanup):
+    payload = _node_payload(runtime={field: value})
+    payload["spec"]["infrastructure"] = {}
+    plan = _serialized(_resource("provision.node.web", "node", payload))
+    with pytest.raises(RaesPlanError, match="native cloud runtime realization is not available") as error:
+        parse_plan(plan, cleanup_only=cleanup)
+    assert "PRIVATE_UNSUPPORTED_INTENT" not in str(error.value)
+
+
+def test_empty_native_cloud_inventories_remain_compatible():
+    payload = _node_payload(runtime={"identity_authorities": [], "platform_applications": []})
+    payload["spec"]["infrastructure"] = {}
+    assert len(parse_plan(_serialized(_resource("provision.node.web", "node", payload))).nodes) == 1
+
+
 def test_omitted_network_selection_remains_open_for_backend_adapter():
     payload = _node_payload()
     payload["spec"]["infrastructure"] = {}

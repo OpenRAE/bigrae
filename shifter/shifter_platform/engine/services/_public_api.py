@@ -1,6 +1,10 @@
 """Stable declared export inventory for the Engine service facade."""
 
 PUBLIC_API = (
+    "retry_gcp_range_project",
+    "register_gcp_range_project",
+    "list_gcp_range_projects",
+    "disable_gcp_range_project",
     "CLEANUP_NOT_APPLICABLE",
     "CLEANUP_PENDING",
     "CLEANUP_UNKNOWN",
@@ -200,6 +204,7 @@ PUBLIC_API = (
     "reconcile_retained_warm_generations",
     "reconcile_runtime_plugin_operations",
     "reconcile_runtime_plugins",
+    "runtime_plugin_file_selection",
     "record_capacity_declaration",
     "record_cleanup_verification",
     "record_model_observations",

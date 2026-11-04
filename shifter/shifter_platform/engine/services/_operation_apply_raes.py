@@ -312,6 +312,12 @@ def _apply_uncancelled_raes_result(
         # Record scoped provider inventory/readback evidence BEFORE the DESTROYED
         # transition so verified_terminal, pruning, and CTF capacity release gate on
         # it, not on the logical status (#2086, ADR-063-R4/R5). Same transaction.
+        from ._gcp_project_release import project_restoration_uses
+
+        try:
+            project_restoration_uses(range_obj, payload.get("cleanup_inventory"))
+        except ValueError:
+            raise RaesRealizedAccessError("Registered project restoration is unverified") from None
         _record_cleanup_inventory(row, payload)
 
     return _apply_observation(row, step, payload, range_obj)
@@ -339,6 +345,8 @@ def _validate_completion(row: OperationResultInbox, payload: dict[str, Any], ran
     from engine.models import OperationInput
     from shared.raes.completion import completed_snapshot, load_serialized_plan
 
+    from ._gcp_project_completion import project_completion_context
+
     try:
         record = OperationInput.objects.filter(operation_id=row.operation_id, request_id=row.request_id).first()
         if record is None:
@@ -361,6 +369,7 @@ def _validate_completion(row: OperationResultInbox, payload: dict[str, Any], ran
             payload["completion"],
             generation_id=str(row.operation_id),
             serialized_plan=immutable["plan"],
+            cloud_context=project_completion_context(range_obj, immutable),
         )
     except (KeyError, TypeError, ValueError):
         raise RaesRealizedAccessError("realization completion evidence is missing or invalid") from None

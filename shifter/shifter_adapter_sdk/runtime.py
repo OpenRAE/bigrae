@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+from pathlib import Path
 from typing import Annotated, Final, Literal, Protocol, Self
 from uuid import UUID
 
@@ -19,6 +20,12 @@ ENTRY_POINT_GROUPS = (ENTRY_POINT_GROUP, "bigrae.runtime.plugins")
 # Fits one injected environment value on Linux, including its name and terminator.
 MAX_INPUT_BYTES = 65_536
 MAX_OUTPUT_BYTES = 1_048_576
+MAX_PREPARATION_BYTES = 512 * 1024
+PREPARATION_OUTPUT_ENV = "BIGRAE_PLUGIN_RESULT_SECRET"
+MAX_FILE_INPUT_BYTES = 512 * 1024
+MAX_FILE_INPUTS = 16
+FILE_INPUT_DIRECTORY = "/run/plugin-inputs"
+_FILE_INPUT_ROOT = Path(FILE_INPUT_DIRECTORY)
 
 Identifier = Annotated[str, Field(min_length=1, max_length=128, pattern=r"^[a-z0-9][a-z0-9._-]*$")]
 Digest = Annotated[str, Field(pattern=r"^sha256:[a-f0-9]{64}$")]
@@ -27,8 +34,8 @@ WorkerImage = Annotated[
     str,
     Field(max_length=1024, pattern=r"^[a-z0-9][a-z0-9.:-]+/[a-z0-9/._-]+@sha256:[a-f0-9]{64}$"),
 ]
-Phase = Literal["validate", "configure", "verify", "cleanup"]
-Capability = Literal["guest.configure", "guest.verify"]
+Phase = Literal["prepare", "validate", "configure", "verify", "cleanup"]
+Capability = Literal["provision.prepare", "guest.configure", "guest.verify"]
 
 
 class ClosedModel(BaseModel):
@@ -74,20 +81,36 @@ class PluginManifest(ClosedModel):
     distribution: Identifier
     entry_point: Identifier
     worker_image: WorkerImage
-    capabilities: list[Capability] = Field(min_length=1, max_length=2)
-    required_bindings: list[Identifier] = Field(min_length=1, max_length=64)
+    capabilities: list[Capability] = Field(min_length=1, max_length=3)
+    required_bindings: list[Identifier] = Field(max_length=64)
+    provisioning_concerns: list[Identifier] = Field(
+        default_factory=list, max_length=64, exclude_if=lambda value: not value
+    )
     required_parameters: list[Identifier] = Field(default_factory=list, max_length=64)
+    required_files: list[Identifier] = Field(
+        default_factory=list, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
+    )
     model_bindings: dict[Identifier, Identifier] = Field(default_factory=dict, max_length=16)
 
     @model_validator(mode="after")
     def unique_declarations(self) -> Self:
-        for values in (self.capabilities, self.required_bindings, self.required_parameters):
+        for values in (
+            self.capabilities,
+            self.required_bindings,
+            self.required_parameters,
+            self.required_files,
+            self.provisioning_concerns,
+        ):
             if len(values) != len(set(values)):
                 raise ValueError("plugin declarations must be unique")
         if not set(self.model_bindings.values()).issubset(self.required_bindings):
             raise ValueError("model bindings must name declared guest bindings")
-        if "guest.verify" not in self.capabilities:
+        if bool(self.provisioning_concerns) != ("provision.prepare" in self.capabilities):
+            raise ValueError("preparation requires explicitly declared provisioning concerns")
+        if self.required_bindings and "guest.verify" not in self.capabilities:
             raise ValueError("a runtime plugin must provide readiness verification")
+        if not self.required_bindings and self.capabilities != ["provision.prepare"]:
+            raise ValueError("a plugin without guests must provide only preparation")
         return self
 
     @property
@@ -141,6 +164,22 @@ class InspectionResult(ClosedModel):
             raise ValueError("plugin inspection does not match its invocation")
 
 
+class FileInput(ClosedModel):
+    """Byte-free identity for one declared file supplied by the host."""
+
+    sha256: Digest
+    size_bytes: Annotated[int, Field(strict=True, gt=0, le=MAX_FILE_INPUT_BYTES)]
+
+    def verify_material(self, material: bytes) -> None:
+        """Reject bytes that differ from this admitted identity without echoing them."""
+        if (
+            not isinstance(material, bytes)
+            or len(material) != self.size_bytes
+            or "sha256:" + hashlib.sha256(material).hexdigest() != self.sha256
+        ):
+            raise ValueError("file input does not match its admitted bytes")
+
+
 class RuntimeInput(ClosedModel):
     """Exactly one operation and phase; values are never taken from plugin output."""
 
@@ -152,24 +191,59 @@ class RuntimeInput(ClosedModel):
     phase: Phase
     provider: Literal["aws", "gcp"]
     range_id: Annotated[int, Field(strict=True, ge=1)]
-    targets: dict[Identifier, GuestTarget] = Field(min_length=1, max_length=64)
+    targets: dict[Identifier, GuestTarget] = Field(max_length=64)
+    plan_digest: Digest | None = Field(default=None, exclude_if=lambda value: value is None)
     parameters: dict[Identifier, Annotated[str, Field(max_length=8192)]] = Field(default_factory=dict, max_length=64)
+    files: dict[Identifier, FileInput] = Field(
+        default_factory=dict, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
+    )
 
     @model_validator(mode="after")
     def validate_bindings(self) -> Self:
+        self._validate_phase()
         if self.protocol != self.manifest.protocol:
             raise ValueError("plugin input and manifest protocols must agree")
         if set(self.targets) != set(self.manifest.required_bindings):
             raise ValueError("target bindings must exactly match the installed declaration")
         if set(self.parameters) != set(self.manifest.required_parameters):
             raise ValueError("parameter bindings must exactly match the installed declaration")
+        if set(self.files) != set(self.manifest.required_files):
+            raise ValueError("file inputs must exactly match the installed declaration")
+        if sum(item.size_bytes for item in self.files.values()) > MAX_FILE_INPUT_BYTES:
+            raise ValueError("file inputs exceed their total byte budget")
         if len(self.model_dump_json().encode("utf-8")) > MAX_INPUT_BYTES:
             raise ValueError("plugin input exceeds its bound")
         return self
 
+    def _validate_phase(self) -> None:
+        """Separate preparation context from guest-only phase inputs."""
+        if self.phase == "prepare":
+            if "provision.prepare" not in self.manifest.capabilities or self.plan_digest is None:
+                raise ValueError("preparation requires its declared capability and original plan digest")
+        elif not self.targets or self.plan_digest is not None:
+            raise ValueError("guest phases require guest bindings and no preparation context")
+
     @property
     def digest(self) -> str:
         return canonical_digest(self.model_dump(mode="json"))
+
+
+def read_file_input(request: RuntimeInput, name: str) -> bytes:
+    """Read a declared mounted file, checking its bound size and SHA-256.
+
+    Kubernetes projects Secret keys through symlinks in its read-only volume.
+    Input names cannot select a path outside that host-owned mount.
+    """
+    expected = request.files.get(name)
+    if expected is None or name not in request.manifest.required_files:
+        raise ValueError("file input is unavailable")
+    try:
+        with (_FILE_INPUT_ROOT / name).open("rb") as stream:
+            material = stream.read(expected.size_bytes + 1)
+    except OSError:
+        raise ValueError("file input is unavailable") from None
+    expected.verify_material(material)
+    return material
 
 
 class GuestValueReference(ClosedModel):
@@ -193,6 +267,36 @@ class GuestAction(ClosedModel):
     runtime_values: dict[Identifier, GuestValueReference] = Field(default_factory=dict, max_length=64)
 
 
+class ProvisioningValue(ClosedModel):
+    """One proposed scalar replacement; core owns all semantic authorization."""
+
+    address: Annotated[str, Field(min_length=1, max_length=1024)]
+    concern: Identifier
+    payload_pointer: Annotated[
+        str, Field(min_length=1, max_length=4096, pattern=r"^/(?:[^~/]|~[01])*(?:/(?:[^~/]|~[01])*)*$")
+    ]
+    value: (
+        Annotated[str, Field(strict=True, max_length=8192)]
+        | Annotated[int, Field(strict=True)]
+        | Annotated[float, Field(strict=True, allow_inf_nan=False)]
+        | Annotated[bool, Field(strict=True)]
+        | None
+    ) = Field(repr=False)
+
+
+class SecretPayloadValue(ClosedModel):
+    """A literal backend selection for an otherwise unspecified native secret version."""
+
+    version_ref: Annotated[str, Field(min_length=1, max_length=2048)]
+    value: Annotated[str, Field(strict=True, max_length=65536)] = Field(repr=False)
+
+    @model_validator(mode="after")
+    def bounded_bytes(self) -> Self:
+        if len(self.value.encode("utf-8")) > 65536:
+            raise ValueError("secret payload exceeds the provider byte limit")
+        return self
+
+
 class RuntimePlan(ClosedModel):
     """Untrusted worker response. Core must bind it to input before execution."""
 
@@ -203,25 +307,43 @@ class RuntimePlan(ClosedModel):
     status: Literal["planned", "failed"]
     failure_code: Literal["", "incompatible", "invalid-input", "planning-failed"] = ""
     actions: list[GuestAction] = Field(default_factory=list, max_length=64, repr=False)
+    provisioning_values: list[ProvisioningValue] = Field(
+        default_factory=list, max_length=4096, repr=False, exclude_if=lambda value: not value
+    )
+    secret_payloads: list[SecretPayloadValue] = Field(
+        default_factory=list, max_length=1024, repr=False, exclude_if=lambda value: not value
+    )
 
     @model_validator(mode="after")
     def validate_plan(self) -> Self:
-        if self.status == "failed":
-            if not self.failure_code or self.actions:
-                raise ValueError("failed planning must carry only a bounded failure code")
-        elif self.failure_code:
-            raise ValueError("planned actions cannot carry a failure code")
-        elif self.phase == "validate" and self.actions:
-            raise ValueError("validation cannot execute guest actions")
-        elif self.phase == "verify" and not self.actions:
-            raise ValueError("readiness requires at least one verification action")
+        self._validate_phase()
+        identities = {(item.address, item.payload_pointer) for item in self.provisioning_values}
+        if len(identities) != len(self.provisioning_values):
+            raise ValueError("preparation replacements must be unique")
+        if len({item.version_ref for item in self.secret_payloads}) != len(self.secret_payloads):
+            raise ValueError("secret payload selections must be unique")
         if len({action.action_id for action in self.actions}) != len(self.actions):
             raise ValueError("action identifiers must be unique")
         if sum(action.timeout_seconds for action in self.actions) > 1200:
             raise ValueError("plugin plan exceeds the execution budget")
-        if len(self.model_dump_json().encode("utf-8")) > MAX_OUTPUT_BYTES:
+        limit = MAX_PREPARATION_BYTES if self.phase == "prepare" else MAX_OUTPUT_BYTES
+        if len(self.model_dump_json().encode("utf-8")) > limit:
             raise ValueError("plugin output exceeds its bound")
         return self
+
+    def _validate_phase(self) -> None:
+        """Enforce closed failure and phase-specific effect contracts."""
+        if self.status == "failed":
+            if not self.failure_code or self.actions or self.provisioning_values or self.secret_payloads:
+                raise ValueError("failed planning must carry only a bounded failure code")
+        elif self.failure_code:
+            raise ValueError("planned actions cannot carry a failure code")
+        elif self.phase in {"prepare", "validate"} and self.actions:
+            raise ValueError("validation cannot execute guest actions")
+        elif self.phase == "verify" and not self.actions:
+            raise ValueError("readiness requires at least one verification action")
+        if (self.provisioning_values or self.secret_payloads) and self.phase != "prepare":
+            raise ValueError("only preparation can propose provisioning values")
 
     def authorize(self, request: RuntimeInput) -> None:
         """Reject replay, another phase or operation, and undeclared guest targets."""
@@ -239,6 +361,8 @@ class RuntimePlan(ClosedModel):
         ):
             raise ValueError("plugin plan does not match its authorized invocation")
         capability = "guest.verify" if self.phase == "verify" else "guest.configure"
+        if any(item.concern not in request.manifest.provisioning_concerns for item in self.provisioning_values):
+            raise ValueError("preparation requires an undeclared concern")
         if self.actions and capability not in request.manifest.capabilities:
             raise ValueError("plugin plan requires an undeclared capability")
 
@@ -257,9 +381,16 @@ def parse_input(raw: str | bytes) -> RuntimeInput | InspectionInput:
     return RuntimeInput.model_validate(value)
 
 
-def parse_result(raw: str | bytes, request: RuntimeInput | InspectionInput) -> RuntimePlan | InspectionResult:
+def parse_result(
+    raw: str | bytes, request: RuntimeInput | InspectionInput, *, result_secret: str = ""
+) -> RuntimePlan | InspectionResult:
     """Host-side parser: validate shape and invocation before using worker output."""
-    value = decode_message(raw, limit=MAX_OUTPUT_BYTES)
+    if request.phase == "prepare":
+        from .runtime_sealing import open_result
+
+        raw = open_result(raw, result_secret)
+    limit = MAX_PREPARATION_BYTES if request.phase == "prepare" else MAX_OUTPUT_BYTES
+    value = decode_message(raw, limit=limit)
     if isinstance(request, InspectionInput):
         inspection = InspectionResult.model_validate(value)
         inspection.authorize(request)

@@ -63,9 +63,12 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2622/#2633 integration: compile the provisioner policy and
 # inline the shared platform-runtime map without losing native runtime contracts.
 # Regenerated for #665: add the notification-prune CronJob (ADR-072-R5); no other change.
+# Regenerated for #2719: only the plugin file-input admission policy and Secret object quota change.
+# Regenerated for #2718: optional sealed result key in the same invocation Secret; only plugin admission changes.
+# Regenerated for #2716: generation-bound registered-project capture/verification; only provisioner admission changes.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "e818fe662e9928612cedc9c056dca883ff8752c6483cd3d97cbaa02163c443a9",
-    "gcp-dev": "e030e65d0377de3b767f8f793b23b89da38abf7b23165749e7257c6e48d42909",
+    "gcp-prod": "0528a8c4bec27346e40b961ea74fe9b533100ebdcbac54314aa8fd4acccf741b",
+    "gcp-dev": "3defac47c89fdd6aa1eda621f27b87193892a4907b8d1dea4b958deb3bd68af9",
 }
 
 

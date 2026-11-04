@@ -79,6 +79,7 @@ def generate_scoped_upload_token(upload: AgentUpload) -> str:
             "agent_type": upload.agent_type,
             "expires_at": int(upload.expires_at.timestamp()),
             "upload_id": str(upload.id),
+            **({"asset_kind": upload.asset_kind} if upload.asset_kind != "agent" else {}),
         }
     )
 

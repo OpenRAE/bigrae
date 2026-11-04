@@ -96,6 +96,19 @@ describe("tenant plugin administration", () => {
     expect(mockApi.mock.calls.some(([url]) => url.includes("grant"))).toBe(false);
   });
 
+  it("shows provisioning concerns before the administrator approves installation", async () => {
+    renderRoute(<AdaptersPage />);
+    const preparation = { ...manifest, capabilities: ["provision.prepare"],
+      provisioning_concerns: ["synthetic-settings"], required_bindings: [] };
+    fireEvent.change(await screen.findByLabelText("Plugin installation file"), {
+      target: { files: [{ size: 100, text: async () => JSON.stringify(preparation) }] },
+    });
+    expect(await screen.findByText("synthetic-settings")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review installation" }));
+    expect(within(screen.getByRole("alertdialog")).getByText(/Provisioning preparation may choose values/)).toBeInTheDocument();
+    expect(mockApi.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
+  });
+
   it("allows failed installation retry with replacement private registry credentials", async () => {
     mockApi.mockImplementation(async (url, options) => options?.method === "POST" ? adapter :
       policyOrganizations(url) ?? page([{ ...adapter, state: "failed" }]));

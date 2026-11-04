@@ -1,5 +1,5 @@
 {
-  "current_operation_count": 319,
+  "current_operation_count": 328,
   "historical_baseline": {
     "commit": "8aee758331286293cdc837d94eb95fafa5674ae0",
     "operation_count": 220
@@ -950,6 +950,50 @@
       "method": "GET",
       "operation_id": "cms_content_scopes_retrieve",
       "path": "/api/v1/cms/content-scopes/"
+    },
+    {
+      "authority": {
+        "decision": "installation.manage_cloud_authority",
+        "scope": "sql:gcp_range_project_registry",
+        "target": "installation"
+      },
+      "disposition": "added",
+      "method": "GET",
+      "operation_id": "cms_gcp_range_projects_retrieve",
+      "path": "/api/v1/cms/gcp-range-projects/"
+    },
+    {
+      "authority": {
+        "decision": "installation.manage_cloud_authority",
+        "scope": "sql:gcp_range_project_registry",
+        "target": "installation"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "cms_gcp_range_projects_create",
+      "path": "/api/v1/cms/gcp-range-projects/"
+    },
+    {
+      "authority": {
+        "decision": "installation.manage_cloud_authority",
+        "scope": "sql:gcp_range_project",
+        "target": "installation"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "cms_gcp_range_projects_disable_create",
+      "path": "/api/v1/cms/gcp-range-projects/{registration_id}/disable/"
+    },
+    {
+      "authority": {
+        "decision": "installation.manage_cloud_authority",
+        "scope": "sql:gcp_range_project",
+        "target": "installation"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "cms_gcp_range_projects_retry_create",
+      "path": "/api/v1/cms/gcp-range-projects/{registration_id}/retry/"
     },
     {
       "authority": {
@@ -2977,6 +3021,61 @@
     },
     {
       "authority": {
+        "decision": "account.read_content|organization.read_content|workspace.read_content",
+        "scope": "sql:asset_collection",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "GET",
+      "operation_id": "api_v1_mission_control_files_list",
+      "path": "/api/v1/mission-control/files/"
+    },
+    {
+      "authority": {
+        "decision": "account.manage_content|organization.manage_content|workspace.manage_content",
+        "scope": "sql:upload_intent",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "api_v1_mission_control_file_upload_cancel",
+      "path": "/api/v1/mission-control/files/upload/cancel/"
+    },
+    {
+      "authority": {
+        "decision": "account.manage_content|organization.manage_content|workspace.manage_content",
+        "scope": "sql:upload_intent",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "api_v1_mission_control_file_upload_complete",
+      "path": "/api/v1/mission-control/files/upload/complete/"
+    },
+    {
+      "authority": {
+        "decision": "account.manage_content|organization.manage_content|workspace.manage_content",
+        "scope": "sql:upload_parent",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "POST",
+      "operation_id": "api_v1_mission_control_file_upload_initiate",
+      "path": "/api/v1/mission-control/files/upload/initiate/"
+    },
+    {
+      "authority": {
+        "decision": "account.manage_content|organization.manage_content|workspace.manage_content",
+        "scope": "sql:file_asset",
+        "target": "scope"
+      },
+      "disposition": "added",
+      "method": "DELETE",
+      "operation_id": "api_v1_mission_control_files_delete",
+      "path": "/api/v1/mission-control/files/{file_id}/"
+    },
+    {
+      "authority": {
         "decision": "range.access|account.access_devices|organization.access_devices|workspace.access_devices",
         "scope": "sql:bootstrap;selector=persisted_protocol_and_target",
         "target": "resource"
@@ -4005,6 +4104,14 @@
       "target": "installation"
     },
     {
+      "decision": "installation.manage_content+org.manage_content:configure;org.manage_content:intake,purge;org.read_content:list,retrieve",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "native credential_from_file;SQL-owned organization ancestry and credential ceiling",
+      "surface": "cms:trial_archive",
+      "target": "organization"
+    },
+    {
       "decision": "deployment-command",
       "disposition": "retained",
       "kind": "management-command",
@@ -4451,6 +4558,14 @@
       "scope": "resource-account",
       "surface": "shared-vpn-secret-delivery",
       "target": "vpn-profile"
+    },
+    {
+      "decision": "installation.manage_content+organization.manage_content:admit;organization.read_content:show",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "native credential_from_file;SQL organization ancestry and approved apparatus configuration",
+      "surface": "cms:experiment_batch",
+      "target": "organization"
     }
   ],
   "schema": "shifter.identity-authorization-surfaces/v1"

@@ -90,6 +90,78 @@ def launch(pack, *, backend="gce"):
     return target
 
 
+def test_required_file_selection_is_fenced_before_range_creation(pack):
+    import hashlib
+
+    from engine.models import RuntimePluginPackBinding
+    from engine.services import runtime_plugin_file_selection
+    from shared.runtime_file_inputs import RuntimeFileBinding
+
+    manifest = {**pack.manifest, "version": "2", "required_files": ["parameters"]}
+    installed = install_runtime_plugin(pack.credential, pack.organization.uuid, manifest)
+    RuntimePluginInstallation.objects.filter(pk=installed.id).update(state="ready")
+    asset_uuid = uuid4()
+    bind_runtime_plugin(
+        pack.credential,
+        pack.scope,
+        installed.id,
+        {
+            "targets": {"server": "node.web"},
+            "file_assets": {"parameters": str(asset_uuid)},
+        },
+    )
+    with pytest.raises(ValidationError):
+        launch(pack)
+    assert not Range.objects.exists()
+    digest, selected = runtime_plugin_file_selection(pack.scope)
+    assert selected == {"parameters": asset_uuid}
+    pack.scope = pack.scope.model_copy(
+        update={
+            "binding_digest": digest,
+            "files": {
+                "parameters": RuntimeFileBinding(
+                    asset_uuid=asset_uuid,
+                    version_id=1,
+                    sha256="sha256:" + hashlib.sha256(b"data").hexdigest(),
+                    size_bytes=4,
+                )
+            },
+        }
+    )
+    target = launch(pack)
+    pin = retained_runtime_plugin_pin(target)
+    assert pin.files["parameters"].version_id == 1
+    assert all("version_id" not in str(row.input) for row in RuntimePluginInvocation.objects.all())
+
+    RuntimePluginPackBinding.objects.filter(organization_uuid=pack.organization.uuid).update(
+        bindings={
+            "targets": {"server": "node.web"},
+            "file_assets": {"parameters": str(uuid4())},
+        }
+    )
+    with pytest.raises(ValidationError):
+        launch(pack)
+    assert Range.objects.count() == 1
+
+
+def test_revoked_file_material_blocks_worker_dispatch(pack, monkeypatch):
+    target = launch(pack)
+    from engine.services import _runtime_plugin_operations as operations
+
+    launch_job = Mock()
+    monkeypatch.setattr(operations, "launch_plugin", launch_job)
+
+    def revoked(*_args):
+        raise ValueError("Private provider diagnostic")
+
+    monkeypatch.setattr(operations, "load_file_input_material", revoked)
+    assert reconcile_runtime_plugin_operations() == 3
+    launch_job.assert_not_called()
+    assert set(
+        RuntimePluginInvocation.objects.filter(request_id=target.request.request_id).values_list("state", flat=True)
+    ) == {"failed"}
+
+
 def test_existing_range_keeps_original_version_after_pack_upgrade_and_retirement(pack):
     target = launch(pack)
     original = retained_runtime_plugin_pin(target)

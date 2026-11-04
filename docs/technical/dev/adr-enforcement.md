@@ -697,6 +697,14 @@ The first slice intentionally stays small:
   the [#2558 architecture preflight](../../architecture/blocking-config-security-preflight-2558.md)
   records the cross-repository contracts for that follow-up.
 
+  ADR-008-R5's [#2564 CMEK design](../../architecture/gcp-gcs-cmek-design-2564.md)
+  puts every Terraform-owned GCS bucket on a customer-managed key. A
+  `trivy config` scan of `platform/terraform/gcp` reports no GCP-0066 finding,
+  with no exception. #2566 makes that scan a CI gate. The `terraform test` contracts of `modules/gcs-cmek`,
+  `modules/portal/gcs`, `modules/image-export-storage`,
+  `modules/raes-package-storage`, and `global/cicd-oidc` enforce the keys and
+  the lifecycle KMS roles.
+
 - `checkov-terraform`
   IaC security scan over first-party Terraform in `platform/terraform/`. A
   **blocking gate** under ADR-004-R11. Pre-commit (`.pre-commit-config.yaml`
@@ -1311,6 +1319,25 @@ qualification of an external adapter on either cloud.
 
 The independent adapter SDK has its own dependency update entry, like every other Python package root. Private image recipes and their dependency update targets belong to the pack owner.
 
+### Named adapter file inputs (ADR-041-R11)
+
+Named files reuse CMS's scoped upload ledger, quota mutex, immutable installation
+and cleanup. Database constraints and custody triggers retain the file purpose,
+exact object version and original range-use proof. SDK checks require the exact
+declared input names, nonempty files and a 512 KiB aggregate budget; empty new
+fields preserve retained request identities. CMS authorizes and fences actual
+file custody before native creation and through a composition-bound material
+port before worker dispatch. Engine cannot import CMS.
+
+The rendered runtime-plugin admission policy permits only the invocation's
+immutable file Secret, projected with explicit bounded keys and a fixed read-only
+mount. The object-count quota allows three Secrets per reserved Job without
+increasing the 16-pod execution cap. Synthetic tests evaluate the rendered CEL
+with actual builder manifests and reject wrong Secrets, writable or extra mounts,
+path traversal, unsafe modes and oversized key sets. CMS tests cover replacement,
+retention, quota cleanup, original-proof revocation and digest tampering; these
+checks require no deployment or live qualification.
+
 ### Participant model credential cutover (ADR-004-R21, ADR-059)
 
 Core no longer creates pack-specific provider roles or issues guest provider keys.
@@ -1475,3 +1502,44 @@ These guardrails changed with it:
   `container-images-lint-security` runs the BuildKit check and the Trivy
   configuration scan of the deployer Dockerfile. `gcp-deployer-image` builds
   the image with a fixture release manifest and starts it.
+
+### Adapter preparation (ADR-041-R12, ADR-063-R4)
+
+The SDK restricts `prepare` to declared provisioning concerns, existing scalar
+payload leaves and bounded responses. Core evaluates the original RAES domains,
+recursive constraints and all overlapping authority before accepting any value.
+Migration 0119 makes accepted preparation and its pin/parent identities immutable
+through SQL. Acceptance and cancellation share the Range lock; accepted mapping
+and planned invocation become visible atomically. A destroy input retains that
+mapping, or explicitly records that the mandatory pre-effect gate never opened.
+The latter is a scoped proof of no effects, not an inference from a missing Job.
+Core checks the complete future destroy envelope before accepting a preparation.
+Prepared cleanup uses the original input; unprepared cleanup reads no mutable
+image registry or guest material. Oversized encrypted snapshots are refused
+before any provider effect.
+Accepted preparation continues through normal provider inventory/readback.
+
+Targeted SDK, Engine PostgreSQL, provisioner and admission-policy tests cover
+confidential output, exact-value rejection, retention, tampering, replay and late
+acceptance. The chart allows only one input key and an optional result key from
+the same invocation Secret. See [the design](../../architecture/adapter-pre-provisioning-2718.md).
+
+
+### Registered GCP range projects (ADR-032-R11)
+
+The implementation for #2716 adds Engine-owned project registration and retained
+range-use records. Migration 0120 enforces immutable accepted baseline and project
+identity, one unreleased use per project, immutable lease custody, and refusal to
+delete an active use. A release update requires the current applied native destroy
+receipt, verified absence without residuals, and matching original-lease baseline
+readback. The targeted PostgreSQL tests exercise those guards through bulk SQL
+writes, plus atomic multi-project allocation, organization isolation and replay.
+Shared contract tests cover ciphertext identity, bounded baseline decoding and
+semantic parity, including changed policy conditions and resource incarnations.
+
+Registration uses the existing native operation input, recorded initiating proof
+and append-only result inbox. Installation policy and the exact live credential
+are checked before dispatch. No cloud I/O belongs in the portal or adapter worker.
+These checks establish custody; they do not claim live provider realization or
+deployment qualification. The [design](../../architecture/registered-gcp-range-projects-2716.md)
+describes the remaining provider preflight, execution and readback boundaries.

@@ -287,6 +287,17 @@ class ShifterProvisioner:
         self._port = port
         self._realization_envelope = realization_envelope
         self._participant_access: tuple[ParticipantAccessBinding, ...] = ()
+        self._cloud_content: dict[str, dict[str, Any]] = {}
+
+    def bind_cloud_content(self, declarations: dict[str, dict[str, Any]]) -> None:
+        """Retain native referenced Content beside the compiled plan."""
+        self._cloud_content = declarations
+
+    def _dispatch(self, serialized: dict[str, Any]) -> ShifterDispatchResult:
+        """Older no-cloud ports retain their two-argument contract."""
+        if self._cloud_content:
+            return self._port.realize(serialized, self._participant_access, self._cloud_content)
+        return self._port.realize(serialized, self._participant_access)
 
     def bind_participant_access(self, bindings: Sequence[ParticipantAccessBinding]) -> None:
         """Bind the #1710 participant-access sidecar for the next ``apply``.
@@ -322,7 +333,7 @@ class ShifterProvisioner:
 
         # Boundary: never leak a raw dispatch exception past apply.
         try:
-            result = self._port.realize(serialized, self._participant_access)
+            result = self._dispatch(serialized)
         # dispatch boundary: errors can carry private provider material; class only
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -345,7 +356,7 @@ class ShifterProvisioner:
         if serialized is None:
             return ShifterEnqueueResult(False, "rejected", (), tuple(diagnostics))
         try:
-            receipt = self._port.realize(serialized, self._participant_access)
+            receipt = self._dispatch(serialized)
         # dispatch boundary: errors can carry private provider material; class only
         except Exception as exc:  # noqa: BLE001
             logger.warning(

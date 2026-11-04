@@ -20,10 +20,24 @@ RAES implementation packages.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, TypedDict
+from typing import TYPE_CHECKING, Protocol, TypedDict
 
 if TYPE_CHECKING:
     from datetime import datetime
+
+
+class UploadAssetRef(Protocol):
+    """Only the public completion identity needed by the shared upload views."""
+
+    @property
+    def pk(self) -> int:
+        """Return the installed asset's stable database reference."""
+        ...
+
+    @property
+    def name(self) -> str:
+        """Return the admitted display name without storage authority."""
+        ...
 
 
 class AgentRequirements(TypedDict):
