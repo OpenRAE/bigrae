@@ -74,7 +74,7 @@ Public errors contain no authoring input, provider payload, or parser details.
 
 ## Dependency tuple
 
-The executable tuple is Python 3.14, Django 6.0, RAES 10.6.0, and raes-env-packs 7.2.2.
+The executable tuple is Python 3.14, Django 6.0, RAES 10.7.2, and raes-env-packs 7.2.2.
 Reload refuses an unsupported RAES/env-packs tuple.
 Portable plan and configuration versions remain subject to their owner validators.
 Current compiler limits are 10000 coordinates, domain values, and product outputs, plus a 32 MiB sealed plan.
