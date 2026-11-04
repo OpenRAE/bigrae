@@ -299,6 +299,8 @@ replaces any other value. Audit attribution trusts only the load balancer's own
 Load Balancer (`AUDIT_TRUSTED_PROXY_HOPS`, set by the GCP runtime renderer). Existing structured
 logging and sanitized error builders exclude raw provider responses, credentials,
 signed URLs and private scenario material. Audit evidence is not a work queue.
+Engine capacity decisions use the shared capacity-assessment audit vocabulary
+and the same validated, append-only store as other administrative events.
 Backup existence is not evidence of a successful restore rehearsal.
 
 ### Disposable VM workers
