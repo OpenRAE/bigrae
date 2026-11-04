@@ -10,11 +10,15 @@ from typing import Any
 from raes_plan_types import RaesPlanError
 
 CONTRACT_VERSION = "raes-provisioning-plan-v2"
-PRODUCER_VERSION = "10.6.0"
+PRODUCER_VERSION = "10.7.2"
 _LEGACY_PAIR = ("raes-provisioning-plan-v1", "2.0.0")
 # Retained ranges keep their original producer and resource identities. These
 # reviewed v2 pairs are accepted only for cleanup, with the same wire checks.
-_PREVIOUS_CLEANUP_PAIRS = ((CONTRACT_VERSION, "10.2.0"), (CONTRACT_VERSION, "3.5.0"))
+_PREVIOUS_CLEANUP_PAIRS = (
+    (CONTRACT_VERSION, "10.6.0"),
+    (CONTRACT_VERSION, "10.2.0"),
+    (CONTRACT_VERSION, "3.5.0"),
+)
 
 
 def prepare_envelope(envelope: Mapping[str, Any], *, cleanup_only: bool) -> Mapping[str, Any]:

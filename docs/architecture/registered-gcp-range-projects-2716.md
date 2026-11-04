@@ -136,14 +136,14 @@ validation boundary.
 
 ### Preparation relation budget (#2758)
 
-The host must evaluate admitted recursive authorities with the same fixed plan
-profile as their public compiler and runtime. The current preparation validator
-uses the smaller generic relation default. That can refuse a valid selection
-after full-size author admission succeeds.
+The host evaluates admitted recursive authorities with the same fixed plan
+profile as their public compiler and runtime. RAE 10.7.2 and the host use the
+published `PLAN_AUTHORITY_LIMITS` instead of the smaller generic relation
+default, so a full-size admitted authority remains usable in preparation.
 
-Adopt the released `PLAN_AUTHORITY_LIMITS` contract from RAE #1885 when evaluating
-the complete projected concern. The dependency must also include RAE #1886's
-scalar-scope correction. Keep one published, hash-pinned dependency version
+RAE #1885 owns the profile for the complete projected concern. The dependency
+also includes RAE #1886's scalar-scope correction. Keep one published,
+hash-pinned dependency version
 across compilation, native transport, preparation and completion. Do not copy
 profile constants into the host or let adapters select their own budgets.
 

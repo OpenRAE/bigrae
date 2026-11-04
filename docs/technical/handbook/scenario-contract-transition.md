@@ -7,7 +7,7 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==10.6.0` and `raes-env-packs==7.2.2` in its
+`raes==10.7.2` and `raes-env-packs==7.2.2` in its
 [package manifest](../../../shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
@@ -34,7 +34,7 @@ the ownership boundary, or the migration contract.
 Only `shared.raes` imports the released RAES module family. It validates and
 compiles authored intent into the RAES ProvisioningPlan. The independent
 provisioner validates and reads plain serialized data, not a second authored
-schema. New realization accepts `raes-provisioning-plan-v2` with producer `10.6.0`.
+schema. New realization accepts `raes-provisioning-plan-v2` with producer `10.7.2`.
 Images, cloud resources, secrets and backend realization remain BigRAE-owned.
 
 ## Transition history
@@ -51,8 +51,8 @@ bytes as a new producer is not migration. Retired source/sidecar records are
 removed by cutover migrations; terminal opaque historical envelopes remain
 factual and inert.
 
-Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `10.2.0` and
-`v2` / `3.5.0` pairs through the current wire checks. It also accepts the exact
+Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `10.6.0`,
+`v2` / `10.2.0` and `v2` / `3.5.0` pairs through the current wire checks. It also accepts the exact
 `raes-provisioning-plan-v1` / `2.0.0` pair through its isolated cleanup view. This preserves cleanup identities
 without allowing old producers for new realization. It does not revive the
 retired CyberScript or ACES path.
@@ -71,11 +71,12 @@ The registered-project implementation (#2716) adds constrained identity-authorit
 and platform-application support, with configuration readback from the provider.
 The published manifest matches that capability builder; synthetic native plans
 must produce nonempty account, policy, audit and secret work behind those claims.
-Unsupported shapes are rejected before effects. Large-authority admission and
-scalar-only delegation still require the owning fixes
+Unsupported shapes are rejected before effects. RAE 10.7.2 includes the owning
+fixes for large-authority admission and scalar-only delegation
 ([RAE #1885](https://github.com/OpenRAE/rae/issues/1885) and
-[RAE #1886](https://github.com/OpenRAE/rae/issues/1886));
-live scenario qualification remains outstanding.
+[RAE #1886](https://github.com/OpenRAE/rae/issues/1886)). Preparation uses the
+same published finite plan-authority profile; live scenario qualification
+remains outstanding.
 
 Package upgrades require coordinated producer/consumer pins, serialized-plan
 parity, genuine guest-effect verification and cleanup compatibility. Do not
@@ -99,6 +100,11 @@ are historical records and do not override them.
 The RAES 10.6.0 / env-packs 7.2.2 update adds parser contracts for scope-owned
 audit logs and provider-qualified secret replication. Parser acceptance does
 not add a backend capability. Unsupported effects still fail before dispatch.
+
+The 10.7.2 update admits bounded full-size authorities and preserves scalar-only
+delegation. Runtime and Packer dependencies, the worker producer gate and the
+retained dependency tuple move together. RAE requires `rpds-py==2026.9.1` in
+this release; no unrelated dependency versions change.
 
 Before a future deployment, drain old provision/activate work and settle its
 pending completion results. The completion validator also requires the installed
