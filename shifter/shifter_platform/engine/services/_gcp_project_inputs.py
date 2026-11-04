@@ -76,9 +76,7 @@ def retained_project_leases(target: Range) -> tuple[GcpProjectLease, ...]:
     return leases
 
 
-def projects_for_input(
-    target: Range, plan: dict[str, Any], pin: RuntimePin | None
-) -> tuple[GcpProjectLease, ...]:
+def projects_for_input(target: Range, plan: dict[str, Any], pin: RuntimePin | None) -> tuple[GcpProjectLease, ...]:
     """Project only retained custody; an input projection never grants a new lease."""
     if pin is not None and "provision.prepare" in pin.manifest.capabilities:
         return ()

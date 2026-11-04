@@ -85,6 +85,11 @@ and invocation result commit together, after validating the full future cleanup
 envelope against the existing transport limit. A caught acceptance failure rolls
 back all newly reserved projects.
 
+Runtime preparation accepts content plugin pins and installed worker apparatus
+pins through the shared parser. Both retain the original plan, executable digest
+and operation identity. A worker apparatus with no native cloud resources
+allocates no project lease.
+
 Each lease records its original provisioning operation. Cleanup recovers that
 operation's immutable input, retaining its project and image references even after
 registry configuration changes. Prepared workers apply values only to a local
