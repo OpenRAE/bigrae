@@ -130,6 +130,9 @@ version payloads, retained custody and provider observations. Small validation
 functions share the same closed contracts and bounded errors; refactoring them
 must preserve refusal ordering, transaction boundaries, ASCII provider paths and
 all accepted preparation and cleanup identities.
+Completion identity bounds are validated separately from observation rows; both
+principal and ordinary dispatch pass optional content through the same host
+validation boundary.
 
 The worker plan reader requires full cloud admission for nonempty native
 identity-authority and platform-application inventories. Capability refusal at

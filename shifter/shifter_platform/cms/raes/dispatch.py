@@ -170,7 +170,7 @@ class CmsRaesDispatchPort:
         )
         from shared.raes.cloud_content import prepare_cloud_content
 
-        sealed_content = prepare_cloud_content(cloud_content or {}, compiled_plan, self.pack_root)
+        sealed_content = prepare_cloud_content(cloud_content, compiled_plan, self.pack_root)
         delivery = self._prepare_delivery(compiled_plan)
         artifacts = self._resolve_artifact_bindings(compiled_plan)
         current = revalidate_scoped_launch(

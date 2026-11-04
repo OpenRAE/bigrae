@@ -36,9 +36,7 @@ def validate_completion_evidence(value: object) -> dict[str, Any]:
         raise ValueError("invalid RAES completion evidence fields")
     if value["schema_version"] != "shifter-raes-completion-v1":
         raise ValueError("unsupported RAES completion evidence version")
-    for field in ("plan_digest", "operation_id", "generation_id"):
-        if not isinstance(value[field], str) or not value[field] or len(value[field]) > 128:
-            raise ValueError("invalid RAES completion identity")
+    _validate_completion_identity(value)
     shapes = {
         "resources": {"address", "resource_type", "status"},
         "operating_systems": {"instance_key", "family", "distribution", "version"},
@@ -61,6 +59,13 @@ def validate_completion_evidence(value: object) -> dict[str, Any]:
     if len(json.dumps(value, allow_nan=False).encode()) > _MAX_BYTES:
         raise ValueError("RAES completion evidence exceeds its size bound")
     return value
+
+
+def _validate_completion_identity(value: Mapping[str, Any]) -> None:
+    """Retain nonempty, bounded plan, operation and generation identities."""
+    for field in ("plan_digest", "operation_id", "generation_id"):
+        if not isinstance(value[field], str) or not value[field] or len(value[field]) > 128:
+            raise ValueError("invalid RAES completion identity")
 
 
 def _validate_cloud_projects(rows: object) -> None:
