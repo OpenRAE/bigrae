@@ -403,6 +403,9 @@ _TOOL_HINTS = {
 
 def _required_tools(command: str | None, cloud: str | None) -> set[str]:
     """Return the set of required CLI tools for a bootstrap command."""
+    if command == "preflight":
+        # The shared gate owns cloud-specific tools and embedded-revision handling.
+        return set()
     if command == "gcp-foundation":
         return {"gcloud", "terraform"}
     if command == "gcp-images":
@@ -427,7 +430,7 @@ def _required_tools(command: str | None, cloud: str | None) -> set[str]:
 
 
 # GCP commands that never use GitHub (#2571); they get no gh recommendation.
-_GITHUB_FREE_COMMANDS = frozenset({"gcp-foundation", "gcp-images", "gcp-images-verify", "gdc-bootstrap"})
+_GITHUB_FREE_COMMANDS = frozenset({"gcp-foundation", "gcp-images", "gcp-images-verify", "gdc-bootstrap", "preflight"})
 
 
 def check_dependencies(
