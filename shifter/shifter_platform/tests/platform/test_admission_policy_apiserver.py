@@ -203,3 +203,31 @@ def test_preparation_worker_secret_is_admitted_and_cannot_expand(kubectl: Kubect
             break
         assert time.monotonic() < deadline, admitted.stderr or denied.stderr
         time.sleep(1)
+
+
+@pytest.mark.parametrize("operation", ["register", "verify"])
+def test_api_server_fences_registered_project_command_generation(kubectl: Kubectl, operation: str) -> None:
+    import copy
+
+    _apply_admission(kubectl, _load_helm_documents(runtime_env=_canonical_admission_parameters()))
+    canonical = _canonical_admission_job()
+    canonical["spec"]["template"]["spec"]["containers"][0]["args"] = [
+        "range-project",
+        operation,
+        "--request-id",
+        "11111111-1111-1111-1111-111111111111",
+        "--operation-id",
+        "22222222-2222-2222-2222-222222222222",
+    ]
+    missing = copy.deepcopy(canonical)
+    missing["spec"]["template"]["spec"]["containers"][0]["args"] = canonical["spec"]["template"]["spec"]["containers"][
+        0
+    ]["args"][:4]
+    deadline = time.monotonic() + 60
+    while True:
+        admitted = _create_job(kubectl, canonical, username=PROVISIONER_LAUNCHER_USERNAME)
+        denied = _create_job(kubectl, missing, username=PROVISIONER_LAUNCHER_USERNAME)
+        if admitted.returncode == 0 and _denied_by_policy(denied):
+            break
+        assert time.monotonic() < deadline, admitted.stderr or denied.stderr
+        time.sleep(1)

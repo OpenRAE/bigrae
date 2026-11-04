@@ -267,6 +267,8 @@ def rebind_range_workspace_by_request(
         )
         outcome = RangeWorkspaceRebindOutcome.SOURCE_MISMATCH
     else:
+        if range_obj.gcp_project_uses.filter(released_at__isnull=True).exists():
+            raise ValueError("Range project custody must be retired first")
         range_obj.workspace_id = new_workspace_id
         fields = ["workspace_id"]
         if new_ancestry is not None:

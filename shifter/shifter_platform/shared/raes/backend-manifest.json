@@ -22,10 +22,14 @@
       "supported_constraint_kinds": [
         "node-type",
         "os-family",
+        "runtime-identity-authorities",
+        "runtime-platform-applications",
         "source-artifact"
       ],
       "supported_exact_requirement_kinds": [
         "declared-capability-match",
+        "runtime-identity-authorities",
+        "runtime-platform-applications",
         "source-artifact"
       ],
       "disclosure_kinds": [
@@ -41,6 +45,14 @@
         "operating-system": {
           "verification_scope": "configuration",
           "observation_strength": "guest-observed"
+        },
+        "runtime-identity-authorities": {
+          "verification_scope": "configuration",
+          "observation_strength": "daemon-observed"
+        },
+        "runtime-platform-applications": {
+          "verification_scope": "configuration",
+          "observation_strength": "daemon-observed"
         }
       },
       "process_resource_limits": [],

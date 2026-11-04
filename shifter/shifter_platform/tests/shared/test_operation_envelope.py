@@ -10,6 +10,7 @@ from shared.operation_envelope import (
     ACCEPTED_CONTRACT_VERSIONS,
     CONTRACT_VERSION,
     MAX_ENVELOPE_BYTES,
+    MAX_RAES_INPUT_BYTES,
     OperationEnvelopeError,
     build_operation_envelope,
     canonical_payload_digest,
@@ -115,3 +116,19 @@ def test_authority_version_requires_bound_digest_without_bearer_or_cookie_fields
         validate_operation_envelope({**envelope, "session_key": "SECRET_MARKER"})
     with pytest.raises(OperationEnvelopeError):
         validate_operation_envelope(_valid(authority_digest=digest))
+
+
+def test_native_plan_inputs_have_a_bounded_larger_budget_without_growing_other_envelopes():
+    payload = {"plan": {"kind": "raes_provisioning_plan", "resources": {}, "description": "x" * MAX_ENVELOPE_BYTES}}
+    assert validate_operation_envelope(_valid(resource="raes-range", payload=payload))["payload"] == payload
+    with pytest.raises(OperationEnvelopeError, match="exceeds"):
+        validate_operation_envelope(_valid(payload=payload))
+    with pytest.raises(OperationEnvelopeError, match="exceeds"):
+        validate_operation_envelope(
+            _valid(
+                resource="raes-range", payload={"plan": {"kind": "foreign", "description": "x" * MAX_ENVELOPE_BYTES}}
+            )
+        )
+    payload["plan"]["description"] = "x" * MAX_RAES_INPUT_BYTES
+    with pytest.raises(OperationEnvelopeError, match="exceeds"):
+        validate_operation_envelope(_valid(resource="raes-range", payload=payload))

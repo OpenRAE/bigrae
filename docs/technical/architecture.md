@@ -371,8 +371,10 @@ worker dispatch. File inputs grant no network access or cloud credentials.
 See the [named-file design](../architecture/named-file-assets-2719.md) for the
 trust boundaries, retention and admission checks.
 
-Adapters declaring `provision.prepare` may propose bounded scalar values for
-explicitly declared provisioning concerns. Core checks every original RAES
+Adapters declaring `provision.prepare` may propose bounded scalar values and
+literal UTF-8 secret payloads for explicitly declared provisioning concerns.
+Secret payload selection addresses an unbound native version; it cannot replace
+an authored Content reference. Core checks every original RAES
 authority, including overlapping exact constraints, before accepting a result.
 The worker encrypts its response with an invocation-specific key; accepted values
 remain encrypted in the existing range binding and invocation projection.
@@ -421,6 +423,28 @@ support claims. New boundaries extend the manifest. Run the
 links and diagrams. Historical
 [preflights and reviews](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/index.md)
 explain implementation decisions; they are not prerequisites or current authority.
+
+### Registered range-project custody
+
+The implementation for #2716 adds an installation-authorized project registry
+owned by Engine. The portal queues native metadata capture through the existing
+provisioner outbox/input/result boundary; it gains no project IAM client.
+Encrypted baseline metadata stays in the existing private object store, with
+only original bucket/generation and integrity references retained in leases.
+PostgreSQL guards enforce exclusive unreleased project use and require current
+applied destroy/restoration evidence before release. The worker lowers admitted
+native cloud declarations to data-only Terraform using the pinned provider.
+State stays encrypted in the existing private bucket under the lease identity.
+The Terraform validation inventory classifies this runtime root under the
+provisioner's Terraform version with the Google provider family, so CI validates
+its committed provider lock without credentials.
+Independent inventory and payload readback must match the baseline plus overlay;
+teardown releases custody only after exact baseline restoration. Cloud-only
+nodes retain their native identities without allocating extra guest VMs.
+These routes have local contract and lifecycle checks; live qualification is
+still required. Native provisioning inputs have a 4 MiB transport limit; other
+operation inputs retain the existing 256 KiB limit. See the
+[registered-project contract](shifter_platform/registered-gcp-range-projects.md).
 
 ## Experiment admission
 

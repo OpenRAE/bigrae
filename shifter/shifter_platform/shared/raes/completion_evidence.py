@@ -7,6 +7,9 @@ import json
 from collections.abc import Mapping
 from typing import Any
 
+from shared.gcp_project_completion import GcpProjectCompletion
+from shared.gcp_range_projects import MAX_PROJECTS_PER_RANGE
+
 _KEYS = {
     "schema_version",
     "plan_digest",
@@ -29,13 +32,11 @@ def plan_digest(plan: Mapping[str, Any]) -> str:
 
 def validate_completion_evidence(value: object) -> dict[str, Any]:
     """Validate the closed evidence shape without trusting its claimed outcome."""
-    if not isinstance(value, dict) or set(value) != _KEYS:
+    if not isinstance(value, dict) or set(value) - {"cloud_projects"} != _KEYS:
         raise ValueError("invalid RAES completion evidence fields")
     if value["schema_version"] != "shifter-raes-completion-v1":
         raise ValueError("unsupported RAES completion evidence version")
-    for field in ("plan_digest", "operation_id", "generation_id"):
-        if not isinstance(value[field], str) or not value[field] or len(value[field]) > 128:
-            raise ValueError("invalid RAES completion identity")
+    _validate_completion_identity(value)
     shapes = {
         "resources": {"address", "resource_type", "status"},
         "operating_systems": {"instance_key", "family", "distribution", "version"},
@@ -53,13 +54,31 @@ def validate_completion_evidence(value: object) -> dict[str, Any]:
     }
     for field, keys in shapes.items():
         _validate_evidence_rows(value[field], keys, limits[field], value_limits[field])
+    if "cloud_projects" in value:
+        _validate_cloud_projects(value["cloud_projects"])
     if len(json.dumps(value, allow_nan=False).encode()) > _MAX_BYTES:
         raise ValueError("RAES completion evidence exceeds its size bound")
     return value
 
 
+def _validate_completion_identity(value: Mapping[str, Any]) -> None:
+    """Retain nonempty, bounded plan, operation and generation identities."""
+    for field in ("plan_digest", "operation_id", "generation_id"):
+        if not isinstance(value[field], str) or not value[field] or len(value[field]) > 128:
+            raise ValueError("invalid RAES completion identity")
+
+
+def _validate_cloud_projects(rows: object) -> None:
+    """Require a bounded, unique proof collection with complete closed project records."""
+    if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_PROJECTS_PER_RANGE:
+        raise ValueError("invalid cloud completion evidence")
+    parsed = [GcpProjectCompletion.model_validate(row) for row in rows]
+    if len({row.lease_id for row in parsed}) != len(parsed):
+        raise ValueError("duplicate cloud completion evidence")
+
+
 def _validate_evidence_rows(rows: object, keys: set[str], limit: int, value_limits: Mapping[str, int]) -> None:
-    """Handle validate evidence rows."""
+    """Keep row shape, values, count and unique native identities within transport bounds."""
     if not isinstance(rows, list) or len(rows) > limit:
         raise ValueError("invalid RAES completion evidence collection")
     identities = set()
@@ -81,16 +100,18 @@ def build_completion_evidence(
     operating_systems: object,
     compute_substrates: object,
     generation_id: str | None = None,
+    cloud_projects: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Transport verified worker outputs; admission rechecks the input binding."""
-    return validate_completion_evidence(
-        {
-            "schema_version": "shifter-raes-completion-v1",
-            "plan_digest": plan_digest(plan),
-            "operation_id": plan.get("operation_id"),
-            "generation_id": generation_id or plan.get("operation_id"),
-            "resources": resources,
-            "operating_systems": operating_systems,
-            "compute_substrates": compute_substrates,
-        }
-    )
+    value = {
+        "schema_version": "shifter-raes-completion-v1",
+        "plan_digest": plan_digest(plan),
+        "operation_id": plan.get("operation_id"),
+        "generation_id": generation_id or plan.get("operation_id"),
+        "resources": resources,
+        "operating_systems": operating_systems,
+        "compute_substrates": compute_substrates,
+    }
+    if cloud_projects:
+        value["cloud_projects"] = cloud_projects
+    return validate_completion_evidence(value)

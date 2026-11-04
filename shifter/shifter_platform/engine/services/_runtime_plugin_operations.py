@@ -257,7 +257,7 @@ def _persist_observation(
             if approval is not None:
                 if target is None:
                     raise ValueError("Plugin range is unavailable")
-                retain_preparation(target, approval)
+                approval = retain_preparation(target, approval)
         except Exception as exc:  # noqa: BLE001  # fail-closed recheck; input errors can carry private plan content
             if state != "failed":
                 logger.warning(

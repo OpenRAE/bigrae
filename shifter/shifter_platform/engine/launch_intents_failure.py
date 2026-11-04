@@ -19,7 +19,7 @@ from uuid import UUID, uuid4
 from django.utils import timezone
 
 from engine.launch_target import lock_provisioner_target
-from engine.models import Instance, Range
+from engine.models import GcpRangeProject, Instance, Range
 
 PROVISIONER_DISPATCH_FAILED = "Provisioner dispatch failed"
 
@@ -117,9 +117,28 @@ def fail_current_provisioner_operation(
     except (KeyError, TypeError, ValueError):
         return False
     target = lock_provisioner_target(payload)
-    if not isinstance(target, (Range, Instance)) or not _generation_still_authorizes_failure(
+    if isinstance(target, GcpRangeProject):
+        failed = _fail_project_registration(payload, expected_operation_id, target)
+    elif not isinstance(target, (Range, Instance)) or not _generation_still_authorizes_failure(
         payload, target, expected_operation_id
     ):
+        failed = False
+    else:
+        _apply_dispatch_failure(payload, target)
+        failed = True
+    return failed
+
+
+def _fail_project_registration(
+    payload: dict[str, object], expected_operation_id: UUID | str, target: GcpRangeProject
+) -> bool:
+    """Only the still-current registration generation may record a dispatch failure."""
+    from engine.services._gcp_project_operations import validate_project_operation
+
+    try:
+        validate_project_operation(payload, expected_operation_id)
+    except ValueError:
         return False
-    _apply_dispatch_failure(payload, target)
+    target.status, target.failure_code = "failed", "dispatch-failed"
+    target.save(update_fields=["status", "failure_code", "updated_at"])
     return True

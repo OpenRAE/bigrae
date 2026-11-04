@@ -1879,6 +1879,11 @@
         "id": "ADR-032-R10",
         "description": "RAES agents.interactive_access remains participant-domain intent and MUST NOT be injected into the serialized ProvisioningPlan, RaesPlan, provisioning node payloads, backend capability manifest, or redacted runtime snapshot. shared.raes may lower only the released compiler's typed ParticipantBehaviorRuntime interactive-access projection into a versioned, bounded, non-secret sidecar of resolved compiled node address, closed channel, and resolved compiled account address. The sidecar is persisted separately from range_config, carried through the generation-fenced RAES operation input, and joined fail-closed to the separately parsed provisioning nodes/accounts before any provider or secret mutation. Shifter continues to claim no RAES participant_runtime capability. Because current product authorization has no trusted Shifter-actor to RAES-participant mapping, participant-local binding sets may be used only when they are invariant across compiled participant behaviors; they MUST NOT be unioned, guessed from role/name/team, or selected by an endpoint request. Each current binding requires an explicit enabled local account on the same single-instance target, a channel-compatible existing account credential strategy, and exact declaration-to-result equality; omitted/default accounts, domain accounts, count fan-out/implicit #0 selection, and exposure of the reserved provisioner-management account/key fail closed. The bounded realized member/access projection travels only in the authoritative terminal-ready operation result and is atomically persisted with READY, while credential values remain confined to guest installation and the existing terminal/Guacamole connection boundary.",
         "checks": []
+      },
+      {
+        "id": "ADR-032-R11",
+        "description": "GCP projects used by native cloud IAM and Secret Manager intent require an installation-authorized operator registration. Engine owns immutable encrypted baseline references and exclusive range leases; provider inventory stays in the existing private object store and never enters the reference-only operation envelope. An immutable lease retains the original organization, range/request, provisioning operation, plan digest, provider project identity, object bucket/generation and baseline digest. Only admitted launch or preparation acceptance allocates projects; input projection is read-only. Preparation admission, reservation, full future cleanup-envelope validation and planned state commit atomically, with rollback on acceptance failure. Retry and cleanup retain original projections. Unreleased custody blocks owner and scope moves. SQL prevents simultaneous unreleased uses, custody rewrites and deletion of active uses. Release requires the current applied native destroy receipt, verified absence with no residuals, and exact independent baseline restoration proof for that original lease. Range terminal status, cancellation, missing Jobs, timeouts or actor revocation never release custody. Authored cloud intent remains native RAES plan payload and literal referenced Content; unsupported intent must fail before effects. The worker admits nonempty identity-authority and platform-application inventories only after full native cloud preflight. Cloud-only nodes retain native identity without extra VMs; generated data-only Terraform uses the pinned provider and encrypted lease-scoped state, with independent inventory and payload readback before completion and exact baseline restoration before custody release. Registration excludes image-owning projects from every validated keyed image profile, including machine images, before provider inventory. Registration grants no portal or adapter cloud IAM authority.",
+        "checks": []
       }
     ],
     "exceptions": [],
@@ -1919,7 +1924,12 @@
       "shifter/shifter_platform/shared/raes/domain_topology.py",
       "shifter/shifter_platform/shared/raes/runtime_target.py",
       "docs/architecture/native-ec2-runtime.md",
-      "docs/architecture/raes-feature-artifact-acquisition-preflight-2463.md"
+      "docs/architecture/raes-feature-artifact-acquisition-preflight-2463.md",
+      "docs/architecture/registered-gcp-range-projects-2716.md",
+      "shifter/shifter_platform/shared/gcp_range_projects.py",
+      "shifter/shifter_platform/engine/models/_gcp_range_projects.py",
+      "shifter/shifter_platform/engine/migrations/0120_registered_gcp_range_projects.py",
+      "shifter/shifter_platform/tests/engine/services/test_gcp_range_projects.py"
     ]
   },
   {
@@ -2676,7 +2686,7 @@
       },
       {
         "id": "ADR-043-R4",
-        "description": "Operation payloads MUST compose the existing shared persisted RangeSpec/RAES ProvisioningPlan, range-cell, backend-admission, remote-access, RAES content/evidence, ResourceStatus, NGFW attachment, audit, error, and logging contracts. They MUST NOT introduce table-shaped DTOs, a second authored/runtime state model, duplicate validators/status enums/event constants/exception hierarchies, raw provider-response persistence, or a generic repository/query/patch interface.",
+        "description": "Operation payloads MUST compose the existing shared persisted RangeSpec/RAES ProvisioningPlan, range-cell, backend-admission, remote-access, RAES content/evidence, ResourceStatus, NGFW attachment, audit, error, and logging contracts. They MUST NOT introduce table-shaped DTOs, a second authored/runtime state model, duplicate validators/status enums/event constants/exception hierarchies, raw provider-response persistence, or a generic repository/query/patch interface. Native RAES plan inputs MAY use the bounded 4 MiB transport profile; registration, ordinary envelopes and results retain their existing limits, and the native payload parser remains mandatory.",
         "checks": []
       },
       {

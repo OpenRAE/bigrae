@@ -27,21 +27,30 @@ def range_owner_reassignment_available_by_request(request_id: UUID) -> bool:
     from engine.models import Range
 
     range_obj = Range.objects.select_related("user").filter(request__request_id=request_id).first()
-    return range_obj is not None and (
-        principal_range_owner_reassignment_available(range_obj) or _vpn_custody_never_left(range_obj.user)
+    return (
+        range_obj is not None
+        and not range_obj.gcp_project_uses.filter(released_at__isnull=True).exists()
+        and (principal_range_owner_reassignment_available(range_obj) or _vpn_custody_never_left(range_obj.user))
     )
 
 
 def principal_range_owner_reassignment_available(range_obj: Range) -> bool:
     """Return whether principal-native VPN custody is still wholly server-side."""
+    if range_obj.gcp_project_uses.filter(released_at__isnull=True).exists():
+        return False
     binding = range_obj.vpn_access_binding
     if binding is None:
         return True
+    return _vpn_binding_is_server_side(range_obj)
+
+
+def _vpn_binding_is_server_side(range_obj: Range) -> bool:
+    """Uncertain ownership or a delivered profile keeps VPN custody with its owner."""
     try:
         from engine.models import VpnAccessProfile
         from shared.remote_access import parse_openvpn_binding
 
-        parsed = parse_openvpn_binding(binding)
+        parsed = parse_openvpn_binding(range_obj.vpn_access_binding)
         return (
             parsed.owner_principal_uuid == range_obj.owner_principal_uuid
             and not VpnAccessProfile.objects.filter(range=range_obj, revoked_at__isnull=True).exists()

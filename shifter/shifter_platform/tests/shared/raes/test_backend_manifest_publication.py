@@ -39,6 +39,7 @@ from raes_contracts.backend_profiles import load_backend_profile
 from raes_contracts.contracts import BackendManifestV2Model
 from raes_contracts.realization_envelope import realizer_configuration_digest
 
+from shared.gcp_runtime_plan import compile_cloud_work
 from shared.raes.manifest import (
     SHIFTER_BACKEND_PROFILE,
     SHIFTER_SUPPORTED_CONTRACT_VERSIONS,
@@ -49,6 +50,8 @@ from shared.raes.realization import (
     SHIFTER_REALIZER_CONFIGURATION,
     create_shifter_realization_envelope,
 )
+from tests.shared.raes.test_gcp_runtime_plan import baseline_ref as baseline_ref
+from tests.shared.raes.test_gcp_runtime_plan import cloud_plan as cloud_plan
 
 PUBLISHED_MANIFEST_PATH = Path(__file__).resolve().parents[3] / "shared" / "raes" / "backend-manifest.json"
 PUBLISHED_ENVELOPE_PATH = Path(__file__).resolve().parents[3] / "shared" / "raes" / "backend-realization-envelope.json"
@@ -126,16 +129,30 @@ def test_manifest_infers_provisioning_only_profile():
     assert manifest.observation is None
 
 
-def test_realization_support_is_not_hollow():
+def test_realization_support_is_not_hollow(cloud_plan):
     """AC3: every realization-support declaration discloses and is backed by real capability."""
     manifest = create_shifter_backend_manifest()
     provisioner = manifest.provisioner
     declarations = render_shifter_backend_manifest_payload()["realization_support"]
+    plan, lease, contents, _sealed = cloud_plan
+    (work,) = compile_cloud_work(plan, (lease,), contents)
+    cloud_surfaces = {
+        "runtime-identity-authorities": (work.accounts, work.grants, work.audits),
+        "runtime-platform-applications": (work.secrets,),
+    }
 
     assert declarations, "manifest must declare at least one realization-support domain"
     for declaration in declarations:
         assert declaration["disclosure_kinds"], "realization-support must disclose backend evidence kinds"
         for kind in declaration.get("supported_constraint_kinds", ()):
+            if kind in cloud_surfaces:
+                assert all(cloud_surfaces[kind]), f"native runtime compiler has no work backing {kind!r}"
+                assert kind in declaration["supported_exact_requirement_kinds"]
+                assert declaration["observation_capabilities"][kind] == {
+                    "verification_scope": "configuration",
+                    "observation_strength": "daemon-observed",
+                }
+                continue
             if kind == "source-artifact":
                 # Artifact authority is in the public mechanism declaration;
                 # node/OS capability lists do not describe portable identities.
