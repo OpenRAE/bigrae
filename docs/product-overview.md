@@ -4,12 +4,12 @@ Run XDR/XSIAM demos without installing tools on your laptop.
 
 ## Get Started
 
+- [Install BigRAE on GCP](technical/handbook/gcp-first-run.md) - Install a deployment from a published release
 - [Quickstart](getting-started/quickstart) - Launch your first range
 - [Key Concepts](getting-started/concepts) - Agents, ranges, scenarios, terminals
 
 ## How-To Guides
 
-- [Run Your First Demo](how-to/first-demo) - Complete walkthrough from zero to demo
 - [Set Up NGFW Demo](how-to/ngfw-demo) - Full NGFW integration walkthrough
 - [Troubleshooting](how-to/troubleshooting) - Common issues and solutions
 
