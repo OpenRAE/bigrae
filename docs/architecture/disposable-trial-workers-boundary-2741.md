@@ -48,6 +48,13 @@ No new ADR or general workflow abstraction is needed. The current tree already
 contains worker contracts; they are reuse anchors, not delivery or qualification
 evidence. Preserve the following boundaries:
 
+- Operation results own every range with a retained operation ID, including
+  ranges created by the legacy smoke user. Status notifications cannot mutate
+  those rows: a delayed READY notification must not undo accepted teardown.
+  The compatibility handler locks the row before checking operation ownership
+  and changing unfenced legacy state. This uses the existing ADR-043 boundary;
+  notifications do not create a second result path.
+
 - `shared.disposable_workers.WorkerHostProfile` / `WorkerPolicy` and Engine's
   `_disposable_workers`, `_worker_qualification`, `_worker_retirement` and native
   worker models own this feature. Use explicit account scope (with resolved
