@@ -115,7 +115,10 @@ def _report_failure(
 def _load_input(ref: OperationRef, operation_id: str, operation: str, request_id: str) -> RaesOperationRun:
     """Validate input or report a bounded failure before effects; Engine fences the provisional ref."""
     try:
-        return get_raes_operation_input(operation_id, request_id=request_id, operation=operation)
+        run = get_raes_operation_input(operation_id, request_id=request_id, operation=operation)
+        if operation == "provision" and run.input.management_targets and run.input.range_backend != "gce":
+            raise ValueError("Worker host observation backend is unsupported")
+        return run
     except Exception:
         _report_failure(ref, operation, "operation input could not be read or validated", _INPUT_REASON_CODE)
         raise
@@ -148,8 +151,6 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
         from model_enrollment import load_model_enrollment
         from runtime_plugin_execution import load_prepared_plugin_run
 
-        if operation_input.management_targets and operation_input.range_backend != "gce":
-            raise ValueError("Worker host observation backend is unsupported")
         effective_run, plugin_plans = load_prepared_plugin_run(run)
         operation_input = effective_run.input
         preparation_ready = True

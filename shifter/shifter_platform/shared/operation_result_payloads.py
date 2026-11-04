@@ -23,7 +23,7 @@ from uuid import UUID
 
 from shared.enums import ResourceStatus
 from shared.exceptions import ValidationError as OperationResultError
-from shared.operation_result_members import _parse_raes_members
+from shared.operation_result_members import _parse_private_host_results, _parse_raes_members
 from shared.raes.status import RAES_OPERATION_STATES, RAES_STATE_SUCCEEDED
 
 __all__ = [
@@ -455,24 +455,6 @@ def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]
             result["vpn_access"] = parse_openvpn_realization(payload["vpn_access"])
         except OpenVpnBindingError:
             raise OperationResultError(f"{_PAYLOAD_FIELD} vpn_access is invalid") from None
-    return result
-
-
-def _parse_private_host_results(payload: dict[str, Any]) -> dict[str, Any]:
-    """Decode safe observations and immutable historical management references."""
-    from shared.range_management import validate_management_access
-    from shared.worker_observations import validate_worker_observations
-
-    result = {}
-    for field, validator in (
-        ("worker_observations", validate_worker_observations),
-        ("management_access", validate_management_access),
-    ):
-        if field in payload:
-            try:
-                result[field] = validator(payload[field])
-            except (ValueError, TypeError):
-                raise OperationResultError("invalid private host projection") from None
     return result
 
 

@@ -1,7 +1,7 @@
 """Authorize qualification from accepted, credential-free provisioner observations."""
 
 from dataclasses import asdict, dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
@@ -45,9 +45,26 @@ def qualify_disposable_worker(credential: CredentialContext, worker_id: UUID) ->
 
 
 def _qualification(worker: DisposableWorker) -> WorkerQualification:
-    """Require exact membership, generation, profile, lifetime and observation freshness."""
-    from engine.models import WorkerHostObservation
+    """Require the current apparatus and accepted, fresh host observation."""
+    runtime = worker.range
+    profile = _worker_profile(worker)
+    observed = _observed_host(runtime)
+    require_fresh_observation(observed, timezone.now())
+    if observed["docker_version"] != profile.docker_version:
+        raise ValueError("Worker runtime version differs from the retained profile")
+    return WorkerQualification(
+        observed["vm_identity"],
+        observed["machine_identity"],
+        observed["daemon_identity"],
+        profile.digest,
+        observed["observed_at"],
+        str(runtime.provisioner_operation_id),
+        str(runtime.resource_generation),
+    )
 
+
+def _worker_profile(worker: DisposableWorker) -> WorkerHostProfile:
+    """Validate immutable apparatus and the worker's qualification lifetime."""
     runtime = worker.range
     if (
         runtime.status != "ready"
@@ -59,6 +76,13 @@ def _qualification(worker: DisposableWorker) -> WorkerQualification:
     profile = WorkerHostProfile.model_validate(worker.profile)
     if profile.digest != worker.profile_digest:
         raise ValueError("Worker profile identity changed")
+    return profile
+
+
+def _observed_host(runtime: Range) -> dict[str, Any]:
+    """Resolve only the exact accepted generation and its single GCE member."""
+    from engine.models import WorkerHostObservation
+
     members = runtime.provisioned_instances
     if not isinstance(members, list) or len(members) != 1 or not isinstance(members[0], dict):
         raise ValueError("Worker observation membership is unavailable")
@@ -74,19 +98,7 @@ def _qualification(worker: DisposableWorker) -> WorkerQualification:
     observations = validate_worker_observations(record.observations)
     if set(observations) != {members[0].get("uuid")}:
         raise ValueError("Worker observation membership changed")
-    observed = next(iter(observations.values()))
-    require_fresh_observation(observed, timezone.now())
-    if observed["docker_version"] != profile.docker_version:
-        raise ValueError("Worker runtime version differs from the retained profile")
-    return WorkerQualification(
-        observed["vm_identity"],
-        observed["machine_identity"],
-        observed["daemon_identity"],
-        profile.digest,
-        observed["observed_at"],
-        str(runtime.provisioner_operation_id),
-        str(runtime.resource_generation),
-    )
+    return next(iter(observations.values()))
 
 
 def has_current_qualification(worker: DisposableWorker) -> bool:
@@ -113,15 +125,10 @@ def _store_qualification(
         if (
             resolve_local_credential(credential) != credential
             or (fresh.resource_generation, fresh.provisioner_operation_id) != generation
-            or fresh.status != "ready"
             or fresh.provisioned_instances != runtime.provisioned_instances
-            or current.retirement_at is not None
-            or current.terminal_at is not None
-            or current.deadline <= timezone.now()
-            or current.profile_digest != result.profile_digest
-            or _qualification(current) != result
         ):
             raise ValueError("Worker qualification binding changed")
+        _require_current_qualification(current, result)
         require_fresh_observation({"observed_at": result.observed_at}, timezone.now())
         from engine.models import DisposableWorker
 
@@ -139,3 +146,13 @@ def _store_qualification(
         except IntegrityError:
             raise ValueError("Worker identity is not independent") from None
         _audit(credential, current, "worker_qualify")
+
+
+def _require_current_qualification(worker: DisposableWorker, result: WorkerQualification) -> None:
+    """Recheck every observation/profile/lifetime condition under the native lock."""
+    try:
+        current = _qualification(worker)
+    except (ValueError, TypeError):
+        raise ValueError("Worker qualification binding changed") from None
+    if current != result:
+        raise ValueError("Worker qualification binding changed")

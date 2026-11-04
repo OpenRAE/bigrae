@@ -145,3 +145,11 @@ def test_invalid_observation_errors_do_not_echo_guest_or_access_material():
     with pytest.raises(ValueError) as error:
         validate_worker_observations({"host#0": {"private_material": "untrusted-value-must-not-escape"}})
     assert str(error.value) == "Worker observations are invalid"
+
+
+@pytest.mark.parametrize("identity", ["\uff11\uff12\uff13", "1\u06623"])
+def test_numeric_vm_identity_remains_ascii_only(peers, identity):
+    peers.numeric.id = identity
+    with pytest.raises(ValueError, match="provider identity is unavailable"):
+        subject.worker_observations_fragment(peers.result, ("provision.node.host",))
+    assert not peers.secrets
