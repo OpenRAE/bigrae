@@ -222,6 +222,9 @@ def _apply_ready_with_realized_access(
     range_obj.provisioned_instances = [
         _provisioned_instance(member, range_obj.range_backend or "gce") for member in members
     ]
+    from ._range_management import persist_realized_management
+
+    persist_realized_management(row, payload, range_obj)
     range_obj.vpn_access_binding = bound_vpn_access(row, payload.get("vpn_access"), range_obj)
     range_obj.save(update_fields=["provisioned_instances", "vpn_access_binding", "updated_at"])
     logger.info(

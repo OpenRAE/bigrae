@@ -182,6 +182,16 @@ class TestGcpKaliSourceImage:
         assert "ssh-keygen -A" in script
         assert "systemctl enable regenerate-ssh-host-keys.service" in script
 
+    def test_linux_capture_rearms_machine_identity_after_shared_cleanup(self):
+        """Both Linux builders seal fresh identities in their final step."""
+        script = (GCP_SCRIPTS_DIR / "gdc-cloudinit-datasource.sh").read_text()
+        assert "cloud-init clean --logs --seed --machine-id" in script
+        for role in ("ubuntu", "kali"):
+            template = (GCP_DIR / f"{role}.pkr.hcl").read_text()
+            assert template.index("../scripts/common/cleanup.sh") < template.index(
+                "scripts/gdc-cloudinit-datasource.sh"
+            )
+
 
 @pytest.mark.integration
 class TestGcpPackerValidate:

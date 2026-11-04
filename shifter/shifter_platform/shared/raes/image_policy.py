@@ -47,6 +47,7 @@ class ResolvedImage:
     participant_readiness_manifest_sha256: str = ""
     domain_dns_name: str = ""
     domain_netbios_name: str = ""
+    image_id: str = ""
 
 
 #: Authored version sentinels meaning "unpinned / any" (raes defaults an
@@ -108,6 +109,7 @@ def _to_resolved(candidate: dict[str, Any]) -> ResolvedImage:
     """Build a ResolvedImage from a registry candidate row (blank sizing -> None)."""
     return ResolvedImage(
         image_ref=candidate["image_ref"],
+        image_id=validate_provider_image_id(candidate.get("image_id", "")),
         machine_type=(candidate.get("machine_type") or "") or None,
         disk_size_gb=candidate.get("disk_size_gb"),
         disk_type=(candidate.get("disk_type") or "") or None,
@@ -120,6 +122,15 @@ def _to_resolved(candidate: dict[str, Any]) -> ResolvedImage:
         participant_readiness_contract=str(candidate.get("participant_readiness_contract", "")),
         participant_readiness_manifest_sha256=str(candidate.get("participant_readiness_manifest_sha256", "")),
     )
+
+
+def validate_provider_image_id(value: object) -> str:
+    """Accept a blank legacy ID or the immutable numeric GCE image identity."""
+    if value == "":
+        return ""
+    if not isinstance(value, str) or not re.fullmatch(r"[1-9]\d{0,19}", value):
+        raise ValueError("image_id must be an immutable GCE numeric identity")
+    return value
 
 
 def validate_management_ssh_port(value: object) -> int:

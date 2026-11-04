@@ -19,7 +19,7 @@ from raes_processor.semantics.realization_concerns import project_realization_co
 from shifter_adapter_sdk.runtime import RuntimePlan, canonical_digest
 
 from shared.gcp_runtime_plan import selected_secret_payloads
-from shared.runtime_plugin_binding import RuntimePluginPin
+from shared.runtime_plugin_binding import RuntimePin
 from shared.runtime_plugin_preparation import apply_prepared_values, governing_authorities, pointer_value
 
 _INVALID = "Preparation does not conform to the original admitted plan"
@@ -27,7 +27,7 @@ _DOMAIN = TypeAdapter(DomainDescriptor)
 _STRUCTURE = TypeAdapter(RealizationStructure)
 
 
-def validate_runtime_preparation(plan: dict[str, Any], result: RuntimePlan, pin: RuntimePluginPin) -> dict[str, Any]:
+def validate_runtime_preparation(plan: dict[str, Any], result: RuntimePlan, pin: RuntimePin) -> dict[str, Any]:
     """Accept only selections within every original constraint before any effect."""
     try:
         candidate = apply_prepared_values(plan, result, pin.manifest.provisioning_concerns)
@@ -52,7 +52,7 @@ def _validate_all_authorities(plan: dict[str, Any], candidate: dict[str, Any], r
                 seen.add(identity)
 
 
-def _validate_guest_identity(plan: dict[str, Any], candidate: dict[str, Any], pin: RuntimePluginPin) -> None:
+def _validate_guest_identity(plan: dict[str, Any], candidate: dict[str, Any], pin: RuntimePin) -> None:
     """Already-queued guest phases keep exactly their admitted OS and node count."""
     pin.bindings.validate_plan(candidate)
     for address in pin.bindings.targets.values():

@@ -377,6 +377,27 @@ application available for administrator login and credential issuance. It must
 not create an implicit deployment grant or weaken the runtime gate to resolve
 that prerequisite.
 
+Disposable worker qualification has a separate, fixed server-only operator
+workflow. Like catalog initialization, it selects only the activated cutover's
+recorded bootstrap administrator from exact private provider facts. It creates
+no principal, membership, policy grant, cloud binding or browser session.
+Management issues native Knox credentials with fixed actions and exact targets:
+installation configuration, one launch parent, and the command's two new worker
+identities. A recovery invocation instead selects exact retained worker IDs.
+Credentials expire within 35 minutes, never leave the process, and are revoked
+on every handled exit; expiry bounds proof abandoned by uncatchable process death.
+Durable cleanup continues through the existing exact-generation system authority
+after proof expires or is revoked; it must not borrow or renew that proof.
+The [worker boundary note](../architecture/disposable-trial-workers-boundary-2741.md)
+records target-resolution, input-file and failure-output constraints.
+Issuance and revocation use strict native audit. Personal-token
+eligibility, current application policy, SQL scope and original ceilings remain
+mandatory. This closed validation workflow does not generalize the catalog
+credential or expose a general operator token-issuance API. Engine consumes only
+the read-only cutover-state facade for this selection. Shared owns the existing
+bootstrap-facts contract and private-file reader; Config retains compatible
+imports. No control-plane write allowance is added to Config.
+
 Principal RAES creation carries exact customer scope and public identity through
 the incumbent dispatch port and `RangeBindings`. Engine evaluates parent
 authority before the creation transaction. CMS linkage, native input, queued

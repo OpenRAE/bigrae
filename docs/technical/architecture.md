@@ -288,6 +288,25 @@ logging and sanitized error builders exclude raw provider responses, credentials
 signed URLs and private scenario material. Audit evidence is not a work queue.
 Backup existence is not evidence of a successful restore rehearsal.
 
+### Disposable VM workers
+
+Engine owns disposable VM workers through its native range lifecycle.
+Account-scoped worker identities use Engine's SQL ancestry through the composition root.
+Worker and CMS public identities cannot overlap.
+Each worker retains one apparatus profile, one experiment reference, and at most one trial reference.
+Global count limits and enforcing capacity draws precede durable launch.
+Active worker draws survive capacity-window expiry until exact-generation provider absence.
+Ready workers can carry caller-owned evidence holds that fence native destructive admission and dispatch.
+Overdue holds and exhausted cleanup retain tracked custody for explicit operator recovery.
+Optional installed software uses the existing isolated adapter machinery with explicit apparatus identity.
+The generic management probe requires no experiment runtime.
+Engine's qualification command selects the recorded bootstrap administrator through exact private facts.
+Management issues short-lived native credentials for fixed actions and exact targets, then revokes them on exit.
+The command creates no identity or policy grant and preserves ordinary scope, membership and authorization checks.
+The apparatus pins the numeric provider image identity and a capacity partition that matches deployment placement.
+Linux image capture clears machine and Docker identities before independent workers boot.
+See [disposable workers](shifter_platform/disposable-workers.md) for contracts, data flows, controls, and references.
+
 ## Package and dependency ownership
 
 The authoritative dependency map is

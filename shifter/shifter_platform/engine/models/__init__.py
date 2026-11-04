@@ -109,6 +109,7 @@ __all__ = [
     "CapacityDraw",
     "CapacityReservation",
     "CleanupVerificationOutcome",
+    "DisposableWorker",
     "GcpRangeProject",
     "GcpRangeProjectUse",
     "Instance",
@@ -157,6 +158,7 @@ __all__ = [
     "RangeCancellationAuthority",
     "RangeCleanupVerification",
     "RangeEventOutbox",
+    "RangeManagementAccess",
     "ReceiptVerifierRegistration",
     "Request",
     "RetryBindingStatus",
@@ -177,4 +179,8 @@ __all__ = [
     "VpnSessionEndReason",
     "VpnSessionState",
     "WarmRangeGeneration",
+    "WorkerPolicyRecord",
+    "WorkerRetirementHold",
 ]
+
+from ._disposable_worker import DisposableWorker, RangeManagementAccess, WorkerPolicyRecord, WorkerRetirementHold

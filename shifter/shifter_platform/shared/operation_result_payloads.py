@@ -419,7 +419,9 @@ def _parse_raes_snapshot(payload: dict[str, Any], _spec_unused: StepSpec) -> dic
 def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]:
     """Parse an RAES terminal-ready result plus its realized access projection."""
     required = frozenset({"raes_status", "members"})
-    unexpected = sorted(frozenset(payload) - (required | {"status_reason", "completion", "vpn_access"}))
+    unexpected = sorted(
+        frozenset(payload) - (required | {"status_reason", "completion", "vpn_access", "management_access"})
+    )
     if unexpected:
         raise OperationResultError(f"{_PAYLOAD_FIELD} has unexpected field(s): {', '.join(unexpected)}")
     missing = sorted(required - frozenset(payload))
@@ -427,7 +429,11 @@ def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]
         raise OperationResultError(f"{_PAYLOAD_FIELD} is missing field(s): {', '.join(missing)}")
 
     operation = _parse_raes_operation(
-        {key: payload[key] for key in payload if key not in {"members", "completion", "vpn_access"}},
+        {
+            key: payload[key]
+            for key in payload
+            if key not in {"members", "completion", "vpn_access", "management_access"}
+        },
         spec,
     )
     raw = payload["members"]
@@ -443,6 +449,13 @@ def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]
     if len(set(identities)) != len(identities):
         raise OperationResultError(f"{_PAYLOAD_FIELD} members contains a duplicate uuid")
     result = {**operation, "members": members}
+    if "management_access" in payload:
+        from shared.range_management import validate_management_access
+
+        try:
+            result["management_access"] = validate_management_access(payload["management_access"])
+        except ValueError:
+            raise OperationResultError("invalid private management projection") from None
     if "completion" in payload:
         from shared.raes.completion_evidence import validate_completion_evidence
 

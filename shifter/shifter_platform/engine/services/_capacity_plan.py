@@ -173,7 +173,7 @@ def release_capacity_reservations(
     queryset = CapacityReservation.objects.filter(event_ref=event_ref, released_at__isnull=True)
     if request_id is not None:
         queryset = queryset.filter(request_id=request_id)
-    return queryset.update(released_at=now or timezone.now())
+    return queryset.exclude(release_on_absence=True, consumed__gt=0).update(released_at=now or timezone.now())
 
 
 def _observe(

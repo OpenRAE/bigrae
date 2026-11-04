@@ -67,6 +67,24 @@ from . import _vpn_sessions as _api_vpn_sessions
 from . import _warm_pool as _api_warm_pool
 from . import _warm_pool_admission as _api_warm_pool_admission
 from . import _warm_pool_sweep as _api_warm_pool_sweep
+from ._disposable_workers import (
+    WorkerView as WorkerView,
+)
+from ._disposable_workers import (
+    bind_worker_trial as bind_worker_trial,
+)
+from ._disposable_workers import (
+    configure_worker_policy as configure_worker_policy,
+)
+from ._disposable_workers import (
+    create_disposable_worker as create_disposable_worker,
+)
+from ._disposable_workers import (
+    get_disposable_worker as get_disposable_worker,
+)
+from ._disposable_workers import (
+    worker_credential_scope as worker_credential_scope,
+)
 from ._identity_cutover import (
     apply_identity_cutover_resources as apply_identity_cutover_resources,
 )
@@ -93,6 +111,33 @@ from ._range_authority import lock_range_remote_authority as lock_range_remote_a
 from ._range_authority import native_range_id_by_request as native_range_id_by_request
 from ._range_authority import project_range_authority as project_range_authority
 from ._vpn_profiles import get_vpn_crl as get_vpn_crl
+from ._worker_qualification import (
+    WorkerQualification as WorkerQualification,
+)
+from ._worker_qualification import (
+    qualify_disposable_worker as qualify_disposable_worker,
+)
+from ._worker_retirement import (
+    WorkerHoldView as WorkerHoldView,
+)
+from ._worker_retirement import (
+    acquire_worker_hold as acquire_worker_hold,
+)
+from ._worker_retirement import (
+    list_worker_holds as list_worker_holds,
+)
+from ._worker_retirement import (
+    reconcile_disposable_workers as reconcile_disposable_workers,
+)
+from ._worker_retirement import (
+    release_worker_hold as release_worker_hold,
+)
+from ._worker_retirement import (
+    resume_worker_cleanup as resume_worker_cleanup,
+)
+from ._worker_retirement import (
+    retire_disposable_worker as retire_disposable_worker,
+)
 
 transaction = _api_django_db.transaction
 

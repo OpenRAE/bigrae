@@ -38,6 +38,7 @@ These retain their stated design authority and are not historical preflights:
 - [RAES hard cut](raes-migration-adr.md)
 - [RAES 10.6 contract-pair adoption boundary](raes-contract-pair-adoption-2722.md)
 - [Tenant trial archive intake boundary](experiments-trial-archive-intake-boundary-2740.md)
+- [Disposable trial worker boundary](disposable-trial-workers-boundary-2741.md)
 - [Pack experiment admission boundary](experiment-admission-boundary-2742.md)
 - [Trial archive custody design](trial-archive-custody.md)
 - [External runtime boundary](external-scenario-runtime-design.md)

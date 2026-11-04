@@ -558,11 +558,13 @@ class TestSymbolFacadeImports:
                     "get_organization_profile",
                     "resource_scope_from_ids",
                     "resolve_range_scope_binding",
+                    "get_identity_cutover_state",
                     "hierarchy_target_scope",
                 ]
             },
             "config": {
                 "engine.services": [
+                    "worker_credential_scope",
                     "apply_identity_cutover_resources",
                     "identity_cutover_contract_gaps",
                     "identity_cutover_resource_disposition",

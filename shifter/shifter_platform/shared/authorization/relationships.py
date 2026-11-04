@@ -42,6 +42,9 @@ _CUTOVER_PARENT_RELATIONS = {
     ("organization", "event"),
     ("workspace", "event"),
 }
+_HIERARCHY_PARENT_RELATIONS = _CUTOVER_PARENT_RELATIONS | {
+    (parent, "range") for parent in ("account", "organization", "workspace", "event")
+}
 _CUTOVER_EVENT_GRANTS = {
     grant_relation_for_action(action.code) for action in ACTION_CATALOG if action.target_type == "event"
 }
@@ -85,7 +88,7 @@ class HierarchyRelationshipChange:
         user_type, user_id = _cutover_object(self.user)
         object_type, _ = _cutover_object(self.object)
         if (
-            (user_type, object_type) not in _CUTOVER_PARENT_RELATIONS
+            (user_type, object_type) not in _HIERARCHY_PARENT_RELATIONS
             or self.relation != user_type
             or (user_type == "installation" and user_id != "root")
         ):
@@ -184,7 +187,7 @@ def _cutover_object(value: str) -> tuple[str, str]:
     if object_type == "installation":
         if object_id != "root":
             raise AuthorizationContractError(_INVALID_CUTOVER_RELATIONSHIP)
-    elif object_type in {"principal", "account", "organization", "workspace", "event"}:
+    elif object_type in {"principal", "account", "organization", "workspace", "event", "range"}:
         try:
             if UUID(object_id).int == 0:
                 raise ValueError

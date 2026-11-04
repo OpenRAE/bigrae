@@ -81,7 +81,7 @@ from ._agents import (
 from ._content_authority import set_catalog_publication
 from ._content_ingestion import PackRegistrationRequest, RegisteredPack, register_pack
 from ._content_scope_options import content_scope_options
-from ._credential_scope import range_credential_scope
+from ._credential_scope import range_credential_scope, range_identity_present
 from ._credentials import create_credential, delete_credential, get_credential, list_credentials
 from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
 from ._experiment_batches import (
@@ -451,6 +451,7 @@ __all__ = (
     "range_credential_scope",
     "range_egress_compatible_with_event",
     "range_egress_compatible_with_scope",
+    "range_identity_present",
     "range_owner_reassignment_available",
     "range_status_changed",
     "reassign_event_range_owner",
