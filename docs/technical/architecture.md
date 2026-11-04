@@ -18,6 +18,8 @@ The [OpenFGA operations guide](../ops/openfga.md) describes staged replacement
 of retained TLS certificates through the existing provider secret bundles.
 Clients receive both CA certificates before server rotation; authentication
 keys and policy records remain unchanged.
+Strict live-server verification and client migration precede removal of the
+old CA and the next authorization-model publication.
 GCP rollout restarts and readiness checks consume the same closed release
 Deployment inventory, including background workers and optional broker clients.
 

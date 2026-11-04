@@ -44,6 +44,13 @@ The warning `<bucket>: objects that do not use the bucket key` is not a failure.
 It counts the noncurrent, soft-deleted, retention-locked, and wildcard-named
 objects that keep the Google-managed key.
 
+An OpenFGA publisher error about a missing Authority Key Identifier or Subject
+Key Identifier means that retained TLS material fails strict verification.
+Deployment preserves existing secret bundles. Follow the
+[certificate replacement procedure](../ops/openfga.md#replace-retained-tls-certificates),
+including live server checks and removal of the old CA after client migration.
+Keep certificate and hostname verification enabled.
+
 ## Investigation
 
 Record the command, the deployment name, the release revision, and the last
