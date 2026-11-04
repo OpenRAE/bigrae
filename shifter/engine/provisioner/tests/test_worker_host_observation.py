@@ -137,3 +137,11 @@ def test_invalid_guest_facts_cannot_produce_success(peers, change):
 def test_ordinary_range_has_no_probe_or_provider_read(peers):
     assert subject.worker_observations_fragment(peers.result, ()) == {}
     assert not peers.secrets and not peers.reads
+
+
+def test_invalid_observation_errors_do_not_echo_guest_or_access_material():
+    from shared.worker_observations import validate_worker_observations
+
+    with pytest.raises(ValueError) as error:
+        validate_worker_observations({"host#0": {"private_material": "untrusted-value-must-not-escape"}})
+    assert str(error.value) == "Worker observations are invalid"

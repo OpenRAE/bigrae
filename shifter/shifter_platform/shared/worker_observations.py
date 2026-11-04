@@ -32,7 +32,10 @@ def validate_worker_observations(value: object) -> dict[str, dict[str, Any]]:
             raise ValueError("Worker observation target is invalid")
         # JSON-mode validation accepts an ISO timestamp while retaining strict
         # integer/string checks and refusing additional fields.
-        parsed = WorkerHostObservation.model_validate_json(json.dumps(observation))
+        try:
+            parsed = WorkerHostObservation.model_validate_json(json.dumps(observation))
+        except (ValueError, TypeError):
+            raise ValueError("Worker observations are invalid") from None
         result[target] = parsed.model_dump(mode="json")
     return result
 
