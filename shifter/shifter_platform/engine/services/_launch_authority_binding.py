@@ -53,6 +53,10 @@ def assert_launch_authority_binding(intent: ProvisionerLaunchIntent, runtime: Ra
         intent.authority_binding_digest != range_runtime_binding_digest(runtime)
     ):
         raise ValueError(_OPERATION_AUTHORITY_UNAVAILABLE)
+    if intent.payload.get("operation") in {"destroy", "cancel", "pause", "resume"}:
+        from engine.worker_retention import fence_worker_retirement
+
+        fence_worker_retirement(runtime)
     if intent.authority_kind == "cleanup":
         from ._launch_cleanup_authority import assert_cleanup_origin
 

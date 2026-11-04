@@ -3,14 +3,14 @@
 from typing import Any
 
 from shared.model_access.guest_binding import ModelGuestBinding
-from shared.runtime_plugin_binding import RuntimePluginPin
+from shared.runtime_plugin_binding import RuntimePin
 
 from .operation_input_identity import RaesOperationInputError
 
 
 def _validate_enrollment_targets(
     obj: dict[str, Any],
-    plugin: RuntimePluginPin | None,
+    plugin: RuntimePin | None,
     bindings: tuple[ModelGuestBinding, ...],
 ) -> None:
     """Require every enrollment to match its pinned model role and Linux guest."""
@@ -25,7 +25,7 @@ def _validate_enrollment_targets(
             raise ValueError
 
 
-def _model_enrollments(obj: dict[str, Any], plugin: RuntimePluginPin | None) -> tuple[ModelGuestBinding, ...]:
+def _model_enrollments(obj: dict[str, Any], plugin: RuntimePin | None) -> tuple[ModelGuestBinding, ...]:
     """Require unique admitted grants targeting the pinned Linux guests."""
     try:
         rows = obj.get("model_enrollments", [])

@@ -1,0 +1,27 @@
+name: synthetic-worker-host
+description: Synthetic outer VM apparatus without an experiment runtime.
+nodes:
+  lan:
+    type: Switch
+  web:
+    type: compute
+    os: linux
+    os_distribution: x-shifter:alpine
+    os_version: "3.19"
+    source: {name: alpine, version: "3.19"}
+    resources: {ram: 8 gib, cpu: 2}
+infrastructure:
+  lan:
+    count: 1
+    properties: {cidr: 10.50.0.0/24, gateway: 10.50.0.1}
+  web:
+    count: 1
+    links: [lan]
+    properties:
+      - lan: 10.50.0.10
+realization:
+  constraints:
+    - field_pointer: /nodes/web
+      concern: compute-substrate
+      posture: exact
+      domain: {kind: exact, value: virtual-machine}

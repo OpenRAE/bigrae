@@ -26,4 +26,11 @@ history -c 2>/dev/null || true
 # Clear SSH host keys (will be regenerated on first boot)
 rm -f /etc/ssh/ssh_host_*
 
+# Sealed images must not clone a running daemon's persisted identity. Preserve
+# its image cache, but stop socket activation before removing identity files.
+if command -v dockerd >/dev/null 2>&1; then
+    systemctl stop docker.service docker.socket
+    rm -f /var/lib/docker/engine-id /etc/docker/key.json
+fi
+
 echo "=== Cleanup complete ==="

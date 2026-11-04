@@ -23,7 +23,7 @@ from uuid import UUID
 
 from shared.enums import ResourceStatus
 from shared.exceptions import ValidationError as OperationResultError
-from shared.operation_result_members import _parse_raes_member
+from shared.operation_result_members import _parse_private_host_results, _parse_raes_members
 from shared.raes.status import RAES_OPERATION_STATES, RAES_STATE_SUCCEEDED
 
 __all__ = [
@@ -419,7 +419,10 @@ def _parse_raes_snapshot(payload: dict[str, Any], _spec_unused: StepSpec) -> dic
 def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]:
     """Parse an RAES terminal-ready result plus its realized access projection."""
     required = frozenset({"raes_status", "members"})
-    unexpected = sorted(frozenset(payload) - (required | {"status_reason", "completion", "vpn_access"}))
+    unexpected = sorted(
+        frozenset(payload)
+        - (required | {"status_reason", "completion", "vpn_access", "management_access", "worker_observations"})
+    )
     if unexpected:
         raise OperationResultError(f"{_PAYLOAD_FIELD} has unexpected field(s): {', '.join(unexpected)}")
     missing = sorted(required - frozenset(payload))
@@ -427,22 +430,15 @@ def _parse_raes_ready(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]
         raise OperationResultError(f"{_PAYLOAD_FIELD} is missing field(s): {', '.join(missing)}")
 
     operation = _parse_raes_operation(
-        {key: payload[key] for key in payload if key not in {"members", "completion", "vpn_access"}},
+        {
+            key: payload[key]
+            for key in payload
+            if key not in {"members", "completion", "vpn_access", "management_access", "worker_observations"}
+        },
         spec,
     )
-    raw = payload["members"]
-    if not isinstance(raw, list):
-        raise OperationResultError(f"{_PAYLOAD_FIELD} members must be a list")
-    if len(raw) > MAX_RAES_MEMBERS:
-        raise OperationResultError(f"{_PAYLOAD_FIELD} carries more than {MAX_RAES_MEMBERS} members")
-    members = []
-    for index, item in enumerate(raw):
-        field = f"{_PAYLOAD_FIELD} members[{index}]"
-        members.append(_parse_raes_member(_require_dict(item, field), field))
-    identities = [member["uuid"] for member in members]
-    if len(set(identities)) != len(identities):
-        raise OperationResultError(f"{_PAYLOAD_FIELD} members contains a duplicate uuid")
-    result = {**operation, "members": members}
+    members = _parse_raes_members(payload["members"], limit=MAX_RAES_MEMBERS, field=_PAYLOAD_FIELD)
+    result = {**operation, "members": members, **_parse_private_host_results(payload)}
     if "completion" in payload:
         from shared.raes.completion_evidence import validate_completion_evidence
 

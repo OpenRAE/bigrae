@@ -13,7 +13,7 @@ from shifter_adapter_sdk.runtime import RuntimeInput, RuntimePlan, canonical_dig
 
 from shared.field_encryption import encrypt_value
 from shared.raes.runtime_preparation import validate_runtime_preparation
-from shared.runtime_plugin_binding import RuntimePluginPin
+from shared.runtime_plugin_binding import RuntimePin, parse_runtime_pin
 from shared.runtime_plugin_preparation import RuntimePreparation
 
 if TYPE_CHECKING:
@@ -43,7 +43,7 @@ def preparation_result_secret(request: RuntimeInput) -> str:
 
 
 def approved_preparation(
-    request: RuntimeInput, result: RuntimePlan, pin: RuntimePluginPin, plan: dict[str, Any]
+    request: RuntimeInput, result: RuntimePlan, pin: RuntimePin, plan: dict[str, Any]
 ) -> RuntimePreparation:
     """Admit all values before protecting the complete response with the application key."""
     result.authorize(request)
@@ -77,7 +77,7 @@ def approve_invocation(row: RuntimePluginInvocation, request: RuntimeInput, resu
     return record
 
 
-def preparation_identity(record: RuntimePreparation, pin: RuntimePluginPin, plan: object) -> None:
+def preparation_identity(record: RuntimePreparation, pin: RuntimePin, plan: object) -> None:
     """Retained approval belongs to this exact original executable, input and plan."""
     if not isinstance(plan, dict) or record.pin_digest != pin.digest or record.plan_digest != canonical_digest(plan):
         raise ValueError(_IDENTITY_CHANGED)
@@ -106,7 +106,7 @@ def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePrep
         or not isinstance(target.range_config, dict)
     ):
         raise ValueError(_IDENTITY_CHANGED)
-    pin = RuntimePluginPin.model_validate(binding.pin)
+    pin = parse_runtime_pin(binding.pin)
     source_operation_id = record.source_operation_id
     selected = RuntimePlan.model_validate_json(decrypt_value(record.encrypted_result))
     candidate = validate_runtime_preparation(target.range_config, selected, pin)
@@ -120,7 +120,7 @@ def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePrep
     return record
 
 
-def retained_preparation(target: Range, pin: RuntimePluginPin | None) -> RuntimePreparation | None:
+def retained_preparation(target: Range, pin: RuntimePin | None) -> RuntimePreparation | None:
     """Snapshot accepted values or pre-effect absence for the range's next operation."""
     from engine.models import RuntimePluginRangeBinding
 

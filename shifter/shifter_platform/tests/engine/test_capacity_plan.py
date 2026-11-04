@@ -141,6 +141,22 @@ def _reserve(event_ref, *, amount, partition="aws-dev-use2", metric="ec2_vcpu", 
 
 
 class TestAdmissionOutcomes:
+    @pytest.mark.postgres
+    def test_assessment_is_written_to_the_native_audit_store(self):
+        """The producer must pass the real audit vocabulary and persistence boundary."""
+        from shared.audit import AuditAction, AuditActorType
+        from shared.models import AuditLog
+
+        _assess(demand=10.0)
+
+        assessment = CapacityAssessment.objects.get()
+        record = AuditLog.objects.get(
+            entity_type="capacity_assessment", entity_id=assessment.pk, action=AuditAction.CAPACITY_ASSESS
+        )
+        assert record.actor_type == AuditActorType.SYSTEM
+        assert "outcome=admitted" in record.context
+        assert record.sequence > 0 and record.record_digest
+
     def test_demand_within_headroom_is_admitted_and_reserved(self):
         result = _assess(demand=10.0)
 

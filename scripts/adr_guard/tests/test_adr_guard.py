@@ -989,11 +989,13 @@ class SymbolFacadeAllowlistTests(unittest.TestCase):
                         "get_organization_profile",
                         "resource_scope_from_ids",
                         "resolve_range_scope_binding",
+                        "get_identity_cutover_state",
                         "hierarchy_target_scope",
                     ]
                 },
                 "config": {
                     "engine.services": [
+                        "worker_credential_scope",
                         "apply_identity_cutover_resources",
                         "identity_cutover_contract_gaps",
                         "identity_cutover_resource_disposition",
@@ -1049,9 +1051,7 @@ class SymbolFacadeAllowlistTests(unittest.TestCase):
                 repo_root, rel, "from workspaces.services import verify_identity_cutover_hierarchy\n", config=config
             )
             self.assertEqual(ADR_GUARD.check_layer_imports(repo_root, [rel]), [])
-            self._write_layer_repo(
-                repo_root, rel, "from workspaces.services import create_account\n", config=config
-            )
+            self._write_layer_repo(repo_root, rel, "from workspaces.services import create_account\n", config=config)
             violations = ADR_GUARD.check_layer_imports(repo_root, [rel])
             self.assertTrue(any(item.rule_id == "ADR-001-R4" for item in violations))
 

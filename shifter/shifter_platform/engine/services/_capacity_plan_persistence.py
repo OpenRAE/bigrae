@@ -50,16 +50,15 @@ def _committed_reservation(partition_name: str, metric_name: str, start: datetim
     Half-open comparison: two windows that merely touch at an instant do not
     contend, but any real overlap does.
     """
-    from django.db.models import Sum
+    from django.db.models import Q, Sum
 
     from engine.models import CapacityReservation
 
     total = CapacityReservation.objects.filter(
+        Q(window_start__lt=end, window_end__gt=start) | Q(release_on_absence=True, consumed__gt=0),
         partition_name=partition_name,
         metric_name=metric_name,
         released_at__isnull=True,
-        window_start__lt=end,
-        window_end__gt=start,
     ).aggregate(total=Sum("amount"))["total"]
     return float(total or 0.0)
 
@@ -193,10 +192,10 @@ def _audit_assessment(assessment: CapacityAssessment, result: CapacityAssessment
     identifier, or provider payload reaches audit free text.
     """
     try:
-        from shared.audit import AuditAction, AuditTarget, audit_log_system_event
+        from shared.audit import AuditAction, AuditEntityType, AuditTarget, audit_log_system_event
 
         audit_log_system_event(
-            AuditTarget("capacity_assessment", assessment.pk),
+            AuditTarget(AuditEntityType.CAPACITY_ASSESSMENT, assessment.pk),
             action=AuditAction.CAPACITY_ASSESS,
             source="engine.services.capacity",
             context=(

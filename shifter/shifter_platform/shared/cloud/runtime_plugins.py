@@ -102,7 +102,7 @@ def launch_plugin(
     )
     environment = {
         "BIGRAE_PLUGIN_INPUT"
-        if request.protocol == "bigrae.runtime-plugin/v1"
+        if request.protocol.startswith("bigrae.runtime-plugin/")
         else "SHIFTER_PLUGIN_INPUT": request.model_dump_json()
     }
     if result_secret:

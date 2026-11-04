@@ -131,3 +131,17 @@ def test_versioned_change_supersedes_prior_binding_without_deleting_provider_sta
         ("superseded", f"authorization_binding:{'a' * 64}-1"),
     ]
     assert change.writes[1].user == f"authorization_binding:{'a' * 64}-2#active"
+
+
+@pytest.mark.parametrize("parent", ["account", "organization", "workspace", "event"])
+def test_native_range_parent_uses_closed_hierarchy_contract(parent):
+    from shared.authorization import HierarchyRelationshipChange
+
+    change = HierarchyRelationshipChange(f"{parent}:{SUBJECT_ID}", parent, f"range:{WORKSPACE_ID}")
+    assert change.writes == (change.grant_tuple,)
+    assert not change.deletes
+    for invalid in ("principal", "installation", "range"):
+        with pytest.raises(AuthorizationContractError):
+            HierarchyRelationshipChange(f"{invalid}:{SUBJECT_ID}", invalid, f"range:{WORKSPACE_ID}")
+    with pytest.raises(AuthorizationContractError):
+        HierarchyRelationshipChange(f"{parent}:{SUBJECT_ID}", "direct_administrator", f"range:{WORKSPACE_ID}")

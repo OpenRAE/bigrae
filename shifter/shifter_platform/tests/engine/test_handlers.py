@@ -10,6 +10,7 @@ the sub-handlers.
 import json
 import logging
 from datetime import timedelta
+from uuid import uuid4
 
 import pytest
 from django.contrib.auth import get_user_model
@@ -87,6 +88,28 @@ class TestParseSnsMessage:
 
 
 class TestProcessRangeEventStatusUpdates:
+    @pytest.mark.postgres
+    @pytest.mark.parametrize("notification", ["ready", "failed", "destroyed"])
+    def test_operation_owned_range_ignores_delayed_notification(self, user, notification):
+        operation_id = uuid4()
+        range_obj = Range.objects.create(
+            workspace_id=_WORKSPACE_ID,
+            user=user,
+            status=Range.Status.DESTROYING,
+            provisioner_operation="raes-range:destroy",
+            provisioner_operation_id=operation_id,
+        )
+        before = AuditLog.objects.count()
+
+        process_range_event(_status_event(range_obj, new_status=notification))
+
+        range_obj.refresh_from_db()
+        assert range_obj.status == Range.Status.DESTROYING
+        assert range_obj.provisioner_operation_id == operation_id
+        assert range_obj.ready_at is None
+        assert range_obj.destroyed_at is None
+        assert AuditLog.objects.count() == before
+
     def test_updates_status(self, user):
         range_obj = Range.objects.create(workspace_id=_WORKSPACE_ID, user=user, status=Range.Status.PENDING)
         process_range_event(_status_event(range_obj, new_status=ResourceStatus.PROVISIONING.value))
