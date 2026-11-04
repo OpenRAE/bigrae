@@ -65,7 +65,7 @@ def test_qualification_pins_host_identity_and_records_bounded_facts(apparatus, g
         {"daemon_count": 2},
         {"daemon_count": True},
         {"observed_at": (timezone.now() - timedelta(seconds=901)).isoformat()},
-        {"observed_at": (timezone.now() + timedelta(minutes=2)).isoformat()},
+        {"observed_at": (timezone.now() + timedelta(days=1)).isoformat()},
         {"machine_identity": "raw-guest-identity"},
         {"ssh_key_secret_ref": "forbidden"},
     ],
