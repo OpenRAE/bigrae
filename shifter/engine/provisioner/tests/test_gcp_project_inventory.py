@@ -38,6 +38,13 @@ class Session:
         self.calls.append((method, url, kwargs))
         assert kwargs["allow_redirects"] is False
         assert kwargs["stream"] is True
+        # IAM rejects GET for this read-only method; unlike Resource Manager,
+        # its version option belongs in the query and its body must be empty.
+        if url.startswith("https://iam.googleapis.com/") and url.endswith(":getIamPolicy"):
+            if method != "POST":
+                return Response({}, 404)
+            assert kwargs["json"] is None
+            assert kwargs["params"] == {"options.requestedPolicyVersion": "3"}
         token = (kwargs.get("params") or {}).get("pageToken", "")
         response = self.routes[(url, token)]
         if isinstance(response, Exception):
@@ -92,10 +99,13 @@ def test_inventory_paginates_all_metadata_and_never_reads_values_or_creates_keys
         assert method == "GET" or (method == "POST" and url.endswith(":getIamPolicy"))
         assert not any(term in url for term in (":access", ":create", ":enable", ":destroy", ":setIamPolicy"))
         if url.endswith(":getIamPolicy"):
-            if method == "POST":
+            if url.startswith("https://cloudresourcemanager.googleapis.com/"):
+                assert method == "POST"
                 assert kwargs["json"] == {"options": {"requestedPolicyVersion": 3}}
             else:
                 assert kwargs["params"] == {"options.requestedPolicyVersion": "3"}
+                assert kwargs["json"] is None
+                assert method == ("POST" if url.startswith("https://iam.googleapis.com/") else "GET")
         if url.endswith("/keys"):
             assert kwargs["params"] == {"keyTypes": "USER_MANAGED"}
 

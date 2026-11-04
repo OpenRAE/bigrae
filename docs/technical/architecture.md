@@ -6,9 +6,10 @@ architecture; subsystem guides provide detail.
 
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
-**Reviewed:** 2026-11-04 for native provider account lookup (#2771), after the
-one-command GCP install (#2679).
-This describes source behavior, not a certificate of a live deployment.
+
+**Reviewed:** 2026-11-04 for native provider account lookup (#2771) and
+registered-project IAM policy requests (#2773), after the one-command GCP
+install (#2679).
 
 Portal and deployer images install dependencies during the build and remove
 `pip` and its vendored libraries from the runtime image. The shared deployment

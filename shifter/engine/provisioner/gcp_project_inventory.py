@@ -6,7 +6,7 @@ import base64
 import re
 from collections.abc import Iterator
 from copy import deepcopy
-from typing import TYPE_CHECKING, Protocol
+from typing import TYPE_CHECKING, Literal, Protocol
 from urllib.parse import quote
 
 from pydantic import TypeAdapter
@@ -117,7 +117,9 @@ class GcpProjectInventory:
             if not isinstance(email, str) or email in accounts:
                 raise ValueError(_UNAVAILABLE)
             account_policy = self._read(
-                _IAM + quote(account_name, safe="/@") + _GET_IAM_POLICY, params={"options.requestedPolicyVersion": "3"}
+                _IAM + quote(account_name, safe="/@") + _GET_IAM_POLICY,
+                method="POST",
+                params={"options.requestedPolicyVersion": "3"},
             )
             keys = self._read(_IAM + quote(account_name, safe="/@") + "/keys", params={"keyTypes": "USER_MANAGED"})
             raw_keys = keys.get("keys", [])
@@ -181,11 +183,18 @@ class GcpProjectInventory:
             token = next_token
             seen.add(token)
 
-    def _read(self, url: str, *, params: dict[str, str] | None = None, body: JsonObject | None = None) -> JsonObject:
+    def _read(
+        self,
+        url: str,
+        *,
+        method: Literal["GET", "POST"] = "GET",
+        params: dict[str, str] | None = None,
+        body: JsonObject | None = None,
+    ) -> JsonObject:
         """No redirects, unbounded responses, raw provider errors or secret-access routes."""
         try:
             with self._session.request(
-                "POST" if body is not None else "GET",
+                "POST" if body is not None else method,
                 url,
                 params=params,
                 json=body,
