@@ -90,6 +90,7 @@ def build_values(
         mission_control_lease_env=render_mission_control_lease_env(root_config),  # type: ignore[arg-type]
         range_telemetry_env=render_gcp_range_telemetry_env(root_config),  # type: ignore[arg-type]
         model_broker_runtime=root_config.settings.get("model_broker_runtime"),  # type: ignore[attr-defined]
+        participant_control=root_config.settings.get("participant_control"),  # type: ignore[attr-defined]
         openfga_settings=_openfga_settings(settings.openfga, policy_binding),  # type: ignore[attr-defined]
         capacity_profile_id=settings.shared_service_capacity_profile,  # type: ignore[attr-defined]
     )

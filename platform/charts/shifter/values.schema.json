@@ -298,19 +298,94 @@
         "enabled"
       ],
       "properties": {
-        "role_arn": {"type": "string", "pattern": "^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9/+=,.@_-]+$|^$"},
-        "target_group_arn": {"type": "string", "pattern": "^arn:aws:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:targetgroup/[a-zA-Z0-9-]+/[a-f0-9]+$|^$"},
-        "vpc_id": {"type": "string", "pattern": "^vpc-[a-f0-9]+$|^$"},
-        "endpoint_cidrs": {"type": "array", "maxItems": 32, "items": {"type": "string", "pattern": "^[0-9.]+/32$"}},
-        "health_check_cidrs": {"type": "array", "maxItems": 32, "items": {"type": "string", "pattern": "^[0-9.]+/[0-9]+$"}},
-        "enrollment_env": {"type": "object", "additionalProperties": false, "properties": {"MODEL_BROKER_GUEST_URL": {"type": "string"}, "MODEL_BROKER_GUEST_VIP": {"type": "string"}, "MODEL_BROKER_GUEST_CIDRS": {"type": "string"}, "MODEL_ENROLLMENT_CONTROL_URL": {"type": "string"}, "MODEL_ENROLLMENT_CA_PEM_B64": {"type": "string"}}, "oneOf": [{"maxProperties": 0}, {"required": ["MODEL_BROKER_GUEST_URL", "MODEL_ENROLLMENT_CONTROL_URL", "MODEL_ENROLLMENT_CA_PEM_B64"]}]},
-        "providers_json": {"type": "string"},
-        "broker_subject_id": {"type": "string", "pattern": "^([0-9]{10,32})?$"},
-        "provisioner_subject_id": {"type": "string", "pattern": "^([0-9]{10,32})?$"},
-        "provisioner_subject": {"type": "string", "pattern": "^([a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\\.iam\\.gserviceaccount\\.com|arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9/+=,.@_-]+)?$"},
-        "fingerprint_secret_name": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$|^$"},
-        "fingerprint_key_version": {"type": "string", "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$|^$"},
-        "fingerprint_previous_secret_name": {"type": "string", "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$|^$"},
+        "role_arn": {
+          "type": "string",
+          "pattern": "^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9/+=,.@_-]+$|^$"
+        },
+        "target_group_arn": {
+          "type": "string",
+          "pattern": "^arn:aws:elasticloadbalancing:[a-z0-9-]+:[0-9]{12}:targetgroup/[a-zA-Z0-9-]+/[a-f0-9]+$|^$"
+        },
+        "vpc_id": {
+          "type": "string",
+          "pattern": "^vpc-[a-f0-9]+$|^$"
+        },
+        "endpoint_cidrs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9.]+/32$"
+          }
+        },
+        "health_check_cidrs": {
+          "type": "array",
+          "maxItems": 32,
+          "items": {
+            "type": "string",
+            "pattern": "^[0-9.]+/[0-9]+$"
+          }
+        },
+        "enrollment_env": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "MODEL_BROKER_GUEST_URL": {
+              "type": "string"
+            },
+            "MODEL_BROKER_GUEST_VIP": {
+              "type": "string"
+            },
+            "MODEL_BROKER_GUEST_CIDRS": {
+              "type": "string"
+            },
+            "MODEL_ENROLLMENT_CONTROL_URL": {
+              "type": "string"
+            },
+            "MODEL_ENROLLMENT_CA_PEM_B64": {
+              "type": "string"
+            }
+          },
+          "oneOf": [
+            {
+              "maxProperties": 0
+            },
+            {
+              "required": [
+                "MODEL_BROKER_GUEST_URL",
+                "MODEL_ENROLLMENT_CONTROL_URL",
+                "MODEL_ENROLLMENT_CA_PEM_B64"
+              ]
+            }
+          ]
+        },
+        "providers_json": {
+          "type": "string"
+        },
+        "broker_subject_id": {
+          "type": "string",
+          "pattern": "^([0-9]{10,32})?$"
+        },
+        "provisioner_subject_id": {
+          "type": "string",
+          "pattern": "^([0-9]{10,32})?$"
+        },
+        "provisioner_subject": {
+          "type": "string",
+          "pattern": "^([a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\\.iam\\.gserviceaccount\\.com|arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9/+=,.@_-]+)?$"
+        },
+        "fingerprint_secret_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$|^$"
+        },
+        "fingerprint_key_version": {
+          "type": "string",
+          "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$|^$"
+        },
+        "fingerprint_previous_secret_name": {
+          "type": "string",
+          "pattern": "^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$|^$"
+        },
         "enabled": {
           "type": "boolean"
         },
@@ -349,12 +424,30 @@
           "type": "object",
           "additionalProperties": false,
           "properties": {
-            "MODEL_ACCESS_ENABLED": {"enum": ["true", "false"]},
-            "MODEL_ACCESS_CATALOG_PATH": {"const": "/etc/shifter/model-access/catalog.json"},
-            "MODEL_ACCESS_CATALOG_DIGEST": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}
+            "MODEL_ACCESS_ENABLED": {
+              "enum": [
+                "true",
+                "false"
+              ]
+            },
+            "MODEL_ACCESS_CATALOG_PATH": {
+              "const": "/etc/shifter/model-access/catalog.json"
+            },
+            "MODEL_ACCESS_CATALOG_DIGEST": {
+              "type": "string",
+              "pattern": "^sha256:[0-9a-f]{64}$"
+            }
           },
-          "if": {"minProperties": 1},
-          "then": {"required": ["MODEL_ACCESS_ENABLED", "MODEL_ACCESS_CATALOG_PATH", "MODEL_ACCESS_CATALOG_DIGEST"]}
+          "if": {
+            "minProperties": 1
+          },
+          "then": {
+            "required": [
+              "MODEL_ACCESS_ENABLED",
+              "MODEL_ACCESS_CATALOG_PATH",
+              "MODEL_ACCESS_CATALOG_DIGEST"
+            ]
+          }
         },
         "catalog_json": {
           "type": "string"
@@ -377,13 +470,23 @@
         }
       }
     },
-    "releaseNamespace": { "$ref": "#/$defs/dnsLabel" },
+    "releaseNamespace": {
+      "$ref": "#/$defs/dnsLabel"
+    },
     "provider": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
-        "name": { "enum": ["neutral", "aws", "gcp"] }
+        "name": {
+          "enum": [
+            "neutral",
+            "aws",
+            "gcp"
+          ]
+        }
       }
     },
     "profile": {
@@ -393,9 +496,14 @@
     "deployment": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "profile"],
+      "required": [
+        "name",
+        "profile"
+      ],
       "properties": {
-        "name": { "$ref": "#/$defs/dnsLabel" },
+        "name": {
+          "$ref": "#/$defs/dnsLabel"
+        },
         "profile": {
           "type": "string",
           "pattern": "^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$"
@@ -405,13 +513,20 @@
     "capacityProfile": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "participants"],
+      "required": [
+        "id",
+        "participants"
+      ],
       "properties": {
         "id": {
           "type": "string",
           "pattern": "^(?:|gcp-shared-v[1-9][0-9]*-p(?:10|30|50|100))$"
         },
-        "participants": { "type": "integer", "minimum": 0, "maximum": 10000 }
+        "participants": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
       }
     },
     "capabilities": {
@@ -424,45 +539,85 @@
         "gcpAccessNodePool"
       ],
       "properties": {
-        "gcpBackendConfig": { "type": "boolean" },
-        "gcpManagedTls": { "type": "boolean" },
-        "kubernetesJobLauncher": { "type": "boolean" },
-        "gcpAccessNodePool": { "type": "boolean" },
-        "featureArtifactAcquisition": { "type": "boolean" }
+        "gcpBackendConfig": {
+          "type": "boolean"
+        },
+        "gcpManagedTls": {
+          "type": "boolean"
+        },
+        "kubernetesJobLauncher": {
+          "type": "boolean"
+        },
+        "gcpAccessNodePool": {
+          "type": "boolean"
+        },
+        "featureArtifactAcquisition": {
+          "type": "boolean"
+        }
       }
     },
     "namespaces": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform", "jobs"],
+      "required": [
+        "platform",
+        "jobs"
+      ],
       "properties": {
-        "platform": { "$ref": "#/$defs/dnsLabel" },
-        "jobs": { "$ref": "#/$defs/dnsLabel" }
+        "platform": {
+          "$ref": "#/$defs/dnsLabel"
+        },
+        "jobs": {
+          "$ref": "#/$defs/dnsLabel"
+        }
       }
     },
     "featureArtifactAcquisition": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["serviceAccountAnnotations", "egressCidrs", "egressExcept"],
+      "required": [
+        "serviceAccountAnnotations",
+        "egressCidrs",
+        "egressExcept"
+      ],
       "properties": {
-        "serviceAccountAnnotations": { "$ref": "#/$defs/annotations" },
-        "egressCidrs": { "$ref": "#/$defs/cidrList" },
-        "egressExcept": { "$ref": "#/$defs/cidrList" }
+        "serviceAccountAnnotations": {
+          "$ref": "#/$defs/annotations"
+        },
+        "egressCidrs": {
+          "$ref": "#/$defs/cidrList"
+        },
+        "egressExcept": {
+          "$ref": "#/$defs/cidrList"
+        }
       }
     },
     "runtimePluginPool": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["labeler"],
+      "required": [
+        "labeler"
+      ],
       "properties": {
         "labeler": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["enabled", "nodeGroupAsg", "resources"],
+          "required": [
+            "enabled",
+            "nodeGroupAsg",
+            "resources"
+          ],
           "properties": {
-            "enabled": { "type": "boolean" },
-            "nodeGroupAsg": { "type": "string", "pattern": "^[A-Za-z0-9_+=,.@/:-]{0,255}$" },
-            "resources": { "type": "object" }
+            "enabled": {
+              "type": "boolean"
+            },
+            "nodeGroupAsg": {
+              "type": "string",
+              "pattern": "^[A-Za-z0-9_+=,.@/:-]{0,255}$"
+            },
+            "resources": {
+              "type": "object"
+            }
           }
         }
       }
@@ -509,41 +664,72 @@
     },
     "runtimeEnv": {
       "type": "object",
-      "propertyNames": { "pattern": "^[A-Z][A-Z0-9_]*$" },
+      "propertyNames": {
+        "pattern": "^[A-Z][A-Z0-9_]*$"
+      },
       "additionalProperties": {
-        "type": ["string", "number", "boolean"]
+        "type": [
+          "string",
+          "number",
+          "boolean"
+        ]
       }
     },
     "guacamoleRuntimeSecret": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name"],
+      "required": [
+        "name"
+      ],
       "properties": {
-        "name": { "$ref": "#/$defs/dnsLabel" }
+        "name": {
+          "$ref": "#/$defs/dnsLabel"
+        }
       }
     },
     "images": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["platform", "guacd", "guacamoleClient", "provisioner"],
+      "required": [
+        "platform",
+        "guacd",
+        "guacamoleClient",
+        "provisioner"
+      ],
       "properties": {
-        "platform": { "$ref": "#/$defs/imageIdentity" },
-        "guacd": { "$ref": "#/$defs/imageIdentity" },
-        "guacamoleClient": { "$ref": "#/$defs/imageIdentity" },
-        "provisioner": { "$ref": "#/$defs/imageIdentity" }
+        "platform": {
+          "$ref": "#/$defs/imageIdentity"
+        },
+        "guacd": {
+          "$ref": "#/$defs/imageIdentity"
+        },
+        "guacamoleClient": {
+          "$ref": "#/$defs/imageIdentity"
+        },
+        "provisioner": {
+          "$ref": "#/$defs/imageIdentity"
+        }
       }
     },
     "imagePullPolicy": {
-      "enum": ["Always", "IfNotPresent", "Never"]
+      "enum": [
+        "Always",
+        "IfNotPresent",
+        "Never"
+      ]
     },
     "identity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["serviceAccountRoleArns"],
+      "required": [
+        "serviceAccountRoleArns"
+      ],
       "properties": {
         "serviceAccountRoleArns": {
           "type": "object",
-          "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+          },
           "additionalProperties": {
             "type": "string",
             "pattern": "^arn:aws:iam::[0-9]{12}:role/[A-Za-z0-9+=,.@_/-]+$"
@@ -554,26 +740,39 @@
     "provisioner": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["taskRunner"],
+      "required": [
+        "taskRunner"
+      ],
       "properties": {
-        "taskRunner": { "enum": ["gcp", "aws"] }
+        "taskRunner": {
+          "enum": [
+            "gcp",
+            "aws"
+          ]
+        }
       }
     },
     "provisionerAdmission": {
       "type": "object",
       "additionalProperties": false,
       "properties": {
-        "inlineParams": { "type": "boolean" }
+        "inlineParams": {
+          "type": "boolean"
+        }
       }
     },
     "runtime": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["secretReferences"],
+      "required": [
+        "secretReferences"
+      ],
       "properties": {
         "secretReferences": {
           "type": "object",
-          "propertyNames": { "pattern": "^[A-Za-z][A-Za-z0-9]*$" },
+          "propertyNames": {
+            "pattern": "^[A-Za-z][A-Za-z0-9]*$"
+          },
           "additionalProperties": {
             "type": "string",
             "minLength": 1,
@@ -582,7 +781,9 @@
         }
       }
     },
-    "portal": { "$ref": "#/$defs/scaledWorkload" },
+    "portal": {
+      "$ref": "#/$defs/scaledWorkload"
+    },
     "workers": {
       "type": "object",
       "additionalProperties": false,
@@ -603,97 +804,213 @@
         "packRemovalReconciler"
       ],
       "properties": {
-        "cms": { "$ref": "#/$defs/scaledWorkload" },
-        "engine": { "$ref": "#/$defs/scaledWorkload" },
-        "mc": { "$ref": "#/$defs/scaledWorkload" },
-        "ctfScheduler": { "$ref": "#/$defs/scaledWorkload" },
-        "ctfCommunicationWorker": { "$ref": "#/$defs/scaledWorkload" },
-        "guacamolePrune": { "$ref": "#/$defs/scaledWorkload" },
-        "raesOperationRecordPrune": { "$ref": "#/$defs/scaledWorkload" },
+        "cms": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "engine": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "mc": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "ctfScheduler": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "ctfCommunicationWorker": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "guacamolePrune": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "raesOperationRecordPrune": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
         "notificationPrune": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["schedule", "batchSize", "maxBatches", "resources"],
+          "required": [
+            "schedule",
+            "batchSize",
+            "maxBatches",
+            "resources"
+          ],
           "properties": {
-            "schedule": { "type": "string", "pattern": "^\\S+( \\S+){4}$" },
-            "batchSize": { "type": "integer", "minimum": 1, "maximum": 10000 },
-            "maxBatches": { "type": "integer", "minimum": 1, "maximum": 1000 },
-            "resources": { "$ref": "#/$defs/resources" }
+            "schedule": {
+              "type": "string",
+              "pattern": "^\\S+( \\S+){4}$"
+            },
+            "batchSize": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 10000
+            },
+            "maxBatches": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 1000
+            },
+            "resources": {
+              "$ref": "#/$defs/resources"
+            }
           }
         },
-        "operationResultApplier": { "$ref": "#/$defs/scaledWorkload" },
-        "outboxDrainer": { "$ref": "#/$defs/scaledWorkload" },
-        "provisionerLauncher": { "$ref": "#/$defs/scaledWorkload" },
-        "reconciler": { "$ref": "#/$defs/scaledWorkload" },
-        "warmPoolReconciler": { "$ref": "#/$defs/scaledWorkload" },
-        "packRemovalReconciler": { "$ref": "#/$defs/scaledWorkload" }
+        "operationResultApplier": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "outboxDrainer": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "provisionerLauncher": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "reconciler": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "warmPoolReconciler": {
+          "$ref": "#/$defs/scaledWorkload"
+        },
+        "packRemovalReconciler": {
+          "$ref": "#/$defs/scaledWorkload"
+        }
       }
     },
     "guacd": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["replicas", "resources", "freerdpConfigVolume", "autoscaling", "terminationGracePeriodSeconds"],
+      "required": [
+        "replicas",
+        "resources",
+        "freerdpConfigVolume",
+        "autoscaling",
+        "terminationGracePeriodSeconds"
+      ],
       "properties": {
-        "replicas": { "type": "integer", "minimum": 1 },
-        "resources": { "$ref": "#/$defs/resources" },
-        "freerdpConfigVolume": { "$ref": "#/$defs/volume" },
-        "autoscaling": { "$ref": "#/$defs/autoscaling" },
-        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 30 }
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "freerdpConfigVolume": {
+          "$ref": "#/$defs/volume"
+        },
+        "autoscaling": {
+          "$ref": "#/$defs/autoscaling"
+        },
+        "terminationGracePeriodSeconds": {
+          "type": "integer",
+          "minimum": 30
+        }
       }
     },
     "guacamoleClient": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["replicas", "resources", "terminationGracePeriodSeconds", "postgresqlAbsoluteMaxConnections"],
+      "required": [
+        "replicas",
+        "resources",
+        "terminationGracePeriodSeconds",
+        "postgresqlAbsoluteMaxConnections"
+      ],
       "properties": {
-        "replicas": { "const": 1 },
-        "resources": { "$ref": "#/$defs/resources" },
-        "autoscaling": { "$ref": "#/$defs/autoscaling" },
-        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 30 },
-        "postgresqlAbsoluteMaxConnections": { "type": "integer", "minimum": 1, "maximum": 1000 }
+        "replicas": {
+          "const": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "autoscaling": {
+          "$ref": "#/$defs/autoscaling"
+        },
+        "terminationGracePeriodSeconds": {
+          "type": "integer",
+          "minimum": 30
+        },
+        "postgresqlAbsoluteMaxConnections": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000
+        }
       }
     },
     "security": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["pod", "app", "guacd", "guacamole"],
+      "required": [
+        "pod",
+        "app",
+        "guacd",
+        "guacamole"
+      ],
       "properties": {
         "pod": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["seccompProfile"],
+          "required": [
+            "seccompProfile"
+          ],
           "properties": {
-            "seccompProfile": { "const": "RuntimeDefault" }
+            "seccompProfile": {
+              "const": "RuntimeDefault"
+            }
           }
         },
-        "app": { "$ref": "#/$defs/securityIdentity" },
-        "guacd": { "$ref": "#/$defs/securityIdentity" },
-        "guacamole": { "$ref": "#/$defs/securityIdentity" }
+        "app": {
+          "$ref": "#/$defs/securityIdentity"
+        },
+        "guacd": {
+          "$ref": "#/$defs/securityIdentity"
+        },
+        "guacamole": {
+          "$ref": "#/$defs/securityIdentity"
+        }
       }
     },
-    "tmpVolume": { "$ref": "#/$defs/volume" },
-    "mediaVolume": { "$ref": "#/$defs/volume" },
+    "tmpVolume": {
+      "$ref": "#/$defs/volume"
+    },
+    "mediaVolume": {
+      "$ref": "#/$defs/volume"
+    },
     "services": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["portal", "guacamoleClient"],
+      "required": [
+        "portal",
+        "guacamoleClient"
+      ],
       "properties": {
         "portal": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["annotations", "backendConfig"],
+          "required": [
+            "annotations",
+            "backendConfig"
+          ],
           "properties": {
-            "annotations": { "$ref": "#/$defs/annotations" },
-            "backendConfig": { "$ref": "#/$defs/backendConfig" }
+            "annotations": {
+              "$ref": "#/$defs/annotations"
+            },
+            "backendConfig": {
+              "$ref": "#/$defs/backendConfig"
+            }
           }
         },
         "guacamoleClient": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["annotations", "backendConfig"],
+          "required": [
+            "annotations",
+            "backendConfig"
+          ],
           "properties": {
-            "annotations": { "$ref": "#/$defs/annotations" },
-            "backendConfig": { "$ref": "#/$defs/backendConfig" }
+            "annotations": {
+              "$ref": "#/$defs/annotations"
+            },
+            "backendConfig": {
+              "$ref": "#/$defs/backendConfig"
+            }
           }
         }
       }
@@ -715,19 +1032,35 @@
         "rangeProvisionerPorts"
       ],
       "properties": {
-        "enabled": { "const": true },
-        "ingressSourceCidrs": { "$ref": "#/$defs/cidrList" },
-        "providerApiCidrs": { "$ref": "#/$defs/cidrList" },
-        "providerApiEgressExcept": { "$ref": "#/$defs/cidrList" },
-        "privateServiceCidrs": { "$ref": "#/$defs/cidrList" },
-        "kubernetesApiCidrs": { "$ref": "#/$defs/cidrList" },
-        "rangeClusterApiCidrs": { "$ref": "#/$defs/cidrList" },
+        "enabled": {
+          "const": true
+        },
+        "ingressSourceCidrs": {
+          "$ref": "#/$defs/cidrList"
+        },
+        "providerApiCidrs": {
+          "$ref": "#/$defs/cidrList"
+        },
+        "providerApiEgressExcept": {
+          "$ref": "#/$defs/cidrList"
+        },
+        "privateServiceCidrs": {
+          "$ref": "#/$defs/cidrList"
+        },
+        "kubernetesApiCidrs": {
+          "$ref": "#/$defs/cidrList"
+        },
+        "rangeClusterApiCidrs": {
+          "$ref": "#/$defs/cidrList"
+        },
         "rangeClusterApiPort": {
           "type": "integer",
           "minimum": 1,
           "maximum": 65535
         },
-        "rangeAccessCidrs": { "$ref": "#/$defs/cidrList" },
+        "rangeAccessCidrs": {
+          "$ref": "#/$defs/cidrList"
+        },
         "rangeAccessPorts": {
           "type": "array",
           "uniqueItems": true,
@@ -782,12 +1115,16 @@
             "gcpManagedTls"
           ],
           "properties": {
-            "enabled": { "type": "boolean" },
+            "enabled": {
+              "type": "boolean"
+            },
             "className": {
               "type": "string",
               "pattern": "^(?:|[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)$"
             },
-            "annotations": { "$ref": "#/$defs/annotations" },
+            "annotations": {
+              "$ref": "#/$defs/annotations"
+            },
             "host": {
               "type": "string",
               "pattern": "^(?:|[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?)$"
@@ -795,9 +1132,14 @@
             "tls": {
               "type": "object",
               "additionalProperties": false,
-              "required": ["enabled", "secretName"],
+              "required": [
+                "enabled",
+                "secretName"
+              ],
               "properties": {
-                "enabled": { "type": "boolean" },
+                "enabled": {
+                  "type": "boolean"
+                },
                 "secretName": {
                   "type": "string",
                   "pattern": "^(?:|[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)$"
@@ -813,16 +1155,21 @@
                 "frontendConfigName"
               ],
               "properties": {
-                "enabled": { "type": "boolean" },
-                "certificateName": { "$ref": "#/$defs/dnsLabel" },
-                "frontendConfigName": { "$ref": "#/$defs/dnsLabel" }
+                "enabled": {
+                  "type": "boolean"
+                },
+                "certificateName": {
+                  "$ref": "#/$defs/dnsLabel"
+                },
+                "frontendConfigName": {
+                  "$ref": "#/$defs/dnsLabel"
+                }
               }
             }
           }
         }
       }
-    }
-  ,
+    },
     "cloudSqlProxy": {
       "type": "object",
       "additionalProperties": false,
@@ -916,6 +1263,66 @@
           }
         }
       }
+    },
+    "participantControl": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "enabled",
+        "configuration",
+        "tlsSecretName",
+        "storageClassName",
+        "storageGiB",
+        "resources"
+      ],
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "configuration": {
+          "type": "string",
+          "maxLength": 32768
+        },
+        "tlsSecretName": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^$|^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"
+        },
+        "storageClassName": {
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^$|^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$"
+        },
+        "storageGiB": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 128
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "enabled": {
+                "const": true
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "configuration": {
+                "minLength": 2
+              },
+              "tlsSecretName": {
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "allOf": [
@@ -927,7 +1334,11 @@
               "portal": {
                 "properties": {
                   "backendConfig": {
-                    "properties": { "enabled": { "const": true } }
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    }
                   }
                 }
               }
@@ -938,7 +1349,11 @@
       "then": {
         "properties": {
           "capabilities": {
-            "properties": { "gcpBackendConfig": { "const": true } }
+            "properties": {
+              "gcpBackendConfig": {
+                "const": true
+              }
+            }
           }
         }
       }
@@ -951,7 +1366,11 @@
               "ingress": {
                 "properties": {
                   "tls": {
-                    "properties": { "enabled": { "const": true } }
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    }
                   }
                 }
               }
@@ -965,10 +1384,18 @@
             "properties": {
               "ingress": {
                 "properties": {
-                  "enabled": { "const": true },
-                  "host": { "minLength": 1 },
+                  "enabled": {
+                    "const": true
+                  },
+                  "host": {
+                    "minLength": 1
+                  },
                   "tls": {
-                    "properties": { "secretName": { "minLength": 1 } }
+                    "properties": {
+                      "secretName": {
+                        "minLength": 1
+                      }
+                    }
                   }
                 }
               }
@@ -985,7 +1412,11 @@
               "ingress": {
                 "properties": {
                   "gcpManagedTls": {
-                    "properties": { "enabled": { "const": true } }
+                    "properties": {
+                      "enabled": {
+                        "const": true
+                      }
+                    }
                   }
                 }
               }
@@ -996,14 +1427,22 @@
       "then": {
         "properties": {
           "capabilities": {
-            "properties": { "gcpManagedTls": { "const": true } }
+            "properties": {
+              "gcpManagedTls": {
+                "const": true
+              }
+            }
           },
           "edge": {
             "properties": {
               "ingress": {
                 "properties": {
-                  "enabled": { "const": true },
-                  "host": { "minLength": 1 }
+                  "enabled": {
+                    "const": true
+                  },
+                  "host": {
+                    "minLength": 1
+                  }
                 }
               }
             }
@@ -1018,29 +1457,51 @@
             "properties": {
               "ingress": {
                 "properties": {
-                  "className": { "const": "alb" }
+                  "className": {
+                    "const": "alb"
+                  }
                 },
-                "required": ["className"]
+                "required": [
+                  "className"
+                ]
               }
             },
-            "required": ["ingress"]
+            "required": [
+              "ingress"
+            ]
           }
         },
-        "required": ["edge"]
+        "required": [
+          "edge"
+        ]
       },
       "then": {
         "properties": {
           "edge": {
             "properties": {
-              "certificateArn": { "minLength": 1 },
-              "wafAclArn": { "minLength": 1 },
-              "hostname": { "minLength": 1 },
+              "certificateArn": {
+                "minLength": 1
+              },
+              "wafAclArn": {
+                "minLength": 1
+              },
+              "hostname": {
+                "minLength": 1
+              },
               "ingress": {
                 "properties": {
-                  "enabled": { "const": true },
-                  "host": { "minLength": 1 },
+                  "enabled": {
+                    "const": true
+                  },
+                  "host": {
+                    "minLength": 1
+                  },
                   "tls": {
-                    "properties": { "enabled": { "const": false } }
+                    "properties": {
+                      "enabled": {
+                        "const": false
+                      }
+                    }
                   },
                   "annotations": {
                     "required": [
@@ -1076,26 +1537,46 @@
         "properties": {
           "edge": {
             "properties": {
-              "certificateArn": { "minLength": 1 }
+              "certificateArn": {
+                "minLength": 1
+              }
             },
-            "required": ["certificateArn"]
+            "required": [
+              "certificateArn"
+            ]
           }
         },
-        "required": ["edge"]
+        "required": [
+          "edge"
+        ]
       },
       "then": {
         "properties": {
           "edge": {
             "properties": {
-              "wafAclArn": { "minLength": 1 },
-              "hostname": { "minLength": 1 },
+              "wafAclArn": {
+                "minLength": 1
+              },
+              "hostname": {
+                "minLength": 1
+              },
               "ingress": {
                 "properties": {
-                  "enabled": { "const": true },
-                  "className": { "const": "alb" },
-                  "host": { "minLength": 1 },
+                  "enabled": {
+                    "const": true
+                  },
+                  "className": {
+                    "const": "alb"
+                  },
+                  "host": {
+                    "minLength": 1
+                  },
                   "tls": {
-                    "properties": { "enabled": { "const": false } }
+                    "properties": {
+                      "enabled": {
+                        "const": false
+                      }
+                    }
                   },
                   "annotations": {
                     "required": [
@@ -1120,7 +1601,9 @@
                     }
                   }
                 },
-                "required": ["className"]
+                "required": [
+                  "className"
+                ]
               }
             }
           }
@@ -1140,15 +1623,24 @@
       "propertyNames": {
         "pattern": "^[A-Za-z0-9](?:[A-Za-z0-9./_-]*[A-Za-z0-9])?$"
       },
-      "additionalProperties": { "type": "string" }
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "serviceAccount": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "annotations"],
+      "required": [
+        "name",
+        "annotations"
+      ],
       "properties": {
-        "name": { "$ref": "#/$defs/dnsLabel" },
-        "annotations": { "$ref": "#/$defs/annotations" }
+        "name": {
+          "$ref": "#/$defs/dnsLabel"
+        },
+        "annotations": {
+          "$ref": "#/$defs/annotations"
+        }
       }
     },
     "imageIdentity": {
@@ -1158,31 +1650,66 @@
     "quantityMap": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["cpu", "memory", "ephemeral-storage"],
+      "required": [
+        "cpu",
+        "memory",
+        "ephemeral-storage"
+      ],
       "properties": {
-        "cpu": { "type": ["string", "number"] },
-        "memory": { "type": "string", "minLength": 1 },
-        "ephemeral-storage": { "type": "string", "minLength": 1 }
+        "cpu": {
+          "type": [
+            "string",
+            "number"
+          ]
+        },
+        "memory": {
+          "type": "string",
+          "minLength": 1
+        },
+        "ephemeral-storage": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     },
     "resources": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["requests", "limits"],
+      "required": [
+        "requests",
+        "limits"
+      ],
       "properties": {
-        "requests": { "$ref": "#/$defs/quantityMap" },
-        "limits": { "$ref": "#/$defs/quantityMap" }
+        "requests": {
+          "$ref": "#/$defs/quantityMap"
+        },
+        "limits": {
+          "$ref": "#/$defs/quantityMap"
+        }
       }
     },
     "scaledWorkload": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["replicas", "resources"],
+      "required": [
+        "replicas",
+        "resources"
+      ],
       "properties": {
-        "replicas": { "type": "integer", "minimum": 1 },
-        "resources": { "$ref": "#/$defs/resources" },
-        "autoscaling": { "$ref": "#/$defs/autoscaling" },
-        "terminationGracePeriodSeconds": { "type": "integer", "minimum": 30 }
+        "replicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "resources": {
+          "$ref": "#/$defs/resources"
+        },
+        "autoscaling": {
+          "$ref": "#/$defs/autoscaling"
+        },
+        "terminationGracePeriodSeconds": {
+          "type": "integer",
+          "minimum": 30
+        }
       }
     },
     "autoscaling": {
@@ -1196,26 +1723,53 @@
         "scaleDownStabilizationSeconds"
       ],
       "properties": {
-        "enabled": { "type": "boolean" },
-        "minReplicas": { "type": "integer", "minimum": 1 },
-        "maxReplicas": { "type": "integer", "minimum": 1 },
-        "cpuUtilizationPercentage": { "type": "integer", "minimum": 20, "maximum": 90 },
-        "scaleDownStabilizationSeconds": { "type": "integer", "minimum": 300, "maximum": 3600 }
+        "enabled": {
+          "type": "boolean"
+        },
+        "minReplicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "maxReplicas": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "cpuUtilizationPercentage": {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 90
+        },
+        "scaleDownStabilizationSeconds": {
+          "type": "integer",
+          "minimum": 300,
+          "maximum": 3600
+        }
       }
     },
     "securityIdentity": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["runAsUser", "runAsGroup"],
+      "required": [
+        "runAsUser",
+        "runAsGroup"
+      ],
       "properties": {
-        "runAsUser": { "type": "integer", "minimum": 1 },
-        "runAsGroup": { "type": "integer", "minimum": 1 }
+        "runAsUser": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "runAsGroup": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "volume": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["sizeLimit"],
+      "required": [
+        "sizeLimit"
+      ],
       "properties": {
         "sizeLimit": {
           "type": "string",
@@ -1236,13 +1790,37 @@
         "unhealthyThreshold"
       ],
       "properties": {
-        "type": { "enum": ["HTTP", "HTTPS"] },
-        "requestPath": { "type": "string", "pattern": "^/" },
-        "port": { "type": "integer", "minimum": 1, "maximum": 65535 },
-        "checkIntervalSec": { "type": "integer", "minimum": 1 },
-        "timeoutSec": { "type": "integer", "minimum": 1 },
-        "healthyThreshold": { "type": "integer", "minimum": 1 },
-        "unhealthyThreshold": { "type": "integer", "minimum": 1 }
+        "type": {
+          "enum": [
+            "HTTP",
+            "HTTPS"
+          ]
+        },
+        "requestPath": {
+          "type": "string",
+          "pattern": "^/"
+        },
+        "port": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
+        },
+        "checkIntervalSec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "healthyThreshold": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "unhealthyThreshold": {
+          "type": "integer",
+          "minimum": 1
+        }
       }
     },
     "backendConfig": {
@@ -1257,23 +1835,41 @@
         "connectionDraining"
       ],
       "properties": {
-        "enabled": { "type": "boolean" },
-        "name": { "$ref": "#/$defs/dnsLabel" },
+        "enabled": {
+          "type": "boolean"
+        },
+        "name": {
+          "$ref": "#/$defs/dnsLabel"
+        },
         "securityPolicyName": {
           "type": "string",
           "pattern": "^(?:|[a-z0-9](?:[-a-z0-9]*[a-z0-9])?)$"
         },
-        "healthCheck": { "$ref": "#/$defs/healthCheck" },
-        "timeoutSec": { "type": "integer", "minimum": 30, "maximum": 86400 },
-        "connectionDraining": { "$ref": "#/$defs/connectionDraining" }
+        "healthCheck": {
+          "$ref": "#/$defs/healthCheck"
+        },
+        "timeoutSec": {
+          "type": "integer",
+          "minimum": 30,
+          "maximum": 86400
+        },
+        "connectionDraining": {
+          "$ref": "#/$defs/connectionDraining"
+        }
       }
     },
     "connectionDraining": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["drainingTimeoutSec"],
+      "required": [
+        "drainingTimeoutSec"
+      ],
       "properties": {
-        "drainingTimeoutSec": { "type": "integer", "minimum": 0, "maximum": 3600 }
+        "drainingTimeoutSec": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 3600
+        }
       }
     },
     "cidrList": {

@@ -38,6 +38,11 @@ from cms.models.lease_policy import (
     MissionControlTenantLeasePolicyRevision,
 )
 from cms.models.pack_removal import TenantPackArchive, TenantPackRemoval
+from cms.models.participant_control import (
+    ParticipantControlBinding,
+    ParticipantControlCommand,
+    ParticipantControlConfiguration,
+)
 from cms.models.provisioning import (
     App,
     EntityBase,
@@ -77,6 +82,9 @@ __all__ = [
     "MissionControlTenantLeasePolicyRevision",
     "NamedFileAsset",
     "OperatingSystem",
+    "ParticipantControlBinding",
+    "ParticipantControlCommand",
+    "ParticipantControlConfiguration",
     "RaesPackageSource",
     "RangeInstance",
     "RangeStatusDelivery",

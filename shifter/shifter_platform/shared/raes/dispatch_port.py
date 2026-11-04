@@ -18,7 +18,10 @@ from __future__ import annotations
 
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
+
+if TYPE_CHECKING:
+    from shared.raes.compiled_participants import CompiledParticipantContext
 
 __all__ = [
     "ShifterDispatchResult",
@@ -64,6 +67,8 @@ class ShifterProvisioningDispatchPort(Protocol):
         self,
         compiled_plan: dict[str, Any],
         participant_access: Sequence[Any] = (),
+        *,
+        compiled_participants: CompiledParticipantContext | None = None,
     ) -> ShifterDispatchResult:
         """Persist + dispatch the serialized ``compiled_plan``; return a receipt and optional completed observations.
 
@@ -72,5 +77,9 @@ class ShifterProvisioningDispatchPort(Protocol):
         (ADR-032-R10), persisted separately from ``range_config`` exactly as the
         #1564 delivery bindings are. Empty is the common case of a scenario that
         authored no interactive access.
+
+        ``compiled_participants`` retains native compilation references beside
+        the plan. Its private parameter selection is encrypted by the owning
+        service and never enters the provisioner operation payload.
         """
         ...

@@ -1,0 +1,262 @@
+{{- if .Values.participantControl.enabled }}
+{{- if or (ne .Values.provider.name "gcp") (not .Values.capabilities.kubernetesJobLauncher) }}
+{{- fail "participant control requires the admitted GCP Kubernetes provisioner installation" }}
+{{- end }}
+{{- if or (not .Values.network.enabled) (empty .Values.network.kubernetesApiCidrs) }}
+{{- fail "participant control requires network policy and the exact Kubernetes API egress addresses" }}
+{{- end }}
+{{- $config := mustFromJson (required "participant control configuration is required" .Values.participantControl.configuration) }}
+{{- $image := include "shifter.portalImage" . }}
+{{- if or (ne $config.owner_image $image) (ne $config.provisioner_image .Values.runtimeEnv.ENGINE_TASK_IMAGE) (ne $config.namespace .Values.namespaces.platform) }}
+{{- fail "participant control configuration must match the installed images and namespace" }}
+{{- end }}
+{{- if or (not (regexMatch "^.+@sha256:[a-f0-9]{64}$" $image)) (not (regexMatch "^.+@sha256:[a-f0-9]{64}$" $config.provisioner_image)) }}
+{{- fail "participant control requires immutable owner and provisioner images" }}
+{{- end }}
+{{- $mounts := (include "shifter.tmpVolumeMount" . | fromYaml).volumeMounts }}
+{{- $mounts = append $mounts (dict "name" "tls" "mountPath" "/etc/shifter/participant-control/tls" "readOnly" true) }}
+{{- $mounts = append $mounts (dict "name" "runtime" "mountPath" "/var/lib/shifter") }}
+{{- $volumes := (include "shifter.tmpVolume" . | fromYaml).volumes }}
+{{- $volumes = append $volumes (dict "name" "tls" "secret" (dict "secretName" (required "participant control TLS Secret is required" .Values.participantControl.tlsSecretName) "defaultMode" 288)) }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: participant-control
+  namespace: {{ .Values.namespaces.platform }}
+  labels:
+    {{- include "shifter.partOfLabels" . | nindent 4 }}
+    app.kubernetes.io/component: participant-control
+  {{- with .Values.serviceAccounts.workers.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: participant-control
+  namespace: {{ .Values.namespaces.platform }}
+  labels:
+    {{- include "shifter.partOfLabels" . | nindent 4 }}
+    app.kubernetes.io/component: participant-control
+spec:
+  serviceName: participant-control
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy: {whenDeleted: Retain, whenScaled: Retain}
+  selector:
+    matchLabels: {app.kubernetes.io/part-of: shifter, app.kubernetes.io/component: participant-control}
+  template:
+    metadata:
+      labels:
+        {{- include "shifter.partOfLabels" . | nindent 8 }}
+        app.kubernetes.io/component: participant-control
+      annotations:
+        checksum/runtime-config: {{ include "shifter.runtimeConfigChecksum" . }}
+        checksum/participant-control: {{ toJson .Values.participantControl | sha256sum }}
+    spec:
+      securityContext:
+        seccompProfile: {type: RuntimeDefault}
+        fsGroup: {{ .Values.security.app.runAsGroup }}
+        fsGroupChangePolicy: OnRootMismatch
+      serviceAccountName: participant-control
+      automountServiceAccountToken: true
+      enableServiceLinks: false
+      terminationGracePeriodSeconds: 60
+      {{- include "shifter.cloudSqlProxyPod" (dict "root" . "autoIam" true) | nindent 6 }}
+      containers:
+        - name: participant-control
+          image: {{ $image | quote }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          {{- include "shifter.containerSecurityContextApp" . | nindent 10 }}
+          args: [python, -m, cms.participant_control_worker]
+          envFrom:
+            - configMapRef: {name: platform-runtime}
+          env:
+            {{- include "shifter.databaseUserEnv" (dict "root" . "role" "workers") | nindent 12 }}
+            - {name: PARTICIPANT_CONTROL_OWNER_PROCESS, value: "true"}
+            - name: PARTICIPANT_CONTROL_POD_UID
+              valueFrom:
+                fieldRef: {fieldPath: metadata.uid}
+            - name: PARTICIPANT_CONTROL_POD_IP
+              valueFrom:
+                fieldRef: {fieldPath: status.podIP}
+          ports:
+            - {name: control-tls, containerPort: 8445}
+          startupProbe:
+            httpGet: {path: /health/live, port: control-tls, scheme: HTTPS}
+            periodSeconds: 5
+            failureThreshold: 36
+          readinessProbe:
+            httpGet: {path: /health/ready, port: control-tls, scheme: HTTPS}
+            periodSeconds: 5
+            failureThreshold: 1
+          livenessProbe:
+            httpGet: {path: /health/live, port: control-tls, scheme: HTTPS}
+            periodSeconds: 10
+          resources:
+            {{- toYaml .Values.participantControl.resources | nindent 12 }}
+          volumeMounts:
+            {{- toYaml $mounts | nindent 12 }}
+      volumes:
+        {{- toYaml $volumes | nindent 8 }}
+  volumeClaimTemplates:
+    - metadata:
+        name: runtime
+      spec:
+        accessModes: [ReadWriteOncePod]
+        {{- with .Values.participantControl.storageClassName }}
+        storageClassName: {{ . | quote }}
+        {{- end }}
+        resources:
+          requests: {storage: {{ printf "%dGi" (int .Values.participantControl.storageGiB) | quote }}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: participant-control
+  namespace: {{ .Values.namespaces.platform }}
+  labels:
+    {{- include "shifter.partOfLabels" . | nindent 4 }}
+    app.kubernetes.io/component: participant-control
+  annotations:
+    cloud.google.com/app-protocols: '{"control-tls":"HTTPS"}'
+    cloud.google.com/neg: '{"ingress":true}'
+    cloud.google.com/backend-config: '{"default":"participant-control"}'
+spec:
+  type: ClusterIP
+  selector: {app.kubernetes.io/part-of: shifter, app.kubernetes.io/component: participant-control}
+  ports:
+    - {name: control-tls, port: 8445, targetPort: control-tls}
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: participant-control
+  namespace: {{ .Values.namespaces.platform }}
+spec:
+  timeoutSec: 60
+  connectionDraining: {drainingTimeoutSec: 60}
+  healthCheck: {type: HTTPS, port: 8445, requestPath: /health/ready}
+  {{- with .Values.services.portal.backendConfig.securityPolicyName }}
+  securityPolicy: {name: {{ . | quote }}}
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: participant-control-own-pod
+  namespace: {{ .Values.namespaces.platform }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    resourceNames: [participant-control-0]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: participant-control-own-pod
+  namespace: {{ .Values.namespaces.platform }}
+subjects:
+  - {kind: ServiceAccount, name: participant-control, namespace: {{ .Values.namespaces.platform }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: participant-control-own-pod}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: participant-control-workload-reader
+  namespace: {{ .Values.namespaces.jobs }}
+rules:
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get]
+  - apiGroups: [batch]
+    resources: [jobs]
+    verbs: [get]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: participant-control-workload-reader
+  namespace: {{ .Values.namespaces.jobs }}
+subjects:
+  - {kind: ServiceAccount, name: participant-control, namespace: {{ .Values.namespaces.platform }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: Role, name: participant-control-workload-reader}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: participant-control-token-review
+rules:
+  - apiGroups: [authentication.k8s.io]
+    resources: [tokenreviews]
+    verbs: [create]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: participant-control-token-review
+subjects:
+  - {kind: ServiceAccount, name: participant-control, namespace: {{ .Values.namespaces.platform }}}
+roleRef: {apiGroup: rbac.authorization.k8s.io, kind: ClusterRole, name: participant-control-token-review}
+{{- if .Values.network.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: participant-control-ingress
+  namespace: {{ .Values.namespaces.platform }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: participant-control}
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: {{ .Values.namespaces.jobs | quote }}}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: pulumi-provisioner}
+      ports: [{protocol: TCP, port: 8445}]
+    {{- if .Values.network.ingressSourceCidrs }}
+    - from:
+        {{- range .Values.network.ingressSourceCidrs }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports: [{protocol: TCP, port: 8445}]
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: participant-control-provisioner-egress
+  namespace: {{ .Values.namespaces.jobs }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: pulumi-provisioner}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: {{ .Values.namespaces.platform | quote }}}
+          podSelector:
+            matchLabels: {app.kubernetes.io/component: participant-control}
+      ports: [{protocol: TCP, port: 8445}]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: participant-control-kubernetes-api-egress
+  namespace: {{ .Values.namespaces.platform }}
+spec:
+  podSelector:
+    matchLabels: {app.kubernetes.io/component: participant-control}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        {{- range .Values.network.kubernetesApiCidrs }}
+        - ipBlock: {cidr: {{ . | quote }}}
+        {{- end }}
+      ports: [{protocol: TCP, port: 443}]
+{{- end }}
+{{- end }}
+

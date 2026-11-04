@@ -79,6 +79,8 @@ def _creation_binding_facts(bindings: RangeBindings) -> tuple[object, ...]:
         bindings.owner_principal,
         bindings.authority_action,
         bindings.authority_target,
+        bindings.compiled_participants,
+        bindings.source_package_digest,
     )
 
 

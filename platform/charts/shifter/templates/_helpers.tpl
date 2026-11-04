@@ -219,6 +219,11 @@ the admission policy and the ConfigMap can not drift.
 */}}
 {{- define "shifter.platformRuntimeEnv" -}}
 {{- $runtimeEnv := deepCopy .Values.runtimeEnv -}}
+{{- if or .Values.participantControl.enabled (hasKey $runtimeEnv "PARTICIPANT_CONTROL_ENABLED") -}}
+{{- $_ := set $runtimeEnv "PARTICIPANT_CONTROL_ENABLED" (ternary "true" "false" .Values.participantControl.enabled) -}}
+{{- $_ = set $runtimeEnv "PARTICIPANT_CONTROL_OWNER_PROCESS" "false" -}}
+{{- $_ = set $runtimeEnv "PARTICIPANT_CONTROL_CONFIGURATION" (ternary .Values.participantControl.configuration "" .Values.participantControl.enabled) -}}
+{{- end -}}
 {{- if .Values.capabilities.kubernetesJobLauncher -}}
 {{- $_ := set $runtimeEnv "ENGINE_TASK_NAMESPACE" .Values.namespaces.jobs -}}
 {{- $_ = set $runtimeEnv "ENGINE_TASK_SERVICE_ACCOUNT_NAME" .Values.serviceAccounts.provisioner.name -}}

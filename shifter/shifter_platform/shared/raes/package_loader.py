@@ -15,16 +15,19 @@ consumption path stays below the ``shared.raes`` boundary.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
-from raes.artifact_requirements import ArtifactRequirement
 from raes.scenarios import Scenario, ScenarioError, load_scenario
-from raes_contracts.contracts import ArtifactRequirementAvailability
+from raes_contracts.errors import RaesError
 
 from shared.log_sanitize import safe_log_value
-from shared.raes.artifact_inventory import ArtifactSupply
+from shared.native_participant import NativePowerControlSelection
+from shared.raes.artifact_planning import (
+    ArtifactSupplyProvider,
+    capture_artifact_planning_input,
+    plan_with_artifact_supply,
+)
 from shared.raes.dispatch_port import ShifterProvisioningDispatchPort
 from shared.raes.participant_access import ParticipantAccessError, project_participant_access
 from shared.raes.runtime_target import NODE_RESOURCE_TYPE, create_shifter_backend_target
@@ -126,10 +129,8 @@ def launch_raes_package(
     scenario_path: Path,
     port: ShifterProvisioningDispatchPort,
     parameters: dict[str, object] | None = None,
-    artifact_supply_provider: Callable[
-        [Mapping[str, ArtifactRequirement]], ArtifactSupply | Mapping[str, ArtifactRequirementAvailability]
-    ]
-    | None = None,
+    artifact_supply_provider: ArtifactSupplyProvider | None = None,
+    native_control_selection: NativePowerControlSelection | None = None,
 ) -> ShifterLaunchResult:
     """Load, plan, and dispatch the RAES package at ``scenario_path``.
 
@@ -145,12 +146,28 @@ def launch_raes_package(
     except (ScenarioError, OSError) as exc:
         raise RaesPackageError(f"failed to load RAES package: {safe_log_value(exc)}") from exc
 
-    target = create_shifter_backend_target(port=port, scenario=scenario)
-    from shared.raes.artifact_planning import plan_with_artifact_supply
+    if native_control_selection is None:
+        target = create_shifter_backend_target(port=port, scenario=scenario)
+        execution_plan, target = plan_with_artifact_supply(
+            scenario, target, parameters=parameters, supply_provider=artifact_supply_provider
+        )
+    else:
+        from shared.raes.native_power_planning import plan_native_power_with_artifact_supply
 
-    execution_plan, target = plan_with_artifact_supply(
-        scenario, target, parameters=parameters, supply_provider=artifact_supply_provider
-    )
+        try:
+            execution_plan, target = plan_native_power_with_artifact_supply(
+                scenario=scenario,
+                port=port,
+                selection=native_control_selection,
+                parameters=parameters,
+                supply_provider=artifact_supply_provider,
+            )
+        except (ValueError, RaesError):
+            return ShifterLaunchResult(
+                accepted=False,
+                status="rejected",
+                diagnostics=("shifter-provisioner.participant-control-unavailable",),
+            )
 
     # #1710: lower the compiled participant-domain interactive access into the
     # bounded sidecar here -- this is the only point where Shifter holds the
@@ -184,6 +201,20 @@ def launch_raes_package(
             status="rejected",
             diagnostics=tuple(_render_diagnostic(diagnostic) for diagnostic in execution_plan.diagnostics),
         )
+    from shared.raes.compiled_participants import project_compiled_participants
+
+    try:
+        compiled_participants = project_compiled_participants(execution_plan.model, parameters=parameters)
+        if compiled_participants is not None:
+            compiled_participants = replace(
+                compiled_participants,
+                artifact_planning_json=capture_artifact_planning_input(execution_plan, compiled_participants),
+            )
+    except ValueError:
+        return ShifterLaunchResult(
+            accepted=False, status="rejected", diagnostics=("shifter-provisioner.compiler-context-unavailable",)
+        )
+    target.provisioner.bind_compiled_participants(compiled_participants)
     result = target.provisioner.enqueue(execution_plan.provisioning)
     return ShifterLaunchResult(
         accepted=result.accepted,

@@ -4448,6 +4448,93 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/participant-control/ctf/bindings/{binding_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Read a bounded reference page under current event authorization. */
+        get: operations["participant_control_ctf_bindings_retrieve"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/participant-control/ctf/bindings/{binding_id}/commands/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Submit one closed original request through the installed owner. */
+        post: operations["participant_control_ctf_bindings_commands_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/participant-control/ctf/bindings/{binding_id}/commands/{command_id}/retry/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** @description Recover the retained request without accepting replacement fields. */
+        post: operations["participant_control_ctf_bindings_commands_retry_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/participant-control/ctf/participants/{participant_id}/binding/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Discover opaque control choices under current participant custody. */
+        get: operations["participant_control_ctf_participants_binding_retrieve"];
+        put?: never;
+        /** @description Activate an existing mapping for the current assigned generation. */
+        post: operations["participant_control_ctf_participants_binding_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/participant-control/organizations/{organization_uuid}/sources/{scenario_id}/": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** @description Authorize the organization before projecting its current source mapping. */
+        get: operations["participant_control_organizations_sources_retrieve"];
+        put?: never;
+        /** @description Verify the exact source revision before saving the authorized mapping. */
+        post: operations["participant_control_organizations_sources_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workspaces/{target_uuid}/authorization/direct-assignments/": {
         parameters: {
             query?: never;
@@ -5151,6 +5238,7 @@ export interface components {
             principal: components["schemas"]["BootstrapPrincipal"];
             permissions: components["schemas"]["BootstrapPermissions"];
             modes: components["schemas"]["BootstrapModes"];
+            participant_control_available?: boolean;
         };
         /** @description UX mode eligibility (participant/operator). Not an authorization fact. */
         BootstrapModes: {
@@ -5768,6 +5856,109 @@ export interface components {
         ContentScopePage: {
             count: number;
             results: components["schemas"]["ContentScopeOption"][];
+        };
+        /** @description Select only an existing verified configuration. */
+        ControlBinding: {
+            /** Format: uuid */
+            configuration_id: string;
+        };
+        /** @description Describe a native request without accepting portable verdicts or code. */
+        ControlCommand: {
+            /** Format: uuid */
+            request_id: string;
+            kind: components["schemas"]["ControlCommandKindEnum"];
+            verb: components["schemas"]["VerbEnum"];
+            /** Format: uuid */
+            proposal_id: string;
+            /** Format: uuid */
+            action_id: string;
+            expected_cut_digest: string;
+            /** Format: uuid */
+            decision_id?: string | null;
+        };
+        /**
+         * @description * `proposal` - proposal
+         *     * `approval` - approval
+         *     * `denial` - denial
+         *     * `cancellation` - cancellation
+         *     * `action` - action
+         * @enum {string}
+         */
+        ControlCommandKindEnum: "proposal" | "approval" | "denial" | "cancellation" | "action";
+        /** @description Expose body-free original command and receipt references. */
+        ControlCommandReference: {
+            /** Format: uuid */
+            id: string;
+            kind: string;
+            verb: string;
+            /** Format: uuid */
+            proposal_id: string;
+            /** Format: uuid */
+            action_id: string;
+            /** Format: uuid */
+            operation_id: string | null;
+            operation_state: string | null;
+        };
+        /** @description Expose verified configuration references without compiler material. */
+        ControlConfiguration: {
+            /** Format: uuid */
+            id: string;
+            source_package_digest: string;
+            configuration_digest: string;
+            raes_version: string;
+            structural_report_ref: string;
+            selection: components["schemas"]["ControlSelection"];
+        };
+        /** @description Require the displayed package digest and logical selection. */
+        ControlConfigurationRequest: {
+            expected_package_digest: string;
+            selection: components["schemas"]["ControlSelection"];
+        };
+        /** @description Distinguish an absent mapping from one that needs review. */
+        ControlConfigurationStatus: {
+            configuration: components["schemas"]["ControlConfiguration"] | null;
+            requires_refresh: boolean;
+        };
+        /** @description Project the owning SDK receipt separately from native power truth. */
+        ControlOperation: {
+            /** Format: uuid */
+            command_id: string;
+            /** Format: uuid */
+            operation_id: string;
+            state: string;
+        };
+        /** @description Return opaque discovery references and mapping freshness. */
+        ControlOptions: {
+            /** Format: uuid */
+            configuration_id: string | null;
+            /** Format: uuid */
+            binding_id: string | null;
+            requires_refresh: boolean;
+        };
+        /** @description Five closed logical references from the admitted scenario. */
+        ControlSelection: {
+            participant_address: string;
+            controller_address: string;
+            pause_action_contract_address: string;
+            resume_action_contract_address: string;
+            observation_boundary_address: string;
+        };
+        /** @description Return current coordinates, native status, and a bounded command page. */
+        ControlState: {
+            /** Format: uuid */
+            binding_id: string;
+            /** Format: uuid */
+            configuration_id: string;
+            /** Format: uuid */
+            range_uuid: string;
+            episode_id: string;
+            state_revision: number;
+            history_head: number;
+            control_cut_digest: string;
+            range_status: string;
+            commands: components["schemas"]["ControlCommandReference"][];
+            /** Format: uuid */
+            next_before: string | null;
         };
         /** @description Closed custom group/policy creation command. */
         CreateAuthorizationMetadata: {
@@ -8845,6 +9036,12 @@ export interface components {
         ValidResponse: {
             valid: boolean;
         };
+        /**
+         * @description * `pause` - pause
+         *     * `resume` - resume
+         * @enum {string}
+         */
+        VerbEnum: "pause" | "resume";
         /** @description One registered webhook endpoint (CTF-1203); secrets never round-trip. */
         Webhook: {
             readonly id: string;
@@ -22754,6 +22951,296 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participant_control_ctf_bindings_retrieve: {
+        parameters: {
+            query?: {
+                before?: string;
+            };
+            header?: never;
+            path: {
+                binding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlState"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participant_control_ctf_bindings_commands_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                binding_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlCommand"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlOperation"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participant_control_ctf_bindings_commands_retry_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                binding_id: string;
+                command_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlOperation"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participant_control_ctf_participants_binding_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlOptions"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participant_control_ctf_participants_binding_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                participant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlBinding"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlState"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participant_control_organizations_sources_retrieve: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_uuid: string;
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlConfigurationStatus"];
+                };
+            };
+            /** @description Authentication failed. */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Permission denied. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participant_control_organizations_sources_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                organization_uuid: string;
+                scenario_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ControlConfigurationRequest"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ControlConfiguration"];
+                };
             };
             /** @description Authentication failed. */
             401: {

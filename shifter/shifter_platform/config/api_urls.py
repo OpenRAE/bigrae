@@ -19,6 +19,7 @@ from config.api_model_access import (
 app_name = "api"
 
 urlpatterns = [
+    path("participant-control/", include("config.participant_control_urls")),
     # S8 coordinated activation. Register the principal-aware administration
     # composition before retained legacy includes so each colliding route has
     # one authoritative handler.

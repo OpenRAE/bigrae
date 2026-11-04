@@ -14,7 +14,13 @@ def _clients(status: str) -> SimpleNamespace:
     instances = SimpleNamespace(
         stop=lambda **kwargs: SimpleNamespace(name="op-stop"),
         start=lambda **kwargs: SimpleNamespace(name="op-start"),
-        get=lambda **kwargs: SimpleNamespace(status=status),
+        get=lambda **kwargs: SimpleNamespace(
+            id="12345",
+            status=status,
+            disks=[SimpleNamespace(type_="PERSISTENT", source="projects/p/zones/z/disks/root")],
+            metadata=SimpleNamespace(items=[]),
+            resource_policies=[],
+        ),
     )
     op_service = SimpleNamespace(wait=lambda **kwargs: SimpleNamespace(status="DONE"))
     return SimpleNamespace(
@@ -99,3 +105,89 @@ def test_instance_id_fallback_for_name():
     state = {"gcp_project_id": "p", "gcp_zone": "z", "instance_id": "fallback-name"}
     run_power_operation("stop", state, clients=clients)
     assert calls["instance"] == "fallback-name"
+
+
+@pytest.mark.parametrize("operation", ["stop", "start"])
+@pytest.mark.parametrize(
+    "footprint",
+    ["missing-disks", "local-ssd", "scheduled", "managed", "missing-id", "malformed-id", "malformed-metadata"],
+)
+def test_power_rejects_unqualified_footprint_before_mutation(operation, footprint):
+    clients = _clients("TERMINATED" if operation == "stop" else "RUNNING")
+    observed = clients.instances.get()
+    if footprint == "missing-disks":
+        observed.disks = []
+    elif footprint == "local-ssd":
+        observed.disks.append(SimpleNamespace(type_="SCRATCH", source=""))
+    elif footprint == "scheduled":
+        observed.resource_policies = ["projects/p/regions/r/resourcePolicies/schedule"]
+    elif footprint == "managed":
+        observed.metadata.items = [SimpleNamespace(key="created-by", value="instanceGroupManagers/group")]
+    elif footprint == "malformed-id":
+        observed.id = {"private": "provider-value"}
+    elif footprint == "malformed-metadata":
+        observed.metadata.items = "not-an-observed-metadata-list"
+    else:
+        observed.id = ""
+    clients.instances.get = lambda **kwargs: observed
+    mutations = []
+    clients.instances.stop = lambda **kwargs: mutations.append("stop") or SimpleNamespace(name="op")
+    clients.instances.start = lambda **kwargs: mutations.append("start") or SimpleNamespace(name="op")
+
+    with pytest.raises(RuntimeError, match="footprint"):
+        run_power_operation(operation, _STATE, clients=clients)
+
+    assert mutations == []
+
+
+def test_power_rejects_replaced_instance_in_readback():
+    clients = _clients("TERMINATED")
+    original = clients.instances.get()
+    replacement = SimpleNamespace(**{**vars(original), "id": "67890"})
+    observations = iter([original, replacement])
+    clients.instances.get = lambda **kwargs: next(observations)
+
+    with pytest.raises(RuntimeError, match="identity"):
+        run_power_operation("stop", _STATE, clients=clients)
+
+
+def test_power_checks_discovery_client_response_shape():
+    clients = _clients("RUNNING")
+    clients.instances.get = lambda **kwargs: {
+        "id": "12345",
+        "status": "RUNNING",
+        "disks": [{"type": "PERSISTENT", "source": "projects/p/zones/z/disks/root"}],
+        "metadata": {"items": []},
+        "resourcePolicies": [],
+    }
+
+    run_power_operation("start", _STATE, clients=clients)
+
+
+def test_power_rejects_disk_replacement_in_readback():
+    clients = _clients("TERMINATED")
+    original = clients.instances.get()
+    replacement = SimpleNamespace(
+        **{**vars(original), "disks": [SimpleNamespace(type_="PERSISTENT", source="projects/p/zones/z/disks/other")]}
+    )
+    observations = iter([original, replacement])
+    clients.instances.get = lambda **kwargs: next(observations)
+
+    with pytest.raises(RuntimeError, match="persistent disks"):
+        run_power_operation("stop", _STATE, clients=clients)
+
+
+def test_power_rechecks_the_footprint_admitted_for_the_whole_range():
+    clients = _clients("TERMINATED")
+    mutations = []
+    clients.instances.stop = lambda **kwargs: mutations.append("stop") or SimpleNamespace(name="stop")
+
+    with pytest.raises(RuntimeError, match="changed after range admission"):
+        run_power_operation(
+            "stop",
+            _STATE,
+            clients=clients,
+            expected_footprint=("67890", ("projects/p/zones/z/disks/root",)),
+        )
+
+    assert mutations == []

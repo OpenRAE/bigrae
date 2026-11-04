@@ -279,6 +279,7 @@ from config._database_settings import *  # noqa: E402  # NOSONAR
 # shared.mission_control_lease); canonical 30/30/365 defaults when unset.
 from config._mission_control_lease_settings import *  # noqa: E402  # NOSONAR
 from config._model_access_settings import *  # noqa: E402  # NOSONAR
+from config._participant_control_settings import *  # noqa: E402  # NOSONAR
 from config._raes_settings import *  # noqa: E402  # NOSONAR
 
 # #28: deployment-owned warm-pool policy (parsed/validated by shared.warm_pool.policy),

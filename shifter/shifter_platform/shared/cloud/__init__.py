@@ -35,6 +35,7 @@ from shared.cloud.exceptions import CloudProviderNotImplementedError
 PROVISIONER_CONTAINER_NAME = "pulumi-provisioner"
 
 if TYPE_CHECKING:
+    from shared.cloud.native_power import NativePowerObserver
     from shared.cloud.preparation_readback import GCEPreparationReadback
     from shared.cloud.preparation_runtime import PreparationTask
     from shared.cloud.types import (
@@ -123,6 +124,16 @@ def get_preparation_readback(grant: PreparationGrantConfiguration) -> GCEPrepara
     from shared.cloud.preparation_readback import GCEPreparationReadback
 
     return GCEPreparationReadback(grant)
+
+
+def get_native_power_observer() -> NativePowerObserver:
+    """Compose the fixed GCE read-only recovery boundary; no provider selection by content."""
+    provider = _require_capability(BackendCapability.TASK_RUNNER)
+    if provider != "gcp":
+        raise CloudProviderNotImplementedError(provider, BackendCapability.TASK_RUNNER)
+    from shared.cloud.native_power_readback import GCENativePowerObserver
+
+    return GCENativePowerObserver()
 
 
 def get_queue_consumer() -> QueueConsumer:

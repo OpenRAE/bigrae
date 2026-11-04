@@ -131,6 +131,29 @@ from ._non_user_range_launch import NonUserWorkflow, create_non_user_range
 # --- Public service functions ------------------------------------------------
 from ._pack_conformance import validate_registered_pack_conformance
 from ._pack_fence import fence_pack_reference
+from ._participant_control_api import (
+    activate_native_participant_control as activate_native_participant_control,
+)
+from ._participant_control_api import (
+    native_control_product_subject as native_control_product_subject,
+)
+from ._participant_control_api import native_participant_control_options as native_participant_control_options
+from ._participant_control_api import (
+    read_native_participant_control as read_native_participant_control,
+)
+from ._participant_control_api import retry_native_participant_control as retry_native_participant_control
+from ._participant_control_api import (
+    submit_native_participant_control as submit_native_participant_control,
+)
+from ._participant_control_binding import bind_native_participant_control as bind_native_participant_control
+from ._participant_control_binding import prepare_native_control_binding as prepare_native_control_binding
+from ._participant_control_configuration import (
+    configure_native_participant_control as configure_native_participant_control,
+)
+from ._participant_control_configuration import read_native_control_configuration as read_native_control_configuration
+from ._participant_control_retirement import (
+    retire_verified_native_participant_control as retire_verified_native_participant_control,
+)
 from ._policy_offboarding import policy_reassign_range_owner, policy_transfer_user_ownership
 from ._policy_range_scope import policy_list_range_scope_bindings, policy_rebind_range_workspace
 from ._principal_scopes import AccountScopeError as AccountScopeError
@@ -324,6 +347,7 @@ __all__ = (
     "TrialArchiveCollection",
     "WorkspaceLaunchDenied",
     "WorkspaceLaunchQuotaExceeded",
+    "activate_native_participant_control",
     "admit_experiment_batch",
     "attempt_warm_claim",
     "audit_log",
@@ -436,6 +460,8 @@ __all__ = (
     "load_runtime_file_inputs",
     "max_agent_file_size_bytes",
     "model_source_alias_options",
+    "native_control_product_subject",
+    "native_participant_control_options",
     "observe_experiment_attempt",
     "pause_range",
     "pause_range_by_request_id",
@@ -453,6 +479,8 @@ __all__ = (
     "range_egress_compatible_with_scope",
     "range_owner_reassignment_available",
     "range_status_changed",
+    "read_native_control_configuration",
+    "read_native_participant_control",
     "reassign_event_range_owner",
     "reassign_range_owner",
     "rebind_range_workspace",
@@ -483,10 +511,13 @@ __all__ = (
     "resolve_retry_recovery",
     "resume_range",
     "resume_range_by_request_id",
+    "retire_verified_native_participant_control",
     "retrieve_trial_archive",
+    "retry_native_participant_control",
     "revoke_range_model_sources",
     "run_event_range_lifecycle",
     "set_catalog_publication",
+    "submit_native_participant_control",
     "transfer_user_ownership",
     "validate_registered_pack_conformance",
     "validate_scenario_requirements",

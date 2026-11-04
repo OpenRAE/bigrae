@@ -413,8 +413,19 @@ def _finish_rollout(
     from gcp_rollout import ReleasePins, record_running_images, restart_workloads, wait_for_rollouts
 
     pins = ReleasePins.from_documents(documents)
-    restart_workloads(runner, {}, model_broker_enabled=broker_enabled)
-    wait_for_rollouts(runner, {}, model_broker_enabled=broker_enabled, policy_enabled=pins.policy is not None)
+    restart_workloads(
+        runner,
+        {},
+        model_broker_enabled=broker_enabled,
+        participant_control_enabled=pins.participant_control,
+    )
+    wait_for_rollouts(
+        runner,
+        {},
+        model_broker_enabled=broker_enabled,
+        policy_enabled=pins.policy is not None,
+        participant_control_enabled=pins.participant_control,
+    )
     if pool:
         roll_out_pool(
             runner,

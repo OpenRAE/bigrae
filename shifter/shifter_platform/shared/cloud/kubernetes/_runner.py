@@ -14,7 +14,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from pydantic import SecretStr
+
+    from .workload_identity import VerifiedTaskWorkload
 
 from shared.cloud.exceptions import CloudTaskError
 
@@ -137,6 +142,62 @@ class KubernetesTaskRunner:
         except Exception as e:
             logger.exception("get_task_status: failed task_id=%s error_type=%s", task_id, type(e).__name__)
             raise CloudTaskError(f"Failed to get Kubernetes Job status ({type(e).__name__})") from e
+
+    def authenticate_task_workload(
+        self,
+        *,
+        cluster: str,
+        task_ref: str,
+        expected_identity: dict[str, Any],
+        token: SecretStr,
+        audience: str,
+    ) -> VerifiedTaskWorkload:
+        """Authenticate an invoker with this runner's installed cluster clients."""
+        from .workload_identity import KubernetesWorkloadClients, verify_task_workload_token
+
+        try:
+            batch, core, client, _api_exception = self._load_kubernetes_api()
+            authentication = cast(Any, client).AuthenticationV1Api(api_client=cast(Any, batch).api_client)
+            return verify_task_workload_token(
+                token=token,
+                audience=audience,
+                namespace=cluster,
+                task_ref=task_ref,
+                expected_identity=expected_identity,
+                clients=KubernetesWorkloadClients(authentication=authentication, core=core, batch=batch),
+            )
+        except Exception:  # noqa: BLE001  # authentication boundary; no token-bearing client failure escapes
+            raise CloudTaskError("Workload authentication unavailable") from None
+
+    def is_task_invocation_inactive(
+        self, *, cluster: str, task_ref: str, expected_identity: dict[str, Any], job_uid: str
+    ) -> bool:
+        """Read a recovery trigger, never infer cessation of an external API call."""
+        from ._job_lifecycle import _read_idempotent_job
+
+        try:
+            namespace, name = parse_job_task_id(task_ref, cluster)
+            if not namespace or not name or not job_uid or namespace != cluster:
+                raise ValueError("Task identity unavailable")
+            batch, _core, _client, api_exception = self._load_kubernetes_api()
+            job = _read_idempotent_job(batch, api_exception, namespace, name)
+            if job is None:
+                return True
+            metadata = getattr(job, "metadata", None)
+            uid = getattr(metadata, "uid", None)
+            if not isinstance(uid, str) or not uid:
+                raise ValueError("Task identity unavailable")
+            if uid != job_uid:
+                return True
+            if not _is_reserved_intent(job, name, expected_identity):
+                raise ValueError("Task identity changed")
+            status = getattr(job, "status", None)
+            return getattr(metadata, "deletion_timestamp", None) is not None or any(
+                type(count) is int and count > 0
+                for count in (getattr(status, "failed", None), getattr(status, "succeeded", None))
+            )
+        except Exception:  # noqa: BLE001  # no workload diagnostics or credentials cross the recovery boundary
+            raise CloudTaskError("Workload recovery status unavailable") from None
 
     def get_task_output(self, cluster: str, task_ref: str, expected_identity: dict[str, Any]) -> bytes | None:
         """Read bounded output without logging untrusted worker diagnostics."""

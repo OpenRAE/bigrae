@@ -3315,6 +3315,46 @@
           "source": "rendered from validated Terraform outputs and the normalized root config"
         },
         {
+          "description": "Public GCP runtime configuration value (PARTICIPANT_CONTROL_CONFIGURATION) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "PARTICIPANT_CONTROL_CONFIGURATION",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker",
+            "provisioner"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (PARTICIPANT_CONTROL_ENABLED) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "PARTICIPANT_CONTROL_ENABLED",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (PARTICIPANT_CONTROL_OWNER_PROCESS) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "PARTICIPANT_CONTROL_OWNER_PROCESS",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
           "description": "Public GCP runtime configuration value (PORTAL_NETWORK_CIDRS) emitted into the platform runtime environment.",
           "destination": "runtime-env",
           "kind": "runtime-env",
@@ -5019,6 +5059,106 @@
             "title": "NatLogPolicy",
             "type": "object"
           },
+          "NativeControlBudgets": {
+            "additionalProperties": false,
+            "description": "Finite installed durations; SDK admission and lifecycle semantics remain upstream-owned.",
+            "properties": {
+              "admission_ms": {
+                "default": 10000,
+                "maximum": 60000,
+                "minimum": 100,
+                "title": "Admission Ms",
+                "type": "integer"
+              },
+              "commit_ms": {
+                "default": 10000,
+                "maximum": 60000,
+                "minimum": 100,
+                "title": "Commit Ms",
+                "type": "integer"
+              },
+              "drain_ms": {
+                "default": 5000,
+                "maximum": 30000,
+                "minimum": 100,
+                "title": "Drain Ms",
+                "type": "integer"
+              },
+              "execution_ms": {
+                "default": 30000,
+                "maximum": 120000,
+                "minimum": 100,
+                "title": "Execution Ms",
+                "type": "integer"
+              },
+              "observation_ms": {
+                "default": 2000,
+                "maximum": 60000,
+                "minimum": 100,
+                "title": "Observation Ms",
+                "type": "integer"
+              }
+            },
+            "title": "NativeControlBudgets",
+            "type": "object"
+          },
+          "ParticipantControlSettings": {
+            "additionalProperties": false,
+            "description": "Operator-owned TLS, storage and limits; images come from the verified release.",
+            "properties": {
+              "budgets": {
+                "$ref": "#/$defs/NativeControlBudgets"
+              },
+              "enabled": {
+                "default": false,
+                "title": "Enabled",
+                "type": "boolean"
+              },
+              "idle_seconds": {
+                "default": 300,
+                "maximum": 3600,
+                "minimum": 30,
+                "title": "Idle Seconds",
+                "type": "integer"
+              },
+              "max_contexts": {
+                "default": 8,
+                "maximum": 32,
+                "minimum": 1,
+                "title": "Max Contexts",
+                "type": "integer"
+              },
+              "storage_class_name": {
+                "default": "",
+                "maxLength": 253,
+                "pattern": "^$|^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+                "title": "Storage Class Name",
+                "type": "string"
+              },
+              "storage_gib": {
+                "default": 8,
+                "maximum": 128,
+                "minimum": 1,
+                "title": "Storage Gib",
+                "type": "integer"
+              },
+              "tls_secret_name": {
+                "default": "",
+                "maxLength": 253,
+                "pattern": "^$|^[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?$",
+                "title": "Tls Secret Name",
+                "type": "string"
+              },
+              "trust_ca_pem": {
+                "default": "",
+                "maxLength": 16384,
+                "title": "Trust Ca Pem",
+                "type": "string"
+              }
+            },
+            "title": "ParticipantControlSettings",
+            "type": "object"
+          },
           "ProviderInventory": {
             "additionalProperties": false,
             "description": "Closed mounted non-secret configuration independent of guest packages.",
@@ -5226,6 +5366,9 @@
             ],
             "default": null,
             "description": "First Identity Platform operator. The deploy command requires this block."
+          },
+          "participant_control": {
+            "$ref": "#/$defs/ParticipantControlSettings"
           },
           "participant_openvpn": {
             "$ref": "#/$defs/GcpParticipantOpenVpnSettings",

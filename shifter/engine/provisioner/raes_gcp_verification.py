@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from gce_range_cell_incarnation import retain_power_incarnations
 from gcp_range_cell_types import RangeCellPlan, ResourceDict
 from raes_gcp_apply_types import RaesGceApplyRuntime
 from raes_operating_system import validate_operating_systems
@@ -74,6 +75,7 @@ def _verify_raes_apply(
     operating_systems = runtime.operating_system_observer(raes_plan, instance_outputs)
     validate_operating_systems(raes_plan, operating_systems)
     compute_substrates = runtime.substrate_observer(plan, runtime.clients)
+    retain_power_incarnations(instance_outputs, clients=runtime.clients)
     snapshot_resources(raes_plan, verified)
     return {
         "composition_verified_addresses": sorted(verified),

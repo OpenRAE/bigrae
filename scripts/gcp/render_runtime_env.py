@@ -624,6 +624,11 @@ def render_env(outputs: dict[str, object], *, engine_image: str) -> str:
     values["MODEL_BROKER_GUEST_VIP"] = ""
     values["MODEL_ENROLLMENT_CONTROL_URL"] = ""
     values["MODEL_ENROLLMENT_CA_PEM_B64"] = ""
+    # Verified release rendering supplies an explicitly enabled installation.
+    # Blank defaults remove stale control coordinates when it is disabled.
+    values["PARTICIPANT_CONTROL_ENABLED"] = "false"
+    values["PARTICIPANT_CONTROL_OWNER_PROCESS"] = "false"
+    values["PARTICIPANT_CONTROL_CONFIGURATION"] = ""
     values.update(_model_access_runtime_values())
     values.update(_openvpn_runtime_values(outputs))
     values.update(_mission_control_lease_runtime_values())

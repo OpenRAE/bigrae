@@ -154,7 +154,14 @@ def create_raes_range(
 
     existing = Range.objects.filter(request__request_id=request_uuid).first()
     if existing is not None:
+        from ._compiled_participants import verify_compiled_participant_binding
+
+        if existing.range_config != compiled_plan:
+            from ._common import EngineError
+
+            raise EngineError("Range plan conflict")
         verify_principal_range_replay(existing, principal_fields, bindings, compiled_plan)
+        verify_compiled_participant_binding(existing, bindings.compiled_participants, bindings.source_package_digest)
         verify_existing_binding(existing, request_uuid, backend_admission)
         verify_existing_workspace_binding(existing, request_uuid, workspace_id)
         verify_existing_egress_binding(existing, request_uuid, egress_mode)
@@ -214,7 +221,7 @@ def create_raes_range(
             status=Range.Status.PROVISIONING,
             subnet_index=subnet_index,
             placement_zone=placement_zone,
-            resource_generation=_new_resource_generation(bool(principal_fields), binding_fields.get("range_backend")),
+            resource_generation=uuid4(),
             range_config=compiled_plan,
             workspace_id=workspace_id,
             remote_access_capability=capability,
@@ -311,11 +318,6 @@ def _dispatch_range_creation(range_obj: Range, request_uuid: UUID, bindings: Ran
             prepared_creation=bindings.prepared_creation,
         )
     return dispatch_created_raes_range(request_uuid)
-
-
-def _new_resource_generation(principal_owned: bool, range_backend: object) -> UUID | None:
-    """Mint native custody generations for principal ranges and EC2 execution."""
-    return uuid4() if principal_owned or range_backend == "ec2" else None
 
 
 def _lock_native_warm_creation(request_uuid: UUID, bindings: RangeBindings, principal_owned: bool) -> None:

@@ -200,6 +200,56 @@ class TestHelm:
 
 
 class TestRolloutChecks:
+    def test_rendered_persistent_owner_joins_rollout_and_evidence_and_keeps_support_pins(self, tmp_path: Path):
+        document = {
+            "kind": "StatefulSet",
+            "metadata": {"namespace": "shifter-platform", "name": "participant-control"},
+            "spec": {
+                "template": {
+                    "spec": {
+                        "containers": [{"name": "participant-control", "image": _identities()["portal"]}],
+                        "initContainers": [{"name": "cloud-sql-proxy", "image": "example.test/sql@sha256:" + "f" * 64}],
+                    }
+                }
+            },
+        }
+        pins = ReleasePins.from_documents([document])
+        assert pins.participant_control
+        assert pins.support["cloud-sql-proxy"] == "example.test/sql@sha256:" + "f" * 64
+        runner = FakeRunner().on(
+            [],
+            lambda argv, env, stdin: ProcessResult(
+                0,
+                "portal-web\n" if "--list-deployments" in argv else '{"items":[]}',
+            ),
+        )
+        restart_workloads(runner, {}, model_broker_enabled=False, participant_control_enabled=pins.participant_control)
+        wait_for_rollouts(runner, {}, model_broker_enabled=False, participant_control_enabled=pins.participant_control)
+        assert any(
+            call.argv[3] == "statefulset/participant-control" for call in runner.find("kubectl", "rollout", "restart")
+        )
+        assert any(
+            call.argv[3] == "statefulset/participant-control" for call in runner.find("kubectl", "rollout", "status")
+        )
+
+        def verify(argv, env, stdin):
+            if "--output" in argv:
+                Path(argv[argv.index("--output") + 1]).write_text("{}\n")
+            return ProcessResult(0, '{"items":[]}')
+
+        recorder = FakeRunner().on([], verify)
+        record_running_images(
+            recorder,
+            {},
+            identities=_identities(),
+            model_broker_enabled=False,
+            evidence=EvidenceRun("acme-shifter-release-evidence", REVISION, "r", 1),
+            workdir=tmp_path,
+            pins=pins,
+        )
+        command = next(call.argv for call in recorder.calls if "--pods-json" in call.argv)
+        assert command[command.index("--participant-control-enabled") + 1] == "true"
+
     def test_restarts_inventory_and_waits(self):
         runner = FakeRunner()
         restart_workloads(runner, {}, model_broker_enabled=True)

@@ -63,6 +63,15 @@ spec:
       {{- end }}
       http:
         paths:
+          {{- if .Values.participantControl.enabled }}
+          - path: /api/v1/participant-control/
+            pathType: Prefix
+            backend:
+              service:
+                name: participant-control
+                port:
+                  number: 8445
+          {{- end }}
           - path: /guacamole
             pathType: Prefix
             backend:

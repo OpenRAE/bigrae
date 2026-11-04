@@ -6,8 +6,9 @@ architecture; subsystem guides provide detail.
 
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
-**Reviewed:** 2026-10-31 for live CTF notifications (#665), after the AWS native
-identity bindings (#2313) and the one-command GCP install (#2679).
+**Reviewed:** 2026-11-03 for participant compiler bindings and native power
+readback (#1968), after live CTF notifications (#665), AWS native identity
+bindings (#2313) and the one-command GCP install (#2679).
 This describes source behavior, not a certificate of a live deployment.
 
 BigRAE is the current product name. Public BigRAE config, SDK, client and plugin
@@ -252,6 +253,41 @@ realized state. Retry identity recovers an existing operation; it never creates
 a client-owned generation. Destroyed status alone is not verified absence:
 cleanup readback, residual obligations and retained recovery records matter.
 See [retry-safe operations](shifter_platform/retry-safe-range-operations.md).
+
+Native RAES launches retain compiler references beside the provisioning plan.
+Engine binds the source digest, compiler version, selected parameters and
+participant references to the physical range generation and current custody.
+Selected parameters use the existing encrypted field. Status reads references
+only; they do not decrypt parameters. Replay must preserve the retained input.
+This metadata establishes neither participant identity nor control authority.
+
+The participant reservation adapter requires a real reusable proposal, explicit
+approval and exact installed action commitment before reserving native work.
+Engine rechecks current native authority, compiler custody, resource generation
+and the full affected footprint. It commits strict audit, immutable operation
+input and a `HELD` launch intent together. The correlation row retains only
+native identities and committed portable references; the existing launch intent
+continues to own execution. Neither the launcher nor the local shortcut can
+dispatch held work. Portable admission release and per-call invocation authority
+remain required before enabling a product path.
+Receipt correlation also requires the captured SDK control cut and original
+credential. Later cancellation, changed resources or failed audit cannot turn
+a historically accepted SDK action into newly dispatchable work.
+
+Realized GCE members may retain a closed native power target: project, zone,
+instance name and bootstrap capability. Separate qualification retains numeric VM
+and dedicated zonal disk identities. Native power input carries the complete
+compiled footprint and its exact resource generation. Member readback must match
+that immutable input and the current targets. A terminal assertion alone cannot
+settle the range; this operation must report all members. Partial observations
+remain visible, and strict audit commits with each applied result.
+
+The explicitly installed [participant control owner](../architecture/raes-participant-control-adoption-1968.md)
+connects this GCE path to authenticated human review, released participant
+crossings, one-use workload invocation fences, and guest readiness checks.
+Its [operator guide](../ops/supervised-range-power.md) describes deployment,
+recovery, and bounded evidence. Generic native RAES pause/resume remains closed,
+and the generic backend manifest remains provisioning-only.
 
 [Range-event delivery](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/range-event-delivery-preflight-476.md)
 is an implementation record. The current input/result definitions are

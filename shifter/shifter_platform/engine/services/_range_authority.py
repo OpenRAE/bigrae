@@ -113,7 +113,13 @@ def lock_range_remote_authority(range_uuid: UUID, member: str) -> RangeAuthority
     return project_range_authority(runtime.request.request_id)
 
 
-def require_native_range_action(credential: CredentialContext, request_uuid: UUID, action: str) -> Range:
+def require_native_range_action(
+    credential: CredentialContext,
+    request_uuid: UUID,
+    action: str,
+    *,
+    authority_target: TargetRef | None = None,
+) -> Range:
     """Enforce runtime authority independently of the CMS/HTTP caller."""
     from engine.models import Range
 
@@ -123,9 +129,26 @@ def require_native_range_action(credential: CredentialContext, request_uuid: UUI
         target = TargetRef("range", projection.public_uuid)
         if resolve_credential_scope(target) != projection.scope:
             raise ValueError("Range projection changed")
+        decision_target = authority_target or target
+        if authority_target is not None:
+            if (
+                action != "event.manage_ranges"
+                or authority_target.type != "event"
+                or authority_target != projection.parent
+                or authority_target.uuid is None
+            ):
+                raise ValueError("Range authority parent changed")
+            from shared.range_workspace_aggregate import require_range_event_association
+
+            require_range_event_association(request_uuid, authority_target.uuid)
         require_authorization(
             AuthorizationRequest(
-                current.principal, action, target, projection.scope, current.ceiling, parent=projection.parent
+                current.principal,
+                action,
+                decision_target,
+                projection.scope,
+                current.ceiling,
+                parent=projection.parent if decision_target.type == "range" else None,
             )
         )
         row = (
@@ -139,7 +162,11 @@ def require_native_range_action(credential: CredentialContext, request_uuid: UUI
             )
             .first()
         )
-        if row is None or project_range_authority(request_uuid) != projection:
+        if (
+            row is None
+            or project_range_authority(request_uuid) != projection
+            or resolve_current_credential(current) != current
+        ):
             raise ValueError("Range projection changed")
         return row
     except Exception:  # noqa: BLE001  # fail-closed range authority; only bounded denial escapes

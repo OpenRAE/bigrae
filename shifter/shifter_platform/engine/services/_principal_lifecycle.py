@@ -106,6 +106,9 @@ def _commit_destroy(prepared: PreparedRangeLifecycle, *, _verification_retry: bo
             raise ValueError("Provision generation requires native interruption")
         if row.status == "destroying" and _destroy_already_queued(row, fields):
             return True
+        from ._native_participant_retirement import fence_native_power_for_teardown
+
+        fenced_power = fence_native_power_for_teardown(row)
         resource = "raes-range" if is_raes_provisioning_plan(row.range_config) else "range"
         row.status = "destroying"
         row.save(update_fields=["status", "updated_at"])
@@ -130,6 +133,7 @@ def _commit_destroy(prepared: PreparedRangeLifecycle, *, _verification_retry: bo
                     "status": "destroying",
                     "launch_intent": identifier,
                     "initiating_principal_uuid": str(prepared.credential.principal.uuid),
+                    "fenced_participant_operations": fenced_power,
                 },
             ),
             strict=True,

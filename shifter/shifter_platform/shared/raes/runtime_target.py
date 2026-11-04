@@ -51,6 +51,7 @@ from shared.raes._runtime_target_envelope import (
     _network_lookup,
     _network_refs,
 )
+from shared.raes.compiled_participants import CompiledParticipantContext
 from shared.raes.composition_envelope import account_operation_diagnostics, feature_operation_diagnostics
 from shared.raes.contracts import RAES_PROVISIONING_PLAN_CONTRACT_VERSION, SHIFTER_BACKEND_NAME
 from shared.raes.dispatch_port import ShifterDispatchResult, ShifterProvisioningDispatchPort
@@ -287,6 +288,18 @@ class ShifterProvisioner:
         self._port = port
         self._realization_envelope = realization_envelope
         self._participant_access: tuple[ParticipantAccessBinding, ...] = ()
+        self._compiled_participants: CompiledParticipantContext | None = None
+
+    def bind_compiled_participants(self, context: CompiledParticipantContext | None) -> None:
+        """Retain native compiler references without adding them to the RAES plan."""
+        self._compiled_participants = context
+
+    def _realize(self, serialized: dict[str, Any]) -> ShifterDispatchResult:
+        if self._compiled_participants is None:
+            return self._port.realize(serialized, self._participant_access)
+        return self._port.realize(
+            serialized, self._participant_access, compiled_participants=self._compiled_participants
+        )
 
     def bind_participant_access(self, bindings: Sequence[ParticipantAccessBinding]) -> None:
         """Bind the #1710 participant-access sidecar for the next ``apply``.
@@ -322,7 +335,7 @@ class ShifterProvisioner:
 
         # Boundary: never leak a raw dispatch exception past apply.
         try:
-            result = self._port.realize(serialized, self._participant_access)
+            result = self._realize(serialized)
         # dispatch boundary: errors can carry private provider material; class only
         except Exception as exc:  # noqa: BLE001
             logger.warning(
@@ -345,7 +358,7 @@ class ShifterProvisioner:
         if serialized is None:
             return ShifterEnqueueResult(False, "rejected", (), tuple(diagnostics))
         try:
-            receipt = self._port.realize(serialized, self._participant_access)
+            receipt = self._realize(serialized)
         # dispatch boundary: errors can carry private provider material; class only
         except Exception as exc:  # noqa: BLE001
             logger.warning(

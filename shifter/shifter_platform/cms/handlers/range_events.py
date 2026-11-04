@@ -127,6 +127,12 @@ def apply_range_status(
     try:
         with transaction.atomic():
             current = RangeInstance.all_objects.select_for_update().get(pk=instance.pk)
+            if new_status == ResourceStatus.DESTROYED.value:
+                from cms.services import retire_verified_native_participant_control
+
+                # Retry retirement even on an unchanged logical status: fresh
+                # exact-generation inventory may arrive after its first event.
+                retire_verified_native_participant_control(current.uuid)
             if current.status == new_status:
                 instance.status = current.status
                 return False

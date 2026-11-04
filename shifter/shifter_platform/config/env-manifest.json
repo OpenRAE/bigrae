@@ -738,6 +738,21 @@
       "source_file": "config/_openfga_settings.py"
     },
     {
+      "default": "''",
+      "name": "PARTICIPANT_CONTROL_CONFIGURATION",
+      "source_file": "config/_participant_control_settings.py"
+    },
+    {
+      "default": "'false'",
+      "name": "PARTICIPANT_CONTROL_ENABLED",
+      "source_file": "config/_participant_control_settings.py"
+    },
+    {
+      "default": "'false'",
+      "name": "PARTICIPANT_CONTROL_OWNER_PROCESS",
+      "source_file": "config/_participant_control_settings.py"
+    },
+    {
       "default": "'False'",
       "name": "PORTAL_CAPACITY_METRICS_ENABLED",
       "source_file": "config/_capacity_settings.py"

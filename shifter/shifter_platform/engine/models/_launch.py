@@ -16,6 +16,7 @@ class ProvisionerLaunchStatus(models.TextChoices):
     Cancellation rides the separate ``InterruptState`` machine below (#277).
     """
 
+    HELD = "HELD", "Awaiting participant admission"
     PENDING = "PENDING", "Pending"
     RUNNING = "RUNNING", "Running"
     SUCCEEDED = "SUCCEEDED", "Succeeded"

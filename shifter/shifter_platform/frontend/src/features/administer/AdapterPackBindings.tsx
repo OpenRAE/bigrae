@@ -23,6 +23,7 @@ import { missionControlFilesPath } from "@/features/mission-control/routes";
 
 import { manifestPreview } from "./adapter-manifest";
 import { PackUploadForm } from "./PackUploadForm";
+import { PackControlConfiguration } from "./PackControlConfiguration";
 
 const MACHINE_IMAGE_KIND = "machine-image";
 const BOOT_IMAGE_KIND = "image";
@@ -73,6 +74,8 @@ export function AdapterPackBindings({ organization, adapters }: Readonly<{ organ
     {selected && detail.isPending ? <output className="block">Checking pack contents and guest targets…</output> : null}
     {selected && detail.data ? <PackAssignmentForm key={`${selected}:${detail.data.pack_digest}`} organization={organization}
       pack={detail.data} adapters={adapters} onSaved={() => { setSelected(""); setSaved(true); }} /> : null}
+    {selected && detail.data ? <PackControlConfiguration organization={organization} source={selected}
+      digest={detail.data.pack_digest} /> : null}
     {removing ? <PackRemovalDialog key={removing.id} organization={organization} pack={removing}
       onClose={() => setRemoving(null)}
       onRemoved={(message) => {

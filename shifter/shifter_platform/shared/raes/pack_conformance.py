@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from raes.scenarios import load_scenario
+from raes_processor.models import ExecutionPlan
 from raes_runtime import RuntimeManager
 
 from shared.raes.dispatch_port import ShifterDispatchResult
@@ -36,8 +37,10 @@ class ContractValidationPort:
         self,
         compiled_plan: dict[str, Any],
         participant_access: Sequence[Any] = (),
+        *,
+        compiled_participants: object = None,
     ) -> ShifterDispatchResult:
-        _ = (self.request_id, compiled_plan, participant_access)
+        _ = (self.request_id, compiled_plan, participant_access, compiled_participants)
         raise RuntimeError("contract validation cannot dispatch")
 
 
@@ -46,6 +49,11 @@ def validate_pack_contract(scenario_path: Path, request_id: str) -> None:
     scenario = load_scenario(scenario_path)
     target = create_shifter_backend_target(port=ContractValidationPort(request_id), scenario=scenario)
     execution = RuntimeManager(target).plan(scenario)
+    validate_compiled_pack_structure(execution)
+
+
+def validate_compiled_pack_structure(execution: ExecutionPlan) -> None:
+    """Apply the same structure and access envelope to each explicitly selected target."""
     artifact_addresses = {
         item.address for item in execution.model.realization_requirements if item.artifact_requirement
     }

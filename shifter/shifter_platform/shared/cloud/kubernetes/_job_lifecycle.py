@@ -78,6 +78,12 @@ def _matches_required_model(observed: object, expected: object) -> bool:
             for name, wanted in expected.items()
             if wanted is not None
         )
+    if isinstance(expected, list):
+        return (
+            isinstance(observed, list)
+            and len(observed) == len(expected)
+            and all(_matches_required_model(actual, wanted) for actual, wanted in zip(observed, expected, strict=True))
+        )
     return observed == expected
 
 

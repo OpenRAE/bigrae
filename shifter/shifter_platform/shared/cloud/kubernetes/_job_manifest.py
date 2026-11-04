@@ -13,6 +13,12 @@ from typing import Any
 
 from shared.cloud.exceptions import CloudTaskError
 from shared.cloud.sensitive_env import split_env
+from shared.native_power_protocol import (
+    NATIVE_POWER_JOB_DEADLINE_SECONDS,
+    NATIVE_POWER_TOKEN_AUDIENCE,
+    NATIVE_POWER_TOKEN_DIRECTORY,
+    NATIVE_POWER_TOKEN_VOLUME,
+)
 
 from ._helpers import (
     _SHIFTER_ANNOTATION_TASK_IDENTITY,
@@ -188,7 +194,48 @@ def _build_container(
             _api_call(client, "V1VolumeMount", name=mount.name, mount_path=mount.mount_path, read_only=True)
             for mount in profile.read_only_secret_mounts
         )
+        if _is_range_power(command):
+            kwargs["volume_mounts"].append(
+                _api_call(
+                    client,
+                    "V1VolumeMount",
+                    name=NATIVE_POWER_TOKEN_VOLUME,
+                    mount_path=NATIVE_POWER_TOKEN_DIRECTORY,
+                    read_only=True,
+                )
+            )
     return _api_call(client, "V1Container", **kwargs)
+
+
+def _is_range_power(command: list[str]) -> bool:
+    return len(command) >= 2 and command[0] == "range" and command[1] in {"pause", "resume"}
+
+
+def _native_power_token_volume(client: object) -> object:
+    """Only this explicit audience is mounted; general API tokens stay disabled."""
+    return _api_call(
+        client,
+        "V1Volume",
+        name=NATIVE_POWER_TOKEN_VOLUME,
+        projected=_api_call(
+            client,
+            "V1ProjectedVolumeSource",
+            default_mode=0o440,
+            sources=[
+                _api_call(
+                    client,
+                    "V1VolumeProjection",
+                    service_account_token=_api_call(
+                        client,
+                        "V1ServiceAccountTokenProjection",
+                        audience=NATIVE_POWER_TOKEN_AUDIENCE,
+                        expiration_seconds=600,
+                        path="token",
+                    ),
+                )
+            ],
+        ),
+    )
 
 
 def _build_database_proxy(client: object, proxy: NativeDatabaseProxyProfile) -> object:
@@ -275,6 +322,8 @@ def _build_job(
             )
             for mount in profile.read_only_secret_mounts
         )
+        if _is_range_power(command):
+            pod_spec_kwargs["volumes"].append(_native_power_token_volume(client))
         pod_spec_kwargs["automount_service_account_token"] = False
     elif profile.read_only_secret_mounts:
         raise CloudTaskError("Read-only file inputs require the hardened task profile")
@@ -326,11 +375,12 @@ def _build_job(
         spec=pod_spec,
     )
 
-    deadline = (
-        {"active_deadline_seconds": profile.active_deadline_seconds}
-        if profile.active_deadline_seconds is not None
-        else {}
+    deadline_seconds = (
+        NATIVE_POWER_JOB_DEADLINE_SECONDS
+        if hardening is not None and _is_range_power(command)
+        else profile.active_deadline_seconds
     )
+    deadline = {"active_deadline_seconds": deadline_seconds} if deadline_seconds is not None else {}
     spec = _api_call(
         client,
         "V1JobSpec",

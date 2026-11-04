@@ -511,6 +511,7 @@ class GcpRenderArtifacts:
     mission_control_lease_env: str = ""
     range_telemetry_env: str = ""
     model_broker_runtime: dict | None = None
+    participant_control: dict | None = None
     openfga_settings: dict | None = None
     capacity_profile_id: str = "gcp-shared-v1-p10"
 
@@ -541,6 +542,7 @@ def render_gcp_helm_values(
     """
     from installation.capacity_profiles_gcp import resolve_capacity_profile
     from installation.gcp_model_broker import project_model_broker
+    from installation.participant_control import project_participant_control
 
     artifacts = render_artifacts or GcpRenderArtifacts()
     service_accounts = _get_output_value(outputs, "workload_service_accounts")
@@ -581,6 +583,13 @@ def render_gcp_helm_values(
     )
     runtime_env.update(broker.get("enrollment_env", {}))
     images = _helm_image_values(image_identities)
+    participant_control, control_env = project_participant_control(
+        artifacts.participant_control,
+        namespace="shifter-platform",
+        owner_image=images["platform"],
+        provisioner_image=runtime_env.get("ENGINE_TASK_IMAGE", ""),
+    )
+    runtime_env.update(control_env)
     acquirer = service_accounts.get("artifact-acquirer") if isinstance(service_accounts, Mapping) else None
     if acquirer:
         # Isolated acquisition Jobs run exactly the attested platform image, which
@@ -589,6 +598,7 @@ def render_gcp_helm_values(
     values: dict[str, object] = {
         "releaseNamespace": "shifter-system",
         "modelBroker": broker,
+        "participantControl": participant_control,
         "capabilities": {"featureArtifactAcquisition": bool(acquirer)},
         "featureArtifactAcquisition": _gcp_feature_artifact_acquisition_values(acquirer),
         "serviceAccounts": _helm_service_account_values(service_accounts),

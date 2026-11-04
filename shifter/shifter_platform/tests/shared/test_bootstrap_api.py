@@ -58,6 +58,14 @@ def test_bootstrap_has_no_rollout_feature_flags(user):
     assert "feature_flags" not in body
 
 
+@pytest.mark.parametrize("available", [False, True])
+def test_bootstrap_reports_only_advisory_installed_participant_control_availability(user, settings, available):
+    settings.PARTICIPANT_CONTROL_ENABLED = available
+    client = APIClient()
+    client.force_authenticate(user=user)
+    assert client.get(BOOTSTRAP_URL).json()["participant_control_available"] is available
+
+
 def test_user_admin_capabilities_false_without_model_permissions(user):
     # A staff user without the auth model permissions gets no advisory admin caps.
     client = APIClient()

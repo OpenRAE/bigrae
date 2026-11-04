@@ -1,5 +1,17 @@
 releaseNamespace: shifter-system
 
+# Explicit fixed native participant-control installation. TLS material remains
+# in an existing Secret; configuration contains public trust and immutable images.
+participantControl:
+  enabled: false
+  configuration: ""
+  tlsSecretName: ""
+  storageClassName: ""
+  storageGiB: 8
+  resources:
+    requests: {cpu: 500m, memory: 1Gi, ephemeral-storage: 256Mi}
+    limits: {cpu: "2", memory: 2Gi, ephemeral-storage: 1Gi}
+
 provider:
   name: neutral
 profile: default

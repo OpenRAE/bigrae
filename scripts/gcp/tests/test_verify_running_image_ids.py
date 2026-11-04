@@ -397,6 +397,35 @@ def test_optional_broker_requires_explicit_release_enablement_and_both_component
     )
 
 
+def test_persistent_participant_owner_is_required_only_for_its_exact_enabled_release():
+    module = _load_module()
+    pods = _valid_pods(module)
+    with pytest.raises(ValueError, match="missing release components"):
+        module.build_evidence(pods, _EXPECTED, source_sha=_SHA, participant_control_enabled=True)
+    image = _EXPECTED["portal"]
+    container = _container("participant-control", image["root"], image["digest"])
+    pods["items"].append(
+        {
+            "metadata": {
+                "name": "participant-control-0",
+                "labels": {
+                    "app.kubernetes.io/part-of": "shifter",
+                    "app.kubernetes.io/component": "participant-control",
+                },
+            },
+            "spec": {"containers": [{"name": "participant-control", "image": container["image"]}]},
+            "status": {"containerStatuses": [container]},
+        }
+    )
+    with pytest.raises(ValueError, match="unexpected"):
+        module.build_evidence(pods, _EXPECTED, source_sha=_SHA)
+    evidence = module.build_evidence(pods, _EXPECTED, source_sha=_SHA, participant_control_enabled=True)
+    assert any(row["pod"] == "participant-control-0" for row in evidence["running_containers"])
+    container["imageID"] = image["root"] + "@sha256:" + "f" * 64
+    with pytest.raises(ValueError, match="exact approved image identity"):
+        module.build_evidence(pods, _EXPECTED, source_sha=_SHA, participant_control_enabled=True)
+
+
 def test_policy_servers_are_required_at_their_pinned_image_when_the_release_renders_them():
     """#2698: native identity adds the OpenFGA runtime and admin servers."""
     module = _load_module()

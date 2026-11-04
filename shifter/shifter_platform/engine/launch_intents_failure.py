@@ -26,6 +26,18 @@ PROVISIONER_DISPATCH_FAILED = "Provisioner dispatch failed"
 
 def clear_provisioner_operation_after_failure(row: Range | Instance) -> list[str]:
     """Close a failed lifecycle episode so the same operation can be retried."""
+    from engine.models import ParticipantPowerInvocation
+
+    if (
+        isinstance(row, Range)
+        and ParticipantPowerInvocation.objects.filter(
+            reservation__compiler_binding__range=row,
+            closed_at__isnull=True,
+        ).exists()
+    ):
+        # Failure is observable while an external call remains unknown. Keep
+        # its generation addressable and excluded until native cessation.
+        return []
     if row.provisioner_operation_id is None and not row.provisioner_operation:
         return []
     row.provisioner_operation = ""

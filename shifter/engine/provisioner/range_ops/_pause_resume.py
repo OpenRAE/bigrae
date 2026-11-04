@@ -138,12 +138,26 @@ def _assert_range_pause_resume_supported(backend: str | None, instances: list[di
     mix or stale realized metadata) or a single ephemeral (scenario Pod) asset
     makes the whole range unsupported so parity is maintained (ADR-039).
     """
+    if not instances:
+        raise UnsupportedRangeLifecycleError("Range power footprint is empty")
     capability = range_pause_resume_capability(
         backend,
         ((instance.get("cloud_provider"), instance.get("asset_type")) for instance in instances),
     )
     if not capability.supported:
         raise UnsupportedRangeLifecycleError(capability.reason)
+    # Inspect the complete GCE footprint before any guest or shared NGFW call.
+    # Keep the admitted observations for the final per-guest recheck too.
+    import gce_range_cell_power
+
+    gce_instances = [instance for instance in instances if instance["operation_mode"] == "gce_vm"]
+    try:
+        footprints = gce_range_cell_power.observe_power_footprints([instance["state"] for instance in gce_instances])
+    except Exception as exc:  # noqa: BLE001  # provider diagnostics are private
+        logger.warning("GCE range footprint unavailable exc_type=%s", type(exc).__name__)
+        raise UnsupportedRangeLifecycleError("GCE range power footprint is unavailable or unsupported") from None
+    for instance, footprint in zip(gce_instances, footprints, strict=True):
+        instance["power_footprint"] = footprint
 
 
 # GCP guest-power operation_modes handled by the provider-native power adapters.
@@ -167,7 +181,11 @@ def _run_gcp_power_operation(mode: str, operation: str, instance: dict[str, Any]
     else:  # gce_vm
         import gce_range_cell_power
 
-        gce_range_cell_power.run_power_operation(verb, instance["state"])
+        footprint = instance.get("power_footprint")
+        if footprint is None:
+            gce_range_cell_power.run_power_operation(verb, instance["state"])
+        else:
+            gce_range_cell_power.run_power_operation(verb, instance["state"], expected_footprint=footprint)
 
 
 def _execute_instance_operation(
@@ -204,7 +222,7 @@ def _execute_instance_operation(
         aws_instance_id = instance["aws_instance_id"]
         context = plan.get_context(aws_instance_id)
         result = orchestrator.orchestrate(aws_instance_id, plan, context)
-        error_msg = None if result.success else f"Operation failed: {result.error}"
+        error_msg = None if result.success else "Native lifecycle operation failed"
         if error_msg:
             # Provider stderr stays out of logs (see OpsOrchestrator); the executor logged the error code.
             logger.error("Operation failed for instance %s (uuid=%s)", aws_instance_id, uuid)
@@ -212,9 +230,11 @@ def _execute_instance_operation(
             logger.info("Operation succeeded for instance %s (uuid=%s)", aws_instance_id, uuid)
         return (uuid, bool(result.success), error_msg)
 
-    except Exception as e:
-        logger.exception("Exception during %s for uuid=%s mode=%s", operation, uuid, mode)
-        return (uuid, False, str(e))
+    except Exception as e:  # noqa: BLE001  # native provider boundary; never disclose private causes
+        logger.error(
+            "Native lifecycle failed operation=%s uuid=%s mode=%s exc_type=%s", operation, uuid, mode, type(e).__name__
+        )
+        return (uuid, False, "Native lifecycle operation failed")
 
 
 def run_range_pause(request_id: str, *, operation_id: str | None = None) -> None:
@@ -289,15 +309,20 @@ def run_range_pause(request_id: str, *, operation_id: str | None = None) -> None
             try:
                 result = future.result()
                 results.append(result)
-            except Exception as e:
-                logger.exception(
-                    "Unexpected error pausing instance uuid=%s",
+            except Exception as e:  # noqa: BLE001  # worker fault boundary; private causes stay out of logs
+                logger.error(
+                    "Unexpected error pausing instance uuid=%s exc_type=%s",
                     instance["uuid"],
+                    type(e).__name__,
                 )
-                results.append((instance["uuid"], False, str(e)))
+                results.append((instance["uuid"], False, "Native lifecycle operation failed"))
 
     # Check for failures
     failures = [(uuid, err) for uuid, success, err in results if not success]
+    observed_ids = {uuid for uuid, success, _ in results if success}
+    observed = [instance for instance in instances if instance["uuid"] in observed_ids]
+    if observed:
+        _pkg._update_instance_statuses(request_id, STATUS_PAUSED, instances=observed, ref=ref)
 
     if failures:
         error_msg = f"Failed to pause {len(failures)}/{len(instances)} instances"
@@ -305,17 +330,14 @@ def run_range_pause(request_id: str, *, operation_id: str | None = None) -> None
         _report_terminal_failure(ref, "pause", error_msg)
         raise RuntimeError(error_msg)
 
-    # Report instance outcomes for the closed set this operation handled.
-    _pkg._update_instance_statuses(request_id, STATUS_PAUSED, instances=instances, ref=ref)
-
     # Cascade: pause NGFW if no other ranges need it (before reporting paused)
     try:
         _pkg.pause_ngfw_for_range(request_id, ref=ref)
     except Exception as e:  # noqa: BLE001  # non-fatal NGFW cascade; the range instances are already paused
         # Non-fatal: log and continue - range instances are already paused
         logger.warning(
-            "run_range_pause: NGFW pause failed (non-fatal): %s request_id=%s",
-            str(e),
+            "run_range_pause: NGFW pause failed (non-fatal) exc_type=%s request_id=%s",
+            type(e).__name__,
             request_id,
         )
 
@@ -372,13 +394,13 @@ def run_range_resume(request_id: str, *, operation_id: str | None = None) -> Non
     # Cascade: ensure NGFW is running before resuming range instances
     try:
         _pkg.ensure_ngfw_running(request_id, ref=ref)
-    except Exception as e:
-        # Fatal: range cannot resume without NGFW. The diagnostic is durable:
-        # authored text only (ADR-043-R5). The log keeps the detail.
+    except Exception as e:  # noqa: BLE001  # native provider boundary; private causes stay out of logs
+        # Fatal: range cannot resume without NGFW. Only authored diagnostic
+        # text is durable; the provider's private cause stays out of logs too.
         error_msg = _authored_failure_message(e, "NGFW start")
-        logger.exception("run_range_resume: failed to start NGFW request_id=%s", request_id)
+        logger.error("run_range_resume: failed to start NGFW request_id=%s exc_type=%s", request_id, type(e).__name__)
         _report_terminal_failure(ref, "resume", error_msg)
-        raise RuntimeError(error_msg) from e
+        raise RuntimeError(error_msg) from None
 
     has_aws_assets = any(instance["operation_mode"] == "aws" for instance in instances)
     executor = _pkg.AWSExecutor() if has_aws_assets else None
@@ -405,24 +427,26 @@ def run_range_resume(request_id: str, *, operation_id: str | None = None) -> Non
             try:
                 result = future.result()
                 results.append(result)
-            except Exception as e:
-                logger.exception(
-                    "Unexpected error resuming instance uuid=%s",
+            except Exception as e:  # noqa: BLE001  # worker fault boundary; private causes stay out of logs
+                logger.error(
+                    "Unexpected error resuming instance uuid=%s exc_type=%s",
                     instance["uuid"],
+                    type(e).__name__,
                 )
-                results.append((instance["uuid"], False, str(e)))
+                results.append((instance["uuid"], False, "Native lifecycle operation failed"))
 
     # Check for failures
     failures = [(uuid, err) for uuid, success, err in results if not success]
+    observed_ids = {uuid for uuid, success, _ in results if success}
+    observed = [instance for instance in instances if instance["uuid"] in observed_ids]
+    if observed:
+        _pkg._update_instance_statuses(request_id, STATUS_READY, instances=observed, ref=ref)
 
     if failures:
         error_msg = f"Failed to resume {len(failures)}/{len(instances)} instances"
         logger.error("run_range_resume: %s", error_msg)
         _report_terminal_failure(ref, "resume", error_msg)
         raise RuntimeError(error_msg)
-
-    # Report instance outcomes for the closed set this operation handled.
-    _pkg._update_instance_statuses(request_id, STATUS_READY, instances=instances, ref=ref)
 
     _report_terminal_success(ref, "resume")
 

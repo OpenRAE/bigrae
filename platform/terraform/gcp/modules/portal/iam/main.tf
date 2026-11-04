@@ -468,6 +468,29 @@ resource "google_service_account_iam_member" "workload_identity" {
   member             = each.value
 }
 
+# The fixed persistent CMS owner has its own Kubernetes authority boundary.
+# It uses the application's worker cloud identity, never provisioner power IAM.
+resource "google_service_account_iam_member" "participant_control_worker_identity" {
+  service_account_id = google_service_account.workload["workers"].name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${var.workload_identity_pool}[shifter-platform/participant-control]"
+}
+
+# Recovery observes one exact already-issued request. It cannot read guest data
+# or issue another instance mutation, and an absent operation clears no fence.
+resource "google_project_iam_custom_role" "native_power_recovery" {
+  project     = var.project_id
+  role_id     = "shifterNativePowerRecovery"
+  title       = "Shifter native power recovery"
+  permissions = ["compute.zoneOperations.list"]
+}
+
+resource "google_project_iam_member" "workers_native_power_recovery" {
+  project = var.project_id
+  role    = google_project_iam_custom_role.native_power_recovery.name
+  member  = "serviceAccount:${google_service_account.workload["workers"].email}"
+}
+
 # The portal signs V4 GCS upload/download URLs (agent uploads, experiment
 # artifact downloads) via the IAM credentials signBlob API: Workload Identity
 # credentials carry only an access token and have no private key to sign URLs

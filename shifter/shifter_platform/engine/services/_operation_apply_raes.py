@@ -200,6 +200,12 @@ def _provisioned_instance(member: dict[str, Any], backend: str = "gce") -> dict[
     sftp_root_directory = member.get("sftp_root_directory")
     if sftp_root_directory:
         instance["sftp_root_directory"] = sftp_root_directory
+    if "native_power_target" in member:
+        if backend != "gce":
+            raise RaesRealizedAccessError("RAES member power target backend does not match")
+        instance["native_power_target"] = dict(member["native_power_target"])
+        if "native_power_incarnation" in member:
+            instance["native_power_incarnation"] = dict(member["native_power_incarnation"])
     return instance
 
 

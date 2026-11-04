@@ -39,6 +39,7 @@ if TYPE_CHECKING:
     from shared.identity_scope import PrincipalRef, ResourceScope
     from shared.raes.artifact_binding import ArtifactBinding
     from shared.raes.artifact_inventory import ArtifactRequirements, ArtifactSupply, BackendArtifact
+    from shared.raes.compiled_participants import CompiledParticipantContext
     from shared.raes.content_delivery import DeliveryBinding
     from shared.raes.participant_access import ParticipantAccessBinding
     from shared.range_instantiation_policy import BackendAdmission
@@ -105,9 +106,11 @@ class CmsRaesDispatchPort:
         self,
         compiled_plan: dict[str, Any],
         participant_access: Sequence[ParticipantAccessBinding] = (),
+        *,
+        compiled_participants: CompiledParticipantContext | None = None,
     ) -> ShifterDispatchResult:
         if self.credential is not None:
-            return self._realize_principal(compiled_plan, participant_access)
+            return self._realize_principal(compiled_plan, participant_access, compiled_participants)
         delivery_bindings = self._prepare_delivery(compiled_plan)
         artifact_bindings = self._resolve_artifact_bindings(compiled_plan)
         from uuid import UUID
@@ -126,6 +129,8 @@ class CmsRaesDispatchPort:
                     delivery=delivery_bindings,
                     participant_access=tuple(participant_access),
                     artifact=artifact_bindings,
+                    compiled_participants=compiled_participants,
+                    source_package_digest=self.source.package_digest if self.source is not None else "",
                     runtime_plugin_scope=self.runtime_plugin_scope,
                     defer_dispatch=prepare_models,
                     openvpn_deadline=self._openvpn_deadline(),
@@ -141,7 +146,10 @@ class CmsRaesDispatchPort:
         )
 
     def _realize_principal(
-        self, compiled_plan: dict[str, Any], participant_access: Sequence[ParticipantAccessBinding]
+        self,
+        compiled_plan: dict[str, Any],
+        participant_access: Sequence[ParticipantAccessBinding],
+        compiled_participants: CompiledParticipantContext | None = None,
     ) -> ShifterDispatchResult:
         """Stage policy before locks; native creation, source fences and queue commit together."""
         from uuid import UUID
@@ -184,6 +192,8 @@ class CmsRaesDispatchPort:
             delivery=delivery,
             participant_access=tuple(participant_access),
             artifact=artifacts,
+            compiled_participants=compiled_participants,
+            source_package_digest=self.source.package_digest if self.source is not None else "",
             runtime_plugin_scope=plugin_scope,
             defer_dispatch=prepare_inputs or self.authority_target is not None,
             openvpn_deadline=self._openvpn_deadline(),
@@ -222,7 +232,7 @@ class CmsRaesDispatchPort:
             self._fence_event_launch(instance)
             row = RangeInstance.objects.select_for_update(of=("self",)).select_related("request").get(pk=instance.pk)
             self._assert_principal_launch_row(row, current, metadata)
-            ref: ShifterDispatchResult | RaesRangeRef | None = self._replay_runtime(row)
+            ref: ShifterDispatchResult | RaesRangeRef | None = self._replay_runtime(row, compiled_plan, bindings)
             if ref is None:
                 if (
                     row.range_id is None
@@ -265,14 +275,19 @@ class CmsRaesDispatchPort:
                 raise ValueError("Range launch intent unavailable")
             fence_range_event_launch(UUID(self.request_id), self.authority_target.uuid)
 
-    def _replay_runtime(self, row: RangeInstance) -> ShifterDispatchResult | None:
+    def _replay_runtime(
+        self,
+        row: RangeInstance,
+        compiled_plan: dict[str, Any],
+        bindings: RangeBindings,
+    ) -> ShifterDispatchResult | None:
         """An identical retained event runtime is reused without another native create."""
         from uuid import UUID
 
         if not row.launch_intent_digest or self.authority_target is None or row.range_id is None:
             return None
 
-        from engine.services import project_range_authority
+        from engine.services import project_range_authority, verify_raes_range_compilation
 
         projection = project_range_authority(UUID(self.request_id))
         if (
@@ -283,6 +298,12 @@ class CmsRaesDispatchPort:
             projection.parent,
         ) != (row.range_id, row.uuid, self.scope, row.owner_principal_uuid, self.authority_target):
             raise ValueError("Range replay runtime changed")
+        verify_raes_range_compilation(
+            UUID(self.request_id),
+            compiled_plan,
+            context=bindings.compiled_participants,
+            source_package_digest=bindings.source_package_digest,
+        )
         return ShifterDispatchResult(
             request_id=self.request_id, accepted=True, status=row.status, range_id=str(projection.native_uuid)
         )

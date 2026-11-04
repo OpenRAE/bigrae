@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from shared.authorization import TargetRef
     from shared.credentials import CredentialContext
     from shared.identity_scope import PrincipalRef, ResourceScope
+    from shared.raes.compiled_participants import CompiledParticipantContext
     from shared.runtime_plugin_binding import RuntimePluginScope
 
     from ._principal_range_create import PreparedRaesRangeCreation
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class RangeBindings:
-    """The byte-free sidecar bindings persisted beside a Range, in one argument.
+    """Typed launch bindings persisted beside a Range, in one argument.
 
     Groups the three binding collections ``create_raes_range`` persists in the
     same transaction as the Range -- content delivery (#1564, ``delivery``),
@@ -42,6 +43,8 @@ class RangeBindings:
     delivery: tuple[DeliveryBinding, ...] = ()
     participant_access: tuple[ParticipantAccessBinding, ...] = ()
     artifact: tuple[ArtifactBinding, ...] = ()
+    compiled_participants: CompiledParticipantContext | None = None
+    source_package_digest: str = ""
     runtime_plugin_scope: RuntimePluginScope | None = None
     # CMS may finish downward authorization after Range creation signals, then
     # dispatch in the same enclosing transaction. No worker sees a partial launch.
@@ -144,12 +147,16 @@ def _verify_existing_plugin_scope(existing: Range, scope: RuntimePluginScope | N
 
 
 def _persist_range_bindings(range_obj: Range, bindings: RangeBindings) -> None:
-    """Persist every byte-free RAES sidecar binding in the range transaction."""
+    """Persist typed bindings in the range transaction; encrypt private selections."""
     from engine.models import (
         RaesArtifactSatisfactionBinding,
         RaesContentDeliveryBinding,
         RaesParticipantAccessBinding,
     )
+
+    from ._compiled_participants import persist_compiled_participant_binding
+
+    persist_compiled_participant_binding(range_obj, bindings.compiled_participants, bindings.source_package_digest)
 
     RaesContentDeliveryBinding.objects.bulk_create(
         RaesContentDeliveryBinding(

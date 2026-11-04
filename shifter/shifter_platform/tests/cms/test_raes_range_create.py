@@ -9,7 +9,10 @@ no real provisioning is triggered.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
+import yaml
 
 from cms.exceptions import CMSError
 from cms.models import RaesPackageSource, RangeInstance
@@ -286,6 +289,29 @@ def test_end_to_end_chain_with_engine_seam_mocked(user, make_pack, tmp_path, mon
     assert captured["kind"] == "raes_provisioning_plan"
     assert captured["request_id"] == str(ctx.request_id)
     assert RangeInstance.objects.get(request__request_id=ctx.request_id).status == ResourceStatus.PROVISIONING.value
+
+
+@pytest.mark.django_db
+def test_registered_package_context_reaches_real_engine_persistence(user, make_pack, tmp_path, settings):
+    from engine.models import RaesCompilerInputBinding, Range
+
+    fixture = Path(__file__).parents[1] / "shared/raes/fixtures/launchable/shifter-launch-access.sdl.yaml"
+    source = yaml.safe_load(fixture.read_text())
+    source["name"] = "raes-launch"
+    root = make_pack(tmp_path / _PACK_REF, name="raes-launch", sdl=yaml.safe_dump(source))
+    settings.RAES_PACKAGE_ROOT = str(tmp_path)
+    settings.LOCAL_PROVISIONER = None
+    settings.ENGINE_TASK_CLUSTER = ""
+    settings.ENGINE_ECS_CLUSTER_ARN = ""
+    registered = _make_source(user, package_digest=pack_digest(root))
+
+    launched = create_raes_native_range(user, registered.scenario_id)
+
+    runtime = Range.objects.get(request__request_id=launched.request_id)
+    binding = RaesCompilerInputBinding.objects.get(range=runtime)
+    assert binding.source_package_digest == registered.package_digest
+    assert binding.resource_generation == runtime.resource_generation
+    assert binding.participant_references[0]["participant_ref"] == "participant.behavior.analyst"
 
 
 @pytest.mark.django_db

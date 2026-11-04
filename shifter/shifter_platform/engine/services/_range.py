@@ -235,7 +235,7 @@ def get_range_status(range_id: int) -> dict[str, Any] | None:
         logger.warning("get_range_status: range not found range_id=%s", range_id)
         return None
 
-    return {
+    result = {
         "status": range_obj.status,
         "error_message": range_obj.error_message,
         "instances": range_obj.provisioned_instances or [],
@@ -246,3 +246,10 @@ def get_range_status(range_id: int) -> dict[str, Any] | None:
         "created_at": (range_obj.created_at.isoformat() if range_obj.created_at else None),
         "ready_at": range_obj.ready_at.isoformat() if range_obj.ready_at else None,
     }
+    if result["native_raes"]:
+        from ._compiled_participants import current_compiled_participant_projection
+
+        compiled = current_compiled_participant_projection(range_obj)
+        if compiled is not None:
+            result["compiled_participants"] = compiled
+    return result

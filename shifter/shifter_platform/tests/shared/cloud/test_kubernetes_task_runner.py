@@ -68,6 +68,40 @@ def _runner(profile, batch_api: MagicMock, core_api: MagicMock) -> KubernetesTas
 class TestInjectedProfileDrivesJobShape:
     """The Job manifest reflects the injected profile, not any GCP constant."""
 
+    @pytest.mark.parametrize("verb", ["pause", "resume"])
+    def test_power_job_projects_only_the_fixed_native_audience(self, verb):
+        from shared.cloud.kubernetes._job_manifest import _build_job
+
+        client = _make_fake_k8s_client()
+        job = _build_job(
+            client,
+            "example.test/provisioner@sha256:" + "a" * 64,
+            _HARDENED_CONTAINER,
+            ["range", verb, "--request-id", "11111111-1111-4111-8111-111111111111"],
+            [],
+            _profile(),
+        )
+        pod = job.spec.template.spec
+        assert job.spec.active_deadline_seconds == 1800
+        assert pod.automount_service_account_token is False
+        projected = [volume for volume in pod.volumes if getattr(volume, "projected", None) is not None]
+        assert len(projected) == 1
+        assert projected[0].name == "native-power-identity"
+        assert projected[0].projected.default_mode == 0o440
+        assert len(projected[0].projected.sources) == 1
+        source = projected[0].projected.sources[0]
+        assert set(vars(source)) == {"service_account_token"}
+        assert vars(source.service_account_token) == {
+            "audience": "shifter-native-participant-invocation",
+            "expiration_seconds": 600,
+            "path": "token",
+        }
+        mounts = [mount for mount in pod.containers[0].volume_mounts if mount.name == projected[0].name]
+        assert len(mounts) == 1
+        assert mounts[0].mount_path == "/var/run/secrets/shifter/native-power"
+        assert mounts[0].read_only is True
+        assert not getattr(mounts[0], "sub_path", None) and not getattr(mounts[0], "sub_path_expr", None)
+
     def test_private_task_profile_binds_pull_auth_resources_and_deadline(self):
         batch_api = MagicMock()
         batch_api.create_namespaced_job.return_value = SimpleNamespace(metadata=SimpleNamespace(name="bounded-task"))

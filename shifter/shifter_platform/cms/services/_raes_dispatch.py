@@ -109,7 +109,7 @@ def dispatch_repo_raes_package(
             authority_action=options.authority_action,
             authority_target=options.authority_target,
         ),
-        source=source if options.principal_scope is not None else None,
+        source=source,
     )
 
 
@@ -192,7 +192,7 @@ def dispatch_object_raes_package(
                     authority_action=options.authority_action,
                     authority_target=options.authority_target,
                 ),
-                source=source if options.principal_scope is not None else None,
+                source=source,
             )
     except RaesPackageError as exc:
         # Staging errors embed server paths and storage provider payloads: log the class only.

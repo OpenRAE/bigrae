@@ -30,6 +30,7 @@ exactly as before the split.
 from ._capacity import CapacityDeclaration
 from ._capacity_assessment import CapacityAssessment, CapacityDraw, CapacityReservation
 from ._cleanup_verification import CleanupVerificationOutcome, RangeCleanupVerification
+from ._compiled_participants import RaesCompilerInputBinding
 from ._feature_artifacts import AcquiredFeatureArtifact
 from ._launch import InterruptState, ProvisionerLaunchIntent, ProvisionerLaunchStatus, RangeCancellationAuthority
 from ._model_allocation import (
@@ -60,6 +61,7 @@ from ._operation_io import (
     OperationResultKind,
 )
 from ._outbox import OutboxStatus, RangeEventOutbox
+from ._participant_power import ParticipantPowerInvocation, ParticipantPowerReservation
 from ._preparation import (
     PreparationAdapter,
     PreparationAttempt,
@@ -136,6 +138,8 @@ __all__ = [
     "OperationResultInbox",
     "OperationResultKind",
     "OutboxStatus",
+    "ParticipantPowerInvocation",
+    "ParticipantPowerReservation",
     "PreparationAdapter",
     "PreparationAttempt",
     "PreparationGrant",
@@ -146,6 +150,7 @@ __all__ = [
     "ProvisionerLaunchStatus",
     "PublicOperationRetryBinding",
     "RaesArtifactSatisfactionBinding",
+    "RaesCompilerInputBinding",
     "RaesContentDeliveryBinding",
     "RaesImageMapping",
     "RaesParticipantAccessBinding",

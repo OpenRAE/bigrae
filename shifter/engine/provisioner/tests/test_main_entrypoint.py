@@ -40,6 +40,7 @@ def _install_entrypoint_fakes(monkeypatch) -> dict[str, Recorder]:
         "run_range_terraform": Recorder(),
         "run_range_pause": Recorder(),
         "run_range_resume": Recorder(),
+        "run_range_power": Recorder(),
         "run_raes_range_provision": Recorder(),
         "run_raes_range_destroy": Recorder(),
         "run_raes_range_activate": Recorder(),
@@ -48,6 +49,7 @@ def _install_entrypoint_fakes(monkeypatch) -> dict[str, Recorder]:
     _install_module(monkeypatch, "ngfw_runtime_ops", run_ngfw_operation=calls["run_ngfw_operation"])
     _install_module(monkeypatch, "ngfw_terraform", run_ngfw_terraform=calls["run_ngfw_terraform"])
     _install_module(monkeypatch, "terraform_ops", run_range_terraform=calls["run_range_terraform"])
+    _install_module(monkeypatch, "native_power_ops", run_range_power=calls["run_range_power"])
     _install_module(
         monkeypatch,
         "range_ops",
@@ -111,7 +113,7 @@ def test_range_pause_dispatches_range_ops(monkeypatch) -> None:
 
     _run_main(monkeypatch, "range", "pause", "--request-id", "req-3")
 
-    calls["run_range_pause"].assert_called_once_with("req-3", operation_id=None)
+    calls["run_range_power"].assert_called_once_with("req-3", "pause", operation_id=None)
 
 
 def test_range_resume_dispatches_range_ops(monkeypatch) -> None:
@@ -119,7 +121,7 @@ def test_range_resume_dispatches_range_ops(monkeypatch) -> None:
 
     _run_main(monkeypatch, "range", "resume", "--request-id", "req-4")
 
-    calls["run_range_resume"].assert_called_once_with("req-4", operation_id=None)
+    calls["run_range_power"].assert_called_once_with("req-4", "resume", operation_id=None)
 
 
 def test_range_pause_threads_operation_id_when_present(monkeypatch) -> None:
@@ -133,7 +135,7 @@ def test_range_pause_threads_operation_id_when_present(monkeypatch) -> None:
 
     _run_main(monkeypatch, "range", "pause", "--request-id", "req-3", "--operation-id", operation_id)
 
-    calls["run_range_pause"].assert_called_once_with("req-3", operation_id=operation_id)
+    calls["run_range_power"].assert_called_once_with("req-3", "pause", operation_id=operation_id)
 
 
 def test_range_resume_threads_operation_id_when_present(monkeypatch) -> None:
@@ -143,7 +145,7 @@ def test_range_resume_threads_operation_id_when_present(monkeypatch) -> None:
 
     _run_main(monkeypatch, "range", "resume", "--request-id", "req-4", "--operation-id", operation_id)
 
-    calls["run_range_resume"].assert_called_once_with("req-4", operation_id=operation_id)
+    calls["run_range_power"].assert_called_once_with("req-4", "resume", operation_id=operation_id)
 
 
 def test_ngfw_provision_dispatches_terraform_up(monkeypatch) -> None:

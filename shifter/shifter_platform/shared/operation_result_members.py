@@ -12,6 +12,7 @@ from __future__ import annotations
 from typing import Any
 
 from shared.exceptions import ValidationError as OperationResultError
+from shared.native_power import parse_gce_power_incarnation, parse_gce_power_target
 from shared.sftp_root import SftpRootError, normalize_sftp_root_directory
 
 # The realized member/access projection an RAES provision returns so the portal
@@ -37,7 +38,13 @@ _RAES_MEMBER_REF_KEYS = frozenset({"ssh_key_secret_arn", "rdp_password_secret_ar
 # The full optional set the closed member shape accepts. ``sftp_root_directory``
 # is realized per-image metadata (#375), not a credential reference, so it is
 # parsed and shape-validated separately from the reference keys.
-RAES_MEMBER_OPTIONAL_KEYS = _RAES_MEMBER_REF_KEYS | frozenset({"sftp_root_directory"})
+RAES_MEMBER_OPTIONAL_KEYS = _RAES_MEMBER_REF_KEYS | frozenset(
+    {
+        "sftp_root_directory",
+        "native_power_target",
+        "native_power_incarnation",
+    }
+)
 #: Mirrors ``shared.raes.participant_access.SUPPORTED_ACCESS_CHANNELS`` without
 #: importing it, keeping this transport module dependency-light.
 RAES_MEMBER_CHANNELS = frozenset({"ssh", "rdp"})
@@ -129,10 +136,22 @@ def _parse_raes_member(entry: dict[str, Any], field: str) -> dict[str, Any]:
         raise OperationResultError(f"{field} is missing field(s): {', '.join(missing)}")
 
     channels = _member_channels(entry, field)
+    power_target: dict[str, Any] = {}
+    if "native_power_target" in entry:
+        power_target["native_power_target"] = parse_gce_power_target(
+            entry["native_power_target"], instance_id=entry["instance_id"]
+        ).to_transport()
+    if "native_power_incarnation" in entry:
+        if "native_power_target" not in entry:
+            raise OperationResultError("Native power incarnation requires its target")
+        power_target["native_power_incarnation"] = parse_gce_power_incarnation(
+            entry["native_power_incarnation"]
+        ).to_transport()
     return {
         **_member_identity(entry, field),
         "participant_access_channels": channels,
         "participant_access_usernames": _member_usernames(entry, channels, field),
         **_member_credential_refs(entry, channels, field),
         **_member_sftp_root(entry, field),
+        **power_target,
     }

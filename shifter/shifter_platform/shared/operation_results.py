@@ -84,6 +84,7 @@ class ResultStep(StrEnum):
 
     # range pause
     RANGE_INSTANCES_PAUSED = "range_instances_paused"
+    RANGE_RAES_MEMBERS_PAUSED = "range_raes_members_paused"
     RANGE_NGFW_CASCADE_PAUSING = "range_ngfw_cascade_pausing"
     RANGE_NGFW_CASCADE_PAUSED = "range_ngfw_cascade_paused"
     RANGE_TERMINAL_PAUSED = "range_terminal_paused"
@@ -91,6 +92,8 @@ class ResultStep(StrEnum):
     RANGE_NGFW_CASCADE_RESUMING = "range_ngfw_cascade_resuming"
     RANGE_NGFW_CASCADE_READY = "range_ngfw_cascade_ready"
     RANGE_INSTANCES_READY = "range_instances_ready"
+    RANGE_RAES_MEMBERS_RESUMING = "range_raes_members_resuming"
+    RANGE_RAES_MEMBERS_READY = "range_raes_members_ready"
     RANGE_TERMINAL_READY = "range_terminal_ready"
     # range, either direction
     RANGE_NGFW_CASCADE_FAILED = "range_ngfw_cascade_failed"
@@ -132,6 +135,7 @@ class ResultStep(StrEnum):
 
 _RANGE_PAUSE_STEPS: dict[ResultStep, StepSpec] = {
     ResultStep.RANGE_INSTANCES_PAUSED: progress(10, Shape.INSTANCES, ResourceStatus.PAUSED),
+    ResultStep.RANGE_RAES_MEMBERS_PAUSED: progress(10, Shape.RAES_POWER_MEMBERS, ResourceStatus.PAUSED),
     ResultStep.RANGE_NGFW_CASCADE_PAUSING: progress(20, Shape.NGFW, ResourceStatus.PAUSING),
     ResultStep.RANGE_NGFW_CASCADE_PAUSED: progress(30, Shape.NGFW, ResourceStatus.PAUSED),
     ResultStep.RANGE_NGFW_CASCADE_FAILED: progress(30, Shape.NGFW, ResourceStatus.FAILED),
@@ -140,10 +144,12 @@ _RANGE_PAUSE_STEPS: dict[ResultStep, StepSpec] = {
 }
 
 _RANGE_RESUME_STEPS: dict[ResultStep, StepSpec] = {
+    ResultStep.RANGE_RAES_MEMBERS_RESUMING: progress(20, Shape.RAES_POWER_MEMBERS, ResourceStatus.RESUMING),
     ResultStep.RANGE_NGFW_CASCADE_RESUMING: progress(10, Shape.NGFW, ResourceStatus.RESUMING),
     ResultStep.RANGE_NGFW_CASCADE_READY: progress(20, Shape.NGFW, ResourceStatus.READY),
     ResultStep.RANGE_NGFW_CASCADE_FAILED: progress(20, Shape.NGFW, ResourceStatus.FAILED),
     ResultStep.RANGE_INSTANCES_READY: progress(30, Shape.INSTANCES, ResourceStatus.READY),
+    ResultStep.RANGE_RAES_MEMBERS_READY: progress(30, Shape.RAES_POWER_MEMBERS, ResourceStatus.READY),
     ResultStep.RANGE_TERMINAL_READY: success(40, Shape.RANGE_TERMINAL, ResourceStatus.READY),
     ResultStep.RANGE_TERMINAL_FAILED: failure(40),
 }

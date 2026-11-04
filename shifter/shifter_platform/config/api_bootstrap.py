@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.conf import settings
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.authentication import SessionAuthentication
@@ -100,6 +101,7 @@ class BootstrapSerializer(serializers.Serializer):
     principal = BootstrapPrincipalSerializer()
     permissions = BootstrapPermissionsSerializer()
     modes = BootstrapModesSerializer()
+    participant_control_available = serializers.BooleanField(required=False)
 
 
 def _principal_from_token(token: ApiToken) -> tuple[dict[str, object], bool]:
@@ -257,5 +259,6 @@ class BootstrapView(APIView):
                 **policy_permissions,
             },
             "modes": _modes_for_user(session_user),
+            "participant_control_available": bool(settings.PARTICIPANT_CONTROL_ENABLED),
         }
         return Response(BootstrapSerializer(payload).data)

@@ -46,11 +46,21 @@ def _bool_flag(enabled: bool) -> str:
     return "true" if enabled else "false"
 
 
-def restart_workloads(runner: ProcessRunner, env: Mapping[str, str | None], *, model_broker_enabled: bool) -> None:
+def restart_workloads(
+    runner: ProcessRunner,
+    env: Mapping[str, str | None],
+    *,
+    model_broker_enabled: bool,
+    participant_control_enabled: bool = False,
+) -> None:
     """Restart the control-plane Deployments that read hydrated secrets at start."""
     deployments = [*RESTART_DEPLOYMENTS, *(["model-access-control"] if model_broker_enabled else [])]
     for deployment in deployments:
         runner.run(["kubectl", "rollout", "restart", f"deployment/{deployment}", "-n", PLATFORM_NAMESPACE], env=env)
+    if participant_control_enabled:
+        runner.run(
+            ["kubectl", "rollout", "restart", "statefulset/participant-control", "-n", PLATFORM_NAMESPACE], env=env
+        )
 
 
 def release_deployments(
@@ -81,6 +91,7 @@ def wait_for_rollouts(
     *,
     model_broker_enabled: bool,
     policy_enabled: bool = False,
+    participant_control_enabled: bool = False,
     terminating_timeout_seconds: int = 300,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
@@ -91,6 +102,19 @@ def wait_for_rollouts(
     ):
         runner.run(
             ["kubectl", "rollout", "status", f"deployment/{deployment}", "-n", PLATFORM_NAMESPACE, "--timeout=15m"],
+            env=env,
+        )
+    if participant_control_enabled:
+        runner.run(
+            [
+                "kubectl",
+                "rollout",
+                "status",
+                "statefulset/participant-control",
+                "-n",
+                PLATFORM_NAMESPACE,
+                "--timeout=15m",
+            ],
             env=env,
         )
     deadline = clock() + terminating_timeout_seconds
@@ -124,7 +148,7 @@ def _pinned_images(
     for document in documents:
         metadata = document.get("metadata") or {}
         namespace = metadata.get("namespace")  # type: ignore[union-attr]
-        if document.get("kind") != "Deployment" or namespace != PLATFORM_NAMESPACE:
+        if document.get("kind") not in {"Deployment", "StatefulSet"} or namespace != PLATFORM_NAMESPACE:
             continue
         if deployments and metadata.get("name") not in deployments:  # type: ignore[union-attr]
             continue
@@ -147,12 +171,22 @@ class ReleasePins:
 
     support: Mapping[str, str] = field(default_factory=dict)
     policy: str | None = None
+    participant_control: bool = False
 
     @classmethod
     def from_documents(cls, documents: Sequence[Mapping[str, object]]) -> ReleasePins:
         """Read the support sidecar images and the OpenFGA image from the rendered release Deployments."""
         policy = _pinned_images(documents, ("openfga",), _POLICY_DEPLOYMENTS).get("openfga")
-        return cls(support=_pinned_images(documents, _SUPPORT_CONTAINERS), policy=policy)
+        control = False
+        for document in documents:
+            metadata = document.get("metadata")
+            if (
+                document.get("kind") == "StatefulSet"
+                and isinstance(metadata, Mapping)
+                and (metadata.get("namespace"), metadata.get("name")) == (PLATFORM_NAMESPACE, "participant-control")
+            ):
+                control = True
+        return cls(support=_pinned_images(documents, _SUPPORT_CONTAINERS), policy=policy, participant_control=control)
 
 
 def record_running_images(
@@ -198,6 +232,8 @@ def record_running_images(
                 ],
                 "--policy-enabled",
                 _bool_flag(pins.policy is not None),
+                "--participant-control-enabled",
+                _bool_flag(pins.participant_control),
                 *(["--expected-image", f"openfga={pins.policy}"] if pins.policy else []),
             ),
             env=env,

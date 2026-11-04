@@ -1,10 +1,19 @@
 # RAES Participant-Control Realization Envelope
 
-Status: accepted architecture guidance; implementation not present
+Status: accepted architecture guidance; participant-control integration pending
+
+Implementation design for #1968:
+[platform adoption, mechanism comparison, and released-RAES compatibility](raes-participant-control-adoption-1968.md).
+The initial realization uses API-409 supervision and API-423 crossings.
+API-424 modular effects are a separate, unsupported installation for this profile.
+The implementation design is a Shifter decision; it requests no RAES changes.
 
 Date: 2026-09-06
 
-Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/1967>
+Tracking issues: <https://github.com/OpenRAE/bigrae/issues/1967> (selection),
+<https://github.com/OpenRAE/bigrae/issues/1968> (implementation).
+
+Implementation preflight refreshed: 2026-11-03, checkout `6dcaa6913`.
 
 Portable authority: OpenRAE ADR-108 and
 `participant-control-composition/rev1` (PC-01 through PC-15), accepted at
@@ -27,14 +36,15 @@ Shifter selects one closed local profile for initial implementation:
 | Local profile | `shifter-ctf-gce-range-lifecycle` |
 | Profile version | `1` |
 | Operating mode | CTF cyber-range, one event participant's current dedicated RAES range generation |
-| Mechanism composition | RAES capability restriction + approval/audit protocol + resource control |
+| Selected protections | Released explicit supervision plus native capability restriction, resource limits and strict audit |
 | Approval provider | Explicit proposal-bound approval in the CTF product control decision by an actor whose current event authority is verified |
-| Authorization provider | `ctf.services.authorization` with exact `EventCapability.RANGES`; CMS/Engine retain target, ownership, workspace, lifecycle, and generation authorization |
+| Authorization provider | `ctf.services.authorization.assert_event_action` for exact `event.manage_ranges` (`EventCapability.RANGES` at the API), using current shared policy; CMS/Engine retain credential, target, scope, lifecycle, and generation authorization |
 | Evidence sink | Request-attributed strict `shared.audit`; evidence is not approval or workflow state |
 | Effect provider | ADR-039 `range-substrate/v1`, adapter `gcp-gce` |
 | Native action set | whole-range `pause` and `resume`, with the persistent-resource limits below |
-| Selected portable governed effects | permit, deny, withhold, audit, and request review around an admitted proposal; these names retain PC-09 meanings |
-| Operation transport | `shifter.provisioner-operation` version `1`, generation-fenced by `operation_id` |
+| Portable control path | API-409 proposal, approval/denial and cancellation; API-423 ingress and separately authorized disclosure |
+| Native protections | Current permissions, complete resource limits and strict intent/outcome audit |
+| Operation transport | Existing `shifter.provisioner-operation`; authority-bearing version `2` binds `authority_digest`, generation-fenced by `operation_id`; version `1` remains an incumbent compatibility contract |
 | Portable interpreter/conformance boundary | `shared.raes`, using the exact released RAES contract and verdict implementation |
 
 The mechanism-family labels above name the accepted RAES architectural
@@ -62,15 +72,21 @@ mechanism/profile/version/effect/provider combination is unsupported and fails
 before control-workflow persistence, launch, or provider mutation. A bounded
 denial audit may still be emitted; it is not evidence that a control occurred.
 
-Native pause/resume are not new portable effect tags, nor synonyms for
-interrupt or shutdown. An API-409 proposal/control reference must bind through
-the released closed API-424 mapping to an already admitted native range
-action. A permit only admits that parent; it does not execute it. Request
-review creates an independently admitted supervisory obligation, not an
-automatic approval. #1072 must supply the applicable closed bindings and
-valid/invalid fixtures; if it cannot represent this exact mapping, the profile
-is unsupported. A free-form reference, callback or parameter bag cannot fill
-the gap.
+Native pause/resume use an exactly bound admitted action through the released
+participant-runtime adapter. API-409 owns proposal and decision history;
+API-423 owns crossing admission and disclosure. Native permissions, resource
+limits and strict audit remain BigRAE service responsibilities. Explicit human
+review does not require an API-424 mechanism to schedule a request-review effect.
+
+This #1968 amendment follows the approved source assessment and
+[revised plan](https://github.com/OpenRAE/bigrae/issues/1968#issuecomment-6613801679).
+[Hub #3](https://github.com/OpenRAE/hub/issues/3) establishes the responsibility
+split. RAES drives portable semantics and runtime behavior; BigRAE realizes
+those contracts through organizational services. The original requirement for
+a closed API-424 mapping around every explicit approval is superseded.
+Automatic modular review/audit effects and the original full modular profile
+remain unsupported. They are not prerequisites of this supervisory use case.
+No native action is relabeled as portable interrupt or shutdown.
 
 ### Research basis and alternatives
 
@@ -190,12 +206,12 @@ own admitted authority, provider, crossing coverage and evidence.
 
 | RAES/control concern | Current canonical surface | Boundary for #1968 |
 | --- | --- | --- |
-| Portable RAES semantics | `shared.raes`; ADR-031 import confinement; exact `raes==2.0.0` and `raes-env-packs==3.1.0` pins | Only this package may parse the future released control contract. The current pins contain no Shifter-usable participant-control release, so they authorize no claim. |
+| Portable RAES semantics | `shared.raes`; ADR-031 import confinement; exact `raes==10.6.0` and `raes-env-packs==7.2.2` pins in platform `pyproject.toml`/`uv.lock` | This release contains modular-control contracts, runtime and conformance tooling. Availability is not Shifter installation, admission or realization evidence. |
 | Backend capability | `shared/raes/backend-manifest.json`, `shared.raes.manifest` | Currently `provisioning-only`; `participant_runtime`, `observation`, `orchestrator`, and `evaluator` are null. Existing sidecars do not widen it. |
 | Participant semantics | compiled RAES participant behaviors and ADR-032-R10 `ParticipantAccessBinding` | Access is not control, and participant-invariant access is not participant identity. The initial control target comes from the event participant's current dedicated range binding. |
 | Run/context identity | `shared.raes.runs.validate_run_binding` and bounded `RunDescriptor`; compiled plan persisted in Engine `Range.range_config` | Reuse released RAES validation and the one-way run-binding identity, but do not overclaim the incumbent: the descriptor is not currently persisted through range launch and establishes neither an active participant-control episode/controller nor a history cut. Those exact released-runtime identities must bind to the admitted compiled package/run and current range generation before control admission. |
 | Product participant | `ctf.models.CTFParticipant`, event-scoped CTF services | A CTF participant, Django user, RAES participant, range owner, and runtime node remain different identities. |
-| Action/effect execution | `cms.services` lifecycle facade, `engine.services._lifecycle`, ADR-039 range substrate | Reuse pause/resume only. Direct organizer range actions remain Shifter product actions unless they are bound to a validated portable control occurrence. |
+| Action/effect execution | `ctf.services.range.lifecycle`, `ctf.bridges`, CMS `_scoped_range_lifecycle`, Engine `_principal_lifecycle` and `_lifecycle`, ADR-039 range substrate | Reuse the authenticated prepare/commit path for pause/resume. Native RAES ranges are currently rejected; enabling their lifecycle is required work, not an existing capability. Direct organizer range actions are not portable control occurrences. |
 | Intervention | ADR-051 `CommunicationIntent` RAES provenance and CTF communication policy | Disclosure, external direction, and intervention remain distinct. A communication is not a control effect; an intervention needs the exact selected mapping and observed effect. |
 | Observation/readback | `OperationResultInbox`, Engine result applier, `Range`/`Instance` state, `RangeEventOutbox` | Provider completion is true only after the current generation's closed result is validated and its complete target state is observed. Queue/task acceptance is not effect success. |
 | RAES operation evidence | `RaesOperationRecord`, `shared.raes.operations`, `shared.raes.projections` | Reuse receipt/status/reference projections where the released contract permits; never add control semantics to JSON opportunistically. |
@@ -207,6 +223,78 @@ own admitted authority, provider, crossing coverage and evidence.
 | Errors/logging | `CMSError`, CTF domain exceptions, `shared.exceptions.ValidationError`, `shared.api.errors`, `shared.log_sanitize`, provisioner `log_redact` | Map at existing boundaries with stable reason codes; do not create a participant-control exception hierarchy or expose raw RAES/provider failures. |
 | Verification | `tests/shared/raes` conformance/fixture style; CTF organizer authorization/audit tests; CMS lifecycle tests; Engine launch/applier/generation tests; provisioner pause/resume tests | Extend the existing vertical seams and negative matrices. #1969 adds disposable real-GCE effect/readback/isolation proof; mocks alone cannot release the claim. |
 
+### Current checkout constraints for #1968
+
+The modular-control constraints below apply only to a separately selected
+API-424 installation. The initial supervisory path selects no such installation;
+its own API-409/API-423 contracts, native protections and evidence gates apply.
+
+These findings update the original surface assessment without changing the
+selected mechanism or prescribing implementation steps:
+
+- RAES 10.6.0 publishes `ParticipantControlProvider`/`ParticipantControlProviderV2`
+  in `raes_backend_protocols.protocols`, `ParticipantControlRuntimeBinding` in
+  `raes_runtime.participant_control_binding`, API-424 selection/evaluation
+  contracts, and `raes_conformance.conformance.modular_control`. Local profile
+  version `1` is independent of portable schema/protocol versions. Bind one
+  compatible released family and its schema digests; the installed modular
+  conformance runner uses `modular-control-runtime/v2`. Do not mix a v1 provider
+  with v2 stages/probes or infer support from method presence.
+- In API-424/v2, permit/deny/withhold are `ControlParentDecisionV2Model`
+  dispositions, not executable `ControlEffectRequestV2Model` targets. Audit and
+  request-review are separately admitted effects. Preserve that split when
+  mapping the selected conceptual effects; do not put parent decisions into the
+  executable-effect union or describe native stop/start as interrupt/shutdown.
+- RUN-320 composition requires both the incumbent crossing-policy resolver and
+  an API-407 `participant_modular_control` declaration. Shifter's manifest still
+  has `participant_runtime: null`. An organizer HTTP request or GCE power call
+  alone is not a participant/world crossing. Candidate proof needs an explicitly
+  admitted configured target using the real released crossing boundary; preserve
+  the generic provisioning-only claim until its replacement is evidenced. Reuse
+  `shared.raes.manifest`/`contracts`, the checked-in manifest and the existing
+  publication/conformance gates together; do not patch only the JSON artifact
+  or bypass runtime capability admission to bootstrap a probe.
+- Engine `get_range_pause_resume_capability` and `prepare_range_lifecycle`
+  explicitly refuse native RAES plans. The CLI implements no `raes-range`
+  pause/resume, despite the launcher/Helm grammar permitting those words.
+  ADR-058 selects the existing `resource=range` lifecycle transport. Its current
+  input builder carries legacy `range_spec`, and its worker classifies mutable
+  `engine_instance` rows; neither supplies the complete generation-bound native
+  RAES footprint. Extend the incumbent operation-specific input/consumer and
+  result contracts consistently; do not parse a ProvisioningPlan as a legacy
+  spec, revive retired CyberScript, or remove the denial without the missing gates.
+- The current authority path carries `CredentialContext` unchanged from CTF,
+  through CMS, into Engine. `assert_event_action` uses live shared policy;
+  `resolve_event_authority` is the older user/role resolver and must not become
+  an alternate permission store. ADR-066 `PrincipalRef`, `ResourceScope`,
+  credential ceilings and SQL-owned event/range ancestry are canonical. Preserve
+  human/service distinctions; a credential or policy permit is not a deliberate
+  human approval, and participant membership grants no organizer authority.
+- `PreparedRangeLifecycle`, `_launch_authority`, `_launch_authority_binding`,
+  `shared.operation_authority` and `engine.launch_payload_authority` already
+  bind/recheck the initiating proof, owner, scope, backend and
+  `Range.resource_generation`. Reuse them. Resource incarnation, operation UUID,
+  RAES episode and control state cut are separate identities. These commit and
+  pre-launch checks do not fence each subsequent GCE call or prove revocation.
+- The published `shifter_adapter_sdk.runtime` plugin capability set is only
+  `guest.configure`/`guest.verify`. Its tenant-admin installation/binding and
+  isolated worker paths are incumbents for external guest adapters, not modular
+  control protocols or proof of control-provider installation. Implement trusted
+  control resolvers through the released RAES provider boundary; do not overload
+  guest actions, add a second loader, install pack code into the portal/provisioner,
+  or pass platform/cloud authority into an isolated plugin worker.
+- `audit_organizer_participant_range_action` is best effort;
+  `admin_external_audit` remains an owner/staff no-op. Neither meets this profile's
+  strict all-source decision audit. Existing strict CMS/Engine transition audit
+  is reusable but is not proposal-bound approval or portable control history.
+- P1 has no admitted Shifter embedding here yet. Reuse the released durable
+  store/owner-lease implementation through `shared.raes`, with one immutable
+  target/run per owner and storage outside the pausable world. A SQLite file in
+  a stateless web worker, `/tmp`, a provisioner Job's `emptyDir`, or participant
+  storage is not durable ownership. Store paths are installation-derived and
+  must pass the released path/permission/symlink and ownership checks. Do not
+  add arbitrary mounts to the hardened provisioner Job or invent a second store.
+
 ## Placement, Trust, Lifecycle, And Persistence
 
 `shared.raes` owns portable parsing, exact profile compatibility, bounded
@@ -215,7 +303,7 @@ authoritative runtime. It performs no product authorization or effect. That
 runtime, not a Shifter sidecar or product model, commits portable control
 history, provider-state transitions, finite causal budgets, effect claims, and
 control dispositions. CTF owns event-participant resolution, the explicit proposal-bound
-product approval, live `EventCapability.RANGES` authorization, and the local
+product approval, live `event.manage_ranges` authorization, and the local
 occurrence-to-effect mapping. It reaches CMS only through `ctf.bridges`; CTF
 never imports CMS or Engine models. CMS owns the public participant/range
 control facade and revalidates the current target, workspace, lifecycle, and
@@ -235,90 +323,52 @@ required, and P3 distributed coordination is not claimed. A deployment unable
 to provide the released durable-store/ownership contract cannot admit this
 profile. This decision adds no listener or fictional provisioner Job service.
 
-### Exact bindings and composition
+### Exact bindings and supervision
 
-The following are fixed local provider-instance names for the design, not
-new portable mechanism literals or assertions that provider code is installed:
+The closed installation policy binds one exact native lifecycle profile to
+compiled participant/controller identities, immutable source and parameter
+selection, run, episode, resource generation, complete dedicated footprint,
+implementation/configuration digests and current organizational authority.
+A product role or resource owner alone establishes no portable controller.
 
-| Mandatory role | Local instance/version | Input and result boundary |
-| --- | --- | --- |
-| Capability restriction | `shifter-ctf-range-capability/1` | Immutable native authority, admitted action/resource scope and current capability snapshot; a deterministic constraint, not guest-wide command filtering |
-| Explicit review | `shifter-ctf-explicit-review/1` | Exact proposal-bound approval/denial/expiry and authority references; a mandatory constraint plus separately admitted review request |
-| Resource control | `shifter-range-resource-budget/1` | Declared native action footprint and released durable causal-budget/provider-state snapshot; bounded resource admission, not a spending or CPU/memory guarantee |
+API-409 owns proposals, approval/denial, cancellation, policy validity and
+accepted control history. Its trusted live-cut resolver establishes current
+grants, scope, evidence and order. The linked action must retain its exact
+proposal meaning and live approval. API-423 independently admits each control
+and action crossing, and every participant-facing disclosure. Failed or stale
+admission prevents native reservation or release; recorded approval alone
+cannot authorize changed work. Only the released runtime folds portable state.
 
-Each admitted instance pins its actual portable mechanism/protocol revision,
-profile revision/content digest, installed implementation artifact/version/digest,
-configuration digest, authority and state scope, inputs, evidence and limitations.
-Do not substitute the profile name, source branch, provisioning configuration
-digest or artifact hash for trust or capability validation.
+Native capability checks, complete resource bounds and strict audit conjoin at
+their owning services. Installation limits bound history, active contexts,
+request rates, callback deadlines and recovery work. They make no portable
+modular causal-budget claim. API-424 pure provider resolution, shared state,
+acyclic effect graphs and durable root budgets apply only to a separately
+admitted modular installation. This profile installs none and schedules no
+modular review/audit effect.
 
-Resolution uses PC-03 context K: run, apparatus binding, participant, episode,
-subject, crossing, direction, final sink/audience/destination, controller,
-authority, policy revisions, state cut, expected history heads, provider-state
-references, trigger root, predecessors, memory scope and governed time/order.
-The CTF participant and range association are necessary but insufficient:
-the trusted compiled participant/controller/run binding must be persisted and
-validated, including exclusive resource scope. Never infer it from a team,
-role, host name, AD domain controller, event organizer or access credential.
+Pause and resume against the same native state must serialize. Each new action
+revalidates the preceding observed postcondition, current authority and control
+cut. Identical retries retain one action and operation identity; changed meaning
+conflicts. A crash after reservation leaves work held until the runtime's
+committed admission and current native authority are established. Uncertain
+external invocation blocks repetition until readback supports a conclusion.
 
-Provider resolution is pure over immutable snapshots. It cannot invoke GCE,
-deliver to a participant, mutate authoritative state or call a model covertly.
-Next provider-state references are proposals for the same RAES commit, discarded
-on conflict. Only RAES performs composition: a finite admitted acyclic dependency
-graph, correctly typed result slots, and conjunction of all incumbent gates and
-mandatory resolved permits at the same K. Fact, constraint, advice and effect
-request slots are distinct; no advice score can supply authority.
+The CTF product decision retains only native approval, actor, authority, fence
+and correlation references. CMS owns the durable product-to-compiled binding
+and owner routing. The released RAES store owns portable control and crossing
+history; Engine owns native reservation, input, execution and results.
+No workflow state belongs in communication, audit, task or range-config JSON.
+Conformance verdicts come from the exact released checker. Native service and
+provider evidence remain additional independent acceptance obligations.
 
-Mandatory deny blocks the parent; withhold keeps it undispatched with explicit
-resumption/expiry conditions. Abstain, missing, unknown, unsupported, failed or
-weakened mandatory support cannot release it. Stale results and history
-conflicts require bounded re-resolution at a fresh K, never reuse of an old
-permit. Keep all contributing/blocking reasons in canonical order. This profile
-has no advisory provider; adding one cannot secretly make advice a required
-guarantee or alter these fail behaviors.
-
-Same-slot identical requests deduplicate; different canonical content conflicts.
-Pause and resume targeting the same state conflict unless an explicit order and
-revalidation of the preceding observed postcondition permits a new action.
-There is no lexical winner or implicit restart. Every required predecessor must
-be realized and revalidated before the parent. Independent member calls may be
-parallel only for the profile's declared disjoint resource footprint; parallelism
-does not imply an atomic world transition.
-
-PC-12 causal limits cover root lifetime, depth, effect count, rule firings,
-resolution attempts and fan-out, with finite installation-admitted values in the
-bound configuration. Counts, provider-state transitions, claims and history commit
-together in the RAES store. Re-resolution, child review/audit effects, restart,
-replay or controller transitions cannot mint a new root or replenish a budget.
-Terminal evidence is bounded and must not recursively trigger unlimited effects.
-Product rate limits, Redis windows, range quotas, retry counts and timeouts are
-additional controls, not the portable causal budget.
-
-The control decision must retain immutable references/digests for the portable
-occurrence and context/history cut, the exact local profile/provider/configuration,
-approval actor and authority source, event participant, range request, explicit
-effect dependencies, exact operation generation, and terminal outcome. When
-control originates in an ADR-051 intervention, its portable provenance remains
-in the immutable communication aggregate. The minimum persistence seam is a
-narrow CTF-owned product control decision keyed to those references; it owns
-only Shifter authorization, approval, fence, and correlation lifecycle. It does
-not own or copy portable control history, provider-state transitions, causal
-budget balances, effect claims or composition decisions. Those remain in the
-released RAES authoritative runtime, while provider execution truth remains
-in Engine. Conformance verdicts come from the released checker and are
-referenced as version-pinned evidence, never locally reimplemented.
-The decision must not be hidden in
-`CommunicationIntent` JSON, `AuditLog` JSON, `Range.range_config`,
-`CTFScheduledTask.metadata`, a participant-runtime sidecar payload, frontend
-state, or task memory.
-
-The current CTF range-lifecycle API authorizes with `EventCapability.RANGES`,
-then its service calls CMS with `participant.user`. That target-owner
-substitution may be reused to reach the owned range, but it is neither explicit
-approval nor approver identity and must not attribute the control to the
-participant. The control boundary must carry the effective event-authority
-actor/source and the target owner as separate facts, preserve the existing
-self-service CMS authorization path, and strict-audit the actual approval
+The current CTF range-lifecycle API uses `EventCapability.RANGES`, then its
+service rechecks `event.manage_ranges` and passes the initiating
+`CredentialContext` and exact event target through CMS to Engine. Preserve that
+path; do not reintroduce the historical `participant.user` substitution. The
+control boundary carries the approving principal, initiating credential/policy
+authority and target owner as separate facts, preserves the existing direct
+CMS authorization path, and must strict-audit the actual approval
 decision before the launch intent can be claimed. Authorization, approval,
 execution admission, and audit evidence remain distinct records and outcomes.
 `admin_external_audit` supplies the correct intent-before-effect shape only for
@@ -409,11 +459,11 @@ reject that target/guarantee before mutation.
 
 | Proposed claim | Real implementation boundary | Authoritative readback | Failure behavior | Released RAES conformance | Explicit limitation |
 | --- | --- | --- | --- | --- | --- |
-| The local profile is supported | `shared.raes` exact released contract adapter plus server-owned profile policy | published exact profile/mechanism/provider/configuration identities, versions, and canonical digests plus deployed provider identity | unknown version, profile, mechanism, provider, configuration, effect, or digest rejects before persistence/mutation | released profile/PC-01–PC-15 fixtures and verdict API; no local verdict clone | no implication for any other Shifter, RAES, or LilRAE profile |
+| The local supervisory profile is supported | `shared.raes` released API-409/API-423 adapter plus server-owned native policy | exact compiled policy, implementation/configuration, action, resource and deployment identities | unsupported contract, native binding or requested guarantee rejects before mutation | released supervisory/crossing probes plus independently observed native outcomes | excludes generic API-424 modular-profile support and backend parity |
 | The target has admitted participant resource scope | CTF event/participant service -> `ctf.bridges` -> CMS current range resolver and `shared.raes` binding | event, product participant, compiled RAES participant/controller/run/episode, package, resource scope, request/range and generation join | missing, non-dedicated, ambiguous, foreign, replaced or stale join rejects opaquely | portable identity/target fixtures plus Shifter authorization tests | no inferred agent selection, shared-resource control or union of participant policies |
-| Capability restrictions constrain the parent | Pure capability result at K plus incumbent CMS/Engine gates | exact allowed action/resource binding and decision reference; denial proves no prohibited invocation | any unsatisfied mandatory slot blocks the parent | PC-01–PC-06 fixtures and native boundary-negative tests | not command filtering or confinement inside a guest |
-| Review was requested and decided | Released request-review binding -> CTF product supervision -> explicit authorized decision | matching request/proposal/approval-or-denial/expiry references and strict audit | unsupported binding, failed sink or absent/expired approval cannot dispatch the parent | API-409/API-424 review fixtures and real service/UI evidence | review, approval and execution are separate; no two-person or infallible-human claim |
-| Resource causality is bounded | Released RAES runtime/provider-state commit | root, counters, limits, effect slots and committed history heads across recovery | exhaustion, conflicting heads or unavailable durable store block new effects | PC-10–PC-12 fixtures and restart/replay/exhaustion cases | not an expenditure, CPU or RAM quota |
+| Capability restrictions constrain the parent | Current native policy and incumbent CMS/Engine gates | exact allowed action/resource binding and decision reference; denial proves no prohibited invocation | any unsatisfied authority or resource gate blocks the parent | API-423 refusal probes and native boundary-negative tests | not command filtering or confinement inside a guest |
+| Proposal was explicitly reviewed | API-409 proposal -> CTF product supervision -> exact approval or denial | proposal/decision/validity references and strict audit | absent, stale or revoked approval cannot dispatch the parent | released API-409 validation, API-423 crossing probes and real service/UI evidence | approval and execution are separate; no automatic modular review or two-person claim |
+| Resource work is bounded | Installation limits and Engine operation admission | exact footprint, one operation identity, bounded history and callback/recovery limits | exhaustion, stale generation or unavailable durable store prevents new work | released runtime checks plus native restart/replay/exhaustion tests | no modular causal-budget or model-spend claim |
 | The effect was approved | explicit proposal-bound CTF product approval; separate current `EventCapability.RANGES` authorization; strict all-source `shared.audit` evidence | immutable approval/effect correlation, authority source, exact operation binding, and request-attributed audit | absent/mismatched approval, revoked/insufficient actor, invalidated event/participant, audit failure, or stale/replaced target prevents actual invocation | approval/audit protocol fixtures plus revocation, lifecycle-invalidation, pre-dispatch-race, and audit-failure tests | no autonomous scenario/range/controller approval; no approval inferred from authorization, content, or audit |
 | Native pause was effected | CMS lifecycle -> Engine generation -> final invocation fence -> ADR-039 `gcp-gce` stop/readback | every admitted GCE member observed stopped, required access unavailable and Engine current generation applied `PAUSED` | unsupported rejects before mutation; partial/timeout stays failed or indeterminate and visible | #1968 contract tests; #1969 disposable real GCE proof | admitted persistent resources only; no RAM, frozen-world, destroy or quarantine claim; non-atomic across members |
 | Resume was effected | same path using ADR-039 `gcp-gce` start/readback | every admitted member observed running/ready and Engine current generation applied `READY` | same fail-closed admission and truthful partial/timeout handling | #1968 contract tests; #1969 disposable real GCE proof | readiness is range lifecycle readiness, not arbitrary in-guest application health |
@@ -438,7 +488,7 @@ The terms in this table describe outcomes, not new Shifter wire enums.
 
 | Case | Required observation |
 | --- | --- |
-| Deliberate teaching/session intervention | A review trigger creates an admitted supervisory obligation; explicit approval then permits the bound native pause/resume, with real GCE and access readback. Displaying a message or approving alone is insufficient. |
+| Deliberate teaching/session intervention | An authenticated proposal enters explicit supervision; exact current approval then permits the bound native pause/resume, with real GCE and access readback. Displaying a message or approving alone is insufficient. |
 | Known in-world adversarial influence under permitted ordinary policy | The admitted test content can remain in the world while the resource-control decision follows its own constraints. This profile claims no IFC propagation, endorsement or adversarial detection. A requested SEM-233 enforcement profile remains independent and unsupported without its required instrumentation. |
 | Denial, missing/failed mandatory result, or expired approval | Zero prohibited parent delivery/invocation; only independently authorized bounded rejection/review/audit evidence. |
 | Changed proposal, profile/configuration digest, participant or generation | Old approval/permit cannot authorize the replacement; reject or resolve a fresh K with new approval where required. |
@@ -459,19 +509,19 @@ The terms in this table describe outcomes, not new Shifter wire enums.
 | --- | --- |
 | HTTP authentication | Reuse bearer-first `ApiTokenAuthentication` and session authentication. A malformed bearer token fails closed and never falls through to a session; session mutations retain CSRF. |
 | Token scope | Reuse the exact existing `ctf:event:write` scope for the organizer range-management audience. Do not add a broad `raes:*` or wildcard scope. A future external controller is a new audience and is unsupported here. |
-| CTF authorization | Reuse `resolve_event_authority` with the exact `EventCapability.RANGES`, including event-owner, delegated-staff, and platform-admin source rules. Recheck it at the CTF service/claim boundary; the existing API-view check alone is not durable authorization. Workspace membership, scenario authorship, range ownership, UI visibility, an approval row, or audit evidence is not event authority. |
+| Identity, scope and CTF authorization | Reuse `shared.credentials.CredentialContext`, `shared.identity_scope`, `ctf.services.authorization.assert_event_action`/`admit_event_actions` and `ctf.services.unified_authorization` for exact `event.manage_ranges` (`EventCapability.RANGES` at the API). Re-resolve credentials and SQL ancestry through the owning services, then use the configured shared authorization provider and credential ceiling. Policy failure is unavailable/deny, never a fallback to local owner/staff/admin rules. Keep remote policy evaluation outside database locks and recheck local admitted bindings under the existing locks. An API-view check, membership, creator, range owner, UI visibility, approval row or audit evidence supplies no durable authority. |
 | Approval and invocation freshness | Wire invalidation into event cancellation, participant removal, range replacement and authority changes through existing public services. Commit native decision/operation correlation before claimability; extend the locked launcher gate and enforce the admitted generation/authority/ownership fence at each actual cloud call as specified above. Communication hooks and destroy-specific provision interruption do not establish this control fence; no direct provisioner access to CTF models. |
-| Target authorization | Re-resolve the event-qualified participant and current dedicated range; then reuse CMS ownership/workspace/lifecycle gates without confusing target owner with approving actor. Bind the released controller/episode/run/world identities to the admitted package, `RunDescriptor` identity where parameterized, compiled plan, and current range generation. Return the same opaque not-found/denial behavior for foreign targets. |
-| RAES validation/runtime | Only `shared.raes` loads the released portable DTO, validates exact profile/mechanism/provider/configuration identities, versions, digests, package/occurrence/context/history-cut binding, invokes released composition/conformance, and commits through the released authoritative runtime. All mechanisms see the same cut; mandatory missing/stale/unknown/unsupported/failed/weakened/abstaining/conflicting results deny. No raw SDL reparse, app-local portable serializer, local composer/verdict, or sidecar runtime. |
-| API/request shape | Use explicit DRF serializers and a closed request shape. The caller identifies the already-bound intervention/participant occurrence; server code derives target, provider, operation, and profile. DRF does not reject unknown members by default, so reuse the explicit `initial_data` unknown-field check used by `workspaces.api.serializers`. Duplicate JSON-member detection is a parser-level concern and is not supplied by a serializer; do not claim that guarantee without a shared parser boundary. |
+| Target authorization | Re-resolve the event-qualified participant and current dedicated range; reuse CMS `_unified_authorization.require_range_action`, `_scoped_range_lifecycle` and Engine's prepared lifecycle/authority services. Require exact account/organization/workspace ancestry where present, event parent, resource incarnation and owner agreement across CTF/CMS/Engine; absent subdivisions do not mean installation authority. Bind released controller/episode/run/world identities to the admitted package, parameterized run identity, compiled plan and current range generation. Keep target owner separate from approving actor and preserve opaque foreign-target refusals. |
+| RAES validation/runtime | Only `shared.raes` loads the released portable DTO, validates exact profile/mechanism/provider/configuration identities, versions, digests, package/occurrence/context/history-cut binding, invokes released supervisory/crossing validation and applicable conformance, and commits through the released authoritative runtime. All selected authority and crossing gates must hold at the current cut. A separately installed modular mechanism additionally follows its own required-slot and effect rules. No raw SDL reparse, app-local portable serializer, local composer/verdict, or sidecar runtime. |
+| API/request shape | Reuse `shared.api.strict_json.ClosedJSONParser` for bounded JSON objects and duplicate-member rejection, and `shared.api.closed_serializer.ClosedSerializer` for unknown-field rejection plus explicit field bounds/types. The caller identifies the already-bound intervention/participant occurrence; the server derives target, provider, operation and profile. Reuse `shared.raes.json_ingress.parse_bounded_json_object` for portable JSON ingress inside its owning boundary. Do not copy parser/serializer logic or accept alternate parsers that bypass the closed JSON contract. |
 | Capability/provider admission | Join the CTF participant/event to the current CMS `RangeInstance`; require its server-derived CTF source/workspace/scenario and validated RAES package source/digest; then reuse persisted Engine `Range.range_backend` and instantiation purpose, `shared.range_lifecycle_capability`, current `ResourceStatus`, and current operation generation. Never re-read an environment selector or infer RAES/control support from a scenario-id string, cloud/provider name, or range ownership alone. |
-| Persistence/wire shape | Keep only product authorization/approval/fence/correlation references in the narrow CTF-owned control decision. The released RAES runtime owns control history, provider-state transitions, finite causal budgets, effect claims, and control dispositions; conformance evidence references the released checker. Reuse `ProvisionerLaunchIntent`, immutable `OperationInput`, `shared.operation_envelope`, `shared.operation_results`, and append-only `OperationResultInbox` for execution. Preserve logical effect identity across retry/replay and exact keys, bounds, digests, ordering, ownership, and generation fencing; do not add control JSON to generic operation input. |
-| Provider/config | Reuse ADR-039 `gcp-gce`, `load_gce_range_cell_config`, GCE power helpers, persisted backend/purpose, least-privilege workload identity, private range networking, current timeouts, and the exact deployed image/source identity. Bind the released participant-control provider/configuration identity and canonical digest separately; `SHIFTER_REALIZER_CONFIGURATION` is provisioning evidence and cannot be reused under a new meaning. The initial profile adds no scenario or handler-local environment setting. |
-| Secret handling | Control records carry identifiers/digests only. Existing session/token secrets stay in their authentication stores; provider credentials stay in workload identity/secret stores. Nothing new enters database JSON, audit detail, events, metrics labels, docs fixtures, task payloads, environment dumps, or provider state. |
+| Persistence/wire shape | Keep only product authorization/approval/fence/correlation references in the narrow CTF-owned control decision. RAES owns portable history, provider-state transitions, budgets, effect claims and dispositions. Reuse `ProvisionerLaunchIntent`, immutable `OperationInput`, `shared.operation_envelope` (authority-bearing v2), `shared.operation_authority`, `shared.operation_results`/`operation_result_payloads`, and append-only `OperationResultInbox`. Extend only the bounded native operation-specific projection needed for an admitted dispatch grant; never carry portable control workflow JSON. Preserve exact keys, bounds, digest conflict detection, step ordering, ownership and generation fences. RAES's published canonical control digest and native `canonical_payload_digest` have different contracts; use each for its own artifact, never interchange or rewrite retained digests. |
+| Provider/config | Reuse ADR-039 `gcp-gce`, `load_gce_range_cell_config`, `gce_range_cell_power`, persisted backend/purpose/placement, least-privilege workload identity, private range networking, existing deadlines and exact deployed artifact identity. Before calling the power helper, join every target project/zone/instance and native UUID to the trusted complete generation-bound footprint; accepting its metadata shape alone proves neither ownership nor scope. Require nonempty membership; the shared capability helper accepts an empty set and the legacy query sees only ready/paused members. Include dedicated access resources; do not silently omit failed/missing members. Bind control-provider/configuration identity/digest separately from provisioning-only `SHIFTER_REALIZER_CONFIGURATION`. No request/scenario/handler-local environment selector or arbitrary endpoint is admitted. |
+| Secret handling | Control records carry admitted identifiers/digests only. Reuse authentication stores, workload identity/provider secret stores and `shared.cloud.sensitive_env.split_env` plus Kubernetes `_secrets` for existing Secret-backed Job values. The classifier recognizes names, not secret content; a `_URL`, `_PATH` or `_REF` suffix does not make embedded credentials safe. Do not add credentials, raw participant content or provider-private state to control-record JSON, portable evidence, audit detail, events, metrics labels, fixtures, task payloads or environment dumps. |
 | OS/process exposure | Preserve canonical structured argv: resource/operation plus request and operation UUIDs only, using canonical `resource=range`; the provisioner CLI has no `raes-range pause/resume` implementation. Preserve the GCP validating-admission policy's fail-closed launcher/service-account/image/argument/env/volume/hardening checks, dedicated launcher RBAC and network policy, no service-account-token mount, non-root/read-only/drop-all/seccomp Job, and per-Job Secret delivery. Portable control payloads, actor data, profile documents, cloud identifiers, credentials, commands, scripts, and configuration blobs do not enter argv, shell strings, process titles, or workflow output. |
-| Result validation | Reuse Engine's digest/version/ownership/current-generation/step-order/result-shape applier and ADR-039 postcondition checks. A result does not mutate domain state until every gate passes. |
-| Audit/observability and sinks | Strict-audit the approval decision before effect and reuse strict Engine outcome audit. Apply the released audience/sink policy independently to decisions, reasons, approvals, receipts, and evidence; portable presence is not permission to log, emit, audit, or publish. Preserve bounded digest-bound references and limitations. Log only stable codes, operation/profile names, counts, timings, and sanitized/fingerprinted ids through `shared.log_sanitize`/`log_redact`; never raw rejected content, payloads, provider-private state, or exception text. |
-| Error envelopes | Portable failures become bounded RAES diagnostics inside `shared.raes`; service failures use existing CTF/`CMSError`/shared validation classes; `/api/v1` uses `shared.api.errors`. Raw RAES, database, provider, IAM, network, and guest errors do not reach users. |
+| Result validation | Reuse `provisioner_db_operation_input` discriminator/envelope checks, `shared.operation_results`, Engine `_operation_apply`/`_operation_apply_admission` and ADR-039 postcondition checks. New native projection/result shapes must agree at builder, persistence guard, independent consumer, closed reason/step registry and applier. A result changes domain state only after all digest/version/authority/ownership/generation/order/shape gates pass. GCE RUNNING alone does not prove guest health or restored remote access; resume must also meet the existing readiness/access contract. |
+| Audit/observability and sinks | Reuse `shared.audit.request_audit`/`principal_actor_fields` and `audit_log(..., strict=True)`: record permitted, denied and triggered decisions before consequential service work or participant delivery for every authority source, and retain strict Engine outcome audit. Commit failure prevents dispatch. Apply released sink/audience policy independently to decisions, reasons, approvals, receipts and evidence. Use stable codes, bounded counts/timings and admitted identifiers through `shared.log_sanitize`/provisioner `log_redact`; sanitizing/truncating text does not remove secrets. Do not log raw provider exceptions/traceback content or use per-participant/effect IDs as unbounded metric labels. Keep durable audit references for correlation; process-local log fingerprints are not portable identities. |
+| Error envelopes | Portable failures become bounded diagnostics inside `shared.raes`; services reuse CTF/`CMSError`/shared validation errors and distinguish denied, unsupported, conflict and unavailable outcomes. Reuse `shared.errors` and `shared.api.errors` for authored public text and the existing request-id envelope. Declare the owning serializer for allowed validation-detail keys; neither `str(exc)`, attacker-supplied keys, chained causes nor provider/database/RAES diagnostics become public details. No new error wrapper or exception hierarchy. |
 | Events/read models | Reuse ADR-025 outbox and reconciliation for product status projection. WebSocket/notification delivery is advisory and never control readback or success evidence. |
 | Cross-layer imports | Preserve ADR-001, `.importlinter`, and `scripts/check_layer_imports/layer_imports.yaml`: CTF -> `ctf.bridges` -> public `cms.services` -> public `engine.services`; only `shared.raes` imports `raes_*`. |
 
@@ -481,10 +531,23 @@ These are installation-owned, not scenario-owned choices. Any new typed setting
 and closed validator must pass through `config/settings.py`,
 `config/env-manifest.json`, `installation/schema.py`, `installation/registry.py`,
 the runtime inventories, provider renderers, deployment overlays, and parity
-tests. This design adds no executable configuration. A handler-local `os.environ` read, free-form JSON profile,
+tests. On GCP this includes the closed `installation/settings_gcp.py` and
+`settings_gcp_deploy.py` models, `scripts/gcp/render_runtime_env.py`,
+`engine.ecs._env`, `shared.cloud.gcp.task_runner`, the neutral Kubernetes
+profile/Secret builders and Helm's `validatingadmissionpolicy-provisioner-jobs`:
+env keys, required bindings, literal/Secret classification and rendered values
+must agree, including native Cloud SQL auth. Use `config._product_env.product_env`
+for established product settings; do not bypass the installation backend's
+closed setting registry. This design adds no executable configuration.
+A handler-local `os.environ` read, free-form JSON profile,
 scenario-selected module, or provider-specific UI branch is forbidden.
 
 ## Extensibility Seams
+
+For initial supervision, the closed native action table binds the released
+API-409/API-423 path to the admitted participant, controller and complete native
+footprint. The modular profile table described below is a future extension seam;
+it is not required to enable this path. Neither table loads executable code.
 
 The required seam is a closed server-owned profile table keyed by the exact
 portable profile/mechanism/effect/provider/configuration identities, versions,
@@ -520,8 +583,8 @@ conformance evidence; none extends this profile by adding an enum member.
   evidence repository, provider plugin registry, config parser, error envelope
   or exception hierarchy. The narrow CTF product record does not duplicate
   RAES or Engine authority.
-- Keep explicit unknown-field rejection and parser-level duplicate-member
-  validation distinct. A default DRF serializer supplies neither guarantee.
+- Reuse the existing closed serializer and JSON parser together; a default DRF
+  serializer supplies neither unknown-field nor duplicate-member rejection.
 - Keep native `resource=range` pause/resume dispatch, exact operation
   correlation, all-source audit and existing authentication/CSRF/scope rules.
   Task identifiers, cached status and a latest-operation lookup are not proof.
@@ -551,29 +614,32 @@ conformance evidence; none extends this profile by adding an enum member.
   ADR-043, shared audit, provider secret stores, ADR-025 events, terminal access,
   or Guacamole.
 
-The current repository pins RAES 2.0.0 and environment packs 3.1.0; the accepted
-OpenRAE design revision is not by itself a released consumable control contract.
-#1968 is blocked until the required RAES artifacts are released and pinned at
-exact versions, with the import boundary and conformance tests updated together.
-A git revision, copied DTO, local verdict, UID list, or `DRAFT` upstream
-requirement is not a substitute.
+The current repository pins RAES 10.6.0 and environment packs 7.2.2. The former
+upstream blockers are closed; do not reopen the historical release dependency.
+The remaining admission gate is the exact compatible released contract/protocol,
+runtime and probe subset for this profile, consumed through `shared.raes` and
+matched to actual service/provider behavior. A git revision, copied DTO, local
+verdict, UID list or `DRAFT` requirement is not implementation evidence.
 
 GEN-2005 is the cross-cutting Ground Control constraint for this decision and is
-currently `DRAFT`. Its documentation links to #1967, #1968, #1969, ADR-058, and
-this envelope do not claim an implemented runtime or conformance.
+currently `ACTIVE` because implementation has started. Its native power
+preflight and readback links cover part of this constraint. They do not claim an
+implemented participant-control runtime or conformance.
 
-The accepted upstream #1068 design is sufficient for #1967. #1968 additionally
-requires the released artifacts from OpenRAE/rae
+The accepted upstream #1068 design supplies #1967's portable authority. The
+closed implementation children in OpenRAE/rae are
 [#1070](https://github.com/OpenRAE/rae/issues/1070) (semantics),
 [#1072](https://github.com/OpenRAE/rae/issues/1072) (contracts),
 [#1069](https://github.com/OpenRAE/rae/issues/1069) (runtime), and
-[#1071](https://github.com/OpenRAE/rae/issues/1071) (conformance), in that
-dependency order. These are native GitHub blockers, not merely prose links.
-Pin the consumable release versions and their exact contract/fixture identities
-before mechanism implementation; accepted design commits alone do not suffice.
+[#1071](https://github.com/OpenRAE/rae/issues/1071) (conformance).
+Record the consumed release and exact contract/fixture identities with the
+implementation; accepted design commits alone do not suffice. #1968 itself
+must include at least one real participant/world crossing through authenticated
+Shifter services. #1969 extends that evidence; it cannot defer #1968's first
+end-to-end acceptance criterion.
 
-GEN-2005 is reviewed and activated with implementation, with IMPLEMENTS/TESTS
-links to the actual delivered artifacts. #1967 retains DOCUMENTS links and
+GEN-2005 records partial IMPLEMENTS/TESTS links for the native power boundary.
+Remaining clauses still require implementation and proof. #1967 retains DOCUMENTS links and
 makes no such runtime claim. Support advertisement additionally requires #1969
 real-boundary proof. Neither LilRAE implementation nor its evaluation issues
 are a prerequisite or evidence of Shifter support.
@@ -600,3 +666,15 @@ Implementation remains subject to the stack-native checks and behavioral tests
 in `AGENTS.md`; #1969 supplies the disposable real-provider
 control/readback/isolation evidence. Mandatory audit is distinct from optional
 experimental capture, retention or export.
+
+Reuse the existing `tests/shared/raes` publication/conformance gates,
+`tests/engine/services/test_prepared_launch_commit_fences.py`, native launch
+outbox/inbox tests, organizer authority/audit tests, provisioner
+`test_gce_range_cell_power.py` and installation/runtime-env/Job-policy parity
+tests. The required negative cases above must assert absence of forbidden
+provider calls and participant delivery, not just HTTP error codes; include
+revocation after queueing, stale/conflicting cuts, crash/reopen/replay, exhausted
+budgets, audit failure, partial members and deceptive provider/error payloads.
+Use targeted local tests and pragmatic mutation checks for these gates, with
+full suites in CI. Synthetic fixtures remain in this repository; private pack
+content and operational acceptance evidence stay in their owning repository.

@@ -53,3 +53,5 @@ enforces the prerequisites documented here before any Terraform apply.
 | [ADR enforcement](adr/README.md) | You need how architecture decisions are recorded and enforced in CI. |
 
 - [Deployment configuration and recovery](dev/deployment-configuration.md)
+
+- [Supervised range power operations](ops/supervised-range-power.md) - Install, maintain, and recover the optional GCP participant control owner.

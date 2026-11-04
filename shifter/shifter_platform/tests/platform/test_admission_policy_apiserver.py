@@ -203,3 +203,45 @@ def test_preparation_worker_secret_is_admitted_and_cannot_expand(kubectl: Kubect
             break
         assert time.monotonic() < deadline, admitted.stderr or denied.stderr
         time.sleep(1)
+
+
+@pytest.mark.parametrize("verb", ["pause", "resume"])
+def test_api_server_admits_only_the_pinned_native_power_projection(kubectl: Kubectl, verb: str) -> None:
+    import copy
+
+    from shared.participant_control_installation import NativeControlInstallation
+    from tests.platform.test_gcp_job_launcher_manifests import _attach_native_power_identity
+    from tests.shared.test_participant_control_installation import synthetic_installation_values
+
+    encoded = NativeControlInstallation.model_validate(synthetic_installation_values()).model_dump_json()
+    parameters = {**_canonical_admission_parameters(), "PARTICIPANT_CONTROL_CONFIGURATION": encoded}
+    _apply_admission(kubectl, _load_helm_documents(runtime_env=parameters))
+    canonical = _canonical_admission_job()
+    container = canonical["spec"]["template"]["spec"]["containers"][0]
+    container["args"][1] = verb
+    container["env"].append({"name": "PARTICIPANT_CONTROL_CONFIGURATION", "value": encoded})
+    _attach_native_power_identity(canonical)
+    tampered = copy.deepcopy(canonical)
+    tampered["spec"]["template"]["spec"]["containers"][0]["env"][-1]["value"] = encoded + " "
+    deadline = time.monotonic() + 60
+    while True:
+        admitted = _create_job(kubectl, canonical, username=PROVISIONER_LAUNCHER_USERNAME)
+        denied = _create_job(kubectl, tampered, username=PROVISIONER_LAUNCHER_USERNAME)
+        if admitted.returncode == 0 and _denied_by_policy(denied):
+            break
+        assert time.monotonic() < deadline, admitted.stderr or denied.stderr
+        time.sleep(2)
+    for fault in ("deadline", "audience", "expiry", "mount"):
+        changed = copy.deepcopy(canonical)
+        pod = changed["spec"]["template"]["spec"]
+        token = pod["volumes"][-1]["projected"]["sources"][0]["serviceAccountToken"]
+        if fault == "deadline":
+            changed["spec"]["activeDeadlineSeconds"] = 1801
+        elif fault == "audience":
+            token["audience"] = "https://kubernetes.default.svc"
+        elif fault == "expiry":
+            token["expirationSeconds"] = 3600
+        else:
+            pod["containers"][0]["volumeMounts"][-1]["readOnly"] = False
+        refused = _create_job(kubectl, changed, username=PROVISIONER_LAUNCHER_USERNAME)
+        assert _denied_by_policy(refused), f"{fault}: {refused.stderr or refused.stdout}"

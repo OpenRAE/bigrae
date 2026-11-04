@@ -36,3 +36,7 @@ class CtfConfig(AppConfig):
         from ctf.services.pack_references import register_ctf_pack_references
 
         register_ctf_pack_references()
+        from ctf.services.range.participant_control import admit_ctf_participant_control
+        from shared.participant_control_authority import register_participant_subject_admitter
+
+        register_participant_subject_admitter("ctf", admit_ctf_participant_control)

@@ -175,6 +175,28 @@ def _ready(members):
 
 
 class TestRealizedProjection:
+    def test_ready_keeps_the_realized_native_power_target(self):
+        fx = _Fixture()
+        member = _member()
+        target = {
+            "backend": "gce",
+            "project_id": "synthetic-project",
+            "zone": "europe-west3-a",
+            "instance_name": member["instance_id"],
+            "bootstrap_capability": "standard",
+        }
+        member["native_power_target"] = target
+        incarnation = {"instance_identity": "123", "disks": [{"name": "synthetic-boot", "identity": "456"}]}
+        member["native_power_incarnation"] = incarnation
+        row = fx.seed(ResultStep.RAES_TERMINAL_READY, _ready([member]))
+
+        apply_pending_operation_results()
+
+        fx.range.refresh_from_db()
+        assert _disposition(row) == OperationResultDisposition.APPLIED
+        assert fx.range.provisioned_instances[0]["native_power_target"] == target
+        assert fx.range.provisioned_instances[0]["native_power_incarnation"] == incarnation
+
     def test_ready_applies_the_projection_and_transitions_in_one_result(self):
         fx = _Fixture()
         row = fx.seed(ResultStep.RAES_TERMINAL_READY, _ready([_member()]))

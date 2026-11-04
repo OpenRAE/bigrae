@@ -150,6 +150,7 @@ def _policy_variable(policy: dict[str, Any], name: str) -> str:
 
 
 _SEMANTIC_VALIDATION_MESSAGES = {
+    "A provisioner Job may only declare canonical writable volumes and its exact native power identity projection.",
     "The provisioner-launcher service account may only create provisioner Jobs.",
     "Jobs running as the provisioner service account may only be created by the provisioner-launcher service account.",
     "A provisioner Job command must match the canonical operation and identifier argument grammar.",
@@ -683,6 +684,8 @@ def test_admission_policy_admits_exactly_the_launcher_operation_grammar(inline_p
     def allows(resource: str, operation: str) -> bool:
         job = copy.deepcopy(canonical)
         job["spec"]["template"]["spec"]["containers"][0]["args"] = [resource, operation, *ids]
+        if resource == "range" and operation in {"pause", "resume"}:
+            _attach_native_power_identity(job)
         return _semantic_policy_allows(policy, PROVISIONER_LAUNCHER_USERNAME, job, parameter_data=parameters)
 
     for resource, operations in _OPERATIONS.items():
@@ -692,6 +695,106 @@ def test_admission_policy_admits_exactly_the_launcher_operation_grammar(inline_p
     assert "activate" not in _OPERATIONS["range"]
     assert not allows("range", "activate")
     assert not allows("ngfw", "activate")
+
+
+def _attach_native_power_identity(job):
+    job["spec"]["activeDeadlineSeconds"] = 1800
+    pod = job["spec"]["template"]["spec"]
+    pod["volumes"].append(
+        {
+            "name": "native-power-identity",
+            "projected": {
+                "defaultMode": 0o440,
+                "sources": [
+                    {
+                        "serviceAccountToken": {
+                            "audience": "shifter-native-participant-invocation",
+                            "expirationSeconds": 600,
+                            "path": "token",
+                        }
+                    }
+                ],
+            },
+        }
+    )
+    pod["containers"][0]["volumeMounts"].append(
+        {
+            "name": "native-power-identity",
+            "mountPath": "/var/run/secrets/shifter/native-power",
+            "readOnly": True,
+        }
+    )
+
+
+def test_inline_runtime_parameters_preserve_escaped_configuration_strings():
+    from shared.participant_control_installation import NativeControlInstallation
+    from tests.shared.test_participant_control_installation import synthetic_installation_values
+
+    value = NativeControlInstallation.model_validate(synthetic_installation_values()).model_dump_json()
+    parameters = {**_canonical_admission_parameters(), "PARTICIPANT_CONTROL_CONFIGURATION": value}
+    policy = _policy(_load_helm_documents(runtime_env=parameters))
+    job = _canonical_admission_job()
+    environment = job["spec"]["template"]["spec"]["containers"][0]["env"]
+    environment.append({"name": "PARTICIPANT_CONTROL_CONFIGURATION", "value": value})
+    assert _semantic_policy_allows(policy, PROVISIONER_LAUNCHER_USERNAME, job, parameter_data=parameters)
+    environment[-1]["value"] = value.replace("shifter-native-power-installation/v1", "foreign-installation")
+    assert not _semantic_policy_allows(policy, PROVISIONER_LAUNCHER_USERNAME, job, parameter_data=parameters)
+
+
+@pytest.mark.parametrize("verb", ["pause", "resume"])
+def test_native_power_admission_allows_only_the_exact_identity_projection(verb):
+    parameters = _canonical_admission_parameters()
+    policy = _policy(_load_helm_documents(runtime_env=parameters))
+    canonical = _canonical_admission_job()
+    canonical["spec"]["template"]["spec"]["containers"][0]["args"][1] = verb
+    _attach_native_power_identity(canonical)
+    assert _semantic_policy_allows(policy, PROVISIONER_LAUNCHER_USERNAME, canonical, parameter_data=parameters)
+    for fault in (
+        "audience",
+        "expiry",
+        "path",
+        "mode",
+        "secret",
+        "extra-source",
+        "empty-dir",
+        "mount",
+        "writable",
+        "other-command",
+    ):
+        job = copy.deepcopy(canonical)
+        pod = job["spec"]["template"]["spec"]
+        volume = pod["volumes"][-1]
+        projection = volume["projected"]
+        source = projection["sources"][0]
+        token = source["serviceAccountToken"]
+        mount = pod["containers"][0]["volumeMounts"][-1]
+        if fault == "audience":
+            token["audience"] = "https://kubernetes.default.svc"
+        elif fault == "expiry":
+            token["expirationSeconds"] = 3600
+        elif fault == "path":
+            token["path"] = "other"
+        elif fault == "mode":
+            projection["defaultMode"] = 0o777
+        elif fault == "secret":
+            source["secret"] = {"name": "arbitrary"}
+        elif fault == "extra-source":
+            projection["sources"].append({"configMap": {"name": "arbitrary"}})
+        elif fault == "empty-dir":
+            del volume["projected"]
+            volume["emptyDir"] = {}
+        elif fault == "mount":
+            mount["mountPath"] = "/app"
+        elif fault == "writable":
+            mount["readOnly"] = False
+        else:
+            pod["containers"][0]["args"][1] = "provision"
+        assert not _semantic_policy_allows(
+            policy,
+            PROVISIONER_LAUNCHER_USERNAME,
+            job,
+            parameter_data=parameters,
+        ), fault
 
 
 @pytest.mark.parametrize("inline_params", [True, False])

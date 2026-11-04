@@ -1,0 +1,198 @@
+name: synthetic-native-power-admission
+description: Synthetic supervised native operation admission; no claimed cloud outcome.
+nodes:
+  lan:
+    type: Switch
+  web:
+    type: compute
+    os: linux
+    os_distribution: x-shifter:alpine
+    os_version: '3.19'
+    source:
+      name: alpine
+      version: '3.19'
+    resources:
+      ram: 512 mib
+      cpu: 1
+infrastructure:
+  lan:
+    count: 1
+    properties:
+      cidr: 10.51.0.0/24
+      gateway: 10.51.0.1
+  web:
+    count: 1
+    links:
+    - lan
+    properties:
+    - lan: 10.51.0.10
+entities:
+  analyst-team:
+    description: Participant team the interactive access is offered to.
+    role: blue
+  operators:
+    description: Synthetic organizing authority for the bounded control fixture.
+    role: white
+accounts:
+  analyst:
+    username: analyst
+    node: web
+    auth_method: key
+agents:
+  organizer:
+    affiliations:
+    - operators
+    authority_anchors:
+    - entities.operators
+    operating_scope:
+    - nodes.web
+  analyst:
+    affiliations:
+    - analyst-team
+    description: Participant offered SSH to the web host.
+    starting_accounts:
+    - analyst
+    interactive_access:
+      web-ssh:
+        target_ref: web
+        channel: ssh
+        account_ref: analyst
+    authority_anchors:
+    - entities.analyst-team
+    operating_scope:
+    - nodes.web
+    actions:
+    - request-pause
+    - request-resume
+    observation_boundaries:
+    - native-status
+action_contracts:
+  request-pause:
+    semantic_version: 1.0.0
+    behavioral_granularity: atomic
+    procedure_basis: Reserve an explicitly approved native range pause operation.
+    realization_profile: shifter-native-operation-admission-v1
+    fidelity_claim: Admission only; native readback determines power outcome.
+    preconditions:
+    - precondition_id: current-authority
+      precondition_class: authority
+      description: Current native authority and exact proposal approval are required.
+    effects:
+    - effect_id: reserved-operation
+      effect_class: evidence_effect
+      description: A native operation is reserved without dispatching a cloud call.
+      target_refs:
+      - nodes.web
+    failure_classes:
+    - authority_denied
+    - unsafe_withheld
+    - backend_error
+  request-resume:
+    semantic_version: 1.0.0
+    behavioral_granularity: atomic
+    procedure_basis: Reserve an explicitly approved native range resume operation.
+    realization_profile: shifter-native-operation-admission-v1
+    fidelity_claim: Admission only; native readback determines power outcome.
+    preconditions:
+    - precondition_id: current-authority
+      precondition_class: authority
+      description: Current native authority and exact proposal approval are required.
+    effects:
+    - effect_id: reserved-operation
+      effect_class: evidence_effect
+      description: A native operation is reserved without dispatching a cloud call.
+      target_refs:
+      - nodes.web
+    failure_classes:
+    - authority_denied
+    - unsafe_withheld
+    - backend_error
+observation_boundaries:
+  native-status:
+    observable_refs:
+    - nodes.web
+    projection_basis: Opaque operation references only.
+    redaction_policy: Exclude native credentials, content and provider state.
+    latency_profile: Asynchronous native result observation.
+realization:
+  constraints:
+  - field_pointer: /nodes/web
+    concern: compute-substrate
+    posture: exact
+    domain:
+      kind: exact
+      value: virtual-machine
+behavior_specifications:
+  controlled:
+    semantic_version: 1.0.0
+    participant_refs:
+    - analyst
+    authority_scope_refs:
+    - nodes.web
+    behavior_mode: mixed-control
+    action_contract_refs:
+    - request-pause
+    - request-resume
+    observation_boundary_refs:
+    - native-status
+    extension_policy: closed
+    mixed_control:
+      semantics: mixed-control-policy-occurrence/rev1
+      form: reusable-policy
+      participant_ref: analyst
+      policy_revision: 1.0.0
+      order_strategy: total-effective-order
+      initial_state_ref: active
+      dispositions:
+        duplicate: idempotent-if-equivalent
+        stale: reject-no-state-change
+        revoked: reject-no-state-change
+        late: reject-no-state-change
+        concurrent: order-then-revalidate
+        conflict: reject-no-state-change
+      controller_states:
+        active:
+          controller_ref: organizer
+          authority_basis_refs:
+          - entities.operators
+          scope_refs:
+          - nodes.web
+          policy_revision: 1.0.0
+          valid_from_order: 0
+          valid_until_order: 100
+          authority_status: active
+          evidence_refs:
+          - entities.operators
+      permitted_transitions:
+        propose:
+          transition_kind: proposal
+          from_state_ref: active
+          to_state_ref: active
+          valid_from_order: 0
+          valid_until_order: 100
+          evidence_refs:
+          - entities.operators
+        approve:
+          transition_kind: approval
+          from_state_ref: active
+          to_state_ref: active
+          valid_from_order: 0
+          valid_until_order: 100
+          evidence_refs:
+          - entities.operators
+        deny:
+          transition_kind: denial
+          from_state_ref: active
+          to_state_ref: active
+          valid_from_order: 0
+          valid_until_order: 100
+          evidence_refs:
+          - entities.operators
+        cancel:
+          transition_kind: cancellation
+          from_state_ref: active
+          to_state_ref: active
+          valid_from_order: 0
+          valid_until_order: 100
+          evidence_refs:
+          - entities.operators

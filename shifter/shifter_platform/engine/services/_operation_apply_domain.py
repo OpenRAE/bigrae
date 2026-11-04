@@ -295,6 +295,27 @@ def _lock_operation_target(row: OperationResultInbox) -> Range | Instance | None
 def _dispatch_range(row: OperationResultInbox, step: ResultStep, payload: dict[str, Any], target: Range) -> str:
     """Apply a range-resource result. Caller holds the Range lock."""
     request_id = str(row.request_id)
+    from shared.raes.runtime_target import is_raes_provisioning_plan
+
+    if is_raes_provisioning_plan(target.range_config) and step is not ResultStep.RANGE_TERMINAL_FAILED:
+        from ._operation_apply_native_power import apply_native_power_result
+
+        try:
+            detail = apply_native_power_result(row, step, payload, target)
+        except OperationResultError as exc:
+            from engine.models import OperationResultDisposition
+
+            raise _Rejected(OperationResultDisposition.REJECTED_INVALID, str(exc)) from None
+        if detail is not None:
+            return detail
+    elif step in {
+        ResultStep.RANGE_RAES_MEMBERS_PAUSED,
+        ResultStep.RANGE_RAES_MEMBERS_RESUMING,
+        ResultStep.RANGE_RAES_MEMBERS_READY,
+    }:
+        from engine.models import OperationResultDisposition
+
+        raise _Rejected(OperationResultDisposition.REJECTED_INVALID, "Native power result requires a compiled range")
     if step in (ResultStep.RANGE_INSTANCES_PAUSED, ResultStep.RANGE_INSTANCES_READY):
         return _apply_instances(target, payload, request_id)
     if step in _RANGE_TERMINAL_STEPS:

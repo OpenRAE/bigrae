@@ -14,10 +14,13 @@ class GCEInstanceBindingError(RuntimeError):
 
 def _host_public_key_from_instance(existing: object) -> str:
     """Recover the provisioner-issued host key instead of minting a mismatched one."""
-    metadata = getattr(existing, "metadata", None)
-    for item in getattr(metadata, "items", None) or []:
-        if getattr(item, "key", None) == HOST_PUBLIC_KEY_METADATA_KEY:
-            return str(getattr(item, "value", "") or "")
+    metadata = existing.get("metadata") if isinstance(existing, dict) else getattr(existing, "metadata", None)
+    items = metadata.get("items") if isinstance(metadata, dict) else getattr(metadata, "items", None)
+    for item in items or []:
+        key = item.get("key") if isinstance(item, dict) else getattr(item, "key", None)
+        if key == HOST_PUBLIC_KEY_METADATA_KEY:
+            value = item.get("value") if isinstance(item, dict) else getattr(item, "value", None)
+            return str(value or "")
     return ""
 
 

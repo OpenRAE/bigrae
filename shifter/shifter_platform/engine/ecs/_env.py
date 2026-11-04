@@ -23,6 +23,7 @@ from django.core.exceptions import ImproperlyConfigured
 from installation.runtime_inventory import AWS_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS
 
 _GCP_PROVISIONER_ENV_KEYS = (
+    "PARTICIPANT_CONTROL_CONFIGURATION",
     "MODEL_BROKER_GUEST_URL",
     "MODEL_BROKER_GUEST_VIP",
     "MODEL_ENROLLMENT_CONTROL_URL",

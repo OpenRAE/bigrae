@@ -91,6 +91,8 @@ _POLICY_CONTAINERS = {
     "openfga-admin": {"openfga": "openfga"},
 }
 
+_PARTICIPANT_CONTROL_CONTAINERS = {"participant-control": {"participant-control": "portal"}}
+
 
 def release_deployments(*, model_broker_enabled: bool = False, policy_enabled: bool = False) -> tuple[str, ...]:
     """Return every Deployment that must converge before evidence is sampled."""
@@ -262,6 +264,7 @@ def build_evidence(
     model_broker_enabled: bool = False,
     support: dict[str, dict[str, str]] | None = None,
     policy_enabled: bool = False,
+    participant_control_enabled: bool = False,
 ) -> dict[str, object]:
     """Return evidence only for the exact closed release workload/image map."""
     support = support or {}
@@ -272,6 +275,7 @@ def build_evidence(
         **_RELEASE_CONTAINERS,
         **(_BROKER_CONTAINERS if model_broker_enabled else {}),
         **(_POLICY_CONTAINERS if policy_enabled else {}),
+        **(_PARTICIPANT_CONTROL_CONTAINERS if participant_control_enabled else {}),
     }
     containers = {**required, **_SCHEDULED_CONTAINERS}
     referenced_images = {image_name for containers in containers.values() for image_name in containers.values()}
@@ -327,6 +331,7 @@ def main() -> int:
     parser.add_argument("--list-deployments", action="store_true")
     parser.add_argument("--model-broker-enabled", choices=("true", "false"), default="false")
     parser.add_argument("--policy-enabled", choices=("true", "false"), default="false")
+    parser.add_argument("--participant-control-enabled", choices=("true", "false"), default="false")
     parser.add_argument("--pods-json", type=Path)
     parser.add_argument("--output", type=Path)
     parser.add_argument("--source-sha")
@@ -354,6 +359,7 @@ def main() -> int:
             model_broker_enabled=args.model_broker_enabled == "true",
             support=parse_support_images(args.support_image),
             policy_enabled=args.policy_enabled == "true",
+            participant_control_enabled=args.participant_control_enabled == "true",
         )
         _write_private_json(args.output, evidence)
     except (OSError, ValueError, json.JSONDecodeError) as exc:

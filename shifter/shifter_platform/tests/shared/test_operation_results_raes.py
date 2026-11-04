@@ -33,6 +33,46 @@ from shared.raes.status import RAES_STATE_RUNNING, RAES_STATE_SUCCEEDED
 _OPERATION_ID = "11111111-2222-3333-4444-555555555555"
 
 
+class TestNativePowerMemberResults:
+    @pytest.mark.parametrize(
+        "operation,status,step_name",
+        [
+            ("pause", "paused", "RANGE_RAES_MEMBERS_PAUSED"),
+            ("resume", "ready", "RANGE_RAES_MEMBERS_READY"),
+        ],
+    )
+    def test_compiled_member_references_keep_their_resource_generation(self, operation, status, step_name):
+        payload = {
+            "resource_generation": _OPERATION_ID,
+            "members": [{"member_ref": "provision.node.web#0", "status": status}],
+        }
+
+        parsed = parse_result_payload("range", operation, step=getattr(ResultStep, step_name), payload=payload)
+
+        assert parsed == payload
+
+    @pytest.mark.parametrize("bad", ["duplicate", "unknown-field", "wrong-status", "empty", "bad-generation"])
+    def test_native_power_results_reject_ambiguous_or_invalid_observations(self, bad):
+        payload = {
+            "resource_generation": _OPERATION_ID,
+            "members": [{"member_ref": "provision.node.web#0", "status": "paused"}],
+        }
+        if bad == "duplicate":
+            payload["members"].append(dict(payload["members"][0]))
+        elif bad == "unknown-field":
+            payload["members"][0]["provider_state"] = "private"
+        elif bad == "wrong-status":
+            payload["members"][0]["status"] = "ready"
+        elif bad == "empty":
+            payload["members"] = []
+        else:
+            payload["resource_generation"] = "not-a-generation"
+
+        step = ResultStep.RANGE_RAES_MEMBERS_PAUSED
+        with pytest.raises(OperationResultError):
+            parse_result_payload("range", "pause", step=step, payload=payload)
+
+
 def _snapshot_payload(count: int = 2) -> dict:
     return {
         "resources": [

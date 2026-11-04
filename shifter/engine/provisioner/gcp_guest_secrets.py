@@ -15,6 +15,7 @@ from gcp_dynamic_secrets import (
     delete_all,
     dynamic_secret_project_id,
     read_or_create,
+    read_published_or_wait,
     secret_locations,
 )
 from log_redact import safe_log_fingerprint
@@ -186,6 +187,24 @@ def ensure_raes_ssh_secret(range_id: int, instance_key: str) -> tuple[str, str]:
         ),
     )
     return secret_name, derive_ssh_public_key(private_key)
+
+
+def existing_raes_ssh_secret(range_id: int, instance_key: str) -> str:
+    """Read an existing management credential reference without creating anything."""
+    client, exceptions, platform_project_id = _secret_client()
+    locations = secret_locations(
+        platform_project_id=platform_project_id,
+        dynamic_project_id=dynamic_secret_project_id(),
+        legacy_secret_id=_raes_secret_id(range_id, instance_key, "ssh"),
+        canonical_secret_id=canonical_secret_id(
+            credential_class=DynamicSecretClass.RAES_HOST_SSH,
+            scope=f"range-{range_id}-{instance_key}",
+        ),
+    )
+    existing = read_published_or_wait(client, exceptions, locations.read_refs, attempts=1, delay_seconds=0)
+    if existing is None:
+        raise RuntimeError("Native power management credential unavailable")
+    return existing[0]
 
 
 def _raes_account_secret_id(range_id: int, instance_key: str, username: str, kind: str) -> str:

@@ -9,6 +9,8 @@ Detailed guides for each BigRAE feature.
 - [Retry-safe range operations](retry-safe-range-operations) - Idempotent launch with a caller retry key and truthful cleanup outcomes
 - [Terminal](terminal) - Access range instances via SSH and RDP
 
+- [Supervised range power](supervised-range-power.md) - Human review, native status, and original request recovery
+
 ## Events
 
 - [CTF](ctf) - Capture-the-flag events with scored challenges and automated provisioning

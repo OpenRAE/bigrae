@@ -22124,6 +22124,491 @@
         }
       }
     },
+    "/api/v1/participant-control/ctf/bindings/{binding_id}/": {
+      "get": {
+        "operationId": "participant_control_ctf_bindings_retrieve",
+        "description": "Read a bounded reference page under current event authorization.",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "before",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "in": "path",
+            "name": "binding_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "participant-control"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlState"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/participant-control/ctf/bindings/{binding_id}/commands/": {
+      "post": {
+        "operationId": "participant_control_ctf_bindings_commands_create",
+        "description": "Submit one closed original request through the installed owner.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "binding_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "participant-control"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlCommand"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlOperation"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/participant-control/ctf/bindings/{binding_id}/commands/{command_id}/retry/": {
+      "post": {
+        "operationId": "participant_control_ctf_bindings_commands_retry_create",
+        "description": "Recover the retained request without accepting replacement fields.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "binding_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "command_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "participant-control"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlOperation"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/participant-control/ctf/participants/{participant_id}/binding/": {
+      "get": {
+        "operationId": "participant_control_ctf_participants_binding_retrieve",
+        "description": "Discover opaque control choices under current participant custody.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "participant_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "participant-control"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlOptions"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      },
+      "post": {
+        "operationId": "participant_control_ctf_participants_binding_create",
+        "description": "Activate an existing mapping for the current assigned generation.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "participant_id",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "participant-control"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlBinding"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlState"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        }
+      }
+    },
+    "/api/v1/participant-control/organizations/{organization_uuid}/sources/{scenario_id}/": {
+      "get": {
+        "operationId": "participant_control_organizations_sources_retrieve",
+        "description": "Authorize the organization before projecting its current source mapping.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization_uuid",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "participant-control"
+        ],
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlConfigurationStatus"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        },
+        "x-required-scopes": [
+          "cms:authoring:read"
+        ]
+      },
+      "post": {
+        "operationId": "participant_control_organizations_sources_create",
+        "description": "Verify the exact source revision before saving the authorized mapping.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "organization_uuid",
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "required": true
+          },
+          {
+            "in": "path",
+            "name": "scenario_id",
+            "schema": {
+              "type": "string"
+            },
+            "required": true
+          }
+        ],
+        "tags": [
+          "participant-control"
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ControlConfigurationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "security": [
+          {
+            "ApiTokenAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ControlConfiguration"
+                }
+              }
+            },
+            "description": ""
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Authentication failed."
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            },
+            "description": "Permission denied."
+          }
+        },
+        "x-required-scopes": [
+          "cms:authoring:write"
+        ]
+      }
+    },
     "/api/v1/workspaces/{target_uuid}/authorization/direct-assignments/": {
       "post": {
         "operationId": "workspaces_authorization_direct_assignments_create",
@@ -24819,6 +25304,9 @@
           },
           "modes": {
             "$ref": "#/components/schemas/BootstrapModes"
+          },
+          "participant_control_available": {
+            "type": "boolean"
           }
         },
         "required": [
@@ -27192,6 +27680,321 @@
         "required": [
           "count",
           "results"
+        ]
+      },
+      "ControlBinding": {
+        "type": "object",
+        "description": "Select only an existing verified configuration.",
+        "properties": {
+          "configuration_id": {
+            "type": "string",
+            "format": "uuid"
+          }
+        },
+        "required": [
+          "configuration_id"
+        ]
+      },
+      "ControlCommand": {
+        "type": "object",
+        "description": "Describe a native request without accepting portable verdicts or code.",
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ControlCommandKindEnum"
+          },
+          "verb": {
+            "$ref": "#/components/schemas/VerbEnum"
+          },
+          "proposal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "expected_cut_digest": {
+            "type": "string",
+            "maxLength": 71,
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "decision_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "action_id",
+          "expected_cut_digest",
+          "kind",
+          "proposal_id",
+          "request_id",
+          "verb"
+        ]
+      },
+      "ControlCommandKindEnum": {
+        "enum": [
+          "proposal",
+          "approval",
+          "denial",
+          "cancellation",
+          "action"
+        ],
+        "type": "string",
+        "description": "* `proposal` - proposal\n* `approval` - approval\n* `denial` - denial\n* `cancellation` - cancellation\n* `action` - action"
+      },
+      "ControlCommandReference": {
+        "type": "object",
+        "description": "Expose body-free original command and receipt references.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "verb": {
+            "type": "string"
+          },
+          "proposal_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "action_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "operation_state": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "required": [
+          "action_id",
+          "id",
+          "kind",
+          "operation_id",
+          "operation_state",
+          "proposal_id",
+          "verb"
+        ]
+      },
+      "ControlConfiguration": {
+        "type": "object",
+        "description": "Expose verified configuration references without compiler material.",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "source_package_digest": {
+            "type": "string"
+          },
+          "configuration_digest": {
+            "type": "string"
+          },
+          "raes_version": {
+            "type": "string"
+          },
+          "structural_report_ref": {
+            "type": "string"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/ControlSelection"
+          }
+        },
+        "required": [
+          "configuration_digest",
+          "id",
+          "raes_version",
+          "selection",
+          "source_package_digest",
+          "structural_report_ref"
+        ]
+      },
+      "ControlConfigurationRequest": {
+        "type": "object",
+        "description": "Require the displayed package digest and logical selection.",
+        "properties": {
+          "expected_package_digest": {
+            "type": "string",
+            "maxLength": 71,
+            "pattern": "^sha256:[0-9a-f]{64}$"
+          },
+          "selection": {
+            "$ref": "#/components/schemas/ControlSelection"
+          }
+        },
+        "required": [
+          "expected_package_digest",
+          "selection"
+        ]
+      },
+      "ControlConfigurationStatus": {
+        "type": "object",
+        "description": "Distinguish an absent mapping from one that needs review.",
+        "properties": {
+          "configuration": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ControlConfiguration"
+              }
+            ],
+            "nullable": true
+          },
+          "requires_refresh": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "configuration",
+          "requires_refresh"
+        ]
+      },
+      "ControlOperation": {
+        "type": "object",
+        "description": "Project the owning SDK receipt separately from native power truth.",
+        "properties": {
+          "command_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "operation_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "command_id",
+          "operation_id",
+          "state"
+        ]
+      },
+      "ControlOptions": {
+        "type": "object",
+        "description": "Return opaque discovery references and mapping freshness.",
+        "properties": {
+          "configuration_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "binding_id": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          },
+          "requires_refresh": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "binding_id",
+          "configuration_id",
+          "requires_refresh"
+        ]
+      },
+      "ControlSelection": {
+        "type": "object",
+        "description": "Five closed logical references from the admitted scenario.",
+        "properties": {
+          "participant_address": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "controller_address": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "pause_action_contract_address": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "resume_action_contract_address": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "observation_boundary_address": {
+            "type": "string",
+            "maxLength": 256
+          }
+        },
+        "required": [
+          "controller_address",
+          "observation_boundary_address",
+          "participant_address",
+          "pause_action_contract_address",
+          "resume_action_contract_address"
+        ]
+      },
+      "ControlState": {
+        "type": "object",
+        "description": "Return current coordinates, native status, and a bounded command page.",
+        "properties": {
+          "binding_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "configuration_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "range_uuid": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "episode_id": {
+            "type": "string"
+          },
+          "state_revision": {
+            "type": "integer"
+          },
+          "history_head": {
+            "type": "integer"
+          },
+          "control_cut_digest": {
+            "type": "string"
+          },
+          "range_status": {
+            "type": "string"
+          },
+          "commands": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ControlCommandReference"
+            }
+          },
+          "next_before": {
+            "type": "string",
+            "format": "uuid",
+            "nullable": true
+          }
+        },
+        "required": [
+          "binding_id",
+          "commands",
+          "configuration_id",
+          "control_cut_digest",
+          "episode_id",
+          "history_head",
+          "next_before",
+          "range_status",
+          "range_uuid",
+          "state_revision"
         ]
       },
       "CreateAuthorizationMetadata": {
@@ -36029,6 +36832,14 @@
         "required": [
           "valid"
         ]
+      },
+      "VerbEnum": {
+        "enum": [
+          "pause",
+          "resume"
+        ],
+        "type": "string",
+        "description": "* `pause` - pause\n* `resume` - resume"
       },
       "Webhook": {
         "type": "object",

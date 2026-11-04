@@ -37,9 +37,11 @@ class _RecordingPort:
     request_id: str = "req-launch-1"
     accepted: bool = True
     plans: list = field(default_factory=list)
+    contexts: list = field(default_factory=list)
 
-    def realize(self, compiled_plan, participant_access=()) -> ShifterDispatchResult:
+    def realize(self, compiled_plan, participant_access=(), *, compiled_participants=None) -> ShifterDispatchResult:
         self.plans.append(compiled_plan)
+        self.contexts.append(compiled_participants)
         return ShifterDispatchResult(
             request_id=self.request_id,
             accepted=self.accepted,
@@ -131,7 +133,7 @@ class _AccessRecordingPort:
     accepted: bool = True
     seen: list = field(default_factory=list)
 
-    def realize(self, compiled_plan, participant_access=()) -> ShifterDispatchResult:
+    def realize(self, compiled_plan, participant_access=(), *, compiled_participants=None) -> ShifterDispatchResult:
         self.seen.append(tuple(participant_access))
         return ShifterDispatchResult(
             request_id=self.request_id, accepted=True, status="accepted", range_id="rng-access"
@@ -169,6 +171,19 @@ def test_launch_without_authored_access_projects_an_empty_sidecar():
     assert port.seen == [()]
 
 
+def test_launch_preserves_compiled_participant_context_beside_the_plan():
+    port = _RecordingPort()
+
+    result = launch_raes_package(scenario_path=_FIXTURES / "shifter-launch-access.sdl.yaml", port=port)
+
+    assert result.accepted
+    (context,) = port.contexts
+    assert context is not None
+    assert context.reference_payload()[0]["participant_ref"] == "participant.behavior.analyst"
+    assert "compiler_input_digest" not in port.plans[0]
+    assert "parameters_json" not in port.plans[0]
+
+
 def test_launch_rejects_ambiguous_participant_access_before_dispatch():
     """Divergent participant policies must fail closed, never be unioned."""
     port = _AccessRecordingPort()
@@ -179,3 +194,18 @@ def test_launch_rejects_ambiguous_participant_access_before_dispatch():
     assert any("participant-access-unrealizable" in diagnostic for diagnostic in result.diagnostics)
     # Nothing was dispatched: no range row or cloud resource exists for it.
     assert port.seen == []
+
+
+def test_launch_rejects_uninstalled_participant_control_before_dispatch():
+    """A provisioning-only target cannot silently discard authored control."""
+    scenario_path = _FIXTURES.parent / "control/participant-supervision.sdl.yaml"
+    port = _RecordingPort()
+
+    result = launch_raes_package(scenario_path=scenario_path, port=port)
+
+    assert not result.accepted
+    assert result.status == "rejected"
+    assert port.plans == []
+    assert any(
+        diagnostic.startswith("participant.mixed-control-semantics-unsupported @") for diagnostic in result.diagnostics
+    )

@@ -353,7 +353,7 @@ def _range_operation_payload(target: Range, resource: str, request: Request, ope
             suppress_access=_request_has_pending_warm_generation(request),
             preparation_for_cleanup=operation == "destroy",
         )
-    return {
+    payload: dict[str, object] = {
         "range_spec": target.range_config or {},
         "legacy_range_backend": _resolved_range_backend(target, request),
         # Effective egress posture pinned at create (PLAT-238, ADR-017-R5).
@@ -363,6 +363,21 @@ def _range_operation_payload(target: Range, resource: str, request: Request, ope
         # parser fails closed on absence rather than defaulting (ADR-043 window).
         "egress_mode": target.egress_mode,
     }
+    if operation in {"pause", "resume"}:
+        from shared.raes.power_input import build_native_power_input
+        from shared.raes.runtime_target import is_raes_provisioning_plan
+
+        if is_raes_provisioning_plan(target.range_config):
+            from engine.services._native_participant_origin import native_power_origin
+
+            payload["native_power"] = build_native_power_input(
+                target.range_config,
+                target.provisioned_instances,
+                target.resource_generation,
+                backend=str(target.range_backend or ""),
+            )
+            payload["native_provisioning_operation_id"] = str(native_power_origin(target))
+    return payload
 
 
 def operation_input_payload(

@@ -58,6 +58,7 @@ class Shape(StrEnum):
     RAES_OPERATION = "raes_operation"
     RAES_SNAPSHOT = "raes_snapshot"
     RAES_READY = "raes_ready"
+    RAES_POWER_MEMBERS = "raes_power_members"
     VPN_PKI = "vpn_pki"
 
 
@@ -262,6 +263,34 @@ def _parse_instances(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]:
             }
         )
     return {"instances": outcomes}
+
+
+def _parse_raes_power_members(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]:
+    """Preserve compiled member handles without treating them as legacy UUIDs."""
+    _require_exact_keys(payload, frozenset({"resource_generation", "members"}), _PAYLOAD_FIELD)
+    generation = _require_uuid(payload["resource_generation"], "result payload resource generation")
+    members = payload["members"]
+    if not isinstance(members, list) or not 1 <= len(members) <= MAX_RAES_MEMBERS:
+        raise OperationResultError("result payload native member count is invalid")
+    outcomes = []
+    seen = set()
+    for item in members:
+        entry = _require_dict(item, "result payload native member")
+        _require_exact_keys(entry, frozenset({"member_ref", "status"}), "result payload native member")
+        reference = entry["member_ref"]
+        if (
+            not isinstance(reference, str)
+            or not 1 <= len(reference) <= 512
+            or reference.strip() != reference
+            or any(ord(character) < 32 or ord(character) == 127 for character in reference)
+            or reference in seen
+        ):
+            raise OperationResultError("result payload native member reference is invalid or repeated")
+        seen.add(reference)
+        outcomes.append(
+            {"member_ref": reference, "status": _require_status(entry["status"], spec.status, "member status")}
+        )
+    return {"resource_generation": generation, "members": outcomes}
 
 
 def _parse_ngfw_state(value: object) -> dict[str, Any]:
@@ -480,4 +509,5 @@ PARSERS = {
     Shape.RAES_OPERATION: _parse_raes_operation,
     Shape.RAES_SNAPSHOT: _parse_raes_snapshot,
     Shape.RAES_READY: _parse_raes_ready,
+    Shape.RAES_POWER_MEMBERS: _parse_raes_power_members,
 }

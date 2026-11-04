@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
 
+import { ParticipantControlCard } from "./ParticipantControlCard";
 import { ParticipantCaptainCard } from "./ParticipantCaptainCard";
 import { ParticipantModerationCard } from "./ParticipantModerationCard";
 import { ParticipantPasswordDialog } from "./ParticipantPasswordDialog";
@@ -290,6 +291,7 @@ export function ParticipantDetailPage() {
         <ParticipantModerationCard participant={participant} />
         <BracketControl participant={participant} />
         <RangeControls participant={participant} />
+        <ParticipantControlCard key={participant.id} participantId={participant.id} />
       </div>
     </>
   );

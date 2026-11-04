@@ -161,13 +161,9 @@ if __name__ == "__main__":
 
         if args.operation in ("provision", "destroy"):
             run_range_terraform(tf_op, request_id, operation_id=args.operation_id)
-        elif args.operation == "pause":
-            from range_ops import run_range_pause
+        else:
+            from native_power_ops import run_range_power
 
-            run_range_pause(request_id, operation_id=args.operation_id)
-        elif args.operation == "resume":
-            from range_ops import run_range_resume
-
-            run_range_resume(request_id, operation_id=args.operation_id)
+            run_range_power(request_id, args.operation, operation_id=args.operation_id)
 
         logger.info("Completed range %s for request_id=%s", args.operation, request_id)

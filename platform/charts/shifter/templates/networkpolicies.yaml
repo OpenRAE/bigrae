@@ -565,6 +565,7 @@ spec:
                   - portal
                   - identity-cutover
                   - catalog-initializer
+                  - participant-control
                   - worker-cms
                   - worker-engine
                   - worker-mc
@@ -598,6 +599,7 @@ spec:
           - portal
           - identity-cutover
           - catalog-initializer
+          - participant-control
           - worker-cms
           - worker-engine
           - worker-mc

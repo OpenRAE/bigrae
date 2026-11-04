@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from shared.native_power import parse_gce_power_incarnation, parse_gce_power_target
+
 from raes_gcp_network_allocation import RaesRealizationError
 
 
@@ -42,6 +44,21 @@ def _realized_member(instance: dict[str, object]) -> dict[str, object]:
     if host_key:
         member["host_public_key"] = host_key
     _copy_optional_text(member, instance, "sftp_root_directory", "sftp_root_directory")
+    if any(key in instance for key in ("gcp_project_id", "gcp_zone", "gcp_instance_name")):
+        member["native_power_target"] = parse_gce_power_target(
+            {
+                "backend": "gce",
+                "project_id": instance.get("gcp_project_id"),
+                "zone": instance.get("gcp_zone"),
+                "instance_name": instance.get("gcp_instance_name"),
+                "bootstrap_capability": instance.get("bootstrap_capability"),
+            },
+            instance_id=str(member["instance_id"]),
+        ).to_transport()
+        if "native_power_incarnation" in instance:
+            member["native_power_incarnation"] = parse_gce_power_incarnation(
+                instance["native_power_incarnation"]
+            ).to_transport()
     for channel, key in (("ssh", "ssh_key_secret_arn"), ("rdp", "rdp_password_secret_arn")):
         if channel in channels:
             member[key] = str(instance.get(key, ""))

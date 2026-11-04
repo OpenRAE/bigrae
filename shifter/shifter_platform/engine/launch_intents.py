@@ -400,7 +400,7 @@ def enqueue_provisioner_launch(
 
 
 def _enqueue_admitted_provisioner_launch(
-    command: list[str], payload: dict[str, object], authority: dict[str, object]
+    command: list[str], payload: dict[str, object], authority: dict[str, object], *, hold_for_participant: bool = False
 ) -> str:
     """Commit server-owned admission in the incumbent operation transaction."""
     from engine.services._launch_authority import assert_launch_authority_replay
@@ -432,6 +432,7 @@ def _enqueue_admitted_provisioner_launch(
             payload=payload,
             task_ref=task_ref,
             next_attempt_at=timezone.now(),
+            status=ProvisionerLaunchStatus.HELD if hold_for_participant else ProvisionerLaunchStatus.PENDING,
             **({"executing_workload": _launch_workload(payload, operation_id, intent_id)} if authority else {}),
             **authority,
         )
@@ -440,7 +441,7 @@ def _enqueue_admitted_provisioner_launch(
 
         from engine.ecs._local import _is_local_provisioner_enabled, drain_local_intent
 
-        if _is_local_provisioner_enabled():
+        if not hold_for_participant and _is_local_provisioner_enabled():
             transaction.on_commit(partial(drain_local_intent, intent_id))
         return str(row.intent_id)
 

@@ -12,6 +12,9 @@ from __future__ import annotations
 # Keep this set scoped to that renderer: its contract test asserts exact equality.
 GCP_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
+        "PARTICIPANT_CONTROL_ENABLED",
+        "PARTICIPANT_CONTROL_OWNER_PROCESS",
+        "PARTICIPANT_CONTROL_CONFIGURATION",
         "MODEL_BROKER_GUEST_URL",
         "MODEL_BROKER_GUEST_VIP",
         "MODEL_ENROLLMENT_CONTROL_URL",
@@ -205,6 +208,7 @@ GCP_SECRET_RUNTIME_ENV_KEYS: frozenset[str] = frozenset()
 # range-task for the ``GCP_RANGE_*`` guest-configuration keys among them).
 GCP_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
+        "PARTICIPANT_CONTROL_CONFIGURATION",
         "DB_AUTH_MODE",
         "MODEL_BROKER_GUEST_URL",
         "MODEL_BROKER_GUEST_VIP",
