@@ -49,6 +49,8 @@ Transfer bundle payloads through process input, never command arguments or logs.
 2. Publish a CA trust bundle containing the old and new public CAs. Synchronize
    it through `sync_openfga_secrets.py`, restart policy clients and verify that
    their mounted trust files contain both CAs before changing either server.
+   Use the full application workload inventory, including background workers;
+   a list limited to the portal and the original workers is incomplete.
 3. Add new runtime and admin secret versions with the replacement TLS material
    and the existing authentication keys. Synchronize the bundles, then roll
    `openfga` and `openfga-admin` and wait for both Deployments to become ready.
