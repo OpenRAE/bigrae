@@ -6,9 +6,10 @@ architecture; subsystem guides provide detail.
 
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
-**Reviewed:** 2026-11-04 for registered-project IAM policy requests (#2773), after
-the one-command GCP install (#2679).
-This describes source behavior, not a certificate of a live deployment.
+
+**Reviewed:** 2026-11-04 for native provider account lookup (#2771) and
+registered-project IAM policy requests (#2773), after the one-command GCP
+install (#2679).
 
 Portal and deployer images install dependencies during the build and remove
 `pip` and its vendored libraries from the runtime image. The shared deployment
@@ -88,8 +89,11 @@ bootstraps one exact provider-bound administrator, and invalidates pre-cutover
 sessions and API tokens before activation. On an empty database, a preparation
 step before the plan creates that administrator's user, principal, and provider
 binding from the bootstrap facts (#2671). It creates nothing when any user
-already exists. Repository and clean/legacy fixture evidence alone does not
-establish live-cloud acceptance.
+already exists. Human login resolves that exact native provider binding before
+legacy profile fields, so the first administrator keeps its original account,
+principal and grants (#2771). Account and principal lifecycle checks still apply.
+Repository and clean/legacy fixture evidence alone does not establish live-cloud
+acceptance.
 [Content/range authority](shifter_platform/content-range-authority.md) and
 [account administration](shifter_platform/account-administration.md) explain the
 implemented slices. ADR-054's dedicated-customer model is superseded by ADR-066;

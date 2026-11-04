@@ -196,13 +196,24 @@ def test_identity_platform_session_rejects_non_json(client, body):
 @override_settings(
     AUTH_PROVIDER="identity_platform",
     DEBUG=False,
-    IDENTITY_ALLOWED_EMAIL_DOMAIN="paloaltonetworks.com",
+    IDENTITY_ALLOWED_EMAIL_DOMAIN="example.com",
 )
-def test_identity_platform_session_creates_django_session(client, monkeypatch, identity_user, settings):
+@pytest.mark.parametrize("first_install", [False, True], ids=["existing-user", "first-install"])
+def test_identity_platform_session_creates_django_session(client, monkeypatch, settings, first_install):
     from config import views
+    from management.models import ProviderBinding
+    from management.services import prepare_empty_installation_bootstrap
 
     settings.IDENTITY_PLATFORM_PROJECT_ID = "synthetic-project"
     settings.IDENTITY_PLATFORM_API_KEY = "synthetic-public-api-key"
+    issuer = "https://securetoken.google.com/synthetic-project"
+    if first_install:
+        principal_uuid = prepare_empty_installation_bootstrap(issuer, "synthetic-human")
+        identity_user = ProviderBinding.objects.get(principal__uuid=principal_uuid).principal.user
+        assert identity_user.email == ""
+        assert not identity_user.profile.cognito_sub
+    else:
+        identity_user = User.objects.create_user(username="operator@example.com", email="operator@example.com")
     provider = views.identity_platform_auth
     monkeypatch.setattr(provider.firebase_admin, "get_app", lambda: object())
     monkeypatch.setattr(
@@ -212,7 +223,7 @@ def test_identity_platform_session_creates_django_session(client, monkeypatch, i
             "iss": "https://securetoken.google.com/synthetic-project",
             "aud": "synthetic-project",
             "sub": "synthetic-human",
-            "email": identity_user.email,
+            "email": "operator@example.com",
             "email_verified": True,
             "auth_time": int(time.time()),
             "firebase": {"sign_in_second_factor": "totp"},
@@ -237,6 +248,10 @@ def test_identity_platform_session_creates_django_session(client, monkeypatch, i
     assert response.json()["redirect_url"] == reverse("dashboard_router")
     assert "_auth_user_id" in client.session
     assert BACKEND_SESSION_KEY in client.session
+    assert int(client.session["_auth_user_id"]) == identity_user.pk
+    assert User.objects.count() == 1
+    if first_install:
+        assert ProviderBinding.objects.get(issuer=issuer, subject="synthetic-human").principal.uuid == principal_uuid
 
 
 @override_settings(
@@ -614,6 +629,56 @@ class TestIdentityPlatformBackendSubjectFirstResolution:
     """Subject-first account resolution, falling back to username/email only
     when no stored profile is bound to the (issuer, subject) or a legacy
     subject-only row (issue #1521)."""
+
+    @pytest.mark.parametrize(
+        "issuer,subject", [("https://other.example", "native-subject"), (_ISSUER, "other-subject")]
+    )
+    def test_native_lookup_requires_the_exact_provider_tuple(self, issuer, subject):
+        from management.services import prepare_empty_installation_bootstrap, resolve_user_by_provider_identity
+
+        prepare_empty_installation_bootstrap(_ISSUER, "native-subject")
+        assert not resolve_user_by_provider_identity(issuer, subject).exists()
+
+    @pytest.mark.parametrize("native_state", ["active", "inactive-user", "inactive-principal", "service"])
+    @override_settings(IDENTITY_ALLOWED_EMAIL_DOMAIN="example.com")
+    def test_native_binding_precedes_a_conflicting_legacy_profile(self, native_state):
+        from config import identity_platform as provider
+        from management.models import Principal, ProviderBinding
+        from management.services import (
+            get_user_profile,
+            prepare_empty_installation_bootstrap,
+            resolve_user_by_provider_identity,
+        )
+
+        subject = "native-subject"
+        if native_state == "service":
+            principal = Principal.objects.create(kind=Principal.Kind.SERVICE, name="automation")
+            ProviderBinding.objects.create(principal=principal, issuer=_ISSUER, subject=subject)
+            native_user = None
+        else:
+            uuid = prepare_empty_installation_bootstrap(_ISSUER, subject)
+            principal = Principal.objects.get(uuid=uuid)
+            native_user = principal.user
+            if native_state == "inactive-user":
+                native_user.is_active = False
+                native_user.save(update_fields=["is_active"])
+            elif native_state == "inactive-principal":
+                principal.is_active = False
+                principal.save(update_fields=["is_active"])
+
+        legacy = User.objects.create_user(username="other@example.com", email="other@example.com")
+        profile = get_user_profile(legacy)
+        profile.issuer, profile.cognito_sub = _ISSUER, subject
+        profile.save(update_fields=["issuer", "cognito_sub"])
+
+        assert list(resolve_user_by_provider_identity(_ISSUER, subject)) == ([native_user] if native_user else [])
+        count = User.objects.count()
+        with pytest.raises(provider.IdentityPlatformAuthError):
+            provider.IdentityPlatformBackend().authenticate(
+                None, identity_claims=_claims(sub=subject, email=legacy.email)
+            )
+        assert User.objects.count() == count
+        assert ProviderBinding.objects.get(issuer=_ISSUER, subject=subject).principal_id == principal.pk
 
     @override_settings(IDENTITY_ALLOWED_EMAIL_DOMAIN="example.com")
     def test_resolves_exact_bound_tuple_over_a_different_email(self):

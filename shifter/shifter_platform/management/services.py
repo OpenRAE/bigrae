@@ -32,7 +32,7 @@ from . import session_backend as _session_backend
 from . import temporary_accounts as _temporary_accounts
 from . import worker_validation as _worker_validation
 from .audit_context import AuditContext
-from .models import ActivityLog, UserProfile
+from .models import ActivityLog, Principal, ProviderBinding, UserProfile
 
 apply_identity_provider_bindings = _identity_cutover.apply_identity_provider_bindings
 bootstrap_principal_uuid = _identity_cutover.bootstrap_principal_uuid
@@ -327,14 +327,15 @@ def resolve_user_by_provider_identity(issuer: str, subject: str) -> QuerySet[Use
     persistence layer next to :func:`bind_provider_identity` rather than being
     duplicated in ``config.oidc`` and ``config.identity_platform``.
 
-    Because ``UserProfile.cognito_sub`` is unique, at most one profile matches a
-    given ``subject``; it resolves that user when the stored issuer is either the
-    verified issuer (an exact bind) or empty (a legacy row not yet bound to an
-    issuer). A drifted issuer or an unknown subject yields an empty queryset,
-    leaving the caller's provider-native email fallback (the unbound/first-
-    bootstrap seam) and :func:`bind_provider_identity`'s fail-closed compare to
-    run. Resolution never creates, mutates, or binds; the caller performs
-    creation and binding inside one atomic, row-locked security mutation.
+    The exact native ``ProviderBinding`` selects its human account first,
+    including the first-install administrator whose legacy profile is unbound.
+    Lifecycle checks remain with the caller and binding service. A service or
+    temporary account cannot resolve as a human login.
+
+    Without a native binding, a legacy profile may match the subject with the
+    exact issuer or an empty issuer. Resolution never creates, mutates, or
+    binds; the caller performs creation and binding inside one atomic,
+    row-locked security mutation.
 
     Returns a queryset (never ``None``) so the OIDC adapter can hand it straight
     to ``mozilla-django-oidc``'s multi/one/none handling while the Identity
@@ -343,6 +344,15 @@ def resolve_user_by_provider_identity(issuer: str, subject: str) -> QuerySet[Use
     user_model = get_user_model()
     if not subject or not subject.strip():
         return user_model.objects.none()
+    principal_id = (
+        ProviderBinding.objects.filter(issuer=issuer, subject=subject).values_list("principal_id", flat=True).first()
+    )
+    if principal_id is not None:
+        return user_model.objects.filter(
+            identity_principal=principal_id,
+            identity_principal__kind=Principal.Kind.HUMAN,
+            profile__is_ctf_account=False,
+        )
     return user_model.objects.filter(
         Q(profile__issuer=issuer) | Q(profile__issuer=""),
         profile__cognito_sub=subject,
