@@ -160,7 +160,8 @@ class TestReleaseBaseImages:
             version="1.0.0", source_revision="a" * 40, chart_version="1.0.0", images=images, base_images=base_images
         )
 
-    def test_imports_the_verified_images_only_when_the_bundle_lacks_them(self, tmp_path, monkeypatch):
+    @pytest.mark.parametrize("roles", [("kali", "ubuntu"), ("kali", "ubuntu", "dc")], ids=["required-only", "with-dc"])
+    def test_imports_the_verified_images_only_when_the_bundle_lacks_them(self, tmp_path, monkeypatch, roles):
         from gcp_provenance import ReleaseTrust
 
         bundle = write_bundle(tmp_path / "b", range_images={})
@@ -190,13 +191,14 @@ class TestReleaseBaseImages:
         options = DeployOptions(source="gs://acme-shifter-deployment-config", release_source="mirror.example/r")
         trust = ReleaseTrust(repository_id="11", owner_id="22", source_revision="a" * 40)
         runner = FakeRunner()
-        updated = import_release_base_images(runner, options, inputs, self._manifest(BASE_IMAGES), trust)
+        base_images = {role: BASE_IMAGES[role] for role in roles}
+        updated = import_release_base_images(runner, options, inputs, self._manifest(base_images), trust)
         # Every guest is verified against the trust anchor before the import.
-        assert verified == [(BASE_IMAGES, "11", "22", "mirror.example/r")]
-        assert imported == [(["kali", "ubuntu", "dc"], PROJECT, "us-central1")]
-        assert set(updated.range_images) == {"linux", "kali", "dc"}
+        assert verified == [(base_images, "11", "22", "mirror.example/r")]
+        assert imported == [(list(roles), PROJECT, "us-central1")]
+        assert set(updated.range_images) == ({"linux", "kali", "dc"} if "dc" in roles else {"linux", "kali"})
         assert written == [("gs://acme-shifter-deployment-config", dict(updated.range_images))]
-        assert import_release_base_images(runner, options, updated, self._manifest(BASE_IMAGES), trust) is updated
+        assert import_release_base_images(runner, options, updated, self._manifest(base_images), trust) is updated
         assert import_release_base_images(runner, options, inputs, self._manifest({}), trust) is inputs
         # A release without dc needs no import when the bundle holds the roles that it names (#2730).
         import dataclasses

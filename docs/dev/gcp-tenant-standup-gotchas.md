@@ -130,8 +130,14 @@ Artifact Registry mirror, ORAS uses the Docker credential helper, so
 
 The deploy imports the base range images that the release pins when the bundle
 has no range image roles. If other base guest images already exist in the
-project, record them with `gcp-config set-range-image` for the `linux`,
-`kali`, and `dc` roles first; the deploy then imports nothing.
+project, record them with `gcp-config set-range-image`. Record `linux` and `kali`;
+record `dc` only when the selected release includes it. The deploy imports only
+when a role named by the release is missing from the bundle.
+
+If an interrupted first installation imported verified images before it wrote
+`range-images.json`, retain those images. Record their exact native references
+through this command. Then resume `gcp-deploy --first-install` with the same
+release and store. Image readback and the release checks still apply.
 
 ## Use the deployer image for the tools
 
