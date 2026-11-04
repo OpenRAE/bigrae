@@ -41,6 +41,9 @@ class DisposableWorker(models.Model):
     range = models.OneToOneField("Range", on_delete=models.PROTECT, related_name="disposable_worker")
     request_id = models.UUIDField(unique=True)
     experiment_id = models.UUIDField(db_index=True)
+    initial_trial_id = models.UUIDField(
+        null=True, blank=True, editable=False, help_text="Trial requested at creation, before any later binding"
+    )
     trial_id = models.UUIDField(null=True, blank=True)
     profile = models.JSONField()
     profile_digest = models.CharField(max_length=71)

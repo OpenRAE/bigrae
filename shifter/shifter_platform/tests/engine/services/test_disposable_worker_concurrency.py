@@ -72,7 +72,7 @@ def test_parallel_dispatch_does_not_invert_creation_ancestry_and_range_table_loc
     from uuid import uuid4
 
     first_id = uuid4()
-    publishing, allocating, readback, dispatch_scope = (threading.Event() for _ in range(4))
+    publishing, allocating, readback, dispatch_lock = (threading.Event() for _ in range(4))
     original_read = allow_all_policy.read_relationships
 
     def read(change):
@@ -88,9 +88,14 @@ def test_parallel_dispatch_does_not_invert_creation_ancestry_and_range_table_loc
         def trace(execute, sql, params, many, context):
             if not first and "LOCK TABLE mission_control_range IN EXCLUSIVE MODE" in sql:
                 allocating.set()
-                assert dispatch_scope.wait(10)
-            if first and readback.is_set() and '"workspaces_account"' in sql and "FOR UPDATE" in sql:
-                dispatch_scope.set()
+                assert dispatch_lock.wait(10)
+            if (
+                first
+                and readback.is_set()
+                and "FOR UPDATE" in sql
+                and ('"workspaces_account"' in sql or '"engine_workerpolicyrecord"' in sql)
+            ):
+                dispatch_lock.set()
             return execute(sql, params, many, context)
 
         try:
@@ -105,3 +110,75 @@ def test_parallel_dispatch_does_not_invert_creation_ancestry_and_range_table_loc
         second = pool.submit(launch, False)
         assert first.result(timeout=30) == first_id
         assert second.result(timeout=30) != first_id
+
+
+def test_creation_overlaps_verified_absence_settlement_without_deadlock(apparatus):
+    """Meet a real capacity-row lock with native range/table locks in PostgreSQL."""
+    from engine.models import CapacityDraw, DisposableWorker, ProvisionerLaunchIntent
+    from engine.services import reconcile_disposable_workers, retire_disposable_worker
+    from shared.operation_results import ResultStep
+    from tests.engine.services.test_native_warm_retirement import _apply_result
+
+    worker = create(apparatus)
+    provision = ProvisionerLaunchIntent.objects.get(payload__operation="provision")
+    _apply_result(
+        provision,
+        ResultStep.RAES_TERMINAL_FAILED,
+        {"reason_code": "cloud_operation_failed", "diagnostic": "Synthetic partial provision"},
+    )
+    retire_disposable_worker(apparatus.credential, worker.worker_id)
+    row = DisposableWorker.objects.get(pk=worker.worker_id)
+    cleanup = ProvisionerLaunchIntent.objects.get(payload__operation="destroy")
+    _apply_result(
+        cleanup,
+        ResultStep.RAES_TERMINAL_DESTROYED,
+        {
+            "raes_status": "succeeded",
+            "cleanup_inventory": {
+                "outcome": "VERIFIED_ABSENT",
+                "residual_categories": [],
+                "scope": {
+                    "provider": "gcp",
+                    "request_id": str(row.request_id),
+                    "resource_generation": str(row.range.resource_generation),
+                },
+            },
+        },
+    )
+    budget_locked, settlement_attempting = threading.Event(), threading.Event()
+
+    def run(creating):
+        def trace(execute, sql, params, many, context):
+            locking = "FOR UPDATE" in sql
+            if not creating and locking and '"engine_workerpolicyrecord"' in sql:
+                settlement_attempting.set()
+            result = execute(sql, params, many, context)
+            if not creating and locking and '"mission_control_range"' in sql:
+                settlement_attempting.set()
+            if creating and locking and '"engine_capacity_reservation"' in sql and not budget_locked.is_set():
+                budget_locked.set()
+                assert settlement_attempting.wait(10)
+            return result
+
+        try:
+            with connection.cursor() as cursor:
+                cursor.execute("SET lock_timeout = '5s'")
+            with connection.execute_wrapper(trace):
+                if creating:
+                    return create(apparatus).worker_id
+                return reconcile_disposable_workers(worker_ids=(worker.worker_id,))
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        creation = pool.submit(run, True)
+        if not budget_locked.wait(10):
+            creation.result(timeout=1)
+            pytest.fail("Creation never acquired the capacity reservation")
+        settlement = pool.submit(run, False)
+        assert creation.result(timeout=20) != worker.worker_id
+        assert settlement.result(timeout=20) == 1
+    row.refresh_from_db()
+    assert row.terminal_at is not None
+    assert not CapacityDraw.objects.filter(draw_key=row.pk, released_at__isnull=True).exists()
+    assert DisposableWorker.objects.count() == 2

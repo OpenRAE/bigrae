@@ -169,6 +169,7 @@ def create_disposable_worker(
                 range=runtime,
                 request_id=request_id,
                 experiment_id=experiment_id,
+                initial_trial_id=trial_id,
                 trial_id=trial_id,
                 profile=profile.model_dump(mode="json"),
                 profile_digest=profile.digest,
@@ -192,7 +193,7 @@ def _validate_replay(
     """A replay recovers the same immutable custody, not a new apparatus choice."""
     if worker_credential_scope(worker.pk) != scope or (
         worker.experiment_id,
-        worker.trial_id,
+        worker.initial_trial_id,
         worker.range.owner_principal_uuid,
     ) != (experiment, trial, owner):
         raise ValueError("Worker replay conflicts")

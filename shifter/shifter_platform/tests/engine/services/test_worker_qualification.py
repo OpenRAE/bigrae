@@ -170,7 +170,7 @@ def test_migration_refuses_active_workers_and_clears_only_retired_references(app
     immutable = OperationInput.objects.get(operation_id=guest.record.operation_id)
     original = immutable.envelope
     before = [("engine", "0122_merge_worker_and_cloud_custody")]
-    after = [("engine", "0123_worker_host_observations")]
+    after = [("engine", "0124_worker_creation_intent")]
     executor = MigrationExecutor(connection)
     executor.migrate(before)
     old = executor.loader.project_state(before).apps

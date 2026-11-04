@@ -104,9 +104,31 @@ def test_idempotent_replay_rejects_changed_experiment_and_trial(apparatus):
     worker_id, trial_id = uuid4(), uuid4()
     create(apparatus, worker_id=worker_id, trial_id=trial_id)
     assert create(apparatus, worker_id=worker_id, trial_id=trial_id).worker_id == worker_id
-    for kwargs in ({"experiment_id": uuid4(), "trial_id": trial_id}, {"trial_id": uuid4()}):
+    for kwargs in ({"experiment_id": uuid4(), "trial_id": trial_id}, {"trial_id": uuid4()}, {}):
         with pytest.raises(ValueError):
             create(apparatus, worker_id=worker_id, **kwargs)
+
+
+def test_creation_replay_retains_initial_trial_intent_after_binding(apparatus):
+    from django.db import IntegrityError, transaction
+
+    from engine.models import CapacityDraw, DisposableWorker, ProvisionerLaunchIntent
+    from engine.services import bind_worker_trial
+
+    worker = create(apparatus)
+    trial = uuid4()
+    bind_worker_trial(apparatus.credential, worker.worker_id, trial)
+
+    replay = create(apparatus, worker_id=worker.worker_id)
+
+    assert replay.trial_id == trial
+    assert DisposableWorker.objects.count() == 1
+    assert ProvisionerLaunchIntent.objects.count() == 1
+    assert CapacityDraw.objects.filter(released_at__isnull=True).count() == 2
+    with pytest.raises(ValueError, match="replay conflicts"):
+        create(apparatus, worker_id=worker.worker_id, trial_id=trial)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        DisposableWorker.objects.filter(pk=worker.worker_id).update(initial_trial_id=trial)
 
 
 def test_create_replay_retains_apparatus_after_operator_policy_change(apparatus):

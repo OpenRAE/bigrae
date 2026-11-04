@@ -127,14 +127,14 @@ The release manifest names one exact identity for each role:
 
 ```json
 "base_images": {
-  "dc": "ghcr.io/<owner>/<repository>/gce-dc@sha256:<digest>",
   "kali": "ghcr.io/<owner>/<repository>/gce-kali@sha256:<digest>",
   "ubuntu": "ghcr.io/<owner>/<repository>/gce-ubuntu@sha256:<digest>"
 }
 ```
 
-The map names all three roles or none. A guest build revision can be older than
-the application revision. A release without `base_images` deploys an existing
+The map requires `kali` and `ubuntu`; it may also name `dc` when that role is
+published. A guest build revision can be older than the application revision.
+A release without `base_images` deploys an existing
 tenant, and `gcp-images` refuses it with a clear error.
 
 ### Import

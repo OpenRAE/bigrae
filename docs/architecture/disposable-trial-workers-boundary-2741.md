@@ -1,12 +1,20 @@
 # Disposable trial worker boundary (#2741)
 
-Architecture preflight, refreshed 2026-11-04. The supplied issue title, body and
-acceptance criteria are the delivery contract. This note constrains the
-forthcoming design; it is not an implementation plan or evidence of implemented
-or qualified workers.
+Implemented architecture boundary, refreshed 2026-11-04. The supplied issue
+title, body and acceptance criteria are the delivery contract. This note records
+the service design. The issue's qualification record describes live validation;
+private operational inputs and raw execution records remain with the operator.
 There is no new implementation prerequisite.
 
 ## Ownership and reuse
+
+Worker admission and locked custody operations share the existing policy-row
+mutex before native range locks. This also serializes verified-absence capacity
+settlement against admission's reservation and subnet-allocation locks.
+The worker retains its initial trial argument separately from its later single
+trial assignment. Creation replay compares the initial argument; binding never
+changes creation intent. A forward migration recovers existing intent from the
+strict native binding audit and protects the new retained field against updates.
 
 Engine owns a generic create/inspect/destroy service for independently owned,
 single-use VM workers. Each worker is backed by the existing native range

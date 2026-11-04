@@ -270,6 +270,11 @@ digests and legal ordering. Undeclared compatibility families remain
 validation-only shadow results while their incumbent writer is retained; do not
 assume all direct provisioner SQL is gone.
 
+Ranges with a retained operation ID take lifecycle state from the result applier.
+The compatibility event handler locks the row and refuses state writes for those
+ranges, including legacy-user ranges. A delayed notification cannot overwrite
+accepted teardown.
+
 A launch acknowledgment, queue delivery or successful cloud command is not
 READY. Required guest verification and accepted Engine results establish
 realized state. Retry identity recovers an existing operation; it never creates

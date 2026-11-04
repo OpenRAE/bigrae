@@ -408,6 +408,13 @@ new identity, Job type, arbitrary command capability or participant credential
 projection is introduced. The worker boundary note records the historical-result
 compatibility, freshness and standalone transport dependency requirements.
 
+Worker custody retains the initial trial argument independently of a later
+single-use binding. Creation retries compare that original intent. The forward
+migration uses the strict binding audit to recover existing intent and captures
+old PostgreSQL inserts during rollout. Admission and locked custody operations
+take the existing policy-row mutex before native range locks, serializing
+capacity settlement with admission's reservation and subnet-allocation locks.
+
 Principal RAES creation carries exact customer scope and public identity through
 the incumbent dispatch port and `RangeBindings`. Engine evaluates parent
 authority before the creation transaction. CMS linkage, native input, queued
