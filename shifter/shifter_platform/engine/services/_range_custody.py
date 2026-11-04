@@ -41,11 +41,16 @@ def principal_range_owner_reassignment_available(range_obj: Range) -> bool:
     binding = range_obj.vpn_access_binding
     if binding is None:
         return True
+    return _vpn_binding_is_server_side(range_obj)
+
+
+def _vpn_binding_is_server_side(range_obj: Range) -> bool:
+    """Uncertain ownership or a delivered profile keeps VPN custody with its owner."""
     try:
         from engine.models import VpnAccessProfile
         from shared.remote_access import parse_openvpn_binding
 
-        parsed = parse_openvpn_binding(binding)
+        parsed = parse_openvpn_binding(range_obj.vpn_access_binding)
         return (
             parsed.owner_principal_uuid == range_obj.owner_principal_uuid
             and not VpnAccessProfile.objects.filter(range=range_obj, revoked_at__isnull=True).exists()

@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
+from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
@@ -25,6 +26,24 @@ def project_restoration_uses(
         return ()
     if not isinstance(inventory, dict) or inventory.get("outcome") != "VERIFIED_ABSENT":
         return ()
+    _require_current_destroy(target)
+    by_lease = _restoration_proofs(uses, inventory)
+    verified = []
+    for use in uses:
+        lease = GcpProjectLease.model_validate(use.binding)
+        proof = by_lease[use.pk]
+        if (
+            proof.outcome != "restored"
+            or proof.registration_id != use.project_id
+            or proof.baseline_state_digest != lease.baseline.state_digest
+        ):
+            raise ValueError(_UNVERIFIED)
+        verified.append((use, proof))
+    return tuple(verified)
+
+
+def _require_current_destroy(target: Range) -> None:
+    """Only the original range's current native destroy can release its custody."""
     if (
         target.request is None
         or target.provisioner_operation_id is None
@@ -36,6 +55,12 @@ def project_restoration_uses(
         ).exists()
     ):
         raise ValueError(_UNVERIFIED)
+
+
+def _restoration_proofs(
+    uses: tuple[GcpRangeProjectUse, ...], inventory: dict[str, Any]
+) -> dict[UUID, GcpProjectRestorationProof]:
+    """Require bounded positive proof for every held lease and no residual resource."""
     scope = inventory.get("scope")
     proofs = scope.get("gcp_projects") if isinstance(scope, dict) else None
     if (
@@ -49,18 +74,7 @@ def project_restoration_uses(
     by_lease = {proof.lease_id: proof for proof in parsed}
     if len(by_lease) != len(parsed) or by_lease.keys() != {use.pk for use in uses}:
         raise ValueError(_UNVERIFIED)
-    verified = []
-    for use in uses:
-        lease = GcpProjectLease.model_validate(use.binding)
-        proof = by_lease[use.pk]
-        if (
-            proof.outcome != "restored"
-            or proof.registration_id != use.project_id
-            or proof.baseline_state_digest != lease.baseline.state_digest
-        ):
-            raise ValueError(_UNVERIFIED)
-        verified.append((use, proof))
-    return tuple(verified)
+    return by_lease
 
 
 def release_applied_project_restorations(result: OperationResultInbox) -> None:

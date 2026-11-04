@@ -57,19 +57,23 @@ def validate_completion_evidence(value: object) -> dict[str, Any]:
     for field, keys in shapes.items():
         _validate_evidence_rows(value[field], keys, limits[field], value_limits[field])
     if "cloud_projects" in value:
-        rows = value["cloud_projects"]
-        if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_PROJECTS_PER_RANGE:
-            raise ValueError("invalid cloud completion evidence")
-        parsed = [GcpProjectCompletion.model_validate(row) for row in rows]
-        if len({row.lease_id for row in parsed}) != len(parsed):
-            raise ValueError("duplicate cloud completion evidence")
+        _validate_cloud_projects(value["cloud_projects"])
     if len(json.dumps(value, allow_nan=False).encode()) > _MAX_BYTES:
         raise ValueError("RAES completion evidence exceeds its size bound")
     return value
 
 
+def _validate_cloud_projects(rows: object) -> None:
+    """Require a bounded, unique proof collection with complete closed project records."""
+    if not isinstance(rows, list) or not 1 <= len(rows) <= MAX_PROJECTS_PER_RANGE:
+        raise ValueError("invalid cloud completion evidence")
+    parsed = [GcpProjectCompletion.model_validate(row) for row in rows]
+    if len({row.lease_id for row in parsed}) != len(parsed):
+        raise ValueError("duplicate cloud completion evidence")
+
+
 def _validate_evidence_rows(rows: object, keys: set[str], limit: int, value_limits: Mapping[str, int]) -> None:
-    """Handle validate evidence rows."""
+    """Keep row shape, values, count and unique native identities within transport bounds."""
     if not isinstance(rows, list) or len(rows) > limit:
         raise ValueError("invalid RAES completion evidence collection")
     identities = set()

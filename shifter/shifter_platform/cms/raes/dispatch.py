@@ -111,7 +111,7 @@ class CmsRaesDispatchPort:
             return self._realize_principal(compiled_plan, participant_access, cloud_content)
         from shared.raes.cloud_content import prepare_cloud_content
 
-        sealed_content = prepare_cloud_content(cloud_content or {}, compiled_plan, self.pack_root)
+        sealed_content = prepare_cloud_content(cloud_content, compiled_plan, self.pack_root)
         delivery_bindings = self._prepare_delivery(compiled_plan)
         artifact_bindings = self._resolve_artifact_bindings(compiled_plan)
         from uuid import UUID

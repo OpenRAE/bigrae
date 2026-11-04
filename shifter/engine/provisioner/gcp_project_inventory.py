@@ -31,6 +31,7 @@ _RM = "https://cloudresourcemanager.googleapis.com/v3/"
 _IAM = "https://iam.googleapis.com/v1/"
 _SECRETS = "https://secretmanager.googleapis.com/v1/"
 _MAX_PAGE_BYTES = 1_048_576
+_GET_IAM_POLICY = ":getIamPolicy"
 
 
 class ProjectInventory(Protocol):
@@ -57,7 +58,9 @@ class GcpProjectInventory:
 
     def read_owned_payload(self, project_number: str, version: str, owned_secrets: set[str]) -> bytes:
         """Access only newly owned versions; registration never calls this route."""
-        match = re.fullmatch(r"projects/([1-9][0-9]+)/secrets/([A-Za-z0-9_-]+)/versions/([1-9][0-9]*)", version)
+        match = re.fullmatch(
+            r"projects/([1-9]\d+)/secrets/([A-Za-z0-9_-]+)/versions/([1-9]\d*)", version, flags=re.ASCII
+        )
         if match is None or match[1] != project_number or match[2] not in owned_secrets:
             raise ValueError(_UNAVAILABLE)
         self._remaining = MAX_BASELINE_BYTES
@@ -72,7 +75,7 @@ class GcpProjectInventory:
             if not isinstance(data, str):
                 raise ValueError()
             material = base64.b64decode(data, validate=True)
-            if not 0 <= len(material) <= 65536:
+            if len(material) > 65536:
                 raise ValueError()
             return material
         except (KeyError, TypeError, ValueError):
@@ -100,7 +103,13 @@ class GcpProjectInventory:
         name = project.get("name")
         if not isinstance(name, str) or not name.startswith("projects/") or not name[9:].isdigit():
             raise ValueError(_UNAVAILABLE)
-        policy = self._read(_RM + name + ":getIamPolicy", body={"options": {"requestedPolicyVersion": 3}})
+        policy = self._read(_RM + name + _GET_IAM_POLICY, body={"options": {"requestedPolicyVersion": 3}})
+        accounts = self._accounts(identifier)
+        secrets = self._secrets(name)
+        return GcpProjectState(project=project, policy=policy, service_accounts=accounts, secrets=secrets)
+
+    def _accounts(self, identifier: str) -> dict[str, GcpServiceAccountState]:
+        """Read account metadata, policies and user-managed key metadata in the selected project."""
         accounts: dict[str, GcpServiceAccountState] = {}
         for account in self._pages(_IAM + f"projects/{identifier}/serviceAccounts", "accounts", 1024):
             account_name = self._resource_name(account, f"projects/{identifier}/serviceAccounts/")
@@ -108,7 +117,7 @@ class GcpProjectInventory:
             if not isinstance(email, str) or email in accounts:
                 raise ValueError(_UNAVAILABLE)
             account_policy = self._read(
-                _IAM + quote(account_name, safe="/@") + ":getIamPolicy", params={"options.requestedPolicyVersion": "3"}
+                _IAM + quote(account_name, safe="/@") + _GET_IAM_POLICY, params={"options.requestedPolicyVersion": "3"}
             )
             keys = self._read(_IAM + quote(account_name, safe="/@") + "/keys", params={"keyTypes": "USER_MANAGED"})
             raw_keys = keys.get("keys", [])
@@ -117,13 +126,17 @@ class GcpProjectInventory:
             accounts[email] = GcpServiceAccountState(
                 resource=account, policy=account_policy, user_keys=[_JSON.validate_python(key) for key in raw_keys]
             )
+        return accounts
+
+    def _secrets(self, name: str) -> dict[str, GcpSecretState]:
+        """Read secret metadata and version identities without accessing baseline payloads."""
         secrets: dict[str, GcpSecretState] = {}
         for secret in self._pages(_SECRETS + name + "/secrets", "secrets", 1024):
             secret_name = self._resource_name(secret, name + "/secrets/")
             if secret_name in secrets:
                 raise ValueError(_UNAVAILABLE)
             secret_policy = self._read(
-                _SECRETS + quote(secret_name, safe="/") + ":getIamPolicy",
+                _SECRETS + quote(secret_name, safe="/") + _GET_IAM_POLICY,
                 params={"options.requestedPolicyVersion": "3"},
             )
             versions: dict[str, JsonObject] = {}
@@ -133,7 +146,7 @@ class GcpProjectInventory:
                     raise ValueError(_UNAVAILABLE)
                 versions[version_name] = version
             secrets[secret_name] = GcpSecretState(resource=secret, policy=secret_policy, versions=versions)
-        return GcpProjectState(project=project, policy=policy, service_accounts=accounts, secrets=secrets)
+        return secrets
 
     @staticmethod
     def _resource_name(value: JsonObject, prefix: str) -> str:

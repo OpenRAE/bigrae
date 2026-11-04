@@ -77,7 +77,6 @@ def validate_project_operation(
     payload: dict[str, object], operation_id: UUID | str | None, *, receipt: bool = False
 ) -> GcpRangeProject:
     """Require the exact original immutable input, target and current native generation."""
-    from ._gcp_project_registration import project_authority_fields
     from ._launch_authority import assert_input_authority_binding
 
     if operation_id is None:
@@ -100,6 +99,15 @@ def validate_project_operation(
     intent = ProvisionerLaunchIntent.objects.get(operation_id=operation_id)
     stored = OperationInput.objects.get(operation_id=operation_id)
     assert_input_authority_binding(stored, intent)
+    original = _validate_capture_input(row, intent, stored, expected)
+    _validate_capture_authority(row, intent, stored, original)
+    return row
+
+
+def _validate_capture_input(
+    row: GcpRangeProject, intent: ProvisionerLaunchIntent, stored: OperationInput, expected: dict[str, object]
+) -> GcpProjectRegistrationInput:
+    """Keep original baseline, scope and interrupt state tied to this capture generation."""
     original = GcpProjectRegistrationInput.model_validate(stored.envelope["payload"])
     if (row.provisioner_operation == "verify") != (original.baseline is not None):
         raise ValueError(_UNAVAILABLE)
@@ -113,6 +121,15 @@ def validate_project_operation(
         != (row.pk, row.organization_uuid, row.project_id)
     ):
         raise ValueError(_UNAVAILABLE)
+    return original
+
+
+def _validate_capture_authority(
+    row: GcpRangeProject, intent: ProvisionerLaunchIntent, stored: OperationInput, original: GcpProjectRegistrationInput
+) -> None:
+    """Reconstruct the exact initiating proof and immutable payload digest."""
+    from ._gcp_project_registration import project_authority_fields
+
     authority = project_authority_fields(credential_reference_from_record(intent), row)
     if any(getattr(intent, name) != value for name, value in authority.items()):
         raise ValueError(_UNAVAILABLE)
@@ -120,7 +137,6 @@ def validate_project_operation(
         stored.envelope["payload"]
     ):
         raise ValueError(_UNAVAILABLE)
-    return row
 
 
 def authorize_project_operation(payload: dict[str, object], operation_id: UUID | str | None) -> None:

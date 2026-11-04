@@ -9,6 +9,12 @@ Nothing in this page claims a tenant deployment or live acceptance.
 
 ## Native capture boundary
 
+Provider secret-version reads accept only ASCII decimal project and version
+identities beneath an explicitly owned secret. Payload decoding retains the
+64 KiB byte limit. Scope, account, policy, payload and restoration checks remain
+separate from node projection and keep the same retained identities and custody
+transactions when their implementation is refactored.
+
 The installation-authorized API queues `range-project/register` through the
 existing `ProvisionerLaunchIntent`, immutable `OperationInput`, installed worker
 identity and result inbox. Its request correlation is the registration UUID,

@@ -42,51 +42,68 @@ def compile_secret_application(
         raise ValueError(UNSUPPORTED)
     prefix = f"nodes.{node_name}.runtime.platform_applications.{token(application.get('platform_application_id'))}"
     for secret in records(application.get("secrets", [])):
-        supported(
-            secret,
-            {"secret_id", "native_id", "resource_scope_ref", "replication", "versions"},
-            {
-                "consumers": [],
-                "location": "",
-                "replica_locations": [],
-                "encryption_key_ref": "",
-                "reset_owner_ref": "",
-                "deletion_owner_ref": "",
-                "description": "",
-            },
-        )
-        project = scopes.get(secret.get("resource_scope_ref") or application.get("resource_scope_ref", ""))
-        if project is None:
-            raise ValueError(UNSUPPORTED)
-        name = token(secret.get("native_id"), r"[A-Za-z0-9_-]{1,255}")
-        if name in project.secrets:
-            raise ValueError(UNSUPPORTED)
-        provider_replication = _replication(secret.get("replication"))
-        versions = []
-        for version in records(secret.get("versions", [])):
-            supported(
-                version,
-                {"version_id", "native_id", "state", "native_state", "payload_content_ref"},
-                {"description": ""},
-            )
-            version_ref = f"{prefix}.secrets.{secret['secret_id']}.versions.{version['version_id']}"
-            payload = contents.get(version.get("payload_content_ref") or version_ref)
-            if not isinstance(payload, bytes) or not 0 <= len(payload) <= 65536 or version.get("state") != "enabled":
-                raise ValueError(UNSUPPORTED)
-            if version.get("native_id") or version.get("native_state", "") not in {"", str(version["state"]).upper()}:
-                raise ValueError(UNSUPPORTED)
-            versions.append(
-                {
-                    "version_id": token(version.get("version_id")),
-                    "enabled": version["state"] == "enabled",
-                    "payload": payload,
-                }
-            )
-        project.secrets[name] = {"replication": provider_replication, "versions": versions}
-        targets[f"{prefix}.secrets.{token(secret.get('secret_id'))}"] = (project, "secret", name)
+        _compile_secret(secret, application, prefix, scopes, contents, targets)
+
+
+def _compile_secret(
+    secret: dict[str, Any],
+    application: dict[str, Any],
+    prefix: str,
+    scopes: dict[str, GcpProjectWork],
+    contents: Mapping[str, bytes],
+    targets: TargetMap,
+) -> None:
+    """Bind one new secret to its selected project and literal version collection."""
+    supported(
+        secret,
+        {"secret_id", "native_id", "resource_scope_ref", "replication", "versions"},
+        {
+            "consumers": [],
+            "location": "",
+            "replica_locations": [],
+            "encryption_key_ref": "",
+            "reset_owner_ref": "",
+            "deletion_owner_ref": "",
+            "description": "",
+        },
+    )
+    project = scopes.get(secret.get("resource_scope_ref") or application.get("resource_scope_ref", ""))
+    if project is None:
+        raise ValueError(UNSUPPORTED)
+    name = token(secret.get("native_id"), r"[A-Za-z0-9_-]{1,255}")
+    if name in project.secrets:
+        raise ValueError(UNSUPPORTED)
+    replication = _replication(secret.get("replication"))
+    versions = [
+        _secret_version(version, f"{prefix}.secrets.{secret['secret_id']}", contents)
+        for version in records(secret.get("versions", []))
+    ]
+    project.secrets[name] = {"replication": replication, "versions": versions}
+    targets[f"{prefix}.secrets.{token(secret.get('secret_id'))}"] = (project, "secret", name)
+
+
+def _secret_version(version: dict[str, Any], secret_ref: str, contents: Mapping[str, bytes]) -> dict[str, Any]:
+    """Accept only an enabled new version and its bounded literal payload."""
+    supported(
+        version,
+        {"version_id", "native_id", "state", "native_state", "payload_content_ref"},
+        {"description": ""},
+    )
+    version_ref = f"{secret_ref}.versions.{version['version_id']}"
+    payload = contents.get(version.get("payload_content_ref") or version_ref)
+    if not isinstance(payload, bytes) or len(payload) > 65536 or version.get("state") != "enabled":
+        raise ValueError(UNSUPPORTED)
+    if version.get("native_id") or version.get("native_state", "") not in {"", str(version["state"]).upper()}:
+        raise ValueError(UNSUPPORTED)
+    return {
+        "version_id": token(version.get("version_id")),
+        "enabled": version["state"] == "enabled",
+        "payload": payload,
+    }
 
 
 def _replication(replication: object) -> dict[str, Any]:
+    """Preserve explicit supported replication modes and refuse unsupported encryption."""
     if not isinstance(replication, dict):
         raise ValueError(UNSUPPORTED)
     supported(replication, {"provider", "mode", "replicas", "kms_key_name"})

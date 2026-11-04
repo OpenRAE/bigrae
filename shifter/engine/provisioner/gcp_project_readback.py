@@ -27,7 +27,8 @@ def terraform_resources(state: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return result
 
 
-def _values(resources: dict, kind: str, identity: str) -> dict[str, Any]:
+def _values(resources: dict[str, Any], kind: str, identity: str) -> dict[str, Any]:
+    """Locate one generated managed resource by its retained logical identity."""
     row = resources.get(kind + "." + resource_key(identity))
     if row is None or row.get("mode") != "managed":
         raise ValueError(_MISMATCH)
@@ -57,6 +58,7 @@ def expected_project_policy(work: GcpProjectWork, baseline: GcpProjectBaseline) 
 
 
 def _add_grant(policy: dict[str, Any], grant: dict[str, Any]) -> None:
+    """Merge one declared member without changing the binding's role or condition."""
     rows = policy.setdefault("bindings", [])
     row = next(
         (row for row in rows if (row["role"], row.get("condition")) == (grant["role"], grant["condition"])), None
@@ -72,33 +74,42 @@ def _add_grant(policy: dict[str, Any], grant: dict[str, Any]) -> None:
 
 def _policy_equal(expected: dict[str, Any], observed: dict[str, Any]) -> None:
     """Treat omitted empty policy collections as empty, retain all security values."""
-
-    def normalized(policy: dict[str, Any]) -> dict[str, Any]:
-        value = deepcopy(policy)
-        value.pop("etag", None)
-        version = value.pop("version", 0)
-        if version not in {0, 1, 3}:
-            raise ValueError(_MISMATCH)
-        for field in ("bindings", "auditConfigs"):
-            rows = value.get(field, [])
-            if not rows:
-                value.pop(field, None)
-            else:
-                for row in rows:
-                    if field == "bindings":
-                        row["members"] = sorted(row.get("members", []))
-                    else:
-                        for config in row.get("auditLogConfigs", []):
-                            if config.get("exemptedMembers"):
-                                config["exemptedMembers"] = sorted(config["exemptedMembers"])
-                            else:
-                                config.pop("exemptedMembers", None)
-                        row["auditLogConfigs"] = sorted(row.get("auditLogConfigs", []), key=canonical_digest)
-                value[field] = sorted(rows, key=canonical_digest)
-        return value
-
-    if normalized(expected) != normalized(observed):
+    if _normalized_policy(expected) != _normalized_policy(observed):
         raise ValueError(_MISMATCH)
+
+
+def _normalized_policy(policy: dict[str, Any]) -> dict[str, Any]:
+    """Remove volatile etags and normalize only order and omitted empty collections."""
+    value = deepcopy(policy)
+    value.pop("etag", None)
+    version = value.pop("version", 0)
+    if version not in {0, 1, 3}:
+        raise ValueError(_MISMATCH)
+    for field in ("bindings", "auditConfigs"):
+        rows = value.get(field, [])
+        if not rows:
+            value.pop(field, None)
+            continue
+        normalize = _normalized_binding if field == "bindings" else _normalized_audit
+        value[field] = sorted([normalize(row) for row in rows], key=canonical_digest)
+    return value
+
+
+def _normalized_binding(row: dict[str, Any]) -> dict[str, Any]:
+    """Preserve every binding field while sorting its member collection."""
+    row["members"] = sorted(row.get("members", []))
+    return row
+
+
+def _normalized_audit(row: dict[str, Any]) -> dict[str, Any]:
+    """Normalize audit order and empty exemptions without discarding policy values."""
+    for config in row.get("auditLogConfigs", []):
+        if config.get("exemptedMembers"):
+            config["exemptedMembers"] = sorted(config["exemptedMembers"])
+        else:
+            config.pop("exemptedMembers", None)
+    row["auditLogConfigs"] = sorted(row.get("auditLogConfigs", []), key=canonical_digest)
+    return row
 
 
 def verify_project_setup(
@@ -128,6 +139,7 @@ def verify_project_setup(
 
 
 def _verify_accounts(work: GcpProjectWork, remainder: GcpProjectState, resources: dict[str, Any]) -> None:
+    """Verify each owned account and its policy before removing it from the baseline comparison."""
     for email, intent in work.accounts.items():
         recorded = _values(resources, "google_service_account", email)
         account = remainder.service_accounts.pop(email, None)
@@ -142,9 +154,7 @@ def _verify_accounts(work: GcpProjectWork, remainder: GcpProjectState, resources
             "description": intent["description"],
             "disabled": intent["disabled"],
         }
-        for key, value in expected.items():
-            if account.resource.get(key, False if key == "disabled" else "") != value:
-                raise ValueError(_MISMATCH)
+        _require_account_metadata(account.resource, expected)
         policy: dict[str, Any] = {}
         for grant in work.grants:
             if (grant["kind"], grant["target"]) == ("service-account", email):
@@ -152,9 +162,17 @@ def _verify_accounts(work: GcpProjectWork, remainder: GcpProjectState, resources
         _policy_equal(policy, account.policy)
 
 
+def _require_account_metadata(observed: dict[str, Any], expected: dict[str, Any]) -> None:
+    """Account IDs, incarnations and exact authored metadata must all match readback."""
+    for key, value in expected.items():
+        if observed.get(key, False if key == "disabled" else "") != value:
+            raise ValueError(_MISMATCH)
+
+
 def _verify_secrets(
     work: GcpProjectWork, remainder: GcpProjectState, resources: dict[str, Any], access_payload: Callable[[str], bytes]
 ) -> None:
+    """Verify complete owned secret metadata, policies, versions and protected payloads."""
     for name, intent in work.secrets.items():
         recorded = _values(resources, "google_secret_manager_secret", name)
         provider_name = f"projects/{work.lease.project_number}/secrets/{name}"
@@ -197,6 +215,12 @@ def require_recorded_incarnations(
     if not resources.keys() <= expected:
         raise ValueError(_MISMATCH)
     _require_recorded_scope(work, resources)
+    _require_account_incarnations(work, actual, resources)
+    _require_secret_incarnations(work, actual, resources)
+
+
+def _require_account_incarnations(work: GcpProjectWork, actual: GcpProjectState, resources: dict[str, Any]) -> None:
+    """A reused account email cannot confer ownership of a replacement account."""
     for email in work.accounts:
         row = resources.get("google_service_account." + resource_key(email))
         current = actual.service_accounts.get(email)
@@ -206,6 +230,10 @@ def require_recorded_incarnations(
             and current.resource.get("uniqueId") != row["values"].get("unique_id")
         ):
             raise ValueError(_MISMATCH)
+
+
+def _require_secret_incarnations(work: GcpProjectWork, actual: GcpProjectState, resources: dict[str, Any]) -> None:
+    """A secret replacement must retain its own creation identity outside this lease."""
     for name in work.secrets:
         row = resources.get("google_secret_manager_secret." + resource_key(name))
         current = actual.secrets.get(f"projects/{work.lease.project_number}/secrets/{name}")

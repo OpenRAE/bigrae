@@ -18,6 +18,7 @@ import json
 from typing import TYPE_CHECKING
 
 from engine.models import Instance, OperationInput, ProvisionerLaunchIntent, Range, Request
+from shared.gcp_cloud_content import CloudContentEnvelope
 from shared.operation_envelope import build_operation_envelope
 from shared.raes.artifact_binding import ArtifactBinding
 from shared.raes.content_delivery import DeliveryBinding
@@ -233,6 +234,15 @@ def _raes_remote_access(target: Range) -> RaesRemoteAccess | None:
     return parse_remote_access({"capability": capability})
 
 
+def _raes_cloud_content(target: Range) -> CloudContentEnvelope | None:
+    """Project only the retained sealed content; absence keeps the old input shape."""
+    return (
+        CloudContentEnvelope.model_validate(target.raes_cloud_content)
+        if target.raes_cloud_content is not None
+        else None
+    )
+
+
 def _raes_input_payload(
     target: Range, request: Request, *, suppress_access: bool = False, preparation_for_cleanup: bool = False
 ) -> dict[str, object]:
@@ -252,7 +262,6 @@ def _raes_input_payload(
     from engine.services._model_guest_bindings import project_model_guest_bindings
     from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
     from engine.services._runtime_plugin_cleanup import retained_cleanup_payload
-    from shared.gcp_cloud_content import CloudContentEnvelope
 
     plan = target.range_config or {}
     pin = retained_runtime_plugin_pin(target)
@@ -271,9 +280,7 @@ def _raes_input_payload(
             artifact=_raes_artifact_bindings(target),
             runtime_plugin=pin,
             gcp_projects=projects_for_input(target, plan, pin),
-            cloud_content=CloudContentEnvelope.model_validate(target.raes_cloud_content)
-            if target.raes_cloud_content is not None
-            else None,
+            cloud_content=_raes_cloud_content(target),
             model_enrollments=project_model_guest_bindings(target, pin) if not suppress_access else (),
             remote_access=None if suppress_access else _raes_remote_access(target),
         ),

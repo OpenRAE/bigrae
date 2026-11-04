@@ -125,6 +125,12 @@ A capability declaration alone is not realization. Explicitly declared native
 provider IDs must match; generated provider identities remain in the retained
 mapping rather than replacing logical SDL IDs.
 
+Validation keeps separate checks for scope identity, account and policy intent,
+version payloads, retained custody and provider observations. Small validation
+functions share the same closed contracts and bounded errors; refactoring them
+must preserve refusal ordering, transaction boundaries, ASCII provider paths and
+all accepted preparation and cleanup identities.
+
 The worker plan reader requires full cloud admission for nonempty native
 identity-authority and platform-application inventories. Capability refusal at
 authoring admission alone is insufficient: a retained or directly queued input

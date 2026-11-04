@@ -1,5 +1,6 @@
 """Metadata inventory must be complete, scoped, bounded and read-only."""
 
+import base64
 import json
 
 import pytest
@@ -97,6 +98,45 @@ def test_inventory_paginates_all_metadata_and_never_reads_values_or_creates_keys
                 assert kwargs["params"] == {"options.requestedPolicyVersion": "3"}
         if url.endswith("/keys"):
             assert kwargs["params"] == {"keyTypes": "USER_MANAGED"}
+
+
+@pytest.mark.parametrize("version", ["1\u0661", "\u0661", "1/../2", "1?alt=json"])
+def test_owned_payload_path_rejects_non_ascii_digits_and_path_extensions_before_http(version):
+    session = Session({})
+    with pytest.raises(ValueError, match="inventory is unavailable"):
+        GcpProjectInventory(session).read_owned_payload(_NUMBER, f"{_SECRET}/versions/{version}", {"example"})
+    assert not session.calls
+
+
+@pytest.mark.parametrize("size", [0, 65536, 65537])
+def test_owned_payload_read_keeps_the_provider_byte_limit(size):
+    version = f"{_SECRET}/versions/1"
+    url = f"https://secretmanager.googleapis.com/v1/{version}:access"
+    material = b"x" * size
+    session = Session(
+        {(url, ""): Response({"name": version, "payload": {"data": base64.b64encode(material).decode()}})}
+    )
+    reader = GcpProjectInventory(session)
+    if size > 65536:
+        with pytest.raises(ValueError, match="inventory is unavailable"):
+            reader.read_owned_payload(_NUMBER, version, {"example"})
+    else:
+        assert reader.read_owned_payload(_NUMBER, version, {"example"}) == material
+    assert len(session.calls) == 1 and session.calls[0][:2] == ("GET", url)
+
+
+def test_policy_restoration_uses_current_etag_and_preserves_the_original_policy():
+    url = f"https://cloudresourcemanager.googleapis.com/v3/projects/{_NUMBER}:setIamPolicy"
+    original = {"version": 1, "etag": "original", "bindings": [], "auditConfigs": []}
+    session = Session({(url, ""): Response({})})
+    GcpProjectInventory(session).restore_policy(_NUMBER, original, {"etag": "current"})
+    method, actual_url, options = session.calls[0]
+    assert (method, actual_url) == ("POST", url)
+    assert options["json"] == {
+        "policy": {**original, "version": 3, "etag": "current"},
+        "updateMask": "bindings,auditConfigs",
+    }
+    assert original["etag"] == "original" and original["version"] == 1
 
 
 @pytest.mark.parametrize("status", [302, 403, 404, 429, 500])

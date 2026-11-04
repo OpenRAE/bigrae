@@ -38,21 +38,21 @@ def project_bindings(obj: Mapping[str, Any], preparation: RuntimePreparation | N
             {lease.project_id for lease in leases}
         ) != len(leases):
             raise ValueError("Duplicate project references")
-        if (
-            len(
-                {
-                    (lease.source_operation_id, lease.request_id, lease.range_uuid, lease.organization_uuid)
-                    for lease in leases
-                }
-            )
-            > 1
-        ):
-            raise ValueError("Project custody identity changed")
-        digest = canonical_digest(obj["plan"])
-        if any(lease.range_id != obj["legacy_range_id"] or lease.plan_digest != digest for lease in leases):
-            raise ValueError("Project reference identity changed")
+        _validate_lease_identity(leases, obj)
         if preparation is not None and preparation.cloud_projects != leases:
             raise ValueError("Preparation project references changed")
         return leases
     except (ValueError, KeyError):
         raise RaesOperationInputError("raes operation input project binding is invalid") from None
+
+
+def _validate_lease_identity(leases: tuple[GcpProjectLease, ...], obj: Mapping[str, Any]) -> None:
+    """All leases must retain one original custody identity and the exact plan and range."""
+    identities = {
+        (lease.source_operation_id, lease.request_id, lease.range_uuid, lease.organization_uuid) for lease in leases
+    }
+    if len(identities) > 1:
+        raise ValueError("Project custody identity changed")
+    digest = canonical_digest(obj["plan"])
+    if any(lease.range_id != obj["legacy_range_id"] or lease.plan_digest != digest for lease in leases):
+        raise ValueError("Project reference identity changed")

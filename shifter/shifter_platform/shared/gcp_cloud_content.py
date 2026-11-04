@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import base64
 from collections.abc import Callable, Mapping
-from typing import Annotated
+from typing import Annotated, Any
 
 from pydantic import Field
 from shifter_adapter_sdk.runtime import ClosedModel, Digest, canonical_digest, decode_message
@@ -31,7 +31,7 @@ def encode_cloud_content(contents: Mapping[str, bytes]) -> dict[str, str]:
 
 
 def open_cloud_content(
-    envelope: CloudContentEnvelope | None, plan: Mapping, decrypt: Callable[[str], str]
+    envelope: CloudContentEnvelope | None, plan: Mapping[str, Any], decrypt: Callable[[str], str]
 ) -> dict[str, bytes]:
     """An authenticated ciphertext still belongs to exactly one original plan."""
     if envelope is None:

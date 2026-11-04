@@ -168,5 +168,6 @@ def prepare_registered_projects(
         for project, baseline in zip(work, baselines, strict=True)
     )
     runtime = RegisteredProjectRuntime(projects, GcpProjectInventory())
-    _ = runtime.attachments  # Validate cross-project duplicate workload claims before effects.
+    # Validate cross-project duplicate workload claims before effects.
+    _ = runtime.attachments
     return runtime

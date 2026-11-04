@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 
 from pydantic import TypeAdapter
@@ -37,29 +37,41 @@ def node_gcp_project_demands(node_name: str, runtime: object) -> tuple[GcpProjec
     result: list[GcpProjectDemand] = []
     seen: set[str] = set()
     for authority in rows:
-        scopes = _records(authority.get("resource_scopes", []))
-        if not scopes:
-            continue
-        node_name = _identifier(node_name)
-        if authority.get("kind") != "cloud_iam":
-            raise ValueError(_UNSUPPORTED)
-        authority_id = _identifier(authority.get("identity_authority_id"))
-        for scope in scopes:
-            if scope.get("provider") != "gcp" or scope.get("scope_kind") != "project":
-                raise ValueError(_UNSUPPORTED)
-            scope_id = _identifier(scope.get("scope_id"))
-            reference = f"nodes.{node_name}.runtime.identity_authorities.{authority_id}.resource_scopes.{scope_id}"
+        for reference, scope in _project_scope_records(node_name, authority):
             if reference in seen or len(reference) > 1024 or len(result) >= MAX_PROJECT_SCOPE_REFERENCES:
                 raise ValueError(_UNSUPPORTED)
             seen.add(reference)
-            try:
-                project_id = TypeAdapter(ProjectID).validate_python(scope.get("native_id"))
-                incarnation = scope.get("incarnation_id", "")
-                number = "" if incarnation == "" else TypeAdapter(ProjectNumber).validate_python(incarnation)
-            except ValueError:
-                raise ValueError(_UNSUPPORTED) from None
-            result.append(GcpProjectDemand(reference, project_id, number))
+            result.append(_scope_demand(reference, scope))
     return tuple(result)
+
+
+def _project_scope_records(
+    node_name: str, authority: Mapping[str, object]
+) -> Iterator[tuple[str, Mapping[str, object]]]:
+    """Expose only explicit GCP project scopes under their original native references."""
+    scopes = _records(authority.get("resource_scopes", []))
+    if not scopes:
+        return
+    node_name = _identifier(node_name)
+    if authority.get("kind") != "cloud_iam":
+        raise ValueError(_UNSUPPORTED)
+    authority_id = _identifier(authority.get("identity_authority_id"))
+    for scope in scopes:
+        if scope.get("provider") != "gcp" or scope.get("scope_kind") != "project":
+            raise ValueError(_UNSUPPORTED)
+        scope_id = _identifier(scope.get("scope_id"))
+        yield f"nodes.{node_name}.runtime.identity_authorities.{authority_id}.resource_scopes.{scope_id}", scope
+
+
+def _scope_demand(reference: str, scope: Mapping[str, object]) -> GcpProjectDemand:
+    """Validate provider IDs and optional numeric incarnation without choosing defaults."""
+    try:
+        project_id = TypeAdapter(ProjectID).validate_python(scope.get("native_id"))
+        incarnation = scope.get("incarnation_id", "")
+        number = "" if incarnation == "" else TypeAdapter(ProjectNumber).validate_python(incarnation)
+    except ValueError:
+        raise ValueError(_UNSUPPORTED) from None
+    return GcpProjectDemand(reference, project_id, number)
 
 
 def _identifier(value: object) -> str:

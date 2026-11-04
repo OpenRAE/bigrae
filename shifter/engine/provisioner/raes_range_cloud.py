@@ -37,6 +37,8 @@ def realize_cloud_projects(
 
 
 class _Instance(Protocol):
+    """The provider observation exposes only its attached account collection."""
+
     service_accounts: list[Any]
 
 
