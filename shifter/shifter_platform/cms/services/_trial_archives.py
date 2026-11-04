@@ -322,6 +322,8 @@ def list_trial_archives(
     _admit(credential, organization_uuid, "read_content")
     if type(offset) is not int or type(limit) is not int or offset < 0 or not 1 <= limit <= 100:
         raise CMSError("Invalid archive page")
+    if experiment_id is not None:
+        raise CMSError("Experiment archive selection is not implemented")
     rows = TrialArchiveTransfer.objects.filter(organization_uuid=organization_uuid).select_related(
         "trialarchivereceipt"
     )[offset : offset + limit]

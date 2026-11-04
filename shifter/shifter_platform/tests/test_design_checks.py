@@ -9,13 +9,21 @@ import pytest
 
 
 @pytest.mark.parametrize(
-    "name,status", [("passes", "passed"), ("fails", "failed"), ("skips", "skipped"), ("broken", "broken")]
+    "name,status,matches",
+    [
+        ("test_passes", "passed", 1),
+        ("test_fails", "failed", 1),
+        ("test_skips", "skipped", 1),
+        ("test_broken", "broken", 1),
+        ("test_exception", "broken", 1),
+        ("TestAmbiguous", "broken", 2),
+    ],
 )
-def test_acceptance_observes_exact_case(name, status):
+def test_acceptance_observes_exact_case(name, status, matches):
     script = Path(__file__).with_name("design_checks.py")
     # Pytest collects only test-prefixed functions by default.
     fixture = script.with_name("design_cases.py")
-    request = {"test_file": str(fixture.relative_to(script.resolve().parents[3])), "test_name": "test_" + name}
+    request = {"test_file": str(fixture.relative_to(script.resolve().parents[3])), "test_name": name}
     result = subprocess.run(  # noqa: S603 - fixed local interpreter and repository adapter.
         [sys.executable, str(script), "acceptance"],
         input=json.dumps(request),
@@ -25,4 +33,4 @@ def test_acceptance_observes_exact_case(name, status):
     )
     observed = json.loads(result.stdout)
     assert observed["status"] == status
-    assert observed["matches"] == 1
+    assert observed["matches"] == matches

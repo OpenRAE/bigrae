@@ -55,14 +55,19 @@ Archives are staged privately through verified retrieval and parsed without
 executing content or extracting filesystem members.
 
 Sorting and canonical JSON make repeated aggregation deterministic. Output
-paths bind batch identity and content digest. Indexes are written before the
+paths bind batch identity, content digest and an opaque publication identifier. Indexes are written before the
 manifest; a successful command returns references only after verification.
 Later arrivals create a new content identity. Original retained objects are
 never modified. The export refuses more than 10000 expected entries, 10000
 archive inventory observations or 128 MiB of derived output. Existing per-archive
 validation bounds also apply. These limits do not authorize silent truncation.
-Derived exports share the destination's operator-managed storage retention;
-archive receipt expiry still controls subsequent access to original archives.
+Each derived file uses the existing `TrialArchiveTransfer` journal with an
+explicit export-kind marker, publication identity, file digest and pinned expiry.
+Archive inventory excludes these derived files. The existing settled-write
+fence and `purge_trial_archives` delete only their exactly owned objects after
+expiry. A failed or concurrent publication owns separate keys. Only a completely
+verified publication can be reused. No new retention model or bucket lifecycle
+assumption is needed. Archive receipt expiry still controls original reads.
 
 The synthetic command tests cover mixed outcomes, absent and corrupt collections,
 capture gaps, repeated and out-of-order arrival, duplicate delivery, identities,

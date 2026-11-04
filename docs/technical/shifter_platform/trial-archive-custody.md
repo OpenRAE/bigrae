@@ -132,5 +132,7 @@ experiment identity. Custody also owns publication of the derived manifest and
 CSV/JSON indexes to the current approved tenant destination. This write requires
 current tenant content-management authority. The content digest names each export;
 original archives remain unchanged. The manifest is published after the indexes
-verify. These derived objects use the operator's existing storage retention policy.
+verify. Each derived file has its own transfer journal and pinned expiry. The existing
+settled-write fence and purge operation enforce retention for these objects.
+Archive inventory excludes records marked as derived exports.
 See [the result export design](../../architecture/experiment-result-exports.md).

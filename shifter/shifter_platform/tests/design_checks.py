@@ -23,13 +23,29 @@ class Observation:
         self.matches = 0
         self.status = "missing"
         self.message = "No unique executed acceptance case"
+        self.assertion_failures: set[str] = set()
+
+    def pytest_collection_modifyitems(self, items) -> None:
+        self.matches = len(items)
+        if self.matches != 1:
+            self.status = "broken"
+            pytest.exit("Acceptance selection must execute exactly one case", returncode=2)
+
+    def pytest_runtest_makereport(self, item, call) -> None:
+        if (
+            call.when == "call"
+            and call.excinfo is not None
+            and call.excinfo.errisinstance((AssertionError, pytest.fail.Exception))
+        ):
+            self.assertion_failures.add(item.nodeid)
 
     def pytest_collection_finish(self, session) -> None:
         self.matches = len(session.items)
 
     def pytest_runtest_logreport(self, report) -> None:
         if report.failed or report.skipped or report.when == "call":
-            self.status = "broken" if report.failed and report.when != "call" else report.outcome
+            broken = report.failed and (report.when != "call" or report.nodeid not in self.assertion_failures)
+            self.status = "broken" if broken else report.outcome
             self.message = str(report.longrepr) if report.failed else ""
 
     def pytest_collectreport(self, report) -> None:
