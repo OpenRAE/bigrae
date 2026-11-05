@@ -7,14 +7,22 @@ provides the participant-with-range loader shared by the lifecycle actions in
 
 from __future__ import annotations
 
-from typing import Any
+import logging
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
+
+from django.db import transaction
 
 from ctf.exceptions import CTFNotFoundError, CTFRangeError
 from ctf.models import CTFParticipant
 
+if TYPE_CHECKING:
+    from shared.credentials import CredentialContext
 
-def get_range_status(participant_id: UUID) -> dict[str, Any]:
+logger = logging.getLogger(__name__)
+
+
+def get_range_status(participant_id: UUID, *, credential: CredentialContext | None = None) -> dict[str, Any]:
     """Get range status for a participant.
 
     Args:
@@ -61,14 +69,12 @@ def get_range_status(participant_id: UUID) -> dict[str, Any]:
     # {uuid, name, private_ip, os_type} allowlist; outside the ready state we
     # return an empty list rather than leaking stale targets.
     target_instances: list[dict[str, str]] = []
-    if participant.user_id:
+    if credential is not None:
         from ctf.bridges import cms_get_range_target_instances, cms_has_openvpn_profile
 
-        user = participant.user
-        if user is not None:
-            vpn_profile_available = cms_has_openvpn_profile(user, participant.range_instance_id)
-            if participant.range_status == "ready":
-                target_instances = cms_get_range_target_instances(user)
+        vpn_profile_available = cms_has_openvpn_profile(credential, participant.range_instance_id)
+        if participant.range_status == "ready":
+            target_instances = cms_get_range_target_instances(credential, participant.range_instance_id)
 
     return {
         "participant_id": str(participant_id),
@@ -119,21 +125,34 @@ def _get_participant_with_range(participant_id: UUID) -> CTFParticipant:
     return participant
 
 
-def _notify_range_ready(participant: CTFParticipant) -> None:
-    """Range-ready milestone (CTF-801/CTF-802): email + realtime, best-effort."""
-    try:
-        from ctf.services.notification import publish_event_notification, send_range_ready
+def notify_range_ready(participant: CTFParticipant, *, publish: bool = True) -> None:
+    """Range-ready milestone (CTF-801/CTF-802): email declaration, then realtime.
 
-        send_range_ready(participant.pk)
-        if participant.user_id:
-            publish_event_notification(
+    The email notice is declared in the caller's transaction and its identity
+    collapses repeats. The content-free live hint is published after commit, with
+    one occurrence identity per range generation (ADR-072).
+    """
+    from ctf.enums import LiveNotificationKind
+    from ctf.services.notification import publish_live_hint, send_range_ready
+
+    send_range_ready(participant.pk)
+    user_id = participant.user_id
+    if publish and user_id:
+        occurrence = f"{participant.pk}:{participant.range_instance_id or 'account'}"
+        transaction.on_commit(
+            lambda: publish_live_hint(
                 participant.event,
-                "range_ready",
-                {"participant_id": str(participant.pk)},
-                recipient_ids=[participant.user_id],
+                LiveNotificationKind.RANGE_READY,
+                recipient_ids=[user_id],
+                occurrence=occurrence,
             )
+        )
+
+
+def _notify_range_ready(participant: CTFParticipant) -> None:
+    """Best-effort range-ready from a status read; the CMS status outbox declares it too."""
+    try:
+        notify_range_ready(participant)
     # pragma: no cover — defensive; notification must never break status reads
     except Exception:
-        import logging
-
-        logging.getLogger(__name__).exception("Range-ready notification failed for %s", participant.pk)
+        logger.exception("Range-ready notification failed for %s", participant.pk)

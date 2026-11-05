@@ -591,7 +591,7 @@ class AdrGuardTests(unittest.TestCase):
                 "automated_conformance_claim": False,
             },
             "toolchain": {
-                "static": "eslint-plugin-jsx-a11y",
+                "static": "eslint-plugin-jsx-a11y-x",
                 "component": "vitest-axe",
                 "browser": "@axe-core/playwright",
                 "runner": "playwright",
@@ -989,9 +989,18 @@ class SymbolFacadeAllowlistTests(unittest.TestCase):
                         "get_organization_profile",
                         "resource_scope_from_ids",
                         "resolve_range_scope_binding",
+                        "get_identity_cutover_state",
+                        "hierarchy_target_scope",
                     ]
                 },
                 "config": {
+                    "engine.services": [
+                        "worker_credential_scope",
+                        "apply_identity_cutover_resources",
+                        "identity_cutover_contract_gaps",
+                        "identity_cutover_resource_disposition",
+                        "pending_identity_cutover_work",
+                    ],
                     "workspaces.services": [
                         "list_administrable_organizations",
                         "hierarchy_target_scope",
@@ -1000,6 +1009,22 @@ class SymbolFacadeAllowlistTests(unittest.TestCase):
                         "PolicyMutationRequest",
                         "apply_policy_mutation",
                         "event_placement_scope",
+                        "admin_principal_context",
+                        "policy_admin_registrations",
+                        "IdentityCutoverConflict",
+                        "IdentityCutoverStateView",
+                        "activate_identity_cutover",
+                        "apply_identity_cutover_sql",
+                        "begin_identity_cutover",
+                        "bind_identity_cutover_provider",
+                        "get_identity_cutover_state",
+                        "identity_cutover_disposition",
+                        "identity_cutover_relationships",
+                        "identity_cutover_resource_mappings",
+                        "plan_identity_cutover_accounts",
+                        "record_identity_cutover_bootstrap",
+                        "record_identity_cutover_policy_intent",
+                        "verify_identity_cutover_hierarchy",
                     ],
                     "management.api.policy_views": ["PolicyAdminView"],
                     "workspaces.api.serializers": ["AuthorizationMutationSerializer"],
@@ -1016,6 +1041,19 @@ class SymbolFacadeAllowlistTests(unittest.TestCase):
                 },
             },
         )
+
+    def test_config_cutover_verifier_uses_only_the_sanctioned_tenancy_symbol(self) -> None:
+        config = (ADR_GUARD.REPO_ROOT / "scripts/check_layer_imports/layer_imports.yaml").read_text()
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            rel = "shifter/shifter_platform/config/management/commands/identity_cutover.py"
+            self._write_layer_repo(
+                repo_root, rel, "from workspaces.services import verify_identity_cutover_hierarchy\n", config=config
+            )
+            self.assertEqual(ADR_GUARD.check_layer_imports(repo_root, [rel]), [])
+            self._write_layer_repo(repo_root, rel, "from workspaces.services import create_account\n", config=config)
+            violations = ADR_GUARD.check_layer_imports(repo_root, [rel])
+            self.assertTrue(any(item.rule_id == "ADR-001-R4" for item in violations))
 
     def test_unrestricted_layer_is_unaffected(self) -> None:
         config = (
@@ -2545,6 +2583,24 @@ class McpNoShellExecTests(unittest.TestCase):
             violations = ADR_GUARD.check_no_plaintext_secrets_in_tfvars(repo_root, None)
 
             self.assertEqual(violations, [])
+
+    def test_no_plaintext_secrets_fails_closed_on_undecodable_file(self) -> None:
+        # A non-UTF-8 byte must not let a committed literal bypass the scan.
+        with tempfile.TemporaryDirectory() as tmp:
+            repo_root = Path(tmp)
+            tfvars_dir = repo_root / "platform" / "terraform" / "environments" / "dev" / "portal"
+            tfvars_dir.mkdir(parents=True)
+            (tfvars_dir / "terraform.tfvars").write_bytes(
+                b'# caf\xe9\ndc_domain_password = "Synthetic-Literal-1"\n'  # pragma: allowlist secret
+            )
+
+            violations = ADR_GUARD.check_no_plaintext_secrets_in_tfvars(repo_root, None)
+
+            self.assertEqual(len(violations), 1)
+            self.assertEqual(violations[0].rule_id, "ADR-004-R7")
+            self.assertEqual(violations[0].path, "platform/terraform/environments/dev/portal/terraform.tfvars")
+            self.assertIn("UnicodeDecodeError", violations[0].message)
+            self.assertNotIn("Synthetic-Literal-1", violations[0].message)
 
     def test_no_plaintext_secrets_ignores_non_secret_vars(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

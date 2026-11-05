@@ -8,6 +8,17 @@ _ACCESS = ("range.access",)
 _DEVICE_ACCESS = scope_actions("access_devices")
 
 API_OPERATION_POLICY: dict[str, OperationPolicy] = {
+    "api_v1_mission_control_files_list": OperationPolicy(scope_actions("read_content"), "scope", "asset_collection"),
+    "api_v1_mission_control_files_delete": OperationPolicy(scope_actions("manage_content"), "scope", "file_asset"),
+    "api_v1_mission_control_file_upload_initiate": OperationPolicy(
+        scope_actions("manage_content"), "scope", "upload_parent"
+    ),
+    "api_v1_mission_control_file_upload_complete": OperationPolicy(
+        scope_actions("manage_content"), "scope", "upload_intent"
+    ),
+    "api_v1_mission_control_file_upload_cancel": OperationPolicy(
+        scope_actions("manage_content"), "scope", "upload_intent"
+    ),
     "api_v1_mission_control_agents_list": OperationPolicy(scope_actions("read_content"), "scope", "asset_collection"),
     "api_v1_mission_control_credentials_create": OperationPolicy(
         scope_actions("manage_credentials"), "scope", "credential_parent"
@@ -39,6 +50,9 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "mission_control_range_extend_create": OperationPolicy(_MANAGE, "range", "current_range"),
     "api_v1_mission_control_range_launch": OperationPolicy(
         scope_actions("launch_range"), "scope", "launch_parent", selector="validated_parent"
+    ),
+    "api_v1_mission_control_launch_workspaces_list": OperationPolicy(
+        ("workspace.launch_range",), "workspace", "authorized_workspace_collection"
     ),
     "api_v1_mission_control_range_pause": OperationPolicy(_MANAGE, "range", "current_range"),
     "api_v1_mission_control_range_resume": OperationPolicy(_MANAGE, "range", "current_range"),

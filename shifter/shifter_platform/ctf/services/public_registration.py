@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from uuid import UUID
 
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
@@ -13,6 +14,7 @@ from django.utils import timezone
 from ctf.enums import EventStatus, PublicRegistrationDisposition
 from ctf.models import CTFEvent, CTFPublicRegistrationRequest
 from ctf.services.audit import audit_public_registration_disposition
+from shared.time_zones import is_valid_time_zone
 
 MAX_PUBLIC_DESCRIPTION_CHARS = 5_000
 MAX_PENDING_REGISTRATION_REQUESTS = 2_000
@@ -74,7 +76,7 @@ def _project_eligible_event(event: CTFEvent, *, at: datetime) -> PublicEventProj
     if (
         event.deleted_at is not None
         or not event.public_registration_enabled
-        or event.workspace_id is None
+        or (event.workspace_id is None and not (event.scope_kind == "account" and event.account_id is not None))
         or event.status != EventStatus.REGISTRATION.value
     ):
         raise PublicEventUnavailable
@@ -111,9 +113,15 @@ def submit_public_registration_request(
     *,
     name: str,
     email: str,
+    time_zone: str = "",
     at: datetime | None = None,
 ) -> PublicRegistrationSubmission:
-    """Store one idempotent pending request under the event publication lock."""
+    """Store one idempotent pending request under the event publication lock.
+
+    ``time_zone`` is blank or an installed IANA name (#582).
+    """
+    if time_zone and not is_valid_time_zone(time_zone):
+        raise ValidationError({"time_zone": "Unknown time zone"})
     normalized_name = name.strip()
     normalized_email = email.strip().lower()
     with transaction.atomic():
@@ -138,6 +146,7 @@ def submit_public_registration_request(
             event=event,
             name=normalized_name,
             email=normalized_email,
+            time_zone=time_zone,
         )
         request_row.save()
         return PublicRegistrationSubmission(request_id=request_row.pk, created=True)
@@ -146,7 +155,7 @@ def submit_public_registration_request(
 def list_pending_public_registration_requests(
     event_id: UUID,
     *,
-    actor_id: int,
+    actor_id: object,
 ) -> QuerySet[CTFPublicRegistrationRequest]:
     """Return the event's pending queue after service-boundary authorization."""
     from ctf.enums import EventCapability
@@ -162,7 +171,7 @@ def list_pending_public_registration_requests(
     )
 
 
-def _locked_pending_request(request_id: UUID, *, actor_id: int) -> CTFPublicRegistrationRequest:
+def _locked_pending_request(request_id: UUID, *, actor_id: object) -> CTFPublicRegistrationRequest:
     """Lock and authorize one still-pending request."""
     from ctf.enums import EventCapability
     from ctf.services.authorization import assert_event_capability
@@ -179,7 +188,7 @@ def _locked_pending_request(request_id: UUID, *, actor_id: int) -> CTFPublicRegi
     return request_row
 
 
-def approve_public_registration_request(request_id: UUID, *, actor_id: int) -> PublicRegistrationDispositionResult:
+def approve_public_registration_request(request_id: UUID, *, actor_id: object) -> PublicRegistrationDispositionResult:
     """Admit one request through the canonical participant service."""
     from ctf.services.participant.lifecycle import add_participant
 
@@ -188,8 +197,15 @@ def approve_public_registration_request(request_id: UUID, *, actor_id: int) -> P
         # The stored ``name`` is the participant's self-chosen handle (#2455):
         # use it as the single username (login + scoreboard display).
         participant = add_participant(
-            request_row.event_id, request_row.email, request_row.name, username=request_row.name
+            request_row.event_id,
+            request_row.email,
+            request_row.name,
+            username=request_row.name,
+            actor=actor_id,
         )
+        if request_row.time_zone:
+            participant.time_zone = request_row.time_zone
+            participant.save(update_fields=["time_zone", "updated_at"])
         request_row.disposition = PublicRegistrationDisposition.APPROVED.value
         request_row.dispositioned_at = timezone.now()
         request_row.save(update_fields=["disposition", "dispositioned_at", "updated_at"])
@@ -206,7 +222,7 @@ def approve_public_registration_request(request_id: UUID, *, actor_id: int) -> P
         )
 
 
-def reject_public_registration_request(request_id: UUID, *, actor_id: int) -> PublicRegistrationDispositionResult:
+def reject_public_registration_request(request_id: UUID, *, actor_id: object) -> PublicRegistrationDispositionResult:
     """Reject one pending request without invoking participant admission."""
     with transaction.atomic():
         request_row = _locked_pending_request(request_id, actor_id=actor_id)

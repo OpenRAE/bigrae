@@ -11,12 +11,14 @@ import sys
 
 from .runtime import (
     ENTRY_POINT_GROUPS,
+    PREPARATION_OUTPUT_ENV,
     InspectionInput,
     InspectionResult,
     PluginManifest,
     RuntimeInput,
     RuntimePlan,
     parse_input,
+    read_file_input,
 )
 
 
@@ -47,11 +49,13 @@ def plan_invocation(request: RuntimeInput) -> RuntimePlan:
     """Load one exact installed distribution; all exceptions become bounded failures."""
     original = RuntimeInput.model_validate_json(request.model_dump_json())
     try:
+        for name in original.files:
+            read_file_input(original, name)
         plugin = _load_plugin(request.manifest)
         result = RuntimePlan.model_validate(plugin.plan(request))
         result.authorize(original)
         return result
-    except Exception:
+    except Exception:  # noqa: BLE001  # plugin isolation: the bounded planning-failed result records the failure
         return RuntimePlan(
             protocol=original.protocol,
             invocation_id=original.invocation_id,
@@ -68,7 +72,7 @@ def inspect_invocation(request: InspectionInput) -> InspectionResult:
     try:
         _load_plugin(request.manifest)
         status = "compatible"
-    except Exception:
+    except Exception:  # noqa: BLE001  # plugin isolation: the failed inspection status records the failure
         status = "failed"
     return InspectionResult(
         protocol=request.protocol,
@@ -83,6 +87,7 @@ def main() -> int:
     """Read bounded injected input and emit only the versioned plan response."""
     raw = os.environ.pop("BIGRAE_PLUGIN_INPUT", None)
     legacy = os.environ.pop("SHIFTER_PLUGIN_INPUT", None)
+    result_secret = os.environ.pop(PREPARATION_OUTPUT_ENV, "")
     try:
         if raw is not None and legacy is not None and raw != legacy:
             raise ValueError("conflicting plugin input aliases")
@@ -96,7 +101,17 @@ def main() -> int:
     # host still rejects polluted/malformed output and bounds the log read.
     with open(os.devnull, "w") as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
         result = inspect_invocation(request) if isinstance(request, InspectionInput) else plan_invocation(request)
-    sys.stdout.write(json.dumps(result.model_dump(mode="json"), separators=(",", ":")) + "\n")
+    if result.phase == "prepare":
+        from .runtime_sealing import seal_result
+
+        try:
+            output = seal_result(result.model_dump_json(), result_secret).decode("ascii")
+        except ValueError:
+            sys.stderr.write("plugin output unavailable\n")
+            return 2
+    else:
+        output = json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
+    sys.stdout.write(output + "\n")
     return 1 if result.status == "failed" else 0
 
 

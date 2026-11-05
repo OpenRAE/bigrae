@@ -78,6 +78,21 @@ AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
         "AUDIT_DEPLOYMENT_SCOPE",
         "AUTH_PROVIDER",
+        # AWS native identity (#2313): the STS outbound web identity issuer, the
+        # installation audience and the account that owns the issuer.
+        "AWS_ACCOUNT_ID",
+        "AWS_SERVICE_TOKEN_AUDIENCE",
+        "AWS_SERVICE_TOKEN_ISSUER",
+        # Verified TLS to RDS (#2313): verify-full and the region's public RDS CA
+        # bundle, which the entrypoint and the provisioner write to a file.
+        "DB_SSLMODE",
+        "DB_SSL_ROOT_CERT_PEM_B64",
+        # Guacamole gateway renewal on AWS (#2313): the STS audience and the exact
+        # IAM role ARN of the gateway's IRSA identity.
+        "GUACAMOLE_CONTROL_AUDIENCE",
+        "GUACAMOLE_CONTROL_IDENTITY",
+        "GUACAMOLE_CONTROL_URL",
+        "GUACAMOLE_CONTROLLER_ROLE_ARN",
         "CLOUD_PROVIDER",
         # The AWS infrastructure environment name (dev/prod), equal to the
         # Terraform/IAM environment. The standalone provisioner tags and scopes range
@@ -127,6 +142,8 @@ AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
         "MODEL_ENROLLMENT_CONTROL_URL",
         "MODEL_ENROLLMENT_CA_PEM_B64",
         "SITE_URL",
+        # Follows the presence of a shared Redis channel layer (ADR-072).
+        "WEBSOCKET_NOTIFICATIONS_ENABLED",
     }
 )
 
@@ -155,6 +172,8 @@ AWS_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
         "DB_PORT",
         "DB_NAME",
         "DB_USER",
+        "DB_SSLMODE",
+        "DB_SSL_ROOT_CERT_PEM_B64",
         "STATE_BUCKET_URL",
         "RANGE_VPC_ID",
         "RANGE_VPC_CIDR",
@@ -198,6 +217,22 @@ AWS_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     }
 )
 
+# Django Channels posture that the EKS root reads from the portal stack's SSM
+# parameters (modules/portal/eks/portal_channels.tf; ADR-018, ADR-044-R6, ADR-072).
+# CHANNEL_LAYER_BACKEND is always present; the REDIS_* keys are present only when
+# the portal stack runs Redis. REDIS_SECRET_ID is a reference: entrypoint.sh
+# hydrates the AUTH token from it, so no secret value enters the ConfigMap.
+AWS_CHANNEL_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
+    {
+        "CHANNEL_LAYER_BACKEND",
+        "REDIS_CA_MODE",
+        "REDIS_HOST",
+        "REDIS_PORT",
+        "REDIS_SECRET_ID",
+        "REDIS_TLS",
+    }
+)
+
 # Forwarded keys whose value is hydrated from a secret store after process startup
 # (the launcher injects them as secret references). The Terraform provisioner_env
 # excludes them by design, so they never enter the ConfigMap-bound runtime env and
@@ -216,5 +251,6 @@ AWS_PROVISIONER_HYDRATED_SECRET_KEYS: frozenset[str] = frozenset({"DC_DOMAIN_PAS
 AWS_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = (
     AWS_EKS_REQUIRED_RUNTIME_ENV_KEYS
     | AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS
+    | AWS_CHANNEL_RUNTIME_ENV_KEYS
     | (AWS_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS - AWS_PROVISIONER_HYDRATED_SECRET_KEYS)
 )

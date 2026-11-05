@@ -84,7 +84,11 @@ def stages(monkeypatch):
     monkeypatch.setattr(
         gcp_deploy_stages, "check_range_preconditions", lambda *a, **k: seen.append(("preconditions", None))
     )
-    monkeypatch.setattr(gcp_deploy, "_import_images", lambda runner, inputs, infra, manifest: dict(manifest.images))
+    monkeypatch.setattr(
+        gcp_deploy,
+        "_import_images",
+        lambda runner, inputs, infra, manifest, source: gcp_deploy.source_images(manifest, source),
+    )
     monkeypatch.setattr(
         gcp_deploy,
         "_scan",
@@ -140,6 +144,52 @@ class TestRunDeploy:
         assert runner.find("gcloud", "storage", "cp")[0].argv[-1].endswith("/locks/deploy.lock")
         assert "--if-generation-match=7" in runner.find("gcloud", "storage", "rm")[0].argv
         assert IMPERSONATION_KEY not in os.environ
+
+    def test_the_rollout_receives_the_release_authorization_model(self, bundle, tmp_path, stages, monkeypatch):
+        """#2679: each deploy publishes the model that the release carries."""
+        model = {"schema_version": "1.1", "type_definitions": [{"type": "principal"}]}
+        release = write_manifest(tmp_path / "release-with-model.json", authorization_model=model)
+        requests = []
+        monkeypatch.setattr(
+            gcp_deploy, "rollout_stage", lambda runner, inputs, infra, request: requests.append(request) or True
+        )
+        monkeypatch.setattr(
+            gcp_deploy,
+            "load_deployment_inputs",
+            lambda *args, **kwargs: load_deployment_inputs(str(bundle), Path(args[1]), FakeRunner(), {}),
+        )
+        runner = FakeRunner().on(["gcloud", "storage", "objects", "describe"], ProcessResult(0, "7\n"))
+        options = DeployOptions(source="gs://acme-shifter-deployment-config", release_manifest=str(release))
+        assert run_deploy(options, runner=runner) == 0
+        assert requests[0].authorization_model == model
+
+    def test_a_failed_lock_release_never_hides_the_run_error(self, bundle, manifest, stages, monkeypatch, capsys):
+        """#2676: the original failure propagates; a successful run still fails on a stuck lock."""
+        from gcp_process import GcpCommandError
+
+        def runner():
+            return (
+                FakeRunner()
+                .on(["gcloud", "storage", "objects", "describe"], ProcessResult(0, "7\n"))
+                .on(["gcloud", "storage", "rm"], ProcessResult(1, "", "Reauthentication failed"))
+            )
+
+        def fetch(*args, **kwargs):
+            return load_deployment_inputs(str(bundle), Path(args[1]), FakeRunner(), {})
+
+        monkeypatch.setattr(gcp_deploy, "load_deployment_inputs", fetch)
+        options = DeployOptions(source="gs://acme-shifter-deployment-config", release_manifest=str(manifest))
+
+        def broken_rollout(*args, **kwargs):
+            raise GcpDeployError("rollout broke")
+
+        monkeypatch.setattr(gcp_deploy, "rollout_stage", broken_rollout)
+        with pytest.raises(GcpDeployError, match="rollout broke"):
+            run_deploy(options, runner=runner())
+        assert "--break-lock" in capsys.readouterr().out
+        monkeypatch.setattr(gcp_deploy, "rollout_stage", lambda *a, **k: True)
+        with pytest.raises(GcpCommandError):
+            run_deploy(options, runner=runner())
 
     def test_ci_stages_use_ambient_identity_and_an_external_lock(self, bundle, manifest, stages, tmp_path: Path):
         roots = tmp_path / "image-roots.json"
@@ -213,6 +263,36 @@ class TestRunDeploy:
         monkeypatch.delenv(gcp_deploy.DEFAULT_RELEASE_MANIFEST_ENV, raising=False)
         with pytest.raises(GcpDeployError, match="release manifest is required"):
             run_deploy(DeployOptions(source=str(bundle), stage="infrastructure", lock="external"), runner=FakeRunner())
+
+    def test_release_source_mirror_is_verified_and_imported(self, bundle, manifest, stages, monkeypatch):
+        """#2659: with a mirror, the gates verify and import the mirror copy of each release digest."""
+        verified: list[dict[str, str]] = []
+        monkeypatch.setattr(gcp_deploy, "_verify", lambda runner, images, trust: verified.append(dict(images)))
+        options = DeployOptions(
+            source=str(bundle),
+            stage="rollout",
+            lock="external",
+            release_manifest=str(manifest),
+            release_source="mirror.example/team/bigrae",
+        )
+        assert run_deploy(options, runner=FakeRunner()) == 0
+        assert len(verified) == 2
+        for images in verified:
+            assert images
+            assert all(
+                identity.startswith(f"mirror.example/team/bigrae/{name}@sha256:") for name, identity in images.items()
+            )
+        with pytest.raises(RuntimeError, match="registry prefix"):
+            run_deploy(
+                DeployOptions(
+                    source=str(bundle),
+                    stage="rollout",
+                    lock="external",
+                    release_manifest=str(manifest),
+                    release_source="https://mirror.example",
+                ),
+                runner=FakeRunner(),
+            )
 
     def test_rejects_bad_stage_local_lock_and_mismatched_tooling(self, bundle, manifest, stages, monkeypatch):
         with pytest.raises(GcpDeployError, match="--stage"):
@@ -301,11 +381,20 @@ class TestStageHelpers:
         runner = FakeRunner()
         retire_inventoried_artifacts(runner, inputs, "ctx")
         assert runner.calls == []
-        assert sync_policy_credentials(runner, inputs, sample_gcp_outputs(PROJECT)) is False
+        disabled = {"native_identity": {"value": {"openfga_enabled": False}}}
+        assert sync_policy_credentials(runner, inputs, disabled) is False
         assert (
             sync_policy_credentials(runner, inputs, {"native_identity": {"value": {"openfga_enabled": True}}}) is True
         )
-        assert "sync_openfga_secrets.py" in runner.calls[0].argv[1]
+        # The three derived OpenFGA secrets exist (#2679), so nothing is generated before the sync.
+        describes = runner.find("gcloud", "secrets", "versions", "describe")
+        assert [call.argv[call.argv.index("--secret") + 1] for call in describes] == [
+            "shifter-acme-openfga-runtime",
+            "shifter-acme-openfga-admin",
+            "shifter-acme-openfga-ca",
+        ]
+        assert not runner.find("gcloud", "secrets", "create")
+        assert "sync_openfga_secrets.py" in runner.calls[-1].argv[1]
         with pytest.raises(DeployStageError, match="foundation-inputs"):
             reconcile_foundation_image_network(runner, inputs)
 
@@ -340,6 +429,13 @@ class TestOtherCommands:
         options = ScanOptions(release_manifest=str(manifest), project_id=PROJECT, environment="acme")
         assert run_release_scan_command(options, runner=FakeRunner()) == 0
         assert seen == [(f"shifteracme-scan@{PROJECT}.iam.gserviceaccount.com", f"{PROJECT}-release-evidence")]
+        scanned = []
+        monkeypatch.setattr(gcp_deploy, "_scan", lambda runner, images, evidence, workdir: scanned.append(images))
+        mirror = ScanOptions(
+            release_manifest=str(manifest), project_id=PROJECT, environment="acme", release_source="m.example/x"
+        )
+        assert run_release_scan_command(mirror, runner=FakeRunner()) == 0
+        assert all(identity.startswith(f"m.example/x/{name}@") for name, identity in scanned[0].items())
 
     def test_smoke_command(self, bundle, monkeypatch):
         monkeypatch.setattr(gcp_deploy, "require_tools", lambda *n: None)
@@ -357,13 +453,33 @@ class TestOtherCommands:
         )
         for name in (
             "terraform_init",
-            "lift_sql_deletion_protection",
             "drop_unremovable_kms_resources",
             "terraform_destroy",
         ):
             monkeypatch.setattr(
                 f"gcp_terraform.{name}", lambda *a, _n=name, **k: steps.append((_n, os.environ.get(IMPERSONATION_KEY)))
             )
+        # A rerun after an interrupted destroy adopts the detached keys first (#2564).
+        monkeypatch.setattr(
+            "gcp_terraform.kms_adoption_variables",
+            lambda *a, **k: (
+                steps.append(("kms_adoption_variables", os.environ.get(IMPERSONATION_KEY)))
+                or {"adopt_storage_kms": "true"}
+            ),
+        )
+        settings_variables = []
+        monkeypatch.setattr(
+            "gcp_terraform.apply_destroy_settings",
+            lambda *a, variables=None, **k: (
+                settings_variables.append(variables)
+                or steps.append(("apply_destroy_settings", os.environ.get(IMPERSONATION_KEY)))
+            ),
+        )
+        monkeypatch.setattr(
+            gcp_destroy,
+            "remove_platform_release",
+            lambda *a, **k: steps.append(("remove_platform_release", os.environ.get(IMPERSONATION_KEY))),
+        )
         with pytest.raises(GcpDeployError, match="--confirm"):
             run_destroy(DestroyOptions(source=str(bundle), confirm="other", lock="external"), runner=FakeRunner())
         assert (
@@ -373,17 +489,44 @@ class TestOtherCommands:
         assert steps[0] == "verified"
         assert [step[0] for step in steps[1:]] == [
             "terraform_init",
-            "lift_sql_deletion_protection",
+            "remove_platform_release",
+            "kms_adoption_variables",
+            "apply_destroy_settings",
             "drop_unremovable_kms_resources",
             "terraform_destroy",
         ]
         assert all(step[1] == destroy for step in steps[1:])
+        assert settings_variables == [{"adopt_storage_kms": "true"}]
         steps.clear()
         run_destroy(
             DestroyOptions(source=str(bundle), confirm="acme", lock="external", identity_mode="ambient"),
             runner=FakeRunner(),
         )
         assert "verified" not in steps
+
+    def test_destroy_uninstalls_the_release_before_terraform(self, bundle, tmp_path: Path):
+        # The Ingress controller removes its load balancer only while the cluster exists (#2640).
+        inputs = load_deployment_inputs(str(bundle), tmp_path / "w", FakeRunner(), {})
+        absent = FakeRunner().on(["gcloud", "container", "fleet", "memberships", "describe"], ProcessResult(1))
+        gcp_destroy.remove_platform_release(absent, inputs)
+        assert not absent.find("helm")
+        no_release = FakeRunner().on(["helm", "status"], ProcessResult(1))
+        gcp_destroy.remove_platform_release(no_release, inputs)
+        assert no_release.find("helm", "status") and not no_release.find("helm", "uninstall")
+        installed = FakeRunner()
+        gcp_destroy.remove_platform_release(installed, inputs)
+        uninstall = installed.find("helm", "uninstall")[0].argv
+        assert uninstall == [
+            "helm",
+            "uninstall",
+            "shifter",
+            "--namespace",
+            "shifter-system",
+            "--wait",
+            "--timeout",
+            "15m",
+        ]
+        assert installed.find("gcloud", "container", "fleet", "memberships", "get-credentials")
 
     def test_destroy_tooling_verification_checks_release_provenance(
         self, bundle, manifest, monkeypatch, tmp_path: Path
@@ -399,9 +542,40 @@ class TestOtherCommands:
         )
         images, trust = verified[0]
         assert images == release_images() and trust.source_revision == REVISION
+        mirror = DestroyOptions(
+            source=str(bundle), confirm="acme", release_manifest=str(manifest), release_source="mirror.example/bigrae"
+        )
+        gcp_destroy._verify_release_tooling(FakeRunner(), mirror, inputs)
+        assert all(identity.startswith(f"mirror.example/bigrae/{name}@") for name, identity in verified[1][0].items())
 
 
 class TestCli:
+    def test_cmek_migrate_moves_an_operator_owned_bucket_to_its_key(self, monkeypatch):
+        # The pack bucket has no deploy-owned root; the operator runs the same migration (#2564).
+        parser = argparse.ArgumentParser()
+        gcp_cli.add_lifecycle_subparsers(parser.add_subparsers(dest="command"))
+        assert "gcp-cmek-migrate" in gcp_cli.LIFECYCLE_COMMANDS
+        key = "projects/acme/locations/us/keyRings/acme-packs/cryptoKeys/raes-packages"
+        calls = []
+        monkeypatch.setattr(
+            "gcp_storage_cmek.migrate_bucket",
+            lambda runner, bucket, k: calls.append((type(runner).__name__, bucket, k)),
+        )
+        args = parser.parse_args(["gcp-cmek-migrate", "--bucket", "acme-packs", "--key", key])
+        assert gcp_cli._HANDLERS["gcp-cmek-migrate"](args) == 0
+        assert calls == [("ProcessRunner", "acme-packs", key)]
+        for bucket, bad_key in (
+            ("gs://acme-packs", key),
+            ("acme-packs", key + "/cryptoKeyVersions/1"),
+            ("acme-packs", "https://example.invalid/key"),
+            ("acme-packs", key + " "),
+        ):
+            with pytest.raises(ValueError):
+                gcp_cli._HANDLERS["gcp-cmek-migrate"](
+                    parser.parse_args(["gcp-cmek-migrate", "--bucket", bucket, "--key", bad_key])
+                )
+        assert len(calls) == 1
+
     def test_parser_builds_options_and_dispatch_reports_failures(self, monkeypatch, capsys):
         parser = argparse.ArgumentParser()
         gcp_cli.add_lifecycle_subparsers(parser.add_subparsers(dest="command"))
@@ -416,6 +590,8 @@ class TestCli:
                 "ambient",
                 "--no-smoke",
                 "--first-install",
+                "--release-source",
+                "mirror.example/bigrae",
             ]
         )
         options = gcp_cli._deploy_options(args)
@@ -426,6 +602,12 @@ class TestCli:
             False,
             True,
         )
+        assert options.release_source == "mirror.example/bigrae"
+        for command in (
+            ["gcp-destroy", "--store", "gs://b", "--confirm", "acme"],
+            ["gcp-release-scan", "--release-manifest", "m", "--project-id", "p", "--environment", "e"],
+        ):
+            assert parser.parse_args([*command, "--release-source", "m.example/x"]).release_source == "m.example/x"
 
         def failing(args):
             raise GcpDeployError("bad input")

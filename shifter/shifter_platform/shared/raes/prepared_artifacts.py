@@ -11,7 +11,8 @@ from typing import Any, Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
-from raes.artifact_requirements import ArtifactIdentity, ArtifactMaterializationSpecification
+from raes.artifact_requirements import ArtifactMaterializationSpecification
+from raes_contracts.artifact_identity import ArtifactIdentity
 
 from shared.artifact_preparation import BuildEvidence, Digest, ImageRef, InputEvidence, OutputEvidence, ProviderID
 from shared.operation_envelope import canonical_payload_digest

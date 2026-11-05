@@ -14,6 +14,7 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
+from shared.identity_scope import PrincipalRef, ResourceScope
 from shared.operation_results import ResultStep
 from shared.raes.operation_input import RaesInputBindings, RaesRangeIdentity, build_raes_operation_input
 from shared.warm_pool.activation_input import (
@@ -26,6 +27,7 @@ from shared.warm_pool.activation_input import (
 import raes_gcp_activate_realize
 import raes_range_ops
 from raes_gcp_activate_gce import GceActivationOps
+from raes_gcp_network_allocation import GceNetworkAllocation
 
 
 def _activation():
@@ -38,7 +40,10 @@ def _activation():
         identity=RaesRangeIdentity(1001, None),
     )
     payload = build_activation_input(
-        claimant=ActivationClaimant(user_id=42, username="claimant@example.com", workspace_id=7),
+        claimant=ActivationClaimant(
+            PrincipalRef(uuid4(), "service"),
+            ResourceScope("account", uuid4()),
+        ),
         generation=ActivationGeneration(
             range_source="mission-control",
             instantiation_purpose="live_fire",
@@ -280,7 +285,7 @@ class TestRunRaesRangeActivate:
         monkeypatch.setattr(
             raes_range_ops,
             "_allocated_networks_for_destroy",
-            lambda *args: raes_range_ops._GceNetworkAllocation(required=False),
+            lambda *args: GceNetworkAllocation(required=False),
         )
         monkeypatch.setattr(raes_range_ops, "_require_gce_live_fire_binding", lambda operation_input: "gce")
         monkeypatch.setattr(raes_range_ops, "load_gce_range_cell_config", lambda **kwargs: object())
@@ -316,7 +321,7 @@ class TestRunRaesRangeActivate:
         monkeypatch.setattr(
             raes_range_ops,
             "_allocated_networks_for_destroy",
-            lambda *args: raes_range_ops._GceNetworkAllocation(required=False),
+            lambda *args: GceNetworkAllocation(required=False),
         )
         monkeypatch.setattr(raes_range_ops, "_require_gce_live_fire_binding", lambda operation_input: "gce")
         monkeypatch.setattr(raes_range_ops, "load_gce_range_cell_config", lambda **kwargs: object())
@@ -359,7 +364,7 @@ class TestRunRaesRangeActivate:
         monkeypatch.setattr(
             raes_range_ops,
             "_allocated_networks_for_destroy",
-            lambda *args: raes_range_ops._GceNetworkAllocation(required=False),
+            lambda *args: GceNetworkAllocation(required=False),
         )
         monkeypatch.setattr(raes_range_ops, "_require_gce_live_fire_binding", lambda operation_input: "gce")
         monkeypatch.setattr(raes_range_ops, "load_gce_range_cell_config", lambda **kwargs: object())
@@ -388,7 +393,7 @@ class TestRunRaesRangeActivate:
             "_allocated_networks_for_destroy",
             lambda request_id, operation_id, plan, value: (
                 recovered.append((request_id, operation_id, value))
-                or raes_range_ops._GceNetworkAllocation(
+                or GceNetworkAllocation(
                     required=True,
                     network_cidrs=(("backend.gce.network.default", "10.90.0.0/28"),),
                 )
@@ -425,7 +430,7 @@ class TestRunRaesRangeActivate:
         monkeypatch.setattr(
             raes_range_ops,
             "_allocated_networks_for_destroy",
-            lambda *args: raes_range_ops._GceNetworkAllocation(required=True),
+            lambda *args: GceNetworkAllocation(required=True),
         )
         monkeypatch.setattr(
             "raes_gcp_activate.default_activation_ops",
@@ -474,8 +479,13 @@ class TestGetActivationOperationInput:
     def test_returns_parsed_activation_run(self, monkeypatch):
         import provisioner_db_operation_input as dbin
 
+        principal_uuid = uuid4()
+        account_uuid = uuid4()
         payload = build_activation_input(
-            claimant=ActivationClaimant(user_id=42, username="claimant@example.com", workspace_id=7),
+            claimant=ActivationClaimant(
+                PrincipalRef(principal_uuid, "service"),
+                ResourceScope("account", account_uuid),
+            ),
             generation=ActivationGeneration(
                 range_source="mission-control",
                 instantiation_purpose="live_fire",
@@ -496,7 +506,8 @@ class TestGetActivationOperationInput:
         run = dbin.get_activation_operation_input("op-1", request_id="rid-1")
         assert run.operation_id == "op-1"
         assert run.request_id == "rid-1"
-        assert run.input.claimant_user_id == 42
+        assert run.input.claimant == PrincipalRef(principal_uuid, "service")
+        assert run.input.scope == ResourceScope("account", account_uuid)
 
     def test_invalid_payload_raises_operation_input_error(self, monkeypatch):
         import provisioner_db_operation_input as dbin

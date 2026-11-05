@@ -4,6 +4,7 @@ from dataclasses import asdict
 from typing import Any
 from uuid import UUID
 
+from django.core.validators import MaxLengthValidator
 from drf_spectacular.utils import extend_schema
 from rest_framework import serializers
 from rest_framework.filters import BaseFilterBackend
@@ -17,13 +18,13 @@ from cms.services._runtime_plugin_packs import (
     runtime_plugin_pack_detail,
     set_runtime_plugin_pack,
 )
-from shared.api.permissions import IsAuthenticatedSession
+from shared.api.permissions import IsAuthenticatedSessionOrApiToken
+from shared.api.principals import authenticated_credential
 from shared.exceptions import ValidationError
 from workspaces.services import OrganizationAuthorizationError
 
 from .preparation_adapters import PreparationSerializer, preparation_request_audit
 from .runtime_plugins import _error
-from .tenant_packs import SESSION_ONLY_SCHEMA_AUTH
 
 
 class RuntimeTargetImageProfileSerializer(serializers.Serializer):
@@ -56,6 +57,9 @@ class RuntimePluginBindingsSerializer(PreparationSerializer):
         default=dict,
     )
     image_profiles = serializers.DictField(child=RuntimeTargetImageProfileSerializer(), default=dict)
+    file_assets = serializers.DictField(
+        child=serializers.UUIDField(), default=dict, validators=[MaxLengthValidator(16)]
+    )
 
 
 class RuntimePluginPackBindingSerializer(serializers.Serializer):
@@ -106,14 +110,14 @@ class RuntimePluginPackUpdateSerializer(PreparationSerializer):
 class RuntimePluginPackListView(ListAPIView):
     """List packs that the organization administrator can bind."""
 
-    permission_classes = [IsAuthenticatedSession]
+    permission_classes = [IsAuthenticatedSessionOrApiToken]
     serializer_class = RuntimePluginPackSerializer
     filter_backends: list[type[BaseFilterBackend]] = []
 
     def get_queryset(self) -> list[dict[str, Any]]:
-        return list_runtime_plugin_packs(self.request.user, self.kwargs["organization_uuid"])
+        return list_runtime_plugin_packs(authenticated_credential(self.request), self.kwargs["organization_uuid"])
 
-    @extend_schema(auth=SESSION_ONLY_SCHEMA_AUTH)  # type: ignore[arg-type]
+    @extend_schema()
     def get(self, request: Request, *args: object, **kwargs: object) -> Response:
         try:
             return super().get(request, *args, **kwargs)
@@ -124,26 +128,29 @@ class RuntimePluginPackListView(ListAPIView):
 class RuntimePluginPackDetailView(APIView):
     """Inspect verified guests and update the organization's binding."""
 
-    permission_classes = [IsAuthenticatedSession]
+    permission_classes = [IsAuthenticatedSessionOrApiToken]
 
-    @extend_schema(responses=RuntimePluginPackDetailSerializer, auth=SESSION_ONLY_SCHEMA_AUTH)  # type: ignore[arg-type]
+    @extend_schema(responses=RuntimePluginPackDetailSerializer)
     def get(self, request: Request, organization_uuid: UUID, pack_id: str) -> Response:
         try:
-            return Response(runtime_plugin_pack_detail(request.user, organization_uuid, pack_id))
+            return Response(runtime_plugin_pack_detail(authenticated_credential(request), organization_uuid, pack_id))
         except (OrganizationAuthorizationError, ValidationError) as exc:
             return _error(request, exc)
 
     @extend_schema(
         request=RuntimePluginPackUpdateSerializer,
         responses=RuntimePluginPackBindingSerializer,
-        auth=SESSION_ONLY_SCHEMA_AUTH,  # type: ignore[arg-type]
     )
     def post(self, request: Request, organization_uuid: UUID, pack_id: str) -> Response:
         body = RuntimePluginPackUpdateSerializer(data=request.data)
         body.is_valid(raise_exception=True)
         try:
             row = set_runtime_plugin_pack(
-                request.user, organization_uuid, pack_id, body.validated_data, audit=preparation_request_audit(request)
+                authenticated_credential(request),
+                organization_uuid,
+                pack_id,
+                body.validated_data,
+                audit=preparation_request_audit(request),
             )
             return Response(asdict(row))
         except (OrganizationAuthorizationError, ValidationError) as exc:

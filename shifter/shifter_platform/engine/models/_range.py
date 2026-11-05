@@ -186,6 +186,7 @@ class Range(RangeAllocationMixin, models.Model):
         blank=True,
         help_text="Full RangeSpec from CMS (scenario_id, user_id, subnets)",
     )
+    raes_cloud_content = models.JSONField(null=True, editable=False)
     provisioned_instances = models.JSONField(
         null=True,
         blank=True,

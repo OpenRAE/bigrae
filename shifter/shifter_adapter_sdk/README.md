@@ -46,6 +46,24 @@ Plugin authors must build images that run under these constraints. Host callers
 use `parse_result` with their original input to reject replay and undeclared
 targets. Neither a plan nor a compatibility response proves guest readiness.
 
+An adapter can declare `required_files`, a list of up to 16 named input files.
+Administrators upload and replace these in Mission Control → Assets → Files,
+then select each file in the pack's adapter assignment. Each file and their
+combined size must fit 512 KiB. Files are opaque data; the portal does not
+interpret them or install them as executable adapters. A missing, deleted or
+unauthorized selection blocks launch. Replacement retains a logical file
+identity: new ranges get the current version; existing ranges keep the version
+they admitted.
+
+`RuntimeInput.files` contains only each declared file's SHA-256 and byte length.
+The host reauthorizes the original file access and mounts the verified version
+read-only at `/run/plugin-inputs`, using an immutable Secret owned by the
+invocation's Job. Use `bigrae_adapter_sdk.runtime.read_file_input(request, name)`
+to obtain bounded, digest-checked bytes. The worker verifies all required files
+before loading adapter code. Files add no network access or storage credentials
+to the worker. Build the worker image against an SDK candidate containing these
+contracts; older images cannot consume required file inputs.
+
 The RAES GCE and EC2 hosts ask for `validate`, `configure` and `verify` plans before
 creating resources. These requests contain declared node identities and OS
 families, not realized IP addresses, keys, provider credentials or secret URLs.
@@ -54,6 +72,46 @@ The host executes configuration and verification against its own guest map and
 uses exit status as evidence. Each binding currently targets exactly one guest.
 Guest-only cleanup is performed by core range destruction, independently of the
 image registry.
+
+An adapter can also declare `provision.prepare` with nonempty
+`provisioning_concerns`. The host asks for a `prepare` plan before any provider
+work. Preparation-only adapters declare `required_bindings: []`; guest adapters
+retain their guest bindings and readiness verification. The request carries the
+original `plan_digest` and declared parameters/files. It grants no provider API,
+CMS access, or additional input discovery.
+
+Return `provisioning_values`, each containing an authored resource `address`, a
+declared `concern`, an RFC 6901 `payload_pointer` and a scalar `value`. Only an
+existing payload scalar may change. New paths, collection replacement, resource
+identities and operation graphs are outside this contract. Core evaluates every
+original RAES authority, including exact ancestors and recursive constraints;
+unsupported or unresolved constraints refuse preparation. At most 4096 proposals
+and 512 KiB of clear response are permitted by the SDK. Core additionally
+requires the complete encrypted snapshot plus original input to fit its 256 KiB
+operation envelope before acceptance. Preparation cannot execute guest
+actions. For example, a synthetic concern may propose:
+
+```json
+{"address":"node.example","concern":"synthetic-settings","payload_pointer":"/spec/label","value":"selected"}
+```
+
+The worker seals preparation stdout using the host-supplied
+`BIGRAE_PLUGIN_RESULT_SECRET`. Authors use the standard worker entrypoint and do
+not handle this key. A missing key fails without plaintext output. Host callers
+supply the invocation key to `parse_result(..., result_secret=...)`; cleartext
+preparation output is refused. Guest-only output is unchanged. Accepted values
+remain encrypted in core records and are reused for retries and destruction;
+reports keep original plan addresses. See the
+[pre-provisioning design](../../docs/architecture/adapter-pre-provisioning-2718.md).
+
+A preparation response may include `secret_payloads`, each with an exact native
+`version_ref` and a literal UTF-8 `value`. Core accepts a selection only for an
+otherwise unspecified native payload and the installed adapter's declared
+`runtime-platform-applications` concern. Explicit Content references cannot be
+overridden. Values remain in the sealed response, are excluded from object
+representations, and are bounded by the provider byte limit and the existing
+preparation-output budget. This selection grants no cloud API or key-issuance
+authority to an adapter.
 
 An action may request `runtime_values`, a map from local names to closed
 `GuestValueReference(binding=..., field=...)` references. Supported fields are
@@ -139,3 +197,14 @@ or refresh failure must stop client model access.
 The current delivery implementation requires trusted private SSH on Linux. It
 rejects transports that would persist enrollment in a remote command service.
 Client protocol compatibility and both cloud deployments require live qualification.
+
+## Apparatus runtime inputs
+
+`bigrae.runtime-plugin/v2` supports administrator-bound worker software without a content pack.
+Its runtime input requires `apparatus_digest` and forbids `pack_digest`.
+The manifest and response must declare that same protocol.
+Version 1 inputs continue to require their original pack identity.
+The host still pins the installed executable, target bindings, operation, phase, and input digest.
+An adapter cannot install itself through content or choose provider resources.
+Apparatus planning uses the existing isolated worker and bounded guest-action contract.
+A compatible installation probe does not prove guest readiness.

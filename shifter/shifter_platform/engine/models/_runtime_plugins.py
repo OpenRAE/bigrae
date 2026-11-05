@@ -89,6 +89,7 @@ class RuntimePluginRangeBinding(models.Model):
     installation = models.ForeignKey(RuntimePluginInstallation, on_delete=models.PROTECT)
     pin = models.JSONField()
     pin_digest = models.CharField(max_length=71)
+    preparation = models.JSONField(null=True, editable=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
     def __str__(self) -> str:

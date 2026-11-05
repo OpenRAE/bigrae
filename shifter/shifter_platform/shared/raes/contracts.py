@@ -7,6 +7,8 @@ can check Shifter's supported profile/version set without importing the builder.
 
 from __future__ import annotations
 
+import importlib.metadata
+
 SHIFTER_BACKEND_NAME = "shifter"
 SHIFTER_BACKEND_PROFILE = "provisioning-only"
 
@@ -24,6 +26,12 @@ EVENT_TYPE_RAES_SNAPSHOT = "range.raes.snapshot"
 #: by a parity test, since the provisioner ships without ``shared``). A new transport
 #: envelope shape is a new ``-vN`` value.
 RAES_PROVISIONING_PLAN_CONTRACT_VERSION = "raes-provisioning-plan-v2"
+
+
+def provisioning_plan_producer() -> str:
+    """Return the transport contract and RAES producer that new plans carry."""
+    return f"{RAES_PROVISIONING_PLAN_CONTRACT_VERSION}/{importlib.metadata.version('raes')}"
+
 
 SHIFTER_SUPPORTED_CONTRACT_VERSIONS = frozenset(
     {

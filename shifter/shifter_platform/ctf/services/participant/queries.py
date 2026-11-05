@@ -9,7 +9,7 @@ from django.db.models import Q, QuerySet
 
 from ctf.enums import ParticipantStatus
 from ctf.exceptions import CTFNotFoundError
-from ctf.models import CTFEvent, CTFParticipant
+from ctf.models import CTFEvent, CTFParticipant, CTFTeam
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -101,17 +101,18 @@ def ranked_participant_q(field_prefix: str = "") -> Q:
     return eligible_participant_q(field_prefix) & Q(**{f"{p}hidden": False, f"{p}role": ParticipantRole.PLAYER.value})
 
 
-def assert_participant_can_compete(participant: CTFParticipant) -> None:
+def assert_participant_can_compete(participant: CTFParticipant, *, require_team: bool = False) -> None:
     """Raise unless `participant` may take competitive actions (submit, hints).
 
     The imperative twin of :func:`eligible_participant_q` for callers already
     holding a row, plus the CTF-604 role rule: observers watch but never act.
-    Shared by flag submission and hint purchase so a mutation path can never
-    be more permissive than the scoring predicate.
+    Flag submission also requires live same-event team membership in team mode
+    when ``require_team`` is set. Team onboarding and other callers do not.
 
     Raises:
         CTFStateError: If the participant is unregistered or their status is
-            outside the playing set (invited, disqualified, banned).
+            outside the playing set (invited, disqualified, banned), or required
+            team membership is missing.
         CTFPermissionError: If the participant is an observer.
     """
     from ctf.enums import ParticipantRole
@@ -125,6 +126,18 @@ def assert_participant_can_compete(participant: CTFParticipant) -> None:
     if participant.role == ParticipantRole.OBSERVER.value:
         raise CTFPermissionError(
             "Observers cannot submit flags or unlock hints",
+            details={"participant_id": str(participant.id)},
+        )
+    if (
+        require_team
+        and participant.event.team_mode
+        and (
+            participant.team_id is None
+            or not CTFTeam.objects.filter(pk=participant.team_id, event_id=participant.event_id).exists()
+        )
+    ):
+        raise CTFStateError(
+            "Join or create a team before submitting flags",
             details={"participant_id": str(participant.id)},
         )
 

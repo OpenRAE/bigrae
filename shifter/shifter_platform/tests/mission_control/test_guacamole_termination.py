@@ -73,10 +73,12 @@ def test_failed_or_redirected_delete_does_not_claim_termination(status):
 
 
 def test_unresponsive_delete_is_bounded():
-    with server(delay=0.5) as (url, _):
+    # The bound sits far below the server delay and far above the client timeout,
+    # so a loaded CI runner cannot fail it while an unbounded wait still does.
+    with server(delay=5) as (url, _):
         started = time.monotonic()
         assert not client(url, timeout=0.05).terminate_session(_TOKEN)
-        assert time.monotonic() - started < 0.3
+        assert time.monotonic() - started < 2
 
 
 def test_native_absence_response_finishes_repeated_termination():
@@ -100,12 +102,7 @@ def test_provider_failure_does_not_echo_secret_to_errors_or_logs(monkeypatch, ca
         raise urllib.error.URLError(_TOKEN)
 
     monkeypatch.setattr(guac.urllib.request, "urlopen", failed)
-    logger = logging.getLogger(guac.__name__)
-    logger.addHandler(caplog.handler)
-    try:
-        with caplog.at_level(logging.WARNING, logger=guac.__name__), pytest.raises(ValueError) as caught:
-            client("http://127.0.0.1", timeout=0.05)._get_auth_token(_TOKEN)
-    finally:
-        logger.removeHandler(caplog.handler)
+    with caplog.at_level(logging.WARNING, logger=guac.__name__), pytest.raises(ValueError) as caught:
+        client("http://127.0.0.1", timeout=0.05)._get_auth_token(_TOKEN)
     assert _TOKEN not in str(caught.value)
     assert _TOKEN not in caplog.text

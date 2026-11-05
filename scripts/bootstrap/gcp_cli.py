@@ -6,12 +6,14 @@ Commands:
 - ``gcp-release-scan``: scan the exact images of a release manifest;
 - ``gcp-smoke``: run the advisory post-deploy range smoke;
 - ``gcp-destroy``: tear down the platform resources of one deployment;
-- ``gcp-config``: publish, pull, and show the deployment inputs, and set range images.
+- ``gcp-config``: publish, pull, and show the deployment inputs, and set range images;
+- ``gcp-cmek-migrate``: move the live objects of an operator-owned bucket to its key.
 """
 
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from collections.abc import Callable
 
@@ -28,9 +30,15 @@ from gcp_deploy import (
 from gcp_destroy import DestroyOptions, run_destroy
 from gcp_inputs import RANGE_IMAGE_ROLES
 
-LIFECYCLE_COMMANDS = frozenset({"gcp-deploy", "gcp-release-scan", "gcp-smoke", "gcp-destroy", "gcp-config"})
+LIFECYCLE_COMMANDS = frozenset(
+    {"gcp-install", "gcp-deploy", "gcp-release-scan", "gcp-smoke", "gcp-destroy", "gcp-config", "gcp-cmek-migrate"}
+)
+# A Cloud KMS key resource name without a version (#2564).
+_KMS_KEY_RE = re.compile(r"projects/[a-z0-9-]+/locations/[a-z0-9-]+/keyRings/[A-Za-z0-9_-]+/cryptoKeys/[A-Za-z0-9_-]+")
+_BUCKET_RE = re.compile(r"[a-z0-9][a-z0-9._-]{1,220}[a-z0-9]")
 _IDENTITY_HELP = "impersonate (operator, default) or ambient (the caller already is the purpose identity, CI)"
 _STORE_HELP = "Deployment config bucket prefix"
+_RELEASE_SOURCE_HELP = "Mirror registry prefix that holds the release images by digest (default: the manifest's)"
 
 
 def _add_source_arguments(parser: argparse.ArgumentParser) -> None:
@@ -56,6 +64,7 @@ def _add_lock_arguments(parser: argparse.ArgumentParser) -> None:
 def _add_trust_arguments(parser: argparse.ArgumentParser) -> None:
     """Add the release manifest and provenance trust arguments."""
     parser.add_argument("--release-manifest", default="", help="Release manifest (default: the deployer image's)")
+    parser.add_argument("--release-source", default="", help=_RELEASE_SOURCE_HELP)
     parser.add_argument("--trusted-repository-id", default="", help="CI only: the running repository ID")
     parser.add_argument("--trusted-owner-id", default="", help="CI only: the running repository owner ID")
 
@@ -71,6 +80,15 @@ def _add_run_arguments(parser: argparse.ArgumentParser) -> None:
 
 def add_lifecycle_subparsers(subparsers: argparse._SubParsersAction) -> None:
     """Wire the GitHub-less GCP lifecycle subcommands."""
+    install = subparsers.add_parser(
+        "gcp-install", help="Install a GCP deployment from a release and one local bundle (foundation through deploy)"
+    )
+    install.add_argument("--inputs", required=True, help="Local bundle directory: bigrae.yaml and the Terraform values")
+    install.add_argument("--release-manifest", default="", help="Release manifest (default: the deployer image's)")
+    install.add_argument("--release-source", default="", help=_RELEASE_SOURCE_HELP)
+    install.add_argument(
+        "--operator", default="", help="Google identity that may impersonate the deploy identities (default: gcloud's)"
+    )
     deploy = subparsers.add_parser("gcp-deploy", help="Stand up or update a GCP deployment from a published release")
     _add_source_arguments(deploy)
     _add_lock_arguments(deploy)
@@ -80,6 +98,15 @@ def add_lifecycle_subparsers(subparsers: argparse._SubParsersAction) -> None:
     deploy.add_argument("--deploy-service-account", default="", help="Deploy identity (default: derived)")
     deploy.add_argument("--release-scan-service-account", default="", help="Release-scan identity (default: derived)")
     deploy.add_argument("--first-install", action="store_true", help="Accept an inactive certificate before DNS exists")
+    deploy.add_argument(
+        "--identity-cutover-facts", default="", help="Private 0600 cutover JSON file (legacy conversion)"
+    )
+    deploy.add_argument("--identity-bootstrap-facts", default="", help="Paired private 0600 native bootstrap JSON file")
+    deploy.add_argument(
+        "--catalog-credential-file",
+        default="",
+        help="Private 0600 native bearer file for post-activation catalog setup",
+    )
     deploy.add_argument(
         "--allow-missing-range-images", action="store_true", help="Deploy the platform before range images exist"
     )
@@ -94,6 +121,7 @@ def add_lifecycle_subparsers(subparsers: argparse._SubParsersAction) -> None:
 
     scan = subparsers.add_parser("gcp-release-scan", help="Scan the exact images of a release manifest")
     scan.add_argument("--release-manifest", required=True, help="Release manifest to scan")
+    scan.add_argument("--release-source", default="", help=_RELEASE_SOURCE_HELP)
     scan.add_argument("--project-id", required=True, help="Deployment project")
     scan.add_argument("--environment", required=True, help="Deployment name")
     scan.add_argument("--identity", choices=("impersonate", "ambient"), default="impersonate", help=_IDENTITY_HELP)
@@ -128,6 +156,12 @@ def add_lifecycle_subparsers(subparsers: argparse._SubParsersAction) -> None:
     image_parser.add_argument("--role", required=True, choices=RANGE_IMAGE_ROLES, help="Range guest role")
     image_parser.add_argument("--image", required=True, help="projects/<project>/global/images/[family/]<name>")
 
+    cmek = subparsers.add_parser(
+        "gcp-cmek-migrate", help="Rewrite the live objects of an operator-owned bucket with its customer-managed key"
+    )
+    cmek.add_argument("--bucket", required=True, help="Bucket name, for example the private pack bucket")
+    cmek.add_argument("--key", required=True, help="projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>")
+
 
 def _deploy_options(args: argparse.Namespace) -> DeployOptions:
     """Build ``gcp-deploy`` or ``gcp-smoke`` options; an argument that the command lacks takes its default."""
@@ -135,6 +169,7 @@ def _deploy_options(args: argparse.Namespace) -> DeployOptions:
         source=args.store or args.inputs,
         environment=args.environment,
         release_manifest=getattr(args, "release_manifest", ""),
+        release_source=getattr(args, "release_source", ""),
         stage=getattr(args, "stage", "all"),
         identity_mode=args.identity,
         name_prefix=args.name_prefix,
@@ -143,6 +178,9 @@ def _deploy_options(args: argparse.Namespace) -> DeployOptions:
         lock=getattr(args, "lock", "external"),
         break_lock=getattr(args, "break_lock", False),
         first_install=getattr(args, "first_install", False),
+        identity_cutover_facts=getattr(args, "identity_cutover_facts", ""),
+        identity_bootstrap_facts=getattr(args, "identity_bootstrap_facts", ""),
+        catalog_credential_file=getattr(args, "catalog_credential_file", ""),
         allow_missing_range_images=getattr(args, "allow_missing_range_images", False),
         reconcile_foundation_image_network=getattr(args, "reconcile_foundation_image_network", False),
         smoke=not getattr(args, "no_smoke", False),
@@ -153,6 +191,26 @@ def _deploy_options(args: argparse.Namespace) -> DeployOptions:
         attempt=getattr(args, "attempt", 1),
         evidence_bucket=getattr(args, "evidence_bucket", ""),
         image_roots_output=getattr(args, "image_roots_output", ""),
+    )
+
+
+def _run_install(args: argparse.Namespace) -> int:
+    """Run ``gcp-install`` from the parsed arguments.
+
+    The one install command is non-interactive, so it answers the foundation's
+    routine proceed prompts. Destructive actions keep their own opt-in.
+    """
+    from bootstrap_core import set_assume_yes
+    from gcp_install import InstallOptions, run_install
+
+    set_assume_yes(True)
+    return run_install(
+        InstallOptions(
+            inputs=args.inputs,
+            release_manifest=args.release_manifest,
+            release_source=args.release_source,
+            operator=args.operator,
+        )
     )
 
 
@@ -169,7 +227,21 @@ def _handle_config(args: argparse.Namespace) -> int:
     return 0
 
 
+def _run_cmek_migrate(args: argparse.Namespace) -> int:
+    """Run ``gcp-cmek-migrate`` with the caller's credentials after a check of both names."""
+    from gcp_process import ProcessRunner
+    from gcp_storage_cmek import migrate_bucket
+
+    if not _BUCKET_RE.fullmatch(args.bucket):
+        raise ValueError("--bucket must be a bucket name, not a URL")
+    if not _KMS_KEY_RE.fullmatch(args.key):
+        raise ValueError("--key must be projects/<p>/locations/<l>/keyRings/<r>/cryptoKeys/<k>, without a version")
+    migrate_bucket(ProcessRunner(), args.bucket, args.key)
+    return 0
+
+
 _HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
+    "gcp-install": lambda args: _run_install(args),
     "gcp-deploy": lambda args: run_deploy(_deploy_options(args)),
     "gcp-release-scan": lambda args: run_release_scan_command(
         ScanOptions(
@@ -182,6 +254,7 @@ _HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
             evidence_bucket=args.evidence_bucket,
             run_id=args.run_id,
             attempt=args.attempt,
+            release_source=args.release_source,
         )
     ),
     "gcp-smoke": lambda args: run_smoke_command(_deploy_options(args)),
@@ -191,6 +264,7 @@ _HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
             confirm=args.confirm,
             environment=args.environment,
             release_manifest=args.release_manifest,
+            release_source=args.release_source,
             identity_mode=args.identity,
             name_prefix=args.name_prefix,
             destroy_service_account=args.destroy_service_account,
@@ -201,6 +275,7 @@ _HANDLERS: dict[str, Callable[[argparse.Namespace], int]] = {
         )
     ),
     "gcp-config": _handle_config,
+    "gcp-cmek-migrate": _run_cmek_migrate,
 }
 
 

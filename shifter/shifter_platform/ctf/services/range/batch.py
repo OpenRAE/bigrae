@@ -10,10 +10,12 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Any
 from uuid import UUID
 
-from ctf.exceptions import CTFNotFoundError
+from ctf.exceptions import CTFError, CTFNotFoundError
 from ctf.models import CTFEvent, CTFParticipant
 from ctf.services.range.provision import (
     _interruptible_sleep,
@@ -41,6 +43,16 @@ def compute_throttle_delay(spinup_window_seconds: int, participant_count: int) -
     return max(_MIN_THROTTLE_DELAY_SECONDS, min(_MAX_THROTTLE_DELAY_SECONDS, raw_delay))
 
 
+def spin_up_window_seconds(event_start: datetime, lead_minutes: int, now: datetime) -> int:
+    """Return the seconds left before the start, bounded by the configured lead time.
+
+    A resumed spin-up spreads its remaining participants over this window, not the
+    full lead time again (#528).
+    """
+    remaining = int((event_start - now).total_seconds())
+    return max(0, min(lead_minutes * 60, remaining))
+
+
 def _safe_heartbeat(heartbeat: Callable[[], None] | None, event_id: UUID) -> None:
     """Invoke the spin-up heartbeat, swallowing failures (#942).
 
@@ -63,6 +75,7 @@ def _record_provision_attempt(
     tallies: dict[str, int],
     errors: list[dict[str, str]],
     heartbeat: Callable[[], None] | None = None,
+    actor: object | None = None,
 ) -> None:
     """Provision one participant and fold the outcome into the running tallies.
 
@@ -72,7 +85,7 @@ def _record_provision_attempt(
     the scheduled task and liveness file fresh (#943).
     """
     try:
-        provision_participant_range_with_retry(participant.pk, heartbeat=heartbeat)
+        provision_participant_range_with_retry(participant.pk, heartbeat=heartbeat, actor=actor)
         tallies["successful"] += 1
     except Exception as e:
         if _is_already_assigned_error(e):
@@ -80,7 +93,9 @@ def _record_provision_attempt(
             logger.info("Participant %s already has a range; skipping", participant.pk)
         else:
             tallies["failed"] += 1
-            errors.append({"participant_id": str(participant.pk), "error": str(e)})
+            # Authored text only: the exception log below carries the full detail.
+            error_text = e.message if isinstance(e, CTFError) else "Range provisioning failed"
+            errors.append({"participant_id": str(participant.pk), "error": error_text})
             logger.exception("Failed to provision range for participant %s", participant.pk)
 
 
@@ -89,6 +104,8 @@ def provision_event_ranges_throttled(
     spinup_window_seconds: int,
     shutdown_check: Callable[[], bool] | None = None,
     heartbeat: Callable[[], None] | None = None,
+    actor: object | None = None,
+    continuation: bool = False,
 ) -> dict[str, Any]:
     """Provision ranges for all participants with throttled pacing.
 
@@ -106,6 +123,10 @@ def provision_event_ranges_throttled(
             multi-node portal, #942) and the scheduler liveness file fresh (so
             the container healthcheck does not restart it, #943). Failures are
             swallowed so a heartbeat error never aborts provisioning.
+        continuation: True when this run resumes an interrupted or yielded run.
+            The first run's capacity admission covers the cohort, so a
+            continuation does not declare or assess capacity again; repeating it
+            would count the run's own provisioned ranges against its headroom.
 
     Returns:
         Dict with counts of successful, failed, skipped, and whether interrupted.
@@ -113,7 +134,21 @@ def provision_event_ranges_throttled(
     Raises:
         CTFNotFoundError: If event doesn't exist.
     """
-    capacity = _declare_and_assess(event_id)
+    try:
+        event = CTFEvent.objects.get(pk=event_id)
+    except CTFEvent.DoesNotExist:
+        raise CTFNotFoundError(
+            f"Event {event_id} not found",
+            details={"event_id": str(event_id)},
+        ) from None
+    if actor is None:
+        raise ValueError("Range provisioning authority unavailable")
+    from ctf.services.actors import event_actor_credential
+    from ctf.services.authorization import assert_event_action
+
+    credential = event_actor_credential(actor)
+    assert_event_action(credential, event, "event.manage_ranges")
+    capacity = None if continuation else _declare_and_assess(event_id)
     if capacity is not None and capacity["blocking"]:
         return _capacity_refused_result(event_id, capacity)
     logger.info(
@@ -122,18 +157,15 @@ def provision_event_ranges_throttled(
         spinup_window_seconds,
     )
 
-    try:
-        CTFEvent.objects.get(pk=event_id)
-    except CTFEvent.DoesNotExist:
-        raise CTFNotFoundError(
-            f"Event {event_id} not found",
-            details={"event_id": str(event_id)},
-        ) from None
+    from django.db.models import Q
 
+    from ctf.models import CTFRangeLaunch
+
+    pending = CTFRangeLaunch.objects.filter(event_id=event_id, dispatched_at=None).values_list("pk", flat=True)
     participants = list(
         CTFParticipant.objects.filter(
+            Q(range_instance_id__isnull=True) | Q(range_request_id__in=pending),
             event_id=event_id,
-            range_instance_id__isnull=True,
         )
     )
 
@@ -150,10 +182,10 @@ def provision_event_ranges_throttled(
         event_id,
         participants,
         delay,
-        tallies,
-        errors,
+        _ProvisioningProgress(tallies, errors),
         shutdown_check=shutdown_check,
         heartbeat=heartbeat,
+        actor=credential,
     )
 
     _notify_provision_failures(event_id, errors)
@@ -174,15 +206,23 @@ def provision_event_ranges_throttled(
     }
 
 
+@dataclass(frozen=True, slots=True)
+class _ProvisioningProgress:
+    """Accumulate bounded per-wave outcome counts and public participant errors."""
+
+    tallies: dict[str, int]
+    errors: list[dict[str, str]]
+
+
 def _provision_participants_paced(
     event_id: UUID,
     participants: list[CTFParticipant],
     delay: float,
-    tallies: dict[str, int],
-    errors: list[dict[str, str]],
+    progress: _ProvisioningProgress,
     *,
     shutdown_check: Callable[[], bool] | None = None,
     heartbeat: Callable[[], None] | None = None,
+    actor: object | None = None,
 ) -> bool:
     """Provision each participant in turn, waiting ``delay`` seconds between them.
 
@@ -201,16 +241,16 @@ def _provision_participants_paced(
             return True
 
         _safe_heartbeat(heartbeat, event_id)
-        _record_provision_attempt(participant, tallies, errors, heartbeat=heartbeat)
+        _record_provision_attempt(participant, progress.tallies, progress.errors, heartbeat=heartbeat, actor=actor)
 
-        logger.info(
+        logger.debug(
             "Throttled provisioning progress for event %s: %d/%d (%d ready, %d failed, %d skipped)",
             event_id,
             i + 1,
             count,
-            tallies["successful"],
-            tallies["failed"],
-            tallies["skipped"],
+            progress.tallies["successful"],
+            progress.tallies["failed"],
+            progress.tallies["skipped"],
         )
 
         # Sleep between provisions (skip after the last one). The wait is
@@ -282,7 +322,11 @@ def _empty_batch_result(event_id: UUID, capacity: dict[str, Any] | None = None) 
 
 
 def _notify_provision_failures(event_id: UUID, errors: list[dict[str, str]]) -> None:
-    """Notify the organizer and each affected participant of failures (CTF-801)."""
+    """Notify the organizer and each affected participant of failures (CTF-801).
+
+    Best-effort, like :func:`_notify_capacity_outcome`: a failed notice is logged
+    and never fails the spin-up whose result is already settled.
+    """
     if not errors:
         return
     from ctf.services.notification import (
@@ -290,8 +334,16 @@ def _notify_provision_failures(event_id: UUID, errors: list[dict[str, str]]) -> 
         notify_participant_provision_failure,
     )
 
-    notify_organizer_provision_failure(event_id, errors)
+    try:
+        notify_organizer_provision_failure(event_id, errors)
+    except Exception:
+        logger.exception("Failed to notify organizer of provisioning failures for event %s", event_id)
     for error in errors:
         participant_id = error.get("participant_id") if isinstance(error, dict) else None
         if participant_id:
-            notify_participant_provision_failure(UUID(str(participant_id)))
+            try:
+                notify_participant_provision_failure(UUID(str(participant_id)))
+            except Exception:
+                logger.exception(
+                    "Failed to notify participant %s of provisioning failure for event %s", participant_id, event_id
+                )

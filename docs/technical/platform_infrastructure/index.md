@@ -4,8 +4,14 @@ BigRAE platform workloads use the shared Helm chart on EKS or GKE.
 Terraform owns the supporting cloud infrastructure and workload identity grants.
 
 - [AWS EKS backend bundle](aws-eks-bundle.md)
+- [AWS native identity](aws-native-identity.md)
 - [GCP native identity](gcp-native-identity.md)
 - [GCP range audit telemetry](gcp-range-audit-telemetry.md)
+
+AWS support is planned for an upcoming release. See the operations guides:
+
+- [AWS native identity operations](../../ops/aws-native-identity.md)
+- [Portal EKS operations](../../ops/portal-eks-operations.md)
 
 ## AWS
 

@@ -13,16 +13,20 @@ from pathlib import Path, PurePosixPath
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
-from raes.artifact_requirements import ArtifactIdentity, ArtifactLockedInput
+from raes.artifact_requirements import ArtifactLockedInput
+from raes.associated_artifacts import ScenarioArtifactParent
+from raes_contracts.artifact_identity import ArtifactIdentity
 from raes_contracts.associated_artifacts import (
+    AssociatedArtifactManifestModel,
     AssociatedArtifactValidationLimits,
     load_associated_artifact_manifest_json,
     validate_associated_artifact_manifest,
 )
-from raes_contracts.json_ingress import parse_bounded_json_object
+from raes_contracts.json_ingress import StrictJsonIngressError
 
 from shared.artifact_preparation import Digest, ImageRef, InputObservation, ProviderID
 from shared.operation_envelope import canonical_payload_digest
+from shared.raes.json_ingress import parse_bounded_json_object
 
 MAX_INPUT_BYTES = 16384
 DESCRIPTOR_MEDIA_TYPE = "application/vnd.shifter.gce-input+json"
@@ -58,7 +62,7 @@ def bind_input_material(
     """Use the public validator with the real scenario and real descriptor stream."""
     if len(manifest_bytes) > MAX_INPUT_BYTES or len(descriptor_bytes) > MAX_INPUT_BYTES:
         raise ValueError("preparation input material exceeds its bound")
-    manifest = load_associated_artifact_manifest_json(manifest_bytes)
+    manifest = _load_manifest(manifest_bytes)
     if set(manifest.artifacts) != {lock.input_id}:
         raise ValueError("input manifest must bind exactly the declared descriptor")
     entry = manifest.artifacts[lock.input_id]
@@ -66,7 +70,7 @@ def bind_input_material(
         raise ValueError("input manifest has an unsupported payload type")
     diagnostics = validate_associated_artifact_manifest(
         manifest,
-        parent=parent,
+        parent=ScenarioArtifactParent(parent),
         artifact_readers={lock.input_id: BytesIO(descriptor_bytes)},
         limits=AssociatedArtifactValidationLimits(
             max_artifacts=1, max_artifact_bytes=MAX_INPUT_BYTES, max_total_bytes=MAX_INPUT_BYTES
@@ -85,7 +89,7 @@ def load_input_material(root: Path, parent: object, locks: list[ArtifactLockedIn
     bindings = []
     for lock in locks:
         manifest_bytes = _read_contained(root, lock.associated_artifact_manifest_ref)
-        manifest = load_associated_artifact_manifest_json(manifest_bytes)
+        manifest = _load_manifest(manifest_bytes)
         if set(manifest.artifacts) != {lock.input_id}:
             raise ValueError("input manifest must contain exactly its declared descriptor")
         uri = manifest.artifacts[lock.input_id].uri
@@ -97,6 +101,14 @@ def load_input_material(root: Path, parent: object, locks: list[ArtifactLockedIn
             bind_input_material(lock, manifest_bytes=manifest_bytes, descriptor_bytes=descriptor_bytes, parent=parent)
         )
     return bindings
+
+
+def _load_manifest(manifest_bytes: bytes) -> AssociatedArtifactManifestModel:
+    """Load one manifest; RAES reports ambiguous JSON as its own input error."""
+    try:
+        return load_associated_artifact_manifest_json(manifest_bytes)
+    except StrictJsonIngressError as exc:
+        raise ValueError("input manifest is not one unambiguous JSON object") from exc
 
 
 def _read_contained(root: Path, relative: str) -> bytes:

@@ -12,8 +12,11 @@ from uuid import UUID, uuid5
 
 from pydantic import Field, model_validator
 from shifter_adapter_sdk.runtime import (
+    MAX_FILE_INPUT_BYTES,
+    MAX_FILE_INPUTS,
     ClosedModel,
     Digest,
+    FileInput,
     GuestTarget,
     Identifier,
     Phase,
@@ -21,6 +24,8 @@ from shifter_adapter_sdk.runtime import (
     RuntimeInput,
     canonical_digest,
 )
+
+from shared.runtime_file_inputs import RuntimeFileBinding
 
 _GCE_IMAGE_REF = re.compile(r"^projects/[a-z0-9][-a-z0-9.:]*/global/images/[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$")
 _GCE_MACHINE_IMAGE_REF = re.compile(
@@ -195,7 +200,6 @@ class PluginTargetBindings(ClosedModel):
     """The logical guest names requested by an installed plugin and exact nodes."""
 
     targets: dict[Identifier, Annotated[str, Field(min_length=1, max_length=1024)]] = Field(
-        min_length=1,
         max_length=64,
     )
     parameters: dict[Identifier, Annotated[str, Field(max_length=8192)]] = Field(
@@ -204,12 +208,17 @@ class PluginTargetBindings(ClosedModel):
         repr=False,
     )
     image_profiles: dict[Identifier, RuntimeTargetImageProfile] = Field(default_factory=dict, max_length=64)
+    file_assets: dict[Identifier, UUID] = Field(
+        default_factory=dict, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
+    )
 
     def validate_manifest(self, manifest: PluginManifest) -> None:
         if set(self.targets) != set(manifest.required_bindings):
             raise ValueError("Plugin target bindings do not match its declaration")
         if set(self.parameters) != set(manifest.required_parameters):
             raise ValueError("Plugin parameters do not match its declaration")
+        if set(self.file_assets) != set(manifest.required_files):
+            raise ValueError("Plugin file selections do not match its declaration")
         if not set(self.image_profiles).issubset(self.targets):
             raise ValueError("Plugin image profiles must name declared target bindings")
 
@@ -253,6 +262,10 @@ class RuntimePluginScope(ClosedModel):
     organization_uuid: UUID
     pack_id: str = Field(min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9_-]+$")
     pack_digest: Digest
+    files: dict[Identifier, RuntimeFileBinding] = Field(
+        default_factory=dict, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
+    )
+    binding_digest: Digest | None = Field(default=None, exclude_if=lambda value: value is None)
 
 
 class RuntimePluginPin(RuntimePluginScope):
@@ -265,7 +278,15 @@ class RuntimePluginPin(RuntimePluginScope):
 
     @model_validator(mode="after")
     def validate_pin(self) -> Self:
+        if self.manifest.protocol == "bigrae.runtime-plugin/v2":
+            raise ValueError("Apparatus protocol cannot carry pack identity")
         self.bindings.validate_manifest(self.manifest)
+        if set(self.files) != set(self.manifest.required_files) or any(
+            self.bindings.file_assets[name] != item.asset_uuid for name, item in self.files.items()
+        ):
+            raise ValueError("Plugin file versions do not match their admitted selection")
+        if sum(item.size_bytes for item in self.files.values()) > MAX_FILE_INPUT_BYTES:
+            raise ValueError("Plugin files exceed their aggregate byte budget")
         if len(self.model_dump_json().encode("utf-8")) > 32_768:
             raise ValueError("Plugin binding exceeds its input budget")
         return self
@@ -275,8 +296,49 @@ class RuntimePluginPin(RuntimePluginScope):
         return canonical_digest(self.model_dump(mode="json"))
 
 
+class RuntimeApparatusPin(ClosedModel):
+    """Explicit installed apparatus software, independent of content packs."""
+
+    binding_version: Literal[2] = 2
+    organization_uuid: UUID
+    apparatus_digest: Digest
+    installation_id: UUID
+    manifest: PluginManifest
+    bindings: PluginTargetBindings
+    files: dict[Identifier, RuntimeFileBinding] = Field(default_factory=dict, max_length=0)
+
+    @model_validator(mode="after")
+    def validate_pin(self) -> Self:
+        """Require exact SDK apparatus scope and forbid substrate authority."""
+        if self.manifest.protocol != "bigrae.runtime-plugin/v2" or self.manifest.required_files:
+            raise ValueError("Apparatus software requires its supported SDK protocol")
+        if self.bindings.file_assets or self.bindings.image_profiles or self.manifest.model_bindings:
+            raise ValueError("Apparatus software cannot replace admitted substrate or model authority")
+        self.bindings.validate_manifest(self.manifest)
+        if len(self.model_dump_json().encode()) > 32768:
+            raise ValueError("Apparatus binding exceeds its bound")
+        return self
+
+    @property
+    def digest(self) -> str:
+        """Identify the immutable installed apparatus binding."""
+        return canonical_digest(self.model_dump(mode="json"))
+
+
+RuntimePin = RuntimePluginPin | RuntimeApparatusPin
+
+
+def parse_runtime_pin(value: object) -> RuntimePin:
+    """Preserve each version's closed input shape and explicit identity kind."""
+    if isinstance(value, (RuntimePluginPin, RuntimeApparatusPin)):
+        value = value.model_dump(mode="json")
+    if isinstance(value, dict) and value.get("binding_version") == 2:
+        return RuntimeApparatusPin.model_validate(value)
+    return RuntimePluginPin.model_validate(value)
+
+
 def runtime_plugin_requests(
-    pin: RuntimePluginPin,
+    pin: RuntimePin,
     plan: dict[str, Any],
     operation_id: UUID,
     range_id: int,
@@ -289,7 +351,7 @@ def runtime_plugin_requests(
     the isolated worker cannot observe guests or call a provider. The host later
     resolves actions against its own realized node-to-transport map.
     """
-    pin = RuntimePluginPin.model_validate(pin)
+    pin = parse_runtime_pin(pin)
     providers: dict[str, Literal["aws", "gcp"]] = {"gce": "gcp", "ec2": "aws"}
     if backend not in providers:
         raise ValueError("Runtime plugins are not supported by this range backend")
@@ -298,19 +360,29 @@ def runtime_plugin_requests(
         name: GuestTarget(node_address=address, os_family=plan["resources"][address]["payload"]["os_family"])
         for name, address in pin.bindings.targets.items()
     }
-    phases: tuple[Phase, ...] = ("validate", "configure", "verify")
+    phases: list[Phase] = []
+    if "provision.prepare" in pin.manifest.capabilities:
+        phases.append("prepare")
+    if targets:
+        phases.extend(("validate", "configure", "verify"))
     return tuple(
         RuntimeInput(
             protocol=pin.manifest.protocol,
             invocation_id=uuid5(operation_id, f"runtime-plugin:{phase}"),
             operation_id=operation_id,
-            pack_digest=pin.pack_digest,
+            **(
+                {"pack_digest": pin.pack_digest}
+                if isinstance(pin, RuntimePluginPin)
+                else {"apparatus_digest": pin.apparatus_digest}
+            ),
             manifest=pin.manifest,
             phase=phase,
+            plan_digest=canonical_digest(plan) if phase == "prepare" else None,
             provider=providers[backend],
             range_id=range_id,
             targets=targets,
             parameters=pin.bindings.parameters,
+            files={name: FileInput(sha256=item.sha256, size_bytes=item.size_bytes) for name, item in pin.files.items()},
         )
         for phase in phases
     )

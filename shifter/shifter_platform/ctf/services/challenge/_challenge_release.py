@@ -11,6 +11,7 @@ from __future__ import annotations
 import logging
 from uuid import UUID
 
+from django.db import transaction
 from django.utils import timezone
 
 from ctf.exceptions import CTFNotFoundError
@@ -51,8 +52,13 @@ def release_challenge(challenge_id: UUID) -> CTFChallenge:
         )
         return challenge
 
-    challenge.visibility = ChallengeVisibility.VISIBLE.value
-    challenge.save(update_fields=["visibility", "updated_at"])
+    from ctf.services.notification.live import request_challenge_released
+
+    with transaction.atomic():
+        challenge.visibility = ChallengeVisibility.VISIBLE.value
+        challenge.save(update_fields=["visibility", "updated_at"])
+        # The live notice task commits with the release (CTF-802).
+        request_challenge_released(challenge, was_released=False)
     logger.info("Released challenge %s: HIDDEN -> VISIBLE", challenge_id)
     return challenge
 

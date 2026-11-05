@@ -109,6 +109,11 @@ if __name__ == "__main__":
         help=_operation_id_help,
     )
 
+    project_parser = subparsers.add_parser("range-project", help="Register dedicated range projects")
+    project_parser.add_argument("operation", choices=["register", "verify"])
+    project_parser.add_argument("--request-id", required=True)
+    project_parser.add_argument("--operation-id", required=True)
+
     vpn_parser = subparsers.add_parser("vpn-profile", help="Individual OpenVPN certificate lifecycle")
     vpn_parser.add_argument("operation", choices=["issue", "revoke", "refresh-crl", "purge"])
     vpn_parser.add_argument("--request-id", required=True)
@@ -116,7 +121,11 @@ if __name__ == "__main__":
     vpn_parser.add_argument("--operation-id", required=True)
     args = parser.parse_args()
 
-    if args.resource == "vpn-profile":
+    if args.resource == "range-project":
+        from gcp_project_registration import run_project_registration
+
+        run_project_registration(args.request_id, args.operation_id, operation=args.operation)
+    elif args.resource == "vpn-profile":
         from vpn_profile_ops import run_vpn_profile_operation
 
         run_vpn_profile_operation(args.request_id, args.profile_id, args.operation, args.operation_id)

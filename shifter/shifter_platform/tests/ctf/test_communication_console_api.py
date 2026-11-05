@@ -10,27 +10,28 @@ moderator, judge, participant, removed staff, and cross-workspace actors.
 from __future__ import annotations
 
 from datetime import timedelta
+from types import SimpleNamespace
 
 import pytest
+from django.db.models import TextField, Value
 from django.utils import timezone
 from rest_framework.test import APIClient
 
-import workspaces.services as ws
 from ctf.enums import EventStaffRole, ParticipantStatus, ScheduledTaskStatus
 from ctf.enums_communication import DeliveryStatus
 from ctf.models import (
     CommunicationCampaign,
     CommunicationIntent,
     CTFEvent,
-    CTFEventStaff,
     CTFParticipant,
     CTFScheduledTask,
     DeliveryAttempt,
-    ParticipantReceipt,
+    RecipientReceipt,
     RecipientSnapshot,
 )
+from ctf.services.event import assign_event_staff, revoke_event_staff
 from shared.api_tokens.models import ApiToken
-from workspaces.models import WorkspaceMembership
+from workspaces.models import Account, Organization, Workspace
 
 pytestmark = [pytest.mark.django_db, pytest.mark.usefixtures("personal_token_use_grant")]
 URL = "/api/v1/ctf/communications/"
@@ -55,16 +56,39 @@ def _participant(event, name, email):
     )
 
 
-@pytest.fixture
-def workspace(organizer_user):
-    return ws.resolve_personal_workspace(organizer_user)
+def _new_workspace(name):
+    account = Account.objects.create(kind=Account.Kind.TEAM, name=name)
+    organization = Organization.objects.create(account=account, name=name)
+    workspace = Workspace.objects.create(organization=organization, name=name)
+    return SimpleNamespace(
+        workspace_id=workspace.pk,
+        workspace_uuid=workspace.uuid,
+        account_id=account.pk,
+        organization_id=organization.pk,
+    )
 
 
 @pytest.fixture
-def second_event(ctf_event, organizer_user):
+def workspace(ctf_event):
+    placement = _new_workspace("Synthetic communications")
+    CTFEvent.objects.filter(pk=ctf_event.pk).update(
+        scope_kind="account",
+        account_id=placement.account_id,
+        organization_id=placement.organization_id,
+        workspace_id=placement.workspace_id,
+    )
+    ctf_event.refresh_from_db()
+    return placement
+
+
+@pytest.fixture
+def second_event(ctf_event, organizer_user, workspace):
     return CTFEvent.objects.create(
         name="Second Event",
         created_by=organizer_user,
+        scope_kind=ctf_event.scope_kind,
+        account_id=ctf_event.account_id,
+        organization_id=ctf_event.organization_id,
         workspace_id=ctf_event.workspace_id,
         event_start=ctf_event.event_start,
         event_end=ctf_event.event_end,
@@ -83,14 +107,23 @@ def roster(ctf_event, second_event):
 
 
 @pytest.fixture
-def staff_member(second_organizer_user, workspace):
-    """Add the second organizer to the workspace; tests assign the event role."""
-    WorkspaceMembership.objects.create(workspace_id=workspace.workspace_id, user=second_organizer_user, role="member")
+def staff_member(second_organizer_user, workspace, organizer_credential):
+    """Publish real event roles; SQL membership never supplies application authority."""
 
     def assign(event, role):
-        return CTFEventStaff.objects.create(event=event, user=second_organizer_user, role=role)
+        return assign_event_staff(event.pk, organizer_credential, second_organizer_user.identity_principal.uuid, role)
 
     return assign
+
+
+def _foreign_placement():
+    parent = _new_workspace("Foreign synthetic communications")
+    return {
+        "scope_kind": "account",
+        "account_id": parent.account_id,
+        "organization_id": parent.organization_id,
+        "workspace_id": parent.workspace_id,
+    }
 
 
 def _draft(client, workspace, events, *, trigger=None, subject="Kickoff"):
@@ -98,7 +131,7 @@ def _draft(client, workspace, events, *, trigger=None, subject="Kickoff"):
     response = client.post(
         URL,
         {
-            "workspace_id": str(workspace.workspace_uuid),
+            "workspace": str(workspace.workspace_uuid),
             "title": "Kickoff",
             "target_event_ids": ids,
             "audience_spec": {"kind": "multi_event" if len(ids) > 1 else "event", "event_ids": ids},
@@ -118,12 +151,13 @@ def _ledger_counts():
         CommunicationIntent.objects.count(),
         RecipientSnapshot.objects.count(),
         DeliveryAttempt.objects.count(),
-        ParticipantReceipt.objects.count(),
+        RecipientReceipt.objects.count(),
         CTFScheduledTask.objects.filter(task_type="release_communication").count(),
     )
 
 
-def test_compose_preview_send_report_and_timeline(organizer_user, workspace, ctf_event, second_event, roster):
+def test_compose_preview_send_report_and_timeline(organizer_user, workspace, ctf_event, second_event, roster, settings):
+    settings.CTF_COMMUNICATION_ALLOWED_LINK_HOSTS = frozenset({"docs.example.com"})
     client = _client(organizer_user)
     campaign = _draft(client, workspace, [ctf_event, second_event])
     assert {t["id"] for t in campaign["target_events"]} == {str(ctf_event.pk), str(second_event.pk)}
@@ -143,6 +177,8 @@ def test_compose_preview_send_report_and_timeline(organizer_user, workspace, ctf
     assert body["recipient_total"] == 3
     assert body["exceeds_audience_cap"] is False
     assert body["channels"] == [{"channel": "in_app", "available": True}]
+    # The preview renders under the same deployment link policy as the inbox.
+    assert body["allowed_link_hosts"] == ["docs.example.com"]
     assert "ada@example.test" not in preview.content.decode()
 
     # Another tab revises the draft; the reviewed revision is still what is sent.
@@ -168,13 +204,15 @@ def test_compose_preview_send_report_and_timeline(organizer_user, workspace, ctf
     attempts = list(DeliveryAttempt.objects.filter(intent=intent).order_by("snapshot__participant_public_id"))
     DeliveryAttempt.objects.filter(pk=attempts[0].pk).update(status=DeliveryStatus.ACCEPTED.value)
     DeliveryAttempt.objects.filter(pk=attempts[1].pk).update(status=DeliveryStatus.PERMANENT_FAILURE.value)
-    ParticipantReceipt.objects.filter(snapshot__participant=roster[0]).update(read_at=timezone.now())
+    RecipientReceipt.objects.filter(snapshot__participant=roster[0]).update(read_at=timezone.now())
     report = client.get(f"{URL}{campaign['id']}/delivery/")
     assert report.status_code == 200, report.content
     occurrence = report.json()["results"][0]
     assert occurrence["intent_id"] == str(intent.pk)
     assert occurrence["status"] == "released"
     assert occurrence["revision_number"] == 1
+    # In-app availability is committed at release; wake-up commands never hold it pending.
+    assert occurrence["delivery_state"] == "accepted"
     totals = occurrence["totals"]
     assert totals["recipients"] == 3
     assert totals["inbox_available"] == 3
@@ -187,6 +225,10 @@ def test_compose_preview_send_report_and_timeline(organizer_user, workspace, ctf
     assert per_event[str(second_event.pk)]["recipients"] == 1
     assert sum(row["recipients"] for row in occurrence["events"]) == 3
 
+    # Recipient rows never decrypt a coordinate: an unreadable one cannot break them.
+    RecipientSnapshot.objects.filter(intent=intent, participant=roster[0]).update(
+        delivery_coordinate=Value("enc:v1:unreadable", output_field=TextField())
+    )
     rows = client.get(
         f"{URL}{campaign['id']}/recipients/", {"intent_id": str(intent.pk), "event_id": str(ctf_event.pk)}
     )
@@ -202,7 +244,11 @@ def test_compose_preview_send_report_and_timeline(organizer_user, workspace, ctf
     kinds = [entry["kind"] for entry in activity.json()["entries"]]
     assert kinds == ["created", "revised", "revised", "released", "cancelled"]
     for entry in activity.json()["entries"]:
-        assert entry["actor"] == {"label": organizer_user.username, "via": "session"}
+        assert entry["actor"] == {
+            "label": organizer_user.username,
+            "via": "session",
+            "principal_uuid": str(organizer_user.identity_principal.uuid),
+        }
     assert "Kickoff" not in activity.content.decode()
 
 
@@ -236,7 +282,7 @@ def test_targets_list_only_events_the_actor_may_message(
     other = CTFEvent.objects.create(
         name="Other tenant",
         created_by=second_organizer_user,
-        workspace_id=ws.resolve_personal_workspace(second_organizer_user).workspace_id,
+        **_foreign_placement(),
         event_start=ctf_event.event_start,
         event_end=ctf_event.event_end,
     )
@@ -279,11 +325,11 @@ def test_role_matrix_for_campaign_reads(
     # Judges hold no notification capability on the event.
     judge = staff_member(ctf_event, EventStaffRole.JUDGE.value)
     assert set(statuses(second_organizer_user)) <= {403, 404}
-    CTFEventStaff.objects.filter(pk=judge.pk).update(role=EventStaffRole.MODERATOR.value)
+    staff_member(ctf_event, EventStaffRole.MODERATOR.value)
     assert statuses(second_organizer_user) == [200, 200, 200, 200]
 
     # Removed staff lose every read immediately.
-    CTFEventStaff.all_objects.filter(pk=judge.pk).update(deleted_at=timezone.now())
+    revoke_event_staff(ctf_event.pk, organizer_user, judge.principal_uuid)
     assert set(statuses(second_organizer_user)) <= {403, 404}
 
     # Participants never reach organizer communications.
@@ -291,9 +337,7 @@ def test_role_matrix_for_campaign_reads(
     CTFParticipant.objects.filter(pk=participant.pk).update(user=participant_user)
     assert set(statuses(participant_user)) <= {403, 404}
 
-    # The platform-admin override does not bypass workspace membership.
-    assert set(statuses(admin_user)) <= {403, 404}
-    WorkspaceMembership.objects.create(workspace_id=workspace.workspace_id, user=admin_user, role="member")
+    # The test provider grants the administrator explicitly; no SQL membership substitutes for policy.
     assert statuses(admin_user) == [200, 200, 200, 200]
 
 
@@ -303,7 +347,7 @@ def test_cross_workspace_and_cross_event_requests_are_denied(
     foreign = CTFEvent.objects.create(
         name="Foreign",
         created_by=second_organizer_user,
-        workspace_id=ws.resolve_personal_workspace(second_organizer_user).workspace_id,
+        **_foreign_placement(),
         event_start=ctf_event.event_start,
         event_end=ctf_event.event_end,
     )
@@ -312,7 +356,7 @@ def test_cross_workspace_and_cross_event_requests_are_denied(
     response = client.post(
         URL,
         {
-            "workspace_id": str(workspace.workspace_uuid),
+            "workspace": str(workspace.workspace_uuid),
             "title": "Probe",
             "target_event_ids": [str(ctf_event.pk), str(foreign.pk)],
             "audience_spec": {"kind": "multi_event", "event_ids": [str(ctf_event.pk), str(foreign.pk)]},
@@ -330,6 +374,9 @@ def test_cross_workspace_and_cross_event_requests_are_denied(
     second = CTFEvent.objects.create(
         name="Second",
         created_by=organizer_user,
+        scope_kind=ctf_event.scope_kind,
+        account_id=ctf_event.account_id,
+        organization_id=ctf_event.organization_id,
         workspace_id=ctf_event.workspace_id,
         event_start=ctf_event.event_start,
         event_end=ctf_event.event_end,
@@ -400,7 +447,7 @@ def test_session_writes_require_csrf(organizer_user, workspace, ctf_event):
     response = client.post(
         URL,
         {
-            "workspace_id": str(workspace.workspace_uuid),
+            "workspace": str(workspace.workspace_uuid),
             "title": "x",
             "target_event_ids": [str(ctf_event.pk)],
             "audience_spec": {"kind": "event", "event_ids": [str(ctf_event.pk)]},
@@ -426,7 +473,7 @@ def test_summaries_select_latest_revision_without_loading_bodies(organizer_user,
         response = client.post(f"{URL}{campaign['id']}/revisions/", content, format="json")
         assert response.json()["latest_revision"]["revision_number"] == number
     with CaptureQueriesContext(connection) as queries:
-        listed = client.get(URL, {"workspace_id": str(workspace.workspace_uuid)})
+        listed = client.get(URL, {"workspace": str(workspace.workspace_uuid)})
     assert listed.json()["results"][0]["latest_revision"]["revision_number"] == 3
     revision_reads = [q["sql"] for q in queries.captured_queries if "ctf_communication_message_revision" in q["sql"]]
     assert revision_reads, "latest revision must come from SQL"

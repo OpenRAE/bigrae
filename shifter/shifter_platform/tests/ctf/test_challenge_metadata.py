@@ -352,7 +352,7 @@ class TestChallengeSolutions:
         )
         assert "Updated solution" in updated.solution
 
-    def test_solution_visibility_by_event_status(self, ctf_event_draft, participant_user):
+    def test_solution_visibility_by_event_status(self, ctf_event_draft, participant_user, organizer_credential):
         """Participant SPA projection shows solutions only after the event."""
         from ctf.api.projections import participant_challenge_detail
 
@@ -386,7 +386,7 @@ class TestChallengeSolutions:
             ctf_event_draft.status = status
             ctf_event_draft.save(update_fields=["status", "updated_at"])
 
-            payload = participant_challenge_detail(participant, challenge)
+            payload = participant_challenge_detail(participant, challenge, credential=organizer_credential)
             assert payload["show_solution"] is expected
             assert payload["solution"] == ("The answer is 42." if expected else None)
 
@@ -604,11 +604,18 @@ class TestChallengeRatings:
         )
         return challenge
 
-    def test_rate_challenge_after_solving(self, participant, solved_challenge):
+    def test_rate_challenge_after_solving(self, participant, solved_challenge, caplog):
+        import logging
+
         from ctf.services.submission import rate_challenge
 
-        rating = rate_challenge(participant.id, solved_challenge.id, 4)
+        # caplog fails the test on a bad format spec in the rating log line,
+        # instead of the logging module dropping the record.
+        submission_logger = logging.getLogger("ctf.services.submission")
+        with caplog.at_level(logging.INFO, logger=submission_logger.name):
+            rating = rate_challenge(participant.id, solved_challenge.id, 4)
         assert rating.value == 4
+        assert "value=4" in caplog.text
 
     def test_rate_challenge_before_solving_fails(self, active_event, participant):
         from ctf.exceptions import CTFValidationError

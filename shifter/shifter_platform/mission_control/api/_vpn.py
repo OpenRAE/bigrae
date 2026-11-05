@@ -2,22 +2,21 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 from uuid import UUID
 
-from django.conf import settings
 from django.contrib.auth.models import User
 from django.http import HttpResponse
 from django.utils.cache import patch_vary_headers
 from drf_spectacular.types import OpenApiTypes
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.request import Request
 from rest_framework.response import Response
 
 from cms.services import get_mission_control_openvpn_profile
-from mission_control.api._base import MissionControlAPIView, _vpn_profile_read_permission
-from mission_control.api.permissions import HasMissionControlActor
+from mission_control.api._base import MissionControlAPIView
 from shared.api.permissions import IsAuthenticatedSessionOrApiToken
 from shared.api.principals import authenticated_credential
 from shared.api.schema import ApiErrorSerializer
@@ -27,10 +26,10 @@ from shared.remote_access import OPENVPN_PROFILE_MEDIA_TYPE, OpenVpnProfile
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from rest_framework.permissions import BasePermission
-
     from shared.credentials import CredentialContext
 
+
+logger = logging.getLogger(__name__)
 
 _VPN_PROFILE_FILENAME = "bigrae-range.ovpn"
 
@@ -39,11 +38,12 @@ def _credential_delivery_error(view: MissionControlAPIView, actor: User | Creden
     """Return a fail-closed delivery response, or None when delivery may proceed."""
     from shared.credential_delivery import credential_delivery_allowed
 
+    actor_key = actor.principal.uuid if isinstance(actor, CredentialContext) else actor.pk
     try:
-        allowed = credential_delivery_allowed(
-            actor.principal.uuid if isinstance(actor, CredentialContext) else actor.pk
-        )
+        allowed = credential_delivery_allowed(actor_key)
     except Exception:
+        # Fail closed: an unavailable delivery-budget backend blocks profile delivery.
+        logger.exception("VPN profile delivery budget check failed: actor=%s", actor_key)
         response = view.error_response(
             code="vpn_profile_unavailable",
             message="VPN profile is unavailable.",
@@ -126,19 +126,13 @@ def _vpn_profile_download_response(
 class MissionControlVpnProfileView(MissionControlAPIView):
     """Deliver the current Mission Control range's generation-bound OpenVPN profile."""
 
-    permission_classes = [
-        IsAuthenticatedSessionOrApiToken,
-        HasMissionControlActor,
-        _vpn_profile_read_permission(),
-    ]
+    required_actions = ("range.access",)
 
-    def get_permissions(self) -> list[BasePermission]:
-        if isinstance(getattr(self.request, "auth", None), CredentialContext) or settings.OPENFGA_ENABLED:
-            return [IsAuthenticatedSessionOrApiToken()]
-        return super().get_permissions()
+    permission_classes = [IsAuthenticatedSessionOrApiToken]
 
     @extend_schema(
         request=None,
+        parameters=[OpenApiParameter("request_id", type=OpenApiTypes.UUID, required=False)],
         responses={
             (200, OPENVPN_PROFILE_MEDIA_TYPE): OpenApiTypes.BINARY,
             202: ApiErrorSerializer,
@@ -150,28 +144,7 @@ class MissionControlVpnProfileView(MissionControlAPIView):
         },
     )
     def post(self, request: Request) -> HttpResponse | Response:
-        source = isinstance(getattr(request, "auth", None), CredentialContext) or settings.OPENFGA_ENABLED
-        if source:
-            return self._principal_profile(request)
-        if request.body or request.query_params:
-            response: HttpResponse | Response = self.error_response(
-                code="invalid",
-                message="VPN profile requests must not include a body or query parameters.",
-                status_code=status.HTTP_400_BAD_REQUEST,
-            )
-        else:
-            actor = self.actor_user()
-            delivery_error = _credential_delivery_error(self, actor)
-            if delivery_error is not None:
-                response = delivery_error
-            else:
-                profile_result = _mission_control_profile_result(self, actor)
-                if isinstance(profile_result, Response):
-                    response = profile_result
-                else:
-                    profile, range_instance_id = profile_result
-                    response = _vpn_profile_download_response(actor, profile, range_instance_id)
-        return response
+        return self._principal_profile(request)
 
     def _principal_profile(self, request: Request) -> HttpResponse | Response:
         """Validate the selected principal range before rate admission and private profile delivery."""

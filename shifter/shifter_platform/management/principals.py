@@ -14,7 +14,14 @@ from shared.credentials import CredentialContext
 from shared.identity_scope import PrincipalRef
 from shared.verified_identity import VerifiedIdentity
 
-from .models import Principal, PrincipalConflictError, ProviderBinding, ServiceCredentialAdmission, UserProfile
+from .models import (
+    PROVIDER_SUBJECT_MAX_LENGTH,
+    Principal,
+    PrincipalConflictError,
+    ProviderBinding,
+    ServiceCredentialAdmission,
+    UserProfile,
+)
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -70,6 +77,22 @@ def principal_identity_for_user(user: User) -> PrincipalRef:
     if principal is None:
         raise PrincipalConflictError(_PRINCIPAL_UNAVAILABLE)
     return _principal_ref(principal)
+
+
+def principal_identity_for_uuid(principal_uuid: UUID) -> PrincipalRef:
+    """Read a durable subject identity without admitting its current lifecycle."""
+    principal = Principal.objects.filter(uuid=principal_uuid).first()
+    if principal is None:
+        raise PrincipalConflictError(_PRINCIPAL_UNAVAILABLE)
+    return _principal_ref(principal)
+
+
+def human_principal_identity_user_id(principal_ref: PrincipalRef) -> int:
+    """Project a retained human owner for audit/display, never authentication."""
+    principal = Principal.objects.filter(uuid=principal_ref.uuid, kind=Principal.Kind.HUMAN).first()
+    if principal_ref.kind != "human" or principal is None or principal.user_id is None:
+        raise PrincipalConflictError(_PRINCIPAL_UNAVAILABLE)
+    return principal.user_id
 
 
 def principal_for_user(user: User) -> PrincipalRef:
@@ -180,6 +203,21 @@ def human_principal_user_id(principal_ref: PrincipalRef) -> int:
     return identifier
 
 
+def active_human_user_ids_by_principal(principal_uuids: tuple[UUID, ...]) -> dict[UUID, int]:
+    """Map active human principals to their accounts in one query, in input order; never service contacts."""
+    identities = dict(
+        _active_principals().filter(kind=Principal.Kind.HUMAN, uuid__in=principal_uuids).values_list("uuid", "user_id")
+    )
+    return {
+        value: user_id for value in dict.fromkeys(principal_uuids) if (user_id := identities.get(value)) is not None
+    }
+
+
+def active_human_user_ids(principal_uuids: tuple[UUID, ...]) -> tuple[int, ...]:
+    """Project active browser recipients in one query, never service contacts."""
+    return tuple(active_human_user_ids_by_principal(principal_uuids).values())
+
+
 def resolve_service_credential(*, issuer: str, subject: str, audience: str) -> CredentialContext:
     """Resolve only an exact, explicitly admitted, active native service tuple."""
     admission = (
@@ -276,7 +314,7 @@ def _valid_provider_identity(principal_ref: object, issuer: object, subject: obj
         and len(issuer) <= 255
         and isinstance(subject, str)
         and bool(subject.strip())
-        and len(subject) <= 255
+        and len(subject) <= PROVIDER_SUBJECT_MAX_LENGTH
     )
 
 
@@ -330,7 +368,9 @@ __all__ = [
     "bind_principal_provider_identity",
     "create_service_principal",
     "ensure_human_principal",
+    "human_principal_identity_user_id",
     "principal_for_user",
+    "principal_identity_for_uuid",
     "resolve_principal",
     "resolve_principal_uuid",
     "resolve_service_credential",

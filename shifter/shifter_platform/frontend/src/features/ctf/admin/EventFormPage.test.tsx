@@ -1,8 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 
-import { renderRoute } from "@/test/utils";
+import { renderRoute, setupUser } from "@/test/utils";
 
 vi.mock("@/api/client", () => ({ apiFetch: vi.fn() }));
 
@@ -37,11 +36,17 @@ const EVENT = {
   scoring_mode: "static",
   scoreboard_visible: true,
   scoreboard_freeze_at: null,
+  live_notifications: ["messages", "first_blood"],
 };
 
 function routeApi(handlers: (path: string, options?: { method?: string }) => unknown) {
   mockApi.mockImplementation((path: string, options?: { method?: string }) => Promise.resolve(
-    path === "/cms/model-source-options/"
+    path === "/cms/content-scopes/"
+      ? { count: 2, results: [
+          { kind: "installation", name: "Shared catalog", scope_kind: "installation", account: null, organization: null, workspace: null },
+          { kind: "account", name: "Synthetic tenant", scope_kind: "account", account: "11111111-1111-4111-8111-111111111111", organization: null, workspace: null },
+        ] }
+      : path === "/cms/model-source-options/"
       ? { available: false, workspace: null, workspaces: [], aliases: [] }
       : handlers(path, options),
   ));
@@ -52,13 +57,27 @@ beforeEach(() => {
 });
 
 describe("EventFormPage (create)", () => {
+  it("loads scenarios from the selected explicit catalog", async () => {
+    routeApi((path) => path === "/ctf/scenario-options/" ? { scenarios: [] } : {});
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="create" />, { path: "/*", initialEntries: ["/ctf/admin/events/create"] });
+    const catalog = await screen.findByRole("combobox", { name: "Scenario catalog" });
+    await waitFor(() => expect(mockApi).toHaveBeenCalledWith("/ctf/scenario-options/", expect.objectContaining({
+      query: { scope_kind: "installation", account: null, organization: null, workspace: null },
+    })));
+    await user.selectOptions(catalog, JSON.stringify(["account", "11111111-1111-4111-8111-111111111111", null, null]));
+    await waitFor(() => expect(mockApi).toHaveBeenCalledWith("/ctf/scenario-options/", expect.objectContaining({
+      query: { scope_kind: "account", account: "11111111-1111-4111-8111-111111111111", organization: null, workspace: null },
+    })));
+  });
+
   it("submits a create request via POST /ctf/events/", async () => {
     routeApi((path) => {
-      if (path === "/ctf/scenarios/") return { scenarios: [{ id: "s1", name: "Basic" }] };
+      if (path === "/ctf/scenario-options/") return { scenarios: [{ id: "s1", name: "Basic" }] };
       if (path === "/ctf/events/") return { id: "e9", name: "New", status: "draft" };
       return {};
     });
-    const user = userEvent.setup();
+    const user = setupUser();
     renderRoute(<EventFormPage mode="create" />, { path: "/*", initialEntries: ["/ctf/admin/events/create"] });
 
     expect(await screen.findByRole("checkbox", { name: "Publish public registration page" })).not.toBeChecked();
@@ -69,14 +88,37 @@ describe("EventFormPage (create)", () => {
       const call = mockApi.mock.calls.find(([p, o]) => p === "/ctf/events/" && o?.method === "POST");
       expect(call).toBeDefined();
       expect(call?.[1]?.body).toMatchObject({ public_registration_enabled: false });
+      // A new event selects every live notification kind (ADR-072).
+      expect(call?.[1]?.body).toMatchObject({
+        live_notifications: ["messages", "challenge_released", "first_blood", "position_changed", "range_ready"],
+      });
     });
+  });
+
+  it("shows authored copy when the save fails without an API error", async () => {
+    routeApi((path, options) => {
+      if (path === "/ctf/scenarios/") return { scenarios: [] };
+      if (path === "/ctf/events/" && options?.method === "POST") {
+        return Promise.reject(new TypeError("Failed to fetch"));
+      }
+      return {};
+    });
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="create" />, { path: "/*", initialEntries: ["/ctf/admin/events/create"] });
+
+    await user.type(await screen.findByLabelText("Name"), "New event");
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    expect(await screen.findByText("Could not save")).toBeInTheDocument();
+    expect(screen.getByText("The event could not be saved.")).toBeInTheDocument();
+    expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
   });
 });
 
 describe("EventFormPage (edit)", () => {
   it("loads the existing event into the form", async () => {
     routeApi((path) => {
-      if (path === "/ctf/scenarios/") return { scenarios: [] };
+      if (path === "/ctf/scenario-options/") return { scenarios: [] };
       if (path === "/ctf/events/e1/") return EVENT;
       return {};
     });
@@ -89,5 +131,85 @@ describe("EventFormPage (edit)", () => {
     expect(screen.getByRole("checkbox", { name: "Publish public registration page" })).toBeChecked();
     expect(screen.getByText(/publishes the event name, description, dates, and registration deadline/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+  });
+});
+
+describe("EventFormPage (team size)", () => {
+  it("accepts 0 as an unlimited team size limit (CTF-505)", async () => {
+    routeApi((path, options) => {
+      if (path === "/ctf/scenario-options/") return { scenarios: [] };
+      if (path === "/ctf/events/e1/" && options?.method === "PUT") return { id: "e1", name: "Spring CTF", status: "registration" };
+      if (path === "/ctf/events/e1/") return { ...EVENT, team_mode: true, team_size_limit: 4 };
+      return {};
+    });
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="edit" />, {
+      path: "/ctf/admin/events/:eventId/edit",
+      initialEntries: ["/ctf/admin/events/e1/edit"],
+    });
+
+    const limit = await screen.findByLabelText("Team size limit (0 or blank = unlimited)");
+    expect(limit).toHaveAttribute("min", "0");
+    await user.clear(limit);
+    await user.type(limit, "0");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      const call = mockApi.mock.calls.find(([p, o]) => p === "/ctf/events/e1/" && o?.method === "PUT");
+      expect(call?.[1]?.body).toMatchObject({ team_mode: true, team_size_limit: 0 });
+    });
+  });
+
+  it("does not save unparseable number input as an unlimited team size", async () => {
+    routeApi((path) => {
+      if (path === "/ctf/scenario-options/") return { scenarios: [] };
+      if (path === "/ctf/events/e1/") return { ...EVENT, team_mode: true, team_size_limit: 4 };
+      return {};
+    });
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="edit" />, {
+      path: "/ctf/admin/events/:eventId/edit",
+      initialEntries: ["/ctf/admin/events/e1/edit"],
+    });
+
+    const limit = await screen.findByLabelText("Team size limit (0 or blank = unlimited)");
+    await user.clear(limit);
+    // Browsers report unparseable number input (like "1e") as an empty value
+    // with validity.badInput set; jsdom does not model badInput.
+    Object.defineProperty(limit, "validity", { value: { ...(limit as HTMLInputElement).validity, badInput: true } });
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    expect(await screen.findByText("Team size limit (0 or blank = unlimited) is not a valid number.")).toBeInTheDocument();
+    expect(limit).toHaveFocus();
+    expect(mockApi.mock.calls.some(([p, o]) => p === "/ctf/events/e1/" && o?.method === "PUT")).toBe(false);
+  });
+});
+
+describe("EventFormPage (live notifications)", () => {
+  it("loads the selected kinds and saves only the checked kinds", async () => {
+    routeApi((path, options) => {
+      if (path === "/ctf/scenario-options/") return { scenarios: [] };
+      if (path === "/ctf/events/e1/" && options?.method === "PUT") return { id: "e1", name: "Spring CTF", status: "registration" };
+      if (path === "/ctf/events/e1/") return EVENT;
+      return {};
+    });
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="edit" />, {
+      path: "/ctf/admin/events/:eventId/edit",
+      initialEntries: ["/ctf/admin/events/e1/edit"],
+    });
+
+    const firstBlood = await screen.findByRole("checkbox", { name: "First blood" });
+    expect(firstBlood).toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Scoreboard position changes" })).not.toBeChecked();
+
+    await user.click(firstBlood);
+    await user.click(screen.getByRole("checkbox", { name: "Scoreboard position changes" }));
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      const call = mockApi.mock.calls.find(([p, o]) => p === "/ctf/events/e1/" && o?.method === "PUT");
+      expect(call?.[1]?.body).toMatchObject({ live_notifications: ["messages", "position_changed"] });
+    });
   });
 });

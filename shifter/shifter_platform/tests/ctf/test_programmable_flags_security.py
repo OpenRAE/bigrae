@@ -28,10 +28,7 @@ def _fake_addrinfo(*ips: str):
     """Build a getaddrinfo-shaped response from a list of IP strings."""
     out = []
     for ip in ips:
-        try:
-            family = socket.AF_INET6 if ":" in ip else socket.AF_INET
-        except Exception:
-            family = socket.AF_INET
+        family = socket.AF_INET6 if ":" in ip else socket.AF_INET
         sockaddr = (ip, 443, 0, 0) if family == socket.AF_INET6 else (ip, 443)
         out.append((family, socket.SOCK_STREAM, 0, "", sockaddr))
     return out
@@ -222,6 +219,19 @@ class TestDNSRebindingProtection:
         ):
             _resolve_and_validate("mixed.example.com", 443)
 
+    @pytest.mark.parametrize("answer", ["100.64.0.10", "100.127.255.254", "192.0.0.8"])
+    def test_resolve_and_validate_rejects_non_global_special_ranges(self, answer):
+        """Shared address space and other non-global ranges are blocked, not only RFC 1918 (#2617)."""
+        with (
+            patch(
+                "ctf.validators.socket.getaddrinfo",
+                return_value=_fake_addrinfo(answer),
+            ),
+            pytest.raises(_BlockedDestinationError),
+        ):
+            _resolve_and_validate("cgnat.example.com", 443)
+        assert is_blocked_url(f"https://{answer}/validate") is True
+
     def test_resolve_and_validate_rejects_multicast(self):
         with (
             patch(
@@ -233,7 +243,7 @@ class TestDNSRebindingProtection:
             _resolve_and_validate("multi.example.com", 443)
 
     def test_resolve_and_validate_rejects_unspecified(self):
-        unspecified = "0.0.0.0"  # noqa: S104 - DNS answer literal, not a bind target
+        unspecified = "0.0.0.0"  # noqa: S104  # DNS answer literal, not a bind target
         with (
             patch(
                 "ctf.validators.socket.getaddrinfo",

@@ -619,6 +619,19 @@
           "source": "rendered from validated Terraform outputs and the normalized root config"
         },
         {
+          "description": "Public AWS runtime configuration value (AWS_ACCOUNT_ID) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "AWS_ACCOUNT_ID",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
           "description": "Public AWS runtime configuration value (AWS_REGION) emitted into the platform runtime environment.",
           "destination": "runtime-env",
           "kind": "runtime-env",
@@ -628,6 +641,45 @@
             "portal",
             "worker",
             "provisioner"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (AWS_SERVICE_TOKEN_AUDIENCE) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "AWS_SERVICE_TOKEN_AUDIENCE",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (AWS_SERVICE_TOKEN_ISSUER) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "AWS_SERVICE_TOKEN_ISSUER",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (CHANNEL_LAYER_BACKEND) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "CHANNEL_LAYER_BACKEND",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
           ],
           "sensitivity": "public",
           "source": "rendered from validated Terraform outputs and the normalized root config"
@@ -679,6 +731,34 @@
           "destination": "runtime-env",
           "kind": "runtime-env",
           "name": "DB_PORT",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker",
+            "provisioner"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (DB_SSLMODE) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "DB_SSLMODE",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker",
+            "provisioner"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (DB_SSL_ROOT_CERT_PEM_B64) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "DB_SSL_ROOT_CERT_PEM_B64",
           "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
           "process_roles": [
             "portal",
@@ -846,6 +926,58 @@
             "portal",
             "worker",
             "provisioner"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (GUACAMOLE_CONTROLLER_ROLE_ARN) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROLLER_ROLE_ARN",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (GUACAMOLE_CONTROL_AUDIENCE) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROL_AUDIENCE",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (GUACAMOLE_CONTROL_IDENTITY) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROL_IDENTITY",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (GUACAMOLE_CONTROL_URL) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROL_URL",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
           ],
           "sensitivity": "public",
           "source": "rendered from validated Terraform outputs and the normalized root config"
@@ -1503,6 +1635,71 @@
           "source": "rendered from validated Terraform outputs and the normalized root config"
         },
         {
+          "description": "Public AWS runtime configuration value (REDIS_CA_MODE) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "REDIS_CA_MODE",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (REDIS_HOST) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "REDIS_HOST",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (REDIS_PORT) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "REDIS_PORT",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (REDIS_SECRET_ID) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "REDIS_SECRET_ID",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (REDIS_TLS) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "REDIS_TLS",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
           "description": "Public AWS runtime configuration value (S3_ENDPOINT_ID) emitted into the platform runtime environment.",
           "destination": "runtime-env",
           "kind": "runtime-env",
@@ -1622,6 +1819,19 @@
             "portal",
             "worker",
             "provisioner"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public AWS runtime configuration value (WEBSOCKET_NOTIFICATIONS_ENABLED) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "WEBSOCKET_NOTIFICATIONS_ENABLED",
+          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
+          "process_roles": [
+            "portal",
+            "worker"
           ],
           "sensitivity": "public",
           "source": "rendered from validated Terraform outputs and the normalized root config"
@@ -1812,6 +2022,73 @@
             "title": "AwsModelBrokerSettings",
             "type": "object"
           },
+          "AwsOpenFgaSettings": {
+            "additionalProperties": false,
+            "description": "Operator references for the private released policy service on AWS; no payloads (#2313).\n\nThe runtime and admin bundles each hold ``server-preshared-keys``, ``api-token``,\n``tls.crt`` and ``tls.key``; the CA bundle holds only ``ca.crt``. Datastore logins\nare not operator settings: Terraform creates and rotates them.",
+            "properties": {
+              "admin_secret_ref": {
+                "anyOf": [
+                  {
+                    "description": "Exact Secrets Manager secret ARN without a version.",
+                    "pattern": "^arn:aws:secretsmanager:[a-z]{2}(?:-[a-z]+)+-\\d+:\\d{12}:secret:[A-Za-z0-9/_+=.@-]+$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Admin Secret Ref"
+              },
+              "ca_secret_ref": {
+                "anyOf": [
+                  {
+                    "description": "Exact Secrets Manager secret ARN without a version.",
+                    "pattern": "^arn:aws:secretsmanager:[a-z]{2}(?:-[a-z]+)+-\\d+:\\d{12}:secret:[A-Za-z0-9/_+=.@-]+$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Ca Secret Ref"
+              },
+              "enabled": {
+                "default": false,
+                "title": "Enabled",
+                "type": "boolean"
+              },
+              "model_id": {
+                "default": "",
+                "pattern": "^$|^[0-9A-HJKMNP-TV-Z]{26}$",
+                "title": "Model Id",
+                "type": "string"
+              },
+              "runtime_secret_ref": {
+                "anyOf": [
+                  {
+                    "description": "Exact Secrets Manager secret ARN without a version.",
+                    "pattern": "^arn:aws:secretsmanager:[a-z]{2}(?:-[a-z]+)+-\\d+:\\d{12}:secret:[A-Za-z0-9/_+=.@-]+$",
+                    "type": "string"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ],
+                "default": null,
+                "title": "Runtime Secret Ref"
+              },
+              "store_id": {
+                "default": "",
+                "pattern": "^$|^[0-9A-HJKMNP-TV-Z]{26}$",
+                "title": "Store Id",
+                "type": "string"
+              }
+            },
+            "title": "AwsOpenFgaSettings",
+            "type": "object"
+          },
           "ModelBrokerRuntimeSettings": {
             "additionalProperties": false,
             "description": "Mounted provider bindings and versioned Kubernetes Secret references only.",
@@ -1973,6 +2250,9 @@
               }
             ],
             "default": null
+          },
+          "openfga": {
+            "$ref": "#/$defs/AwsOpenFgaSettings"
           },
           "region": {
             "pattern": "^[a-z]{2}(?:-[a-z]+)+-\\d+$",
@@ -2329,6 +2609,19 @@
           "destination": "runtime-env",
           "kind": "runtime-env",
           "name": "AUDIT_DEPLOYMENT_SCOPE",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (AUDIT_TRUSTED_PROXY_HOPS) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "AUDIT_TRUSTED_PROXY_HOPS",
           "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
           "process_roles": [
             "portal",
@@ -3435,6 +3728,19 @@
           "source": "rendered from validated Terraform outputs and the normalized root config"
         },
         {
+          "description": "Public GCP runtime configuration value (WEBSOCKET_NOTIFICATIONS_ENABLED) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "WEBSOCKET_NOTIFICATIONS_ENABLED",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
           "description": "Public GCP runtime configuration value (CLOUD_SQL_INSTANCE_CONNECTION_NAME) emitted into the platform runtime environment. Optional; emitted only when the deployment configures it.",
           "destination": "runtime-env",
           "kind": "runtime-env",
@@ -4241,8 +4547,9 @@
         ],
         "workflows": [
           ".github/workflows/_gcp-dev.yml",
-          ".github/workflows/gcp-dev-destroy.yml",
-          ".github/workflows/release-gcp.yml"
+          ".github/workflows/release-gcp.yml",
+          ".github/workflows/packer-gcp.yml",
+          ".github/workflows/packer-gcp-validate.yml"
         ]
       },
       "required_secrets": [
@@ -4388,7 +4695,7 @@
           },
           "GcpOpenFgaSettings": {
             "additionalProperties": false,
-            "description": "Operator references for the private released policy service; no payloads.",
+            "description": "Operator references for the private released policy service; no payloads.\n\nOpenFGA is required. Leave the references empty to let the deploy generate\nthem, and leave the store and model IDs empty to publish the release model.",
             "properties": {
               "admin_secret_ref": {
                 "anyOf": [
@@ -4419,7 +4726,7 @@
                 "title": "Ca Secret Ref"
               },
               "enabled": {
-                "default": false,
+                "default": true,
                 "title": "Enabled",
                 "type": "boolean"
               },
@@ -4871,8 +5178,8 @@
         "description": "Closed operator-intent settings for the ``gcp`` backend bundle (PLAT-2003, #729).\n\nOnly genuine operator intent lives here (projects and region). Terraform variables,\ngenerated runtime outputs, and provider SDK payloads are not settings — copying them in\nwould turn ``settings`` into a second provider schema. ``extra='forbid'`` fails unknown\nGCP settings closed. The shared cross-backend ``range_egress`` policy is deliberately not\ndeclared; the loader validates it separately for every backend (see the module docstring).",
         "properties": {
           "cloud_sql_iam_auth": {
-            "default": false,
-            "description": "Use attached workload identities and the official native Cloud SQL proxy for runtime database login.",
+            "default": true,
+            "description": "Use attached workload identities and the official native Cloud SQL proxy for runtime database login. The current release requires it.",
             "title": "Cloud Sql Iam Auth",
             "type": "boolean"
           },

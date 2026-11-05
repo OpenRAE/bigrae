@@ -14,7 +14,12 @@ import re
 import sys
 import tempfile
 from collections.abc import Mapping
+from dataclasses import dataclass
+from functools import partial
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
+
+import yaml
 
 from bootstrap_core import get_repo_root, run_cmd, run_cmd_secret_stdin
 from preflight import Cloud, Mode, preflight_gate
@@ -35,6 +40,12 @@ from installation.runtime_inventory import (  # noqa: E402
     AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS,
 )
 from installation.schema import RootConfig  # noqa: E402
+
+import aws_native_identity  # noqa: E402
+import openfga_rotation_package  # noqa: E402
+
+if TYPE_CHECKING:
+    from gcp_process import ProcessRunner
 
 _LOWERCASE_HEX = frozenset("0123456789abcdef")
 _EKS_NAMESPACE = "shifter-system"
@@ -81,6 +92,7 @@ _IRSA_PROBE_IDENTITIES = {
     "ctfScheduler": ("shifter-platform", "ctf-scheduler"),
     "provisionerLauncher": ("shifter-platform", "provisioner-launcher"),
     "provisioner": ("shifter-jobs", "provisioner"),
+    "guacamoleClient": ("shifter-platform", "guacamole-client"),
 }
 # Probed only when the environment defines the role (see _OPTIONAL_WORKLOAD_ROLE_KEYS).
 _OPTIONAL_IRSA_PROBE_IDENTITIES = {
@@ -118,7 +130,20 @@ print(f"IRSA_OK:{identity}")
 # roles (cni, ingress, ebs-csi, efs-csi, cluster-autoscaler) are wired to their
 # controllers directly (EKS add-on service_account_role_arn / Helm SA annotation),
 # not projected into the chart's identity.serviceAccountRoleArns.
-_WORKLOAD_ROLE_KEYS = frozenset({"portal", "workers", "ctfScheduler", "provisionerLauncher", "provisioner", "migrator"})
+_WORKLOAD_ROLE_KEYS = frozenset(
+    {
+        "portal",
+        "workers",
+        "ctfScheduler",
+        "provisionerLauncher",
+        "provisioner",
+        "migrator",
+        # AWS native identity (#2313): the gateway's STS web identity and the weekly
+        # OpenFGA datastore credential refresh.
+        "guacamoleClient",
+        "policyCredentialRefresh",
+    }
+)
 # Workload roles an environment may define. Their presence enables the matching
 # capability: artifactAcquirer turns on isolated feature-artifact acquisition
 # Jobs (ADR-034-R12, #2463); nodePoolLabeler turns on the trusted runtime-plugin
@@ -281,8 +306,14 @@ def _aws_account_id(outputs: Mapping[str, object]) -> str:
 def _runtime_env(config: RootConfig, outputs: Mapping[str, object]) -> dict[str, str]:
     """Build the complete canonical runtime environment for AWS EKS."""
     domain = config.deployment.domain
+    terraform_env = _validated_runtime_env(outputs)
     return {
-        **_validated_runtime_env(outputs),
+        **terraform_env,
+        # Live CTF notifications need a shared channel layer across portal,
+        # scheduler, and worker pods (ADR-072). The AWS runtime env names the
+        # ElastiCache host only when the operator supplies it, so the capability
+        # follows that host.
+        "WEBSOCKET_NOTIFICATIONS_ENABLED": "true" if terraform_env.get("REDIS_HOST", "").strip() else "false",
         "AUDIT_DEPLOYMENT_SCOPE": (
             f"aws:{_aws_account_id(outputs)}:{config.settings['region']}:{config.deployment.profile}"
         ),
@@ -984,6 +1015,14 @@ def _guacamole_db_endpoint(terraform_outputs: Mapping[str, object]) -> tuple[str
     return host, str(port)
 
 
+def _portal_vpc_cidr(terraform_outputs: Mapping[str, object]) -> str:
+    """Return the portal data-plane CIDR that the policy datastore egress names."""
+    cidr = _bundle_outputs(terraform_outputs).get("portal_vpc_cidr")
+    if not isinstance(cidr, str) or not re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}/\d{1,2}", cidr):
+        raise ValueError("bundle_outputs.portal_vpc_cidr is required for the policy datastore egress")
+    return cidr
+
+
 def _validated_workload_roles(terraform_outputs: Mapping[str, object]) -> Mapping[str, str]:
     """The workload IRSA role map, required to cover every chart workload identity."""
     roles = _output(terraform_outputs, "workload_role_arns")
@@ -1080,8 +1119,14 @@ def render_aws_values(
     config: RootConfig,
     terraform_outputs: Mapping[str, object],
     images: Mapping[str, object],
+    *,
+    rds_ca_bundle: bytes,
 ) -> dict[str, object]:
-    """Render non-secret AWS values from validated config, outputs, and digests."""
+    """Render non-secret AWS values from validated config, outputs, and digests.
+
+    ``rds_ca_bundle`` is the region's public RDS CA bundle; runtime SQL connections
+    verify the server identity with it (#2313).
+    """
     _validate_config(config)
     roles = _validated_workload_roles(terraform_outputs)
     validated_images = _validated_images(images)
@@ -1121,6 +1166,13 @@ def render_aws_values(
     runtime_env["GUACAMOLE_POSTGRESQL_HOSTNAME"] = guacamole_db_host
     runtime_env["GUACAMOLE_POSTGRESQL_PORT"] = guacamole_db_port
     runtime_env["GUACAMOLE_POSTGRESQL_DATABASE"] = _GUACAMOLE_DATABASE_NAME
+    # AWS native identity (#2313): service proof issuer/audience, gateway renewal
+    # and verified TLS to RDS.
+    runtime_env.update(
+        aws_native_identity.runtime_env(
+            terraform_outputs, roles, domain=config.deployment.domain, ca_bundle=rds_ca_bundle
+        )
+    )
     from installation.aws_model_broker import project_aws_model_broker
 
     broker = project_aws_model_broker(
@@ -1141,8 +1193,16 @@ def render_aws_values(
             **broker.get("enrollment_env", {}),
         }
     )
+    native_values = aws_native_identity.chart_values(
+        config.settings,
+        terraform_outputs,
+        db_host=guacamole_db_host,
+        database_cidrs=[_portal_vpc_cidr(terraform_outputs)],
+        ca_bundle=rds_ca_bundle,
+    )
     return {
         "provider": {"name": "aws"},
+        **native_values,
         "modelBroker": broker,
         "deployment": {"name": config.deployment.name, "profile": config.deployment.profile},
         "capabilities": {
@@ -1192,9 +1252,10 @@ def render_aws_values(
         "runtime": {
             # References only. entrypoint.sh hydrates values from Secrets Manager
             # in-process; raw values never enter Helm history, ConfigMaps, or argv.
+            # Runtime workloads use their own RDS IAM logins, so the master database
+            # reference reaches only the migration and provisioning Jobs (#2313).
             "secretReferences": {
                 "app": secret_arns["django"],
-                "database": secret_arns["database"],
             }
         },
         "images": validated_images,
@@ -1237,10 +1298,18 @@ def _apply_eks_terraform(
     *,
     backend_config: Path,
     terraform_inputs: Path,
+    rotation_package: Path,
     aws_profile: str | None,
     dry_run: bool,
-) -> None:
-    """Initialize the isolated root, create a saved plan, and apply that plan."""
+    rotation_schedule: bool | None = None,
+) -> bool:
+    """Initialize the isolated root, create a saved plan, and apply that plan.
+
+    ``rotation_package`` is the built OpenFGA datastore rotation function (#2313).
+    ``rotation_schedule`` turns the rotation schedules on; ``None`` keeps the
+    applied state, because a new schedule tests the logins at once. Return the
+    schedule setting that was applied.
+    """
     plan_name = "shifter-eks.tfplan"
     run_cmd(
         [
@@ -1254,6 +1323,8 @@ def _apply_eks_terraform(
         dry_run=dry_run,
         profile=aws_profile,
     )
+    if rotation_schedule is None:
+        rotation_schedule = not dry_run and _rotation_scheduled(root, aws_profile=aws_profile)
     run_cmd(
         [
             "terraform",
@@ -1261,12 +1332,21 @@ def _apply_eks_terraform(
             "plan",
             _TERRAFORM_NONINTERACTIVE,
             f"-var-file={terraform_inputs}",
+            f"-var=openfga_rotation_package={rotation_package.resolve()}",
+            f"-var=openfga_rotation_schedule={str(rotation_schedule).lower()}",
             f"-out={plan_name}",
         ],
         dry_run=dry_run,
         profile=aws_profile,
     )
     run_cmd(["terraform", f"-chdir={root}", "apply", plan_name], dry_run=dry_run, profile=aws_profile)
+    return rotation_schedule
+
+
+def _rotation_scheduled(root: Path, *, aws_profile: str | None) -> bool:
+    """Return whether the applied state already has the rotation schedules."""
+    scheduled = _terraform_outputs(root, aws_profile=aws_profile).get("openfga_rotation_scheduled")
+    return isinstance(scheduled, Mapping) and scheduled.get("value") is True
 
 
 _EKS_WORKLOAD_SECRET_SOURCES: dict[str, str] = {
@@ -1279,6 +1359,11 @@ _EKS_WORKLOAD_SECRET_SOURCES: dict[str, str] = {
     # OIDC client bundle ({client_id,client_secret,issuer_url,domain,user_pool_id}).
     "cognito": "shifter-{environment}-portal-cognito",
 }
+
+# The portal Redis AUTH token ({password}), copied into the EKS-owned redis secret
+# container only when the runtime env names it (ADR-072). The portal stack creates
+# it only on its AUTH + in-transit encryption path.
+_EKS_REDIS_AUTH_SOURCE = "shifter-{environment}-portal-redis-auth"
 
 
 def _populate_eks_workload_secrets(
@@ -1294,53 +1379,44 @@ def _populate_eks_workload_secrets(
     as empty containers that only the portal IRSA role may read; the real values
     live in the portal RDS/app secrets. Copy them in before Helm so the portal and
     worker entrypoints can hydrate DB_SECRET_ID/APP_SECRET_ID. Each value moves
-    through a 0600 temp file (put-secret-value --secret-string file://...) so it
-    never lands on argv or in the operator log (run_cmd logs only the command).
+    over stdin (put-secret-value --secret-string file:///dev/stdin), so it never
+    lands on argv, on disk, or in the operator log.
     """
     secret_arns = _workload_secret_arns(outputs)
-    for name, source_template in _EKS_WORKLOAD_SECRET_SOURCES.items():
-        target_arn = secret_arns[name]
-        source = source_template.format(environment=environment)
-        fetched = run_cmd(
-            [
-                "aws",
-                "secretsmanager",
-                "get-secret-value",
-                "--secret-id",
-                source,
-                "--region",
-                region,
-                "--query",
-                "SecretString",
-                "--output",
-                "text",
-            ],
-            capture=True,
-            profile=aws_profile,
-        )
-        payload = str(fetched.stdout).rstrip("\n")
-        handle, path = tempfile.mkstemp(suffix=f"-{name}.json")
-        os.close(handle)
-        try:
-            secret_file = Path(path)
-            secret_file.chmod(0o600)
-            secret_file.write_text(payload, encoding="utf-8")
-            run_cmd(
-                [
-                    "aws",
-                    "secretsmanager",
-                    "put-secret-value",
-                    "--secret-id",
-                    target_arn,
-                    "--region",
-                    region,
-                    "--secret-string",
-                    f"file://{path}",
-                ],
-                profile=aws_profile,
-            )
-        finally:
-            Path(path).unlink(missing_ok=True)
+    copies = [
+        (source_template.format(environment=environment), secret_arns[name], name)
+        for name, source_template in _EKS_WORKLOAD_SECRET_SOURCES.items()
+    ]
+    redis_secret_id = _validated_runtime_env(outputs).get("REDIS_SECRET_ID", "")
+    if redis_secret_id:
+        if redis_secret_id != _bundle_secret_arns(outputs).get("redis"):
+            raise ValueError("REDIS_SECRET_ID must name the eks-owned redis secret container")
+        copies.append((_EKS_REDIS_AUTH_SOURCE.format(environment=environment), redis_secret_id, "redis"))
+    for source, target_arn, name in copies:
+        _copy_secret(source, target_arn, name=name, region=region, aws_profile=aws_profile)
+
+
+def _copy_secret(source: str, target_arn: str, *, name: str, region: str, aws_profile: str | None) -> None:
+    """Copy one SecretString over stdin, so it never lands on argv or on disk."""
+    payload = _read_secret_string(source, region=region, aws_profile=aws_profile)
+    profile = ["--profile", aws_profile] if aws_profile else []
+    return_code = run_cmd_secret_stdin(
+        [
+            "aws",
+            *profile,
+            "secretsmanager",
+            "put-secret-value",
+            "--secret-id",
+            target_arn,
+            "--region",
+            region,
+            "--secret-string",
+            "file:///dev/stdin",
+        ],
+        secret_stdin=payload,
+    )
+    if return_code != 0:
+        raise RuntimeError(f"failed to copy the {name} workload secret")
 
 
 def _read_secret_string(secret_id: str, *, region: str, aws_profile: str | None) -> str:
@@ -1436,7 +1512,13 @@ def _guacamole_provision_role_arn(outputs: Mapping[str, object]) -> str:
     return role_arn
 
 
-def _guacamole_provision_job_env(secret_arns: Mapping[str, str], region: str) -> list[dict[str, str]]:
+def _guacamole_provision_job_env(
+    secret_arns: Mapping[str, str],
+    region: str,
+    datastore_arns: Mapping[str, str],
+    iam_users: Mapping[str, str],
+    rds_ca_bundle: bytes,
+) -> list[dict[str, str]]:
     """Env for the provisioner command (it bypasses the portal entrypoint).
 
     The command only needs Django to initialise, not the full platform runtime env.
@@ -1460,6 +1542,13 @@ def _guacamole_provision_job_env(secret_arns: Mapping[str, str], region: str) ->
         {"name": "OIDC_ISSUER_URL", "value": "https://issuer.example.test"},
         {"name": "DB_SECRET_ID", "value": secret_arns["database"]},
         {"name": "GUACAMOLE_DB_SECRET_ID", "value": secret_arns[_GUACAMOLE_DB_SECRET_NAME]},
+        # The same Job creates the OpenFGA database and its base logins (#2313).
+        {"name": "OPENFGA_DATASTORE_LOGIN_ARNS", "value": json.dumps(dict(datastore_arns), sort_keys=True)},
+        # It also creates the runtime RDS IAM logins before the identity probe uses them.
+        {"name": "AWS_DATABASE_IAM_USERS_JSON", "value": json.dumps(dict(iam_users), sort_keys=True)},
+        # The master password goes only to a server that proves the RDS identity.
+        {"name": "DB_SSLMODE", "value": "verify-full"},
+        {"name": "DB_SSL_ROOT_CERT_PEM_B64", "value": base64.b64encode(rds_ca_bundle).decode("ascii")},
     ]
 
 
@@ -1467,8 +1556,11 @@ def _guacamole_provision_manifests(
     *,
     role_arn: str,
     secret_arns: Mapping[str, str],
+    datastore_arns: Mapping[str, str],
+    iam_users: Mapping[str, str],
     region: str,
     platform_image: str,
+    rds_ca_bundle: bytes,
 ) -> tuple[dict[str, object], dict[str, object]]:
     """Build the (ServiceAccount, Job) manifests for the guacamole DB provisioner."""
     labels = {_PART_OF_LABEL: "shifter"}
@@ -1510,12 +1602,20 @@ def _guacamole_provision_manifests(
                             "imagePullPolicy": "IfNotPresent",
                             # Override the portal entrypoint: run the command directly so
                             # it does not require the full platform runtime env.
-                            "command": ["python", "manage.py", "provision_guacamole_database"],
+                            "command": [
+                                "/bin/sh",
+                                "-c",
+                                "python manage.py provision_guacamole_database"
+                                " && python manage.py provision_openfga_database"
+                                " && python manage.py provision_aws_runtime_logins",
+                            ],
                             "securityContext": {
                                 "allowPrivilegeEscalation": False,
                                 "capabilities": {"drop": ["ALL"]},
                             },
-                            "env": _guacamole_provision_job_env(secret_arns, region),
+                            "env": _guacamole_provision_job_env(
+                                secret_arns, region, datastore_arns, iam_users, rds_ca_bundle
+                            ),
                         }
                     ],
                 },
@@ -1545,6 +1645,7 @@ def _provision_guacamole_database(
     *,
     region: str,
     platform_image: str,
+    rds_ca_bundle: bytes,
 ) -> None:
     """Run the one-shot guacamole database/role provisioner Job before the chart install.
 
@@ -1560,8 +1661,11 @@ def _provision_guacamole_database(
     service_account, job = _guacamole_provision_manifests(
         role_arn=_guacamole_provision_role_arn(outputs),
         secret_arns=_guacamole_provision_secret_arns(outputs),
+        datastore_arns=aws_native_identity.datastore_secret_arns(outputs),
+        iam_users=aws_native_identity.database_iam_users(outputs),
         region=region,
         platform_image=platform_image,
+        rds_ca_bundle=rds_ca_bundle,
     )
     # A completed Job's pod template is immutable, so clear any prior run first.
     _delete_guacamole_provision_job()
@@ -1709,22 +1813,52 @@ def _write_private_api_kubeconfig(
     return path
 
 
+@dataclass(frozen=True)
+class IdentityFiles:
+    """Private 0600 operator files for the identity cutover and catalog setup (#2313)."""
+
+    cutover_facts: str | Path | None = None
+    bootstrap_facts: str | Path | None = None
+    catalog_credential: str | Path | None = None
+
+
 def deploy_eks(
     config_path: str | Path,
     images_path: str | Path,
     *,
     backend_config_path: str | Path | None = None,
     terraform_inputs_path: str | Path | None = None,
+    identity_files: IdentityFiles | None = None,
     aws_profile: str | None = None,
     dry_run: bool = False,
 ) -> dict[str, str]:
-    """Apply a saved EKS plan and atomically roll out the shared Helm chart."""
+    """Apply a saved EKS plan and atomically roll out the shared Helm chart.
+
+    The identity cutover boundary is the same chart-derived ceremony as GCP
+    (#2313): a conclusive status probe, maintenance for a legacy installation,
+    migrations and owner reconciliation, policy datastore migration, verified
+    activation, the release, then catalog setup with a current native proof.
+    """
+    from gcp_catalog import initialize_catalog, validate_catalog_credential_path
+    from gcp_helm import adopt_objects
+    from gcp_identity_cutover import (
+        activate_identity_cutover,
+        identity_cutover_boundary,
+        migrate_policy_datastore,
+        validate_fact_paths,
+    )
+    from gcp_process import ProcessRunner
+
+    files = identity_files or IdentityFiles()
     config = load_root_config(config_path)
     _validate_config(config)
     profile = config.deployment.profile
+    region = str(config.settings["region"])
     # Select the EKS component so preflight validates the isolated EKS root's inputs, not the
     # legacy core/range/portal defaults (#1828).
     preflight_gate(Cloud.AWS, Mode.LOCAL, profile, component="eks", headless=True)
+    validate_fact_paths(files.cutover_facts, files.bootstrap_facts)
+    validate_catalog_credential_path(files.catalog_credential)
     root = eks_root(profile)
     allowed_roots = _protected_input_roots()
     backend_config = _required_file(
@@ -1737,71 +1871,152 @@ def deploy_eks(
         config,
         allowed_roots=allowed_roots,
     )
-    _apply_eks_terraform(
+    workdir = Path(tempfile.mkdtemp(prefix="shifter-eks-"))
+    rds_ca_bundle, rotation_package = _rotation_inputs(workdir, region, dry_run=dry_run)
+    apply_terraform = partial(
+        _apply_eks_terraform,
         root,
         backend_config=backend_config,
         terraform_inputs=terraform_inputs,
+        rotation_package=rotation_package,
         aws_profile=aws_profile,
         dry_run=dry_run,
     )
+    rotation_scheduled = apply_terraform()
     health_url = f"https://{config.deployment.domain}/health/"
     if dry_run:
         return {"backend": "aws", "profile": profile, "health_url": health_url}
 
     outputs = _terraform_outputs(root, aws_profile=aws_profile)
+    images = _read_images(images_path, allowed_roots=allowed_roots)
+    policy_enabled = _prepare_cluster(config, outputs, images, aws_profile=aws_profile, rds_ca_bundle=rds_ca_bundle)
+    if not rotation_scheduled:
+        # The logins exist now, so the schedules' first test can sign in.
+        apply_terraform(rotation_schedule=True)
+    values = render_aws_values(config, outputs, images, rds_ca_bundle=rds_ca_bundle)
+    chart = get_repo_root() / "platform" / "charts" / "shifter"
+    provider_values = chart / f"values-aws-{profile}.yaml"
+    runner = ProcessRunner()
+    documents = _release_documents(runner, chart, provider_values, values)
+    with identity_cutover_boundary(
+        runner,
+        documents,
+        workdir,
+        cutover_facts=files.cutover_facts,
+        bootstrap_facts=files.bootstrap_facts,
+    ) as cutover:
+        # Migrate the schema and reconcile owner duties once, before the chart
+        # install. Deployed pods then skip per-pod startup migrations
+        # (SKIP_MIGRATIONS=1), which previously crash-looped the provisioner-launcher
+        # under DB load (#1826).
+        _run_database_migrations(values, database_secret_arn=_workload_secret_arns(outputs)["database"])
+        if policy_enabled and cutover.required:
+            migrate_policy_datastore(runner, documents)
+            # A required cutover entered maintenance by applying the quiesced
+            # release, which keeps both policy Deployments running, so they
+            # exist here even on a first installation.
+            _restart_policy_servers(runner)
+        activate_identity_cutover(runner, cutover)
+        # The cutover applies chart objects before Helm; Helm must own them.
+        adopt_objects(runner, {}, documents)
+        _helm_upgrade(chart, provider_values, values)
+        # Policy servers read their bundle and datastore login at start. Without
+        # a cutover they restart here so republished credentials take effect.
+        if policy_enabled and not cutover.required:
+            _restart_policy_servers(runner)
+    _verify_release(outputs, values, health_url)
+    initialize_catalog(
+        runner,
+        documents,
+        credential_file=files.catalog_credential,
+        hostname=config.deployment.domain,
+    )
+    return {"backend": "aws", "profile": profile, "health_url": health_url}
+
+
+def _rotation_inputs(workdir: Path, region: str, *, dry_run: bool) -> tuple[bytes, Path]:
+    """Return the region's RDS CA bundle and the built datastore rotation package.
+
+    A preview prints the plan command only; it needs no network or build.
+    """
+    if dry_run:
+        return b"", openfga_rotation_package.package_path(workdir)
+    rds_ca_bundle = openfga_rotation_package.fetch_rds_ca_bundle(region)
+    return rds_ca_bundle, openfga_rotation_package.build_rotation_package(workdir, rds_ca_bundle)
+
+
+def _prepare_cluster(
+    config: RootConfig,
+    outputs: Mapping[str, object],
+    images: Mapping[str, object],
+    *,
+    aws_profile: str | None,
+    rds_ca_bundle: bytes,
+) -> bool:
+    """Make the cluster ready for the release; return whether the policy service is enabled.
+
+    The steps connect through the private API, install the cluster add-ons and
+    publish the workload, Guacamole and policy credentials. Then one Job creates
+    the databases and the runtime SQL logins.
+    """
+    profile = config.deployment.profile
+    region = str(config.settings["region"])
     _write_private_api_kubeconfig(
         outputs,
         alias=f"shifter-{profile}",
-        region=str(config.settings["region"]),
+        region=region,
         aws_profile=aws_profile,
     )
     _wait_for_managed_addons(str(_output(outputs, "cluster_name")), aws_profile=aws_profile)
     _populate_eks_workload_secrets(
         outputs,
         environment=profile,
-        region=str(config.settings["region"]),
+        region=region,
         aws_profile=aws_profile,
     )
-    _bootstrap_cluster(outputs, str(config.settings["region"]))
-    images = _read_images(images_path, allowed_roots=allowed_roots)
+    _bootstrap_cluster(outputs, region)
     # Guacamole (AWS EKS parity with GCP): create the guacamole-runtime Secret and
     # provision the guacamole database + guacamole_admin role in-cluster before Helm,
     # so guacamole-client can start and initialise its schema during --wait.
     _sync_guacamole_runtime_secret(
         outputs,
-        region=str(config.settings["region"]),
+        region=region,
         aws_profile=aws_profile,
     )
+    # Operator policy bundles and the current datastore logins become named
+    # Kubernetes objects before any policy server starts (#2313).
+    policy_enabled = aws_native_identity.publish_policy_credentials(
+        config.settings,
+        outputs,
+        read_secret=lambda secret_id: _read_secret_string(secret_id, region=region, aws_profile=aws_profile),
+        apply=_apply_secret_document,
+    )
+    # The same Job creates the OpenFGA database and logins and the runtime RDS
+    # IAM logins that the identity status probe connects as.
     _provision_guacamole_database(
         outputs,
-        region=str(config.settings["region"]),
+        region=region,
         platform_image=str(_validated_images(images)["platform"]),
+        rds_ca_bundle=rds_ca_bundle,
     )
-    values = render_aws_values(
-        config,
-        outputs,
-        images,
-    )
-    # Migrate the schema and converge the in-box catalog / RAES image registry once,
-    # before the chart install. Deployed pods then skip per-pod startup migrations
-    # (SKIP_MIGRATIONS=1), which previously crash-looped the provisioner-launcher
-    # under DB load (#1826). Pre-creates the Helm-adopted migrator SA + runtime
-    # ConfigMap the chart owns afterward.
-    _run_database_migrations(values)
-    chart = get_repo_root() / "platform" / "charts" / "shifter"
-    provider_values = chart / f"values-aws-{profile}.yaml"
+    return policy_enabled
+
+
+def _release_documents(
+    runner: ProcessRunner, chart: Path, provider_values: Path, values: Mapping[str, object]
+) -> list[dict[str, object]]:
+    """Lint the chart and return the release objects that the identity cutover reads."""
     _run_helm_with_values(["helm", "lint", str(chart), "--values", str(provider_values)], values)
-    _run_helm_with_values(
-        [
-            "helm",
-            "template",
-            _HELM_RELEASE,
-            str(chart),
-            "--values",
-            str(provider_values),
-        ],
-        values,
-    )
+    rendered = runner.run(
+        ["helm", "template", _HELM_RELEASE, str(chart), "--values", str(provider_values), "--values", "-"],
+        input_text=json.dumps(values, sort_keys=True),
+        sensitive=True,
+    ).stdout
+    return [document for document in yaml.safe_load_all(rendered) if isinstance(document, dict)]
+
+
+def _helm_upgrade(chart: Path, provider_values: Path, values: Mapping[str, object]) -> None:
+    """Install or upgrade the release atomically and wait until it is ready."""
     _run_helm_with_values(
         [
             "helm",
@@ -1821,13 +2036,33 @@ def deploy_eks(
         ],
         values,
     )
+
+
+def _verify_release(outputs: Mapping[str, object], values: Mapping[str, Any], health_url: str) -> None:
+    """Prove pod security enforcement, effective IRSA and the public health endpoint."""
     roles = _output(outputs, "workload_role_arns")
     if not isinstance(roles, Mapping):
         raise RuntimeError("workload_role_arns must be a mapping for effective IRSA readiness")
     _verify_kubernetes_security_enforcement(str(values["images"]["platform"]))
     _verify_effective_irsa(roles, str(values["images"]["platform"]))
     run_cmd(["curl", "--fail", "--silent", "--show-error", "--max-time", "30", health_url])
-    return {"backend": "aws", "profile": profile, "health_url": health_url}
+
+
+def _apply_secret_document(document: dict[str, object]) -> None:
+    """Apply one Secret or ConfigMap through stdin; values never reach argv or disk."""
+    return_code = run_cmd_secret_stdin(["kubectl", "apply", "-f", "-"], secret_stdin=json.dumps(document))
+    if return_code != 0:
+        raise RuntimeError("failed to publish a policy credential object")
+
+
+def _restart_policy_servers(runner: ProcessRunner) -> None:
+    """Restart the policy servers after datastore migration; only they restart here."""
+    for deployment in ("openfga", "openfga-admin"):
+        runner.run(["kubectl", "rollout", "restart", f"deployment/{deployment}", "-n", _PLATFORM_NAMESPACE])
+    for deployment in ("openfga", "openfga-admin"):
+        runner.run(
+            ["kubectl", "rollout", "status", f"deployment/{deployment}", "-n", _PLATFORM_NAMESPACE, "--timeout=10m"]
+        )
 
 
 def _migration_prerequisites(
@@ -1885,15 +2120,15 @@ def _migration_prerequisites(
     }
 
 
-def _migration_job(platform_image: str) -> dict[str, object]:
-    """Build the one-shot schema-migration + content-bootstrap Job.
+def _migration_job(platform_image: str, *, database_secret_arn: str, iam_users: Mapping[str, str]) -> dict[str, object]:
+    """Build the one-shot schema-migration and owner-reconciliation Job.
 
     Runs through the portal entrypoint with ``SKIP_MIGRATIONS=""`` (overriding the
-    runtime ConfigMap's ``"1"``) so it hydrates the runtime secrets, applies migrations
-    as the RDS master, switches to portal_runtime RDS IAM auth, then registers the
-    in-box catalog and seeds the RAES image registry. Deployed pods keep
-    ``SKIP_MIGRATIONS=1`` and skip startup migrations, so this is the single migrator
-    (#1826). Both management commands are idempotent, so a redeploy is a no-op.
+    runtime ConfigMap's ``"1"``). It applies migrations as the RDS master, creates the
+    per-workload RDS IAM logins and reconciles the database duties (#2313), then
+    seeds the RAES image registry. Catalog content follows identity activation.
+    Deployed pods keep ``SKIP_MIGRATIONS=1``, so this is the single migrator (#1826).
+    The commands are idempotent, so a redeploy is a no-op.
     """
     labels = {_PART_OF_LABEL: "shifter", "app.kubernetes.io/component": "migrator"}
     return {
@@ -1926,15 +2161,31 @@ def _migration_job(platform_image: str) -> dict[str, object]:
                             # execs these content-convergence commands. The last one
                             # claims registered packs' feature artifacts so they are
                             # acquired before any range needs them (ADR-034-R12).
+                            # The owner reconciles the per-workload RDS IAM logins and
+                            # policy ownership (#2313). Catalog content is not
+                            # initialized here: it follows verified identity activation.
                             "args": [
                                 "/bin/sh",
                                 "-c",
-                                "python manage.py bootstrap_inbox_catalog"
+                                "python manage.py reconcile_aws_database_duties"
                                 " && python manage.py seed_raes_image_registry"
                                 " && python manage.py acquire_feature_artifacts",
                             ],
                             "envFrom": [{"configMapRef": {"name": "platform-runtime"}}],
-                            "env": [{"name": "SKIP_MIGRATIONS", "value": ""}],
+                            "env": [
+                                {"name": "SKIP_MIGRATIONS", "value": ""},
+                                # Only this owner Job reads the master credential;
+                                # it stays on password authentication throughout.
+                                {"name": "DB_SECRET_ID", "value": database_secret_arn},
+                                {"name": "DB_IAM_AUTH_RUNTIME", "value": "false"},
+                                # The owner Job prepares the database before identity
+                                # activation; this bypasses only the runtime readiness check.
+                                {"name": "SHIFTER_IDENTITY_MAINTENANCE", "value": "true"},
+                                {
+                                    "name": "AWS_DATABASE_IAM_USERS_JSON",
+                                    "value": json.dumps(dict(iam_users), sort_keys=True),
+                                },
+                            ],
                             "securityContext": {
                                 "allowPrivilegeEscalation": False,
                                 "capabilities": {"drop": ["ALL"]},
@@ -1974,15 +2225,15 @@ def _migration_inputs(values: Mapping[str, object]) -> tuple[str, Mapping[str, o
     return str(migrator_role_arn), runtime_env, secret_refs, platform_image
 
 
-def _run_database_migrations(values: Mapping[str, object]) -> None:
-    """Run schema migrations + content bootstrap once, before the chart install.
+def _run_database_migrations(values: Mapping[str, object], *, database_secret_arn: str) -> None:
+    """Run schema migrations and owner reconciliation once, before the chart install.
 
     AWS has no cloud-managed migration hook, so this dedicated Job is the single
     migrator (GCP parity). Deployed pods carry ``SKIP_MIGRATIONS=1`` and must not
     migrate on startup -- per-pod migrations made the provisioner-launcher's startup
     exceed its liveness window under DB load and crash-loop (#1826). It also converges
-    the in-box scenario catalog and the ``provider=aws`` RAES image registry so a fresh
-    tenant's smoke scenario resolves its package and AMIs.
+    the ``provider=aws`` RAES image registry. Only this Job receives the master
+    database reference (#2313).
     """
     migrator_role_arn, runtime_env, secret_refs, platform_image = _migration_inputs(values)
 
@@ -1991,7 +2242,12 @@ def _run_database_migrations(values: Mapping[str, object]) -> None:
         runtime_env=runtime_env,
         secret_refs=secret_refs,
     )
-    job = _migration_job(platform_image)
+    iam_users = _as_mapping(_as_mapping(values.get("rdsIam")).get("databaseUsers"))
+    job = _migration_job(
+        platform_image,
+        database_secret_arn=database_secret_arn,
+        iam_users={str(key): str(value) for key, value in iam_users.items()},
+    )
     # A completed Job's pod template is immutable, so clear any prior run first.
     _delete_migration_job()
     # Stream the manifests to kubectl over stdin rather than a temp file: the

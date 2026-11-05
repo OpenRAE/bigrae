@@ -82,7 +82,7 @@ def _plan() -> RaesPlan:
         image=RaesPlanImage(name="ubuntu"),
     )
     network = RaesPlanNetwork(address="net.lan", name="lan", cidr="10.9.0.0/24")
-    return RaesPlan(raes_version="3.5.0", nodes=(node,), networks=(network,))
+    return RaesPlan(raes_version="10.6.0", nodes=(node,), networks=(network,))
 
 
 def _resolver(node):
@@ -342,7 +342,7 @@ def _plan_with_domain(*, include_local: bool = False) -> RaesPlan:
         member_addresses=(member.address,),
     )
     return RaesPlan(
-        raes_version="3.5.0",
+        raes_version="10.6.0",
         nodes=(controller, member),
         networks=(RaesPlanNetwork(address="net.lan", name="lan", cidr="10.9.0.0/24"),),
         accounts=(authority, service, *((local_operator,) if include_local else ())),
@@ -421,6 +421,7 @@ class TestApply:
         clients = _clients()
         secret_ops, secret_mocks = _secret_ops()
         release = MagicMock()
+        cloud = MagicMock()
 
         with pytest.raises(RaesGcePlanError, match="does not match"):
             apply_raes_range_cell(
@@ -434,14 +435,67 @@ class TestApply:
                     secret_ops,
                     allocated_network_cidrs=(("net.wrong", "10.90.1.0/24"),),
                     on_pre_mutation_failure=release,
+                    before_provider_mutation=cloud,
                 ),
             )
 
         release.assert_called_once_with()
+        cloud.assert_not_called()
         clients.networks.insert.assert_not_called()
         clients.subnetworks.insert.assert_not_called()
         secret_mocks.ensure_ssh.assert_not_called()
         secret_mocks.delete_ssh.assert_not_called()
+
+    def test_cloud_effects_follow_preflight_and_precede_guest_mutation(self):
+        clients = _clients()
+        secret_ops, secret_mocks = _secret_ops()
+        effects = []
+        resolved = []
+
+        def resolve(node):
+            resolved.append(node.address)
+            return _resolver(node)
+
+        def cloud():
+            assert resolved
+            clients.networks.insert.assert_not_called()
+            secret_mocks.ensure_ssh.assert_not_called()
+            effects.append("cloud")
+
+        apply_raes_range_cell(
+            "req-1",
+            7,
+            _plan(),
+            resolve,
+            _apply_options(_config(), clients, secret_ops, before_provider_mutation=cloud),
+        )
+        assert effects == ["cloud"]
+        assert clients.networks.insert.called
+        assert secret_mocks.ensure_ssh.called
+
+    def test_cloud_failure_cannot_start_guest_mutations(self):
+        clients = _clients()
+        secret_ops, secret_mocks = _secret_ops()
+        cloud = MagicMock(side_effect=ValueError("cloud setup failed"))
+        release = MagicMock()
+        with pytest.raises(ValueError, match="cloud setup failed"):
+            apply_raes_range_cell(
+                "req-1",
+                7,
+                _plan(),
+                _resolver,
+                _apply_options(
+                    _config(),
+                    clients,
+                    secret_ops,
+                    before_provider_mutation=cloud,
+                    on_pre_mutation_failure=release,
+                ),
+            )
+        cloud.assert_called_once_with()
+        release.assert_called_once_with()
+        clients.networks.insert.assert_not_called()
+        secret_mocks.ensure_ssh.assert_not_called()
 
     def test_reconcile_existing_instance_skips_insert(self):
         clients = _clients(exists=True)
@@ -543,14 +597,16 @@ class TestApply:
             labels={"managed-by": "unrelated", "range-id": "other", "image-profile": "wrong"}
         )
         secret_ops, secret_calls = _secret_ops()
+        cloud = MagicMock()
         with pytest.raises(RuntimeError, match="conflicting range or image-profile"):
             apply_raes_range_cell(
                 "req-1",
                 7,
                 _plan(),
                 lambda _node: profile,
-                _apply_options(_config(), clients, secret_ops),
+                _apply_options(_config(), clients, secret_ops, before_provider_mutation=cloud),
             )
+        cloud.assert_not_called()
         clients.instances.insert.assert_not_called()
         clients.instances.delete.assert_not_called()
         secret_calls.ensure_ssh.assert_not_called()
@@ -786,7 +842,7 @@ def _plan_with_content(*content: RaesPlanContent) -> RaesPlan:
         image=RaesPlanImage(name="ubuntu"),
     )
     network = RaesPlanNetwork(address="net.lan", name="lan", cidr="10.9.0.0/24")
-    return RaesPlan(raes_version="3.5.0", nodes=(node,), networks=(network,), content=content)
+    return RaesPlan(raes_version="10.6.0", nodes=(node,), networks=(network,), content=content)
 
 
 class TestCompositionIntegration:
@@ -1435,7 +1491,7 @@ def _access_plan() -> RaesPlan:
         auth_method="key",
     )
     network = RaesPlanNetwork(address="net.lan", name="lan", cidr="10.9.0.0/24")
-    return RaesPlan(raes_version="3.5.0", nodes=(node,), networks=(network,), accounts=(account,))
+    return RaesPlan(raes_version="10.6.0", nodes=(node,), networks=(network,), accounts=(account,))
 
 
 def _access_transport(channel: str = "ssh") -> dict:

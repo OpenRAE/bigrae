@@ -10,7 +10,7 @@ import pytest
 import yaml
 
 CHART = Path(__file__).resolve().parents[1]
-IMAGE = "openfga/openfga@sha256:d53ce5c48413d01e75ecf375f3f74eb35c50f155fc028c41d03dbc7c9838fb38"
+IMAGE = "docker.io/openfga/openfga@sha256:d53ce5c48413d01e75ecf375f3f74eb35c50f155fc028c41d03dbc7c9838fb38"
 
 
 def _values() -> dict[str, object]:
@@ -90,12 +90,36 @@ def test_aws_and_gcp_render_the_same_private_server_contract(tmp_path, provider_
     assert int(policy_hooks["helm.sh/hook-weight"]) < int(migration["metadata"]["annotations"]["helm.sh/hook-weight"])
     assert "hook-succeeded" not in policy_hooks["helm.sh/hook-delete-policy"]
     assert migration_policy["spec"]["egress"][0]["to"] == [{"ipBlock": {"cidr": "10.60.0.12/32"}}]
-    assert by_identity["PodDisruptionBudget", "openfga"]["spec"]["minAvailable"] == 1
+    runtime_budget = by_identity["PodDisruptionBudget", "openfga"]["spec"]
+    admin_budget = by_identity["PodDisruptionBudget", "openfga-admin"]["spec"]
+    assert runtime_budget["minAvailable"] == 1
+    assert admin_budget["maxUnavailable"] == 1
+    assert "minAvailable" not in admin_budget
+    assert runtime_budget["unhealthyPodEvictionPolicy"] == "AlwaysAllow"
+    assert admin_budget["unhealthyPodEvictionPolicy"] == "AlwaysAllow"
 
     portal = by_identity["Deployment", "portal-web"]["spec"]["template"]["spec"]
     portal_environment = {item["name"]: item for item in portal["containers"][0]["env"]}
+    portal_env_names = [item["name"] for item in portal["containers"][0]["env"]]
+    assert len(portal_env_names) == len(set(portal_env_names))
     assert portal_environment["OPENFGA_API_TOKEN_FILE"]["value"] == "/run/secrets/openfga/token"
     assert portal_environment["OPENFGA_CA_CERT_PATH"]["value"] == "/run/secrets/openfga-ca/ca.crt"
+    for workload in (
+        "worker-cms",
+        "worker-engine",
+        "worker-mc",
+        "ctf-scheduler",
+        "ctf-communication-worker",
+        "worker-provisioner-launcher",
+    ):
+        pod = by_identity["Deployment", workload]["spec"]["template"]["spec"]
+        environment = {item["name"]: item for item in pod["containers"][0]["env"]}
+        mounts = {item["name"] for item in pod["containers"][0]["volumeMounts"]}
+        volumes = {item["name"] for item in pod["volumes"]}
+        assert environment["OPENFGA_STORE_ID"]["value"] == "01J00000000000000000000001"
+        assert environment["OPENFGA_MODEL_ID"]["value"] == "01J00000000000000000000000"
+        assert {"openfga-token", "openfga-ca"} <= mounts
+        assert {"openfga-token", "openfga-ca"} <= volumes
     assert ("NetworkPolicy", "allow-portal-to-openfga") in by_identity
     assert ("NetworkPolicy", "allow-openfga-postgres-egress") in by_identity
 
@@ -186,6 +210,12 @@ def test_native_policy_servers_and_migration_use_their_attached_database_logins(
     migration = objects["Job", "openfga-datastore-migrate"]["spec"]["template"]["spec"]
     assert migration["initContainers"][0]["name"] == "cloud-sql-proxy"
     assert migration["initContainers"][1]["name"] == "migrate"
+    # The migrator creates the datastore as the reconciled owner role (#2688).
+    migrate_env = {item["name"]: item for item in migration["initContainers"][1]["env"]}
+    assert migrate_env["OPENFGA_DATASTORE_URI"]["value"] == (
+        "postgres://" + users["openfga-migrator"].replace("@", "%40")
+        + "@127.0.0.1:5432/openfga?sslmode=disable&options=-c%20role%3Dshifter_openfga_owner"
+    )
     assert migration["volumes"][0]["configMap"]["name"] == "openfga-migration-connection"
     service = objects["ConfigMap", "openfga-migration-connection"]["data"]["pg-service.conf"]
     assert f'user={users["openfga-migrator"]}' in service
@@ -198,13 +228,31 @@ def test_partial_policy_binding_and_collapsed_migration_duties_are_rejected(tmp_
         assert result.returncode != 0
 
 
-def test_policy_administration_network_is_separate_from_portal_and_worker_clients(tmp_path):
+def test_policy_administration_network_is_separate_from_runtime_clients(tmp_path):
     from test_model_broker import selected
 
     result = _render(tmp_path, "values-gcp-dev.yaml")
     assert result.returncode == 0, result.stderr
     documents = [item for item in yaml.safe_load_all(result.stdout) if item]
-    for target, allowed in (("openfga", {"portal"}), ("openfga-admin", {"openfga-publisher"})):
+    runtime_clients = {
+        "portal",
+        "identity-cutover",
+        "catalog-initializer",
+        "worker-cms",
+        "worker-engine",
+        "worker-mc",
+        "worker-reconciler",
+        "worker-outbox-drainer",
+        "worker-provisioner-launcher",
+        "worker-warm-pool-reconciler",
+        "worker-operation-result-applier",
+        "worker-pack-removal-reconciler",
+        "ctf-scheduler",
+        "ctf-communication-worker",
+        "guacamole-bootstrap-prune",
+        "raes-operation-record-prune",
+    }
+    for target, allowed in (("openfga", runtime_clients), ("openfga-admin", {"openfga-publisher"})):
         selectors = [{"app.kubernetes.io/component": target}]
         ingress = [rule for document in documents if document["kind"] == "NetworkPolicy"
                    and document["metadata"]["namespace"] == "shifter-platform"
@@ -212,7 +260,53 @@ def test_policy_administration_network_is_separate_from_portal_and_worker_client
                    for rule in document["spec"].get("ingress", [])]
         peers = [peer for rule in ingress for peer in rule.get("from", [])
                  if any(port["port"] == 8080 for port in rule.get("ports", []))]
-        admitted = {component for component in ("portal", "workers", "worker-engine", "guacamole-client", "openfga-publisher")
+        admitted = {component for component in (*runtime_clients, "workers", "guacamole-client", "openfga-publisher")
                     if any("namespaceSelector" not in peer and "podSelector" in peer
                            and selected(peer["podSelector"], {"app.kubernetes.io/component": component}) for peer in peers)}
         assert admitted == allowed
+
+
+def test_catalog_initializer_reaches_the_native_database(tmp_path) -> None:
+    """#2679: the catalog Job registers content through the same native SQL lane as the portal."""
+    values = _values()
+    users = {
+        role: f"synthetic-{role}@synthetic-project.iam"
+        for role in (
+            "portal",
+            "workers",
+            "ctf-scheduler",
+            "provisioner-launcher",
+            "provisioner",
+            "openfga-runtime",
+            "openfga-admin",
+            "openfga-migrator",
+        )
+    }
+    values["openfga"].update(
+        {
+            "runtimeDatabaseUser": users["openfga-runtime"],
+            "adminDatabaseUser": users["openfga-admin"],
+            "migrationDatabaseUser": users["openfga-migrator"],
+        }
+    )
+    values["cloudSqlProxy"] = {
+        "enabled": True,
+        "instanceConnectionName": "synthetic-project:us-central1:platform-pg",
+        "databaseUsers": users,
+        "databaseCidrs": ["10.60.0.12/32"],
+    }
+    generated = tmp_path / "native.json"
+    generated.write_text(json.dumps(values))
+    result = subprocess.run(
+        ["helm", "template", "native-test", str(CHART), "-f", str(CHART / "values-gcp-dev.yaml"), "-f", str(generated)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    lane = next(
+        item
+        for item in yaml.safe_load_all(result.stdout)
+        if item and item.get("kind") == "NetworkPolicy" and item["metadata"]["name"] == "allow-platform-native-sql-egress"
+    )
+    assert "catalog-initializer" in lane["spec"]["podSelector"]["matchExpressions"][0]["values"]

@@ -33,6 +33,7 @@ from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
+from cms.handlers.ctf_bridge import drain_ctf_status_deliveries
 from cms.handlers.range_events import apply_range_status
 from cms.models import RangeInstance
 from engine.services import get_authoritative_range_status
@@ -365,12 +366,14 @@ class Command(BaseCommand):
 
     def _run_once(self, stale_seconds: int, batch_size: int) -> None:
         """Execute one reconciliation pass and log the summary."""
+        ctf_delivered = drain_ctf_status_deliveries(limit=batch_size)
         ri_counts = reconcile_range_instances(stale_seconds, batch_size)
         from cms import services as cms_services
 
         lease_counts = cms_services.expire_due_ranges(batch_size=batch_size)
 
         self._reconcile_model_access(batch_size)
+        self._reconcile_workers(batch_size)
 
         total_reconciled = ri_counts["reconciled"]
         total_converged = ri_counts["converged"]
@@ -381,13 +384,14 @@ class Command(BaseCommand):
         log_fn(
             "reconcile_range_events: pass complete — "
             "reconciled=%d converged=%d skipped=%d no_engine_range=%d "
-            "expired=%d expiry_failed=%d (range_instances: %r)",
+            "expired=%d expiry_failed=%d ctf_delivered=%d (range_instances: %r)",
             total_reconciled,
             total_converged,
             total_skipped,
             total_no_engine,
             lease_counts["expired"],
             lease_counts["failed"],
+            ctf_delivered,
             ri_counts,
         )
 
@@ -405,3 +409,12 @@ class Command(BaseCommand):
             reconcile_model_allocations(limit=batch_size)
         except Exception:
             logger.exception("reconcile_range_events: model-access reconciliation failed")
+
+    def _reconcile_workers(self, batch_size: int) -> None:
+        """Retire only due, unheld native workers through their owning service."""
+        from engine.services import reconcile_disposable_workers
+
+        try:
+            reconcile_disposable_workers(limit=min(batch_size, 100))
+        except Exception:  # noqa: BLE001  # isolate bounded cleanup without exposing provider diagnostics
+            logger.warning("reconcile_range_events: worker recovery pass failed")

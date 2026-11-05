@@ -29,8 +29,9 @@ from gcp_helm import (
 )
 from gcp_inputs import load_deployment_inputs
 from gcp_openvpn import OpenVpnError, ensure_pki, pool_output, roll_out_pool
-from gcp_process import ProcessResult
+from gcp_process import GcpCommandError, ProcessResult
 from gcp_rollout import (
+    ReleasePins,
     RolloutError,
     record_running_images,
     release_deployments,
@@ -165,7 +166,8 @@ class TestHelm:
         with pytest.raises(HelmReleaseError, match="another Helm release"):
             adopt_objects(FakeRunner().on(["kubectl", "get"], ProcessResult(0, json.dumps(foreign))), {}, documents)
         missing_kind = FakeRunner().on(["kubectl", "get"], ProcessResult(1))
-        assert adopt_objects(missing_kind, {}, documents) == []
+        with pytest.raises(GcpCommandError):
+            adopt_objects(missing_kind, {}, documents)
 
     def test_render_upgrade_and_retire(self):
         rendered = yaml.safe_dump_all([{"kind": "A", "metadata": {"name": "x"}}, None])
@@ -198,11 +200,31 @@ class TestHelm:
 
 
 class TestRolloutChecks:
-    def test_restarts_inventory_and_waits(self):
-        runner = FakeRunner()
-        restart_workloads(runner, {}, model_broker_enabled=True)
+    @pytest.mark.parametrize("model_broker_enabled", [False, True])
+    def test_restarts_complete_release_inventory(self, model_broker_enabled):
+        verifier = _load_python_script_module(
+            get_repo_root() / "scripts/gcp/verify_running_image_ids.py", "test_restart_inventory"
+        )
+        inventory = verifier.release_deployments(model_broker_enabled=model_broker_enabled)
+        runner = FakeRunner().on(
+            [],
+            lambda a, e, s: ProcessResult(0, "\n".join(inventory)) if "--list-deployments" in a else ProcessResult(0),
+        )
+        restart_workloads(runner, {}, model_broker_enabled=model_broker_enabled)
+        discovery = [call for call in runner.calls if "--list-deployments" in call.argv]
+        assert len(discovery) == 1
+        assert discovery[0].argv[-4:] == [
+            "--model-broker-enabled",
+            str(model_broker_enabled).lower(),
+            "--policy-enabled",
+            "false",
+        ]
         restarted = [call.argv[3] for call in runner.find("kubectl", "rollout", "restart")]
-        assert restarted[0] == "deployment/portal-web" and restarted[-1] == "deployment/model-access-control"
+        assert restarted == ["deployment/" + name for name in inventory]
+        assert "deployment/worker-outbox-drainer" in restarted
+        assert ("deployment/model-broker" in restarted) is model_broker_enabled
+
+    def test_waits_for_inventory_and_superseded_pods(self):
         with pytest.raises(RolloutError):
             release_deployments(FakeRunner(), {}, model_broker_enabled=False)
         pods = iter(
@@ -240,6 +262,12 @@ class TestRolloutChecks:
         with pytest.raises(RolloutError, match="superseded"):
             wait_for_rollouts(stuck, {}, model_broker_enabled=False, sleep=lambda _: None, clock=lambda: next(ticks))
 
+    def test_restart_refuses_an_empty_release_inventory(self):
+        runner = FakeRunner()
+        with pytest.raises(RolloutError, match="no deployments"):
+            restart_workloads(runner, {}, model_broker_enabled=False)
+        assert not runner.find("kubectl", "rollout", "restart")
+
     def test_running_images_are_verified_and_stored(self, tmp_path: Path):
         def verifier(argv, env, stdin):
             if "--output" in argv:
@@ -258,6 +286,19 @@ class TestRolloutChecks:
         assert record.prefix == f"deployments/{REVISION}/r/1"
         verify = next(call.argv for call in runner.calls if "--expected-image" in call.argv)
         assert f"portal={_identities()['portal']}" in verify
+        assert "--support-image" not in verify
+        proxy = "gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:" + "4" * 64
+        record_running_images(
+            runner,
+            {},
+            identities=_identities(),
+            model_broker_enabled=False,
+            evidence=EvidenceRun("acme-shifter-release-evidence", REVISION, "r", 2),
+            workdir=tmp_path,
+            pins=ReleasePins(support={"cloud-sql-proxy": proxy}),
+        )
+        verify = [call.argv for call in runner.calls if "--expected-image" in call.argv][-1]
+        assert verify[verify.index("--support-image") + 1] == f"cloud-sql-proxy={proxy}"
         failing = FakeRunner().on(["kubectl"], ProcessResult(0, "[]")).on([], ProcessResult(1))
         with pytest.raises(RolloutError, match="approved release"):
             record_running_images(
@@ -268,6 +309,61 @@ class TestRolloutChecks:
                 evidence=EvidenceRun("acme-shifter-release-evidence", REVISION, "r", 1),
                 workdir=tmp_path,
             )
+
+    def test_support_images_come_from_the_rendered_release_deployments(self):
+        """#2698: one pinned proxy reference per release; a second one is an error."""
+        proxy = "gcr.io/cloud-sql-connectors/cloud-sql-proxy@sha256:" + "4" * 64
+
+        def deployment(name, image, namespace="shifter-platform"):
+            sidecar = {"name": "cloud-sql-proxy", "image": image, "restartPolicy": "Always"}
+            return {
+                "kind": "Deployment",
+                "metadata": {"name": name, "namespace": namespace},
+                "spec": {"template": {"spec": {"initContainers": [sidecar], "containers": [{"name": name}]}}},
+            }
+
+        documents = [deployment("portal-web", proxy), deployment("worker-cms", proxy), {"kind": "Service"}]
+        assert ReleasePins.from_documents(documents).support == {"cloud-sql-proxy": proxy}
+        assert ReleasePins.from_documents([{"kind": "Service", "metadata": {}}]) == ReleasePins()
+        # Another namespace is outside the verified release boundary.
+        assert ReleasePins.from_documents([deployment("x", proxy + "0", namespace="other"), *documents]).support == {
+            "cloud-sql-proxy": proxy
+        }
+        with pytest.raises(RolloutError, match="more than one image"):
+            ReleasePins.from_documents([*documents, deployment("worker-mc", proxy.replace("4", "5"))])
+
+    def test_policy_image_comes_from_the_rendered_policy_servers(self, tmp_path: Path):
+        """#2698: the OpenFGA servers join the running image check at their pinned image."""
+        image = "docker.io/openfga/openfga@sha256:" + "6" * 64
+
+        def server(name):
+            return {
+                "kind": "Deployment",
+                "metadata": {"name": name, "namespace": "shifter-platform"},
+                "spec": {"template": {"spec": {"containers": [{"name": "openfga", "image": image}]}}},
+            }
+
+        assert ReleasePins.from_documents([server("openfga"), server("openfga-admin")]).policy == image
+        assert ReleasePins.from_documents([{"kind": "Service", "metadata": {}}]).policy is None
+
+        def verifier(argv, env, stdin):
+            if "--output" in argv:
+                Path(argv[argv.index("--output") + 1]).write_text("{}\n")
+            return ProcessResult(0, "[]" if argv[:3] == ["kubectl", "get", "pods"] else "")
+
+        runner = FakeRunner().on([], verifier)
+        record_running_images(
+            runner,
+            {},
+            identities=_identities(),
+            model_broker_enabled=False,
+            evidence=EvidenceRun("acme-shifter-release-evidence", REVISION, "r", 3),
+            workdir=tmp_path,
+            pins=ReleasePins(policy=image),
+        )
+        verify = next(call.argv for call in runner.calls if "--expected-image" in call.argv)
+        assert verify[verify.index("--policy-enabled") + 1] == "true"
+        assert f"openfga={image}" in verify
 
     def test_ingress_and_certificate_waits(self):
         addresses = iter([ProcessResult(0, ""), ProcessResult(0, "34.1.2.3")])
@@ -418,3 +514,16 @@ class TestSmoke:
         )
         with pytest.raises(ValueError):
             run_smoke(FakeRunner(), {}, user_email="s@example.com", run_id="r", variant="mac")
+
+
+@pytest.mark.parametrize("bad", ["not-json", "{}", '{"items":[{}]}', None])
+def test_adoption_validates_every_inventory_before_any_metadata_effect(bad):
+    documents = [
+        {"apiVersion": "v1", "kind": "ConfigMap", "metadata": {"name": "a", "namespace": "ns"}},
+        {"apiVersion": "apps/v1", "kind": "Deployment", "metadata": {"name": "b", "namespace": "ns"}},
+    ]
+    runner = FakeRunner().on(["kubectl", "get", "configmap"], ProcessResult(0, '{"items":[{"metadata":{"name":"a"}}]}'))
+    runner.on(["kubectl", "get", "deployment.apps"], ProcessResult(1) if bad is None else ProcessResult(0, bad))
+    with pytest.raises((GcpCommandError, HelmReleaseError)):
+        adopt_objects(runner, {}, documents)
+    assert all(call.argv[:2] == ["kubectl", "get"] for call in runner.calls)

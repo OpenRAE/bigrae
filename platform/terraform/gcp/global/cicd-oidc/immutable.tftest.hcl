@@ -1,4 +1,10 @@
-mock_provider "google" {}
+mock_provider "google" {
+  mock_data "google_storage_project_service_account" {
+    defaults = {
+      member = "serviceAccount:service-789@gs-project-accounts.iam.gserviceaccount.com"
+    }
+  }
+}
 
 variables {
   project_number               = "789"

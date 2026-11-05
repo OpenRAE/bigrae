@@ -58,6 +58,11 @@ class TestScriptStructureLint:
             path = SCRIPTS_DIR / "kali" / script
             assert path.exists(), f"Missing required script: {script}"
 
+    def test_aws_kali_conversion_purges_orphaned_debian_packages(self):
+        """The AWS conversion removes Debian leftovers after the guest environment reinstall (#2734)."""
+        script = (SCRIPTS_DIR / "aws" / "debian-to-kali.sh").read_text()
+        assert script.index("apt-get -y autoremove --purge") > script.index("systemctl enable ssh.service")
+
     def test_required_ubuntu_scripts(self):
         """Check all required Ubuntu scripts exist."""
         required = ["base.sh", "services.sh", "tools.sh", "claude-code.sh"]
@@ -300,6 +305,53 @@ class TestCleanup:
     def test_clear_ssh_keys(self, cleanup_content):
         """Cleanup should remove SSH host keys."""
         assert "ssh_host_" in cleanup_content
+
+    @pytest.mark.parametrize("stop_failure", [False, True])
+    def test_daemon_identity_is_removed_only_after_successful_stop(self, tmp_path, stop_failure):
+        """Execute cleanup against shims without touching the host filesystem."""
+        commands = tmp_path / "bin"
+        commands.mkdir()
+        log = tmp_path / "commands.jsonl"
+        shim = textwrap.dedent(
+            f"""\
+            #!{shutil.which("python3")}
+            import json, os, sys
+            from pathlib import Path
+            command = Path(sys.argv[0]).name
+            with open(os.environ['CLEANUP_TEST_LOG'], 'a') as handle:
+                handle.write(json.dumps([command, *sys.argv[1:]]) + '\\n')
+            if command == 'systemctl' and os.environ['CLEANUP_TEST_STOP_FAILURE'] == '1':
+                sys.exit(1)
+            """
+        )
+        for name in ("apt-get", "rm", "find", "journalctl", "systemctl", "dockerd"):
+            path = commands / name
+            path.write_text(shim)
+            path.chmod(0o700)
+        env = {
+            **os.environ,
+            "PATH": str(commands),
+            "CLEANUP_TEST_LOG": str(log),
+            "CLEANUP_TEST_STOP_FAILURE": str(int(stop_failure)),
+        }
+        result = subprocess.run(  # noqa: S603  # fixed repository script with all external commands shimmed
+            [shutil.which("bash"), str(SCRIPTS_DIR / "common" / "cleanup.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        calls = [json.loads(line) for line in log.read_text().splitlines()]
+        stop = ["systemctl", "stop", "docker.service", "docker.socket"]
+        clear = ["rm", "-f", "/var/lib/docker/engine-id", "/etc/docker/key.json"]
+        assert stop in calls
+        assert (result.returncode != 0) == stop_failure
+        if stop_failure:
+            assert clear not in calls
+        else:
+            assert clear in calls
+            assert calls.index(stop) < calls.index(clear)
+        assert not any(call[0] == "rm" and "/var/lib/docker" in call[1:] for call in calls)
 
 
 class TestUbuntuVpnGatewayRuntime:
@@ -1313,6 +1365,12 @@ class TestDcPrebaked:
         finalize = (PACKER_DIR / "scripts" / "dc-prebaked" / "finalize.ps1").read_text()
         assert "169.254.169.253" in finalize
         assert "Set-DnsServerForwarder" in finalize
+
+    def test_finalize_fails_closed_when_the_content_seed_survives_cleanup(self):
+        finalize = (PACKER_DIR / "scripts" / "dc-prebaked" / "finalize.ps1").read_text()
+        cleanup = finalize.index("Cleaning up build artifacts")
+        check = finalize.index('if (Test-Path "C:\\shifter-build\\content-seed.ps1") {', cleanup)
+        assert "still present before capture" in finalize[check:]
 
 
 class TestClaudeBinaryNeverBaked:

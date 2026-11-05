@@ -18,14 +18,12 @@ from ctf.enums import (
     ChallengeCategory,
     ChallengeDifficulty,
     EventStatus,
-    NotificationType,
     ParticipantStatus,
     ScheduledTaskStatus,
     ScheduledTaskType,
 )
 from ctf.models import (
     CTFChallenge,
-    CTFEmailTemplate,
     CTFEvent,
     CTFParticipant,
     CTFScheduledTask,
@@ -163,8 +161,17 @@ class TestCTFEventModel:
 
         assert "event_end" in exc_info.value.message_dict
 
-    def test_event_validation_team_mode_requires_size_limit(self):
-        """Test validation requires team_size_limit when team_mode is True."""
+    @pytest.mark.parametrize(
+        "team_size_limit",
+        [
+            pytest.param(None, id="none-unlimited"),
+            pytest.param(0, id="zero-unlimited"),
+            pytest.param(1, id="solo-minimum"),
+            pytest.param(50, id="large-no-upper-bound"),
+        ],
+    )
+    def test_event_validation_team_size_limit_accepts_ctf_505_values(self, team_size_limit):
+        """CTF-505 (#648): team mode accepts 1+, and 0 or None as unlimited."""
         now = timezone.now()
         event = CTFEvent(
             name="Team Event",
@@ -172,10 +179,18 @@ class TestCTFEventModel:
             event_start=now + timedelta(days=1),
             event_end=now + timedelta(days=1, hours=8),
             team_mode=True,
-            team_size_limit=None,
+            team_size_limit=team_size_limit,
         )
+        other_fields = [f.name for f in CTFEvent._meta.fields if f.name != "team_size_limit"]
+        event.clean_fields(exclude=other_fields)
+        event.clean()
+
+    def test_event_validation_team_size_limit_rejects_negative(self):
+        """A negative team size limit fails field validation."""
+        event = CTFEvent(team_mode=True, team_size_limit=-1)
+        other_fields = [f.name for f in CTFEvent._meta.fields if f.name != "team_size_limit"]
         with pytest.raises(ValidationError) as exc_info:
-            event.clean()
+            event.clean_fields(exclude=other_fields)
 
         assert "team_size_limit" in exc_info.value.message_dict
 
@@ -383,6 +398,8 @@ class TestCTFTeamModel:
         [
             pytest.param(4, 4, True, id="at-capacity"),
             pytest.param(4, 2, False, id="has-space"),
+            pytest.param(1, 1, True, id="solo-at-capacity"),
+            pytest.param(0, 50, False, id="zero-unlimited"),
         ],
     )
     def test_team_is_full(self, team_size_limit, member_count, expected):
@@ -625,38 +642,3 @@ class TestCTFScheduledTaskModel:
         assert task.status == ScheduledTaskStatus.FAILED.value
         assert task.error_message == "Connection timeout"
         assert task.executed_at is not None
-
-
-# -----------------------------------------------------------------------------
-# CTFEmailTemplate Model Tests
-# -----------------------------------------------------------------------------
-
-
-class TestCTFEmailTemplateModel:
-    """Tests for CTFEmailTemplate.clean() placeholder validation (issue #1095)."""
-
-    def test_clean_accepts_allowlisted_placeholders(self):
-        template = CTFEmailTemplate(
-            notification_type=NotificationType.INVITE.value,
-            html_body="<p>Hi {{ participant_name }}, join {{ event_name }}</p>",
-            text_body="Hi {{ participant_name }}",
-        )
-        template.clean()  # should not raise
-
-    def test_clean_rejects_template_tags(self):
-        template = CTFEmailTemplate(
-            notification_type=NotificationType.INVITE.value,
-            html_body="{% load i18n %}<p>{{ event_name }}</p>",
-            text_body="{{ event_name }}",
-        )
-        with pytest.raises(ValidationError):
-            template.clean()
-
-    def test_clean_rejects_attribute_traversal(self):
-        template = CTFEmailTemplate(
-            notification_type=NotificationType.INVITE.value,
-            html_body="<p>{{ event.created_by.password }}</p>",
-            text_body="hi",
-        )
-        with pytest.raises(ValidationError):
-            template.clean()

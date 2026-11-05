@@ -37,6 +37,42 @@ async function fillAssignment() {
 }
 
 describe("pack adapter assignments", () => {
+  it("requires a current organization file and saves its logical identity", async () => {
+    const withFiles = { ...adapter, manifest: { ...(adapter.manifest as object), required_files: ["parameters"] } };
+    mockApi.mockImplementation(async (url) => url === "/mission-control/files/"
+      ? { files: [{ id: 12, uuid: "file-uuid", name: "Synthetic parameters", file_size_bytes: 12,
+        original_filename: "parameters.json", created_at: "2026-11-03T00:00:00Z" }] }
+      : url.includes("?page=") ? { count: 1, next: null, previous: null, results: [pack] } : detail);
+    renderRoute(<AdapterPackBindings organization="org-1" adapters={[withFiles]} />);
+    await fillAssignment();
+    expect(screen.getByRole("button", { name: "Review assignment" })).toBeDisabled();
+    expect(await screen.findByRole("option", { name: "Synthetic parameters (12 bytes)" })).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText("File for parameters"), { target: { value: "file-uuid" } });
+    expect(screen.getByRole("link", { name: "Manage organization files" })).toHaveAttribute("href", "/mission-control/files/?organization=org-1");
+    fireEvent.click(screen.getByRole("button", { name: "Review assignment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save assignment" }));
+    await waitFor(() => expect(mockApi).toHaveBeenCalledWith(`${base}example/`, { method: "POST", body: {
+      installation_id: adapter.id, pack_digest: digest, enabled: true,
+      bindings: { targets: { server: "node.web" }, parameters: { mode: "training" }, image_profiles: {}, file_assets: { parameters: "file-uuid" } },
+    } }));
+  });
+
+  it("assigns a preparation-only adapter with no guest selectors", async () => {
+    const preparation = { ...adapter, manifest: { ...(adapter.manifest as object),
+      capabilities: ["provision.prepare"], provisioning_concerns: ["synthetic-values"],
+      required_bindings: [], required_parameters: [], model_bindings: {} } };
+    renderRoute(<AdapterPackBindings organization="org-1" adapters={[preparation]} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Configure Example pack" }));
+    fireEvent.change(await screen.findByLabelText("Installed adapter version"), { target: { value: adapter.id } });
+    expect(screen.queryByLabelText("Guest for server")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Review assignment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save assignment" }));
+    await waitFor(() => expect(mockApi).toHaveBeenCalledWith(`${base}example/`, { method: "POST", body: {
+      installation_id: adapter.id, pack_digest: digest, enabled: true,
+      bindings: { targets: {}, parameters: {}, image_profiles: {} },
+    } }));
+  });
+
   it("provides accessible guest selectors and confirms the exact pack version before saving", async () => {
     const { container } = renderRoute(<AdapterPackBindings organization="org-1" adapters={[adapter]} />);
     await fillAssignment();

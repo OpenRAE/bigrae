@@ -3,6 +3,12 @@
 Status: implementation design. This document does not claim the extraction or
 runtime support is complete.
 
+The [named file input design](named-file-assets-2719.md) extends this boundary
+with explicitly selected opaque file assets. It preserves native CMS scope,
+immutable upload custody, byte-free operation pins and worker isolation.
+File material must use the bounded read-only invocation channel; declaring an
+input does not grant credentials, provider permissions or network access.
+
 ## Current implementation boundary
 
 The working implementation contains the independently buildable SDK, bounded
@@ -76,7 +82,7 @@ before the IAM cutover.
 The SDK and external worker have been built and exercised independently with
 synthetic local conformance tests using a locally built SDK wheel. Worker image
 delivery and live cloud qualification remain outstanding. SDK distribution is
-tracked separately in [#2241](https://github.com/Brad-Edwards/shifter/issues/2241)
+tracked separately in [#2241](https://github.com/Brad-Edwards/bigrae/issues/2241)
 and does not block this qualification. An installation's `ready` status means its
 compatibility probe succeeded; it does not mean a pack is runnable or a range is
 ready. This branch is not a completed cutover.
@@ -264,3 +270,12 @@ Publication and live acceptance still need to establish the deployed isolation,
 tenant installation, participant access, model traffic and cleanup behavior.
 Both cloud qualification targets remain pending the user's choice of deployment
 and time.
+
+## Pre-provisioning selection
+
+The optional `provision.prepare` capability is implemented by the independent
+SDK and isolated runtime worker. Its response proposes scalar values under
+explicit provisioning concerns; the host enforces the complete original RAES
+authority and keeps accepted selections encrypted for the range lifetime.
+The worker receives declared files and parameters, never CMS or cloud access.
+See [the design and enforcement boundaries](adapter-pre-provisioning-2718.md).

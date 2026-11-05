@@ -58,3 +58,30 @@ def _copy_optional_text(
     value = str(source.get(source_key, ""))
     if value:
         target[target_key] = value
+
+
+def realized_management(apply_result: dict[str, object], targets: tuple[str, ...]) -> dict[str, dict[str, object]]:
+    """Project only the host access explicitly admitted by immutable input."""
+    from shared.range_management import validate_management_access
+
+    if not targets:
+        return {}
+    expected = {f"{target}#0" for target in targets}
+    result = {}
+    instances = apply_result.get("instances", [])
+    if not isinstance(instances, list) or any(not isinstance(item, dict) for item in instances):
+        raise RaesRealizationError("private management membership is invalid")
+    for instance in instances:
+        if instance.get("uuid") not in expected:
+            continue
+        if instance["uuid"] in result:
+            raise RaesRealizationError("private management target is duplicated")
+        result[instance["uuid"]] = {
+            "ssh_key_secret_ref": instance.get("gcp_host_ssh_key_secret_ref", ""),
+            "host_public_key": instance.get("gcp_host_public_key", ""),
+            "username": instance.get("gcp_host_ssh_username", ""),
+            "port": instance.get("gcp_host_ssh_port", 22),
+        }
+    if set(result) != expected:
+        raise RaesRealizationError("admitted private management targets are missing")
+    return validate_management_access(result)

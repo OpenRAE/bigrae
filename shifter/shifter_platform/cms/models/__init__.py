@@ -29,6 +29,8 @@ from cms.models.catalogs import (
     InstanceType,
     OperatingSystem,
 )
+from cms.models.experiment_batches import ExperimentBatch, ExperimentEntry
+from cms.models.files import FileAssetUse, NamedFileAsset
 from cms.models.lease_policy import (
     MissionControlGroupLeasePolicy,
     MissionControlGroupLeasePolicyRevision,
@@ -44,7 +46,9 @@ from cms.models.provisioning import (
     Subnet,
 )
 from cms.models.range import ACTIVE_RANGE_UNIQUE_CONSTRAINT, RangeInstance
+from cms.models.range_status_delivery import RangeStatusDelivery
 from cms.models.scenarios import RaesPackageSource, ScenarioMetadata, ScenarioModelNeeds
+from cms.models.trial_archives import TrialArchiveDestination, TrialArchiveReceipt, TrialArchiveTransfer
 from cms.models.uploads import AgentUpload, AgentUploadBudget
 
 __all__ = [
@@ -61,20 +65,28 @@ __all__ = [
     "CredentialBase",
     "CredentialType",
     "EntityBase",
+    "ExperimentBatch",
+    "ExperimentEntry",
     "FileAsset",
+    "FileAssetUse",
     "Instance",
     "InstanceType",
     "MissionControlGroupLeasePolicy",
     "MissionControlGroupLeasePolicyRevision",
     "MissionControlTenantLeasePolicy",
     "MissionControlTenantLeasePolicyRevision",
+    "NamedFileAsset",
     "OperatingSystem",
     "RaesPackageSource",
     "RangeInstance",
+    "RangeStatusDelivery",
     "Request",
     "ScenarioMetadata",
     "ScenarioModelNeeds",
     "Subnet",
     "TenantPackArchive",
     "TenantPackRemoval",
+    "TrialArchiveDestination",
+    "TrialArchiveReceipt",
+    "TrialArchiveTransfer",
 ]

@@ -1,6 +1,6 @@
 """In-app channel adapter (#2098).
 
-The in-app channel's durable record is the ``RecipientSnapshot`` / ``ParticipantReceipt``
+The in-app channel's durable record is the ``RecipientSnapshot`` / ``RecipientReceipt``
 committed at admission -- inbox availability never depends on this adapter. The
 adapter only publishes a reference-only WebSocket wake-up (an accelerator) keyed on
 the stable per-recipient snapshot identity, so a socket outage, reconnect, or worker
@@ -14,6 +14,7 @@ is an accepted no-op, not a failure.
 from __future__ import annotations
 
 import logging
+from uuid import UUID
 
 from ctf.enums_communication import CommunicationChannel
 
@@ -27,6 +28,11 @@ class InAppAdapter:
 
     channel = CommunicationChannel.IN_APP.value
 
+    @staticmethod
+    def available() -> bool:
+        """The durable inbox is always available; the wake-up is only an accelerator."""
+        return True
+
     def deliver(self, command: DeliveryCommand, *, timeout: float) -> DeliveryOutcome:
         """Publish a reference-only wake-up for one recipient snapshot.
 
@@ -39,13 +45,16 @@ class InAppAdapter:
         from ctf.services.notification.realtime import publish_communication_wakeup
 
         logger.debug("in-app %s wake-up for snapshot %s (timeout=%ss)", self.channel, command.snapshot_id, timeout)
-        if command.recipient_user_id is None:
-            # No account to wake; the durable inbox entry is the record of truth.
-            return DeliveryOutcome(OutcomeClass.ACCEPTED, reason="no_socket_recipient")
+        recipient_user_id = command.recipient_user_id
+        if recipient_user_id is None or _live_messages_off(command.event_id):
+            # No account to wake, or the event does not use live message wake-ups
+            # (ADR-072). The durable inbox entry stays available either way.
+            reason = "no_socket_recipient" if recipient_user_id is None else "live_disabled"
+            return DeliveryOutcome(OutcomeClass.ACCEPTED, reason=reason)
         try:
             published = publish_communication_wakeup(
                 event_id=command.event_id,
-                recipient_user_id=command.recipient_user_id,
+                recipient_user_id=recipient_user_id,
                 snapshot_id=command.snapshot_id,
                 references={
                     "snapshot_id": str(command.snapshot_id),
@@ -54,8 +63,17 @@ class InAppAdapter:
             )
         except Exception:
             # Bounded: a wake-up failure never affects durable availability.
-            logger.warning("in-app wake-up publish failed for snapshot %s", command.snapshot_id)
+            logger.exception("in-app wake-up publish failed for snapshot %s", command.snapshot_id)
             return DeliveryOutcome(OutcomeClass.RETRIABLE, reason="wakeup_publish_error")
         reason = "wakeup_published" if published else "wakeup_unavailable"
         outcome = OutcomeClass.ACCEPTED if published else OutcomeClass.RETRIABLE
         return DeliveryOutcome(outcome, reason=reason)
+
+
+def _live_messages_off(event_id: UUID) -> bool:
+    """Return True when the capability is on but the event does not select ``messages``."""
+    from ctf.enums import LiveNotificationKind
+    from ctf.services.notification.live import event_selects
+    from shared.notifications import notifications_enabled
+
+    return notifications_enabled() and not event_selects(event_id, LiveNotificationKind.MESSAGES)

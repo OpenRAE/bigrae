@@ -11,19 +11,18 @@ from __future__ import annotations
 from raes.artifact_requirements import (
     ArtifactCandidate,
     ArtifactConstraint,
-    ArtifactIdentity,
     ArtifactLockedInput,
-    ArtifactMechanismProfile,
     ArtifactRequirement,
     ArtifactSatisfactionRoute,
 )
-from raes.explicitness import ExplicitnessClass
 from raes_contracts.apparatus import ApparatusIdentity
+from raes_contracts.artifact_identity import ArtifactIdentity, ArtifactMechanismProfile
 from raes_contracts.contracts import (
     ArtifactAcquisitionTimingModel,
     ArtifactMechanismCapability,
     ArtifactRequirementAvailability,
 )
+from raes_contracts.explicitness import ExplicitnessClass
 
 from shared.raes.artifact_resolution import (
     ArtifactResolutionFailure,

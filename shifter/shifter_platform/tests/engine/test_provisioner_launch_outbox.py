@@ -10,6 +10,7 @@ argv, idempotent task identity, retry/DLQ, fencing) is provider-neutral.
 
 from __future__ import annotations
 
+import logging
 from datetime import timedelta
 from io import StringIO
 from types import SimpleNamespace
@@ -30,6 +31,7 @@ _WORKSPACE_ID = 1
 pytestmark = pytest.mark.django_db(databases=["default"])
 
 _JOBS_NAMESPACE = "shifter-jobs"
+_DRAIN_LOGGER = "engine.management.commands.drain_provisioner_launch_outbox"
 
 
 class _ApiException(Exception):
@@ -268,7 +270,7 @@ def test_missing_task_runner_configuration_retries_instead_of_acknowledging(sett
     assert row.attempts == 1
 
 
-def test_dlq_fails_only_the_current_range_operation(settings, k8s_boundary) -> None:
+def test_dlq_fails_only_the_current_range_operation(settings, k8s_boundary, caplog) -> None:
     from engine.launch_intents import PROVISIONER_DISPATCH_FAILED
     from engine.models import Range, RangeEventOutbox
 
@@ -278,7 +280,14 @@ def test_dlq_fails_only_the_current_range_operation(settings, k8s_boundary) -> N
     _configure_aws(settings)
     k8s_boundary.batch_api.create_namespaced_job.side_effect = RuntimeError("provider unavailable")
 
-    call_command("drain_provisioner_launch_outbox", stdout=StringIO())
+    with caplog.at_level(logging.WARNING, logger=_DRAIN_LOGGER):
+        call_command("drain_provisioner_launch_outbox", stdout=StringIO())
+
+    # An exhausted launch needs attention, so it is logged at ERROR with the type only.
+    drain_records = [record for record in caplog.records if record.name == _DRAIN_LOGGER]
+    assert [record.levelno for record in drain_records] == [logging.ERROR]
+    assert "moved to DLQ" in drain_records[0].getMessage()
+    assert "provider unavailable" not in drain_records[0].getMessage()
 
     row.refresh_from_db()
     range_row = Range.objects.get(request__request_id="11111111-1111-1111-1111-111111111111")
@@ -367,6 +376,22 @@ def test_reclaimed_lease_fences_stale_worker_result() -> None:
     current.refresh_from_db()
     assert current.status == ProvisionerLaunchStatus.SUCCEEDED
     assert current.attempts == 0
+
+
+def test_reclaimed_lease_fences_stale_worker_before_dispatch(settings, k8s_boundary) -> None:
+    """A reclaimed lease must block the provider effect, not only its result write."""
+    from engine.management.commands.drain_provisioner_launch_outbox import Command
+
+    _intent()
+    _configure_aws(settings)
+    claimed = Command._claim_next()
+    assert claimed is not None
+    type(claimed).objects.filter(pk=claimed.pk).update(next_attempt_at=claimed.next_attempt_at + timedelta(minutes=5))
+    k8s_boundary.batch_api.create_namespaced_job.return_value = _job("synthetic-stale-lease")
+
+    Command()._launch(claimed)
+
+    k8s_boundary.batch_api.create_namespaced_job.assert_not_called()
 
 
 def test_drainer_rejects_forged_intent_without_authorized_domain_state(settings, k8s_boundary) -> None:

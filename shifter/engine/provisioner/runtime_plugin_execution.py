@@ -6,11 +6,12 @@ import base64
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import Any
 from uuid import UUID
 
 from shared.raes.participant_access import ParticipantAccessBinding
 from shared.runtime_plugin_binding import runtime_plugin_requests
+from shared.runtime_plugin_preparation import RuntimePreparation
 from shifter_adapter_sdk.guest import RUNTIME_VALUES_ENV
 from shifter_adapter_sdk.runtime import GuestAction, GuestTarget, RuntimeInput, RuntimePlan
 
@@ -18,6 +19,7 @@ from executors.factory import build_guest_execution_context
 from provisioner_db import get_db_connection
 from provisioner_db_operation_input import RaesOperationRun
 from raes_plan import RaesPlan
+from runtime_plugin_preparation import approved_plan, prepared_run
 from runtime_plugin_values import resolve_runtime_values
 
 logger = logging.getLogger(__name__)
@@ -40,16 +42,18 @@ class GuestPluginPlans:
 
     requests: tuple[RuntimeInput, ...]
     plans: tuple[RuntimePlan, ...]
+    preparation: RuntimePlan | None = None
+    preparation_snapshot: RuntimePreparation | None = None
 
     def execute(self, _raes_plan: RaesPlan, instances: list[dict[str, Any]]) -> None:
         """Run configure then verify inside apply's existing cleanup boundary."""
         try:
             _execute(self, instances)
-        except Exception:
+        except Exception:  # noqa: BLE001  # value-free boundary: plugin scripts and runtime values stay out
             raise RuntimePluginExecutionError("Runtime plugin guest execution failed") from None
 
 
-def _read_plan(request: RuntimeInput) -> RuntimePlan | None:
+def _read_response(request: RuntimeInput) -> object | None:
     # A transport projection only: no plugin registry or Engine domain reads.
     """Read only a digest-matched authorized planning result from the transport projection."""
     with get_db_connection() as conn, conn.cursor() as cursor:
@@ -63,11 +67,24 @@ def _read_plan(request: RuntimeInput) -> RuntimePlan | None:
         raise RuntimePluginExecutionError("Runtime plugin planning is unavailable")
     if row[0] == "pending":
         return None
-    result = RuntimePlan.model_validate(row[2])
+    if row[2] is None:
+        raise RuntimePluginExecutionError("Runtime plugin planning is unavailable")
+    return row[2]
+
+
+def _read_plan(request: RuntimeInput, run: RaesOperationRun) -> tuple[RuntimePlan, RuntimePreparation | None] | None:
+    """Read a sealed preparation or a legacy guest plan from the same projection."""
+    response = _read_response(request)
+    if response is None:
+        return None
+    if request.phase == "prepare":
+        result = approved_plan(run, response)
+        return result, RuntimePreparation.model_validate(response)
+    result = RuntimePlan.model_validate(response)
     result.authorize(request)
     if result.status != "planned":
         raise RuntimePluginExecutionError("Runtime plugin planning failed")
-    return result
+    return result, None
 
 
 def load_guest_plugin_plans(run: RaesOperationRun) -> GuestPluginPlans | None:
@@ -87,15 +104,42 @@ def load_guest_plugin_plans(run: RaesOperationRun) -> GuestPluginPlans | None:
         )
         deadline = time.monotonic() + 600
         while time.monotonic() < deadline:
-            plans = tuple(_read_plan(request) for request in requests)
+            plans = tuple(_read_plan(request, run) for request in requests)
             if all(plan is not None for plan in plans):
-                complete = cast(tuple[RuntimePlan, ...], plans)
-                _validate_value_requirements(requests, complete, parsed.access_bindings)
-                return GuestPluginPlans(requests, complete)
+                return _complete_bundle(requests, plans, parsed.access_bindings)
             time.sleep(2)
-    except Exception:
+    except Exception:  # noqa: BLE001  # value-free boundary: plugin plans and runtime values stay out
         raise RuntimePluginExecutionError("Runtime plugin planning failed") from None
     raise RuntimePluginExecutionError("Runtime plugin planning timed out")
+
+
+def load_prepared_plugin_run(run: RaesOperationRun) -> tuple[RaesOperationRun, GuestPluginPlans | None]:
+    """Open the preparation barrier only after the complete authorized phase set."""
+    bundle = load_guest_plugin_plans(run)
+    return prepared_run(
+        run,
+        bundle.preparation if bundle is not None else None,
+        bundle.preparation_snapshot if bundle is not None else None,
+    ), bundle
+
+
+def _complete_bundle(
+    requests: tuple[RuntimeInput, ...],
+    plans: tuple[tuple[RuntimePlan, RuntimePreparation | None] | None, ...],
+    access_bindings: tuple[ParticipantAccessBinding, ...],
+) -> GuestPluginPlans:
+    """Keep preparation out of the guest action set and verify all access needs."""
+    guests = tuple(
+        (request, response[0])
+        for request, response in zip(requests, plans, strict=True)
+        if request.phase != "prepare" and response is not None
+    )
+    guest_requests = tuple(item[0] for item in guests)
+    guest_plans = tuple(item[1] for item in guests)
+    prepared = next((response for response in plans if response is not None and response[0].phase == "prepare"), None)
+    preparation, snapshot = prepared if prepared is not None else (None, None)
+    _validate_value_requirements(guest_requests, guest_plans, access_bindings)
+    return GuestPluginPlans(guest_requests, guest_plans, preparation, snapshot)
 
 
 def _validate_value_requirements(
@@ -132,6 +176,8 @@ def _quiet_script(script: str, os_family: str, values_b64: str) -> str:
 
 def _execute(bundle: GuestPluginPlans, instances: list[dict[str, Any]]) -> None:
     """Resolve all runtime values before executing bounded guest actions."""
+    if not bundle.requests and not bundle.plans:
+        return
     outputs = {instance["uuid"]: instance for instance in instances}
     if len(outputs) != len(instances) or len(bundle.requests) != 3 or len(bundle.plans) != 3:
         raise ValueError("Invalid plugin guest coverage")

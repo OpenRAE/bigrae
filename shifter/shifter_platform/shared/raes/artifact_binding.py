@@ -22,7 +22,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
-from .image_policy import validate_management_ssh_port, validate_management_ssh_username
+from .image_policy import validate_management_ssh_port, validate_management_ssh_username, validate_provider_image_id
 
 __all__ = ["MAX_ARTIFACT_BINDINGS", "ArtifactBinding", "ArtifactBindingError"]
 
@@ -168,11 +168,10 @@ class ArtifactBinding:
 
 def _provider_image_id(value: object) -> str:
     """Legacy inventory has no provider ID; a supplied immutable ID must be valid."""
-    if value == "":
-        return ""
-    if not isinstance(value, str) or not re.fullmatch(r"[1-9]\d{0,19}", value):
-        raise ArtifactBindingError("artifact image_id must be an immutable GCE numeric identity")
-    return value
+    try:
+        return validate_provider_image_id(value)
+    except ValueError:
+        raise ArtifactBindingError("artifact image_id must be an immutable GCE numeric identity") from None
 
 
 def _require_str(raw: Mapping[str, Any], field: str) -> str:

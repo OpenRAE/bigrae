@@ -10,6 +10,7 @@ fixtures come from the shared ``make_pack`` factory (see ``tests/cms/conftest``)
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -145,3 +146,98 @@ class TestPackValidationCompatibilityManifest:
         root = _pack_with_compatibility(make_pack, tmp_path / "pack", manifest_rel="../outside.yaml", write=False)
         errors = check_pack(root)
         assert "compatibility.pointer.invalid: pack.yaml:compatibility_manifest" in errors
+
+
+_MODULE_SDL = """\
+name: web-module
+module:
+  id: fixtures/web
+  version: 0.1.0
+  exports:
+    nodes: [web]
+nodes:
+  web:
+    type: compute
+"""
+
+_MODULAR_ROOT_SDL = """\
+name: __PACK_NAME__
+imports:
+  - source: {source}
+    namespace: app
+    version: 0.1.0{digest}
+nodes:
+  lan:
+    type: switch
+"""
+
+
+class TestPackValidationModuleImports:
+    """A pack-local import is admitted only when digest-pinned and locked (#2714)."""
+
+    def _modular_pack(
+        self, make_pack, root: Path, *, source: str = "local:modules/web.sdl.yaml", pin: bool = True
+    ) -> Path:
+        from raes.module_registry.resolution import resolve_lock_records
+
+        from tests.cms.conftest import write_pack_content_manifest
+
+        root = make_pack(root, sdl=_MODULAR_ROOT_SDL.format(source=source, digest=""))
+        sdl_path = root / "sdl" / "scenario.sdl.yaml"
+        (root / "sdl" / "modules").mkdir()
+        (root / "sdl" / "modules" / "web.sdl.yaml").write_text(_MODULE_SDL, encoding="utf-8")
+        if pin:
+            lock = resolve_lock_records(sdl_path)
+            (root / "sdl" / "raes.lock.json").write_text(lock.model_dump_json(), encoding="utf-8")
+            digest = f"\n    digest: {lock.imports[0].content_digest}"
+            sdl_path.write_text(
+                _MODULAR_ROOT_SDL.format(source=source, digest=digest).replace("__PACK_NAME__", root.name),
+                encoding="utf-8",
+            )
+        write_pack_content_manifest(root, root.name)
+        return root
+
+    def test_pinned_local_import_is_admitted_and_loads(self, make_pack, tmp_path):
+        from shared.raes.package_loader import load_pack_scenario
+
+        root = self._modular_pack(make_pack, tmp_path / "pack")
+        assert check_pack(root) == []
+        assert set(load_pack_scenario(root).nodes) == {"lan", "app.web"}
+
+    def test_unpinned_local_import_is_refused(self, make_pack, tmp_path):
+        root = self._modular_pack(make_pack, tmp_path / "pack", pin=False)
+        assert any(error.startswith("sdl.imports-denied") for error in check_pack(root))
+
+    @pytest.mark.parametrize(
+        "corruption",
+        ["missing-lock", "stale-lock", "tampered-lock", "missing-pin", "tampered-pin", "tampered-module"],
+    )
+    def test_local_import_integrity_failures_are_refused(self, make_pack, tmp_path, corruption):
+        root = self._modular_pack(make_pack, tmp_path / "pack")
+        lock_path = root / "sdl" / "raes.lock.json"
+        sdl_path = root / "sdl" / "scenario.sdl.yaml"
+        if corruption == "missing-lock":
+            lock_path.unlink()
+        elif corruption in {"stale-lock", "tampered-lock"}:
+            lock = json.loads(lock_path.read_text(encoding="utf-8"))
+            field = "module_version" if corruption == "stale-lock" else "content_digest"
+            lock["imports"][0][field] = "0.2.0" if corruption == "stale-lock" else "sha256:" + "0" * 64
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+        elif corruption in {"missing-pin", "tampered-pin"}:
+            document = yaml.safe_load(sdl_path.read_text(encoding="utf-8"))
+            if corruption == "missing-pin":
+                document["imports"][0].pop("digest")
+            else:
+                document["imports"][0]["digest"] = "sha256:" + "f" * 64
+            sdl_path.write_text(yaml.safe_dump(document), encoding="utf-8")
+        else:
+            module = root / "sdl" / "modules" / "web.sdl.yaml"
+            module.write_text(_MODULE_SDL + "\n# changed bytes\n", encoding="utf-8")
+
+        assert any(error.startswith("sdl.imports-denied") for error in check_pack(root))
+        with pytest.raises(PackValidationError, match=r"sdl\.imports-denied"):
+            validate_pack(root)
+
+    def test_registry_import_is_refused(self, make_pack, tmp_path):
+        root = self._modular_pack(make_pack, tmp_path / "pack", source="oci:example.invalid/web:0.1.0", pin=False)
+        assert any(error.startswith("sdl.imports-denied") for error in check_pack(root))

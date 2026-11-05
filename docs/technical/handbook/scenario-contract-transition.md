@@ -7,22 +7,34 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==3.5.0` and `raes-env-packs==5.2.0` in its
-[package manifest](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/pyproject.toml)
+`raes==10.7.2` and `raes-env-packs==7.2.2` in its
+[package manifest](../../../shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
 parser added for #2090, do not change these pins.
 
-The 2026-10-25 repository-wide dependency security refresh changed supporting
-framework and tool dependencies only. It did not change the RAES package pins,
-serialized plan versions, ownership boundary or migration contract described
-here. The 2026-10-28 CI change (#2582) added the `pytest-split` test dependency
-and raised the `autobahn` floor for CVE-2026-116579. It also did not change them.
+Repository-wide maintenance can change this manifest without a change to the
+scenario contract. The 2026-10-25 dependency security refresh changed only
+supporting framework and tool dependencies. The 2026-10-28 logging and
+exception-handling cleanup (#2569) changed only the Ruff lint rules. The
+2026-10-28 CI change (#2582) added the `pytest-split` test dependency and raised
+the `autobahn` floor for CVE-2026-116579. These changes did not alter the RAES
+package pins, the serialized plan versions, the ownership boundary, or the
+migration contract on this page.
+
+The 2026-10-28 WebSocket security update requires Autobahn 26.10.1 and its
+CPython `cbor2` dependency update. It changes transport dependencies only; the
+RAES pins, serialized plans, authoring contract and cleanup reader remain the
+same. The related Node adapter lock updates affect the MCP HTTP transport.
+
+The 2026-10-31 dependency security update (#2696) raised the `pyasn1` floor to
+0.6.5. It did not change the RAES package pins, the serialized plan versions,
+the ownership boundary, or the migration contract.
 
 Only `shared.raes` imports the released RAES module family. It validates and
 compiles authored intent into the RAES ProvisioningPlan. The independent
 provisioner validates and reads plain serialized data, not a second authored
-schema. New realization accepts `raes-provisioning-plan-v2` with producer `3.5.0`.
+schema. New realization accepts `raes-provisioning-plan-v2` with producer `10.7.2`.
 Images, cloud resources, secrets and backend realization remain BigRAE-owned.
 
 ## Transition history
@@ -39,8 +51,9 @@ bytes as a new producer is not migration. Retired source/sidecar records are
 removed by cutover migrations; terminal opaque historical envelopes remain
 factual and inert.
 
-Cleanup alone has a narrowly versioned reader for the previous exact
-`raes-provisioning-plan-v1` / `2.0.0` pair. This preserves cleanup identities
+Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `10.6.0`,
+`v2` / `10.2.0` and `v2` / `3.5.0` pairs through the current wire checks. It also accepts the exact
+`raes-provisioning-plan-v1` / `2.0.0` pair through its isolated cleanup view. This preserves cleanup identities
 without allowing old producers for new realization. It does not revive the
 retired CyberScript or ACES path.
 
@@ -49,10 +62,21 @@ retired CyberScript or ACES path.
 The target stays one released RAES contract, with backend capabilities advertised
 only when their admitted shapes have real guest effects and readback evidence.
 The current
-[backend manifest](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/shared/raes/backend-manifest.json)
+[backend manifest](../../../shifter/shifter_platform/shared/raes/backend-manifest.json)
 and realization envelope bound claims. Parsing a field, retaining a projection,
 or passing unit conformance is not proof of live scenario support. Private packs
 and executable adapters remain separately owned and authorized.
+
+The registered-project implementation (#2716) adds constrained identity-authority
+and platform-application support, with configuration readback from the provider.
+The published manifest matches that capability builder; synthetic native plans
+must produce nonempty account, policy, audit and secret work behind those claims.
+Unsupported shapes are rejected before effects. RAE 10.7.2 includes the owning
+fixes for large-authority admission and scalar-only delegation
+([RAE #1885](https://github.com/OpenRAE/rae/issues/1885) and
+[RAE #1886](https://github.com/OpenRAE/rae/issues/1886)). Preparation uses the
+same published finite plan-authority profile; live scenario qualification
+remains outstanding.
 
 Package upgrades require coordinated producer/consumer pins, serialized-plan
 parity, genuine guest-effect verification and cleanup compatibility. Do not
@@ -69,3 +93,21 @@ The [hard-cut decision](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/arc
 and [ADR registry](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/adr/index.yaml)
 retain the detailed migration and realization constraints. Earlier preflights
 are historical records and do not override them.
+
+
+## Dependency release transition
+
+The RAES 10.6.0 / env-packs 7.2.2 update adds parser contracts for scope-owned
+audit logs and provider-qualified secret replication. Parser acceptance does
+not add a backend capability. Unsupported effects still fail before dispatch.
+
+The 10.7.2 update admits bounded full-size authorities and preserves scalar-only
+delegation. Runtime and Packer dependencies, the worker producer gate and the
+retained dependency tuple move together. RAE requires `rpds-py==2026.9.1` in
+this release; no unrelated dependency versions change.
+
+Before a future deployment, drain old provision/activate work and settle its
+pending completion results. The completion validator also requires the installed
+producer version. Preserve original plans; never relabel or replay them as the
+new version. Retained ranges keep their cleanup-only reader. Deployment and
+live tenant qualification require explicit user approval.

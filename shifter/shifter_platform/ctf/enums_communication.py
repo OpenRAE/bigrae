@@ -32,6 +32,35 @@ class CommunicationOrigin(StrEnum):
         return [(o.value, o.name.replace("_", " ").title()) for o in cls]
 
 
+class NoticeKind(StrEnum):
+    """Which trusted email presentation a campaign uses (#580).
+
+    Organizer-authored campaigns are always ``ANNOUNCEMENT``. Only trusted
+    lifecycle notices select another kind; ``ORGANIZER_ALERT`` is reserved for
+    organizer alerts (ADR-065-R4). Each kind selects one server-owned
+    template pair under ``ctf/email/notice/``; the kind never grants authority.
+    """
+
+    ANNOUNCEMENT = "announcement"
+    REMINDER = "reminder"
+    CLEANUP = "cleanup"
+    RESULTS = "results"
+    RANGE_READY = "range_ready"
+    RANGE_FAILURE = "range_failure"
+    ORGANIZER_ALERT = "organizer_alert"
+    REGISTRATION = "registration"
+    CANCELLATION = "cancellation"
+
+    def __str__(self) -> str:
+        """Return the string value for database storage."""
+        return self.value
+
+    @classmethod
+    def choices(cls) -> list[tuple[str, str]]:
+        """Return choices for Django model field."""
+        return [(k.value, k.name.replace("_", " ").title()) for k in cls]
+
+
 class CommunicationChannel(StrEnum):
     """Selectable delivery channels for a communication (ADR-051, #2048).
 
@@ -98,6 +127,27 @@ class AudienceKind(StrEnum):
     def choices(cls) -> list[tuple[str, str]]:
         """Return choices for Django model field."""
         return [(k.value, k.name.replace("_", " ").title()) for k in cls]
+
+
+class RecipientKind(StrEnum):
+    """Closed recipient-snapshot kinds (ADR-051, ADR-065-R4).
+
+    A participant row carries an immutable event-scoped participant identity. An
+    organizer row carries the principal identity of a current owner or
+    co-organizer and never a participant identity.
+    """
+
+    PARTICIPANT = "participant"
+    ORGANIZER = "organizer"
+
+    def __str__(self) -> str:
+        """Return the string value for database storage."""
+        return self.value
+
+    @classmethod
+    def choices(cls) -> list[tuple[str, str]]:
+        """Return choices for Django model field."""
+        return [(k.value, k.name.title()) for k in cls]
 
 
 class TriggerKind(StrEnum):
@@ -178,6 +228,35 @@ class IntentStatus(StrEnum):
         return [(s.value, s.name.title()) for s in cls]
 
 
+class IntentDeliveryState(StrEnum):
+    """Persisted aggregate delivery outcome of one occurrence (ADR-071, #1525).
+
+    Separate from ``IntentStatus`` (release lifecycle). It is derived from
+    committed per-recipient rows: in-app success is the committed inbox receipt,
+    and a transport channel uses its ``DeliveryAttempt`` status. ACCEPTED means
+    every recipient channel was accepted by its transport, never read. PARTIAL,
+    FAILED, and WITHDRAWN keep partial failure, terminal failure, and
+    cancellation/suppression distinct; EMPTY is a release with no recipients.
+    """
+
+    NOT_RELEASED = "not_released"
+    PENDING = "pending"
+    ACCEPTED = "accepted"
+    PARTIAL = "partial"
+    FAILED = "failed"
+    WITHDRAWN = "withdrawn"
+    EMPTY = "empty"
+
+    def __str__(self) -> str:
+        """Return the string value for database storage."""
+        return self.value
+
+    @classmethod
+    def choices(cls) -> list[tuple[str, str]]:
+        """Return choices for Django model field."""
+        return [(s.value, s.name.replace("_", " ").title()) for s in cls]
+
+
 class DeliveryStatus(StrEnum):
     """Truthful, transport-specific delivery-attempt status (ADR-051, #2048; engine #2098).
 
@@ -212,3 +291,33 @@ class DeliveryStatus(StrEnum):
     def choices(cls) -> list[tuple[str, str]]:
         """Return choices for Django model field."""
         return [(s.value, s.name.replace("_", " ").title()) for s in cls]
+
+
+class ReceiptAction(StrEnum):
+    """Closed participant receipt actions (ADR-051-R13, #2053).
+
+    Each action sets one independent first-write timestamp on the recipient's
+    receipt. No action implies, clears, or changes another.
+    """
+
+    READ = "read"
+    DISMISS = "dismiss"
+    ACKNOWLEDGE = "acknowledge"
+
+    @property
+    def receipt_field(self) -> str:
+        """Return the ``RecipientReceipt`` timestamp this action sets."""
+        return {"read": "read_at", "dismiss": "dismissed_at", "acknowledge": "acknowledged_at"}[self.value]
+
+
+class InboxFilter(StrEnum):
+    """Closed participant inbox selections (ADR-051-R13, #2053).
+
+    INBOX hides a dismissed message only when its pinned policy has no open
+    obligation; ACTION_REQUIRED lists open obligations; DISMISSED lists dismissed
+    messages.
+    """
+
+    INBOX = "inbox"
+    ACTION_REQUIRED = "action_required"
+    DISMISSED = "dismissed"

@@ -51,15 +51,24 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2320: dedicated Guacamole/guacd KSAs and bounded native SQL admission.
 # Regenerated for #2520: tenant pack removal reconciler on the portal identity.
 # Regenerated for #2319 integration: reuse the dedicated gateway KSA with authority renewal configuration.
+# Regenerated for #2321: retain pinned native policy in every Python runtime.
 # Regenerated for #2555: admit one matching BigRAE or legacy plugin Secret key.
 # Regenerated for #2571: the chart is the only GCP renderer. Worker readiness
 # probes now match the retired Kustomize base, stale comments are removed, and
 # the two registered Checkov exceptions annotate their chart Deployments. The
 # portal-to-Guacamole token API policies moved from the retired base to the chart.
 # Regenerated for #2090: CTF content egress proxy, its runtime env binding and identity-free egress.
+# Regenerated for #2321 integration: retain native policy/PDB delivery and catalog
+# initialization alongside the credential-less CTF image egress proxy.
+# Regenerated for #2622/#2633 integration: compile the provisioner policy and
+# inline the shared platform-runtime map without losing native runtime contracts.
+# Regenerated for #665: add the notification-prune CronJob (ADR-072-R5); no other change.
+# Regenerated for #2719: only the plugin file-input admission policy and Secret object quota change.
+# Regenerated for #2718: optional sealed result key in the same invocation Secret; only plugin admission changes.
+# Regenerated for #2716: generation-bound registered-project capture/verification; only provisioner admission changes.
 GCP_RENDER_SHA256 = {
-    "gcp-dev": "603adf8e8ff68f168041fa305ae61b519035c3612ce3f41fc7b5f64f903a78f8",
-    "gcp-prod": "cc25c36465208cd48da2ae3830ee07f8285b1273e383b6fd48caf842d6a6c4bf",
+    "gcp-prod": "0528a8c4bec27346e40b961ea74fe9b533100ebdcbac54314aa8fd4acccf741b",
+    "gcp-dev": "3defac47c89fdd6aa1eda621f27b87193892a4907b8d1dea4b958deb3bd68af9",
 }
 
 
@@ -101,7 +110,8 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         accounts = [doc for doc in documents if _identity(doc) == ("ServiceAccount", "guacamole-client")]
         self.assertEqual(len(accounts), 1)
         env = {value["name"]: value for value in pod["containers"][0]["env"]}
-        for name in ("OPENFGA_ENABLED", "GUACAMOLE_CONTROL_URL", "GUACAMOLE_CONTROL_AUDIENCE"):
+        self.assertEqual(env["OPENFGA_ENABLED"]["value"], "true")
+        for name in ("GUACAMOLE_CONTROL_URL", "GUACAMOLE_CONTROL_AUDIENCE"):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
             self.assertEqual(ref["name"], "platform-runtime")
             self.assertEqual(ref["key"], name)
@@ -154,6 +164,12 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         rendered = _helm(
             "template", "contract-test", str(CHART_DIR), "-f", str(VALUES_FILES["aws-dev"]),
             "--set", "runtimePluginPool.labeler.enabled=true",
+            "--set", "openfga.enabled=true",
+            "--set", "openfga.storeId=01J00000000000000000000001",
+            "--set", "openfga.modelId=01J00000000000000000000000",
+            "--set", "openfga.databaseCidrs={10.60.0.12/32}",
+            "--set", "openfga.runtimeDatabaseUser=synthetic_runtime",
+            "--set", "openfga.adminDatabaseUser=synthetic_admin",
             "--set", f"runtimePluginPool.labeler.nodeGroupAsg={node_group}",
             "--set", f"identity.serviceAccountRoleArns.nodePoolLabeler={labeler_role}",
             "--set", "runtimeEnv.AWS_REGION=us-east-2",
@@ -173,6 +189,9 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         container = docs[("Deployment", "node-pool-labeler")]["spec"]["template"]["spec"]["containers"][0]
         self.assertEqual(container["command"], ["python", "-m", "shared.cloud.eks_node_pool_labeler"])
         self.assertIn({"name": "RUNTIME_PLUGIN_NODE_GROUP_ASG", "value": node_group}, container["env"])
+        pod = docs[("Deployment", "node-pool-labeler")]["spec"]["template"]["spec"]
+        self.assertEqual({volume["name"] for volume in pod["volumes"]}, {"tmp"})
+        self.assertEqual({volume["name"] for volume in container["volumeMounts"]}, {"tmp"})
         self.assertIn(("NetworkPolicy", "allow-node-pool-labeler-kubernetes-api-egress"), docs)
         # GKE applies the pool label itself; the labeler never renders there.
         _, gcp = _render(VALUES_FILES["gcp-dev"])
@@ -312,6 +331,9 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         self.assertIn(("PodDisruptionBudget", "guacd"), by_identity)
         self.assertEqual(by_identity[("BackendConfig", "portal-web")]["spec"]["timeoutSec"], 3600)
         self.assertEqual(by_identity[("BackendConfig", "guacamole-client")]["spec"]["timeoutSec"], 3600)
+        # The Guacamole backend checks the served application path, not the default "/" (#2692).
+        guacamole_check = by_identity[("BackendConfig", "guacamole-client")]["spec"]["healthCheck"]
+        self.assertEqual((guacamole_check["requestPath"], guacamole_check["port"]), ("/guacamole/", 8080))
 
     def test_aws_generated_projection_wires_edge_identity_and_secret_references(self) -> None:
         digest = "a" * 64

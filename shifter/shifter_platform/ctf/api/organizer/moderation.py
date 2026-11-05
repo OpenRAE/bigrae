@@ -21,7 +21,7 @@ from ctf.api.organizer._audit import (
 )
 from ctf.api.organizer._base import (
     _EVENT_WRITE,
-    _actor,
+    _credential,
     _participant_detail_payload,
     _raise_bad_request,
     _raise_conflict,
@@ -73,9 +73,9 @@ class _ModerationActionView(APIView):
                 try:
                     participant = action(body)
                 except CTFStateError as exc:
-                    _raise_conflict(str(exc))
+                    _raise_conflict(exc.message)
                 except CTFValidationError as exc:
-                    _raise_bad_request(str(exc))
+                    _raise_bad_request(exc.message)
                 _audit_admin_from_request(request, "participant.moderate")
             return Response(_participant_detail_payload(participant))
         except _CtfApiError as exc:
@@ -171,5 +171,5 @@ class ParticipantUsernameView(_ModerationActionView):
         return self._run(
             request,
             participant_id,
-            lambda body: rename_participant_username(participant_id, body["username"], actor=_actor(request)),
+            lambda body: rename_participant_username(participant_id, body["username"], actor=_credential(request)),
         )

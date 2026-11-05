@@ -23,6 +23,7 @@ import pytest
 
 import deploy
 import gcp_control_plane
+from tests.gcp_test_support import native_identity_value, native_workload_accounts
 
 PINNED_IMAGE_TAG = "abc1234"
 
@@ -137,8 +138,11 @@ def _sample_gcp_control_plane_outputs(project_id: str = "example-gcp-project") -
                 # localpart is shortened to prov-launcher (#1719).
                 "provisioner-launcher": (f"shiftergcpdev-prov-launcher@{project_id}.iam.gserviceaccount.com"),
                 "provisioner": f"shiftergcpdev-provisioner@{project_id}.iam.gserviceaccount.com",
+                **native_workload_accounts(project_id),
             }
         },
+        # The current release requires native SQL and OpenFGA (#2679).
+        "native_identity": {"value": native_identity_value(project_id)},
     }
 
 
@@ -505,24 +509,25 @@ class TestGdcControlPlaneHelmValues:
 
         prerequisites, job = deploy.render_gcp_migration_manifests(outputs, values)
 
-        service_account, runtime_config = prerequisites["items"]
+        service_account, runtime_config, *_native_egress = prerequisites["items"]
         assert service_account["metadata"]["name"] == "migrator"
         assert (
             service_account["metadata"]["annotations"]["iam.gke.io/gcp-service-account"]
             == outputs["workload_service_accounts"]["value"]["migrator"]
         )
-        assert runtime_config["data"]["DB_SECRET_ID"].endswith("-db")
+        # The migrator owns the schema through its owner secret; the native runtime
+        # login of the other workloads has no password secret (#2679).
         assert runtime_config["data"]["DB_MIGRATION_SECRET_ID"].endswith("-db-migration")
         pod = job["spec"]["template"]["spec"]
         assert pod["serviceAccountName"] == "migrator"
         container = pod["containers"][0]
-        # Entrypoint migrates first; then register the shipped catalog and base
-        # image mappings through the same idempotent commands used by deploy.
+        # Catalog publication requires native bearer proof after activation;
+        # the database-only migration Job cannot register content.
         assert container["args"] == [
             "/bin/sh",
             "-c",
             "python manage.py reconcile_gcp_database_duties"
-            " && python manage.py bootstrap_inbox_catalog && python manage.py seed_raes_image_registry"
+            " && python manage.py seed_raes_image_registry"
             " && python manage.py acquire_feature_artifacts",
         ]
         db_secret = next(item for item in container["env"] if item["name"] == "DB_SECRET_ID")
@@ -1154,8 +1159,8 @@ class TestGcpPlatformCoreContracts:
         assert '"roles/pubsub.publisher"' in workers_section
         assert '"roles/pubsub.subscriber"' in workers_section
 
-    def test_portal_has_only_directory_lifecycle_read_permission(self):
-        """Lifecycle rechecks use the exact native permission and only the portal GSA."""
+    def test_only_session_recheck_identities_have_directory_lifecycle_read_permission(self):
+        """Lifecycle rechecks use the exact native permission and only the recheck GSAs (#2313)."""
         module_path = (
             Path(__file__).resolve().parents[3]
             / "platform"
@@ -1172,7 +1177,8 @@ class TestGcpPlatformCoreContracts:
         assert '"roles/firebaseauth.viewer"' not in portal_section
         native = (module_path.parent / "native_identity.tf").read_text()
         assert 'permissions = ["firebaseauth.users.get"]' in native
-        assert 'member  = "serviceAccount:${google_service_account.workload["portal"].email}"' in native
+        assert 'for_each = toset(["portal", "workers", "ctf-scheduler", "provisioner-launcher"])' in native
+        assert 'member  = "serviceAccount:${google_service_account.workload[each.key].email}"' in native
 
     def test_identity_platform_self_signup_is_allowed_and_guarded_by_before_create_trigger(self):
         """GCP corporate registration must stay open to eligible users and be gated by a blocking function."""
@@ -1554,7 +1560,7 @@ class TestGdcBootstrapRangeBackend:
                 config, confirmation=lambda _p: True, substrate_builder=mock_substrate
             )
         mock_substrate.assert_not_called()
-        assert "gcp-deploy" in capsys.readouterr().out
+        assert "gcp-deploy" in capsys.readouterr().err
 
     def test_gdc_backend_builds_only_the_substrate(self):
         """The gdc backend builds the substrate (including the vm-image secret) and nothing else."""
@@ -1675,7 +1681,7 @@ class TestGceRangePreconditions:
                 self._config(), allow_missing_range_images=True, env=dict(self._FULL_ENV)
             )
         assert exc.value.code == 1
-        output = capsys.readouterr().out
+        output = capsys.readouterr().err
         assert "Required 'compute.images.get' permission" in output
         assert "not imported" not in output
 
@@ -1684,15 +1690,26 @@ class TestGceRangePreconditions:
         with patch("subprocess.run", return_value=absent):
             assert gcp_control_plane._gce_image_exists("p", "image", "i") is False
 
-    def test_allow_flag_downgrades_failures_to_warning(self, capsys):
+    def test_a_dc_image_is_optional(self, capsys):
         env = dict(self._FULL_ENV)
         del env["GCP_RANGE_DC_IMAGE"]
+        checked: list[str] = []
+        gcp_control_plane.check_gce_range_preconditions(
+            self._config(), env=env, image_exists=lambda project, kind, name: checked.append(name) or True
+        )
+        assert checked == ["shifter-ubuntu"]
+        assert "GCE range preconditions satisfied" in capsys.readouterr().out
+
+    def test_allow_flag_downgrades_failures_to_warning(self, capsys):
+        env = dict(self._FULL_ENV)
+        del env["GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL"]
         # Missing var AND a missing image, but the opt-out lets a platform-first bring-up proceed.
         gcp_control_plane.check_gce_range_preconditions(
             self._config(), allow_missing_range_images=True, env=env, image_exists=lambda *_: False
         )
-        output = capsys.readouterr().out
-        assert "GCP_RANGE_DC_IMAGE" in output
+        captured = capsys.readouterr()
+        output = captured.out + captured.err
+        assert "GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL" in output
         assert "Range guest image not imported" in output
         assert "Proceeding despite the range prerequisites" in output
 

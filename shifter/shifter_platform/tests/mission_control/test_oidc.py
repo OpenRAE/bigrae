@@ -1,5 +1,6 @@
 """Tests for OIDC utilities."""
 
+import logging
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -88,14 +89,17 @@ class TestGenerateUsername:
         assert "150 characters" in str(exc_info.value)
 
     # Sad path tests - character violations
-    def test_email_with_exclamation_raises(self):
-        """Email with ! (valid RFC 5321, invalid Django) raises ValueError."""
+    def test_email_with_exclamation_raises(self, caplog):
+        """Email with ! (valid RFC 5321, invalid Django) raises ValueError; the log omits the email."""
         email = "jane!doe@paloaltonetworks.com"
 
-        with pytest.raises(ValueError) as exc_info:
+        username_logger = logging.getLogger("config.username")
+        with caplog.at_level(logging.ERROR, logger=username_logger.name), pytest.raises(ValueError) as exc_info:
             generate_username(email)
 
         assert "not allowed in Django usernames" in str(exc_info.value)
+        assert "reason=invalid_characters" in caplog.text
+        assert email not in caplog.text
 
     def test_email_with_hash_raises(self):
         """Email with # raises ValueError."""
@@ -500,7 +504,7 @@ class TestShifterOIDCBackendVerifyToken:
     @override_settings(OIDC_ISSUER_URL=TEST_ISSUER, OIDC_RP_CLIENT_ID="client-abc")
     def test_accepts_matching_issuer_and_audience_and_stashes_evidence(self):
         backend = ShifterOIDCBackend()
-        payload = {"iss": TEST_ISSUER, "aud": "client-abc", "sub": "sub-1"}
+        payload = {"iss": TEST_ISSUER, "aud": "client-abc", "sub": "sub-1", "auth_time": 1700000000}
 
         with patch.object(OIDCAuthenticationBackend, "verify_token", return_value=payload):
             result = backend.verify_token("token")
@@ -508,11 +512,26 @@ class TestShifterOIDCBackendVerifyToken:
         assert result == payload
         assert backend._verified_issuer == TEST_ISSUER
         assert backend._verified_subject == "sub-1"
+        assert backend._verified_auth_time == 1700000000
+
+    @override_settings(OIDC_ISSUER_URL=TEST_ISSUER, OIDC_RP_CLIENT_ID="client-abc")
+    @pytest.mark.parametrize("auth_time", [None, "1700000000", -1, True, 1.5])
+    def test_rejects_missing_or_malformed_authentication_time(self, auth_time):
+        backend = ShifterOIDCBackend()
+        payload = {"iss": TEST_ISSUER, "aud": "client-abc", "sub": "sub-1"}
+        if auth_time is not None:
+            payload["auth_time"] = auth_time
+
+        with (
+            patch.object(OIDCAuthenticationBackend, "verify_token", return_value=payload),
+            pytest.raises(SuspiciousOperation),
+        ):
+            backend.verify_token("token")
 
     @override_settings(OIDC_ISSUER_URL=TEST_ISSUER, OIDC_RP_CLIENT_ID="client-abc")
     def test_accepts_audience_list_containing_client_id(self):
         backend = ShifterOIDCBackend()
-        payload = {"iss": TEST_ISSUER, "aud": ["client-abc", "other-aud"], "sub": "sub-1"}
+        payload = {"iss": TEST_ISSUER, "aud": ["client-abc", "other-aud"], "sub": "sub-1", "auth_time": 1700000000}
 
         with patch.object(OIDCAuthenticationBackend, "verify_token", return_value=payload):
             result = backend.verify_token("token")

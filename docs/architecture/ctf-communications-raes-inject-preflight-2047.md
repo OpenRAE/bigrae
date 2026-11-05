@@ -9,9 +9,9 @@ Date: 2026-08-14
 
 Requirements: `CTF-008`, `CTF-010`, `CTF-012`, `CTF-014`
 
-Tracking issue: <https://github.com/Brad-Edwards/shifter/issues/2047>
+Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/2047>
 
-Domain-model implementation slice: <https://github.com/Brad-Edwards/shifter/issues/2048>
+Domain-model implementation slice: <https://github.com/Brad-Edwards/bigrae/issues/2048>
 
 Delivery-engine slice: [#2049 preflight](ctf-communication-delivery-engine-preflight-2049.md).
 That note records the post-#2048 repository state and specializes the execution
@@ -88,7 +88,7 @@ The following terms are deliberately distinct:
 | `CommunicationIntent` | Immutable normalized occurrence produced after source validation and authorization. Static, dynamic, manual, timed, and RAES sources converge here. It pins campaign, revision, scope, event targets, occurrence identity, source attribution, and channel policy. |
 | `RecipientSnapshot` | Server-resolved event participation at intent release. One row identifies an internal CTF participant and its event/team/user projection; any delivery coordinate is captured as encrypted sensitive data, never as authority. |
 | `DeliveryAttempt` | One transport attempt for one snapshot, with a stable idempotency key, attempt number, due time, bounded result class, and truthful transport status. Transactional in-app availability is not a transport attempt. |
-| `ParticipantReceipt` | In-app state for `read_at` and explicit `acknowledged_at`. It is independent of email acceptance, WebSocket publication, or socket write. |
+| `RecipientReceipt` | In-app state for `read_at` and explicit `acknowledged_at`. It is independent of email acceptance, WebSocket publication, or socket write. |
 | Audit evidence | Body-free security and workflow evidence emitted through `shared.audit`. Audit rows support investigation; they are not campaign, queue, or delivery state. |
 
 `CTFNotification` currently conflates authoring, content, aggregate status,

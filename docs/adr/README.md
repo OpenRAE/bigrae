@@ -29,10 +29,10 @@ cover the first-project ordering (ADR-004 purpose separation; ADR-008 private
 operator access).
 Native GCE image builds explicitly select `GCP_RANGE_BACKEND=gce` to omit the
 GDC-only disk export dependency. Builds retain their immutable image evidence.
-Separate candidate qualification is optional and off by default for bootstrap
-and deployment; it runs only when an operator dispatches the validation workflow.
-Bootstrap requires the configured guest images to exist, not a qualification
-verdict. The separate image-promotion workflow retains its evidence requirements.
+Each guest build calls the validation workflow for its exact candidate, and
+publishes the image only after validation passes (#2668). A release selects the
+published guest images; a deployment imports them after it verifies their build
+provenance. No image-promotion workflow exists.
 
 SDK candidate distributions from pull-request CI include their SHA-256 checksums
 and are retained under a revision-specific artifact name for independent adapter
@@ -102,8 +102,16 @@ directory credentials.
 
 ## Runtime Enforcement
 
+ADR-031-R7 separates trial archive custody from operational sidecars.
+CMS stores tenant destination, transfer, and receipt metadata.
+The [custody design](../architecture/trial-archive-custody.md) describes the validation and commit boundaries.
+The [service contract](../technical/shifter_platform/trial-archive-custody.md) defines the receipt and recovery behavior.
+The existing layer checks confine portable RAES validation to `shared.raes`.
+Targeted archive and PostgreSQL service tests verify custody, identity, access, and retention.
+No new guard exception or deployment setting is introduced.
+
 ADR-004-R23 generalizes the GCP CI identity module: purpose-separated build,
-validate, promote, release-scan, deploy and destroy identities are rendered from
+validate, release-scan, deploy and destroy identities are rendered from
 explicit per-deployment inputs rather than tenant-name branches. The source WIF
 guard enforces the generic template with pinned CKV_GCP_125 success and no
 Checkov waiver; numeric repository/owner IDs and exact workflow/ref/Environment
@@ -865,13 +873,17 @@ The guardrails change as follows:
 
 - The `release-workflow-provenance` check runs at the fast and ci levels. It
   reads `.github/workflows/release-gcp.yml` as data and fails closed. It requires
-  `workflow_dispatch` as the only trigger. Each job that authenticates must bind
+  `workflow_dispatch` and `workflow_call` as the only triggers (#2660). The only
+  caller is the `release-gcp` job of `release-please.yml`. That workflow starts
+  only on a push to `main`, and the job runs only when a release tag points at
+  the pushed commit. An unconditional `release-commit` step after the Release
+  Please action finds that tag and gives the version and the commit. The job
+  inherits no secrets. Each job that publishes must bind
   the `gcp-release` Environment, run on a GitHub-hosted runner, and reject every
-  ref except `refs/heads/main` before authentication. It also requires SHA-pinned actions, an SBOM and
+  ref except the release refs before its first publishing step. It also requires SHA-pinned actions, an SBOM and
   maximum provenance for each pushed build, and an attestation of each built
   digest with `push-to-registry: true`.
-- `scripts/check_tf_gcp_wif_trust` covers the `release` purpose and the closed
-  impersonation grant. It rejects a default on `github_repository_id`,
+- `scripts/check_tf_gcp_wif_trust` covers the closed impersonation grant. It rejects a default on `github_repository_id`,
   `github_owner_id`, and `purpose_contexts`. Its resolved-plan verifier requires
   no WIF provider when no federated subject exists, and exactly one provider
   otherwise. It also requires the token-creator grants to equal the named
@@ -896,3 +908,8 @@ The guardrails change as follows:
   properties that `_gcp-dev.yml` held before #2571. These are the HIGH and
   CRITICAL release scan, the running-image evidence, the private input files,
   the Connect Gateway credentials, and the single range-zone input.
+
+The [local design checks](../technical/dev/adr-enforcement.md#local-implementation-design-checks)
+configure Ground Control's pre-implementation review using the existing Python
+compiler and import rules, a code-derived dependency view and exact pytest
+observations. Module applicability is configured in `.ground-control.yaml`.

@@ -11,7 +11,7 @@ Safety controls:
 - in operator mode, tooling whose revision equals a release whose images verify against
   the deployment trust anchor (this replaces the protected-branch rule of the workflow);
 - the same private Terraform inputs as the deploy, with Cloud SQL deletion protection
-  lifted and the permanent KMS key ring and key removed from state first.
+  lifted and the permanent KMS key rings and keys removed from state first.
 """
 
 from __future__ import annotations
@@ -21,7 +21,7 @@ import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
-from bootstrap_core import header, success
+from bootstrap_core import header, info, success
 from gcp_deploy import (
     DeployOptions,
     GcpDeployError,
@@ -32,6 +32,7 @@ from gcp_deploy import (
     new_run_id,
     release_deploy_lock,
     release_trust,
+    source_images,
 )
 from gcp_deploy_stages import require_tools
 from gcp_identity import PurposeIdentities
@@ -48,6 +49,7 @@ class DestroyOptions:
     confirm: str
     environment: str = ""
     release_manifest: str = ""
+    release_source: str = ""
     identity_mode: str = "impersonate"
     name_prefix: str = ""
     destroy_service_account: str = ""
@@ -73,15 +75,52 @@ def _verify_release_tooling(runner: ProcessRunner, options: DestroyOptions, inpu
         ),
         manifest.source_revision,
     )
-    verify_release_provenance(dict(manifest.images), trust, token_provider=lambda: access_token(runner, {}))
+    images = source_images(manifest, options.release_source)
+    verify_release_provenance(images, trust, token_provider=lambda: access_token(runner, {}))
+
+
+def remove_platform_release(runner: ProcessRunner, inputs: DeploymentInputs) -> None:
+    """Uninstall the platform Helm release before Terraform removes the cluster.
+
+    The GKE Ingress controller owns the load balancer, its backend services, and
+    its network endpoint groups. A cluster delete leaves them behind, and the
+    backend services keep the Cloud Armor policy in use, so Terraform can not
+    delete it. Uninstalling the release first lets the controller remove them
+    (#2640). The step is a no-op when the cluster or the release is gone.
+    """
+    from gcp_helm import RELEASE_NAME, RELEASE_NAMESPACE
+    from gcp_kube import cluster_name, kube_env
+
+    cluster = cluster_name(inputs.environment)
+    membership = runner.run(
+        ["gcloud", "container", "fleet", "memberships", "describe", cluster]
+        + ["--location", inputs.region, "--project", inputs.project_id],
+        check=False,
+    )
+    if membership.returncode != 0:
+        info(f"Cluster {cluster} is not registered; skipping the Helm uninstall")
+        return
+    kube = kube_env(
+        runner, {}, workdir=inputs.workdir, project_id=inputs.project_id, location=inputs.region, cluster=cluster
+    )
+    if runner.run(["helm", "status", RELEASE_NAME, "--namespace", RELEASE_NAMESPACE], env=kube, check=False).returncode:
+        info(f"Helm release {RELEASE_NAME} is not installed; skipping the uninstall")
+        return
+    info(f"Uninstalling Helm release {RELEASE_NAME} so the Ingress controller removes its load balancer")
+    runner.run(
+        ["helm", "uninstall", RELEASE_NAME, "--namespace", RELEASE_NAMESPACE, "--wait", "--timeout", "15m"],
+        env=kube,
+        capture=False,
+    )
 
 
 def run_destroy(options: DestroyOptions, *, runner: ProcessRunner | None = None) -> int:
     """Run ``gcp-destroy``."""
     from gcp_terraform import (
+        apply_destroy_settings,
         backend_prefix,
         drop_unremovable_kms_resources,
-        lift_sql_deletion_protection,
+        kms_adoption_variables,
         state_bucket_name,
         terraform_context,
         terraform_destroy,
@@ -89,7 +128,7 @@ def run_destroy(options: DestroyOptions, *, runner: ProcessRunner | None = None)
     )
 
     runner = runner or ProcessRunner()
-    require_tools("gcloud", "terraform")
+    require_tools("gcloud", "gke-gcloud-auth-plugin", "terraform", "helm")
     workdir = Path(tempfile.mkdtemp(prefix="bigrae-gcp-destroy-"))
     lock: DeployLock | None = None
     destroy_env: dict[str, str | None] = {}
@@ -125,7 +164,10 @@ def run_destroy(options: DestroyOptions, *, runner: ProcessRunner | None = None)
                 state_bucket=state_bucket_name(inputs.project_id),
                 prefix=backend_prefix(inputs.environment),
             )
-            lift_sql_deletion_protection(runner, ctx)
+            remove_platform_release(runner, inputs)
+            # A rerun after an interrupted destroy finds the keys out of state;
+            # the settings apply adopts them, and the next step detaches them again (#2564).
+            apply_destroy_settings(runner, ctx, variables=kms_adoption_variables(runner, ctx, inputs))
             drop_unremovable_kms_resources(runner, ctx)
             terraform_destroy(runner, ctx)
         success(f"GCP deployment {inputs.environment} platform resources are destroyed")

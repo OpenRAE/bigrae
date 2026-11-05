@@ -1,9 +1,13 @@
 # BigRAE Platform
 
+- [Experiment admission](experiment-admission.md) - Immutable inputs and fenced operational claims
+
 Django application architecture for the BigRAE cyber range platform.
 
 - [Unified access credentials](access-credentials.md)—admission, lifecycle and renewable client setup.
 - [Content, range and continuing access authority](content-range-authority.md)—scoped service operations, durable authority and native session termination.
+- [Identity and range lifecycle contracts](identity-lifecycle-contracts.md)—DFDs, state ownership, recovery, lock order and threat verification.
+- [Trial archive custody](trial-archive-custody.md)—tenant storage, verified collection receipts, recovery, and retention.
 
 ## Ownership and lifecycle
 
@@ -90,3 +94,9 @@ read API.
 - [Communication API and receipt boundaries](ctf-communications.md)
 
 - [Prepared account administration](account-administration.md) - Services, API, browser, migrations and evidence.
+
+- [Registered GCP range projects](registered-gcp-range-projects.md): native capture, encrypted baselines and exclusive custody.
+
+## Disposable workers
+
+- [Disposable VM workers](disposable-workers.md) - Native range custody, capacity, holds, and management qualification.

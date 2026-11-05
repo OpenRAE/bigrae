@@ -61,7 +61,7 @@ def process_range_event(message: str | dict) -> None:
     """Process range event from SNS/SQS - updates Range model.
 
     This handler consumes range events published by the Engine provisioner:
-    - range.status.updated: Updates status and timestamps
+    - range.status.updated: Updates only unfenced legacy status and timestamps
     - range.provisioned: Updates provisioned_instances with instance details
 
     Args:

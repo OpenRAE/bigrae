@@ -6,10 +6,9 @@ This tree provisions the GCP control plane for Shifter.
 
 | Root | Purpose |
 | --- | --- |
-| `environments/platform` | Shared platform root of every GCP deployment. `scripts/bootstrap/deploy.py gcp-deploy` and `gcp-destroy` run it with the state prefix `shifter/<environment>/platform-core`. |
+| `environments/platform` | Shared platform root of every GCP deployment. `scripts/bootstrap/deploy.py gcp-deploy` and `gcp-destroy` run it with the state prefix `shifter/<environment>/platform-core`. It creates no image-build resources; guest images are built in a developer build project (#2668). |
 | `environments/<deployment>` | Committed Terraform values of the deployments that GitHub CI deploys. A deployment without GitHub keeps its values in its deployment input bundle. |
-| `global/cicd-oidc` | Purpose identities that outlive the platform. GitHub federation is optional: an empty `purpose_contexts` creates no pool or provider. `impersonation_principals` names the principals that may impersonate the deploy, release-scan, and destroy identities. `deployment_config_bucket_name` creates the deployment config bucket. A `release` purpose creates the release publisher identity. |
-| `global/release-registry` | Artifact Registry repository for published releases. `writer_members` push releases; `reader_members` read them. |
+| `global/cicd-oidc` | Purpose identities that outlive the platform. GitHub federation is optional: an empty `purpose_contexts` creates no pool or provider. `impersonation_principals` names the principals that may impersonate the deploy, release-scan, and destroy identities. `deployment_config_bucket_name` creates the deployment config bucket. |
 | `global/github-runner` | Self-hosted runner of a deployment that GitHub CI deploys. |
 
 `scripts/bootstrap/deploy.py gcp-foundation` applies `global/cicd-oidc`. See
@@ -50,7 +49,7 @@ Security posture:
 - Platform and range VPCs carry explicit `google_compute_firewall` policy (ADR-008-R4): range ingress is deny-by-default with a single allow rule sourced from `local.portal_network_cidrs` on `var.range_provisioner_ports`; the platform VPC blocks world-open SSH/RDP and allows only Google LB health-check ranges to the GKE nodes. Operator break-glass SSH is gated on `var.operator_admin_cidrs` (empty in dev).
 - Cloud SQL deletion protection is on by default (`var.cloud_sql_deletion_protection`, default `true`); the platform control-plane database cannot be destroyed without an explicit, environment-root override.
 - Memorystore Redis runs on the STANDARD_HA tier with `auth_enabled = true` and `transit_encryption_mode = "SERVER_AUTHENTICATION"` (ADR-008-R6). The AUTH token lives in a `redis` Secret Manager bundle and is hydrated by the runtime entrypoint just like the DB/app secrets - never in the runtime ConfigMap, generated env, or process argv. Django Channels reads `REDIS_TLS` / `REDIS_PASSWORD` and uses a `rediss://` channels_redis URL host; the helper fails closed if TLS is enabled without a hydrated password.
-- GCS buckets stay on Google-managed encryption keys (ADR-008-R5). Customer-managed encryption keys (CMEK) are deferred until an external compliance trigger materializes; see `docs/architecture/gcp-gcs-cmek-preflight.md` for the recorded decision, owner, and review trigger.
+- Each Terraform-owned GCS bucket uses a customer-managed key from `modules/gcs-cmek` (ADR-008-R5): one key ring for each owner and location, one 90-day rotating key for each bucket role, and a grant to the Storage service agent before the bucket uses the key. `gcp-deploy` and `gcp-foundation` rewrite the live objects that do not use the key. See the [GCS CMEK design](../../../docs/architecture/gcp-gcs-cmek-design-2564.md). The Terraform state bucket keeps Google-managed encryption, because bootstrap creates it before Terraform runs.
 - `gcp-deploy` sets `public_hostname` from `deployment.domain` and sets
   `enable_managed_tls = true`. Before Terraform apply, it reads
   `gke_master_authorized_cidrs` from the Terraform values of the deployment.
@@ -149,7 +148,7 @@ python3 scripts/gcp/probe_range_secret_permissions.py \
   --platform-project PLATFORM_PROJECT \
   --dynamic-project RANGE_SECRET_PROJECT \
   --unrelated-project UNRELATED_CONTROL_PROJECT \
-  --environment gcp-dev \
+  --environment ENVIRONMENT \
   --provisioner-service-account PROVISIONER_GSA \
   --portal-service-account PORTAL_GSA \
   --range-host-service-account ASSIGNED_RANGE_HOST_GSA \
@@ -297,7 +296,7 @@ contract consumed by the provisioner runtime:
 - `range_network_region`
 - `portal_network_cidrs`
 
-`gcp-dev` concrete values:
+Example concrete values:
 
 - `project_id = "example-gcp-project"`
 - `public_hostname = "shifter.example.com"`

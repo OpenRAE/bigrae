@@ -18,7 +18,8 @@ from uuid import UUID, uuid4
 
 from django.utils import timezone
 
-from engine.models import Instance, Range, Request
+from engine.launch_target import lock_provisioner_target
+from engine.models import GcpRangeProject, Instance, Range
 
 PROVISIONER_DISPATCH_FAILED = "Provisioner dispatch failed"
 
@@ -30,22 +31,6 @@ def clear_provisioner_operation_after_failure(row: Range | Instance) -> list[str
     row.provisioner_operation = ""
     row.provisioner_operation_id = None
     return ["provisioner_operation", "provisioner_operation_id"]
-
-
-def _resolve_failure_target(payload: dict[str, object]) -> Range | Instance | None:
-    """Lock the domain row named by a validated failure payload."""
-    target: Range | Instance | None
-    if "request_id" not in payload:
-        target = Range.objects.select_for_update().filter(pk=int(str(payload["range_id"]))).first()
-    else:
-        request = Request.objects.filter(request_id=UUID(str(payload["request_id"]))).first()
-        if request is None:
-            target = None
-        elif payload.get("resource") in {"range", "raes-range"}:
-            target = Range.objects.select_for_update().filter(request=request).first()
-        else:
-            target = Instance.objects.select_for_update().filter(request=request, role=Instance.Role.NGFW).first()
-    return target
 
 
 def _generation_still_authorizes_failure(
@@ -131,8 +116,29 @@ def fail_current_provisioner_operation(
         command_from_payload(payload)
     except (KeyError, TypeError, ValueError):
         return False
-    target = _resolve_failure_target(payload)
-    if target is None or not _generation_still_authorizes_failure(payload, target, expected_operation_id):
+    target = lock_provisioner_target(payload)
+    if isinstance(target, GcpRangeProject):
+        failed = _fail_project_registration(payload, expected_operation_id, target)
+    elif not isinstance(target, (Range, Instance)) or not _generation_still_authorizes_failure(
+        payload, target, expected_operation_id
+    ):
+        failed = False
+    else:
+        _apply_dispatch_failure(payload, target)
+        failed = True
+    return failed
+
+
+def _fail_project_registration(
+    payload: dict[str, object], expected_operation_id: UUID | str, target: GcpRangeProject
+) -> bool:
+    """Only the still-current registration generation may record a dispatch failure."""
+    from engine.services._gcp_project_operations import validate_project_operation
+
+    try:
+        validate_project_operation(payload, expected_operation_id)
+    except ValueError:
         return False
-    _apply_dispatch_failure(payload, target)
+    target.status, target.failure_code = "failed", "dispatch-failed"
+    target.save(update_fields=["status", "failure_code", "updated_at"])
     return True

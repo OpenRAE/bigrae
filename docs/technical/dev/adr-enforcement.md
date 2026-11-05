@@ -52,7 +52,25 @@ The current enforcement stack has six parts:
 
 4. `.pre-commit-config.yaml`
    Fast local hygiene and secrets checks. Full architecture checks run in CI;
-   changed-file cloud identifier checks remain local.
+   changed-file cloud identifier checks remain local. The
+   `sonar-rules-changed-lines` hook runs pinned Ruff rules through `diff-quality`
+   for Python lines changed against `origin/dev`. It reports complexity,
+   argument/return counts, documentation, type annotations and line length
+   within the configured production source paths. It does not run tests or
+   measure coverage, and does not replace the blocking SonarCloud gate.
+   Its repository wrapper reads committed, staged and unstaged Git paths with
+   NUL delimiters and supplies escaped literal paths to `diff-quality`. Source
+   roots, exclusions and the 100% threshold remain unchanged. This avoids the
+   tool's repeated recursive include expansion through ignored `node_modules`
+   trees; those directories are not application quality inputs.
+   The source roots, exclusions, Ruff rules and 100% threshold are one fixed
+   policy in `scripts/adr_guard/changed_python_quality.py`. The wrapper accepts
+   no external arguments: attempts to change refs, linter flags or scope fail
+   before any subprocess. Its Git and quality commands use the literal
+   `origin/dev` reference and argument vectors, with explicit Git option/path
+   boundaries; no CLI text is forwarded into either command.
+   The wrapper's regression tests use standard-library `unittest`, as required
+   by the Python 3.11 ADR test lane; they need no pytest dependency.
 
 5. `.github/workflows/_quality.yml`
    CI enforcement. ADR conformance runs as its own architecture gate.
@@ -89,19 +107,29 @@ MCP lint jobs reject security warnings, and the shared package has a test-matrix
 entry. The existing kube-linter job supplies blocking Kubernetes security policy.
 Checkov's separate Kubernetes checks are a blocking gate under ADR-004-R11 (#2558).
 Helm lint and rendered kube-linter checks run together, including when optional
-tests are skipped. BuildKit and Trivy validate container build inputs. A local guacd
-container proves non-root execution, drive permissions and listener readiness.
+tests are skipped. BuildKit and Trivy validate container build inputs. The hosted
+guacd job proves non-root execution, drive permissions and listener readiness.
 The unused root branding assets have been removed after a consumer search.
 The user also retired the two unused vendor CloudFormation installers.
 Their quality owner and identifier exception have been removed.
+
+The `provisioner-locks` hook and provisioner CI job check that the image's Python
+requirements match `uv.lock`. The default export must match the frozen uv export;
+GCP packages present in `uv.lock` must have the same versions. The image keeps
+its existing pip-based install from these hash-pinned exports. Use the documented
+[uv export command](https://docs.astral.sh/uv/concepts/projects/export/) when
+regenerating them. The Guacamole image job also tests direct and nested jar
+replacement, including rejection when an expected archive or dependency is absent.
 
 Bootstrap regression tests use process boundaries for the affected CLI and GDC
 flows. Their legacy mock allowance decreases from 256 to 175. No new allowance
 or exception renewal is part of this repair.
 
 The BigRAE rename (#2555) preserves the existing gates. After the same-owner
-repository cutover, the Sonar condition permits only `Brad-Edwards/bigrae` with
-the same immutable repository and owner IDs. Its expression-model tests deny the
+repository cutover, the Sonar condition permitted only `Brad-Edwards/bigrae` with
+the same immutable repository and owner IDs. The repository then moved to
+`OpenRAE/bigrae` (#2660). The repository ID stayed, and the condition now
+permits the `OpenRAE` owner ID. Its expression-model tests deny the
 old slug, a recreated slug, another owner and fork-origin PRs. Future GCP deployments use
 one exact configured repository identity with the same purpose, Environment,
 ref and workflow restrictions. Under the user's no-deployments decision,
@@ -140,7 +168,8 @@ prove a live repository, publisher or workload-identity cutover.
   the pinned local Vale binary when it is not already installed.
 - Local commits run file hygiene, secret scanning, changed-file cloud identifier
   checks, commit-message policy, Ruff, ShellCheck, actionlint, and Terraform
-  formatting. Full tests and coverage, type checks, Django checks, import and ADR
+  formatting, plus the changed-line Ruff/Sonar rule check above. Full tests and
+  coverage, type checks, Django checks, import and ADR
   checks, package-wide JavaScript/CSS lint, Checkov, Bandit, Terraform validation
   and TFLint, and Kubernetes/chart validation run in CI. These checks are removed
   from the commit hook, not moved to push hooks. This supersedes older references
@@ -162,8 +191,21 @@ prove a live repository, publisher or workload-identity cutover.
   bounds peak memory (each worker loads the Django app), so it is raised only
   with headroom in mind given the suite's documented OOM history at high worker
   counts.
-- `.github/workflows/_gcp-dev.yml` and `gcp-dev-destroy.yml` are thin wrappers
-  over the GCP deploy commands (ADR-070). The deploy renders each image by its
+- CI runs the broad platform suite once against PostgreSQL, split into six
+  `shifter-platform-tests` shards. Each shard publishes coverage data and its
+  PostgreSQL marker evidence. `shifter-platform-coverage` requires all shards,
+  rejects missing or duplicate shard evidence and skipped PostgreSQL-marked
+  tests, and requires at least one PostgreSQL-marked test to have run across
+  the shards. It combines the data, enforces the unchanged 87% package floor,
+  and publishes `coverage.xml` for SonarCloud. Redis integration and adapter SDK
+  packaging retain their own blocking jobs. Released OpenFGA/PostgreSQL tests
+  still run in the dedicated mandatory job and contribute
+  `coverage-openfga.xml`; native browser and built-image smoke gates retain
+  their real service and image entrypoints. Sharding changes execution cost,
+  not the required evidence or coverage thresholds. Full suites and image
+  smoke run in CI; local development uses focused regressions.
+- `.github/workflows/_gcp-dev.yml` is a thin wrapper over the GCP deploy
+  commands (ADR-070). The deploy renders each image by its
   exact digest from the release manifest, so a mutable tag never selects a
   running image.
 
@@ -493,8 +535,7 @@ The first slice intentionally stays small:
 
   The manual-deploy invariant (`TestManualDeployDispatch`, #730) asserts that
   environment deploys are a `workflow_dispatch` naming the `environment` input
-  (a closed `choice` of `aws-dev` / `gcp-dev` /
-  `orthanc` / `sauron` / `balrog`), that the `Set
+  (a closed `choice` that has only `aws-dev` after #2668), that the `Set
   environment` step keys on that input rather than a branch-name `case` router,
   and that `push` / `pull_request` run validation only (no run/apply flags).
 
@@ -507,42 +548,33 @@ The first slice intentionally stays small:
   IAP TCP port-2222 addition. Other resource or output changes fail the run;
   ordinary deployments skip the foundation stage.
 
-  The GCP teardown guardrail
-  (`test_gcp_workflows_keep_sensitive_tfvars_out_of_the_checkout`) asserts that
-  `gcp-dev-destroy.yml` is parameterized over the tenant. `GCP_ENVIRONMENT` and
-  the destroy `environment` (`<environment>-destroy`) derive from the
-  `environment` dispatch input. Every GCP tenant (gcp-dev / orthanc /
-  sauron / balrog) tears down through the one workflow. The workflow keeps
-  its protected-ref check and calls `deploy.py gcp-destroy` with
-  `--confirm "${GCP_ENVIRONMENT}"` (ADR-070). The test also requires the
-  deployment inputs in a private directory under `RUNNER_TEMP`, which the job
-  removes. The CI adapter must create exclusive 0600 files in a 0700
-  directory. It
-  runs on `ubuntu-latest` because teardown deletes resources through the GCP
-  APIs over WIF and needs no in-VPC or self-hosted runner access. The destroy
-  command renders `cloud_sql_deletion_protection = false`, which the shared GCP
-  root declares (default true), so teardown lifts deletion protection. The `packer-gcp.yml` and
-  `packer-gcp-validate.yml` environment enums name the gcp-dev tenant `gcp-dev`
-  (mapped back to the `gcp-build-dev` / `gcp-validate-dev` Environments, whose
-  validate identity is provisioned at standup via the tenant's cicd-oidc
-  `validate` purpose) for parity with `deploy.yml`, and drop the unbacked
-  `proof` option. The teardown workflow runs an upfront preflight that fails with
-  the full list of any secrets missing from the selected `<environment>-destroy`
-  Environment before checkout or auth.
+  The GCP deployment-input guardrail
+  (`test_gcp_workflows_keep_sensitive_tfvars_out_of_the_checkout`) requires the
+  deployment inputs of `_gcp-dev.yml` in a private directory under
+  `RUNNER_TEMP`, which the job removes. The CI adapter must create exclusive
+  0600 files in a 0700 directory. No GitHub workflow tears down a GCP
+  deployment after #2668; an operator runs `deploy.py gcp-destroy` (ADR-070).
+  The destroy command renders `cloud_sql_deletion_protection = false`, which
+  the shared GCP root declares (default true), so teardown lifts deletion
+  protection.
 
-  The reusable GCE base-image guardrail
+  The GCE guest image guardrail
   (`test_gcp_base_image_publish_uses_gce_native_contract_and_protected_ref_gate`)
-  asserts `packer-gcp.yml` publishes the minimum base set (kali, ubuntu, and DC
-  via `dc-prebaked`) to GHCR as GCE-native disk tarballs (package
-  `shifter-gce-<role>`, artifact type `application/vnd.shifter.gce-image.v1`,
-  layer media type `application/vnd.shifter.gce-image.tar.gz`, provenance
-  annotations) gated on `publish_target=ghcr` and a protected dispatch ref, with
-  the staging object keyed on `BUILT_IMAGE_ID` (not the build-step-local
-  `IMAGE_ID`). The retired GDC qcow2 `shifter-vm-*` publish contract is gone.
-  When `GCP_RELEASE_REGISTRY` is set, the job also copies each artifact by
-  digest into the release registry (ADR-070). `deploy.py gcp-images` imports
-  each artifact as a native GCE image from an explicit `--source` prefix
-  (`scripts/bootstrap/gcp_base_images.py`, issues #2309 and #2571).
+  asserts that `packer-gcp.yml` publishes the minimum base set (kali, ubuntu,
+  and DC through `dc-prebaked`) as GCE-native disk tarballs to
+  `ghcr.io/<owner>/<repository>/gce-<role>`. The artifact type is
+  `application/vnd.shifter.gce-image.v1`, the layer media type is
+  `application/vnd.shifter.gce-image.tar.gz`, and annotations record the build
+  revision. The publish job checks that the validated image ID equals
+  `BUILT_IMAGE_ID`, and the export object name uses `BUILT_IMAGE_ID`. The
+  retired GDC qcow2 `shifter-vm-*` publish contract is gone.
+  `test_gcp_guest_publication_needs_the_validation_of_the_same_run` asserts
+  that the publish job needs the build and validate jobs, that the validate job
+  calls the local validation workflow without secrets, and that no promotion
+  workflow exists (#2668). `gcp-deploy` and `deploy.py gcp-images` import the
+  guest images of the release manifest as native GCE images after they verify
+  their build provenance (`scripts/bootstrap/gcp_base_images.py`, issues #2309,
+  #2571, #2679, and #2668).
 
 - `portal-deploy-mode-source-of-truth`
   Enforces ADR-003-R4 for the AWS portal deploy path. `_shifter-platform.yml`
@@ -577,10 +609,17 @@ The first slice intentionally stays small:
   Enforces ADR-070-R1 with ADR-004-R23, ADR-003-R5, and ADR-037-R1, R5, and R7
   on `.github/workflows/release-gcp.yml`. It reads the workflow as data and
   fails closed when the workflow is missing or cannot be parsed. Only
-  `workflow_dispatch` may start the workflow. Each job that authenticates to
-  GCP must bind the `gcp-release` Environment and run on a GitHub-hosted
-  runner. In that job, a step before the authentication step must reject every
-  ref except `refs/heads/main`. Every non-local action must pin a full commit
+  `workflow_dispatch` and `workflow_call` may start the workflow (#2660). The
+  only caller is the `release-gcp` job of `release-please.yml`. That workflow
+  must start only on a push to `main`. The job must run only when a release tag
+  points at the pushed commit, and it must not inherit secrets. That fact, the
+  version, and the commit must come from an unconditional `release-commit` step
+  after the Release Please action. The caller rules are in
+  `scripts/adr_guard/_guard/checks/_release_workflow_caller.py`. Each job that publishes (it logs
+  in to a registry, authenticates to a cloud, or pushes an image) must bind the
+  `gcp-release` Environment and run on a GitHub-hosted runner. In that job, a
+  step before the first publishing step must reject every ref except
+  `refs/heads/main`, `refs/heads/dev`, and `refs/heads/deploy-test`. Every non-local action must pin a full commit
   SHA. Every pushed image build must produce an SBOM and maximum provenance.
   An `actions/attest-build-provenance` step in the same job must sign that
   exact digest with `push-to-registry: true`. A deployment verifies this registry
@@ -588,7 +627,28 @@ The first slice intentionally stays small:
   an unconditional step must scan the deployer digest with the blocking Trivy
   gate (`--severity HIGH,CRITICAL --ignore-unfixed --exit-code 1`). The step must
   use `platform/deployer/gcp/trivyignore.yaml`, which holds only time-boxed
-  vendor-binary exposures. The check runs at the `fast` and `ci` levels;
+  vendor-binary exposures.
+
+  The check also covers the guest image workflows (#2668, ADR-037-R8 and R9) in
+  `scripts/adr_guard/_guard/checks/_release_workflow_guests.py`. A missing or
+  unparseable guest workflow is a violation:
+
+  - `packer-gcp.yml` starts only from `workflow_dispatch` and has no
+    `environment` or `publish_target` input.
+  - `packer-gcp-validate.yml` starts only from `workflow_call`. The build
+    workflow calls it with a local reference. It passes only
+    `GCP_WORKLOAD_IDENTITY_PROVIDER`, `GCP_PACKER_VALIDATE_SERVICE_ACCOUNT`, and
+    `GCP_PROJECT_ID`, each from the secret of the same name. A called workflow
+    reads an Environment secret only when the caller passes its name.
+  - Each job that publishes binds its fixed Environment (`gcp-image-build` or
+    `gcp-image-validate`) and runs on a GitHub-hosted runner. Before its first
+    publishing step, it rejects every ref except `refs/heads/dev` and
+    `refs/heads/main`.
+  - The job that pushes the guest image needs the validation job. An
+    `actions/attest-build-provenance` step in that job signs the pushed digest
+    with `push-to-registry: true`.
+
+  The check runs at the `fast` and `ci` levels;
   `scripts/adr_guard/tests/test_release_workflow.py` covers it.
 
 - `TFLint`
@@ -636,6 +696,14 @@ The first slice intentionally stays small:
   Making the Trivy configuration scan blocking is tracked separately in #2566;
   the [#2558 architecture preflight](../../architecture/blocking-config-security-preflight-2558.md)
   records the cross-repository contracts for that follow-up.
+
+  ADR-008-R5's [#2564 CMEK design](../../architecture/gcp-gcs-cmek-design-2564.md)
+  puts every Terraform-owned GCS bucket on a customer-managed key. A
+  `trivy config` scan of `platform/terraform/gcp` reports no GCP-0066 finding,
+  with no exception. #2566 makes that scan a CI gate. The `terraform test` contracts of `modules/gcs-cmek`,
+  `modules/portal/gcs`, `modules/image-export-storage`,
+  `modules/raes-package-storage`, and `global/cicd-oidc` enforce the keys and
+  the lifecycle KMS roles.
 
 - `checkov-terraform`
   IaC security scan over first-party Terraform in `platform/terraform/`. A
@@ -779,7 +847,9 @@ The first slice intentionally stays small:
   `public_key_password` (which has the public-key fragment AND a
   secret suffix) stays flagged. `*.tfvars.example` files are skipped. Both `#` and `//` line comments and `/* ... */`
   block comments are stripped before matching, matching Terraform's
-  HCL grammar. Enforces ADR-004-R7. Complements gitleaks, which
+  HCL grammar. A file that the check cannot read or decode as UTF-8
+  fails closed: the check reports it as a violation. Enforces ADR-004-R7.
+  Complements gitleaks, which
   matches high-entropy random strings; this catches low-entropy
   committed credentials gitleaks ignores. Implementation note: the
   check is decomposed into focused helpers (`_collect_tfvars_candidates`,
@@ -1199,6 +1269,13 @@ immutable IDs and on `purpose_contexts` (ADR-069-R3, ADR-070).
 
     The overlay invariant now counts CI adapter runs. Each run receives
     `SHIFTER_CONFIG_OVERLAY_JSON` and applies it.
+- **GCP running-image check (`scripts/adr_guard/tests/test_deploy_workflow.py`)**:
+  #2698 adds the OpenFGA policy servers to the running-image check
+  (ADR-037-R8). `gcp_rollout.py` passes a fourth `--expected-image` argument,
+  `openfga=<image>`, only when the release pins a policy image. The exact
+  argument count changes from 3 to 4. The test also requires the conditional
+  OpenFGA argument. The invariant does not change: every workload has an
+  expected image.
 
 # Private scenario boundary
 
@@ -1241,6 +1318,25 @@ is preceded by a hash-verified private archive. This does not establish live
 qualification of an external adapter on either cloud.
 
 The independent adapter SDK has its own dependency update entry, like every other Python package root. Private image recipes and their dependency update targets belong to the pack owner.
+
+### Named adapter file inputs (ADR-041-R11)
+
+Named files reuse CMS's scoped upload ledger, quota mutex, immutable installation
+and cleanup. Database constraints and custody triggers retain the file purpose,
+exact object version and original range-use proof. SDK checks require the exact
+declared input names, nonempty files and a 512 KiB aggregate budget; empty new
+fields preserve retained request identities. CMS authorizes and fences actual
+file custody before native creation and through a composition-bound material
+port before worker dispatch. Engine cannot import CMS.
+
+The rendered runtime-plugin admission policy permits only the invocation's
+immutable file Secret, projected with explicit bounded keys and a fixed read-only
+mount. The object-count quota allows three Secrets per reserved Job without
+increasing the 16-pod execution cap. Synthetic tests evaluate the rendered CEL
+with actual builder manifests and reject wrong Secrets, writable or extra mounts,
+path traversal, unsafe modes and oversized key sets. CMS tests cover replacement,
+retention, quota cleanup, original-proof revocation and digest tampering; these
+checks require no deployment or live qualification.
 
 ### Participant model credential cutover (ADR-004-R21, ADR-059)
 
@@ -1372,7 +1468,7 @@ and [recovery procedure](../../dev/deployment-configuration.md) describe retaine
 owners, callers and the evidence limit for undeployed environments.
 
 Canonical GitHub routing and the workflow expression model now use
-`Brad-Edwards/bigrae`, matching the operator-confirmed repository rename.
+`OpenRAE/bigrae`, after the transfer to the `OpenRAE` organization (#2660).
 
 ## GitHub-less GCP deployment guardrails (ADR-070)
 
@@ -1382,9 +1478,9 @@ These guardrails changed with it:
 
 - `release-workflow-provenance` (described above) guards the release
   workflow that builds the images and the deployer image.
-- `scripts/check_tf_gcp_wif_trust` runs in the Terraform lint job. It now
-  covers the `release` purpose: the release identity binds only its own
-  subjects and holds no project-wide role. Each token-creator or act-as grant
+- `scripts/check_tf_gcp_wif_trust` runs in the Terraform lint job. No `release`
+  purpose exists, because the release workflow publishes to the public
+  registry with the workflow token (#2659). Each token-creator or act-as grant
   outside the build self-grants must use the single `impersonation`
   resource. That resource grants each named principal access only to the
   identity of its own purpose. `impersonation_principals` must admit only `release_scan`,
@@ -1406,3 +1502,56 @@ These guardrails changed with it:
   `container-images-lint-security` runs the BuildKit check and the Trivy
   configuration scan of the deployer Dockerfile. `gcp-deployer-image` builds
   the image with a fixture release manifest and starts it.
+
+### Adapter preparation (ADR-041-R12, ADR-063-R4)
+
+The SDK restricts `prepare` to declared provisioning concerns, existing scalar
+payload leaves and bounded responses. Core evaluates the original RAES domains,
+recursive constraints and all overlapping authority before accepting any value.
+Migration 0119 makes accepted preparation and its pin/parent identities immutable
+through SQL. Acceptance and cancellation share the Range lock; accepted mapping
+and planned invocation become visible atomically. A destroy input retains that
+mapping, or explicitly records that the mandatory pre-effect gate never opened.
+The latter is a scoped proof of no effects, not an inference from a missing Job.
+Core checks the complete future destroy envelope before accepting a preparation.
+Prepared cleanup uses the original input; unprepared cleanup reads no mutable
+image registry or guest material. Oversized encrypted snapshots are refused
+before any provider effect.
+Accepted preparation continues through normal provider inventory/readback.
+
+Targeted SDK, Engine PostgreSQL, provisioner and admission-policy tests cover
+confidential output, exact-value rejection, retention, tampering, replay and late
+acceptance. The chart allows only one input key and an optional result key from
+the same invocation Secret. See [the design](../../architecture/adapter-pre-provisioning-2718.md).
+
+### Registered GCP range projects (ADR-032-R11)
+
+The implementation for #2716 adds Engine-owned project registration and retained
+range-use records. Migration 0120 enforces immutable accepted baseline and project
+identity, one unreleased use per project, immutable lease custody, and refusal to
+delete an active use. A release update requires the current applied native destroy
+receipt, verified absence without residuals, and matching original-lease baseline
+readback. The targeted PostgreSQL tests exercise those guards through bulk SQL
+writes, plus atomic multi-project allocation, organization isolation and replay.
+Shared contract tests cover ciphertext identity, bounded baseline decoding and
+semantic parity, including changed policy conditions and resource incarnations.
+
+Registration uses the existing native operation input, recorded initiating proof
+and append-only result inbox. Installation policy and the exact live credential
+are checked before dispatch. No cloud I/O belongs in the portal or adapter worker.
+These checks establish custody; they do not claim live provider realization or
+deployment qualification. The [design](../../architecture/registered-gcp-range-projects-2716.md)
+describes the remaining provider preflight, execution and readback boundaries.
+
+## Local implementation design checks
+
+The `.ground-control.yaml` module mappings select existing implementations and
+governing architecture decisions. Repository-wide decisions apply to all paths;
+CMS and `shared.raes` also select their admission and archive designs.
+The design stage compiles platform modules, checks the existing import rules,
+and generates a dependency view from Python imports. It then runs each named
+acceptance test on the local design commit through `tests/design_checks.py`.
+An assertion failure establishes missing behavior; collection errors, fixture
+errors, skipped tests, and ambiguous selection do not. The design review runs
+before implementation. These commands add no runtime dependency or deployment.
+Existing CI, pre-commit, architecture and completed-work review checks still apply.

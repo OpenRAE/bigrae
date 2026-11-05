@@ -4,6 +4,7 @@ version = "0.1.0"
 requires-python = ">=3.12"
 dependencies = [
     "Arpeggio>=2.0.3",
+    "asyncssh==2.24.0",
     "attrs>=25.4.0",
     "asgiref>=3.11.1",
     "boto3>=1.43.8",
@@ -59,7 +60,7 @@ line-length = 120
 exclude = [".venv", "__pycache__"]
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "C4", "UP", "S", "T20", "SIM", "RUF", "C901"]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "S", "T20", "SIM", "RUF", "C901", "BLE", "G", "LOG", "TRY401"]
 ignore = ["S101"]
 
 # Per-function McCabe complexity limit (ADR-012). Existing offenders carry

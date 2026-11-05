@@ -19,6 +19,7 @@ here keep the module importable and unit-testable.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from uuid import UUID
 
@@ -30,6 +31,8 @@ from django.db.models import Count
 from ctf.enums_communication import DeliveryStatus
 from ctf.exceptions import CTFCommunicationError
 from ctf.services.communication import metrics
+
+logger = logging.getLogger(__name__)
 
 # Namespace for per-workspace advisory locks so communication admission cannot
 # collide with any other advisory-lock user.
@@ -65,8 +68,9 @@ def _setting(name: str) -> int:
 class AdmissionRequest:
     """The bounded facts admission control needs to accept or reject one intent."""
 
-    actor_user_id: int | None
-    workspace_id: int
+    actor_user_id: int | UUID | str | None
+    scope_kind: str
+    scope_id: int
     event_ids: frozenset[UUID]
     audience_size: int
     channel_count: int
@@ -89,7 +93,16 @@ def _consume(scope_class: str, key: str, limit: int, window: int, code: str, mes
 
     try:
         used = consume_fixed_window(cache, f"ctf:comm:admit:{key}", window)
-    except Exception:
+    # cache client errors can carry the connection URL; log the class only
+    except Exception as exc:  # noqa: BLE001
+        # Fail closed: deny admission when the shared rate counter is unavailable.
+        # ``from None`` keeps the cache client cause out of later tracebacks.
+        logger.error(
+            "Communication admission rate counter unavailable scope=%s exc_type=%s",
+            scope_class,
+            type(exc).__name__,
+            exc_info=False,
+        )
         raise CTFCommunicationError(
             "Communication admission unavailable", code="CTF_COMMUNICATION_ADMISSION_UNAVAILABLE"
         ) from None
@@ -124,11 +137,18 @@ def _serialize_admission() -> None:
         cursor.execute("SELECT pg_advisory_xact_lock(%s, %s)", [_ADVISORY_LOCK_NAMESPACE, _GLOBAL_ADMISSION_KEY])
 
 
-# Admission-denial codes that are transient (clearing the rate window or draining
-# the backlog recovers the occurrence). Every other admission/authorization denial
-# is permanent for this occurrence. Callers that run at due time use this to retry
-# transient pressure within the grace window instead of discarding the occurrence.
-RETRYABLE_ADMISSION_CODES = frozenset({"CTF_COMMUNICATION_RATE_LIMITED", "CTF_COMMUNICATION_BACKLOG_FULL"})
+# Admission-denial codes that are transient (clearing the rate window, draining the
+# backlog, or recovery of the shared rate counter recovers the occurrence). Every
+# other admission/authorization denial is permanent for this occurrence. Callers
+# that run at due time use this to retry transient pressure within the grace window
+# instead of discarding the occurrence.
+RETRYABLE_ADMISSION_CODES = frozenset(
+    {
+        "CTF_COMMUNICATION_RATE_LIMITED",
+        "CTF_COMMUNICATION_BACKLOG_FULL",
+        "CTF_COMMUNICATION_ADMISSION_UNAVAILABLE",
+    }
+)
 
 
 def enforce_admission(request: AdmissionRequest) -> None:
@@ -143,15 +163,18 @@ def enforce_admission(request: AdmissionRequest) -> None:
     if request.audience_size > max_audience():
         _deny("global", "CTF_COMMUNICATION_AUDIENCE_TOO_LARGE", "Audience exceeds the per-intent fan-out limit")
 
-    enforce_operation_rate(request.actor_user_id, request.workspace_id)
+    enforce_operation_rate(request.actor_user_id, request.scope_kind, request.scope_id)
 
     # 3. Durable outstanding-work reservation. Serialized globally so the workspace,
     # global, and per-event counts are all consistent hard bounds, and every check
     # adds this intent's projected work before comparing to its cap.
     _serialize_admission()
-    if _outstanding({"intent__campaign__workspace_id": int(request.workspace_id)}) + projected > _setting(
-        "CTF_COMMUNICATION_MAX_OUTSTANDING_PER_WORKSPACE"
-    ):
+    scope_filter: dict[str, object] = {
+        f"intent__campaign__{request.scope_kind}_id": int(request.scope_id),
+    }
+    if request.scope_kind not in {"account", "workspace"}:
+        raise CTFCommunicationError("Communication scope unavailable", code="CTF_COMMUNICATION_ADMISSION_UNAVAILABLE")
+    if _outstanding(scope_filter) + projected > _setting("CTF_COMMUNICATION_MAX_OUTSTANDING_PER_WORKSPACE"):
         _deny(
             "workspace",
             "CTF_COMMUNICATION_BACKLOG_FULL",
@@ -172,22 +195,22 @@ def enforce_admission(request: AdmissionRequest) -> None:
             )
 
 
-def enforce_operation_rate(actor_user_id: int | None, workspace_id: int) -> None:
+def enforce_operation_rate(actor_user_id: int | UUID | str | None, scope_kind: str, scope_id: int) -> None:
     """Bound draft/revision operations using the shared admission rate budgets."""
     # 2. Fixed-window abuse limits (atomic, distributed).
     window = _setting("CTF_COMMUNICATION_RATE_WINDOW_SECONDS")
     if actor_user_id is not None:
         _consume(
             "actor",
-            f"actor:{int(actor_user_id)}",
+            f"actor:{actor_user_id}",
             _setting("CTF_COMMUNICATION_RATE_PER_ACTOR"),
             window,
             "CTF_COMMUNICATION_RATE_LIMITED",
             "Too many communications from this actor; retry later",
         )
     _consume(
-        "workspace",
-        f"workspace:{int(workspace_id)}",
+        scope_kind,
+        f"{scope_kind}:{int(scope_id)}",
         _setting("CTF_COMMUNICATION_RATE_PER_WORKSPACE"),
         window,
         "CTF_COMMUNICATION_RATE_LIMITED",

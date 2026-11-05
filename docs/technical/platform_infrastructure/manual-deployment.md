@@ -128,15 +128,15 @@ commands for each step:
    named `impersonation_principals` the right to impersonate the deploy,
    release-scan, and destroy identities. It creates no Workload Identity pool
    or provider.
-3. **Release access** - Add the deploy and destroy identities, and the
-   operators, to the `reader_members` of the release registry.
+3. **Release access** - The release registry is public. A deployment that
+   cannot reach it fills a mirror and passes `--release-source`.
 4. **Initial secrets** - Store the first operator password in Secret Manager.
    Name that secret in `settings.operator_bootstrap.admin_password_secret_ref`.
 5. **Deployment inputs** - Write `bigrae.yaml` and the Terraform values. Leave
    `gke_master_authorized_cidrs = []` for Connect Gateway, or use connected
    RFC1918 networks only. Publish the inputs with `gcp-config publish`.
-6. **Range images** - Import the base guest images with `gcp-images --source
-   <release registry> --store gs://<deployment config bucket>`.
+6. **Range images** - Import the guest images that the release selects with
+   `gcp-images --store gs://<deployment config bucket>`.
 7. **First install** - Run `gcp-deploy --store gs://<deployment config bucket>
    --first-install` from the deployer image of the release.
 8. **DNS** - Point the public hostname at the reserved ingress IP if DNS is

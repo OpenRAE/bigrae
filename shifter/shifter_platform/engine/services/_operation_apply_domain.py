@@ -84,8 +84,19 @@ def _lock_range(operation_id: UUID | str) -> Range | None:
     join. Related rows are resolved afterwards and locked explicitly, in the
     declared primary-key order, by the paths that mutate them.
     """
-    from engine.models import Range
+    from engine.models import Range, WarmRangeGeneration
 
+    # Claim, activation, creation and retirement serialize on the ledger before
+    # the runtime. Results must take that same order before their READY/FAILED
+    # transition updates the ledger. Recheck the operation after waiting: a
+    # concurrent lifecycle may have advanced the runtime while this was queued.
+    request_id = (
+        Range.objects.filter(provisioner_operation_id=operation_id)
+        .values_list("request__request_id", flat=True)
+        .first()
+    )
+    if request_id is not None:
+        WarmRangeGeneration.objects.select_for_update().filter(request_id=request_id).first()
     return Range.objects.select_for_update().filter(provisioner_operation_id=operation_id).first()
 
 
@@ -428,7 +439,11 @@ def apply_validated_result(row: OperationResultInbox) -> tuple[str, str]:
 
     try:
         step, payload = _admit(row)
-        if row.resource == "vpn-profile":
+        if row.resource == "range-project":
+            from ._gcp_project_results import apply_project_registration_result
+
+            disposition = apply_project_registration_result(row, payload)
+        elif row.resource == "vpn-profile":
             from ._vpn_pki_results import apply_vpn_pki_result
 
             disposition = apply_vpn_pki_result(row, payload)

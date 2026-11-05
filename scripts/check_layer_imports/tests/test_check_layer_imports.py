@@ -558,9 +558,18 @@ class TestSymbolFacadeImports:
                     "get_organization_profile",
                     "resource_scope_from_ids",
                     "resolve_range_scope_binding",
+                    "get_identity_cutover_state",
+                    "hierarchy_target_scope",
                 ]
             },
             "config": {
+                "engine.services": [
+                    "worker_credential_scope",
+                    "apply_identity_cutover_resources",
+                    "identity_cutover_contract_gaps",
+                    "identity_cutover_resource_disposition",
+                    "pending_identity_cutover_work",
+                ],
                 "workspaces.services": [
                     "list_administrable_organizations",
                     "hierarchy_target_scope",
@@ -569,6 +578,22 @@ class TestSymbolFacadeImports:
                     "PolicyMutationRequest",
                     "apply_policy_mutation",
                     "event_placement_scope",
+                    "admin_principal_context",
+                    "policy_admin_registrations",
+                    "IdentityCutoverConflict",
+                    "IdentityCutoverStateView",
+                    "activate_identity_cutover",
+                    "apply_identity_cutover_sql",
+                    "begin_identity_cutover",
+                    "bind_identity_cutover_provider",
+                    "get_identity_cutover_state",
+                    "identity_cutover_disposition",
+                    "identity_cutover_relationships",
+                    "identity_cutover_resource_mappings",
+                    "plan_identity_cutover_accounts",
+                    "record_identity_cutover_bootstrap",
+                    "record_identity_cutover_policy_intent",
+                    "verify_identity_cutover_hierarchy",
                 ],
                 "management.api.policy_views": ["PolicyAdminView"],
                 "workspaces.api.serializers": ["AuthorizationMutationSerializer"],
@@ -783,7 +808,7 @@ class TestMainInProcess:
 
 
 class TestGetImportsEdgeCases:
-    def test_skips_unreadable_python_files(self, tmp_path):
+    def test_skips_unreadable_python_files(self, tmp_path, capsys):
         layer = tmp_path / "cms"
         layer.mkdir()
         unreadable = layer / "secret.py"
@@ -794,3 +819,15 @@ class TestGetImportsEdgeCases:
             assert get_imports(layer) == {}
         finally:
             unreadable.chmod(0o644)
+        # The skip is reported, so a file the checker could not read is never a silent pass.
+        assert capsys.readouterr().err.count(f"skipped unreadable file {unreadable}") == 2
+
+    def test_reports_unparseable_python_files_skipped_by_ast_passes(self, tmp_path, capsys):
+        layer = tmp_path / "mission_control"
+        layer.mkdir()
+        broken = layer / "broken.py"
+        broken.write_text("from engine.services import (\n")
+
+        assert get_private_facade_imports(layer) == set()
+        assert get_facade_symbol_imports(layer, {"engine.services"}) == ({}, set())
+        assert capsys.readouterr().err.count(f"skipped unreadable or unparseable file {broken}") == 2

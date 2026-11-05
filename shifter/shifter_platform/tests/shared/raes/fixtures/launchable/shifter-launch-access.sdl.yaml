@@ -3,7 +3,7 @@ description: >
   Provisioning-only RAES scenario that additionally authors participant
   interactive access, so the #1710 sidecar projection can be exercised from real
   compiled output rather than hand-built runtime objects. Authored against
-  RAES 3.5.0.
+  RAES 10.2.0.
 
 nodes:
   lan:
@@ -39,7 +39,7 @@ accounts:
 
 agents:
   analyst:
-    entity: analyst-team
+    affiliations: [analyst-team]
     description: Participant offered SSH to the web host.
     starting_accounts: [analyst]
     interactive_access:

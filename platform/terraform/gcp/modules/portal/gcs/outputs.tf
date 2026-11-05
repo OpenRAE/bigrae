@@ -8,3 +8,11 @@ output "audit_logs_bucket_name" {
   value       = google_storage_bucket.audit_logs.name
   depends_on  = [google_storage_bucket_iam_member.audit_log_writer]
 }
+
+output "storage_cmek_buckets" {
+  description = "Customer-managed key of each bucket; gcp-deploy rewrites the live objects that do not use it."
+  value = {
+    (google_storage_bucket.assets.name)     = module.cmek.key_ids["assets"]
+    (google_storage_bucket.audit_logs.name) = module.cmek.key_ids["audit-logs"]
+  }
+}

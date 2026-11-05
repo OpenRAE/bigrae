@@ -30,6 +30,8 @@ export const missionControlTerminalWorkspacePath = (): string => `${MISSION_CONT
 export const missionControlTerminalPath = (instanceUuid: string): string =>
   `${MISSION_CONTROL_BASE}/terminal/${instanceUuid}/`;
 export const missionControlAgentsPath = (): string => `${MISSION_CONTROL_BASE}/agents/`;
+export const missionControlFilesPath = (organization?: string): string =>
+  organization ? `${MISSION_CONTROL_BASE}/files/?organization=${encodeURIComponent(organization)}` : `${MISSION_CONTROL_BASE}/files/`;
 export const missionControlNgfwListPath = (): string => `${MISSION_CONTROL_BASE}/ngfw/`;
 export const missionControlNgfwDetailPath = (appId: string): string => `${MISSION_CONTROL_BASE}/ngfw/${appId}/`;
 export const missionControlNgfwWizardPath = (): string => `${MISSION_CONTROL_BASE}/ngfw/setup/`;

@@ -22,22 +22,25 @@ schema_version: 1
 
 # Named toolchain profiles. A root references a profile; CI never carries a
 # parallel root-to-version mapping. These represent the three live consumer
-# pins today (AWS deploy CI 1.13.3, GCP validation/deploy 1.16.7, provisioner
+# pins today (AWS deploy CI 1.13.3, GCP validation/deploy 1.17.1, provisioner
 # runtime image 1.16.3); unifying them is deliberately out of scope for #1528.
 profiles:
   aws-1.13.3:
     terraform_version: "1.13.3"
     provider_family: aws
-  gcp-1.16.7:
-    terraform_version: "1.16.7"
+  gcp-1.17.1:
+    terraform_version: "1.17.1"
     provider_family: gcp
   provisioner-1.16.3:
     terraform_version: "1.16.3"
     provider_family: aws
+  provisioner-gcp-1.16.3:
+    terraform_version: "1.16.3"
+    provider_family: gcp
 
-# Execution roots: the provisioner stages/executes the two `modules/{range,ngfw}`
-# directories, so despite the name they are runtime roots (each declares a
-# backend and owns a lockfile).
+# Execution roots: the provisioner stages/executes `modules/range`, `modules/ngfw`
+# and `modules/registered-gcp-project`, so despite their names they are runtime
+# roots (each declares a backend and owns a lockfile).
 # A root may declare an optional `test` (relative to `path`): a credential-free
 # `terraform test` suite run with the root's own toolchain against its committed
 # lockfile, for behavior that lives in the root rather than a reusable module.
@@ -99,7 +102,7 @@ roots:
   - id: gcp-platform
     path: platform/terraform/gcp/environments/platform
     owner: "@Brad-Edwards"
-    toolchain: gcp-1.16.7
+    toolchain: gcp-1.17.1
     providers:
       - registry.terraform.io/hashicorp/archive
       - registry.terraform.io/hashicorp/google
@@ -107,38 +110,26 @@ roots:
       - registry.terraform.io/hashicorp/random
       - registry.terraform.io/hashicorp/time
   # GCP-native self-hosted runner (issue #1546). A dedicated execution root and
-  # state prefix, separate from the gcp-dev platform root, so a platform destroy
+  # state prefix, separate from the platform root, so a platform destroy
   # never removes the runner (dev-tenant containment).
   - id: gcp-global-github-runner
     test: tests/inventory.tftest.hcl
     path: platform/terraform/gcp/global/github-runner
     owner: "@Brad-Edwards"
-    toolchain: gcp-1.16.7
+    toolchain: gcp-1.17.1
     providers:
       - registry.terraform.io/hashicorp/google
   # GCP-native GitHub Actions OIDC/WIF identity (pool, provider, packer build SA).
   # A foundational identity root with its own state prefix, separate from the
-  # gcp-dev platform root, so a platform destroy never removes the credentials CI
+  # platform root, so a platform destroy never removes the credentials CI
   # authenticates as (mirrors the github-runner containment).
   - id: gcp-global-cicd-oidc
     test: tests/inventory.tftest.hcl
     path: platform/terraform/gcp/global/cicd-oidc
     owner: "@Brad-Edwards"
-    toolchain: gcp-1.16.7
+    toolchain: gcp-1.17.1
     providers:
       - registry.terraform.io/hashicorp/google
-  # Release registry (ADR-070): the repository that release-gcp.yml and
-  # packer-gcp.yml publish to and that GitHub-less deployments read. It has its
-  # own state prefix and outlives every deployment.
-  - id: gcp-global-release-registry
-    test: tests/registry.tftest.hcl
-    path: platform/terraform/gcp/global/release-registry
-    owner: "@Brad-Edwards"
-    toolchain: gcp-1.16.7
-    providers:
-      - registry.terraform.io/hashicorp/google
-      - registry.terraform.io/hashicorp/google-beta
-      - registry.terraform.io/hashicorp/time
   - id: aws-global-iam
     path: platform/terraform/global/iam
     test: tests/github-subject.tftest.hcl
@@ -161,12 +152,6 @@ roots:
     providers:
       - registry.terraform.io/hashicorp/aws
       - registry.terraform.io/hashicorp/random
-  - id: aws-global-se-admins
-    path: platform/terraform/global/se-admins
-    owner: "@Brad-Edwards"
-    toolchain: aws-1.13.3
-    providers:
-      - registry.terraform.io/hashicorp/aws
   - id: provisioner-range
     path: shifter/engine/provisioner/terraform/modules/range
     owner: "@Brad-Edwards"
@@ -182,6 +167,12 @@ roots:
     providers:
       - registry.terraform.io/hashicorp/aws
       - registry.terraform.io/hashicorp/tls
+  - id: provisioner-registered-gcp-project
+    path: shifter/engine/provisioner/terraform/modules/registered-gcp-project
+    owner: "@Brad-Edwards"
+    toolchain: provisioner-gcp-1.16.3
+    providers:
+      - registry.terraform.io/hashicorp/google
 
 # Reusable modules. Root validation covers them transitively via their
 # consuming roots; they are never init/validated standalone. `contract`
@@ -205,6 +196,16 @@ modules:
     contract: deferred
     reason: "Contract-test rollout tracked in #1597."
     tracking: "#1597"
+  - path: platform/terraform/modules/lambda-code-signing
+    owner: "@Brad-Edwards"
+    contract: terraform_test
+    test: tests/code_signing.tftest.hcl
+    test_profile: aws-1.13.3
+  - path: platform/terraform/modules/lambda-signed-package
+    owner: "@Brad-Edwards"
+    contract: terraform_test
+    test: tests/signed_package.tftest.hcl
+    test_profile: aws-1.13.3
   - path: platform/terraform/modules/log-aggregation
     owner: "@Brad-Edwards"
     contract: deferred
@@ -292,16 +293,21 @@ modules:
     contract: deferred
     reason: "Contract-test rollout tracked in #1597."
     tracking: "#1597"
+  - path: platform/terraform/gcp/modules/gcs-cmek
+    owner: "@Brad-Edwards"
+    contract: terraform_test
+    test: tests/main.tftest.hcl
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/image-build-network
     owner: "@Brad-Edwards"
     contract: deferred
     reason: "Contract-test rollout tracked in #1597."
     tracking: "#1597"
-  - path: platform/terraform/gcp/modules/packer-build-infra
+  - path: platform/terraform/gcp/modules/image-export-storage
     owner: "@Brad-Edwards"
-    contract: deferred
-    reason: "Contract-test rollout tracked in #1597."
-    tracking: "#1597"
+    contract: terraform_test
+    test: tests/main.tftest.hcl
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/platform-core
     owner: "@Brad-Edwards"
     contract: deferred
@@ -311,7 +317,7 @@ modules:
     owner: "@Brad-Edwards"
     contract: terraform_test
     test: tests/main.tftest.hcl
-    test_profile: gcp-1.16.7
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/project-services
     owner: "@Brad-Edwards"
     contract: deferred
@@ -319,19 +325,19 @@ modules:
     tracking: "#1597"
   - path: platform/terraform/gcp/modules/raes-package-storage
     owner: "@Brad-Edwards"
-    contract: deferred
-    reason: "Contract-test rollout tracked in #1597."
-    tracking: "#1597"
+    contract: terraform_test
+    test: tests/main.tftest.hcl
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/range/vpc
     owner: "@Brad-Edwards"
     contract: terraform_test
     test: tests/main.tftest.hcl
-    test_profile: gcp-1.16.7
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/vpn-pool
     owner: "@Brad-Edwards"
     contract: terraform_test
     test: tests/main.tftest.hcl
-    test_profile: gcp-1.16.7
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/github-runner-network
     owner: "@Brad-Edwards"
     contract: deferred
@@ -350,14 +356,14 @@ modules:
     tracking: "#1597"
   - path: platform/terraform/gcp/modules/portal/gcs
     owner: "@Brad-Edwards"
-    contract: deferred
-    reason: "Contract-test rollout tracked in #1597."
-    tracking: "#1597"
+    contract: terraform_test
+    test: tests/main.tftest.hcl
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/portal/gke
     owner: "@Brad-Edwards"
     contract: terraform_test
     test: tests/main.tftest.hcl
-    test_profile: gcp-1.16.7
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/portal/iam
     owner: "@Brad-Edwards"
     contract: deferred
@@ -392,4 +398,4 @@ modules:
     owner: "@Brad-Edwards"
     contract: terraform_test
     test: tests/main.tftest.hcl
-    test_profile: gcp-1.16.7
+    test_profile: gcp-1.17.1

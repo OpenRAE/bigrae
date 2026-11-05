@@ -37,6 +37,19 @@ const ADMIN_CHALLENGES_KEY = "admin-challenges";
 /** Background image copies finish within a scheduler cycle or two (#2090). */
 export const CONTENT_IMAGE_POLL_MS = 30_000;
 
+/**
+ * A scoring event shows on an open scoreboard within 30 seconds (CTF-401, #576).
+ * One interval plus one request must fit that budget. Live socket hints only
+ * accelerate this; they are optional and recipient-specific (ADR-072).
+ */
+export const SCOREBOARD_POLL_MS = 15_000;
+
+const SCOREBOARD_REFRESH = {
+  refetchInterval: SCOREBOARD_POLL_MS,
+  refetchOnWindowFocus: true,
+  refetchOnReconnect: true,
+} as const;
+
 export const ctfKeys = {
   all: ["ctf"] as const,
   currentEvent: () => ["ctf", "current-event"] as const,
@@ -139,6 +152,7 @@ export function useCtfScoreboard(eventId: string, bracketId?: string, enabled = 
         signal,
         query: bracketId ? { bracket: bracketId } : undefined,
       }),
+    ...SCOREBOARD_REFRESH,
   });
 }
 
@@ -159,6 +173,7 @@ export function useCtfOrganizerScoreboard(eventId: string, bracketId?: string, e
         signal,
         query: bracketId ? { bracket: bracketId } : undefined,
       }),
+    ...SCOREBOARD_REFRESH,
   });
 }
 

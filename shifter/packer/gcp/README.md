@@ -9,23 +9,24 @@ to the AWS `amazon-ebs` templates in the parent directory.
 > (it does not recurse), so the AWS `packer build .` / `-only='*.<type>'` flow
 > never sees a `googlecompute` source, and the AWS path is unaffected.
 
-## The image-family contract
+## The image contract
 
 There is no GCP equivalent of the AWS `/shifter/ami/*` SSM parameter. Instead:
 
-- Each build publishes image `shifter-<type>-<timestamp>` into **image family**
-  `shifter-<type>` with labels (`project`, `managed-by`, `image-type`). The
-  pre-promoted DC uses a purpose-scoped family `shifter-<purpose>-dc`.
-- Consumers resolve the **newest non-deprecated image in the family**
-  (`gcloud compute images describe-from-family shifter-<type>`).
-- A dev image must pass the **candidate-boot validation gate**
-  (`packer-gcp-validate.yml`) before it can ship: the workflow boots the exact
-  candidate in a disposable, isolated VM and, on success, labels that image
-  `validated=passed`.
-- Promotion (`packer-gcp-promote.yml`) is **evidence-driven**: it copies the
-  **exact validated candidate** (verified `validated=passed`) into the prod
-  family, verifies the new prod image, then deprecates the previous head. It
-  never re-resolves "newest in the dev family" at promotion time.
+- Each build creates image `shifter-<type>-<timestamp>` in the developer build
+  project, with labels (`project`, `managed-by`, `image-type`, `source-revision`,
+  `build-run`).
+- `packer-gcp.yml` calls the **candidate-boot validation gate**
+  (`packer-gcp-validate.yml`) for the exact candidate. The gate boots the image
+  in a disposable, isolated VM and, on success, labels it `validated=passed`.
+- Only after that gate passes, the same run exports the validated image and
+  publishes it to `ghcr.io/<owner>/<repository>/gce-<role>` with signed build
+  provenance.
+- A run that does not publish deletes the image, the builder VM
+  `packer-<run ID>-<run attempt>`, and its disk. To retry, start a new run. A
+  re-run of only the failed jobs fails, because the image no longer exists.
+- Each release names the newest verified publication of each role. The deploy
+  verifies the provenance and imports those images into the range project.
 
 ## Prerequisites
 
@@ -48,7 +49,8 @@ packer build -only='googlecompute.ubuntu' \
   -var="network=default" -var="subnetwork=default" \
   -var="service_account_email=packer-builder@my-proj.iam.gserviceaccount.com" \
   -var="image_prefix=shifter" -var="machine_type=e2-standard-2" \
-  -var="use_internal_ip=false" .
+  -var="use_internal_ip=false" -var="source_revision=$(git rev-parse HEAD)" \
+  -var="build_id=0-1" .
 ```
 
 In CI, variables are passed as `PKR_VAR_*` environment variables (never `-var`
@@ -87,11 +89,12 @@ packer build -only='googlecompute.kali' \
   -var="network=default" -var="subnetwork=default" \
   -var="service_account_email=packer-builder@my-proj.iam.gserviceaccount.com" \
   -var="image_prefix=shifter" -var="machine_type=e2-standard-2" \
-  -var="use_internal_ip=false" .
+  -var="use_internal_ip=false" -var="source_revision=$(git rev-parse HEAD)" \
+  -var="build_id=0-1" .
 ```
 
-See `docs/architecture/gcp-guest-images.md` for the full build → export → wire
-pipeline.
+See `docs/architecture/gcp-guest-images.md` for the full build, validate,
+publish, and import pipeline.
 
 ### Windows / DC
 
@@ -131,8 +134,8 @@ equivalent hygiene by hand:
 > `packer-gcp-validate.yml` candidate-boot gate is the live-guest check. It
 > boots the exact built image in a disposable isolated VM (no external IP, IAP,
 > Shielded VM), reboots it, verifies guest/stack/AD health, and labels the image
-> `validated=passed`. Run it against a real project after a build, then promote
-> the validated image.
+> `validated=passed`. `packer-gcp.yml` runs it for each build and publishes
+> only a validated image.
 
 ## Guest specialization
 

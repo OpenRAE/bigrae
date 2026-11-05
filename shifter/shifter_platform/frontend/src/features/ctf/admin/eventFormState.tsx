@@ -7,13 +7,25 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { useCreateCtfEvent, useCtfEvent, useCtfScenarios, useUpdateCtfEvent } from "@/api/ctfAdmin";
 import type { ModelSourceSelection } from "@/api/model-sources";
-import { ApiError } from "@/api/errors";
-import type { CtfEventDetail, CtfEventWrite } from "@/api/types";
+import { ApiError, describeMutationError } from "@/api/errors";
+import type { ContentScopeOption, CtfEventDetail, CtfEventWrite } from "@/api/types";
+import { contentScopeKey, useContentScopes } from "@/api/scenarios";
 
 import { fromDateTimeLocalValue, toDateTimeLocalValue } from "../format";
 import { ctfAdminEventPath, ctfAdminEventsPath } from "../routes";
 
 export const NO_SCENARIO = "__none__";
+
+type LiveNotificationKind = NonNullable<CtfEventWrite["live_notifications"]>[number];
+
+/** Live notification kinds an organizer can select, in display order (CTF-802, ADR-072). */
+export const LIVE_NOTIFICATION_OPTIONS: ReadonlyArray<{ kind: LiveNotificationKind; label: string }> = [
+  { kind: "messages", label: "Live message alerts" },
+  { kind: "challenge_released", label: "New challenge released" },
+  { kind: "first_blood", label: "First blood" },
+  { kind: "position_changed", label: "Scoreboard position changes" },
+  { kind: "range_ready", label: "Range ready" },
+];
 
 interface FormState {
   workspace: string;
@@ -45,6 +57,7 @@ interface FormState {
   scoreboard_visibility: string;
   rating_visibility: string;
   scoring_mode: string;
+  live_notifications: LiveNotificationKind[];
 }
 
 const EMPTY: FormState = {
@@ -75,6 +88,7 @@ const EMPTY: FormState = {
   scoreboard_visibility: "public",
   rating_visibility: "public",
   scoring_mode: "standard",
+  live_notifications: LIVE_NOTIFICATION_OPTIONS.map((option) => option.kind),
 };
 
 function fromEvent(event: CtfEventDetail): FormState {
@@ -110,6 +124,9 @@ function fromEvent(event: CtfEventDetail): FormState {
     scoreboard_visibility: event.scoreboard_visibility || "public",
     rating_visibility: event.rating_visibility || "public",
     scoring_mode: event.scoring_mode || "standard",
+    live_notifications: LIVE_NOTIFICATION_OPTIONS.map((option) => option.kind).filter((kind) =>
+      (event.live_notifications ?? []).includes(kind),
+    ),
   };
 }
 
@@ -179,6 +196,7 @@ function toPayload(state: FormState): CtfEventWrite {
     scoreboard_visibility: state.scoreboard_visibility,
     rating_visibility: state.rating_visibility,
     scoring_mode: state.scoring_mode,
+    live_notifications: state.live_notifications,
   };
 }
 
@@ -212,6 +230,15 @@ export function renderEditLoadState(
   return null;
 }
 
+/**
+ * Browsers report unparseable number input (like "1e") as an empty value, which
+ * would otherwise save as an intentional blank: for team size, unlimited (CTF-505).
+ */
+function firstUnparsedNumberInput(form: HTMLFormElement): HTMLInputElement | null {
+  const inputs = Array.from(form.querySelectorAll<HTMLInputElement>('input[type="number"]'));
+  return inputs.find((input) => input.validity.badInput) ?? null;
+}
+
 function submitEventForm(
   event: React.FormEvent,
   opts: Readonly<{
@@ -239,13 +266,21 @@ export function useEventFormState(mode: "create" | "edit") {
   const eventId = mode === "edit" ? (params.eventId ?? "") : "";
 
   const existing = useCtfEvent(eventId, mode === "edit");
-  const scenarios = useCtfScenarios();
+  const [catalogOffset, setCatalogOffset] = useState(0);
+  const [selectedCatalog, setSelectedCatalog] = useState<ContentScopeOption | null>(null);
+  const catalogs = useContentScopes(catalogOffset);
+  const catalog = selectedCatalog ?? catalogs.data?.results[0] ?? null;
+  const listedCatalogs = catalogs.data?.results ?? [];
+  const catalogChoices = catalog && !listedCatalogs.some((row) => contentScopeKey(row) === contentScopeKey(catalog))
+    ? [catalog, ...listedCatalogs] : listedCatalogs;
+  const scenarios = useCtfScenarios(catalog);
   const create = useCreateCtfEvent();
   const update = useUpdateCtfEvent(eventId);
   const mutation = mode === "create" ? create : update;
 
   const [state, setState] = useState<FormState>(EMPTY);
   const [initialized, setInitialized] = useState(mode === "create");
+  const [inputError, setInputError] = useState<string | null>(null);
   const formRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
@@ -267,19 +302,43 @@ export function useEventFormState(mode: "create" | "edit") {
   }, [fieldErrors]);
 
   const nonFieldError =
-    mutation.error instanceof ApiError && Object.keys(fieldErrors).length === 0 ? mutation.error.message : null;
+    inputError ??
+    (Object.keys(fieldErrors).length === 0
+      ? describeMutationError(mutation.error, "The event could not be saved.")
+      : null);
 
   function set<K extends keyof FormState>(key: K, value: FormState[K]) {
     setState((prev) => ({ ...prev, [key]: value }));
+  }
+
+  function selectCatalog(value: string) {
+    setSelectedCatalog(catalogChoices.find((row) => contentScopeKey(row) === value) ?? null);
+    setState((previous) => ({ ...previous, scenario_id: "", model_sources: { aliases: [] } }));
+  }
+
+  function browseCatalogs(offset: number) {
+    setSelectedCatalog(catalog);
+    setCatalogOffset(offset);
   }
 
   function firstError(field: string): string | undefined {
     return fieldErrors[field]?.[0];
   }
 
-  function onSubmit(event: React.FormEvent) {
+  function onSubmit(event: React.FormEvent<HTMLFormElement>) {
+    const unparsed = firstUnparsedNumberInput(event.currentTarget);
+    if (unparsed) {
+      event.preventDefault();
+      unparsed.focus();
+      setInputError(`${unparsed.labels?.[0]?.textContent ?? "A number field"} is not a valid number.`);
+      return;
+    }
+    setInputError(null);
     submitEventForm(event, { state, mode, eventId, create, update, navigate });
   }
 
-  return { eventId, existing, scenarios, mutation, state, formRef, nonFieldError, set, firstError, onSubmit, navigate };
+  return {
+    eventId, existing, scenarios, mutation, state, formRef, nonFieldError, set, firstError, onSubmit, navigate,
+    catalog, catalogs, catalogChoices, catalogOffset, selectCatalog, browseCatalogs,
+  };
 }

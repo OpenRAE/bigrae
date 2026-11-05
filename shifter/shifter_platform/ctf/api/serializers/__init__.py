@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from ctf.api.serializers.organizer import (
     CleanupControlRequestSerializer,
+    CtfScenarioListQuerySerializer,
     CtfScenarioListResponseSerializer,
     CtfScenarioRefSerializer,
     EventContentRefreshRequestSerializer,
@@ -74,9 +75,6 @@ from ctf.api.serializers.organizer_extras import (
 from ctf.api.serializers.organizer_ops import (
     AssignBracketRequestSerializer,
     AssignBracketResultSerializer,
-    EmailTemplateResponseSerializer,
-    EmailTemplateRevertResultSerializer,
-    EmailTemplateWriteSerializer,
     NotificationAnnounceRequestSerializer,
     NotificationAnnounceResultSerializer,
     NotificationListItemSerializer,
@@ -167,12 +165,10 @@ __all__ = [
     "ChallengeSummarySerializer",
     "ChallengeWriteSerializer",
     "CleanupControlRequestSerializer",
+    "CtfScenarioListQuerySerializer",
     "CtfScenarioListResponseSerializer",
     "CtfScenarioRefSerializer",
     "DeleteSuccessSerializer",
-    "EmailTemplateResponseSerializer",
-    "EmailTemplateRevertResultSerializer",
-    "EmailTemplateWriteSerializer",
     "EventContentRefreshRequestSerializer",
     "EventContentRefreshResultSerializer",
     "EventDetailSerializer",

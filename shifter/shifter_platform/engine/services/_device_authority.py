@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 from uuid import UUID
+
+from django.core.exceptions import ObjectDoesNotExist
 
 from shared.authorization import AuthorizationRequest
 from shared.authorization.policy import require_authorization, scope_parent
 from shared.credentials import CredentialContext, resolve_current_credential, resolve_local_credential
 from shared.identity_scope import ResourceScope
+from shared.log_sanitize import safe_log_value
 from shared.operation_authority import credential_reference_fields, credential_reference_from_record
 from shared.operation_envelope import canonical_payload_digest
 
@@ -22,6 +26,7 @@ if TYPE_CHECKING:
     from shared.identity_scope import ResourceScope
     from shared.schemas import RequestSpec
 
+logger = logging.getLogger(__name__)
 
 _DEVICE_AUTHORITY_UNAVAILABLE = "Device authority unavailable"
 
@@ -139,6 +144,11 @@ def device_binding_digest(runtime: Instance) -> str:
 
 def admitted_device_authority(runtime: Instance, credential: CredentialContext) -> dict[str, Any]:
     """Bind a previously evaluated parent decision to native SQL custody."""
+    return {**credential_reference_fields(credential), **_device_authority_fields(runtime)}
+
+
+def _device_authority_fields(runtime: Instance) -> dict[str, Any]:
+    """Project native custody without evaluating or granting application policy."""
     request = _device_request(runtime)
     scope = device_scope(runtime)
     parent = scope_parent(scope)
@@ -146,7 +156,6 @@ def admitted_device_authority(runtime: Instance, credential: CredentialContext) 
     if len(apps) != 1:
         raise ValueError("Device identity unavailable")
     return {
-        **credential_reference_fields(credential),
         "authority_kind": "principal",
         "authority_action": f"{parent.type}.manage_devices",
         "authority_target_type": parent.type,
@@ -202,7 +211,7 @@ def authorize_device_authority(intent: ProvisionerLaunchIntent, runtime: Instanc
             return
         current = resolve_current_credential(credential_reference_from_record(intent))
         require_device_scope(current, device_scope(runtime))
-    except Exception:
+    except Exception:  # noqa: BLE001  # fail-closed authority check; every failure is one bounded denial
         raise PermissionError(_DEVICE_AUTHORITY_UNAVAILABLE) from None
 
 
@@ -315,7 +324,19 @@ def verified_device_status_projection(event: dict[str, Any]) -> tuple[UUID, UUID
         ):
             raise ValueError(_DEVICE_CALLBACK_UNAVAILABLE)
         return (runtime.request.request_id, runtime.uuid, runtime.request.owner_principal_uuid, device_scope(runtime))
+    except (KeyError, TypeError, ValueError, ObjectDoesNotExist) as exc:
+        # The callback does not match accepted native state: fail closed.
+        logger.warning(
+            "device status callback not verified event_id=%s exc_type=%s",
+            safe_log_value(event.get("event_id")),
+            type(exc).__name__,
+        )
+        return None
     except Exception:
+        # An unexpected failure still fails closed; keep its traceback.
+        logger.exception(
+            "device status callback verification failed event_id=%s", safe_log_value(event.get("event_id"))
+        )
         return None
 
 
@@ -327,6 +348,8 @@ def admit_native_device_access(credential: CredentialContext, identifier: UUID |
         runtime = Instance.objects.select_related("request").get(
             apps__uuid=UUID(str(identifier)),
             apps__app_type="ngfw",
+            apps__status="ready",
+            apps__deleted_at__isnull=True,
             role="ngfw",
             status="ready",
             deleted_at__isnull=True,
@@ -336,9 +359,40 @@ def admit_native_device_access(credential: CredentialContext, identifier: UUID |
         latest = Instance.objects.select_related("request").get(pk=runtime.pk, status="ready", deleted_at__isnull=True)
         if binding != device_binding_digest(latest):
             raise ValueError("Device access changed")
-        fields = admitted_device_authority(latest, current)
-        fields["authority_action"] = fields["authority_action"].replace("manage_devices", "access_devices")
-        fields["authority_resource_uuid"] = latest.uuid
-        return fields
-    except Exception:
+        return {**credential_reference_fields(current), **_device_remote_authority_fields(latest)}
+    except Exception:  # noqa: BLE001  # fail-closed device authority; only bounded denial escapes
         raise PermissionError("Device access unavailable") from None
+
+
+def _device_remote_authority_fields(runtime: Instance) -> dict[str, Any]:
+    """Pin the exact native device custody and access action for the final handoff."""
+    fields = _device_authority_fields(runtime)
+    fields["authority_action"] = fields["authority_action"].replace("manage_devices", "access_devices")
+    fields["authority_resource_uuid"] = runtime.uuid
+    return fields
+
+
+def lock_native_device_access_binding(identifier: UUID | str) -> dict[str, Any]:
+    """Lock and project exact native remote custody, without a policy decision."""
+    from django.db import transaction
+
+    from engine.models import App, Instance, Request
+
+    if not transaction.get_connection().in_atomic_block:
+        raise ValueError("Device binding requires a transaction")
+    runtime = Instance.objects.select_for_update(of=("self",)).get(
+        apps__uuid=UUID(str(identifier)),
+        apps__app_type="ngfw",
+        apps__status="ready",
+        apps__deleted_at__isnull=True,
+        role="ngfw",
+        status="ready",
+        deleted_at__isnull=True,
+    )
+    if runtime.request_id is None:
+        raise ValueError("Device request unavailable")
+    runtime.request = Request.objects.select_for_update().get(pk=runtime.request_id)
+    App.objects.select_for_update().get(
+        instance=runtime, uuid=UUID(str(identifier)), app_type="ngfw", status="ready", deleted_at__isnull=True
+    )
+    return _device_remote_authority_fields(runtime)

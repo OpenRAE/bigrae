@@ -18,6 +18,7 @@ import json
 from typing import TYPE_CHECKING
 
 from engine.models import Instance, OperationInput, ProvisionerLaunchIntent, Range, Request
+from shared.gcp_cloud_content import CloudContentEnvelope
 from shared.operation_envelope import build_operation_envelope
 from shared.raes.artifact_binding import ArtifactBinding
 from shared.raes.content_delivery import DeliveryBinding
@@ -97,6 +98,10 @@ def _raes_image_candidates(plan: dict[str, object], target: Range | None = None)
     """
     from engine.models import RaesImageMapping
 
+    if target is not None:
+        worker_candidates = _worker_image_candidates(target, plan)
+        if worker_candidates is not None:
+            return worker_candidates
     keys = plan_image_lookup_keys(plan)
     if not keys:
         return {}
@@ -104,11 +109,16 @@ def _raes_image_candidates(plan: dict[str, object], target: Range | None = None)
     rows = RaesImageMapping.objects.filter(source_name__in=list(keys), enabled=True)
     if target is not None and target.owner_principal_uuid is not None:
         from engine.services._inventory_scope import inventory_scope_filter
-        from engine.services._range_authority import project_range_authority
+        from shared.identity_scope import ResourceScope
 
         if target.request is None:
             raise ValueError("Range request unavailable")
-        scope = project_range_authority(target.request.request_id).scope
+        if target.scope_kind == "installation":
+            scope = ResourceScope("installation")
+        else:
+            from engine.services._range_authority import project_range_authority
+
+            scope = project_range_authority(target.request.request_id).scope
         rows = rows.filter(inventory_scope_filter(scope))
     else:
         rows = rows.filter(scope_kind="")
@@ -228,7 +238,18 @@ def _raes_remote_access(target: Range) -> RaesRemoteAccess | None:
     return parse_remote_access({"capability": capability})
 
 
-def _raes_input_payload(target: Range, request: Request, *, suppress_access: bool = False) -> dict[str, object]:
+def _raes_cloud_content(target: Range) -> CloudContentEnvelope | None:
+    """Project only the retained sealed content; absence keeps the old input shape."""
+    return (
+        CloudContentEnvelope.model_validate(target.raes_cloud_content)
+        if target.raes_cloud_content is not None
+        else None
+    )
+
+
+def _raes_input_payload(
+    target: Range, request: Request, *, suppress_access: bool = False, preparation_for_cleanup: bool = False
+) -> dict[str, object]:
     """Compose the RAES operation input (ADR-043 phase 5, #1837).
 
     Replaces direct provisioner reads with one immutable row: the serialized
@@ -241,18 +262,30 @@ def _raes_input_payload(target: Range, request: Request, *, suppress_access: boo
     access; warm activation later carries the access bindings and realizes the
     claimant's fresh access.
     """
+    from engine.services._gcp_project_inputs import projects_for_input, retained_project_cleanup_payload
     from engine.services._model_guest_bindings import project_model_guest_bindings
     from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
+    from engine.services._runtime_plugin_cleanup import retained_cleanup_payload
 
     plan = target.range_config or {}
     pin = retained_runtime_plugin_pin(target)
+    if preparation_for_cleanup:
+        retained = retained_cleanup_payload(target, pin)
+        if retained is not None:
+            return retained
+        retained = retained_project_cleanup_payload(target)
+        if retained is not None:
+            return retained
     return build_raes_operation_input(
         plan=plan,
         bindings=RaesInputBindings(
             delivery=_raes_delivery_bindings(target),
+            management_targets=_management_targets(target, plan),
             access=() if suppress_access else _raes_access_bindings(target),
             artifact=_raes_artifact_bindings(target),
             runtime_plugin=pin,
+            gcp_projects=projects_for_input(target, plan, pin),
+            cloud_content=_raes_cloud_content(target),
             model_enrollments=project_model_guest_bindings(target, pin) if not suppress_access else (),
             remote_access=None if suppress_access else _raes_remote_access(target),
         ),
@@ -282,19 +315,23 @@ def _activation_input_payload(target: Range, request: Request) -> dict[str, obje
     )
     if gen is None:
         raise ValueError("activation requires a claimed warm generation for the request")
-    claimant = target.user
-    if claimant is None:
-        raise ValueError("Warm activation requires a human claimant")
+    if target.owner_principal_uuid is None:
+        raise ValueError("Warm activation requires a principal claimant")
+    from shared.principal_port import resolve_principal_uuid
+    from workspaces.services import resource_scope_from_ids
+
+    claimant = resolve_principal_uuid(target.owner_principal_uuid)
+    scope = resource_scope_from_ids(
+        kind=target.scope_kind,
+        account_id=target.account_id,
+        organization_id=target.organization_id,
+        workspace_id=target.workspace_id,
+    )
+    if scope.kind != "account":
+        raise ValueError("Warm activation requires a customer-scoped range")
     purpose = target.instantiation_purpose or "live_fire"
-    workspace_id = target.workspace_id
-    if workspace_id is None:
-        raise ValueError("activation requires a workspace-scoped range")
     return build_activation_input(
-        claimant=ActivationClaimant(
-            user_id=int(target.cms_user_id or claimant.id),
-            username=str(claimant.username),
-            workspace_id=workspace_id,
-        ),
+        claimant=ActivationClaimant(principal=claimant, scope=scope),
         generation=ActivationGeneration(
             range_source=gen.range_source,
             instantiation_purpose=str(purpose),
@@ -331,7 +368,12 @@ def _range_operation_payload(target: Range, resource: str, request: Request, ope
         # A warm-prepare provision suppresses participant access so the realized
         # generation is system-owned and quarantined until it is claimed and
         # activated (#28).
-        return _raes_input_payload(target, request, suppress_access=_request_has_pending_warm_generation(request))
+        return _raes_input_payload(
+            target,
+            request,
+            suppress_access=_request_has_pending_warm_generation(request),
+            preparation_for_cleanup=operation == "destroy",
+        )
     return {
         "range_spec": target.range_config or {},
         "legacy_range_backend": _resolved_range_backend(target, request),
@@ -387,3 +429,44 @@ def materialize_operation_input(payload: dict[str, object], operation_id: UUID |
         envelope=envelope,
     )
     queue_runtime_plugin_plans(envelope)
+
+
+def _management_targets(target: Range, plan: dict[str, object]) -> tuple[str, ...]:
+    """Request private management only for an Engine-owned worker host."""
+    from engine.models import DisposableWorker
+    from shared.raes.worker_host import worker_host_shape
+
+    targets = []
+    if DisposableWorker.objects.filter(range_id=target.pk).exists():
+        targets.append(worker_host_shape(plan)[0])
+    return tuple(targets)
+
+
+def _worker_image_candidates(target: Range, plan: dict[str, object]) -> dict[str, list[dict[str, object]]] | None:
+    """Project the worker's retained image identity without consulting the registry."""
+    from engine.models import DisposableWorker
+    from shared.disposable_workers import WorkerHostProfile
+    from shared.raes.worker_host import worker_host_shape
+
+    worker = DisposableWorker.objects.filter(range_id=target.pk).first()
+    if worker is None:
+        return None
+    profile = WorkerHostProfile.model_validate(worker.profile)
+    if profile.digest != worker.profile_digest or profile.plan != plan:
+        raise ValueError("Worker apparatus binding changed")
+    _, source, version, _, _ = worker_host_shape(plan)
+    image = profile.image
+    return {
+        candidate_key("gce", source): [
+            {
+                "source_version": version,
+                "image_ref": image.image_ref,
+                "image_id": profile.image_id,
+                "machine_type": image.machine_type,
+                "disk_size_gb": image.disk_size_gb,
+                "disk_type": image.disk_type,
+                "management_ssh_port": image.management_ssh_port,
+                "management_ssh_username": image.management_ssh_username,
+            }
+        ]
+    }

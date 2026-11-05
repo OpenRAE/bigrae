@@ -20,8 +20,7 @@ from uuid import uuid4
 import pytest
 from django.urls import reverse
 
-from ctf.enums import NotificationType
-from ctf.models import CTFEmailTemplate, CTFHint
+from ctf.models import CTFHint
 from tests.ctf._api_flow_helpers import JSON
 from tests.ctf._api_flow_helpers import call_json as _json
 from tests.ctf.factories import create_event_data
@@ -39,9 +38,8 @@ def recorded_email():
     """Record messages at the external SMTP boundary (ADR-019-R1).
 
     Replaces ``EmailMultiAlternatives`` with a recording double whose ``send()``
-    signals ``delivered``, so a test can wait deterministically on the real
-    ``shared.email.send_email_async`` background dispatch and then assert on what
-    crossed the boundary. Mirrors the fixture in
+    signals ``delivered``, so a test can assert on what crossed the boundary
+    through the real ``shared.email`` transport seam. Mirrors the fixture in
     ``test_services/test_notification.py``: only the external SMTP boundary is
     patched, never a first-party ``ctf.services.*`` seam.
     """
@@ -117,6 +115,44 @@ class TestEventApi:
         # Valid rename of a draft event must succeed (200).
         assert resp.status_code == 200
 
+    @pytest.mark.parametrize("team_size_limit", [None, 0, 1, 50])
+    def test_detail_put_team_size_limit_accepts_ctf_505_values(
+        self, authenticated_organizer_client: Client, ctf_event_draft: CTFEvent, team_size_limit
+    ):
+        """CTF-505 (#648): organizers set 1+ with no upper bound; 0 or null is unlimited."""
+        resp = _json(
+            authenticated_organizer_client,
+            "put",
+            "api_event_detail",
+            kwargs={"event_id": ctf_event_draft.id},
+            body={"team_mode": True, "team_size_limit": team_size_limit},
+        )
+        assert resp.status_code == 200
+        ctf_event_draft.refresh_from_db()
+        assert ctf_event_draft.team_size_limit == team_size_limit
+
+    @pytest.mark.parametrize("team_size_limit", [-1, 2.5, "overflow"], ids=["negative", "fractional", "overflow"])
+    def test_detail_put_team_size_limit_rejects_invalid(
+        self, authenticated_organizer_client: Client, ctf_event_draft: CTFEvent, team_size_limit
+    ):
+        """Invalid limits fail validation with a 400 before any write."""
+        if team_size_limit == "overflow":
+            from django.db import connection
+
+            # The representable maximum is backend-specific (32-bit on PostgreSQL, 64-bit on SQLite).
+            team_size_limit = connection.ops.integer_field_range("PositiveIntegerField")[1] + 1
+        before = ctf_event_draft.team_size_limit
+        resp = _json(
+            authenticated_organizer_client,
+            "put",
+            "api_event_detail",
+            kwargs={"event_id": ctf_event_draft.id},
+            body={"team_mode": True, "team_size_limit": team_size_limit},
+        )
+        assert resp.status_code == 400
+        ctf_event_draft.refresh_from_db()
+        assert ctf_event_draft.team_size_limit == before
+
     def test_detail_delete(self, authenticated_organizer_client: Client, ctf_event_draft: CTFEvent):
         resp = _json(
             authenticated_organizer_client, "delete", "api_event_detail", kwargs={"event_id": ctf_event_draft.id}
@@ -144,10 +180,10 @@ class TestEventApi:
             )
         assert resp.status_code == 200
 
-    def test_scenarios_get(self, authenticated_organizer_client: Client):
-        with patch("ctf.bridges.cms_list_scenarios", return_value=[("basic", "Basic")]):
-            resp = _json(authenticated_organizer_client, "get", "api_scenarios")
+    def test_scenarios_get(self, authenticated_organizer_client: Client, allow_all_policy):
+        resp = authenticated_organizer_client.get(reverse("v1:ctf:api_scenarios"), {"scope_kind": "installation"})
         assert resp.status_code == 200
+        assert resp.json() == {"scenarios": []}
 
 
 class TestParticipantScopedApi:
@@ -294,10 +330,15 @@ class TestParticipantManagementApi:
             "api_participant_detail",
             kwargs={"participant_id": ctf_participant.id},
         )
-        # Deleting an existing participant must succeed (200).
-        assert resp.status_code == 200
+        assert resp.status_code == 204
 
-    def test_resend_invite(self, authenticated_organizer_client: Client, ctf_event: CTFEvent, recorded_email):
+    def test_resend_invite(
+        self,
+        authenticated_organizer_client: Client,
+        ctf_event: CTFEvent,
+        organizer_credential,
+        recorded_email,
+    ):
         """Resend runs the real credential-delivery service end-to-end; only the
         external SMTP boundary is mocked (ADR-019-R1). A participant with a real
         isolated account and a delivery email receives fresh login info, so the
@@ -307,7 +348,12 @@ class TestParticipantManagementApi:
 
         from ctf.services.participant import add_participant
 
-        participant = add_participant(event_id=ctf_event.id, email="resend@test.com", name="Resend Target")
+        participant = add_participant(
+            event_id=ctf_event.id,
+            email="resend@test.com",
+            name="Resend Target",
+            actor=organizer_credential,
+        )
         message_cls, delivered, messages = recorded_email
         with (
             override_settings(CTF_FROM_EMAIL="ctf@test.com", SITE_URL="https://example.com"),
@@ -394,97 +440,13 @@ class TestNotificationApi:
         )
         assert resp.status_code == 410
 
-    def test_email_template_get_default(self, authenticated_organizer_client: Client, ctf_event: CTFEvent):
-        resp = _json(
-            authenticated_organizer_client,
-            "get",
-            "api_event_email_template",
-            kwargs={"event_id": ctf_event.id, "notification_type": NotificationType.INVITE.value},
-        )
-        assert resp.status_code == 404
-
-    def test_email_template_bad_type(self, authenticated_organizer_client: Client, ctf_event: CTFEvent):
-        resp = _json(
-            authenticated_organizer_client,
-            "get",
-            "api_event_email_template",
-            kwargs={"event_id": ctf_event.id, "notification_type": "bogus"},
-        )
-        assert resp.status_code == 400
-
-    def test_email_template_put_then_delete(self, authenticated_organizer_client: Client, ctf_event: CTFEvent):
-        ntype = NotificationType.INVITE.value
-        put = _json(
-            authenticated_organizer_client,
-            "put",
-            "api_event_email_template",
-            kwargs={"event_id": ctf_event.id, "notification_type": ntype},
-            body={"subject": "S", "html_body": "<p>hi</p>", "text_body": "hi"},
-        )
-        assert put.status_code == 200
-        assert CTFEmailTemplate.objects.filter(event=ctf_event, notification_type=ntype).exists()
-        delete = _json(
-            authenticated_organizer_client,
-            "delete",
-            "api_event_email_template",
-            kwargs={"event_id": ctf_event.id, "notification_type": ntype},
-        )
-        assert delete.status_code == 200
-        assert not CTFEmailTemplate.objects.filter(event=ctf_event, notification_type=ntype).exists()
-
-    def test_email_template_put_rejects_template_tags(
+    def test_retired_email_template_override_path_is_gone(
         self, authenticated_organizer_client: Client, ctf_event: CTFEvent
     ):
-        ntype = NotificationType.INVITE.value
-        resp = _json(
-            authenticated_organizer_client,
-            "put",
-            "api_event_email_template",
-            kwargs={"event_id": ctf_event.id, "notification_type": ntype},
-            body={
-                "subject": "S",
-                "html_body": "{% load i18n %}<p>{{ event_name }}</p>",
-                "text_body": "{{ event_name }}",
-            },
-        )
-        assert resp.status_code == 400
-        assert not CTFEmailTemplate.objects.filter(event=ctf_event, notification_type=ntype).exists()
-
-    def test_email_template_put_rejects_attribute_traversal(
-        self, authenticated_organizer_client: Client, ctf_event: CTFEvent
-    ):
-        ntype = NotificationType.INVITE.value
-        resp = _json(
-            authenticated_organizer_client,
-            "put",
-            "api_event_email_template",
-            kwargs={"event_id": ctf_event.id, "notification_type": ntype},
-            body={
-                "subject": "S",
-                "html_body": "<p>{{ event.created_by.password }}</p>",
-                "text_body": "hi",
-            },
-        )
-        assert resp.status_code == 400
-        assert not CTFEmailTemplate.objects.filter(event=ctf_event, notification_type=ntype).exists()
-
-    def test_email_template_put_accepts_allowlisted_placeholders(
-        self, authenticated_organizer_client: Client, ctf_event: CTFEvent
-    ):
-        ntype = NotificationType.INVITE.value
-        resp = _json(
-            authenticated_organizer_client,
-            "put",
-            "api_event_email_template",
-            kwargs={"event_id": ctf_event.id, "notification_type": ntype},
-            body={
-                "subject": "S",
-                "html_body": "<p>Hi {{ participant_name }}, join {{ event_name }}: {{ registration_url }}</p>",
-                "text_body": "Hi {{ participant_name }}",
-            },
-        )
-        assert resp.status_code == 200
-        assert CTFEmailTemplate.objects.filter(event=ctf_event, notification_type=ntype).exists()
+        # #580 retired the per-event override API; no method of the old path routes.
+        path = f"/api/v1/ctf/events/{ctf_event.id}/email-templates/invite/"
+        for method in ("get", "put", "delete"):
+            assert getattr(authenticated_organizer_client, method)(path).status_code == 404
 
 
 class TestRangeApi:
@@ -529,9 +491,24 @@ class TestRangeApi:
     def test_participant_range_action(
         self, authenticated_organizer_client: Client, ctf_participant: CTFParticipant, route, service_fn
     ):
-        with patch(f"ctf.services.range.{service_fn}", return_value={"status": "ok"}):
+        with patch(f"ctf.services.range.{service_fn}", return_value={"status": "ok"}) as action:
             resp = _json(authenticated_organizer_client, "post", route, kwargs={"participant_id": ctf_participant.id})
         assert resp.status_code == 200
+        from shared.credentials import CredentialContext
+
+        credential = action.call_args.kwargs["actor"]
+        assert isinstance(credential, CredentialContext)
+        assert credential.principal.uuid == ctf_participant.event.created_by.identity_principal.uuid
+
+        # The range service acts as the participant; this row names the organizer (#2617).
+        from shared.models import AuditLog
+
+        row = AuditLog.objects.get(context="ctf_organizer_participant_range_action")
+        assert row.actor_id == ctf_participant.event.created_by_id
+        assert row.actor_principal_uuid == credential.principal.uuid
+        assert row.new_state["participant_id"] == str(ctf_participant.id)
+        assert row.new_state["operation"] == f"range.participant.{service_fn.split('_', 1)[0]}"
+        assert row.new_state["authority_source"] == "policy"
 
     def test_participant_range_action_not_found(self, authenticated_organizer_client: Client):
         resp = _json(
@@ -542,7 +519,13 @@ class TestRangeApi:
         )
         assert resp.status_code == 404
 
-    def test_send_invitations(self, authenticated_organizer_client: Client, ctf_event: CTFEvent, recorded_email):
+    def test_send_invitations(
+        self,
+        authenticated_organizer_client: Client,
+        ctf_event: CTFEvent,
+        organizer_credential,
+        recorded_email,
+    ):
         """Real ``send_login_info`` runs end-to-end; only the external SMTP
         boundary is mocked (ADR-019-R1). One participant with a delivery email
         means the endpoint sends one invitation and returns 200.
@@ -551,7 +534,12 @@ class TestRangeApi:
 
         from ctf.services.participant import add_participant
 
-        add_participant(event_id=ctf_event.id, email="invitee@test.com", name="Invitee")
+        add_participant(
+            event_id=ctf_event.id,
+            email="invitee@test.com",
+            name="Invitee",
+            actor=organizer_credential,
+        )
         message_cls, delivered, messages = recorded_email
         with (
             override_settings(CTF_FROM_EMAIL="ctf@test.com", SITE_URL="https://example.com"),

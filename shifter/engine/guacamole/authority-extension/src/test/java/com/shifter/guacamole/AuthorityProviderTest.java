@@ -81,6 +81,19 @@ class AuthorityProviderTest {
         }
     }
 
+    @Test void everyModeRefusesPasswordLoginsFromTheDatabaseProvider() {
+        try (GatewayRenewals renewals = renewals()) {
+            for (boolean enabled : new boolean[] {false, true}) {
+                AuthorityProvider provider = new AuthorityProvider(enabled, renewals);
+                assertThrows(GuacamoleException.class,
+                    () -> provider.decorate(context("guacadmin", "postgresql"), user("guacadmin", "postgresql"), null));
+                assertThrows(GuacamoleException.class,
+                    () -> provider.redecorate(context("guacadmin", "postgresql"), context("guacadmin", "postgresql"),
+                                              user("guacadmin", "postgresql"), null));
+            }
+        }
+    }
+
     @Test void mutableDelegateCannotRebindTheRecordedSessionDuringRedecoration() throws Exception {
         try (GatewayRenewals renewals = renewals()) {
             AuthorityProvider provider = new AuthorityProvider(true, renewals);
@@ -90,5 +103,14 @@ class AuthorityProviderTest {
             decorated.self().setIdentifier(otherBinding);
             assertThrows(GuacamoleException.class, () -> provider.redecorate(decorated, context(otherBinding), user(otherBinding, "json"), null));
         }
+    }
+
+    @Test void unknownGatewayIdentityKindLeavesBoundSessionsRefused() {
+        assertNull(AuthorityProvider.configuredRenewals("https://portal.example.test/control", "synthetic-control", "azure"));
+        assertNull(AuthorityProvider.configuredRenewals(null, "synthetic-control", "aws"));
+        AuthorityProvider provider = new AuthorityProvider(true, null);
+        String bound = "access-" + UUID.randomUUID();
+        assertThrows(GuacamoleException.class, () -> provider.decorate(context(bound), user(bound, "json"), null));
+        provider.shutdown();
     }
 }

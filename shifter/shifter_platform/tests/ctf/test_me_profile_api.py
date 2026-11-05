@@ -30,13 +30,13 @@ def me(ctf_event_active, participant_user, authenticated_participant_client):
 
 
 @pytest.fixture
-def isolated_me(ctf_event_active, monkeypatch):
+def isolated_me(ctf_event_active, organizer_credential, monkeypatch):
     """A participant on an isolated (#1206) account, logged in on a fresh client."""
     monkeypatch.setattr("ctf.services.participant.accounts.request_event_provisioning", lambda *_a, **_kw: None)
     from ctf.services.participant import create_participant_accounts
     from management.services import set_active_ctf_event
 
-    participant = create_participant_accounts(ctf_event_active.id, count=1)[0]
+    participant = create_participant_accounts(ctf_event_active.id, count=1, actor=organizer_credential)[0]
     set_active_ctf_event(participant.user, ctf_event_active.pk)
     profile = participant.user.profile
     profile.must_change_password = False
@@ -76,6 +76,36 @@ class TestProfile:
         blank = call_json(client, "patch", "api_me_profile", body={"name": "   "})
         assert blank.status_code == 400
 
+    def test_time_zone_can_be_set_cleared_and_refuses_unknown_names(self, me):
+        participant, client = me
+        assert call_json(client, "get", "api_me_profile").json()["time_zone"] == ""
+
+        saved = call_json(client, "patch", "api_me_profile", body={"time_zone": "Europe/Paris"})
+        assert saved.status_code == 200
+        assert saved.json()["time_zone"] == "Europe/Paris"
+        assert saved.json()["affiliation"] == "EMEA"
+
+        for bad in ("Mars/Olympus", "../etc/passwd"):
+            refused = call_json(client, "patch", "api_me_profile", body={"time_zone": bad})
+            assert refused.status_code == 400
+            participant.refresh_from_db()
+            assert participant.time_zone == "Europe/Paris"
+
+        cleared = call_json(client, "patch", "api_me_profile", body={"time_zone": ""})
+        assert cleared.status_code == 200
+        participant.refresh_from_db()
+        assert participant.time_zone == ""
+
+    def test_service_refuses_another_actors_time_zone_write(self, me, organizer_user):
+        from ctf.exceptions import CTFValidationError
+        from ctf.services.participant import update_own_profile
+
+        participant, _client = me
+        with pytest.raises(CTFValidationError):
+            update_own_profile(participant.pk, actor=organizer_user, time_zone="Europe/Paris")
+        participant.refresh_from_db()
+        assert participant.time_zone == ""
+
 
 class TestSelfUsername:
     def test_change_own_username(self, isolated_me):
@@ -86,11 +116,13 @@ class TestSelfUsername:
         participant.user.refresh_from_db()
         assert participant.user.username == "range-my-handle"
 
-    def test_change_rejects_invalid_and_duplicate(self, isolated_me, ctf_event_active, monkeypatch):
+    def test_change_rejects_invalid_and_duplicate(
+        self, isolated_me, ctf_event_active, organizer_credential, monkeypatch
+    ):
         monkeypatch.setattr("ctf.services.participant.accounts.request_event_provisioning", lambda *_a, **_kw: None)
         from ctf.services.participant import create_participant_accounts
 
-        other = create_participant_accounts(ctf_event_active.id, count=1)[0]
+        other = create_participant_accounts(ctf_event_active.id, count=1, actor=organizer_credential)[0]
         _participant, client = isolated_me
 
         assert call_json(client, "post", "api_me_username", body={"username": "bad handle"}).status_code == 400

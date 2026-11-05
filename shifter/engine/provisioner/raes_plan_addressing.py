@@ -18,7 +18,7 @@ def network_ip_assignments(
     resolved_networks: tuple[str, ...],
     count: int,
 ) -> tuple[tuple[str, str], ...]:
-    """Read the exact RAES 3.5 static-address property shape, fail closed."""
+    """Read the exact RAES 10.2 static-address property shape, fail closed."""
     assignments: list[tuple[str, str]] = []
     raw = _infrastructure_spec(payload).get("properties")
     if raw in (None, []):

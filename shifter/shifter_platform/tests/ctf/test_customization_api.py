@@ -63,7 +63,7 @@ class TestCustomPages:
             kwargs={"event_id": ctf_event_active.id},
             body={"title": "Getting Started", "body": "Read **this** first.", "order": 1},
         )
-        assert created.status_code == 201
+        assert created.status_code == 200
         assert created.json()["slug"] == "getting-started"
 
         dup = call_json(
@@ -74,6 +74,7 @@ class TestCustomPages:
             body={"title": "Getting Started", "body": "again"},
         )
         assert dup.status_code == 400
+        assert dup.json()["error"]["message"] == "A page with this slug already exists."
 
         updated = call_json(
             authenticated_organizer_client,
@@ -104,7 +105,7 @@ class TestCustomPages:
             "api_event_page_detail",
             kwargs={"page_id": created.json()["id"]},
         )
-        assert gone.status_code == 200
+        assert gone.status_code == 204
         assert not CTFEventPage.objects.filter(deleted_at__isnull=True).exists()
 
 

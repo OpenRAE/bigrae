@@ -8,7 +8,7 @@ import uuid
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 from asgiref.sync import async_to_sync
 from channels.layers import get_channel_layer
@@ -17,10 +17,9 @@ from django.db import IntegrityError, transaction
 from django.utils import timezone
 
 from shared.channels.groups import notification_user_topic_group
+from shared.credentials import CredentialContext, resolve_current_credential
 from shared.models import WebSocketNotification
-
-if TYPE_CHECKING:
-    from django.contrib.auth.models import AbstractBaseUser, AnonymousUser
+from shared.principal_port import PrincipalResolutionError, principal_for_user
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ _TOPIC_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
 _TYPE_RE = re.compile(r"^[a-z][a-z0-9_.:-]{0,127}$")
 
 PayloadHandler = Callable[[Mapping[str, Any]], Mapping[str, Any]]
-SubscriptionAuthorizer = Callable[[Any, str], bool]
+SubscriptionAuthorizer = Callable[[CredentialContext, str], bool]
 
 
 @dataclass(frozen=True)
@@ -110,11 +109,30 @@ def _registrations_for_topic(topic: str) -> list[NotificationRegistration]:
     return [registration for registration in _registry.values() if topic.startswith(registration.topic_prefix)]
 
 
-def authorize_subscription(user: AbstractBaseUser | AnonymousUser, topic: str) -> bool:
-    """Return whether a user may subscribe to a logical topic."""
-    if not getattr(user, "is_authenticated", False):
-        return False
+def _browser_credential(credential: CredentialContext) -> CredentialContext:
+    """Resolve a current human browser credential before notification access."""
+    if not isinstance(credential, CredentialContext) or credential.principal.kind != "human":
+        raise ValueError("Browser credential unavailable")
+    return resolve_current_credential(credential)
+
+
+def notification_user_id(credential: CredentialContext, user: object) -> int | None:
+    """Bind a browser socket to its actual human identity, never a service contact."""
+    from django.contrib.auth.models import User
+
     try:
+        current = _browser_credential(credential)
+        if isinstance(user, User) and principal_for_user(user) == current.principal:
+            return user.pk
+    except (ValueError, PrincipalResolutionError):
+        pass
+    return None
+
+
+def authorize_subscription(credential: CredentialContext, topic: str) -> bool:
+    """Check a current browser proof and pass its narrowed ceiling to the topic owner."""
+    try:
+        credential = _browser_credential(credential)
         registrations = _registrations_for_topic(topic)
     except ValueError:
         return False
@@ -122,15 +140,15 @@ def authorize_subscription(user: AbstractBaseUser | AnonymousUser, topic: str) -
     authorized = False
     for registration in registrations:
         try:
-            if registration.can_subscribe(user, topic):
+            if registration.can_subscribe(credential, topic):
                 authorized = True
                 break
-        except Exception:
+        except Exception:  # noqa: BLE001  # isolates registered authorizers; fails closed, traceback at WARNING
             logger.warning(
-                "notification authorizer failed: type=%s topic=%s user_id=%s",
+                "notification authorizer failed: type=%s topic=%s principal_uuid=%s",
                 registration.name,
                 topic,
-                getattr(user, "id", None),
+                credential.principal.uuid,
                 exc_info=True,
             )
     return authorized
@@ -280,17 +298,38 @@ def mark_notification_delivered(notification_id: int, user_id: int) -> None:
     ).update(delivered_at=timezone.now())
 
 
-def prune_expired_notifications() -> int:
-    """Delete expired notification queue rows and return the count."""
-    deleted, _details = WebSocketNotification.objects.filter(expires_at__lte=timezone.now()).delete()
-    return deleted
+def prune_expired_notifications(*, batch_size: int = 1000, max_batches: int = 100) -> int:
+    """Delete expired queue rows, delivered or not, in bounded batches; return the count.
+
+    One run deletes at most ``batch_size * max_batches`` rows, so a scheduled run
+    has bounded database work and a second concurrent run is safe (ADR-072-R5).
+    The remainder drains on the next run.
+    """
+    batch_size = max(int(batch_size), 1)
+    total = 0
+    for _ in range(max(int(max_batches), 1)):
+        cutoff = timezone.now()
+        ids = list(
+            WebSocketNotification.objects.filter(expires_at__lte=cutoff)
+            .order_by("expires_at", "id")
+            .values_list("id", flat=True)[:batch_size]
+        )
+        if not ids:
+            break
+        deleted, _details = WebSocketNotification.objects.filter(id__in=ids, expires_at__lte=cutoff).delete()
+        total += deleted
+        if len(ids) < batch_size:
+            break
+    return total
 
 
 def authorized_notification_payload(
-    user: AbstractBaseUser | AnonymousUser, notification: WebSocketNotification
+    credential: CredentialContext, notification: WebSocketNotification
 ) -> dict[str, Any] | None:
     """Recheck live topic policy and current projection for both replay and fan-out."""
-    if not authorize_subscription(user, notification.topic):
+    if notification_user_id(
+        credential, notification.recipient
+    ) != notification.recipient_id or not authorize_subscription(credential, notification.topic):
         return None
     registration = _registry.get(notification.notification_type)
     if registration is None:

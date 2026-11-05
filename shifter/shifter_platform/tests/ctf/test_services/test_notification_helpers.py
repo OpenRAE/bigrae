@@ -60,8 +60,8 @@ def ctf_participant():
 def blocking_smtp():
     """A blocking, eventually-raising stand-in for ``EmailMultiAlternatives``.
 
-    Drives the real ``shared.email.send_email_async`` background-thread pipeline
-    (ADR-019-R1: mock the external SMTP boundary, not internal seams).
+    Stands in at the external SMTP boundary (ADR-019-R1: mock the external
+    boundary, not internal seams).
     ``send()`` blocks on ``release`` then raises after signalling ``delivered``,
     so a test can assert the caller returned before ``release`` was set.
     """
@@ -93,36 +93,6 @@ class TestSendEmailHelper:
                 recipient="participant@test.com", subject="Subject", html_content="<p>Body</p>", text_content="Body"
             )
         assert not delivered.is_set()
-
-
-class TestRenderEmail:
-    """Tests for _render_email helper."""
-
-    @patch("django.template.loader.render_to_string")
-    def test_renders_templates(self, mock_render, ctf_event, ctf_participant):
-        """Renders both HTML and text templates."""
-        registration_url = "https://example.com/ctf/login/"
-
-        mock_render.side_effect = [
-            f"<html>{ctf_event.name} {registration_url}</html>",
-            f"{ctf_event.name} {registration_url}",
-        ]
-
-        html, text, custom_subject = notification._render_email(
-            "invitation",
-            {
-                "event": ctf_event,
-                "participant": ctf_participant,
-                "registration_url": registration_url,
-            },
-        )
-
-        assert ctf_event.name in html
-        assert ctf_event.name in text
-        assert registration_url in html
-        assert registration_url in text
-        assert custom_subject == ""
-        assert mock_render.call_count == 2
 
 
 class TestBuildCtfLoginUrl:
@@ -179,7 +149,15 @@ class TestInvitedAtNotSetAtCreation:
             scenario_id="basic",
         )
 
-    def test_invite_participant_does_not_set_invited_at(self, importable_event):
+    @pytest.fixture
+    def importable_actor(self, importable_event, client):
+        """Return the event owner's persisted browser-session credential."""
+        from config.session_credentials import session_credential
+
+        client.force_login(importable_event.created_by)
+        return session_credential(importable_event.created_by, client.session, provider_check=False)
+
+    def test_invite_participant_does_not_set_invited_at(self, importable_event, importable_actor):
         """add_participant() leaves login_info_sent_at unset on the created participant."""
         from ctf.services import participant as participant_service
 
@@ -187,16 +165,17 @@ class TestInvitedAtNotSetAtCreation:
             event_id=importable_event.pk,
             email="newinvite@test.com",
             name="New Invite",
+            actor=importable_actor,
         )
 
         assert participant.login_info_sent_at is None
 
-    def test_bulk_import_does_not_set_invited_at(self, importable_event):
+    def test_bulk_import_does_not_set_invited_at(self, importable_event, importable_actor):
         """bulk_import_participants() leaves login_info_sent_at unset on every created participant."""
         from ctf.services import participant as participant_service
 
         csv_content = "Alice,alice@test.com\nBob,bob@test.com"
-        result = participant_service.bulk_import_participants(importable_event.pk, csv_content)
+        result = participant_service.bulk_import_participants(importable_event.pk, csv_content, actor=importable_actor)
 
         assert len(result["created"]) == 2
         for participant in result["created"]:

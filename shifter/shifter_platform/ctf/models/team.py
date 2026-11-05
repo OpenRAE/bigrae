@@ -142,6 +142,11 @@ class CTFTeam(CTFBaseModel):
         blank=True,
         help_text="Materialized timestamp of the team's most recent correct solve (tie-breaker)",
     )
+    notified_position = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Board position last reported to members by a live position reconcile (CTF-802)",
+    )
 
     class Meta:
         """Django model metadata."""
@@ -328,6 +333,13 @@ class CTFParticipant(CTFBaseModel):
         default="",
         help_text="Optional organization or region shown on the event profile (CTF-610)",
     )
+    time_zone = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        help_text="Optional IANA time zone for times in email; blank uses the event time zone (#582)",
+    )
+    range_request_id = models.UUIDField(null=True, blank=True, editable=False)
     range_instance_id = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -371,6 +383,11 @@ class CTFParticipant(CTFBaseModel):
         null=True,
         blank=True,
         help_text="Materialized timestamp of the most recent correct solve (tie-breaker)",
+    )
+    notified_position = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Board position last reported by a live position reconcile (CTF-802)",
     )
 
     class Meta:

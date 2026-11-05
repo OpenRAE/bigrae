@@ -4,18 +4,13 @@ output "workload_identity_provider" {
 }
 
 output "packer_build_service_account_email" {
-  description = "Packer build identity (GCP_PACKER_BUILD_SERVICE_ACCOUNT); federated only for enabled build contexts."
-  value       = google_service_account.packer_build.email
+  description = "Packer build identity (GCP_PACKER_BUILD_SERVICE_ACCOUNT); null when no build purpose or image-build network exists."
+  value       = try(google_service_account.packer_build[0].email, null)
 }
 
 output "packer_validate_service_account_email" {
   description = "Packer validation identity (GCP_PACKER_VALIDATE_SERVICE_ACCOUNT); null when validation is disabled."
   value       = try(google_service_account.validate[0].email, null)
-}
-
-output "packer_promote_service_account_email" {
-  description = "Packer promotion identity (GCP_PACKER_PROMOTE_SERVICE_ACCOUNT); null when promotion is disabled."
-  value       = try(google_service_account.promote[0].email, null)
 }
 
 output "deploy_service_account_email" {
@@ -38,12 +33,16 @@ output "destroy_service_account_email" {
   value       = try(google_service_account.destroy[0].email, null)
 }
 
-output "release_service_account_email" {
-  description = "Release publisher identity (GCP_RELEASE_SERVICE_ACCOUNT); null when the release purpose is disabled."
-  value       = try(google_service_account.release[0].email, null)
-}
 
 output "deployment_config_bucket_name" {
   description = "Deployment config bucket for the GitHub-less input bundle; null when it is disabled."
   value       = try(google_storage_bucket.deployment_config[0].name, null)
+}
+
+output "storage_cmek_buckets" {
+  description = "Customer-managed key of each foundation bucket; gcp-foundation rewrites the live objects that do not use it (#2564)."
+  value = merge(
+    { (google_storage_bucket.release_evidence.name) = module.storage_cmek.key_ids["release-evidence"] },
+    local.deployment_config_enabled ? { (google_storage_bucket.deployment_config[0].name) = module.storage_cmek.key_ids["deployment-config"] } : {},
+  )
 }

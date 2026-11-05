@@ -365,6 +365,11 @@ def _prepare_raes_apply(
         ),
     )
     for instance in plan["instances"]:
+        if options.cloud_service_accounts:
+            selected = options.cloud_service_accounts.get(_node_address_of(instance))
+            if selected is not None:
+                instance["service_account_email"] = selected
+                instance["attach_service_account"] = True
         assert_management_login_separate(raes_plan, _node_address_of(instance), instance["host_ssh_username"])
     return plan, realized_access
 
@@ -391,13 +396,16 @@ def _cleanup_failed_apply_attempt(
     runtime: RaesGceApplyRuntime | None,
     mutation_started: bool,
     options: RaesGceApplyOptions,
+    error: BaseException,
 ) -> None:
     """Reconstructively clean up after a provider mutation, or release preflight state."""
     if mutation_started and runtime is not None:
-        logger.exception("RAES GCE range-cell apply failed; attempting cleanup request_id=%s", request_uuid)
+        logger.error("RAES GCE range-cell apply failed; attempting cleanup request_id=%s", request_uuid, exc_info=error)
         _cleanup_failed_apply(request_uuid, range_id, raes_plan, runtime)
     else:
-        logger.exception("RAES GCE range-cell apply failed before provider mutation request_id=%s", request_uuid)
+        logger.error(
+            "RAES GCE range-cell apply failed before provider mutation request_id=%s", request_uuid, exc_info=error
+        )
         if options.on_pre_mutation_failure is not None:
             options.on_pre_mutation_failure()
 
@@ -441,6 +449,8 @@ def apply_raes_range_cell(
         )
         runtime = _apply_runtime(resolved_options, config=resolved_config)
         _preflight_existing_hosts(plan, runtime.clients)
+        if resolved_options.before_provider_mutation is not None:
+            resolved_options.before_provider_mutation()
         mutation_started = True
         instance_outputs = _provision_raes_resources(
             plan,
@@ -458,8 +468,10 @@ def apply_raes_range_cell(
         logger.exception("RAES GCE range-cell apply found a conflicting deterministic VM request_id=%s", request_uuid)
         _cleanup_conflicting_apply(plan, raes_plan, runtime, created, mutation_started, resolved_options)
         raise
-    except Exception:
-        _cleanup_failed_apply_attempt(request_uuid, range_id, raes_plan, runtime, mutation_started, resolved_options)
+    except Exception as exc:
+        _cleanup_failed_apply_attempt(
+            request_uuid, range_id, raes_plan, runtime, mutation_started, resolved_options, exc
+        )
         raise
     return {
         "subnets": subnet_outputs(plan),

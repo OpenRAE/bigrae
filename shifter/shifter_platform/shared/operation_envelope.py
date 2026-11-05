@@ -48,13 +48,15 @@ ACCEPTED_CONTRACT_VERSIONS = frozenset({CONTRACT_VERSION, AUTHORITY_CONTRACT_VER
 # Closed discriminators. The specific operation legal for a resource is enforced
 # by the domain authorization (engine.launch_intents); the envelope only bounds
 # the vocabulary so an unknown discriminator fails closed at the wire.
-RESOURCES = frozenset({"range", "raes-range", "ngfw", "vpn-profile"})
+RESOURCES = frozenset({"range", "raes-range", "ngfw", "vpn-profile", "range-project"})
 # ``activate`` (#28, ADR-039-R11) hands an atomically claimed warm generation to
 # its claimant with fresh, fully sanitized access. Like every other value here it
 # is only a wire discriminator; engine.launch_intents authorizes which resource
 # may carry it (raes-range only).
 OPERATIONS = frozenset(
     {
+        "register",
+        "verify",
         "provision",
         "destroy",
         "pause",
@@ -75,6 +77,23 @@ _DIGEST_PREFIX = "sha256:"
 # Bounded transport size; operation payloads compose reference-only contracts and
 # must never carry raw provider state, so a few hundred KiB is generous.
 MAX_ENVELOPE_BYTES = 262144
+# Native cloud declarations occur in both plan resources and operations. Keep
+# room for that valid producer output plus retained preparation and cleanup.
+MAX_RAES_INPUT_BYTES = 8 * 1024 * 1024
+
+
+def envelope_byte_limit(value: dict[str, Any]) -> int:
+    """Only native plan inputs need a larger bound; result budgets stay unchanged."""
+    payload = value.get("payload", {})
+    if (
+        value.get("resource") == "raes-range"
+        and isinstance(payload, dict)
+        and isinstance(payload.get("plan"), dict)
+        and payload["plan"].get("kind") == "raes_provisioning_plan"
+    ):
+        return MAX_RAES_INPUT_BYTES
+    return MAX_ENVELOPE_BYTES
+
 
 ContractDict = dict[str, Any]
 
@@ -162,8 +181,9 @@ def validate_operation_envelope(envelope: object) -> ContractDict:
         normalized["authority_digest"] = digest
 
     serialized = json.dumps(normalized, sort_keys=True, separators=(",", ":")).encode("utf-8")
-    if len(serialized) > MAX_ENVELOPE_BYTES:
-        raise OperationEnvelopeError(f"operation envelope exceeds {MAX_ENVELOPE_BYTES} bytes ({len(serialized)} bytes)")
+    limit = envelope_byte_limit(normalized)
+    if len(serialized) > limit:
+        raise OperationEnvelopeError(f"operation envelope exceeds {limit} bytes ({len(serialized)} bytes)")
     return normalized
 
 

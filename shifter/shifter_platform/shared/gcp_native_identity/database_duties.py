@@ -12,6 +12,8 @@ from psycopg.rows import TupleRow
 from shared.gcp_native_identity import NATIVE_APPLICATION_WORKLOADS, NATIVE_POLICY_WORKLOADS
 
 _LEGACY_RUNTIME_LOGINS = ("portal_runtime", "provisioner_runtime", "guacamole_admin")
+_GUACAMOLE_LOGIN = "guacamole_admin"
+_GUACAMOLE_DATABASE = "guacamole"
 
 
 class _DutyCursor(Protocol):
@@ -92,7 +94,15 @@ def _assert_policy_application_isolation(cursor: _DutyCursor, native_users: Mapp
 
 
 def reconcile_application_duties(cursor: _DutyCursor, native_users: Mapping[str, str]) -> None:
-    """Run after application migrations, never as a runtime database login."""
+    """Run around application migrations, never as a runtime database login.
+
+    The deploy also runs this before the identity probe (#2704). A database
+    without the application schema has no duties yet; the run after the first
+    migration reconciles them.
+    """
+    cursor.execute("SELECT to_regclass('public.django_migrations') IS NOT NULL")
+    if _required_row(cursor) != (True,):
+        return
     cursor.execute("""SELECT pg_has_role(current_user, relowner, 'USAGE')
                       FROM pg_class WHERE oid = 'public.django_migrations'::regclass""")
     if cursor.fetchone() != (True,):
@@ -105,6 +115,35 @@ def reconcile_application_duties(cursor: _DutyCursor, native_users: Mapping[str,
     cursor.execute(sql.SQL("GRANT CONNECT ON DATABASE {} TO portal_runtime, provisioner_lambda").format(database))
     _grant_native_application_duties(cursor, native_users)
     _assert_policy_application_isolation(cursor, native_users)
+
+
+def reconcile_guacamole_owner(connection_parameters: dict[str, Any]) -> None:
+    """Make the Guacamole login the owner of its own database.
+
+    ``reconcile_application_duties`` removes ``cloudsqlsuperuser`` from
+    ``guacamole_admin``. On PostgreSQL 15 and later that membership was its only
+    CREATE path on the public schema of the ``guacamole`` database, so Guacamole
+    could not create its schema in a fresh deployment (#2626). The login owns its
+    database, as on AWS, and no other role keeps default access to it.
+    """
+    login = sql.Identifier(_GUACAMOLE_LOGIN)
+    with psycopg.connect(**{**connection_parameters, "connect_timeout": 10}) as connection:
+        present = connection.execute(
+            "SELECT EXISTS (SELECT FROM pg_database WHERE datname = %s)"
+            " AND EXISTS (SELECT FROM pg_roles WHERE rolname = %s)",
+            [_GUACAMOLE_DATABASE, _GUACAMOLE_LOGIN],
+        ).fetchone()
+    if present != (True,):
+        return
+    parameters = {**connection_parameters, "dbname": _GUACAMOLE_DATABASE, "connect_timeout": 10}
+    with psycopg.connect(**parameters) as connection, connection.cursor() as cursor:
+        cursor.execute(sql.SQL("GRANT {} TO CURRENT_USER").format(login))
+        cursor.execute(sql.SQL("ALTER DATABASE {} OWNER TO {}").format(sql.Identifier(_GUACAMOLE_DATABASE), login))
+        cursor.execute(sql.SQL("ALTER SCHEMA public OWNER TO {}").format(login))
+        cursor.execute("REVOKE ALL ON SCHEMA public FROM PUBLIC")
+        cursor.execute(
+            sql.SQL("REVOKE CONNECT, TEMPORARY ON DATABASE {} FROM PUBLIC").format(sql.Identifier(_GUACAMOLE_DATABASE))
+        )
 
 
 def _prepare_policy_owner(cursor: _DutyCursor) -> str:
@@ -149,23 +188,34 @@ def _assert_no_application_policy_access(cursor: _DutyCursor, native_users: Mapp
                 raise ValueError("Application SQL duties must not inherit access to the policy database")
 
 
-def _transfer_released_policy_tables(cursor: _DutyCursor, owner: str) -> None:
-    """Transfer only released datastore tables in the dedicated policy database."""
+def _transfer_released_policy_tables(cursor: _DutyCursor, owner: str, migrator: str) -> None:
+    """Transfer only released datastore tables in the dedicated policy database.
+
+    The migration now creates its tables as the owner role. An earlier release
+    ran it as the migrator login itself, which then owned the tables; the
+    deployment owner briefly joins that login to adopt them (#2688).
+    """
     # Scope upgrades to released datastore tables in this database. A global
     # REASSIGN OWNED would also move other databases owned by the bootstrap
     # login, so it must never be used here.
     cursor.execute(
-        "SELECT relname FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
+        "SELECT relname, pg_get_userbyid(relowner) FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace "
         "WHERE n.nspname = 'public' AND c.relkind IN ('r', 'p')"
     )
-    tables = {row[0] for row in cursor.fetchall()}
+    tables = {row[0]: row[1] for row in cursor.fetchall()}
     released_tables = {"store", "authorization_model", "assertion", "tuple", "changelog", "goose_db_version"}
-    if tables - released_tables:
+    if set(tables) - released_tables:
         raise ValueError("Policy database contains objects outside the released datastore")
+    cursor.execute("SELECT pg_has_role(current_user, %s, 'MEMBER')", [migrator])
+    adopt = migrator in tables.values() and not _required_row(cursor)[0]
+    if adopt:
+        cursor.execute(sql.SQL("GRANT {} TO CURRENT_USER").format(sql.Identifier(migrator)))
     for table in tables:
         cursor.execute(
             sql.SQL("ALTER TABLE public.{} OWNER TO {}").format(sql.Identifier(table), sql.Identifier(owner))
         )
+    if adopt:
+        cursor.execute(sql.SQL("REVOKE {} FROM CURRENT_USER").format(sql.Identifier(migrator)))
 
 
 def _grant_policy_migration_duties(cursor: _DutyCursor, owner: str, migrator: str) -> None:
@@ -187,5 +237,5 @@ def reconcile_policy_owner(connection_parameters: dict[str, Any], native_users: 
     with psycopg.connect(**parameters) as connection, connection.cursor() as cursor:
         owner = _prepare_policy_owner(cursor)
         _assert_no_application_policy_access(cursor, native_users)
-        _transfer_released_policy_tables(cursor, owner)
+        _transfer_released_policy_tables(cursor, owner, native_users["openfga-migrator"])
         _grant_policy_migration_duties(cursor, owner, native_users["openfga-migrator"])

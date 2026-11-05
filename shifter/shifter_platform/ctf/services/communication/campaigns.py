@@ -1,12 +1,10 @@
 """Campaign authoring service for scoped communications (ADR-051, #2048).
 
-Creating a campaign is the confinement gate (AC1): the author proves active
-membership of the campaign's single workspace, and EVERY target event must both
-share that workspace and admit the author's notification capability. Content is
-validated against the safe profile at authoring time; editing content creates a
-new immutable revision (AC4). Authorization is additive -- workspace membership
-never grants event or recipient authority, and a missing or unauthorized target
-event returns the same opaque denial so identifiers cannot probe tenancy.
+Campaigns use one explicit account, organization, or workspace parent. Every
+requested target must share that exact placement and admit current native
+``event.manage_communications`` policy within the credential ceiling. Content
+uses the safe profile, and edits append immutable revisions. SQL membership,
+creator attribution, and legacy staff flags grant no application authority.
 """
 
 from __future__ import annotations
@@ -17,7 +15,6 @@ from typing import Any
 from uuid import UUID, uuid4
 
 from django.conf import settings
-from django.contrib.auth.models import User
 from django.db import transaction
 
 import workspaces.services as workspace_services
@@ -29,13 +26,25 @@ from ctf.communication_contracts import (
     validate_message_content,
     validate_trigger_spec,
 )
-from ctf.enums import EventCapability
-from ctf.enums_communication import CampaignStatus
+from ctf.enums import EventStatus
+from ctf.enums_communication import CampaignStatus, CommunicationOrigin, NoticeKind
 from ctf.exceptions import CTFCommunicationError
 from ctf.models import CommunicationCampaign, CommunicationTargetEvent, CTFEvent, MessageRevision
-from ctf.services.communication.admission import AdmissionActor, lock_authorized_campaign, reauthorize
+from ctf.services.actors import EventActor, event_actor_credential, event_actor_user, event_actor_user_id
+from ctf.services.communication.admission import (
+    AdmissionActor,
+    lock_authorized_campaign,
+    prepare_admission,
+    prepare_campaign_admission,
+    reauthorize,
+)
+from ctf.services.communication.attribution import actor_attribution
 from ctf.services.communication.backpressure import enforce_operation_rate
-from ctf.services.event.staff import actor_has_event_capability
+from ctf.services.unified_authorization import require_event_action
+from shared.identity_scope import ResourceScope
+from workspaces.services import ResolvedResourceScope
+
+_CAMPAIGN_SCOPE_IS_UNAVAILABLE = "Campaign scope is unavailable"
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +67,7 @@ class CampaignDraft:
     body: str
     acknowledgement_policy: str = "none"
     actor_token_id: int | None = None
+    notice_kind: str = NoticeKind.ANNOUNCEMENT.value
 
 
 _TARGET_DENIED = CTFCommunicationError(
@@ -66,18 +76,17 @@ _TARGET_DENIED = CTFCommunicationError(
 )
 
 
-def _resolve_workspace(user: User, workspace_uuid: str | UUID) -> int:
-    """Authorize active workspace membership for the communication operation."""
+def _resolve_parent(parent_type: str, parent_uuid: str | UUID) -> tuple[ResourceScope, ResolvedResourceScope]:
+    """Resolve one type-correct event parent; event policy supplies permission."""
     try:
-        authorization = workspace_services.authorize_workspace(
-            user, workspace_uuid, workspace_services.WorkspaceOperation.USE_CTF_COMMUNICATIONS
-        )
-    except workspace_services.WorkspaceAuthorizationError as exc:
+        scope = workspace_services.event_placement_scope(parent_type, UUID(str(parent_uuid)))
+        binding = workspace_services.resolve_resource_scope(scope)
+    except (ValueError, workspace_services.AccountScopeError) as exc:
         raise CTFCommunicationError(
-            "Workspace is not available for CTF communications",
+            "Scope is not available for CTF communications",
             code="CTF_COMMUNICATION_WORKSPACE_DENIED",
         ) from exc
-    return authorization.workspace_id
+    return scope, binding
 
 
 def _legacy_workspace_id(campaign: CommunicationCampaign) -> int:
@@ -90,44 +99,73 @@ def _legacy_workspace_id(campaign: CommunicationCampaign) -> int:
     return campaign.workspace_id
 
 
-def _authorized_target_events(user: User, workspace_id: int, target_event_ids: list[UUID]) -> list[CTFEvent]:
-    """Return the target events after confining them to the workspace and per-event capability.
+def campaign_rate_scope(campaign: CommunicationCampaign) -> tuple[str, int]:
+    """Return the narrowest durable campaign scope used by admission budgets."""
+    if campaign.workspace_id is not None:
+        return "workspace", campaign.workspace_id
+    if campaign.account_id is not None:
+        return "account", campaign.account_id
+    raise CTFCommunicationError(_CAMPAIGN_SCOPE_IS_UNAVAILABLE, code="CTF_COMMUNICATION_WORKSPACE_DENIED")
 
-    Every requested event must exist, carry the campaign's workspace scope, and
-    admit the actor's ``notifications`` capability. Any failure raises one opaque
+
+def _authorized_target_events(
+    credential: EventActor, scope: ResourceScope, binding: ResolvedResourceScope, target_event_ids: list[UUID]
+) -> list[CTFEvent]:
+    """Return only exact-scope events admitted by current native communication policy.
+
+    Every requested event must exist, carry the campaign's exact scope, and
+    admit the actor's ``event.manage_communications`` action. Any failure raises one opaque
     denial (no partial success, no oracle).
     """
     if not target_event_ids:
         raise CTFCommunicationError("A campaign must target at least one event", code="CTF_COMMUNICATION_NO_TARGETS")
     unique_ids = list(dict.fromkeys(target_event_ids))
-    events = {
-        event.id: event for event in CTFEvent.objects.select_for_update().filter(id__in=unique_ids).order_by("pk")
-    }
+    events = {event.id: event for event in CTFEvent.objects.filter(id__in=unique_ids).order_by("pk")}
     resolved: list[CTFEvent] = []
     for event_id in unique_ids:
         event = events.get(event_id)
-        if event is None or event.workspace_id != workspace_id:
+        if event is None or (
+            event.scope_kind,
+            event.account_id,
+            event.organization_id,
+            event.workspace_id,
+        ) != (scope.kind, binding.account_id, binding.organization_id, binding.workspace_id):
             raise _TARGET_DENIED
-        if not actor_has_event_capability(user, event, EventCapability.NOTIFICATIONS.value):
-            raise _TARGET_DENIED
+        try:
+            require_event_action(credential, event.pk, "event.manage_communications")
+        except Exception:  # noqa: BLE001  # fail-closed authority boundary; suppress private causes
+            raise _TARGET_DENIED from None
         resolved.append(event)
     return resolved
 
 
 def create_campaign(
-    user: User,
-    workspace_uuid: str | UUID,
+    principal_actor: EventActor,
+    parent_uuid: str | UUID,
     draft: CampaignDraft,
     *,
     actor: AdmissionActor | None = None,
+    parent_type: str = "workspace",
     campaign_id: UUID | None = None,
     maintenance: bool = False,
 ) -> CommunicationCampaign:
-    """Create a draft campaign confined to one workspace with an initial revision."""
-    actor = actor or AdmissionActor(user_id=user.pk, token_id=draft.actor_token_id)
-    if actor.user_id != user.pk or actor.token_id != draft.actor_token_id or actor.system:
+    """Create an exactly scoped draft campaign with an initial immutable revision."""
+    credential = event_actor_credential(principal_actor)
+    from shared.credentials import CredentialContext
+
+    actor = actor or AdmissionActor(
+        credential=credential,
+        compatibility_user_id=(
+            None if isinstance(principal_actor, CredentialContext) else event_actor_user_id(principal_actor)
+        ),
+    )
+    if actor.credential != credential or actor.system:
         raise CTFCommunicationError("Unavailable", code="CTF_COMMUNICATION_ACTOR_DENIED")
-    workspace_id = _resolve_workspace(user, workspace_uuid)
+    if draft.notice_kind != NoticeKind.ANNOUNCEMENT.value:
+        # Only trusted lifecycle notices select another email presentation (#580).
+        raise CTFCommunicationError("Unavailable", code="CTF_COMMUNICATION_NOTICE_KIND_DENIED")
+    scope, binding = _resolve_parent(parent_type, parent_uuid)
+    workspace_id = binding.workspace_id
 
     audience = validate_audience_spec(draft.audience_spec)
     trigger = validate_trigger_spec(draft.trigger_spec)
@@ -138,24 +176,32 @@ def create_campaign(
         allowed_link_hosts=settings.CTF_COMMUNICATION_ALLOWED_LINK_HOSTS,
     )
 
+    events = _authorized_target_events(
+        principal_actor, scope, binding, validate_campaign_targets(draft.target_event_ids)
+    )
+    prospective = CommunicationCampaign(
+        scope_kind=scope.kind,
+        account_id=binding.account_id,
+        organization_id=binding.organization_id,
+        workspace_id=workspace_id,
+    )
+    actor = prepare_admission(prospective, events, actor)
     with transaction.atomic():
-        events = _authorized_target_events(user, workspace_id, validate_campaign_targets(draft.target_event_ids))
-        if maintenance:
-            from ctf.models import CommunicationCutover
-
-            if not CommunicationCutover.objects.filter(pk=1, activated_at__isnull=True).exists():
-                raise CTFCommunicationError("Maintenance fence required", code="CTF_COMMUNICATION_CUTOVER_BLOCKED")
-        else:
-            enforce_operation_rate(user.pk, workspace_id)
-        prospective = CommunicationCampaign(workspace_id=workspace_id)
-        reauthorize(prospective, events, actor, operation="create")
+        events = list(CTFEvent.objects.select_for_update().filter(pk__in=[event.pk for event in events]).order_by("pk"))
+        _enforce_creation_rate(credential.principal.uuid, binding, maintenance)
+        actor = reauthorize(prospective, events, actor, operation="create")
+        attribution = actor_attribution(actor)
         campaign = CommunicationCampaign.objects.create(
             id=campaign_id or uuid4(),
             workspace_id=workspace_id,
+            scope_kind=scope.kind,
+            account_id=binding.account_id,
+            organization_id=binding.organization_id,
             title=draft.title,
             origin=draft.origin,
-            created_by=user,
-            actor_token_id=draft.actor_token_id,
+            created_by=event_actor_user(principal_actor),
+            creator_principal_uuid=credential.principal.uuid,
+            actor_token_id=attribution.token_id,
             status=CampaignStatus.DRAFT.value,
             audience_spec=audience,
             trigger_spec=trigger,
@@ -172,11 +218,103 @@ def create_campaign(
             body=content["body"],
             content_profile=content["profile"],
             content_digest=content["digest"],
-            actor_user_id=actor.user_id,
-            actor_token_id=actor.token_id,
+            actor_user_id=attribution.user_id,
+            actor_token_id=attribution.token_id,
+            actor_principal_uuid=attribution.principal_uuid,
         )
     logger.info("Created communication campaign %s in workspace %s", campaign.id, workspace_id)
     return campaign
+
+
+def create_system_event_campaign(
+    event: CTFEvent, draft: CampaignDraft, *, campaign_id: UUID, authoring_rate_limited: bool = True
+) -> CommunicationCampaign:
+    """Create one trusted lifecycle notice bound to an already-locked event.
+
+    ``authoring_rate_limited=False`` is reserved for organizer alerts and the
+    cancellation notice: they are server-authored, bounded by the event schedule
+    or its one cancellation, and declared inside the state change that causes
+    them, so a shared authoring budget must not drop them after that change
+    commits. Release-time admission backpressure still applies.
+
+    A cancellation notice is the only communication that passes the
+    cancelled-event fence (ADR-065-R6), so it is created only for an event that
+    is already cancelled.
+    """
+    if list(dict.fromkeys(validate_campaign_targets(draft.target_event_ids))) != [event.pk]:
+        raise _TARGET_DENIED
+    try:
+        notice_kind = NoticeKind(draft.notice_kind).value
+    except ValueError:
+        raise CTFCommunicationError("Unavailable", code="CTF_COMMUNICATION_NOTICE_KIND_DENIED") from None
+    if notice_kind == NoticeKind.CANCELLATION.value and event.status != EventStatus.CANCELLED.value:
+        raise CTFCommunicationError("Unavailable", code="CTF_COMMUNICATION_EVENT_NOT_CANCELLED")
+    try:
+        scope = workspace_services.resource_scope_from_ids(
+            kind=event.scope_kind,
+            account_id=event.account_id,
+            organization_id=event.organization_id,
+            workspace_id=event.workspace_id,
+        )
+        binding = workspace_services.resolve_resource_scope(scope)
+    except workspace_services.AccountScopeError:
+        raise CTFCommunicationError(_CAMPAIGN_SCOPE_IS_UNAVAILABLE, code="CTF_COMMUNICATION_WORKSPACE_DENIED") from None
+    # Trusted system notices are the only path that may address organizers.
+    audience = validate_audience_spec(draft.audience_spec, allow_organizer=True)
+    trigger = validate_trigger_spec(draft.trigger_spec)
+    selected_channels = validate_channels(draft.channels)
+    ack_policy = validate_acknowledgement_policy(draft.acknowledgement_policy)
+    content = validate_message_content(
+        {"subject": draft.subject, "body": draft.body},
+        allowed_link_hosts=settings.CTF_COMMUNICATION_ALLOWED_LINK_HOSTS,
+    )
+    scope_kind = "workspace" if binding.workspace_id is not None else "account"
+    scope_id = binding.workspace_id or binding.account_id
+    if scope_id is None:
+        raise CTFCommunicationError(_CAMPAIGN_SCOPE_IS_UNAVAILABLE, code="CTF_COMMUNICATION_WORKSPACE_DENIED")
+    if authoring_rate_limited:
+        enforce_operation_rate("system", scope_kind, scope_id)
+    campaign = CommunicationCampaign.objects.create(
+        id=campaign_id,
+        scope_kind=scope.kind,
+        account_id=binding.account_id,
+        organization_id=binding.organization_id,
+        workspace_id=binding.workspace_id,
+        title=draft.title,
+        origin=draft.origin,
+        notice_kind=notice_kind,
+        created_by=event.created_by,
+        creator_principal_uuid=event.owner_principal_uuid,
+        status=CampaignStatus.DRAFT.value,
+        audience_spec=audience,
+        trigger_spec=trigger,
+        channels=selected_channels,
+        acknowledgement_policy=ack_policy,
+    )
+    CommunicationTargetEvent.objects.create(campaign=campaign, event=event)
+    MessageRevision.objects.create(
+        campaign=campaign,
+        revision_number=1,
+        subject=content["subject"],
+        body=content["body"],
+        content_profile=content["profile"],
+        content_digest=content["digest"],
+    )
+    return campaign
+
+
+def is_event_cancellation_notice(campaign: CommunicationCampaign) -> bool:
+    """Return True only for the trusted participant cancellation notice (ADR-065-R6).
+
+    Public authoring accepts only the announcement kind, ``notice_kind`` is
+    immutable, and :func:`create_system_event_campaign` sets the cancellation kind
+    only for a cancelled event. This one check is the cancelled-event fence
+    exception at declaration, release and delivery.
+    """
+    return (
+        campaign.origin == CommunicationOrigin.SYSTEM_MILESTONE.value
+        and campaign.notice_kind == NoticeKind.CANCELLATION.value
+    )
 
 
 def revise_message(
@@ -191,14 +329,18 @@ def revise_message(
         {"subject": subject, "body": body},
         allowed_link_hosts=settings.CTF_COMMUNICATION_ALLOWED_LINK_HOSTS,
     )
+    actor = prepare_campaign_admission(campaign, actor)
     with transaction.atomic():
         campaign = lock_authorized_campaign(campaign, actor, operation="revise")
+        attribution = actor_attribution(actor)
         if campaign.status != CampaignStatus.DRAFT.value:
             raise CTFCommunicationError(
                 "Only a draft campaign's message can be revised",
                 code="CTF_COMMUNICATION_NOT_DRAFT",
             )
-        enforce_operation_rate(actor.user_id, _legacy_workspace_id(campaign))
+        actor_key = actor.credential.principal.uuid if actor.credential is not None else actor.user_id
+        scope_kind, scope_id = campaign_rate_scope(campaign)
+        enforce_operation_rate(actor_key, scope_kind, scope_id)
         next_number = (
             MessageRevision.objects.filter(campaign=campaign)
             .order_by("-revision_number")
@@ -213,6 +355,23 @@ def revise_message(
             body=content["body"],
             content_profile=content["profile"],
             content_digest=content["digest"],
-            actor_user_id=actor.user_id,
-            actor_token_id=actor.token_id,
+            actor_user_id=attribution.user_id,
+            actor_token_id=attribution.token_id,
+            actor_principal_uuid=attribution.principal_uuid,
         )
+
+
+def _enforce_creation_rate(principal_uuid: UUID, binding: ResolvedResourceScope, maintenance: bool) -> None:
+    """Require the cutover fence or enforce the owning scope's ordinary rate limit."""
+    workspace_id = binding.workspace_id
+    if maintenance:
+        from ctf.models import CommunicationCutover
+
+        if not CommunicationCutover.objects.filter(pk=1, activated_at__isnull=True).exists():
+            raise CTFCommunicationError("Maintenance fence required", code="CTF_COMMUNICATION_CUTOVER_BLOCKED")
+    else:
+        rate_kind = "workspace" if workspace_id is not None else "account"
+        rate_id = workspace_id or binding.account_id
+        if rate_id is None:
+            raise CTFCommunicationError(_CAMPAIGN_SCOPE_IS_UNAVAILABLE, code="CTF_COMMUNICATION_WORKSPACE_DENIED")
+        enforce_operation_rate(principal_uuid, rate_kind, rate_id)

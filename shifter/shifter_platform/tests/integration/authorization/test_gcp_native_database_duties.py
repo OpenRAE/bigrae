@@ -109,6 +109,22 @@ def test_native_policy_migrator_owns_existing_datastore_without_application_acce
                 "SELECT rolcreaterole, rolcreatedb FROM pg_roles WHERE rolname=%s", [users["openfga-migrator"]]
             )
             assert cursor.fetchone() == (False, False)
+            # An earlier release left the datastore owned by the migrator login (#2688).
+            cursor.execute('ALTER TABLE public."tuple" OWNER TO "' + users["openfga-migrator"] + '"')
+        call_command("reconcile_gcp_database_duties")
+        with (
+            psycopg.connect(**{**connection.get_connection_params(), "dbname": "openfga"}) as policy,
+            policy.cursor() as cursor,
+        ):
+            cursor.execute("SELECT pg_get_userbyid(relowner) FROM pg_class WHERE oid = 'public.tuple'::regclass")
+            assert cursor.fetchone() == ("shifter_openfga_owner",)
+            # The temporary membership is gone; a superuser test login needs none.
+            cursor.execute(
+                "SELECT count(*) FROM pg_auth_members m JOIN pg_roles r ON r.oid = m.roleid "
+                "JOIN pg_roles u ON u.oid = m.member WHERE r.rolname = %s AND u.rolname = current_user",
+                [users["openfga-migrator"]],
+            )
+            assert cursor.fetchone() == (0,)
             cursor.execute('GRANT CONNECT ON DATABASE openfga TO "' + users["portal"] + '"')
         try:
             with pytest.raises(CommandError, match="SQL duty reconciliation failed"):
@@ -121,3 +137,43 @@ def test_native_policy_migrator_owns_existing_datastore_without_application_acce
             for user in users.values():
                 cursor.execute('DROP OWNED BY "' + user + '"')
                 cursor.execute('DROP ROLE "' + user + '"')
+
+
+def test_guacamole_login_owns_its_database_after_losing_provider_defaults(monkeypatch):
+    """Guacamole can create its schema after the provider superuser role is removed (#2626)."""
+    import psycopg
+
+    with connection.cursor() as cursor:
+        cursor.execute("CREATE ROLE cloudsqlsuperuser NOLOGIN CREATEROLE CREATEDB")
+        cursor.execute("CREATE ROLE guacamole_admin LOGIN CREATEROLE CREATEDB")
+        cursor.execute("GRANT cloudsqlsuperuser TO guacamole_admin")
+        cursor.execute("CREATE ROLE synthetic_guacamole_probe LOGIN")
+        cursor.execute("CREATE DATABASE guacamole")
+    monkeypatch.setenv("CLOUD_PROVIDER", "gcp")
+    monkeypatch.setenv("DB_AUTH_MODE", "password")
+    monkeypatch.delenv("GCP_DATABASE_IAM_USERS_JSON", raising=False)
+    guacamole = {**connection.get_connection_params(), "dbname": "guacamole"}
+    try:
+        call_command("reconcile_gcp_database_duties")
+        call_command("reconcile_gcp_database_duties")
+        with psycopg.connect(**guacamole) as database, database.cursor() as cursor:
+            cursor.execute("SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname = 'guacamole'")
+            assert cursor.fetchone() == ("guacamole_admin",)
+            cursor.execute("SELECT pg_get_userbyid(nspowner) FROM pg_namespace WHERE nspname = 'public'")
+            assert cursor.fetchone() == ("guacamole_admin",)
+            cursor.execute("SELECT pg_has_role('guacamole_admin', 'cloudsqlsuperuser', 'MEMBER')")
+            assert cursor.fetchone() == (False,)
+            cursor.execute("SELECT has_schema_privilege('synthetic_guacamole_probe', 'public', 'CREATE')")
+            assert cursor.fetchone() == (False,)
+            cursor.execute("SELECT has_database_privilege('synthetic_guacamole_probe', 'guacamole', 'CONNECT')")
+            assert cursor.fetchone() == (False,)
+            cursor.execute("SET ROLE guacamole_admin")
+            cursor.execute("CREATE TABLE guacamole_schema_probe (id integer)")
+            cursor.execute("DROP TABLE guacamole_schema_probe")
+            cursor.execute("RESET ROLE")
+    finally:
+        with connection.cursor() as cursor:
+            cursor.execute("DROP DATABASE IF EXISTS guacamole WITH (FORCE)")
+            for role in ("synthetic_guacamole_probe", "guacamole_admin", "cloudsqlsuperuser"):
+                cursor.execute(f'DROP OWNED BY "{role}"')
+                cursor.execute(f'DROP ROLE "{role}"')

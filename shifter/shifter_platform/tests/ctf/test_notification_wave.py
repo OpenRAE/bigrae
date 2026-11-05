@@ -71,7 +71,8 @@ class TestParticipantAnnouncementFeed:
 
 
 class TestMilestoneEmails:
-    def test_event_results_are_staged_without_delivery_claim(self, ctf_event_active):
+    def test_event_results_are_staged_without_delivery_claim(self, ctf_event_active, settings):
+        settings.EMAIL_DELIVERY_AVAILABLE = False
         from ctf.models import CommunicationCampaign, CommunicationIntent
         from ctf.services.notification import send_event_results
 
@@ -109,7 +110,21 @@ class TestMilestoneEmails:
 
         assert CommunicationCampaign.objects.filter(title="Your range is ready").count() == 1
 
-    def test_participant_provision_failure_email(self, ctf_event_active):
+    def test_event_results_release_email_work_when_email_is_available(self, ctf_event_active, mailoutbox):
+        from ctf.models import CommunicationIntent, DeliveryAttempt
+        from ctf.services.notification import send_event_results
+
+        _register(ctf_event_active, "results")
+        result = send_event_results(ctf_event_active.pk)
+
+        assert result["outcome"] == "accepted"
+        intent = CommunicationIntent.objects.get(pk=result["intent_id"])
+        assert intent.delivery_state == "pending"
+        assert DeliveryAttempt.objects.filter(intent=intent, channel="email").count() == 1
+        assert mailoutbox == []  # admission only; the worker sends
+
+    def test_participant_provision_failure_email(self, ctf_event_active, settings):
+        settings.EMAIL_DELIVERY_AVAILABLE = False
         from ctf.services.notification import notify_participant_provision_failure
 
         participant = _register(ctf_event_active, "unlucky")
@@ -118,65 +133,66 @@ class TestMilestoneEmails:
 
 
 class TestRealtimeBus:
-    def test_publish_creates_rows_when_enabled(self, ctf_event_active, participant_user, settings):
-        from ctf.services.notification import publish_event_notification
+    def test_live_hint_creates_rows_only_for_named_recipients(self, ctf_event_active, participant_user, settings):
+        from ctf.enums import LiveNotificationKind
+        from ctf.services.notification import publish_live_hint
         from shared.models import WebSocketNotification
 
         settings.WEBSOCKET_NOTIFICATIONS_ENABLED = True
         _register(ctf_event_active, "watcher", user=participant_user)
 
-        publish_event_notification(ctf_event_active, "announcement", {"subject": "s", "body": "b"})
+        publish_live_hint(
+            ctf_event_active, LiveNotificationKind.RANGE_READY, recipient_ids=[participant_user.pk], occurrence="1"
+        )
 
         rows = WebSocketNotification.objects.filter(topic=f"ctf:event:{ctf_event_active.pk}")
-        recipient_ids = set(rows.values_list("recipient_id", flat=True))
-        assert participant_user.pk in recipient_ids
-        assert ctf_event_active.created_by_id in recipient_ids
-        assert all(row.payload == {"kind": "refresh"} for row in rows)
+        assert set(rows.values_list("recipient_id", flat=True)) == {participant_user.pk}
+        assert all(row.payload == {"kind": "range_ready"} for row in rows)
 
-    def test_publish_noops_when_disabled(self, ctf_event_active, settings):
-        from ctf.services.notification import publish_event_notification
+    def test_live_hint_noops_when_disabled(self, ctf_event_active, participant_user, settings):
+        from ctf.enums import LiveNotificationKind
+        from ctf.services.notification import publish_live_hint
         from shared.models import WebSocketNotification
 
         settings.WEBSOCKET_NOTIFICATIONS_ENABLED = False
-        publish_event_notification(ctf_event_active, "announcement", {"subject": "s"})
+        publish_live_hint(
+            ctf_event_active, LiveNotificationKind.RANGE_READY, recipient_ids=[participant_user.pk], occurrence="1"
+        )
         assert not WebSocketNotification.objects.exists()
 
-    def test_subscription_authorization(self, ctf_event_active, participant_user, organizer_user, django_user_model):
+    def test_subscription_authorization(
+        self,
+        ctf_event_active,
+        participant_user,
+        organizer_user,
+        django_user_model,
+        live_session_credential,
+        monkeypatch,
+    ):
         from ctf.services.notification.realtime import _can_subscribe, event_topic
+        from shared.authorization import AuthorizationDecision, DecisionKind, configured_authorization_provider
 
         _register(ctf_event_active, "member", user=participant_user)
         stranger = django_user_model.objects.create_user(username="s@test.com", email="s@test.com")
         topic = event_topic(ctf_event_active.pk)
+        organizer_proof = live_session_credential(organizer_user)
 
-        assert _can_subscribe(organizer_user, topic) is True
-        assert _can_subscribe(participant_user, topic) is True
-        assert _can_subscribe(stranger, topic) is False
+        assert _can_subscribe(organizer_proof, topic) is True
+        assert _can_subscribe(live_session_credential(participant_user), topic) is True
+        assert _can_subscribe(live_session_credential(stranger), topic) is False
 
-    def test_first_blood_published_once(self, ctf_event_active, participant_user, monkeypatch):
-        from ctf.enums import ChallengeCategory, ChallengeDifficulty
-        from ctf.models import CTFChallenge
-        from ctf.services import submit_flag
+        # Keep the same live proof and owner; revoke only native read policy (#2617).
+        provider = configured_authorization_provider()
+        check = provider.check
+        checked = []
 
-        challenge = CTFChallenge.objects.create(
-            event=ctf_event_active,
-            name="FB",
-            description="d",
-            category=ChallengeCategory.WEB.value,
-            points=100,
-            difficulty=ChallengeDifficulty.EASY.value,
-            flag_format="FLAG{...}",
-        )
-        solver_one = _register(ctf_event_active, "fb-one", user=participant_user)
-        solver_two = _register(ctf_event_active, "fb-two")
+        def deny_current_grant(request):
+            if request.action == "event.read" and request.principal == organizer_proof.principal:
+                checked.append(request)
+                return AuthorizationDecision(DecisionKind.DENIED, "policy_denied")
+            return check(request)
 
-        published = []
-        monkeypatch.setattr(
-            "ctf.services.notification.publish_event_notification",
-            lambda event, kind, payload, **kw: published.append(kind),
-        )
-        monkeypatch.setattr("ctf.services.submission.verify_flag", lambda _c, _f, **_kwargs: True)
-
-        submit_flag(solver_one.pk, challenge.pk, "FLAG{x}")
-        submit_flag(solver_two.pk, challenge.pk, "FLAG{x}")
-
-        assert published.count("first_blood") == 1
+        monkeypatch.setattr(provider, "check", deny_current_grant)
+        assert _can_subscribe(organizer_proof, topic) is False
+        assert checked
+        assert _can_subscribe(live_session_credential(participant_user), topic) is True

@@ -14,15 +14,21 @@ public final class AuthorityProvider extends AbstractAuthenticationProvider {
 
     public AuthorityProvider() {
         this(Boolean.parseBoolean(java.util.Objects.toString(System.getenv("OPENFGA_ENABLED"), "false").trim()),
-             configuredRenewals());
+             configuredRenewals(System.getenv("GUACAMOLE_CONTROL_URL"), System.getenv("GUACAMOLE_CONTROL_AUDIENCE"),
+                                System.getenv("GUACAMOLE_CONTROL_IDENTITY")));
     }
 
-    private static GatewayRenewals configuredRenewals() {
-        String endpoint = System.getenv("GUACAMOLE_CONTROL_URL");
-        String audience = System.getenv("GUACAMOLE_CONTROL_AUDIENCE");
+    /** Build renewals from deployment settings; incomplete or unknown settings leave sessions refused. */
+    static GatewayRenewals configuredRenewals(String endpoint, String audience, String kind) {
         if (endpoint == null || audience == null) return null;
-        return new GatewayRenewals(new GatewayControl(endpoint, audience), System::nanoTime,
-                                   Duration.ofSeconds(90), 512);
+        GatewayControl control;
+        try { control = new GatewayControl(endpoint, audience, kind); }
+        catch (IllegalArgumentException unsupported) { return null; }
+        try { return new GatewayRenewals(control, System::nanoTime, Duration.ofSeconds(90), 512); }
+        catch (IllegalArgumentException invalid) {
+            control.close();
+            return null;
+        }
     }
 
     AuthorityProvider(boolean enabled, GatewayRenewals renewals) {
@@ -39,6 +45,12 @@ public final class AuthorityProvider extends AbstractAuthenticationProvider {
     @Override public String getIdentifier() { return "shifter-authority"; }
 
     private UUID binding(UserContext context, AuthenticatedUser user) throws GuacamoleException {
+        // The portal issues every session through signed JSON auth. Refuse an
+        // identity from any other provider in every mode, for example a password
+        // login against the PostgreSQL extension on the public login page.
+        AuthenticationProvider source = user.getAuthenticationProvider();
+        if (source == null || !"json".equals(source.getIdentifier()))
+            throw new GuacamoleSecurityException("Gateway authority refused");
         String identifier = user.getIdentifier();
         if (!enabled && (identifier == null || !identifier.startsWith("access-"))) return null;
         try {

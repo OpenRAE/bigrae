@@ -18,10 +18,10 @@ Submodule layout:
 * ``submission``   — ``CTFSubmission``, ``CTFAward``.
 * ``rating``       — ``CTFChallengeRating``.
 * ``hint``         — ``CTFHint``, ``CTFHintUsage``.
-* ``notification`` — ``CTFNotification``, ``CTFEmailTemplate``, ``CTFScheduledTask``.
+* ``notification`` — ``CTFNotification``, ``CTFScheduledTask``.
 * ``communication``— ``CommunicationCampaign``, ``CommunicationTargetEvent``,
   ``MessageRevision``, ``CommunicationIntent``, ``RecipientSnapshot``,
-  ``DeliveryAttempt``, ``ParticipantReceipt`` (ADR-051, #2048).
+  ``DeliveryAttempt``, ``RecipientReceipt`` (ADR-051, #2048).
 * ``recovery``     — ``CTFRangeRecovery``.
 * ``spare_range``  — ``CTFSpareRange``.
 * ``content_image``— ``CTFContentImage``, ``ContentImageStatus`` (#2090).
@@ -47,16 +47,18 @@ from .communication import (
     RecipientSnapshot,
 )
 from .communication_cutover import CommunicationCutover, LegacyCommunication
-from .communication_delivery import DeliveryAttempt, ParticipantReceipt
+from .communication_delivery import DeliveryAttempt, RecipientReceipt
 from .content_hydration import CTFContentHydrationReceipt
 from .content_image import ContentImageStatus, CTFContentImage
 from .event import CTFEvent
+from .event_authority_transition import CTFEventAuthorityTransition
 from .event_page import CTFEventPage
 from .event_staff import CTFEventStaff
 from .flag import CTFFlag
 from .hint import CTFHint, CTFHintUsage
-from .notification import CTFEmailTemplate, CTFNotification, CTFWebhook
+from .notification import CTFNotification, CTFWebhook
 from .public_registration import CTFPublicRegistrationRequest
+from .range_launch import CTFRangeLaunch
 from .rating import CTFChallengeRating
 from .recovery import CTFRangeRecovery
 from .scheduled_task import CTFScheduledTask
@@ -82,8 +84,8 @@ __all__ = [
     "CTFCohort",
     "CTFContentHydrationReceipt",
     "CTFContentImage",
-    "CTFEmailTemplate",
     "CTFEvent",
+    "CTFEventAuthorityTransition",
     "CTFEventPage",
     "CTFEventStaff",
     "CTFFlag",
@@ -92,6 +94,7 @@ __all__ = [
     "CTFNotification",
     "CTFParticipant",
     "CTFPublicRegistrationRequest",
+    "CTFRangeLaunch",
     "CTFRangeRecovery",
     "CTFReceiptConsumption",
     "CTFScheduledTask",
@@ -108,7 +111,7 @@ __all__ = [
     "DeliveryAttempt",
     "LegacyCommunication",
     "MessageRevision",
-    "ParticipantReceipt",
+    "RecipientReceipt",
     "RecipientSnapshot",
     "SoftDeleteManager",
     "timezone",

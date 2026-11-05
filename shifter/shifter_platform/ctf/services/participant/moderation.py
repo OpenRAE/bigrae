@@ -15,6 +15,7 @@ from django.db import transaction
 from ctf.enums import ParticipantRole, ParticipantStatus
 from ctf.exceptions import CTFNotFoundError, CTFStateError, CTFValidationError
 from ctf.models import CTFParticipant
+from shared.log_sanitize import safe_log_value
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -42,11 +43,17 @@ def _locked_participant(participant_id: UUID) -> CTFParticipant:
 
 
 def _recompute_team(participant: CTFParticipant) -> None:
-    """Refresh the materialized team score after an eligibility-affecting change."""
+    """Refresh the materialized team score after an eligibility-affecting change.
+
+    Eligibility changes who ranks, so board positions can move (CTF-802).
+    """
+    from ctf.services.notification.live import request_position_reconcile
+
     if participant.team_id is not None:
         from ctf.services.scoring import recompute_team_score
 
         recompute_team_score(participant.team_id)
+    request_position_reconcile(participant.event_id)
 
 
 def _restored_status() -> str:
@@ -108,7 +115,7 @@ def disqualify_participant(participant_id: UUID, reason: str | None = None) -> C
         participant.status_reason = (reason or "").strip()
         participant.save(update_fields=["status", "status_reason", "updated_at"])
         _recompute_team(participant)
-    logger.info("Disqualified participant %s: %s", participant_id, reason or "No reason provided")
+    logger.info("Disqualified participant %s: %s", participant_id, safe_log_value(reason or "No reason provided"))
     return participant
 
 

@@ -24,6 +24,11 @@ source "googlecompute" "kali" {
   // boot disk well above the debian-12 base (10 GB) with install headroom.
   disk_size = 40
 
+  // state_timeout also bounds the wait for GCE to register the captured image.
+  // The default of 5m is too short for the full Kali disk, so the build fails
+  // after provisioning completes (#2734).
+  state_timeout = "30m"
+
   network               = var.network
   subnetwork            = var.subnetwork
   service_account_email = var.service_account_email
@@ -33,6 +38,10 @@ source "googlecompute" "kali" {
   omit_external_ip = var.use_internal_ip
   use_iap          = var.use_internal_ip
 
+  // A run that does not publish deletes this VM, its disk (Packer names the disk
+  // after the VM), and the image with its build-run label (#2747).
+  instance_name = "packer-${var.build_id}"
+
   image_name        = "${var.image_prefix}-kali-{{timestamp}}"
   image_family      = "${var.image_prefix}-kali"
   image_description = "Kali Linux Rolling with kali-linux-headless, sshpass, Caldera, Claude Code (GCE)"
@@ -41,6 +50,7 @@ source "googlecompute" "kali" {
     managed-by      = "packer"
     image-type      = "kali"
     source-revision = var.source_revision
+    build-run       = var.build_id
   }
 }
 

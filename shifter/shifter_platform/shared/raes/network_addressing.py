@@ -1,4 +1,4 @@
-"""Fail-closed admission for RAES 3.5 static network addresses (#2219)."""
+"""Fail-closed admission for RAES 10.2 static network addresses (#2219)."""
 
 from __future__ import annotations
 

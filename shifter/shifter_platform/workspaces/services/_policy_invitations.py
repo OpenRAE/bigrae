@@ -18,13 +18,15 @@ from shared.verified_identity import VerifiedIdentity
 from workspaces.models import WorkspaceInvitation, WorkspaceMembership
 
 from ._account import AccountScopeError, hierarchy_target_scope
-from ._account_policy_admin import _require_action, _valid_account_page
+from ._account_policy_admin import _fence_actor, _require_action, _valid_account_page
+from ._invitation_delivery import reset_delivery
 from ._invitations import (
     WORKSPACE_INVITATION_TOKEN_MAX_AGE_SECONDS,
     WorkspaceInvitationClaim,
     WorkspaceInvitationError,
     WorkspaceInvitationProjection,
     _audit_state,
+    _committed_projection,
     _consume_delivery_budget,
     _eligible_verified_principal,
     _normalized_email,
@@ -48,12 +50,14 @@ def _unavailable() -> WorkspaceInvitationError:
     return WorkspaceInvitationError("invitation_invalid", "Invitation is invalid")
 
 
-def _authorize(actor: CredentialContext, provider: AuthorizationProvider, workspace_uuid: uuid.UUID) -> ResourceScope:
+def _authorize(
+    actor: CredentialContext, provider: AuthorizationProvider, workspace_uuid: uuid.UUID
+) -> tuple[ResourceScope, CredentialContext]:
     """Check exact SQL ancestry and live policy before opening the write transaction."""
     try:
         scope = hierarchy_target_scope("workspace", workspace_uuid)
-        _require_action(actor, provider, _ACTION, TargetRef("workspace", workspace_uuid), scope)
-        return scope
+        actor = _require_action(actor, provider, _ACTION, TargetRef("workspace", workspace_uuid), scope)
+        return scope, actor
     except AccountScopeError as exc:
         raise _unavailable() from exc
 
@@ -102,11 +106,12 @@ def admin_issue_workspace_invitation(
     audit: RequestAudit | None = None,
 ) -> WorkspaceInvitationProjection:
     """A service can invite a verified human without impersonating its contact."""
-    scope = _authorize(actor, provider, workspace_uuid)
+    scope, actor = _authorize(actor, provider, workspace_uuid)
     email = _normalized_email(email)
     _consume_delivery_budget(actor.principal.uuid)
     with transaction.atomic():
         workspace = _locked_scope("workspace", scope)
+        _fence_actor(actor)
         _require_workspace_eligible(workspace)
         if WorkspaceInvitation.objects.filter(
             workspace=workspace,
@@ -124,7 +129,7 @@ def admin_issue_workspace_invitation(
         )
         _write_audit(invitation, AuditAction.CREATE, _attribution(actor, audit), new_state=_audit_state(invitation))
         _schedule_delivery(invitation)
-        return _projection(invitation)
+    return _committed_projection(invitation.pk)
 
 
 def _manage(
@@ -137,11 +142,12 @@ def _manage(
     audit: RequestAudit | None,
 ) -> WorkspaceInvitationProjection:
     """Use the same generation/status/signing invariants for resend and revoke."""
-    scope = _authorize(actor, provider, workspace_uuid)
+    scope, actor = _authorize(actor, provider, workspace_uuid)
     if not revoke:
         _consume_delivery_budget(actor.principal.uuid)
     with transaction.atomic():
         workspace = _locked_scope("workspace", scope)
+        _fence_actor(actor)
         _require_workspace_eligible(workspace)
         invitation = (
             WorkspaceInvitation.objects.select_for_update()
@@ -161,11 +167,11 @@ def _manage(
         invitation.generation = uuid.uuid4()
         if revoke:
             invitation.revoked_at = timezone.now()
-            changed = "revoked_at"
+            changed = ["revoked_at"]
         else:
             invitation.expires_at = timezone.now() + timedelta(seconds=WORKSPACE_INVITATION_TOKEN_MAX_AGE_SECONDS)
-            changed = "expires_at"
-        invitation.save(update_fields=["generation", changed, "updated_at"])
+            changed = ["expires_at", *reset_delivery(invitation)]
+        invitation.save(update_fields=["generation", *changed, "updated_at"])
         _write_audit(
             invitation,
             AuditAction.CANCEL if revoke else AuditAction.UPDATE,
@@ -175,7 +181,7 @@ def _manage(
         )
         if not revoke:
             _schedule_delivery(invitation)
-        return _projection(invitation)
+    return _committed_projection(invitation.pk)
 
 
 def admin_resend_workspace_invitation(

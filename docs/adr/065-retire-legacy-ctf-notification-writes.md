@@ -36,6 +36,44 @@ are unavailable until a supported recipient/transport contract exists; the
 participant ledger must not gain invented organizer participants or disclose
 organizer-only material to participants.
 
+Revision R4, 2026-10-30, issue #528. The maintainer chose the organizer
+recipient contract. The existing ledger gains an explicit organizer recipient
+kind with principal identity and recipient-kind database constraints. The event
+owner and live co-organizers are delivery candidates, not authority. Release,
+the delivery worker and the organizer inbox recheck the candidate set and
+current native policy. Organizer alerts use the in-app organizer inbox, and
+email when the deployment has email delivery. Organizer rows never enter the
+participant inbox, the communications console or campaign reports. Only the
+system origin can select organizer recipients. The
+[design](../architecture/ctf-organizer-alerts-design-528.md) and the
+[preflight](../architecture/ctf-organizer-alerts-preflight-528.md) give the
+details. ADR-071 provides the email transport.
+
+Revision R5, 2026-10-31, issue #664. The maintainer chose these rules for
+participant lifecycle notices. Registration, range-ready and range-failure
+notices are durable declarations in the transaction that causes them. Each
+declaration is one system campaign for one participant occurrence, with a
+stable identity. Every seat-creation path declares a registration confirmation
+for a seat with a delivery email. These declarations skip the shared system
+authoring rate budget, as organizer alerts do. Seat creation and range status
+bound their number. Release-time admission backpressure still applies. The
+[design](../architecture/ctf-participant-notices-design-664.md) gives the details.
+
+Revision R6, 2026-10-31, issue #662. The maintainer chose a durable
+cancellation notice on this ledger. The cancel transaction declares one
+`cancellation` notice for the event, after task cancellation and the
+communication fence. A scheduled release task releases it and retries on
+backpressure. This notice is the only exception to the ADR-051-R6
+cancelled-event release and delivery fence. The exception needs the
+`system_milestone` origin, the immutable `cancellation` kind and exactly one
+cancelled target event. Only the system campaign factory can set that kind, and
+only for a cancelled event. Campaign and intent cancellation, recipient
+revocation, tenancy and retention still apply. A notice failure does not block
+cancellation or range cleanup. The
+[design](../architecture/ctf-cancellation-notice-design-662.md) and the
+[preflight](../design/ctf-event-cancellation-preflight-706.md) give the
+details.
+
 The API compatibility checker supports exact absent write-method retirements so
 retaining GET on the same URL does not exempt it from compatibility checking.
 Reintroducing any retired method fails the checker. All unrelated differences

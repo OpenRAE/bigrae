@@ -55,6 +55,8 @@ from django.utils import timezone
 
 from ctf.enums import ScheduledTaskStatus, ScheduledTaskType
 from ctf.models import CTFScheduledTask
+from ctf.services.notification.live import handle_live_notice_task, handle_position_reconcile_task
+from shared.log_sanitize import safe_log_value
 
 logger = logging.getLogger(__name__)
 
@@ -72,8 +74,14 @@ def _run_retention_maintenance() -> None:
     from ctf.services.participant.accounts import purge_expired_participant_accounts
     from ctf.services.public_registration import purge_expired_public_registration_requests
 
-    purge_expired_participant_accounts()
-    purge_expired_public_registration_requests()
+    accounts = purge_expired_participant_accounts()
+    registrations = purge_expired_public_registration_requests()
+    if accounts or registrations:
+        logger.info(
+            "CTF retention maintenance purged participant_accounts=%d public_registration_requests=%d",
+            accounts,
+            registrations,
+        )
 
 
 class Command(BaseCommand):
@@ -232,8 +240,8 @@ class Command(BaseCommand):
                 raise ValueError(f"No handler for task type: {task.task_type}")
             result = handler(task, shutdown_check=lambda: self.shutdown, heartbeat=self._touch_heartbeat)
             self._settle(task, token, result)
-        except Exception as exc:
-            logger.exception("Task %s failed: %s", task.pk, exc)
+        except Exception:
+            logger.exception("Task %s failed: type=%s event_id=%s", task.pk, task.task_type, task.event_id)
             task.retry_or_fail_if_claimed("Task execution failed; see server logs for details.", token)
 
     def _settle(self, task: CTFScheduledTask, token: UUID, result: object) -> None:
@@ -265,6 +273,24 @@ class Command(BaseCommand):
 # ---------------------------------------------------------------------------
 
 
+def _other_work_due(task: CTFScheduledTask) -> bool:
+    """Return True when a different, non-spin-up task is due now.
+
+    The scheduler executes one task at a time. A long spin-up yields to due work
+    such as an event start, an event end or an organizer alert release, then
+    resumes (#528). Other spin-ups do not preempt each other.
+    """
+    return (
+        CTFScheduledTask.objects.filter(
+            status=ScheduledTaskStatus.PENDING.value,
+            scheduled_for__lte=timezone.now(),
+        )
+        .exclude(pk=task.pk)
+        .exclude(task_type=ScheduledTaskType.SPIN_UP_RANGES.value)
+        .exists()
+    )
+
+
 def _handle_spin_up_ranges(
     task: CTFScheduledTask,
     shutdown_check: ShutdownCheck | None = None,
@@ -273,13 +299,17 @@ def _handle_spin_up_ranges(
     """Provision all event ranges via the throttled loop.
 
     Returns the throttled result so the executor can requeue the task when the
-    run was interrupted by shutdown instead of marking it completed.
+    run was interrupted by shutdown, or yielded to other due work, instead of
+    marking it completed. A requeued run resumes as a continuation: it spreads the
+    remaining participants over the time left before the event start and does
+    not repeat the capacity admission of the first run.
     """
     from ctf.services.range import provision_event_ranges_throttled
+    from ctf.services.range.batch import spin_up_window_seconds
 
     event = task.event
-    # convert to seconds
-    spinup_window = event.range_spinup_minutes * 60
+    continuation = bool((task.metadata or {}).get("continuation"))
+    spinup_window = spin_up_window_seconds(event.event_start, event.range_spinup_minutes, timezone.now())
 
     def task_heartbeat() -> None:
         """Keep both the claimed task and the scheduler liveness file fresh.
@@ -294,16 +324,38 @@ def _handle_spin_up_ranges(
         if heartbeat is not None:
             heartbeat()
 
+    def stop_requested() -> bool:
+        """Stop for shutdown, or yield when other work is due."""
+        return bool(shutdown_check and shutdown_check()) or _other_work_due(task)
+
+    from shared.credentials import resolve_current_credential
+    from shared.operation_authority import credential_reference_from_record
+
+    credential = resolve_current_credential(credential_reference_from_record(task))
     result = provision_event_ranges_throttled(
         event_id=event.pk,
         spinup_window_seconds=spinup_window,
-        shutdown_check=shutdown_check,
+        shutdown_check=stop_requested,
         heartbeat=task_heartbeat,
+        actor=credential,
+        continuation=continuation,
     )
+    if isinstance(result, dict) and result.get("interrupted"):
+        # Targeted update: the resumed run is a continuation of this admission.
+        CTFScheduledTask.objects.filter(pk=task.pk).update(
+            metadata={**(task.metadata or {}), "continuation": True}, updated_at=timezone.now()
+        )
+    # Counts only: per-participant failures (and their exception text) are
+    # already logged by the provisioning service.
     logger.info(
-        "SPIN_UP_RANGES result for event %s: %s",
+        "SPIN_UP_RANGES result event_id=%s total=%s successful=%s failed=%s skipped=%s interrupted=%s refused=%s",
         event.pk,
-        result,
+        result.get("total"),
+        result.get("successful"),
+        result.get("failed"),
+        result.get("skipped"),
+        result.get("interrupted"),
+        result.get("refused", False),
     )
     return result
 
@@ -324,14 +376,11 @@ def _handle_event_start(
     task: CTFScheduledTask,
     shutdown_check: ShutdownCheck | None = None,
     heartbeat: Heartbeat | None = None,
-) -> None:
-    """Activate the event and notify the organizer on success."""
-    from ctf.services.event import activate_event
+) -> dict[str, Any] | None:
+    """Start the event at its scheduled start and check range readiness (CTF-1002/1004)."""
+    from ctf.services.event import run_automatic_start
 
-    if activate_event(task.event):
-        from ctf.services.notification import notify_organizer_event_start
-
-        notify_organizer_event_start(task.event_id)
+    return run_automatic_start(task)
 
 
 def _handle_event_end(
@@ -339,30 +388,10 @@ def _handle_event_end(
     shutdown_check: ShutdownCheck | None = None,
     heartbeat: Heartbeat | None = None,
 ) -> None:
-    """Complete the event and notify the organizer."""
-    from ctf.models import CTFEvent
-    from ctf.services.event import complete_event
+    """End the event at its scheduled end; the organizer alert commits with the end."""
+    from ctf.services.event import run_automatic_end
 
-    event = CTFEvent.objects.get(pk=task.event_id)
-    now = timezone.now()
-    if now < event.event_end:
-        logger.info(
-            "Skipping stale EVENT_END task %s for event %s: event_end=%s now=%s",
-            task.pk,
-            event.pk,
-            event.event_end,
-            now,
-        )
-        task.cancel_if_active()
-        return
-
-    if complete_event(event):
-        from ctf.services.notification import notify_organizer_event_end
-
-        notify_organizer_event_end(event.pk)
-
-    # End-of-event cleanup (including the CTF-703 delayed-task window) is
-    # owned by ``complete_event`` so manual and automated ends behave alike.
+    run_automatic_end(task)
 
 
 def _handle_cleanup_warning(
@@ -434,7 +463,7 @@ def _handle_release_challenge(
         "RELEASE_CHALLENGE for event %s: challenge %s (%s)",
         task.event_id,
         challenge_id,
-        result.name,
+        safe_log_value(result.name),
     )
 
 
@@ -465,4 +494,6 @@ TASK_HANDLERS: dict[str, Any] = {
     ScheduledTaskType.SEND_NOTIFICATION.value: _handle_send_notification,
     ScheduledTaskType.RELEASE_CHALLENGE.value: _handle_release_challenge,
     ScheduledTaskType.RELEASE_COMMUNICATION.value: _handle_release_communication,
+    ScheduledTaskType.LIVE_NOTICE.value: handle_live_notice_task,
+    ScheduledTaskType.RECONCILE_POSITIONS.value: handle_position_reconcile_task,
 }

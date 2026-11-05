@@ -8,6 +8,8 @@ from __future__ import annotations
 
 from shared.authorization.operations import OperationPolicy
 
+_EVENT_READ = "event.read"
+
 _MANAGE_AWARDS = "event.manage_awards"
 _MANAGE_CHALLENGES = "event.manage_challenges"
 _MANAGE_COMMUNICATIONS = "event.manage_communications"
@@ -23,6 +25,7 @@ _PARTICIPATE = "event.participate"
 
 
 API_OPERATION_POLICY: dict[str, OperationPolicy] = {
+    "ctf_teams_captain_create": OperationPolicy(("event.manage_teams",), "event", "team"),
     "ctf_awards_delete_create": OperationPolicy((_MANAGE_AWARDS,), "event", "award"),
     "ctf_challenges_retrieve": OperationPolicy((_MANAGE_CHALLENGES,), "event", "challenge"),
     "ctf_challenges_update": OperationPolicy((_MANAGE_CHALLENGES,), "event", "challenge"),
@@ -44,18 +47,26 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "ctf_communications_release_create": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "campaign"),
     "ctf_communications_revisions_create": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "campaign"),
     "ctf_communications_targets_list": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "campaign_collection"),
+    "ctf_communications_target_options_list": OperationPolicy(
+        (_MANAGE_COMMUNICATIONS,), "event", "campaign_collection"
+    ),
     "ctf_communications_preview_retrieve": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "campaign"),
     "ctf_communications_delivery_retrieve": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "campaign"),
-    "ctf_communications_recipients_list": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "campaign"),
+    "ctf_communications_recipients_list": OperationPolicy(
+        (_MANAGE_COMMUNICATIONS, "event.manage_participants"),
+        "event",
+        "campaign",
+        selector="campaign_recipient_details",
+    ),
     "ctf_communications_activity_retrieve": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "campaign"),
-    "ctf_events_list": OperationPolicy(("event.read",), "event", "event_discovery"),
+    "ctf_events_list": OperationPolicy((_EVENT_READ,), "event", "event_discovery"),
     "ctf_events_create": OperationPolicy(
         ("account.create_event", "organization.create_event", "workspace.create_event"),
         "parent",
         "parent",
         selector="validated_parent_placement",
     ),
-    "ctf_events_retrieve": OperationPolicy(("event.read",), "event", "event"),
+    "ctf_events_retrieve": OperationPolicy((_EVENT_READ,), "event", "event"),
     "ctf_events_update": OperationPolicy((_MANAGE_CONFIG,), "event", "event"),
     "ctf_events_destroy": OperationPolicy((_DELETE_EVENT,), "event", "event"),
     "ctf_events_analytics_retrieve": OperationPolicy((_MANAGE_SCORING,), "event", "event"),
@@ -65,13 +76,14 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "ctf_events_challenges_import_pack_create": OperationPolicy((_MANAGE_CHALLENGES,), "event", "event"),
     "ctf_events_cleanup_create": OperationPolicy((_MANAGE_LIFECYCLE,), "event", "event"),
     "ctf_events_content_refresh_create": OperationPolicy((_MANAGE_CONTENT,), "event", "event"),
-    "ctf_events_email_templates_retrieve": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "event"),
-    "ctf_events_email_templates_update": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "event"),
-    "ctf_events_email_templates_destroy": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "event"),
     "ctf_events_force_delete_create": OperationPolicy((_DELETE_EVENT,), "event", "event"),
     "ctf_events_lifecycle_create": OperationPolicy((_MANAGE_LIFECYCLE,), "event", "event"),
     "ctf_events_model_access_assessment_retrieve": OperationPolicy((_MANAGE_CONFIG,), "event", "event"),
     "ctf_events_notifications_retrieve": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "event"),
+    "ctf_events_ownership_transfer_create": OperationPolicy(("event.transfer_ownership",), "event", "event"),
+    "ctf_events_staff_members_retrieve": OperationPolicy((_MANAGE_STAFF,), "event", "event"),
+    "ctf_events_staff_members_create": OperationPolicy((_MANAGE_STAFF,), "event", "event"),
+    "ctf_events_staff_members_destroy": OperationPolicy((_MANAGE_STAFF,), "event", "event"),
     "ctf_organizer_scoreboard": OperationPolicy((_MANAGE_SCORING,), "event", "event"),
     "ctf_events_pages_retrieve": OperationPolicy((_MANAGE_CONTENT,), "event", "event"),
     "ctf_events_pages_create": OperationPolicy((_MANAGE_CONTENT,), "event", "event"),
@@ -84,19 +96,15 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "ctf_events_registration_requests_retrieve": OperationPolicy((_MANAGE_PARTICIPANTS,), "event", "event"),
     "ctf_events_results_export_retrieve": OperationPolicy((_MANAGE_SCORING,), "event", "event"),
     "ctf_events_scoreboard_retrieve": OperationPolicy(
-        (_PARTICIPATE,),
+        (_EVENT_READ, _PARTICIPATE),
         "event",
         "event",
         "scoreboard_publication",
-        "publication_or_participation",
+        "publication_or_current_policy_or_participation",
     ),
     "ctf_events_spares_create": OperationPolicy((_MANAGE_RANGES,), "event", "event"),
-    "ctf_events_staff_retrieve": OperationPolicy((_MANAGE_STAFF,), "event", "event"),
-    "ctf_events_staff_create": OperationPolicy((_MANAGE_STAFF,), "event", "event"),
-    "ctf_events_staff_destroy": OperationPolicy((_MANAGE_STAFF,), "event", "event"),
     "ctf_events_tasks_retrieve": OperationPolicy((_MANAGE_LIFECYCLE,), "event", "event"),
     "ctf_events_tasks_run_create": OperationPolicy((_MANAGE_LIFECYCLE,), "event", "event"),
-    "ctf_events_transfer_ownership_create": OperationPolicy(("event.transfer_ownership",), "event", "event"),
     "ctf_events_webhooks_retrieve": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "event"),
     "ctf_events_webhooks_create": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "event"),
     "ctf_content_images_retrieve": OperationPolicy(
@@ -119,6 +127,21 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "ctf_me_events_communications_retrieve": OperationPolicy((_PARTICIPATE,), "event", "event"),
     "ctf_me_events_communications_acknowledge_create": OperationPolicy((_PARTICIPATE,), "event", "event"),
     "ctf_me_events_communications_read_create": OperationPolicy((_PARTICIPATE,), "event", "event"),
+    "ctf_me_events_communications_dismiss_create": OperationPolicy((_PARTICIPATE,), "event", "event"),
+    # Organizer alerts (ADR-065-R4): each alert pins one of these actions; rows
+    # whose action the current organizer does not hold are absent.
+    "ctf_organizer_alert_inbox_list": OperationPolicy(
+        (_EVENT_READ, _MANAGE_RANGES), "event", "event", selector="organizer_alert_action"
+    ),
+    "ctf_organizer_alert_inbox_detail": OperationPolicy(
+        (_EVENT_READ, _MANAGE_RANGES), "event", "event", selector="organizer_alert_action"
+    ),
+    "ctf_events_organizer_alerts_read_create": OperationPolicy(
+        (_EVENT_READ, _MANAGE_RANGES), "event", "event", selector="organizer_alert_action"
+    ),
+    "ctf_events_organizer_alerts_dismiss_create": OperationPolicy(
+        (_EVENT_READ, _MANAGE_RANGES), "event", "event", selector="organizer_alert_action"
+    ),
     "ctf_me_events_participant_retrieve": OperationPolicy((_PARTICIPATE,), "event", "event"),
     "ctf_me_model_access_retrieve": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
     "ctf_me_pages_retrieve": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
@@ -161,7 +184,7 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "ctf_range_status_retrieve": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
     "ctf_range_vpn_profile_create": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
     "ctf_registration_requests_disposition_create": OperationPolicy((_MANAGE_PARTICIPANTS,), "event", "request"),
-    "ctf_scenarios_retrieve": OperationPolicy((), None, None, "cms_model_access"),
+    "ctf_scenario_options_retrieve": OperationPolicy((), None, None, "cms_model_access"),
     "ctf_submissions_retrieve": OperationPolicy(("event.manage_submissions",), "event", "submission_collection"),
     "ctf_webhooks_destroy": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "webhook"),
 }
@@ -185,6 +208,7 @@ NON_API_ROUTE_POLICY: dict[str, str] = {
             "participant_team",
             "team_join",
             "ctf_help",
+            "participant_inbox",
             "admin_dashboard",
             "admin_event_list",
             "admin_event_create",
@@ -210,9 +234,9 @@ NON_API_ROUTE_POLICY: dict[str, str] = {
             "admin_bracket_edit",
             "admin_bracket_delete",
             "admin_range_list",
+            "admin_event_alerts",
             "admin_notification_list",
             "admin_notification_create",
-            "admin_event_email_templates",
             "admin_analytics",
             "admin_communications",
             "admin_communication_detail",
@@ -232,6 +256,8 @@ CTF_COMMAND_POLICY: dict[str, str] = {
     "ctf_recompute_leaderboard": "system_event",
     "cutover_ctf_communications": "system_maintenance",
     "prune_ctf_communications": "system_maintenance",
+    "resume_ctf_event_initialization": "system_maintenance",
+    "seed_e2e_ctf": "system_maintenance",
 }
 
 
@@ -239,6 +265,9 @@ CTF_COMMAND_POLICY: dict[str, str] = {
 # intrinsic effects of the event's committed schedule; they do not borrow the
 # creator's later authority. A communication release carries its own durable
 # initiating actor/token and reauthorizes inside the locked admission service.
+# Live notices and position reconciles (ADR-072) are system effects of committed
+# event state: they stage fixed-text system notices or content-free hints and
+# recheck the event's live notification choice under the event lock.
 # The retired notification handler fails closed for old rows.
 CTF_SCHEDULED_EFFECT_POLICY: dict[str, str] = {
     "spin_up_ranges": "system_event_lifecycle",
@@ -250,6 +279,8 @@ CTF_SCHEDULED_EFFECT_POLICY: dict[str, str] = {
     "event_end": "system_event_lifecycle",
     "release_challenge": "system_event_lifecycle",
     "release_communication": "reauthorize_initiator",
+    "live_notice": "system_event_lifecycle",
+    "reconcile_positions": "system_event_lifecycle",
 }
 
 
@@ -294,5 +325,4 @@ CTF_DJANGO_ADMIN_POLICY: dict[str, OperationPolicy] = {
     "CTFScheduledTask": OperationPolicy((_MANAGE_LIFECYCLE,), "event", "task"),
     "CTFChallengeFile": OperationPolicy((_MANAGE_CHALLENGES,), "event", "file"),
     "CTFChallengePrerequisite": OperationPolicy((_MANAGE_CHALLENGES,), "event", "prerequisite"),
-    "CTFEmailTemplate": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "email_template"),
 }

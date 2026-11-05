@@ -344,7 +344,7 @@ class TestCheckDependencies:
                 deploy.check_dependencies()
 
             captured = capsys.readouterr()
-            urls = set(re.findall(r"https://[^\s)]+", captured.out))
+            urls = set(re.findall(r"https://[^\s)]+", captured.err))
             assert "https://docs.aws.amazon.com/cli/latest/userguide/getting-started-install.html" in urls
             assert "https://developer.hashicorp.com/terraform/downloads" in urls
             assert "https://git-scm.com/downloads" in urls
@@ -625,6 +625,20 @@ class TestRunCmd:
 
             captured = capsys.readouterr()
             assert "Permission denied" in captured.out
+
+    def test_failure_report_keeps_secret_argv_tokens_redacted(self, capsys):
+        """A failed command is reported with the redacted argv, never the raw one."""
+        secret_body = '{"commands":["synthetic-registration-token"]}'
+        argv = ["aws", "ssm", "send-command", "--parameters", secret_body, "--password", "synthetic-password"]
+        with patch("subprocess.run") as mock_run:
+            mock_run.side_effect = subprocess.CalledProcessError(returncode=254, cmd=argv)
+
+            deploy.run_cmd(argv, check=False)
+
+            captured = capsys.readouterr()
+            assert "Command failed (exit 254): aws ssm send-command --parameters *** --password ***" in captured.err
+            assert "synthetic-registration-token" not in captured.out + captured.err
+            assert "synthetic-password" not in captured.out + captured.err
 
 
 class TestGetAwsAccountId:

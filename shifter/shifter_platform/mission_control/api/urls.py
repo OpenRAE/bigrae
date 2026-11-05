@@ -5,6 +5,13 @@ from __future__ import annotations
 from django.urls import path
 
 from mission_control.api import views
+from mission_control.api.files import (
+    FileAssetDetailView,
+    FileAssetListView,
+    FileUploadCancelView,
+    FileUploadCompleteView,
+    FileUploadInitiateView,
+)
 from mission_control.api.guacamole_control import GuacamoleAuthorityView
 
 app_name = "mission_control"
@@ -51,6 +58,12 @@ urlpatterns = [
         name="raes-participant-runtimes",
     ),
     path("agents/", views.AgentListView.as_view(), name="agents-list"),
+    path("files/", FileAssetListView.as_view(), name="files-list"),
+    path("files/<int:file_id>/", FileAssetDetailView.as_view(), name="files-detail"),
+    path("files/upload/initiate/", FileUploadInitiateView.as_view(), name="file-upload-initiate"),
+    path("files/upload/complete/", FileUploadCompleteView.as_view(), name="file-upload-complete"),
+    path("files/upload/cancel/", FileUploadCancelView.as_view(), name="file-upload-cancel"),
+    path("launch-workspaces/", views.LaunchWorkspaceListView.as_view(), name="launch-workspaces-list"),
     path("scenarios/", views.ScenarioListView.as_view(), name="scenarios-list"),
     path("upload/initiate/", views.UploadInitiateView.as_view(), name="upload-initiate"),
     path("upload/complete/", views.UploadCompleteView.as_view(), name="upload-complete"),

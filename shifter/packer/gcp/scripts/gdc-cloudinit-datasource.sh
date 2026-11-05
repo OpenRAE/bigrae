@@ -41,4 +41,4 @@ CFG
 # detection + module application, including the injected ssh_keys host key)
 # instead of treating the baked image's cached instance-id as already
 # provisioned. Run last so no cloud-init state is recreated before capture.
-cloud-init clean --logs --seed
+cloud-init clean --logs --seed --machine-id

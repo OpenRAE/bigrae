@@ -38,7 +38,7 @@ def content_actor(settings, monkeypatch, django_user_model):
     binding = ProviderBinding.objects.create(
         principal=Principal.objects.get(uuid=principal.uuid), issuer="https://accounts.google.com", subject=str(uuid4())
     )
-    settings.GCP_SERVICE_TOKEN_AUDIENCE = "https://example.test/shifter"
+    settings.GCP_SERVICE_TOKEN_AUDIENCE = settings.AWS_SERVICE_TOKEN_AUDIENCE = "https://example.test/shifter"
     ServiceCredentialAdmission.objects.create(
         binding=binding,
         audience=settings.GCP_SERVICE_TOKEN_AUDIENCE,
@@ -230,16 +230,40 @@ def test_cross_account_and_exact_ceiling_deny_before_private_projection(content_
         {"authcode": {"nested": "SECRET_MARKER"}},
     ],
 )
-def test_human_credential_input_uses_the_same_closed_spec(content_actor, django_user_model, values, caplog):
+def test_human_credential_input_uses_the_same_closed_spec(
+    content_actor, django_user_model, live_session_credential, values, caplog
+):
     from cms.models import Credential
     from cms.services import create_credential
 
     user = django_user_model.objects.create_user(username="human-credential-validator")
-    with pytest.raises((CMSError, ValueError)) as caught:
-        create_credential(user, "deployment_profile", name="Invalid human credential", **values)
+    credential = live_session_credential(user)
+    with pytest.raises(CMSError, match="Invalid credential input") as caught:
+        create_credential(
+            credential,
+            "deployment_profile",
+            scope=content_actor.scope,
+            name="Invalid human credential",
+            **values,
+        )
     assert not Credential.objects.filter(name="Invalid human credential").exists()
     assert "SECRET_MARKER" not in str(caught.value)
     assert "SECRET_MARKER" not in caplog.text
+
+
+def test_native_duplicate_credential_name_is_refused_without_an_error_log(content_actor, caplog):
+    from django.core.exceptions import ValidationError
+
+    from cms.models import Credential
+    from cms.services import create_credential
+
+    fixture = content_actor
+    values = {"scope": fixture.scope, "name": "Duplicate native credential", "authcode": "valid"}
+    create_credential(fixture.credential, "deployment_profile", **values)
+    with pytest.raises(ValidationError):
+        create_credential(fixture.credential, "deployment_profile", **values)
+    assert Credential.objects.filter(name=values["name"]).count() == 1
+    assert not [record for record in caplog.records if record.levelname == "ERROR"]
 
 
 def test_catalog_filters_customer_rows_and_requires_explicit_operator_publication(content_actor, django_user_model):
@@ -316,6 +340,7 @@ def test_credential_historical_user_does_not_bypass_private_scope(content_actor,
     )
     user = django_user_model.objects.create_user(username="synthetic-historical-credential-owner")
     Credential.objects.filter(pk=created.credential_id).update(user=user)
-    assert list_credentials(user) == []
+    with pytest.raises(CMSError, match="Content unavailable"):
+        list_credentials(user)
     with pytest.raises(CMSError):
         get_credential(user, created.credential_id)

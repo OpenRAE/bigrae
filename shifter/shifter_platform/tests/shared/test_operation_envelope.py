@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -10,6 +11,7 @@ from shared.operation_envelope import (
     ACCEPTED_CONTRACT_VERSIONS,
     CONTRACT_VERSION,
     MAX_ENVELOPE_BYTES,
+    MAX_RAES_INPUT_BYTES,
     OperationEnvelopeError,
     build_operation_envelope,
     canonical_payload_digest,
@@ -115,3 +117,36 @@ def test_authority_version_requires_bound_digest_without_bearer_or_cookie_fields
         validate_operation_envelope({**envelope, "session_key": "SECRET_MARKER"})
     with pytest.raises(OperationEnvelopeError):
         validate_operation_envelope(_valid(authority_digest=digest))
+
+
+def test_native_plan_inputs_have_a_bounded_larger_budget_without_growing_other_envelopes():
+    payload = {"plan": {"kind": "raes_provisioning_plan", "resources": {}, "description": "x" * MAX_ENVELOPE_BYTES}}
+    assert validate_operation_envelope(_valid(resource="raes-range", payload=payload))["payload"] == payload
+    with pytest.raises(OperationEnvelopeError, match="exceeds"):
+        validate_operation_envelope(_valid(payload=payload))
+    with pytest.raises(OperationEnvelopeError, match="exceeds"):
+        validate_operation_envelope(
+            _valid(
+                resource="raes-range", payload={"plan": {"kind": "foreign", "description": "x" * MAX_ENVELOPE_BYTES}}
+            )
+        )
+    payload["plan"]["description"] = "x" * MAX_RAES_INPUT_BYTES
+    with pytest.raises(OperationEnvelopeError, match="exceeds"):
+        validate_operation_envelope(_valid(resource="raes-range", payload=payload))
+
+
+@pytest.mark.parametrize("operation", ["provision", "destroy"])
+@pytest.mark.parametrize("offset", [-1, 0, 1])
+def test_native_input_budget_has_an_exact_byte_boundary(operation, offset):
+    candidate = _valid(
+        resource="raes-range",
+        operation=operation,
+        payload={"plan": {"kind": "raes_provisioning_plan", "description": ""}},
+    )
+    overhead = len(json.dumps(candidate, sort_keys=True, separators=(",", ":")).encode())
+    candidate["payload"]["plan"]["description"] = "x" * (8 * 1024**2 + offset - overhead)
+    if offset > 0:
+        with pytest.raises(OperationEnvelopeError, match="exceeds 8388608 bytes"):
+            validate_operation_envelope(candidate)
+    else:
+        assert validate_operation_envelope(candidate) == candidate

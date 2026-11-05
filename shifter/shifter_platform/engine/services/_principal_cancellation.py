@@ -25,6 +25,9 @@ def commit_range_cancellation(prepared: PreparedRangeLifecycle) -> bool:
     with transaction.atomic():
         row = Range.objects.select_for_update(of=("self",)).select_related("request").get(pk=prepared.native_id)
         assert_admitted_launch_binding(fields, row)
+        from engine.worker_retention import fence_worker_retirement
+
+        fence_worker_retirement(row, admit=True)
         if row.request is None or row.request.request_id != prepared.request_id or row.status != prepared.status:
             raise ValueError("Range operation changed")
         intent = _cancellable_intent(row, prepared.request_id)
@@ -47,9 +50,9 @@ def _cancellable_intent(row: Range, request_id: UUID) -> ProvisionerLaunchIntent
         ProvisionerLaunchIntent.objects.select_for_update()
         .filter(
             operation_id=row.provisioner_operation_id,
-            authority_kind="principal",
+            authority_kind__in=["principal", "warm_pool"],
             payload__resource="raes-range",
-            payload__operation="provision",
+            payload__operation__in=["provision", "activate"],
             payload__request_id=str(request_id),
         )
         .first()

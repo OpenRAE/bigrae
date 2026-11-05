@@ -38,7 +38,7 @@ def _serialized_plan() -> dict:
     return {
         "kind": "raes_provisioning_plan",
         "contract_version": RAES_PROVISIONING_PLAN_CONTRACT_VERSION,
-        "raes_version": "3.5.0",
+        "raes_version": "10.7.2",
         "operation_id": _OPERATION_ID,
         "resources": {
             "net.lan": {
@@ -171,6 +171,24 @@ class TestGenerationFence:
     def test_input_is_read_for_this_generation_and_operation(self, patched):
         raes_range_ops.run_raes_range_provision("req-1", operation_id=_OPERATION_ID)
         patched.read_input.assert_called_once_with(_OPERATION_ID, request_id="req-1", operation="provision")
+
+
+@pytest.mark.parametrize("operation", ["provision", "destroy"])
+@pytest.mark.parametrize("field", ["identity_authorities", "platform_applications"])
+def test_unsupported_cloud_inventory_fails_before_vm_network_or_guest_effects(patched, operation, field):
+    from raes_plan import RaesPlanError
+
+    plan = _serialized_plan()
+    plan["resources"]["node.web"]["payload"]["spec"]["node"]["runtime"] = {field: [{"name": "synthetic"}]}
+    patched.read_input.side_effect = lambda *_args, **_kwargs: _run(plan=plan)
+    entry = getattr(raes_range_ops, f"run_raes_range_{operation}")
+    with pytest.raises(RaesPlanError, match="native cloud runtime"):
+        entry("req-1", operation_id=_OPERATION_ID)
+    patched.load_config.assert_not_called()
+    patched.apply.assert_not_called()
+    patched.destroy.assert_not_called()
+    patched.reserve_subnet.assert_not_called()
+    assert _steps(patched)[-1] == str(ResultStep.RAES_TERMINAL_FAILED)
 
 
 class TestProvision:
@@ -933,3 +951,17 @@ class TestOpenVpnOrchestration:
         assert patched.destroy.call_args.args[3].remote_access == names_only
         assert patched.inventory.call_args.args[3].remote_access == names_only
         assert vpn.cleaned == [("req-1", 7, vpn.remote)]
+
+
+def test_worker_observation_refuses_unsupported_backend_before_guest_effects(patched, monkeypatch):
+    import raes_ec2_runtime
+
+    patched.read_input.side_effect = lambda *args, **kwargs: _run(range_backend="ec2", management_targets=("node.web",))
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Unsupported worker must not provision any guests")
+
+    monkeypatch.setattr(raes_ec2_runtime, "provision_ec2_run", forbidden)
+    with pytest.raises(ValueError, match="Worker host observation backend is unsupported"):
+        raes_range_ops.run_raes_range_provision("req-1", operation_id=_OPERATION_ID)
+    assert not patched.apply.called

@@ -8,6 +8,7 @@ import pytest
 from celpy import CELEvalError
 
 from shared.cloud.kubernetes._job_manifest import _build_env, _build_job
+from shared.cloud.kubernetes.naming import build_idempotent_job_name
 from shared.cloud.runtime_plugins import PLUGIN_CONTAINER, plugin_task_profile
 from tests.platform.test_gcp_job_launcher_manifests import _load_helm_documents
 from tests.shared.cloud.test_preparation_installation import ManifestClient, allows
@@ -128,7 +129,7 @@ def test_plugin_object_quota_has_burst_headroom_without_raising_execution_cap():
     quota = next(item for item in resources() if item["kind"] == "ResourceQuota")
     hard = quota["spec"]["hard"]
     assert hard["count/jobs.batch"] == "512"
-    assert hard["count/secrets"] == "768"
+    assert hard["count/secrets"] == "1536"
     assert hard["pods"] == "16"
     assert hard["requests.cpu"] == "2"
     assert hard["limits.memory"] == "4Gi"
@@ -163,4 +164,87 @@ def test_default_or_unapproved_runtime_is_denied(policy, job, runtime):
 def test_platform_nodes_cannot_receive_plugin_jobs(policy, job):
     pod = job["spec"]["template"]["spec"]
     pod["nodeSelector"] = {"node-restriction.kubernetes.io/shifter-pool": "provisioner"}
+    assert not accepted(policy, job)
+
+
+@pytest.fixture
+def file_job():
+    client = ManifestClient()
+    identity = str(uuid4())
+    name = build_idempotent_job_name(PLUGIN_CONTAINER, identity)
+    profile = plugin_task_profile(file_secret=name + "-inputs", file_names=("parameters",))
+    env = _build_env(client, {"BIGRAE_PLUGIN_INPUT": "private invocation"}, "runtime-plugin-secrets-" + "1" * 16)
+    return _build_job(
+        client, "registry.example.test/plugin@sha256:" + "a" * 64, PLUGIN_CONTAINER, [], env, profile, identity
+    )
+
+
+def test_declared_file_mount_is_admitted_without_new_worker_privileges(policy, file_job):
+    assert accepted(policy, file_job)
+    pod = file_job["spec"]["template"]["spec"]
+    assert pod["volumes"][1]["secret"]["secretName"] == file_job["metadata"]["name"] + "-inputs"
+    assert pod["containers"][0]["volumeMounts"][1] == {
+        "name": "file-inputs",
+        "mountPath": "/run/plugin-inputs",
+        "readOnly": True,
+    }
+    assert not pod["automountServiceAccountToken"]
+
+
+@pytest.mark.parametrize(
+    "override",
+    ["other-secret", "writable", "path", "traversal", "mode", "extra", "optional", "subpath", "empty", "too-many"],
+)
+def test_file_projection_overrides_are_denied(policy, file_job, override):
+    pod = file_job["spec"]["template"]["spec"]
+    secret = pod["volumes"][1]["secret"]
+    mount = pod["containers"][0]["volumeMounts"][1]
+    if override == "other-secret":
+        secret["secretName"] = "another-invocation-inputs"
+    elif override == "writable":
+        mount["readOnly"] = False
+    elif override == "path":
+        mount["mountPath"] = "/app"
+    elif override == "traversal":
+        secret["items"][0]["path"] = "../parameters"
+    elif override == "mode":
+        secret["items"][0]["mode"] = 0o777
+    elif override == "extra":
+        pod["volumes"].append({"name": "extra", "hostPath": {"path": "/"}})
+    elif override == "optional":
+        secret["optional"] = True
+    elif override == "subpath":
+        mount["subPath"] = "parameters"
+    elif override == "empty":
+        secret["items"] = []
+    else:
+        secret["items"] = [{"key": f"input{index}", "path": f"input{index}"} for index in range(17)]
+    assert not accepted(policy, file_job)
+
+
+def test_sealed_result_key_uses_the_same_bounded_invocation_secret(policy, job):
+    env = job["spec"]["template"]["spec"]["containers"][0]["env"]
+    result = deepcopy(env[0])
+    result["name"] = result["valueFrom"]["secretKeyRef"]["key"] = "BIGRAE_PLUGIN_RESULT_SECRET"
+    # The actual builder sorts env names; the output key can precede the input.
+    env.insert(0, result)
+    assert accepted(policy, job)
+    result["valueFrom"]["secretKeyRef"]["name"] = "runtime-plugin-secrets-other"
+    assert not accepted(policy, job)
+
+
+@pytest.mark.parametrize("change", ["literal", "foreign-key", "duplicate-input", "duplicate-result"])
+def test_preparation_env_cannot_expand_worker_authority(policy, job, change):
+    env = job["spec"]["template"]["spec"]["containers"][0]["env"]
+    second = deepcopy(env[0])
+    second["name"] = second["valueFrom"]["secretKeyRef"]["key"] = "BIGRAE_PLUGIN_RESULT_SECRET"
+    env.append(second)
+    if change == "literal":
+        second["value"] = "literal-secret"
+    elif change == "foreign-key":
+        second["valueFrom"]["secretKeyRef"]["key"] = "FIELD_ENCRYPTION_KEY"
+    elif change == "duplicate-input":
+        env[1] = deepcopy(env[0])
+    else:
+        env[0] = deepcopy(second)
     assert not accepted(policy, job)

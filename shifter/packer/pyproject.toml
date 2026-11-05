@@ -2,12 +2,12 @@
 name = "packer"
 version = "0.1.0"
 description = "Packer AMI build configuration"
-requires-python = ">=3.12"
+requires-python = ">=3.14,<3.15"
 dependencies = [
     "google-auth==2.50.0",
     "pydantic==2.13.4",
-    "raes==3.5.0",
-    "raes-env-packs==5.2.0",
+    "raes==10.7.2",
+    "raes-env-packs==7.2.2",
     "requests==2.33.1",
 ]
 
@@ -24,7 +24,7 @@ line-length = 120
 exclude = [".venv", "__pycache__"]
 
 [tool.ruff.lint]
-select = ["E", "W", "F", "I", "B", "C4", "UP", "S", "T20", "SIM", "RUF", "C901"]
+select = ["E", "W", "F", "I", "B", "C4", "UP", "S", "T20", "SIM", "RUF", "C901", "BLE", "G", "LOG", "TRY401"]
 ignore = ["S101"]
 
 # Per-function McCabe complexity limit (ADR-012). Existing offenders carry

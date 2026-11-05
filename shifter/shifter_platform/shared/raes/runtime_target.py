@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import logging
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, is_dataclass, replace
 from enum import Enum
@@ -61,6 +62,8 @@ from shared.raes.manifest import SHIFTER_PROVISIONER_CAPABILITIES, create_shifte
 from shared.raes.network_addressing import static_network_address_diagnostics
 from shared.raes.participant_access import ParticipantAccessBinding
 from shared.raes.realization import create_shifter_realization_envelope
+
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "DOMAIN_CONTROLLER_PLACEMENT_RESOURCE_TYPE",
@@ -284,6 +287,17 @@ class ShifterProvisioner:
         self._port = port
         self._realization_envelope = realization_envelope
         self._participant_access: tuple[ParticipantAccessBinding, ...] = ()
+        self._cloud_content: dict[str, dict[str, Any]] = {}
+
+    def bind_cloud_content(self, declarations: dict[str, dict[str, Any]]) -> None:
+        """Retain native referenced Content beside the compiled plan."""
+        self._cloud_content = declarations
+
+    def _dispatch(self, serialized: dict[str, Any]) -> ShifterDispatchResult:
+        """Older no-cloud ports retain their two-argument contract."""
+        if self._cloud_content:
+            return self._port.realize(serialized, self._participant_access, self._cloud_content)
+        return self._port.realize(serialized, self._participant_access)
 
     def bind_participant_access(self, bindings: Sequence[ParticipantAccessBinding]) -> None:
         """Bind the #1710 participant-access sidecar for the next ``apply``.
@@ -319,10 +333,16 @@ class ShifterProvisioner:
 
         # Boundary: never leak a raw dispatch exception past apply.
         try:
-            result = self._port.realize(serialized, self._participant_access)
-        except Exception as exc:
+            result = self._dispatch(serialized)
+        # dispatch boundary: errors can carry private provider material; class only
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "shifter provisioner: dispatch failed in apply operation_id=%s exc_type=%s",
+                safe_log_value(plan.operation_id),
+                type(exc).__name__,
+            )
             failure = _diagnostic(
-                "shifter-provisioner.dispatch-failed", "plan", f"provisioning dispatch failed: {safe_log_value(exc)}"
+                "shifter-provisioner.dispatch-failed", "plan", f"Provisioning dispatch failed ({type(exc).__name__})"
             )
             return ApplyResult(success=False, snapshot=snapshot, diagnostics=[*diagnostics, failure])
 
@@ -336,9 +356,17 @@ class ShifterProvisioner:
         if serialized is None:
             return ShifterEnqueueResult(False, "rejected", (), tuple(diagnostics))
         try:
-            receipt = self._port.realize(serialized, self._participant_access)
-        except Exception as exc:
-            failure = _diagnostic("shifter-provisioner.dispatch-failed", "plan", safe_log_value(exc))
+            receipt = self._dispatch(serialized)
+        # dispatch boundary: errors can carry private provider material; class only
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "shifter provisioner: dispatch failed in enqueue operation_id=%s exc_type=%s",
+                safe_log_value(plan.operation_id),
+                type(exc).__name__,
+            )
+            failure = _diagnostic(
+                "shifter-provisioner.dispatch-failed", "plan", f"Provisioning dispatch failed ({type(exc).__name__})"
+            )
             return ShifterEnqueueResult(False, "rejected", (), (*diagnostics, failure))
         addresses = tuple(serialized["resources"]) if receipt.accepted else ()
         return ShifterEnqueueResult(receipt.accepted, receipt.status, addresses, tuple(diagnostics))

@@ -116,7 +116,7 @@ def test_plans_round_trip_then_execute_configure_and_verify_only_on_original_gue
     assert all(request.targets["server"].private_address == "" for request in bundle.requests)
 
 
-@pytest.mark.parametrize("tamper", ["operation", "target", "phase", "failure", "empty-proof"])
+@pytest.mark.parametrize("tamper", ["operation", "target", "phase", "failure", "empty-proof", "empty-result"])
 def test_invalid_result_set_is_rejected_before_guest_execution(run, database, guest, tamper):
     row = database.rows[str(database.requests[-1].invocation_id)]
     if tamper == "operation":
@@ -127,6 +127,8 @@ def test_invalid_result_set_is_rejected_before_guest_execution(run, database, gu
         row[2]["phase"] = "configure"
     elif tamper == "failure":
         row[0] = "failed"
+    elif tamper == "empty-result":
+        row[2] = None
     else:
         row[2]["actions"] = []
     with pytest.raises(execution.RuntimePluginExecutionError, match="planning failed"):

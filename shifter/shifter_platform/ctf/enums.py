@@ -241,6 +241,8 @@ class ScheduledTaskType(StrEnum):
     EVENT_END = "event_end"
     RELEASE_CHALLENGE = "release_challenge"
     RELEASE_COMMUNICATION = "release_communication"
+    LIVE_NOTICE = "live_notice"
+    RECONCILE_POSITIONS = "reconcile_positions"
 
     def __str__(self) -> str:
         """Return the string value for database storage."""
@@ -350,6 +352,25 @@ class ScoreboardVisibility(StrEnum):
         return [(member.value, member.name.title()) for member in cls]
 
 
+class LiveNotificationKind(StrEnum):
+    """Live notification kinds an event can select (CTF-802, ADR-072).
+
+    ``MESSAGES`` pushes inbox wake-ups; ``CHALLENGE_RELEASED`` and ``FIRST_BLOOD``
+    stage inbox notices; ``POSITION_CHANGED`` and ``RANGE_READY`` are socket hints.
+    """
+
+    MESSAGES = "messages"
+    CHALLENGE_RELEASED = "challenge_released"
+    FIRST_BLOOD = "first_blood"
+    POSITION_CHANGED = "position_changed"
+    RANGE_READY = "range_ready"
+
+    @classmethod
+    def choices(cls) -> list[tuple[str, str]]:
+        """Django choices tuples."""
+        return [(member.value, member.name.replace("_", " ").title()) for member in cls]
+
+
 class RatingVisibility(StrEnum):
     """Controls whether challenge ratings are visible to participants.
 
@@ -413,15 +434,29 @@ VALID_TRANSITIONS: dict[EventStatus, frozenset[EventStatus]] = {
 }
 
 
-def validate_transition(current: EventStatus, target: EventStatus) -> bool:
-    """Return True if transitioning from current to target is valid."""
-    return target in VALID_TRANSITIONS.get(current, frozenset())
+# CTF-701: edges valid only for the trusted scheduled end at or after the
+# current end time. Manual lifecycle actions never use them.
+SCHEDULED_END_TRANSITIONS: dict[EventStatus, frozenset[EventStatus]] = {
+    EventStatus.PAUSED: frozenset({EventStatus.ENDED}),
+}
+
+
+def validate_transition(current: EventStatus, target: EventStatus, *, scheduled_end: bool = False) -> bool:
+    """Return True if transitioning from current to target is valid.
+
+    ``scheduled_end`` admits the scheduled-end-only edges; the caller owns the
+    trusted scheduler source and the end-time check under the event lock.
+    """
+    if target in VALID_TRANSITIONS.get(current, frozenset()):
+        return True
+    return scheduled_end and target in SCHEDULED_END_TRANSITIONS.get(current, frozenset())
 
 
 __all__ = [
     "EVENT_MODIFIABLE_STATUSES",
     "EVENT_TERMINAL_STATUSES",
     "PARTICIPANT_MODERATED_STATUSES",
+    "SCHEDULED_END_TRANSITIONS",
     "VALID_TRANSITIONS",
     "AttemptLimitMode",
     "ChallengeCategory",

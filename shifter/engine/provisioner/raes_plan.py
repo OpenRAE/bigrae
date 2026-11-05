@@ -33,6 +33,8 @@ from collections.abc import Callable, Mapping
 from dataclasses import replace
 from typing import Any, cast
 
+from shared.gcp_runtime_plan import cloud_only_node_addresses
+
 import raes_plan_contract
 import raes_plan_domain
 import raes_plan_resources
@@ -77,6 +79,7 @@ from raes_plan_values import (
     _os_family,
     _os_identity_term,
     _resource_name,
+    _validate_cloud_runtime,
     _vcpus,
 )
 from raes_service import build_node_services
@@ -117,7 +120,8 @@ SUPPORTED_CONTRACT_VERSIONS: frozenset[str] = frozenset({RAES_PROVISIONING_PLAN_
 
 #: Exact ``raes`` producer release this consumer accepts. A different producer
 #: release is a different reviewed contract and is rejected before realization.
-SUPPORTED_RAES_VERSION = "3.5.0"
+#: The plan contract module owns the one literal.
+SUPPORTED_RAES_VERSION = raes_plan_contract.PRODUCER_VERSION
 
 
 #: A strict dotted-numeric release: ``MAJOR[.MINOR[.PATCH...]]`` with no pre-release
@@ -233,7 +237,9 @@ def _build_composition_value[CompositionValue: (RaesPlanContent, RaesPlanAccount
     return value
 
 
-def parse_plan(range_config: dict[str, Any] | None, *, cleanup_only: bool = False) -> RaesPlan:
+def parse_plan(
+    range_config: dict[str, Any] | None, *, cleanup_only: bool = False, cloud_admitted: bool = False
+) -> RaesPlan:
     """Parse a serialized RAES plan from a range_config dict, failing closed.
 
     Self-discriminates on ``kind`` so an ``raes-range`` command run against a
@@ -267,6 +273,7 @@ def parse_plan(range_config: dict[str, Any] | None, *, cleanup_only: bool = Fals
             network_lookup,
             network_by_address,
             collected.ordering_dependencies.get(address, ()),
+            cloud_admitted=cloud_admitted,
         )
         for address, payload in sorted(collected.node_pairs)
     )
@@ -293,6 +300,9 @@ def parse_plan(range_config: dict[str, Any] | None, *, cleanup_only: bool = Fals
         node_lookup,
         collected.ordering_dependencies,
     )
+    logical = cloud_only_node_addresses(envelope) if cloud_admitted else frozenset()
+    cloud_nodes = tuple(node for node in nodes if node.address in logical)
+    nodes = tuple(node for node in nodes if node.address not in logical)
     domains = raes_plan_domain.build_domains(nodes, accounts)
 
     return RaesPlan(
@@ -303,6 +313,7 @@ def parse_plan(range_config: dict[str, Any] | None, *, cleanup_only: bool = Fals
         accounts=accounts,
         features=features,
         domains=domains,
+        cloud_nodes=cloud_nodes,
     )
 
 
@@ -312,6 +323,8 @@ def _node(
     network_lookup: dict[str, str],
     network_by_address: Mapping[str, RaesPlanNetwork],
     ordering_dependencies: tuple[str, ...],
+    *,
+    cloud_admitted: bool = False,
 ) -> RaesPlanNode:
     """Build an RaesPlanNode, resolving network membership and ACL endpoints.
 
@@ -319,6 +332,8 @@ def _node(
     ``to_net`` endpoint that no declared network resolves, rather than silently
     dropping it (which would provision a wrong topology or an unintended ACL).
     """
+    if not cloud_admitted:
+        _validate_cloud_runtime(payload)
     resolved = _resolved_networks(address, payload, network_lookup)
     count = _node_count(payload)
     assignments = _network_ip_assignments(

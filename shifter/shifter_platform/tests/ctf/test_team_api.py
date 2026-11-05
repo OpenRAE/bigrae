@@ -195,7 +195,7 @@ class TestTeamConfigGuards:
         updated = update_event(ctf_event_active.pk, {"team_mode": ctf_event_active.team_mode})
         assert updated.team_mode == ctf_event_active.team_mode
 
-    def test_organizer_invite_assignment_honors_capacity(self, ctf_event_team, django_user_model):
+    def test_organizer_invite_assignment_honors_capacity(self, ctf_event_team, django_user_model, organizer_credential):
         """CTF-505 (#648): assigning a team at invite time cannot exceed the cap."""
         from ctf.exceptions import CTFValidationError
         from ctf.services.participant import add_participant
@@ -218,4 +218,123 @@ class TestTeamConfigGuards:
                 email="overflow@test.com",
                 name="Overflow",
                 team_id=team.pk,
+                actor=organizer_credential,
             )
+
+
+@pytest.mark.parametrize("action", ["disband", "leave"])
+def test_recorded_zero_point_solve_prevents_dissolution(team_event_participant, action):
+    from ctf.models import CTFChallenge, CTFSubmission
+
+    event, captain, client = team_event_participant
+    call_json(client, "post", "api_team_create", body={"name": "Solved team"})
+    captain.refresh_from_db()
+    team_id = captain.team_id
+    challenge = CTFChallenge.objects.create(
+        event=event, name="Example", points=100, description="Synthetic challenge", category="misc"
+    )
+    CTFSubmission.objects.create(
+        participant=captain, challenge=challenge, is_correct=True, points_awarded=0, submitted_flag="synthetic"
+    )
+    response = call_json(client, "post", f"api_team_{action}", body={})
+    assert response.status_code == 409
+    captain.refresh_from_db()
+    assert captain.team_id == team_id
+    assert CTFTeam.objects.get(pk=team_id).captain_id == captain.pk
+
+
+def test_organizer_can_reassign_captain(team_event_participant, organizer_user):
+    from ctf.services.team import create_team, reassign_captain
+
+    event, captain, _client = team_event_participant
+    team = create_team(captain.pk, "Reassignment")
+    member = CTFParticipant.objects.create(event=event, team=team, name="Member")
+    updated = reassign_captain(team.pk, member.pk, actor=organizer_user)
+    assert updated.captain_id == member.pk
+    captain.refresh_from_db()
+    assert captain.team_id == team.pk
+
+
+@pytest.mark.parametrize("is_correct", [False, True])
+def test_disband_checks_recorded_solves_not_cached_score(team_event_participant, is_correct):
+    from ctf.exceptions import CTFStateError
+    from ctf.models import CTFChallenge, CTFSubmission
+    from ctf.services.team import create_team, disband_team
+
+    event, captain, _client = team_event_participant
+    team = create_team(captain.pk, "Guard cases")
+    challenge = CTFChallenge.objects.create(
+        event=event, name="Example", description="Synthetic", category="misc", points=100
+    )
+    CTFSubmission.objects.create(
+        participant=captain, challenge=challenge, submitted_flag="synthetic", is_correct=is_correct, points_awarded=0
+    )
+    CTFTeam.objects.filter(pk=team.pk).update(cached_score=0, cached_solve_count=0)
+    if is_correct:
+        with pytest.raises(CTFStateError):
+            disband_team(captain.pk)
+        assert CTFTeam.objects.filter(pk=team.pk).exists()
+    else:
+        disband_team(captain.pk)
+        assert not CTFTeam.objects.filter(pk=team.pk).exists()
+
+
+def test_organizer_captain_endpoint(team_event_participant, authenticated_organizer_client):
+    from ctf.services.team import create_team
+
+    event, captain, _client = team_event_participant
+    team = create_team(captain.pk, "API assignment")
+    member = CTFParticipant.objects.create(event=event, team=team, name="New captain")
+    response = call_json(
+        authenticated_organizer_client,
+        "post",
+        "api_organizer_team_captain",
+        kwargs={"team_id": team.pk},
+        body={"participant_id": str(member.pk)},
+    )
+    assert response.status_code == 200
+    assert response.json() == {"id": str(team.pk), "captain_id": str(member.pk)}
+    team.refresh_from_db()
+    assert team.captain_id == member.pk
+
+
+def test_reassignment_refuses_unrelated_actor(team_event_participant, standard_user):
+    from ctf.exceptions import CTFPermissionError
+    from ctf.services.team import create_team, reassign_captain
+
+    _event, captain, _client = team_event_participant
+    team = create_team(captain.pk, "Protected")
+    with pytest.raises(CTFPermissionError):
+        reassign_captain(team.pk, captain.pk, actor=standard_user)
+    team.refresh_from_db()
+    assert team.captain_id == captain.pk
+
+
+def test_reassignment_refuses_outside_member(team_event_participant, organizer_user):
+    from ctf.exceptions import CTFNotFoundError
+    from ctf.services.team import create_team, reassign_captain
+
+    event, captain, _client = team_event_participant
+    team = create_team(captain.pk, "Members only")
+    outsider = CTFParticipant.objects.create(event=event, name="Outsider")
+    with pytest.raises(CTFNotFoundError):
+        reassign_captain(team.pk, outsider.pk, actor=organizer_user)
+    team.refresh_from_db()
+    assert team.captain_id == captain.pk
+
+
+@pytest.mark.parametrize("has_team", [True, False])
+def test_organizer_detail_team_identity(team_event_participant, authenticated_organizer_client, has_team):
+    from ctf.services.team import create_team
+
+    _event, captain, _client = team_event_participant
+    team = create_team(captain.pk, "Detail team") if has_team else None
+    response = call_json(
+        authenticated_organizer_client, "get", "api_participant_detail", kwargs={"participant_id": captain.pk}
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["team_id"] == (str(team.pk) if team else None)
+    assert body["team_captain_id"] == (str(captain.pk) if team else None)
+    assert body["team_name"] == (team.name if team else None)
+    assert "invite_code" not in body

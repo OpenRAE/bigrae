@@ -23,13 +23,28 @@ from shared.log_sanitize import safe_log_fingerprint, safe_log_value
 from shared.model_access import AuthorityInvalidation, AuthorityState, OwnedReference
 from shared.model_access.authority_port import invalidate_authority, suppress_authority_invalidation_signals
 
+from . import identity_cutover as _identity_cutover
 from . import model_access_authority as _model_access_authority
+from . import personal_credentials as _personal_credentials
 from . import policy as _policy
 from . import principals as _principals
 from . import session_backend as _session_backend
 from . import temporary_accounts as _temporary_accounts
+from . import worker_validation as _worker_validation
 from .audit_context import AuditContext
-from .models import ActivityLog, UserProfile
+from .models import ActivityLog, Principal, ProviderBinding, UserProfile
+
+apply_identity_provider_bindings = _identity_cutover.apply_identity_provider_bindings
+bootstrap_principal_uuid = _identity_cutover.bootstrap_principal_uuid
+identity_cutover_disposition = _identity_cutover.identity_cutover_disposition
+identity_cutover_principals = _identity_cutover.identity_cutover_principals
+identity_cutover_token_count = _identity_cutover.identity_cutover_token_count
+invalidate_pre_cutover_admission = _identity_cutover.invalidate_pre_cutover_admission
+prepare_empty_installation_bootstrap = _identity_cutover.prepare_empty_installation_bootstrap
+installation_user_count = _identity_cutover.installation_user_count
+issue_installation_catalog_credential = _personal_credentials.issue_installation_catalog_credential
+revoke_installation_catalog_credential = _personal_credentials.revoke_installation_catalog_credential
+issue_worker_validation_credentials = _worker_validation.issue_worker_validation_credentials
 
 save_session_assurance = _session_backend.save_session_assurance
 session_for_credential = _session_backend.session_for_credential
@@ -42,9 +57,13 @@ delete_managed_pool_user = _principals.delete_managed_pool_user
 ensure_human_principal = _principals.ensure_human_principal
 principal_for_user = _principals.principal_for_user
 principal_identity_for_user = _principals.principal_identity_for_user
+principal_identity_for_uuid = _principals.principal_identity_for_uuid
+human_principal_identity_user_id = _principals.human_principal_identity_user_id
 resolve_principal = _principals.resolve_principal
 resolve_principal_uuid = _principals.resolve_principal_uuid
 human_principal_user_id = _principals.human_principal_user_id
+active_human_user_ids = _principals.active_human_user_ids
+active_human_user_ids_by_principal = _principals.active_human_user_ids_by_principal
 resolve_verified_principal = _principals.resolve_verified_principal
 resolve_service_credential = _principals.resolve_service_credential
 resolve_service_credential_reference = _principals.resolve_service_credential_reference
@@ -54,6 +73,8 @@ ModelAccessGroupEligibilityView = _model_access_authority.ModelAccessGroupEligib
 ModelAccessGroupScope = _model_access_authority.ModelAccessGroupScope
 ModelAccessIdentityAuthorityError = _model_access_authority.ModelAccessIdentityAuthorityError
 is_platform_operator = _model_access_authority.is_platform_operator
+model_access_principals_for_users = _model_access_authority.model_access_principals_for_users
+model_access_user_references_for_principals = _model_access_authority.model_access_user_references_for_principals
 resolve_model_access_group = _model_access_authority.resolve_model_access_group
 resolve_model_access_users = _model_access_authority.resolve_model_access_users
 resolve_model_preparation_user = _model_access_authority.resolve_model_preparation_user
@@ -61,10 +82,22 @@ set_model_access_group_eligibility = _model_access_authority.set_model_access_gr
 
 USER_PK_REQUIRED_MSG = "user must have a primary key"
 if TYPE_CHECKING:
+    from django.contrib.admin import ModelAdmin
     from django.contrib.auth.models import User
-    from django.db.models import QuerySet
+    from django.db.models import Model, QuerySet
 
 logger = logging.getLogger(__name__)
+
+
+def policy_admin_registrations() -> tuple[tuple[type[Model], type[ModelAdmin]], ...]:
+    """Return management-owned read-only admin registrations to the composition root."""
+    from management.policy_admin import PolicyActivityLogAdmin, PolicyUserAdmin, PolicyUserProfileAdmin
+
+    return (
+        (get_user_model(), PolicyUserAdmin),
+        (UserProfile, PolicyUserProfileAdmin),
+        (ActivityLog, PolicyActivityLogAdmin),
+    )
 
 
 def log_activity(action: str, user: User | None, **metadata: Any) -> None:
@@ -80,13 +113,13 @@ def log_activity(action: str, user: User | None, **metadata: Any) -> None:
     if user is not None and user.pk is None:
         raise ValueError(USER_PK_REQUIRED_MSG)
 
-    user_display = safe_log_value(user.email) if user else "anonymous"
+    user_id = user.pk if user else None
 
     try:
         ActivityLog.log(action, user=user, **metadata)
-        logger.debug("Logged activity '%s' for user %s", action, user_display)
+        logger.debug("Logged activity: action=%s user_id=%s", safe_log_value(action), user_id)
     except Exception:
-        logger.exception("Failed to log activity '%s' for user %s", action, user_display)
+        logger.exception("Failed to log activity: action=%s user_id=%s", safe_log_value(action), user_id)
         raise
 
 
@@ -145,7 +178,7 @@ def mark_user_deleted(
     profile = get_user_profile(user)
 
     if profile.is_deleted:
-        logger.warning("User %s is already deleted, updating timestamp", safe_log_value(user.email))
+        logger.warning("User is already deleted, updating timestamp: user_id=%s", user.pk)
 
     if audit is None:
         audit = AuditContext(
@@ -195,9 +228,9 @@ def mark_user_deleted(
                 strict=strict,
             )
 
-        logger.debug("Marked user %s as deleted", safe_log_value(user.email))
+        logger.info("Marked user deleted: user_id=%s actor_id=%s", user.pk, audit.actor_id)
     except Exception:
-        logger.exception("Failed to mark user %s as deleted", safe_log_value(user.email))
+        logger.exception("Failed to mark user deleted: user_id=%s", user.pk)
         raise
 
 
@@ -256,9 +289,9 @@ def create_user_profile(user: User) -> None:
 
     try:
         UserProfile.objects.create(user=user)
-        logger.debug("Created profile for user %s", safe_log_value(user.email))
+        logger.debug("Created profile: user_id=%s", user.pk)
     except Exception:
-        logger.exception("Failed to create profile for user %s", safe_log_value(user.email))
+        logger.exception("Failed to create profile: user_id=%s", user.pk)
         raise
 
 
@@ -279,9 +312,9 @@ def save_user_profile(user: User) -> None:
 
     try:
         UserProfile.objects.get_or_create(user=user)
-        logger.debug("Ensured profile for user %s", safe_log_value(user.email))
+        logger.debug("Ensured profile: user_id=%s", user.pk)
     except Exception:
-        logger.exception("Failed to ensure profile for user %s", safe_log_value(user.email))
+        logger.exception("Failed to ensure profile: user_id=%s", user.pk)
         raise
 
 
@@ -294,14 +327,15 @@ def resolve_user_by_provider_identity(issuer: str, subject: str) -> QuerySet[Use
     persistence layer next to :func:`bind_provider_identity` rather than being
     duplicated in ``config.oidc`` and ``config.identity_platform``.
 
-    Because ``UserProfile.cognito_sub`` is unique, at most one profile matches a
-    given ``subject``; it resolves that user when the stored issuer is either the
-    verified issuer (an exact bind) or empty (a legacy row not yet bound to an
-    issuer). A drifted issuer or an unknown subject yields an empty queryset,
-    leaving the caller's provider-native email fallback (the unbound/first-
-    bootstrap seam) and :func:`bind_provider_identity`'s fail-closed compare to
-    run. Resolution never creates, mutates, or binds; the caller performs
-    creation and binding inside one atomic, row-locked security mutation.
+    The exact native ``ProviderBinding`` selects its human account first,
+    including the first-install administrator whose legacy profile is unbound.
+    Lifecycle checks remain with the caller and binding service. A service or
+    temporary account cannot resolve as a human login.
+
+    Without a native binding, a legacy profile may match the subject with the
+    exact issuer or an empty issuer. Resolution never creates, mutates, or
+    binds; the caller performs creation and binding inside one atomic,
+    row-locked security mutation.
 
     Returns a queryset (never ``None``) so the OIDC adapter can hand it straight
     to ``mozilla-django-oidc``'s multi/one/none handling while the Identity
@@ -310,6 +344,15 @@ def resolve_user_by_provider_identity(issuer: str, subject: str) -> QuerySet[Use
     user_model = get_user_model()
     if not subject or not subject.strip():
         return user_model.objects.none()
+    principal_id = (
+        ProviderBinding.objects.filter(issuer=issuer, subject=subject).values_list("principal_id", flat=True).first()
+    )
+    if principal_id is not None:
+        return user_model.objects.filter(
+            identity_principal=principal_id,
+            identity_principal__kind=Principal.Kind.HUMAN,
+            profile__is_ctf_account=False,
+        )
     return user_model.objects.filter(
         Q(profile__issuer=issuer) | Q(profile__issuer=""),
         profile__cognito_sub=subject,
@@ -395,15 +438,15 @@ def bind_provider_identity(user: User, issuer: str, subject: str) -> BindOutcome
             stored_subject = locked_profile.cognito_sub or ""
 
             if stored_issuer == issuer and stored_subject == subject:
-                logger.debug("Provider identity already bound for user %s", safe_log_value(user.email))
+                logger.debug("Provider identity already bound: user_id=%s", user.pk)
                 return BindOutcome.UNCHANGED
 
             if not stored_issuer and stored_subject == subject:
                 locked_profile.issuer = issuer
                 locked_profile.save(update_fields=["issuer"])
                 logger.info(
-                    "Legacy identity row for user %s acquired verified issuer (subject=%s)",
-                    safe_log_value(user.email),
+                    "Legacy identity row acquired verified issuer: user_id=%s subject=%s",
+                    user.pk,
                     safe_log_fingerprint(subject),
                 )
                 return BindOutcome.ISSUER_ACQUIRED
@@ -413,8 +456,8 @@ def bind_provider_identity(user: User, issuer: str, subject: str) -> BindOutcome
                 locked_profile.cognito_sub = subject
                 locked_profile.save(update_fields=["issuer", "cognito_sub"])
                 logger.info(
-                    "Bound provider identity for user %s (subject=%s)",
-                    safe_log_value(user.email),
+                    "Bound provider identity: user_id=%s subject=%s",
+                    user.pk,
                     safe_log_fingerprint(subject),
                 )
                 return BindOutcome.BOUND
@@ -424,8 +467,8 @@ def bind_provider_identity(user: User, issuer: str, subject: str) -> BindOutcome
             )
     except IntegrityError as exc:
         logger.warning(
-            "Provider identity bind collided with a different account for user %s (subject=%s)",
-            safe_log_value(user.email),
+            "Provider identity bind collided with a different account: user_id=%s subject=%s",
+            user.pk,
             safe_log_fingerprint(subject),
         )
         raise BindingConflictError("Presented provider identity is already bound to a different account") from exc

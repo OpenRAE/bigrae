@@ -11,12 +11,13 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
+from uuid import UUID
 
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
-from ctf.enums_communication import CampaignStatus, DeliveryStatus, IntentStatus
+from ctf.enums_communication import CampaignStatus, DeliveryStatus, IntentStatus, RecipientKind
 from ctf.models import (
     CommunicationCampaign,
     CommunicationIntent,
@@ -25,7 +26,9 @@ from ctf.models import (
     DeliveryAttempt,
     RecipientSnapshot,
 )
-from ctf.services.communication.admission import AdmissionActor, lock_authorized_campaign
+from ctf.services.communication import disposition
+from ctf.services.communication.admission import AdmissionActor, lock_authorized_campaign, prepare_campaign_admission
+from ctf.services.communication.attribution import actor_attribution
 
 logger = logging.getLogger(__name__)
 
@@ -36,10 +39,16 @@ _UNCLAIMED = (DeliveryStatus.QUEUED.value, DeliveryStatus.RETRY_DUE.value)
 
 
 def _cancel_unclaimed(attempts_q: Q, now: datetime) -> int:
-    """Cancel the not-yet-claimed delivery commands matching ``attempts_q``."""
-    return DeliveryAttempt.objects.filter(attempts_q, status__in=_UNCLAIMED).update(
-        status=DeliveryStatus.CANCELLED.value, updated_at=now
-    )
+    """Cancel the not-yet-claimed commands matching ``attempts_q``; refresh their occurrences.
+
+    Runs inside the caller's transaction, after its event/campaign locks, so the
+    occurrence delivery state commits with the cancellation (ADR-071).
+    """
+    unclaimed = DeliveryAttempt.objects.filter(attempts_q, status__in=_UNCLAIMED)
+    intent_ids = set(unclaimed.values_list("intent_id", flat=True))
+    cancelled = unclaimed.update(status=DeliveryStatus.CANCELLED.value, updated_at=now)
+    disposition.refresh_delivery_state(intent_ids)
+    return cancelled
 
 
 def cancel_campaign(campaign: CommunicationCampaign, *, actor: AdmissionActor) -> int:
@@ -48,10 +57,12 @@ def cancel_campaign(campaign: CommunicationCampaign, *, actor: AdmissionActor) -
     Returns the number of delivery commands cancelled.
     """
     now = timezone.now()
+    actor = prepare_campaign_admission(campaign, actor)
     with transaction.atomic():
         # Lock the campaign so a concurrent release (which also locks it) cannot
         # materialize new work between this cancellation and its commit.
         campaign = lock_authorized_campaign(campaign, actor, operation="cancel")
+        actor_evidence = actor_attribution(actor)
         cancelled = _cancel_unclaimed(Q(intent__campaign=campaign), now)
         CommunicationIntent.objects.filter(campaign=campaign).exclude(
             status__in=(IntentStatus.CANCELLED.value, IntentStatus.FENCED.value)
@@ -61,8 +72,9 @@ def cancel_campaign(campaign: CommunicationCampaign, *, actor: AdmissionActor) -
             # Record the first cancellation only; a repeated cancel keeps the original actor.
             attribution = {
                 "cancelled_at": now,
-                "cancelled_by_user_id": actor.user_id,
-                "cancelled_by_token_id": actor.token_id,
+                "cancelled_by_user_id": actor_evidence.user_id,
+                "cancelled_by_token_id": actor_evidence.token_id,
+                "cancelled_by_principal_uuid": actor_evidence.principal_uuid,
             }
         CommunicationCampaign.objects.filter(pk=campaign.pk).update(
             status=CampaignStatus.CANCELLED.value, updated_at=now, **attribution
@@ -92,6 +104,26 @@ def on_participant_removed(participant: CTFParticipant) -> int:
         cancelled = _cancel_unclaimed(Q(snapshot__in=snapshots), now)
         snapshots.update(delivery_coordinate="", updated_at=now)
     logger.info("Handled participant %s removal for communications (%d deliveries stopped)", participant.id, cancelled)
+    return cancelled
+
+
+def on_organizer_removed(event: CTFEvent, principal_uuid: UUID) -> int:
+    """React to an owner or co-organizer leaving an event's candidate set (ADR-065-R4).
+
+    The caller holds the event lock and commits the staff change with this fence.
+    Cancels that principal's unclaimed organizer delivery commands for the event and
+    erases its encrypted coordinate; the snapshot identity remains bounded evidence
+    and is never retargeted. Inbox access ends live at the organizer inbox boundary.
+    Returns the number of delivery commands cancelled.
+    """
+    now = timezone.now()
+    with transaction.atomic():
+        snapshots = RecipientSnapshot.objects.filter(
+            event=event, recipient_kind=RecipientKind.ORGANIZER.value, principal_uuid=principal_uuid
+        )
+        cancelled = _cancel_unclaimed(Q(snapshot__in=snapshots), now)
+        snapshots.update(delivery_coordinate="", updated_at=now)
+    logger.info("Handled organizer removal on event %s for communications (%d deliveries stopped)", event.pk, cancelled)
     return cancelled
 
 

@@ -1,9 +1,4 @@
-"""CTFEvent — competition events.
-
-Split from monolithic ctf/models.py (PR #856) to satisfy python:S104
-(file too large). Public symbols are re-exported by ctf/models/__init__.py
-so ``from ctf.models import X`` keeps working unchanged.
-"""
+"""Competition event persistence and derived lifecycle properties."""
 
 from __future__ import annotations
 
@@ -27,6 +22,8 @@ from ctf.enums import (
 from shared.field_encryption import EncryptedStringField
 
 from ._base import CTFBaseModel, ImmutableFieldsMixin
+from ._event_defaults import default_reminder_hours
+from ._live_notifications import LiveNotificationsMixin
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -46,7 +43,7 @@ def _scoring_mode_choices() -> list[tuple[str, str]]:
     return ScoringMode.choices() + [(mode, mode.title()) for mode in sorted(registered_scoring_modes())]
 
 
-class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
+class CTFEvent(ImmutableFieldsMixin, LiveNotificationsMixin, CTFBaseModel):
     """CTF competition event.
 
     Represents a single CTF competition with its configuration,
@@ -65,7 +62,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         cleanup_delay_hours: Hours after event end before cleanup.
         max_participants: Optional limit on participant count.
         team_mode: Whether this is a team-based competition.
-        team_size_limit: Max members per team (if team_mode).
+        team_size_limit: Max members per team (if team_mode); 0 or None is unlimited.
         range_spinup_minutes: Minutes before event to start provisioning.
         range_config: Range configuration (agents_by_os, ngfw_enabled, etc.).
     """
@@ -97,6 +94,9 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         help_text="Organizer-authored shared-resource demand hints declared to the engine (CTF-908)",
     )
     model_sources = models.JSONField(default=dict, blank=True)
+    model_source_authority = models.JSONField(null=True, blank=True, editable=False)
+    # Historical attribution retained for the cutover disposition only. Runtime
+    # source authority is the exact non-secret credential reference above.
     model_source_actor_id = models.PositiveIntegerField(null=True, blank=True)
     model_source_revision = models.PositiveIntegerField(default=0)
     model_demand = models.JSONField(
@@ -124,10 +124,25 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
     )
     created_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
-        on_delete=models.PROTECT,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
         related_name="ctf_events_created",
-        help_text="User who created this event",
+        help_text="Optional legacy human creator projection; never application authority",
     )
+    creator_principal_uuid = models.UUIDField(db_index=True, editable=False)
+    owner_principal_uuid = models.UUIDField(db_index=True, editable=False)
+    authorization_publication_state = models.CharField(
+        max_length=16,
+        choices=(("requested", "Requested"), ("confirmed", "Confirmed"), ("unresolved", "Unresolved")),
+        default="confirmed",
+        db_index=True,
+        editable=False,
+    )
+    authorization_provider_store_id = models.CharField(max_length=64, blank=True, default="", editable=False)
+    authorization_model_id = models.CharField(max_length=64, blank=True, default="", editable=False)
+    authorization_publication_reason = models.CharField(max_length=64, blank=True, default="", editable=False)
+    initialization_intent = models.JSONField(null=True, default=None, editable=False)
     workspace_id = models.IntegerField(
         null=True,
         blank=True,
@@ -145,6 +160,20 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
     )
     account_id = models.PositiveBigIntegerField(null=True, blank=True, db_index=True)
     organization_id = models.PositiveBigIntegerField(null=True, blank=True)
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        """Populate legacy human attribution as principal facts on new rows only."""
+        if self._state.adding and self.created_by_id is not None:
+            creator = self.created_by
+            if creator is None:
+                raise ValueError("Human attribution unavailable")
+            from shared.principal_port import principal_for_user
+
+            principal_uuid = principal_for_user(creator).uuid
+            self.creator_principal_uuid = self.creator_principal_uuid or principal_uuid
+            self.owner_principal_uuid = self.owner_principal_uuid or principal_uuid
+        super().save(*args, **kwargs)
+
     status = models.CharField(
         max_length=20,
         choices=EventStatus.choices(),
@@ -196,8 +225,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
     team_size_limit = models.PositiveIntegerField(
         null=True,
         blank=True,
-        validators=[MinValueValidator(2), MaxValueValidator(10)],
-        help_text="Maximum team members (2-10, only for team mode)",
+        help_text="Maximum team members (1 or more; 0 or empty means unlimited; only for team mode)",
     )
     range_spinup_minutes = models.PositiveIntegerField(
         default=30,
@@ -254,7 +282,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         help_text="Freeze scoreboard at this time. Solves after this time are hidden from participants.",
     )
     reminder_hours = models.JSONField(
-        default=list,
+        default=default_reminder_hours,
         blank=True,
         help_text="Hours before event start to send reminders (e.g. [24, 1]). Empty list disables reminders.",
     )
@@ -336,8 +364,6 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
             errors.setdefault("registration_deadline", []).append("Registration deadline must be before event start.")
 
     def _validate_team_settings(self, errors: dict[str, list[str]]) -> None:
-        if self.team_mode and not self.team_size_limit:
-            errors.setdefault("team_size_limit", []).append("Team size limit is required when team mode is enabled.")
         if not self.team_mode and self.team_size_limit:
             errors.setdefault("team_size_limit", []).append(
                 "Team size limit should only be set when team mode is enabled."
@@ -411,11 +437,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
 
     @property
     def is_content_modifiable(self) -> bool:
-        """Return True if event content (challenges, etc.) can be modified.
-
-        Content is only modifiable in DRAFT and REGISTRATION states.
-        Active events should not have their challenges changed.
-        """
+        """Permit content changes only in draft and registration states."""
         try:
             return EventStatus(self.status) in {EventStatus.DRAFT, EventStatus.REGISTRATION}
         except ValueError:
@@ -468,19 +490,7 @@ class CTFEvent(ImmutableFieldsMixin, CTFBaseModel):
         return self.event_start - timedelta(minutes=self.range_spinup_minutes)
 
 
-# Reserved event-page slug carrying the per-event participant briefing (#1854).
-# Defined once so views, services, and serializers key behaviour on the slug
-# constant rather than the mutable display title; the existing conditional
-# ``(event, slug)`` uniqueness constraint makes it a per-event singleton.
+# Public page limits remain available here for existing callers.
 RESERVED_BRIEFING_SLUG = "briefing"
-
-# Organizer-authored page source is untrusted input rendered to other
-# participants, so bound the stored source (characters) and the number of pages
-# an event may carry. This keeps request, database, and render work bounded
-# regardless of the render allowlist (#1854).
 MAX_EVENT_PAGE_BODY_CHARS = 20_000
 MAX_EVENT_PAGES_PER_EVENT = 50
-
-# ``CTFEventPage`` lives in ``ctf.models.event_page`` (python:S104 file-size
-# budget); the constants above stay here because other layers import them from
-# ``ctf.models.event``. Both are re-exported from ``ctf.models``.

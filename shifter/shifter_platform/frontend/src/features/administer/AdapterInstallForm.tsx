@@ -79,6 +79,9 @@ export function AdapterInstallForm({ organization }: Readonly<{ organization: st
             <dt className="font-semibold">Protocol</dt><dd>{preview.protocol}</dd>
             <dt className="font-semibold">Executable image</dt><dd>{preview.worker_image}</dd>
             <dt className="font-semibold">Requested capabilities</dt><dd>{preview.capabilities.join(", ")}</dd>
+            {preview.provisioning_concerns?.length ? <>
+              <dt className="font-semibold">Provisioning concerns</dt><dd>{preview.provisioning_concerns.join(", ")}</dd>
+            </> : null}
             {Object.keys(preview.model_bindings ?? {}).length ? <>
               <dt className="font-semibold">Model access</dt><dd>{Object.keys(preview.model_bindings ?? {}).join(", ")}
                 {" · Subject to deployment policy and budget"}</dd>
@@ -95,7 +98,8 @@ export function AdapterInstallForm({ organization }: Readonly<{ organization: st
             if (fileInput.current) fileInput.current.value = "";
           } })}>
           {preview?.plugin_id} {preview?.version} will be installed for this organization.
-          The requested guest actions can run only after you bind this version to a pack.
+          The requested capabilities can run after you assign this version to a pack.
+          Provisioning preparation may choose values only within the plan’s declared constraints.
         </ConfirmDialog>
       </CardContent>
     </Card>

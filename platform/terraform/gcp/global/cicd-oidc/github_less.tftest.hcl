@@ -1,4 +1,10 @@
-mock_provider "google" {}
+mock_provider "google" {
+  mock_data "google_storage_project_service_account" {
+    defaults = {
+      member = "serviceAccount:service-789@gs-project-accounts.iam.gserviceaccount.com"
+    }
+  }
+}
 
 # A deployment without GitHub (ADR-070): no federation, impersonation by named
 # principals only, and a hardened deployment config bucket.
@@ -43,8 +49,8 @@ run "impersonation_only_foundation" {
     error_message = "Impersonation must enable the lifecycle identities with the naming contract that gcp-deploy derives."
   }
   assert {
-    condition     = length(google_service_account.release) == 0 && length(google_service_account.validate) == 0 && length(google_service_account.promote) == 0
-    error_message = "Impersonation must not enable the release or image purposes."
+    condition     = length(google_service_account.packer_build) == 0 && length(google_service_account.validate) == 0
+    error_message = "Impersonation must not enable the image purposes."
   }
   assert {
     condition     = length(google_service_account_iam_member.impersonation) == 3
@@ -86,6 +92,15 @@ run "impersonation_only_foundation" {
   }
   assert {
     condition = (
+      google_storage_bucket_iam_member.operator_state_object_admin["group:operators@example.com"].bucket == "example-platform-state" &&
+      google_storage_bucket_iam_member.operator_state_object_admin["group:operators@example.com"].role == "roles/storage.objectAdmin" &&
+      google_storage_bucket_iam_member.operator_state_bucket_owner["group:operators@example.com"].role == "roles/storage.legacyBucketOwner" &&
+      length(google_storage_bucket_iam_member.operator_state_object_admin) == 1
+    )
+    error_message = "Deploy principals keep explicit access to the foundation state after a deploy removes the project bindings (#2700)."
+  }
+  assert {
+    condition = (
       toset(google_project_iam_custom_role.deploy_identity_platform[0].permissions) == toset(["firebase.projects.get", "firebase.projects.update"]) &&
       google_project_iam_member.deploy_identity_platform[0].member == "serviceAccount:custunseen-deploy@example-project.iam.gserviceaccount.com"
     )
@@ -98,6 +113,58 @@ run "impersonation_only_foundation" {
   assert {
     condition     = join(",", module.storage_data_access_audit[0].enabled_log_types) == "DATA_READ,DATA_WRITE"
     error_message = "Cloud Audit Logs must record every read and write of the deployment config bucket (#2585)."
+  }
+}
+
+# Foundation buckets use foundation-owned keys in the bucket location (#2564).
+run "foundation_buckets_use_their_own_keys" {
+  command = apply
+  module {
+    source = "../../modules/cicd-oidc-identity"
+  }
+  assert {
+    condition     = module.storage_cmek.key_ids["release-evidence"] == google_storage_bucket.release_evidence.encryption[0].default_kms_key_name
+    error_message = "The release-evidence bucket must use its own customer-managed key (#2564)."
+  }
+  assert {
+    condition     = module.storage_cmek.key_ids["deployment-config"] == google_storage_bucket.deployment_config[0].encryption[0].default_kms_key_name
+    error_message = "The deployment config bucket must use its own customer-managed key (#2564)."
+  }
+  assert {
+    condition     = module.storage_cmek.key_ids["release-evidence"] != module.storage_cmek.key_ids["deployment-config"]
+    error_message = "Each foundation bucket role must have a distinct key (#2564)."
+  }
+  assert {
+    condition     = output.storage_cmek_buckets == { "example-customer-evidence" = module.storage_cmek.key_ids["release-evidence"], "example-customer-deployment-config" = module.storage_cmek.key_ids["deployment-config"] }
+    error_message = "The foundation must publish each bucket with its key for the object migration (#2564)."
+  }
+}
+
+# The lifecycle identities manage keys and grants but can not destroy, disable,
+# or delete a key or a key version (#2564).
+run "lifecycle_identities_can_not_destroy_keys" {
+  command = plan
+  module {
+    source = "../../modules/cicd-oidc-identity"
+  }
+  assert {
+    condition     = !contains(var.deploy_roles, "roles/cloudkms.admin") && !contains(var.destroy_roles, "roles/cloudkms.admin")
+    error_message = "The lifecycle identities must not hold project-wide Cloud KMS admin (#2564)."
+  }
+  assert {
+    condition = alltrue([
+      for permission in setunion(google_project_iam_custom_role.deploy_kms[0].permissions, google_project_iam_custom_role.destroy_kms[0].permissions) :
+      !contains(["cloudkms.cryptoKeyVersions.destroy", "cloudkms.cryptoKeyVersions.update", "cloudkms.cryptoKeyVersions.delete", "cloudkms.cryptoKeys.delete", "cloudkms.keyRings.delete"], permission)
+    ])
+    error_message = "No lifecycle KMS role may destroy, disable, or delete a key or a key version (#2564)."
+  }
+  assert {
+    condition = (
+      toset(["cloudkms.keyRings.create", "cloudkms.cryptoKeys.create", "cloudkms.cryptoKeys.setIamPolicy"]) == setintersection(toset(google_project_iam_custom_role.deploy_kms[0].permissions), toset(["cloudkms.keyRings.create", "cloudkms.cryptoKeys.create", "cloudkms.cryptoKeys.setIamPolicy"])) &&
+      google_project_iam_member.deploy_kms[0].member == "serviceAccount:custunseen-deploy@example-project.iam.gserviceaccount.com" &&
+      google_project_iam_member.destroy_kms[0].member == "serviceAccount:custunseen-destroy@example-project.iam.gserviceaccount.com"
+    )
+    error_message = "Deploy must create key rings, keys, and key grants; each lifecycle identity holds its own KMS role (#2564)."
   }
 }
 
@@ -172,44 +239,9 @@ run "config_bucket_differs_from_evidence" {
   expect_failures = [var.deployment_config_bucket_name]
 }
 
-run "release_purpose_on_release_refs" {
-  command = plan
-  module {
-    source = "../../modules/cicd-oidc-identity"
-  }
-  variables {
-    github_org           = "example"
-    github_repo          = "product"
-    github_repository_id = "123"
-    github_owner_id      = "456"
-    purpose_contexts = {
-      release = [for ref in ["refs/heads/main", "refs/heads/dev", "refs/heads/deploy-test"] : {
-        environment           = "gcp-release"
-        ref                   = ref
-        workflow_ref          = "example/product/.github/workflows/release-gcp.yml@${ref}"
-        reusable_workflow_ref = ""
-      }]
-    }
-  }
-  assert {
-    condition     = google_service_account.release[0].account_id == "custunseen-release"
-    error_message = "The release purpose must create the release publisher identity."
-  }
-  assert {
-    condition     = google_service_account_iam_member.release_wif["repo:example@456/product@123:environment:gcp-release"].service_account_id == "projects/example-project/serviceAccounts/custunseen-release@example-project.iam.gserviceaccount.com"
-    error_message = "The release binding must use the exact immutable release subject."
-  }
-  assert {
-    condition     = strcontains(google_iam_workload_identity_pool_provider.github[0].attribute_condition, "assertion.workflow_ref == 'example/product/.github/workflows/release-gcp.yml@refs/heads/main'")
-    error_message = "The provider must bind the release workflow on protected main."
-  }
-  assert {
-    condition     = strcontains(google_iam_workload_identity_pool_provider.github[0].attribute_condition, "assertion.workflow_ref == 'example/product/.github/workflows/release-gcp.yml@refs/heads/deploy-test'")
-    error_message = "The provider must bind the release workflow on deploy-test."
-  }
-}
-
-run "release_purpose_off_release_refs_rejected" {
+# Releases publish to the public registry with the workflow token (#2659), so no
+# GCP release identity exists.
+run "release_purpose_is_retired" {
   command = plan
   module {
     source = "../../modules/cicd-oidc-identity"
@@ -222,8 +254,8 @@ run "release_purpose_off_release_refs_rejected" {
     purpose_contexts = {
       release = [{
         environment           = "gcp-release"
-        ref                   = "refs/heads/feature"
-        workflow_ref          = "example/product/.github/workflows/release-gcp.yml@refs/heads/feature"
+        ref                   = "refs/heads/main"
+        workflow_ref          = "example/product/.github/workflows/release-gcp.yml@refs/heads/main"
         reusable_workflow_ref = ""
       }]
     }

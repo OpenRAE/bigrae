@@ -35,11 +35,16 @@ def principal_range(settings, monkeypatch, django_user_model):
         issuer="https://accounts.google.com",
         subject=str(uuid4()),
     )
-    settings.GCP_SERVICE_TOKEN_AUDIENCE = "https://example.test/shifter"
+    settings.GCP_SERVICE_TOKEN_AUDIENCE = settings.AWS_SERVICE_TOKEN_AUDIENCE = "https://example.test/shifter"
     admission = ServiceCredentialAdmission.objects.create(
         binding=binding,
         audience=settings.GCP_SERVICE_TOKEN_AUDIENCE,
-        scopes=["authorization:range.read", "authorization:range.manage", "authorization:range.access"],
+        scopes=[
+            "authorization:range.read",
+            "authorization:range.manage",
+            "authorization:range.access",
+            "mission_control:vpn-profile:read",
+        ],
     )
     credential = resolve_service_credential(issuer=binding.issuer, subject=binding.subject, audience=admission.audience)
     request_uuid = uuid4()

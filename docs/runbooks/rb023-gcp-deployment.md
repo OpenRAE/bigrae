@@ -1,12 +1,13 @@
 # RB023: GitHub-less GCP deploy, update, or teardown failed
 
 Applicability: GCP deployments that use the GitHub-less deploy path (ADR-070).
-Operator: platform owner. Verified against the repository: 2026-10-28.
+Operator: platform owner. Verified against the repository: 2026-11-02.
 
 The procedures are in the
 [GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md).
-This runbook covers a failed `gcp-deploy`, `gcp-release-scan`, `gcp-smoke`, or
-`gcp-destroy` run. A CI deployment runs the same commands. Its job log shows the
+This runbook covers a failed `gcp-deploy`, `gcp-release-scan`, `gcp-smoke`,
+`gcp-destroy`, or `gcp-cmek-migrate` run, and a bucket key failure in
+`gcp-foundation`. A CI deployment runs the same commands. Its job log shows the
 same messages.
 
 ## Symptom
@@ -28,12 +29,27 @@ messages identify the stage:
 | Inputs | `required tools are missing from PATH`; `deployment inputs must include bigrae.yaml`; `deployment inputs must include terraform.tfvars or terraform.tfvars.json`; `range-images.json role ... must be projects/<project>/global/images/[family/]<name>`; `the deploy tooling revision does not match the release revision`; `the deploy tooling has local changes`; `a release manifest is required`; `settings.release_trust is required to verify release provenance`; `derived ... identity ... is not a valid service account` |
 | Lock | `the deployment lock is held by <command> run <run id> (started <time>)` |
 | Infrastructure | `settings.operator_bootstrap is required`; `settings.operator_bootstrap.admin_password_secret_ref is required`; `the operator password secret has an empty latest version`; `cannot read the operator password from Secret Manager`; `GCP operator email must use the ... domain`; `terraform apply failed with exit status <n>` |
-| Preconditions | `Required GCE range-cell input ... is not set`; `Range guest image not imported` |
+| Preconditions | `Required GCE range-cell input ... is not set`; `Range guest image not imported`; `Range guest image check failed` |
 | Images | `cannot import release image ...`; `imported image ... resolved to a different digest` |
 | Scan | `exact-release scan failed; the rollout is blocked`; `failed to store the redacted release verdict` |
 | Verify | `no attestation is stored with ...`; `no attestation of ... satisfies the release trust policy` |
 | Rollout | `... belongs to another Helm release; refusing to adopt it`; `running workloads do not match the approved release`; `ingress platform-external did not receive a load-balancer address within 10 minutes`; `certificate platform-managed-cert did not appear for ... within 2 minutes`; `certificate platform-managed-cert is not Active for ... after 60 minutes`; `OpenVPN pool servers did not all report healthy within 10 minutes` |
+| Identity | `Legacy identity conversion requires both private facts files`; `Identity status probe was inconclusive; workloads remain unchanged`; `A fresh install needs settings.operator_bootstrap`; `kubectl wait` fails on job `identity-cutover-status-*` or `identity-cutover-*` |
+| Policy | `Only some OpenFGA secrets exist`; `This release has no authorization model`; `The OpenFGA publisher returned no binding`; `kubectl wait` fails on job `openfga-publish-*` |
+| Catalog | The deploy completes, then warns `The in-box catalog may be incomplete` or `Automatic catalog registration did not complete`. The application is active. |
 | Teardown | `--confirm must equal the deployment name`; `terraform destroy failed after 6 attempts` |
+| Bucket keys | `Bucket <bucket> default key is not <key>; apply its owner root first`; `Bucket <bucket>: <n> live objects do not use <key> after the rewrite`; `storage_cmek_buckets must map each bucket name to its key`; `Permission denied on Cloud KMS key` in a Terraform, upload, or download error |
+
+The warning `<bucket>: objects that do not use the bucket key` is not a failure.
+It counts the noncurrent, soft-deleted, retention-locked, and wildcard-named
+objects that keep the Google-managed key.
+
+An OpenFGA publisher error about a missing Authority Key Identifier or Subject
+Key Identifier means that retained TLS material fails strict verification.
+Deployment preserves existing secret bundles. Follow the
+[certificate replacement procedure](../ops/openfga.md#replace-retained-tls-certificates),
+including live server checks and removal of the old CA after client migration.
+Keep certificate and hostname verification enabled.
 
 ## Investigation
 
@@ -112,7 +128,18 @@ the guide describes, or from a clean checkout of the release revision.
    kubectl -n shifter-platform get events --sort-by=.lastTimestamp
    ```
 
-7. For a running-image failure, list the image of each container. Compare each
+7. For a Helm failure that rolled back, read the container logs from Cloud
+   Logging. The atomic rollback deletes the failed pods, so `kubectl logs` has
+   nothing to show.
+
+   Read-only command:
+
+   ```bash
+   gcloud logging read 'resource.type="k8s_container" AND resource.labels.namespace_name="shifter-platform" AND resource.labels.container_name="<container>"' \
+     --project <project> --freshness=1h --limit 100 --format='value(timestamp,textPayload)'
+   ```
+
+8. For a running-image failure, list the image of each container. Compare each
    image with the release manifest.
 
    Read-only command:
@@ -122,18 +149,32 @@ the guide describes, or from a clean checkout of the release revision.
      -o jsonpath='{range .items[*]}{.metadata.name}{" "}{.status.containerStatuses[*].imageID}{"\n"}{end}'
    ```
 
-8. For an ingress or certificate failure, compare the ingress address, the
-   certificate status, and the DNS answer.
+9. For a bucket key failure, read the bucket default key, the key grants, and
+   the key versions. Each bucket must use its own key, and the Storage service
+   agent of the project must have `roles/cloudkms.cryptoKeyEncrypterDecrypter`
+   on that key.
 
    Read-only command:
 
    ```bash
-   kubectl -n shifter-platform get ingress platform-external \
-     -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
-   kubectl -n shifter-platform get managedcertificate platform-managed-cert \
-     -o jsonpath='{.spec.domains} {.status.certificateStatus}'
-   dig +short <hostname>
+   gcloud storage buckets describe gs://<bucket> --format='value(default_kms_key)'
+   gcloud kms keys get-iam-policy <key> --keyring <key-ring> --location <location> --project <project>
+   gcloud kms keys versions list --key <key> --keyring <key-ring> --location <location> \
+     --project <project> --format='table(name,state)'
    ```
+
+10. For an ingress or certificate failure, compare the ingress address, the
+    certificate status, and the DNS answer.
+
+    Read-only command:
+
+    ```bash
+    kubectl -n shifter-platform get ingress platform-external \
+      -o jsonpath='{.status.loadBalancer.ingress[0].ip}'
+    kubectl -n shifter-platform get managedcertificate platform-managed-cert \
+      -o jsonpath='{.spec.domains} {.status.certificateStatus}'
+    dig +short <hostname>
+    ```
 
 ## Resolution
 
@@ -155,13 +196,21 @@ release. Use the guide for each step that changes the deployment.
   A failed Terraform apply does not roll back. Fix the cause in the Terraform
   values, publish them, and deploy again
   ([Update and roll back](../technical/handbook/gcp-github-less-deployment.md#update-and-roll-back)).
-  Do not remove a Terraform state lock while an apply can still run.
+  Do not remove a Terraform state lock while an apply can still run. When you
+  know that the apply stopped, run `terraform force-unlock` with the generation
+  number of the lock object as the lock ID, not the ID in the lock info:
+  `gcloud storage objects describe gs://<project>-terraform-state/shifter/<environment>/platform-core/default.tflock --format='value(generation)'`.
+  A node pool that stays `RUNNING_WITH_ERROR` after a zone stockout fails the
+  apply; follow the stockout entry in
+  [the GCP tenant standup gotchas](../dev/gcp-tenant-standup-gotchas.md).
 - **Preconditions:** Set `settings.range_cells.zone` and import the range
-  images with `gcp-images`. For a deliberate platform-first bring-up, deploy
+  images with `gcp-images`. For `Range guest image check failed`, the deploy
+  identity could not read an image; the message names the reason, for example
+  a missing `compute.images.get` permission. For a deliberate platform-first bring-up, deploy
   with `--allow-missing-range-images`.
-- **Images:** Add the deploy identity to `reader_members` of the release
-  registry
-  ([Publish a release](../technical/handbook/gcp-github-less-deployment.md#publish-a-release)).
+- **Images:** Make the release packages public
+  ([Publish a release](../technical/handbook/gcp-github-less-deployment.md#publish-a-release)),
+  or deploy from a mirror with `--release-source`.
 - **Scan:** Deploy a release whose images have no HIGH or CRITICAL finding with
   a fix. Read the raw report under `release-scans/`. There is no bypass.
 - **Verify:** Check `settings.release_trust` against the repository that
@@ -171,6 +220,25 @@ release. Use the guide for each step that changes the deployment.
   Helm release. Fix the cause that the events and the rollout status show, and
   deploy again. For a running-image mismatch, find the owner of the unexpected
   image before you deploy again.
+- **Identity:** On an empty database the deploy writes the identity facts
+  from `settings.operator_bootstrap.admin_email`; set that block. A database
+  with users needs the reviewed legacy conversion facts
+  ([First install](../technical/handbook/gcp-github-less-deployment.md#first-install)).
+  When a cutover Job fails, read its `portal` container log in Cloud Logging
+  (`resource.labels.pod_name:"identity-cutover"`). The Job is gone after the
+  command stops.
+- **Policy:** The deploy generates the three OpenFGA secrets
+  (`shifter-<environment>-openfga-runtime`, `-admin`, `-ca`) only when none
+  exists. When only some exist, restore the missing ones, or delete all three
+  to regenerate them; then deploy again. A release built before #2679 has no
+  authorization model: deploy a newer release, or pin
+  `settings.openfga.store_id` and `model_id`. When the publisher Job fails,
+  read its `publisher` container log in Cloud Logging
+  (`resource.labels.pod_name:"openfga-publish"`).
+- **Catalog:** The catalog Job acts as the bootstrap administrator that the
+  cutover recorded, so `settings.operator_bootstrap.admin_email` must name
+  that account. Otherwise sign in, issue a content credential, and deploy
+  again with `--catalog-credential-file <private 0600 file>`.
 - **Certificate:** Point the DNS A record of the hostname at the ingress
   address, with no proxy. Then deploy again without `--first-install`
   ([First install](../technical/handbook/gcp-github-less-deployment.md#first-install)).
@@ -179,6 +247,16 @@ release. Use the guide for each step that changes the deployment.
 - **Smoke (exit status 3):** The deployment is current. Find the cause in the
   smoke output, then run `gcp-smoke` again
   ([Smoke and exit status](../technical/handbook/gcp-github-less-deployment.md#smoke-and-exit-status)).
+- **Bucket keys:** For a wrong default key, run the owner command first:
+  `gcp-foundation` for the foundation buckets, `gcp-deploy` for the platform
+  buckets, or your pack bucket root
+  ([Upgrade a deployment to bucket keys](../technical/handbook/gcp-github-less-deployment.md#upgrade-a-deployment-to-bucket-keys)).
+  For a missing grant or a disabled key version, follow
+  [Repair key access](../technical/handbook/gcp-github-less-deployment.md#repair-key-access).
+  For live objects that stay unmigrated, find the writer that sets its own
+  key or the identity that can not rewrite objects, fix it, and run the
+  command again. A second run rewrites only the objects that remain. Do not
+  remove a bucket default key to restore access.
 - **Teardown:** Pass the exact deployment name to `--confirm`. Use the deployer
   image of the release that the deployment runs. After a failed destroy, run
   `gcp-destroy` again
@@ -189,10 +267,13 @@ To roll back, deploy the deployer image of an earlier verified release.
 ## Prevention
 
 Deploy only verified releases by digest. Keep the bundle in the config bucket,
-not in a repository. Keep the evidence bucket retention lock. Run the preflight
+not in a repository. Keep the evidence bucket retention lock. Do not disable or
+destroy a bucket key version while data uses it. After an upgrade, run
+`gcp-foundation` before `gcp-deploy`. Run the preflight
 before each change. Run one lifecycle command at a time for each deployment.
 
 Escalate when a release fails its provenance check, when the scan finds a
 HIGH or CRITICAL finding with no fixed release, when the state of a lock holder
 is unknown, when a Terraform state lock remains after a stopped run, or when a
-teardown would remove a resource outside the selected deployment.
+teardown would remove a resource outside the selected deployment, or when a
+bucket key version is destroyed or scheduled for destruction.

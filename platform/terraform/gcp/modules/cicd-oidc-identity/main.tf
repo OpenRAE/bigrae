@@ -5,23 +5,22 @@
 locals {
   # An empty purpose_contexts map disables GitHub federation: no pool, no
   # provider, and no federated binding exist.
-  federation_enabled   = length(var.purpose_contexts) > 0
-  build_enabled        = contains(keys(var.purpose_contexts), "build")
+  federation_enabled = length(var.purpose_contexts) > 0
+  build_enabled      = contains(keys(var.purpose_contexts), "build")
+  # A tenant install never builds images (#2679): the builder identity exists
+  # only for a federated build purpose or a foundation image-build network.
+  builder_enabled      = local.build_enabled || var.image_builder_enabled
   validate_enabled     = contains(keys(var.purpose_contexts), "validate")
-  promote_enabled      = contains(keys(var.purpose_contexts), "promote")
   release_scan_enabled = contains(keys(var.purpose_contexts), "release_scan") || contains(keys(var.impersonation_principals), "release_scan")
   deploy_enabled       = contains(keys(var.purpose_contexts), "deploy") || contains(keys(var.impersonation_principals), "deploy")
   destroy_enabled      = contains(keys(var.purpose_contexts), "destroy") || contains(keys(var.impersonation_principals), "destroy")
-  release_enabled      = contains(keys(var.purpose_contexts), "release")
 
   service_account_ids = {
     build        = "${replace(var.name_prefix, "-", "")}-packer"
     validate     = "${replace(var.name_prefix, "-", "")}-validate"
-    promote      = "${replace(var.name_prefix, "-", "")}-promote"
     release_scan = "${replace(var.name_prefix, "-", "")}-scan"
     deploy       = "${replace(var.name_prefix, "-", "")}-deploy"
     destroy      = "${replace(var.name_prefix, "-", "")}-destroy"
-    release      = "${replace(var.name_prefix, "-", "")}-release"
   }
   service_account_emails = {
     for purpose, account_id in local.service_account_ids : purpose => "${account_id}@${var.project_id}.iam.gserviceaccount.com"
@@ -31,7 +30,7 @@ locals {
   }
   subject_prefix = var.github_subject_format == "immutable" ? "repo:${var.github_org}@${var.github_owner_id}/${var.github_repo}@${var.github_repository_id}" : "repo:${var.github_org}/${var.github_repo}"
   purpose_subjects = {
-    for purpose in ["build", "validate", "promote", "release_scan", "deploy", "destroy", "release"] :
+    for purpose in ["build", "validate", "release_scan", "deploy", "destroy"] :
     purpose => distinct([for context in lookup(var.purpose_contexts, purpose, []) : "${local.subject_prefix}:environment:${context.environment}"])
   }
   federated_subjects = toset(flatten(values(local.purpose_subjects)))
@@ -46,10 +45,10 @@ locals {
     lower("${var.project_id}-${replace(var.environment, "_", "-")}-assets"),
     lower("${var.project_id}-${replace(var.environment, "_", "-")}-audit-logs"),
     lower("${var.project_id}-${var.name_prefix}-gdc-vm-images"),
-    # daisy export scratch bucket created by packer-build-infra
-    # (google_storage_bucket.daisy_export_scratch, name fixed by daisy as
-    # <project>-daisy-bkt-<region>); the platform-core deploy/destroy create and
-    # tear it down, so it must be in the conditioned platform-storage allow-list.
+    # The platform root no longer creates the image buckets above and below
+    # (#2679, #2668). They stay in the allow-list so that the next deploy of an
+    # older tenant can delete them. The Daisy scratch bucket name is fixed by
+    # Daisy as <project>-daisy-bkt-<region>.
     lower("${var.project_id}-daisy-bkt-${var.region}"),
   ])
   platform_storage_condition = join(" || ", concat(
@@ -127,9 +126,15 @@ moved {
 }
 
 resource "google_service_account" "packer_build" {
+  count        = local.builder_enabled ? 1 : 0
   project      = var.project_id
   account_id   = "${replace(var.name_prefix, "-", "")}-packer"
   display_name = "Shifter ${var.environment} GCE image builder"
+}
+
+moved {
+  from = google_service_account.packer_build
+  to   = google_service_account.packer_build[0]
 }
 
 resource "google_service_account" "validate" {
@@ -137,13 +142,6 @@ resource "google_service_account" "validate" {
   project      = var.project_id
   account_id   = "${replace(var.name_prefix, "-", "")}-validate"
   display_name = "Shifter ${var.environment} GCE image validator"
-}
-
-resource "google_service_account" "promote" {
-  count        = local.promote_enabled ? 1 : 0
-  project      = var.project_id
-  account_id   = "${replace(var.name_prefix, "-", "")}-promote"
-  display_name = "Shifter prod GCE image promoter"
 }
 
 resource "google_service_account" "deploy" {
@@ -167,15 +165,6 @@ resource "google_service_account" "destroy" {
   display_name = "Shifter ${var.environment} platform destroyer"
 }
 
-# The release publisher pushes release images and their attestations. The
-# release-registry root grants it write access to the release repository only.
-resource "google_service_account" "release" {
-  count        = local.release_enabled ? 1 : 0
-  project      = var.project_id
-  account_id   = "${replace(var.name_prefix, "-", "")}-release"
-  display_name = "Shifter release publisher"
-}
-
 resource "google_service_account_iam_member" "packer_build_wif" {
   depends_on         = [google_service_account.packer_build, google_iam_workload_identity_pool_provider.github]
   for_each           = local.purpose_subject_principals.build
@@ -188,14 +177,6 @@ resource "google_service_account_iam_member" "validate_wif" {
   depends_on         = [google_service_account.validate, google_iam_workload_identity_pool_provider.github]
   for_each           = local.purpose_subject_principals.validate
   service_account_id = local.service_account_names.validate
-  role               = "roles/iam.workloadIdentityUser"
-  member             = each.value
-}
-
-resource "google_service_account_iam_member" "promote_wif" {
-  depends_on         = [google_service_account.promote, google_iam_workload_identity_pool_provider.github]
-  for_each           = local.purpose_subject_principals.promote
-  service_account_id = local.service_account_names.promote
   role               = "roles/iam.workloadIdentityUser"
   member             = each.value
 }
@@ -220,14 +201,6 @@ resource "google_service_account_iam_member" "destroy_wif" {
   depends_on         = [google_service_account.destroy, google_iam_workload_identity_pool_provider.github]
   for_each           = local.purpose_subject_principals.destroy
   service_account_id = local.service_account_names.destroy
-  role               = "roles/iam.workloadIdentityUser"
-  member             = each.value
-}
-
-resource "google_service_account_iam_member" "release_wif" {
-  depends_on         = [google_service_account.release, google_iam_workload_identity_pool_provider.github]
-  for_each           = local.purpose_subject_principals.release
-  service_account_id = local.service_account_names.release
   role               = "roles/iam.workloadIdentityUser"
   member             = each.value
 }
@@ -268,7 +241,7 @@ resource "google_project_iam_member" "packer_build_roles" {
 }
 
 # Build inputs are granted by their owning bucket, not through project-wide
-# Storage Admin. The exported-image bucket writer lives in packer-build-infra.
+# Storage Admin. The export storage of a build project grants its own writers.
 resource "google_storage_bucket_iam_member" "packer_build_reader" {
   depends_on = [google_service_account.packer_build]
   for_each   = local.build_enabled ? var.build_read_bucket_names : toset([])
@@ -294,30 +267,6 @@ resource "google_project_iam_member" "validate_roles" {
   member     = "serviceAccount:${local.service_account_emails.validate}"
 }
 
-resource "google_project_iam_custom_role" "promote" {
-  count       = local.promote_enabled ? 1 : 0
-  project     = var.project_id
-  role_id     = "${replace(var.name_prefix, "-", "_")}_promote"
-  title       = "Shifter GCE image promoter"
-  description = "Verified prod image copy, channel commit, and previous-head deprecation."
-  permissions = var.promote_permissions
-}
-
-resource "google_project_iam_member" "promote_role" {
-  depends_on = [google_service_account.promote, google_project_iam_custom_role.promote]
-  count      = local.promote_enabled ? 1 : 0
-  project    = var.project_id
-  role       = "projects/${var.project_id}/roles/${replace(var.name_prefix, "-", "_")}_promote"
-  member     = "serviceAccount:${local.service_account_emails.promote}"
-}
-
-resource "google_project_iam_member" "promotion_source_image_reader" {
-  count   = var.promotion_reader_service_account_email == "" ? 0 : 1
-  project = var.project_id
-  role    = "roles/compute.imageUser"
-  member  = "serviceAccount:${var.promotion_reader_service_account_email}"
-}
-
 resource "google_project_iam_member" "deploy_roles" {
   depends_on = [google_service_account.deploy]
   for_each   = local.deploy_enabled ? toset(var.deploy_roles) : toset([])
@@ -331,6 +280,44 @@ resource "google_project_iam_member" "destroy_roles" {
   for_each   = local.destroy_enabled ? toset(var.destroy_roles) : toset([])
   project    = var.project_id
   role       = each.value
+  member     = "serviceAccount:${local.service_account_emails.destroy}"
+}
+
+# Cloud KMS authority of the lifecycle identities (#2564). Deploy creates key
+# rings, keys, and key grants; destroy reads keys and removes key grants. Neither
+# role can destroy, disable, or delete a key or a key version, so a lifecycle
+# identity can not make retained bucket data unreadable through these roles.
+resource "google_project_iam_custom_role" "deploy_kms" {
+  count       = local.deploy_enabled ? 1 : 0
+  project     = var.project_id
+  role_id     = "${replace(var.name_prefix, "-", "_")}_deploy_kms"
+  title       = "Shifter platform deploy Cloud KMS"
+  description = "Create and grant platform keys; no key or key version destruction."
+  permissions = var.deploy_kms_permissions
+}
+
+resource "google_project_iam_member" "deploy_kms" {
+  depends_on = [google_service_account.deploy, google_project_iam_custom_role.deploy_kms]
+  count      = local.deploy_enabled ? 1 : 0
+  project    = var.project_id
+  role       = "projects/${var.project_id}/roles/${replace(var.name_prefix, "-", "_")}_deploy_kms"
+  member     = "serviceAccount:${local.service_account_emails.deploy}"
+}
+
+resource "google_project_iam_custom_role" "destroy_kms" {
+  count       = local.destroy_enabled ? 1 : 0
+  project     = var.project_id
+  role_id     = "${replace(var.name_prefix, "-", "_")}_destroy_kms"
+  title       = "Shifter platform destroy Cloud KMS"
+  description = "Remove platform key grants at teardown; no key or key version destruction."
+  permissions = var.destroy_kms_permissions
+}
+
+resource "google_project_iam_member" "destroy_kms" {
+  depends_on = [google_service_account.destroy, google_project_iam_custom_role.destroy_kms]
+  count      = local.destroy_enabled ? 1 : 0
+  project    = var.project_id
+  role       = "projects/${var.project_id}/roles/${replace(var.name_prefix, "-", "_")}_destroy_kms"
   member     = "serviceAccount:${local.service_account_emails.destroy}"
 }
 
@@ -470,6 +457,22 @@ resource "google_storage_bucket_iam_member" "destroy_bucket_iam_admin" {
   member     = "serviceAccount:${local.service_account_emails.destroy}"
 }
 
+# Foundation bucket keys (#2564). They live in the foundation state and outlive
+# a platform teardown; no foundation bucket uses a platform key.
+module "storage_cmek" {
+  source = "../gcs-cmek"
+
+  project_id    = var.project_id
+  location      = var.region
+  key_ring_name = "${var.name_prefix}-foundation-gcs"
+  key_names     = concat(["release-evidence"], local.deployment_config_enabled ? ["deployment-config"] : [])
+  labels = {
+    environment = replace(var.environment, "_", "-")
+    managed_by  = "terraform"
+    project     = "shifter"
+  }
+}
+
 # Raw release evidence never enters public Actions artifacts. This foundational
 # bucket outlives platform-core and is writable only by the exact purpose that
 # produced each evidence class. ObjectCreator prevents overwrite or deletion;
@@ -486,6 +489,10 @@ resource "google_storage_bucket" "release_evidence" {
     environment = replace(var.environment, "_", "-")
     managed_by  = "terraform"
     project     = "shifter"
+  }
+
+  encryption {
+    default_kms_key_name = module.storage_cmek.key_ids["release-evidence"]
   }
 
   versioning {
@@ -588,7 +595,7 @@ resource "google_storage_bucket_iam_member" "packer_build_evidence_reader" {
   count  = local.build_enabled ? 1 : 0
   bucket = google_storage_bucket.release_evidence.name
   role   = "roles/storage.objectViewer"
-  member = "serviceAccount:${google_service_account.packer_build.email}"
+  member = "serviceAccount:${local.service_account_emails.build}"
 }
 
 resource "google_storage_bucket_iam_member" "validate_evidence_reader" {
@@ -610,19 +617,6 @@ resource "google_storage_bucket_iam_member" "deploy_evidence_reader" {
   bucket = google_storage_bucket.release_evidence.name
   role   = "roles/storage.objectViewer"
   member = "serviceAccount:${google_service_account.deploy[0].email}"
-}
-
-resource "google_storage_bucket_iam_member" "promotion_evidence_reader" {
-  count  = var.promotion_reader_service_account_email == "" ? 0 : 1
-  bucket = google_storage_bucket.release_evidence.name
-  role   = "roles/storage.objectViewer"
-  member = "serviceAccount:${var.promotion_reader_service_account_email}"
-
-  condition {
-    title       = "packer-validation-evidence-read-only"
-    description = "Promotion identity may read immutable validation records only."
-    expression  = "resource.name.startsWith('projects/_/buckets/${google_storage_bucket.release_evidence.name}/objects/packer-validation/')"
-  }
 }
 
 
@@ -660,6 +654,24 @@ resource "google_storage_bucket_iam_member" "destroy_state_bucket_reader" {
   member     = "serviceAccount:${local.service_account_emails.destroy}"
 }
 
+# The principals that may deploy also run this foundation, which creates and
+# configures the state bucket and keeps its state there. Each deploy removes the
+# broad project bindings from the state bucket, so these explicit grants give
+# the operators the access that projectOwner gave them (#2700).
+resource "google_storage_bucket_iam_member" "operator_state_object_admin" {
+  for_each = toset(lookup(var.impersonation_principals, "deploy", []))
+  bucket   = local.terraform_state_bucket_name
+  role     = "roles/storage.objectAdmin"
+  member   = each.value
+}
+
+resource "google_storage_bucket_iam_member" "operator_state_bucket_owner" {
+  for_each = toset(lookup(var.impersonation_principals, "deploy", []))
+  bucket   = local.terraform_state_bucket_name
+  role     = "roles/storage.legacyBucketOwner"
+  member   = each.value
+}
+
 # GitHub-less deployment inputs (ADR-070): bigrae.yaml, the Terraform values,
 # and generated references. The bucket holds no secret values; Secret Manager
 # holds them. It outlives platform-core like the state and evidence buckets.
@@ -675,6 +687,10 @@ resource "google_storage_bucket" "deployment_config" {
     environment = replace(var.environment, "_", "-")
     managed_by  = "terraform"
     project     = "shifter"
+  }
+
+  encryption {
+    default_kms_key_name = module.storage_cmek.key_ids["deployment-config"]
   }
 
   versioning {

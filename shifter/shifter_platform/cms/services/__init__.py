@@ -1,22 +1,7 @@
-"""CMS service interface.
+"""Public CMS services and legacy patch bindings.
 
-Content and asset management for Shifter platform. The implementation is
-split across private submodules (``_common``, ``_agents``, ``_credentials``,
-``_range_queries``, ``_raes_range_create``, ``_range_destroy``, ``_range_pause``,
-``_range_resume``, ``_uploads``, ``_scenarios``, ``_ngfws``, ``_queries``)
-and re-exported here so callers continue to use
-``from cms.services import X``.
-
-The re-exports also rebind names that tests historically patch at
-``cms.services.<name>`` (``assets_create_agent``, ``assets_delete_agent``,
-``audit_log``, the ``engine_*`` aliases, ``RangeInstance``) so existing
-``unittest.mock.patch`` targets still work.
-
-The cross-layer re-export (``cms.signals.*``) is
-preserved on the facade so the layer-imports gate
-(``scripts/check_layer_imports/layer_imports.yaml``) continues to allow
-only ``cms.services`` from mission_control / ctf rather than reaching into
-``cms.signals`` directly.
+Private modules own implementations; this facade preserves existing caller and
+patch targets. Cross-layer imports remain confined to this service interface.
 """
 
 from __future__ import annotations
@@ -25,9 +10,6 @@ from __future__ import annotations
 # Rebound here so the patch target resolves at the package level, which means
 # submodules that look these up at call time through ``cms.services`` honour
 # the mock for free.
-from cms.assets.services import AgentUploadSpec
-from cms.assets.services import create_agent as assets_create_agent
-from cms.assets.services import delete_agent as assets_delete_agent
 from cms.exceptions import CMSError, RangeScopeAdminError, WorkspaceLaunchDenied, WorkspaceLaunchQuotaExceeded
 from cms.models import AgentConfig, RangeInstance
 from cms.scenarios.images import project_scenario_images
@@ -72,10 +54,7 @@ from engine.services import resolve_model_access_range_reference as engine_resol
 from engine.services import resolve_model_access_range_views as engine_resolve_model_access_range_views
 from engine.services import resume_range as engine_resume_range
 from engine.services import validate_sharing_binding as engine_validate_sharing_binding
-from shared.audit import (
-    AuditEvent,
-    audit_log,
-)
+from shared.audit import AuditEvent, audit_log
 
 from ._agents import (
     create_agent,
@@ -87,13 +66,45 @@ from ._agents import (
 )
 from ._content_authority import set_catalog_publication
 from ._content_ingestion import PackRegistrationRequest, RegisteredPack, register_pack
-from ._credential_scope import range_credential_scope
-from ._credentials import (
-    create_credential,
-    delete_credential,
-    get_credential,
-    list_credentials,
+from ._content_scope_options import content_scope_options
+from ._credential_scope import range_credential_scope, range_identity_present
+from ._credentials import create_credential, delete_credential, get_credential, list_credentials
+from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
+from ._experiment_batches import (
+    admit_experiment_batch,
+    claim_experiment_entry,
+    list_experiment_entries,
+    load_experiment_batch,
+    observe_experiment_attempt,
+    record_experiment_cleanup,
+    record_experiment_collection,
+    record_experiment_worker,
+    recover_experiment_claim,
 )
+from ._experiment_export_records import (
+    ExperimentExportAssociationError,
+    ExperimentExportDataError,
+    ExperimentExportLimitError,
+)
+from ._experiment_exports import export_experiment_batch
+from ._file_assets import (
+    cancel_file_upload,
+    complete_file_upload,
+    delete_file_asset,
+    initiate_file_upload,
+    list_file_assets,
+)
+from ._identity_cutover import (
+    apply_identity_cutover_resources as apply_identity_cutover_resources,
+)
+from ._identity_cutover import identity_cutover_contract_gaps as identity_cutover_contract_gaps
+from ._identity_cutover import (
+    identity_cutover_resource_disposition as identity_cutover_resource_disposition,
+)
+from ._identity_cutover import (
+    pending_identity_cutover_work as pending_identity_cutover_work,
+)
+from ._inbox_catalog import register_inbox_catalog
 from ._model_access_sharing import (
     ModelAccessSelectorError,
     find_model_access_selected_ranges,
@@ -107,12 +118,7 @@ from ._model_source_selection import list_usable_model_sources as list_usable_mo
 from ._model_source_selection import model_source_alias_options, resolve_model_source_sponsorship
 from ._model_source_selection import project_scenario_model_demands as project_scenario_model_demands
 from ._model_source_selection import resolve_model_source_selection as resolve_model_source_selection
-from ._ngfws import (
-    create_ngfw,
-    destroy_ngfw,
-    get_ngfw,
-    list_ngfws,
-)
+from ._ngfws import create_ngfw, destroy_ngfw, get_ngfw, list_ngfws
 from ._non_user_range_launch import NonUserWorkflow, create_non_user_range
 
 # --- Public service functions ------------------------------------------------
@@ -120,11 +126,17 @@ from ._pack_conformance import validate_registered_pack_conformance
 from ._pack_fence import fence_pack_reference
 from ._policy_offboarding import policy_reassign_range_owner, policy_transfer_user_ownership
 from ._policy_range_scope import policy_list_range_scope_bindings, policy_rebind_range_workspace
+from ._principal_scopes import AccountScopeError as AccountScopeError
+from ._principal_scopes import mission_control_launch_workspaces as mission_control_launch_workspaces
+from ._principal_scopes import mission_control_range_scope as mission_control_range_scope
+from ._principal_scopes import mission_control_resource_scope as mission_control_resource_scope
 from ._queries import (
     find_range_instance_id_by_request,
+    get_principal_range_target_instances,
     get_range_spec_by_id,
     get_range_status_by_id,
     get_range_target_instances,
+    is_event_range_cleanup_verified_absent,
 )
 from ._raes_range_create import create_raes_native_range
 from ._raes_range_dispatch import create_range_dispatch
@@ -183,6 +195,7 @@ from ._range_queries import (
 )
 from ._range_reassign import (
     range_egress_compatible_with_event,
+    range_egress_compatible_with_scope,
     range_owner_reassignment_available,
     reassign_range_owner,
 )
@@ -207,7 +220,9 @@ from ._range_workspace_admin import (
     rebind_range_workspace,
 )
 from ._receipt import ReceiptRangeBindingUnavailable, confirm_ctf_receipt_binding, project_ctf_receipt_binding
+from ._remote_authority import assert_remote_authority_binding as assert_remote_authority_binding
 from ._retry_safe_launch import RetrySafeLaunchOutcome, bind_first_use_launch, resolve_retry_recovery
+from ._runtime_file_material import load_runtime_file_inputs
 from ._scenarios import (
     get_scenario,
     list_launchable_scenarios,
@@ -215,6 +230,13 @@ from ._scenarios import (
     validate_scenario_requirements,
 )
 from ._scoped_devices import admit_device_remote_authority as admit_device_remote_authority
+from ._scoped_range_lifecycle import (
+    destroy_event_range_for_deletion,
+    destroy_event_range_for_recovery,
+    dispatch_bound_event_range,
+    run_event_range_lifecycle,
+)
+from ._scoped_range_owner import reassign_event_range_owner
 from ._tenant_pack_removal import (
     PackRemovalConflict,
     PackRemovalView,
@@ -224,14 +246,18 @@ from ._tenant_pack_removal import (
     relocate_tenant_pack_archive,
     request_tenant_pack_removal,
 )
+from ._trial_archives import (
+    TrialArchiveCollection,
+    configure_trial_archive_destination,
+    intake_trial_archive,
+    list_trial_archives,
+    publish_experiment_export,
+    purge_trial_archives,
+    retrieve_trial_archive,
+)
 from ._unified_authorization import range_authorization_binding as range_authorization_binding
 from ._unified_authorization import require_range_action as require_range_action
-from ._uploads import (
-    cancel_upload,
-    complete_upload,
-    get_storage_used,
-    initiate_upload,
-)
+from ._uploads import cancel_upload, complete_upload, get_storage_used, initiate_upload
 from ._user_offboarding import (
     TRANSFERABLE_RESOURCE_KINDS,
     OffboardingAuditContext,
@@ -254,7 +280,6 @@ create_range = create_range_dispatch
 __all__ = (
     "TRANSFERABLE_RESOURCE_KINDS",
     "AgentConfig",
-    "AgentUploadSpec",
     "AuditEvent",
     "CMSError",
     "CleanupObligation",
@@ -263,6 +288,10 @@ __all__ = (
     "CtfOpenVpnProfileUnavailable",
     "EngineEventCapacitySignal",
     "EngineSharingError",
+    "ExperimentClaim",
+    "ExperimentExportAssociationError",
+    "ExperimentExportDataError",
+    "ExperimentExportLimitError",
     "LeasePolicyAuditContext",
     "LeasePolicyOverride",
     "MissionControlLeasePolicyAdminError",
@@ -286,23 +315,29 @@ __all__ = (
     "RangeScopeAuditContext",
     "ReceiptRangeBindingUnavailable",
     "RegisteredPack",
+    "RetainedExperimentBatch",
     "RetryKeyConflict",
     "RetrySafeLaunchOutcome",
+    "TrialArchiveCollection",
     "WorkspaceLaunchDenied",
     "WorkspaceLaunchQuotaExceeded",
-    "assets_create_agent",
-    "assets_delete_agent",
+    "admit_experiment_batch",
     "attempt_warm_claim",
     "audit_log",
     "bind_first_use_launch",
+    "cancel_file_upload",
     "cancel_range",
     "cancel_range_by_request_id",
     "cancel_upload",
     "change_range_model_sources",
+    "claim_experiment_entry",
+    "complete_file_upload",
     "complete_upload",
+    "configure_trial_archive_destination",
     "confirm_ctf_receipt_binding",
     "confirm_tenant_pack_archive_absent",
     "connect_range_terminal",
+    "content_scope_options",
     "create_agent",
     "create_credential",
     "create_ngfw",
@@ -312,9 +347,13 @@ __all__ = (
     "create_range_dispatch",
     "delete_agent",
     "delete_credential",
+    "delete_file_asset",
+    "destroy_event_range_for_deletion",
+    "destroy_event_range_for_recovery",
     "destroy_ngfw",
     "destroy_range",
     "destroy_range_by_request_id",
+    "dispatch_bound_event_range",
     "engine_admit_range_capacity",
     "engine_assess_declared_event_capacity",
     "engine_cancel_range_by_request",
@@ -346,6 +385,7 @@ __all__ = (
     "engine_resume_range",
     "engine_validate_sharing_binding",
     "expire_due_ranges",
+    "export_experiment_batch",
     "extend_mission_control_range",
     "fence_pack_reference",
     "find_model_access_selected_ranges",
@@ -359,6 +399,7 @@ __all__ = (
     "get_mission_control_openvpn_profile",
     "get_mission_control_range_lease",
     "get_ngfw",
+    "get_principal_range_target_instances",
     "get_range",
     "get_range_by_request_id",
     "get_range_model_policy_status_for_instance",
@@ -373,9 +414,14 @@ __all__ = (
     "has_ctf_openvpn_profile",
     "has_mission_control_openvpn_profile",
     "has_ready_active_range",
+    "initiate_file_upload",
     "initiate_upload",
+    "intake_trial_archive",
+    "is_event_range_cleanup_verified_absent",
     "list_agents",
     "list_credentials",
+    "list_experiment_entries",
+    "list_file_assets",
     "list_launchable_scenarios",
     "list_mission_control_range_history",
     "list_ngfws",
@@ -383,9 +429,13 @@ __all__ = (
     "list_range_scope_bindings",
     "list_ranges",
     "list_scenarios",
+    "list_trial_archives",
     "list_usable_model_sources",
+    "load_experiment_batch",
+    "load_runtime_file_inputs",
     "max_agent_file_size_bytes",
     "model_source_alias_options",
+    "observe_experiment_attempt",
     "pause_range",
     "pause_range_by_request_id",
     "policy_list_range_scope_bindings",
@@ -396,16 +446,26 @@ __all__ = (
     "project_range_cleanup_outcome",
     "project_scenario_images",
     "project_scenario_model_demands",
+    "publish_experiment_export",
+    "purge_trial_archives",
     "range_credential_scope",
     "range_egress_compatible_with_event",
+    "range_egress_compatible_with_scope",
+    "range_identity_present",
     "range_owner_reassignment_available",
     "range_status_changed",
+    "reassign_event_range_owner",
     "reassign_range_owner",
     "rebind_range_workspace",
     "reconcile_ctf_range_leases",
     "reconcile_tenant_pack_removal",
     "reconcile_tenant_pack_removals",
     "reconcile_warm_pool",
+    "record_experiment_cleanup",
+    "record_experiment_collection",
+    "record_experiment_worker",
+    "recover_experiment_claim",
+    "register_inbox_catalog",
     "register_pack",
     "relocate_tenant_pack_archive",
     "replace_group_lease_policy",
@@ -424,7 +484,9 @@ __all__ = (
     "resolve_retry_recovery",
     "resume_range",
     "resume_range_by_request_id",
+    "retrieve_trial_archive",
     "revoke_range_model_sources",
+    "run_event_range_lifecycle",
     "set_catalog_publication",
     "transfer_user_ownership",
     "validate_registered_pack_conformance",

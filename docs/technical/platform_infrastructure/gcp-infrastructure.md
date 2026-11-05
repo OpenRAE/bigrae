@@ -10,7 +10,7 @@ platform/
 │   ├── modules/platform-core/       # All GCP platform infrastructure
 │   ├── environments/platform/       # Shared platform root for every deployment
 │   ├── environments/<deployment>/   # Committed values of the CI-deployed tenants
-│   └── global/                      # cicd-oidc, release-registry, github-runner roots
+│   └── global/                      # cicd-oidc and github-runner roots
 ├── charts/shifter/                  # Helm chart: the only GCP Kubernetes renderer
 └── deployer/gcp/                    # Deployer image of one published release
 ```
@@ -38,7 +38,7 @@ Single module provisions the entire GCP control plane.
 | **Secret Manager** | Secret Manager | Runtime secret bundles (app, db, guacamole-db, oidc, guacamole-json-auth). |
 | **Cloud DNS** | Cloud DNS | Optional. Public hostname with Google-managed TLS certificate. |
 | **Cloud Armor** | Cloud Armor | Baseline WAF policy attached to the public portal and Guacamole GKE backends. |
-| **GCS Buckets** | Cloud Storage | Assets/artifacts and Terraform state. |
+| **GCS Buckets** | Cloud Storage | Assets/artifacts and Terraform state. Each Terraform-owned bucket uses its own customer-managed Cloud KMS key ([Bucket encryption keys](../handbook/gcp-github-less-deployment.md#bucket-encryption-keys)). |
 | **Service Accounts** | IAM | Separate accounts for GKE nodes and workloads (portal, workers, provisioner). Workload Identity binds K8s SAs to GCP SAs. |
 
 ## GKE Cluster
@@ -122,7 +122,8 @@ run it:
 The command runs these stages:
 
 1. load the deployment input bundle and take the deployment lock
-2. apply GCP Terraform and seed the first operator
+2. apply GCP Terraform, rewrite the live bucket objects with the bucket keys,
+   and seed the first operator
 3. copy the release images into the deployment Artifact Registry (CI builds
    its images there)
 4. scan each exact image digest for HIGH and CRITICAL findings as the

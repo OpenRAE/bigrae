@@ -48,7 +48,6 @@ from gdc_cluster import (
 )
 
 _GUACAMOLE_RUNTIME_RESOURCE_NAME = "guacamole-runtime"
-_GCP_MIGRATION_JOB_REF = "job/platform-migrate"
 _GCP_MIGRATION_TMP_DIR = "/var/run/shifter-migrate"
 _K8S_COMPONENT_LABEL = "app.kubernetes.io/component"
 _K8S_PART_OF_LABEL = "app.kubernetes.io/part-of"
@@ -284,7 +283,7 @@ def _gcp_identity_admin_request(
     parsed_url = urllib_parse.urlparse(url)
     if parsed_url.scheme != "https" or parsed_url.netloc != "identitytoolkit.googleapis.com" or parsed_url.query:
         raise RuntimeError(f"Refusing to call unexpected Identity Platform endpoint: {url}")
-    request = urllib_request.Request(  # noqa: S310 - URL is validated immediately above
+    request = urllib_request.Request(  # noqa: S310  # URL is validated immediately above
         url,
         data=json.dumps(payload).encode("utf-8"),
         headers={
@@ -324,7 +323,7 @@ def ensure_gcp_identity_platform_operator(
     _validate_gcp_bootstrap_operator_email(email, outputs=outputs)
 
     if dry_run:
-        info(f"[DRY-RUN] Would create or verify the Identity Platform operator account for {email}")
+        info("[DRY-RUN] Would create or verify the Identity Platform operator account")
         return email
 
     try:
@@ -339,13 +338,30 @@ def ensure_gcp_identity_platform_operator(
                 "emailVerified": True,
             },
         )
-        success(f"Created Identity Platform operator {email}")
+        success("Created the Identity Platform operator account")
         return email
     except RuntimeError as exc:
         if "EMAIL_EXISTS" in str(exc):
-            info(f"Identity Platform operator {email} already exists")
+            info("The Identity Platform operator account already exists")
             return email
         raise
+
+
+def gcp_identity_platform_subject(config: GDCBootstrapConfig, outputs: dict[str, dict[str, object]], email: str) -> str:
+    """Return the Identity Platform account ID (the token subject) of the operator email (#2679)."""
+    response = _gcp_identity_admin_request(
+        config=config,
+        outputs=outputs,
+        path=f"/projects/{config.project_id}/accounts:lookup",
+        payload={"email": [email.strip().lower()]},
+    )
+    users = response.get("users")
+    if not isinstance(users, list) or len(users) != 1 or not isinstance(users[0], dict):
+        raise RuntimeError("The Identity Platform operator account is missing; enable settings.operator_bootstrap")
+    subject = users[0].get("localId")
+    if not isinstance(subject, str) or not subject.strip():
+        raise RuntimeError("The Identity Platform operator account has no account ID")
+    return subject
 
 
 def _gcp_private_service_cidrs(outputs: dict[str, dict[str, object]]) -> list[str]:
@@ -689,7 +705,7 @@ def ensure_gcp_artifact_registry_service_identity(config: GDCBootstrapConfig, dr
     parsed_url = urllib_parse.urlparse(url)
     if parsed_url.scheme != "https" or parsed_url.netloc != "serviceusage.googleapis.com" or parsed_url.query:
         raise RuntimeError(f"Refusing to call unexpected Service Usage endpoint: {url}")
-    request = urllib_request.Request(  # noqa: S310 - URL is validated immediately above
+    request = urllib_request.Request(  # noqa: S310  # URL is validated immediately above
         url,
         data=b"",
         headers={
@@ -903,9 +919,13 @@ def _gcp_migration_prerequisites(
 
 
 def render_gcp_migration_manifests(
-    outputs: dict[str, dict[str, object]], values: Mapping[str, object]
+    outputs: dict[str, dict[str, object]], values: Mapping[str, object], *, duties_only: bool = False
 ) -> tuple[dict[str, object], dict[str, object]]:
-    """Render Helm-owned prerequisites and the one-off schema migration Job."""
+    """Render Helm-owned prerequisites and the one-off schema migration Job.
+
+    ``duties_only`` renders the ``platform-duties`` Job, which reconciles the
+    SQL duties without a schema migration (#2704).
+    """
     runtime_env = values.get("runtimeEnv")
     images = values.get("images")
     if not isinstance(runtime_env, Mapping) or not isinstance(images, Mapping):
@@ -937,33 +957,42 @@ def render_gcp_migration_manifests(
     return prerequisites, render_migration_job(
         platform_image,
         instance_connection_name=instance,
+        job_name="platform-duties" if duties_only else "platform-migrate",
+        duties_only=duties_only,
     )
 
 
 def run_gcp_database_migrations(
-    outputs: dict[str, dict[str, object]], values_path: Path, *, dry_run: bool = False
+    outputs: dict[str, dict[str, object]], values_path: Path, *, dry_run: bool = False, duties_only: bool = False
 ) -> None:
-    """Run migrations under the dedicated GCP Workload Identity and DB owner."""
+    """Run migrations under the dedicated GCP Workload Identity and DB owner.
+
+    ``duties_only`` reconciles only the SQL duties, with no schema migration.
+    """
     values = json.loads(values_path.read_text(encoding="utf-8"))
-    prerequisites, job = render_gcp_migration_manifests(outputs, values)
+    prerequisites, job = render_gcp_migration_manifests(outputs, values, duties_only=duties_only)
+    job_ref = f"job/{job['metadata']['name']}"  # type: ignore[index]
     if dry_run:
         info("[DRY-RUN] Would run the dedicated GCP database migration Job")
         return
 
-    subprocess.run(  # nosec B603 B607
+    retirement = subprocess.run(  # nosec B603 B607
         [
             "kubectl",
             "delete",
-            _GCP_MIGRATION_JOB_REF,
+            job_ref,
             "--namespace",
             "shifter-platform",
             "--ignore-not-found",
             "--wait=true",
+            "--timeout=180s",
         ],
         capture_output=True,
         text=True,
         check=False,
     )
+    if retirement.returncode != 0:
+        raise RuntimeError("Failed to retire the previous GCP migration Job")
 
     for manifest in (prerequisites, job):
         result = subprocess.run(  # nosec B603 B607
@@ -982,7 +1011,7 @@ def run_gcp_database_migrations(
                 "kubectl",
                 "wait",
                 "--for=condition=complete",
-                _GCP_MIGRATION_JOB_REF,
+                job_ref,
                 "--namespace",
                 "shifter-platform",
                 "--timeout=15m",
@@ -992,7 +1021,7 @@ def run_gcp_database_migrations(
             check=False,
         )
         logs = subprocess.run(  # nosec B603 B607
-            ["kubectl", "logs", _GCP_MIGRATION_JOB_REF, "--namespace", "shifter-platform", "--all-containers=true"],
+            ["kubectl", "logs", job_ref, "--namespace", "shifter-platform", "--all-containers=true"],
             capture_output=True,
             text=True,
             check=False,
@@ -1020,7 +1049,7 @@ def run_gcp_database_migrations(
             [
                 "kubectl",
                 "delete",
-                _GCP_MIGRATION_JOB_REF,
+                job_ref,
                 "--namespace",
                 "shifter-platform",
                 "--ignore-not-found",
@@ -1126,11 +1155,11 @@ def _gdc_bootstrap_result(config: GDCBootstrapConfig) -> dict[str, str]:
 # that has no range images or range identity, because a control plane without them
 # can not launch a range.
 
-# Required GCE range-cell variables. A live range needs each of these set.
+# Required GCE range-cell variables. A live range needs each of these set. A DC
+# image is optional: the release names one only when it is published (#2730).
 _REQUIRED_GCE_RANGE_VARS: tuple[str, ...] = (
     "RANGE_NETWORK_ZONE",
     "GCP_RANGE_LINUX_IMAGE",
-    "GCP_RANGE_DC_IMAGE",
     "GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL",
 )
 

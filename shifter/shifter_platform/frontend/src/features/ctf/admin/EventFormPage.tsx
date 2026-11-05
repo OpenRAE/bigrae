@@ -1,3 +1,4 @@
+import { contentScopeKey } from "@/api/scenarios";
 import { ModelSourcePicker } from "@/components/ModelSourcePicker";
 import { Link } from "react-router";
 
@@ -11,11 +12,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 
 import { ctfAdminEventPath, ctfAdminEventsPath } from "../routes";
 import { CheckboxField, FieldError, TextAreaField, TextField } from "./form-fields";
-import { NO_SCENARIO, renderEditLoadState, useEventFormState } from "./eventFormState";
+import { LIVE_NOTIFICATION_OPTIONS, NO_SCENARIO, renderEditLoadState, useEventFormState } from "./eventFormState";
 
 export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
-  const { eventId, existing, scenarios, mutation, state, formRef, nonFieldError, set, firstError, onSubmit, navigate } =
-    useEventFormState(mode);
+  const form = useEventFormState(mode);
+  const {
+    eventId, existing, scenarios, mutation, state, formRef, nonFieldError, set, firstError, onSubmit, navigate,
+  } = form;
 
   const editLoadState = renderEditLoadState(mode, existing);
   if (editLoadState) return <>{editLoadState}</>;
@@ -85,6 +88,8 @@ export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
               error={firstError("registration_deadline")}
               onChange={(v) => set("registration_deadline", v)}
             />
+
+            <ScenarioCatalog form={form} />
 
             <div className="flex flex-col gap-2">
               <Label htmlFor="e-scenario">Scenario</Label>
@@ -183,9 +188,9 @@ export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
               {state.team_mode ? (
                 <TextField
                   id="e-teamsize"
-                  label="Team size limit (optional)"
+                  label="Team size limit (0 or blank = unlimited)"
                   type="number"
-                  min={1}
+                  min={0}
                   value={state.team_size_limit}
                   error={firstError("team_size_limit")}
                   onChange={(v) => set("team_size_limit", v)}
@@ -290,6 +295,30 @@ export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
                 <FieldError id="e-ratingvis-e" error={firstError("rating_visibility")} />
               </div>
             </fieldset>
+
+            <fieldset className="flex flex-col gap-3">
+              <legend className="mb-1 text-sm font-medium">Live notifications</legend>
+              <p className="text-sm text-muted-foreground">
+                Participants get these notices while the event runs. Clear all of them to turn live notifications off.
+              </p>
+              {LIVE_NOTIFICATION_OPTIONS.map((option) => (
+                <CheckboxField
+                  key={option.kind}
+                  id={`e-live-${option.kind}`}
+                  label={option.label}
+                  checked={state.live_notifications.includes(option.kind)}
+                  onChange={(checked) =>
+                    set(
+                      "live_notifications",
+                      LIVE_NOTIFICATION_OPTIONS.map((o) => o.kind).filter((kind) =>
+                        kind === option.kind ? checked : state.live_notifications.includes(kind),
+                      ),
+                    )
+                  }
+                />
+              ))}
+              <FieldError id="e-live-e" error={firstError("live_notifications")} />
+            </fieldset>
           </CardContent>
           <CardFooter className="justify-end gap-2">
             <Button type="button" variant="ghost" onClick={() => navigate(cancelHref)}>
@@ -354,4 +383,30 @@ function EventHeading({ mode, name }: Readonly<{ mode: "create" | "edit"; name?:
         {mode === "create" ? "New event" : `Edit ${name ?? "event"}`}
       </h1>
   </>;
+}
+
+
+function ScenarioCatalog({ form }: Readonly<{ form: ReturnType<typeof useEventFormState> }>) {
+  const { catalog, catalogs, catalogChoices, catalogOffset, selectCatalog, browseCatalogs, scenarios } = form;
+  return (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="e-catalog">Scenario catalog</Label>
+              <select id="e-catalog" value={catalog ? contentScopeKey(catalog) : ""}
+                onChange={(event) => selectCatalog(event.target.value)} disabled={!catalogChoices.length}
+                className="h-9 rounded-md border bg-background px-3 text-sm">
+                {catalogChoices.length === 0 ? <option value="">Select a catalog</option> : null}
+                {catalogChoices.map((row) => <option key={contentScopeKey(row)} value={contentScopeKey(row)}>
+                  {row.kind === "installation" ? row.name : `${row.kind}: ${row.name}`}
+                </option>)}
+              </select>
+              {catalogs.isError ? <p role="alert">Could not load scenario catalogs. Please retry.</p> : null}
+              {catalogOffset > 0 || (catalogs.data?.count ?? 0) > 50 ? <nav aria-label="Scenario catalog pages" className="flex gap-2">
+                <Button type="button" variant="outline" disabled={catalogOffset === 0 || catalogs.isFetching}
+                  onClick={() => browseCatalogs(Math.max(0, catalogOffset - 50))}>Previous catalogs</Button>
+                <Button type="button" variant="outline" disabled={catalogs.isFetching || catalogOffset + 50 >= (catalogs.data?.count ?? 0)}
+                  onClick={() => browseCatalogs(catalogOffset + 50)}>Next catalogs</Button>
+              </nav> : null}
+              {scenarios.isError ? <p role="alert">Could not load scenarios. Please retry.</p> : null}
+            </div>
+  );
 }

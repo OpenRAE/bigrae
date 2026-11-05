@@ -1,6 +1,12 @@
-# Setup
+# Developer environment setup
 
-Deploy BigRAE from a cloud account to a running environment.
+This page deploys a development environment from your own fork of the
+repository, with GitHub Actions. It is the path for AWS, and the CI path for
+GCP. It needs GitHub secrets, variables, and Environments.
+
+To install BigRAE from a published release, use
+[Install BigRAE on GCP](../handbook/gcp-first-run.md). That install needs no
+GitHub access.
 
 ## Before You Start
 
@@ -62,8 +68,8 @@ for the authoritative order.
 - Without GitHub: a published release that the deployment can read, the
   deployment input bundle in the config bucket, and the first operator password
   in Secret Manager.
-- Kali/Ubuntu/DC base packages in an OCI registry. `deploy.py gcp-images
-  --source <registry prefix>` imports them as native GCE images; no
+- A release that selects the Kali, Ubuntu, and DC guest images. `deploy.py
+  gcp-images` verifies and imports them as native GCE images; no
   platform-owned transfer bucket must already exist. See
   [`gcp-range-cell-deploy.md`](../../dev/gcp-range-cell-deploy.md) and
   [`gcp-guest-images.md`](../../architecture/gcp-guest-images.md).
@@ -172,7 +178,9 @@ platform/terraform/
 
 Deployments use an explicit `workflow_dispatch` environment choice.
 Pushes and pull requests run validation only.
-The maintained choices are `aws-dev`, `gcp-dev`, `orthanc`, `sauron` and `balrog`.
+The only choice is `aws-dev`. No GitHub-deployed GCP environment exists; GCP
+deployments install from a release. Issue #2672 decides whether the GitHub GCP
+deploy path stays.
 Branch names do not select an environment.
 AWS production remains a local operator path; it is not a deploy workflow choice.
 See [CI/CD](../platform_infrastructure/cicd.md) for the trigger matrix.
@@ -223,6 +231,22 @@ The retained infrastructure-only CLI remains available for `dev` and `prod`:
 Bootstrap renders private backend files in the operator instance directory.
 Pass those files to Terraform init; do not edit committed backend examples.
 Configure the exact deployment values described in [deploy secrets](../../dev/deploy-secrets.md).
+
+### AWS environment operations
+
+| Doc | Read this when |
+|---|---|
+| [Deploy secrets and variables](../../dev/deploy-secrets.md) | You configure the GitHub secrets and repository variables of an AWS environment. |
+| [AWS Terraform apply order](../../dev/aws-terraform-apply-order.md) | You need the order of the AWS stacks and the preconditions of each one. |
+| [AWS AMI seeding](../../dev/aws-ami-seeding-runbook.md) | You seed the range guest AMIs that the portal stack reads. |
+| [AWS runner provisioning](../../dev/aws-runner-provisioning-runbook.md) | You provision and register the self-hosted CI runners. |
+| [GitHub runner health alerts](../../ops/github-runner-health-alerts.md) | A runner-health alert fired. |
+| [Portal on EKS operations](../../ops/portal-eks-operations.md) | You monitor, scale, deploy, troubleshoot, or roll back the portal on EKS. |
+| [AWS native identity](../../ops/aws-native-identity.md) | You enable the AWS policy service, admit an AWS service principal, open operator access, or rotate the datastore. |
+| [Secrets rotation](../../dev/secrets-rotation-runbook.md) | You rotate deployment or runtime secrets. |
+| [Service Discovery ForceNew](../../dev/service-discovery-forcenew.md) | You hit a Service Discovery replacement. |
+| [Disaster recovery](../../ops/disaster-recovery.md) | You recover the AWS portal stack after a failure. |
+| [AWS environment teardown](../../dev/aws-teardown-runbook.md) | You tear down an AWS environment. |
 
 ## Existing Environment Setup
 
@@ -323,16 +347,18 @@ fail with a misleading model-not-found response.
 Run `scripts/bootstrap/deploy.py gcp-foundation --inputs <file> --yes`. The
 inputs select the mode:
 
-- **Without GitHub:** start from
-  `scripts/bootstrap/gcp-foundation.github-less.example.tfvars.json`. Name the
-  principals that may impersonate the deploy, release-scan, and destroy
-  identities, and the deployment config bucket. Follow
-  [Apply the foundation without GitHub](../handbook/gcp-github-less-deployment.md#apply-the-foundation-without-github).
+- **Without GitHub:** `gcp-install` applies the foundation. See
+  [Install BigRAE on GCP](../handbook/gcp-first-run.md).
 - **For CI:** start from `scripts/bootstrap/gcp-foundation.example.tfvars.json`.
   The command verifies the project and repository numeric IDs and requires
   explicit purpose Environment and workflow trust tuples. Follow the ordering in
   `scripts/bootstrap/README.md` and the staged cutover and readback in
   `docs/dev/deploy-secrets.md`.
+- **For a developer build project:** start from
+  `scripts/bootstrap/gcp-image-builder.example.tfvars.json`. The command creates
+  the image build resources and writes the `gcp-image-build` and
+  `gcp-image-validate` Environments of the GitHub repository. See
+  [GCP Guest Images](../../architecture/gcp-guest-images.md#build-project).
 
 Both modes create the state bucket before the identity Terraform initializes,
 and both can create an isolated private image-build network. Do not hand-create
@@ -343,20 +369,17 @@ For CI, add each output only to its matching GitHub Environment:
 | Secret | Value |
 |--------|-------|
 | `GCP_DEPLOY_SERVICE_ACCOUNT` | Deploy service account email |
-| `GCP_DESTROY_SERVICE_ACCOUNT` | Destroy service account email |
 | `GCP_RELEASE_SCAN_SERVICE_ACCOUNT` | Release-scan service account email |
-| `GCP_PACKER_BUILD_SERVICE_ACCOUNT` | Image build service account email |
-| `GCP_PACKER_VALIDATE_SERVICE_ACCOUNT` | Image validation service account email |
-| `GCP_PACKER_PROMOTE_SERVICE_ACCOUNT` | Image promotion service account email |
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource name |
+
+A developer build project does not need these steps. The bootstrap writes the
+image Environments itself.
 
 ### 3. Configure the deployment inputs
 
-- **Without GitHub:** write `bigrae.yaml` and `terraform.tfvars.json`, then
-  publish them with `deploy.py gcp-config publish`. Create the first operator
-  password in Secret Manager. Import the range guest images with
-  `deploy.py gcp-images --source <registry prefix> --store gs://<bucket>`. See
-  [Author and publish the deployment input bundle](../handbook/gcp-github-less-deployment.md#author-and-publish-the-deployment-input-bundle).
+- **Without GitHub:** write the deployment input bundle. `gcp-install`
+  publishes it and creates the first operator password. See
+  [Install BigRAE on GCP](../handbook/gcp-first-run.md).
 - **For CI:** set the GitHub secrets and variables in
   [`docs/dev/deploy-secrets.md`](../../dev/deploy-secrets.md).
 
@@ -370,12 +393,8 @@ Use the supported keyless-direct guest model path where required.
 
 ### 4. Deploy
 
-- **Without GitHub:** run the first deploy with `--first-install` from the
-  deployer image:
-
-  ```bash
-  ./scripts/bootstrap/deploy.py gcp-deploy --store gs://<bucket> --first-install
-  ```
+- **Without GitHub:** `gcp-install` runs the first deploy. See
+  [Install BigRAE on GCP](../handbook/gcp-first-run.md).
 
 - **For CI:** dispatch the deploy workflow:
 

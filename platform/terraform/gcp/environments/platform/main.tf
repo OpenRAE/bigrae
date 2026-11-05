@@ -39,7 +39,6 @@ locals {
   name_prefix = "shifter-${var.environment}"
   # Deterministic emails of the purpose identities created in the foundational
   # global/cicd-oidc root. This root references them without importing state.
-  build_service_account_email        = "${replace("shifter-${var.environment}", "-", "")}-packer@${var.project_id}.iam.gserviceaccount.com"
   release_scan_service_account_email = "${replace("shifter-${var.environment}", "-", "")}-scan@${var.project_id}.iam.gserviceaccount.com"
   deploy_service_account_email       = "${replace("shifter-${var.environment}", "-", "")}-deploy@${var.project_id}.iam.gserviceaccount.com"
   labels = {
@@ -47,29 +46,6 @@ locals {
     managed_by  = "terraform"
     project     = "shifter"
   }
-}
-
-# Packer build-infra for the GCE image bakes (.github/workflows/packer-gcp.yml):
-# the dedicated builder subnet, the IAP-scoped ingress firewall, and the GCS
-# image bucket. It is network-coupled (needs the platform VPC + Cloud NAT), so it
-# stays in the platform root. The GitHub Actions WIF pool/provider and the packer
-# build service account it references now live in the foundational root
-# platform/terraform/gcp/global/cicd-oidc so they survive a platform destroy (the
-# credentials CI authenticates as). This references that SA by its deterministic
-# email rather than creating it.
-module "packer_build_infra" {
-  source = "../../modules/packer-build-infra"
-
-  project_id                   = var.project_id
-  name_prefix                  = local.name_prefix
-  region                       = var.region
-  platform_network             = module.platform_core.network_name
-  packer_service_account_email = local.build_service_account_email
-  access_log_bucket_name       = module.platform_core.audit_logs_bucket_name
-  # baremetal-gcr (GDC substrate SA) is absent on the default GCE backend; empty
-  # unless a GDC deployment sets it (ADR: GDC plumbing must not be selected by
-  # default). See the gdc_vm_runtime_image_readers variable.
-  image_reader_service_accounts = var.gdc_vm_runtime_image_readers
 }
 
 module "platform_core" {

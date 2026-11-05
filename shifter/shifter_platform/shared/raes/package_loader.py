@@ -145,12 +145,16 @@ def launch_raes_package(
     except (ScenarioError, OSError) as exc:
         raise RaesPackageError(f"failed to load RAES package: {safe_log_value(exc)}") from exc
 
-    target = create_shifter_backend_target(port=port, scenario=scenario)
+    from raes.instantiate import instantiate_scenario
+
+    from shared.raes.cloud_content import referenced_cloud_content
+
+    instantiated = instantiate_scenario(scenario, parameters=parameters)
+    target = create_shifter_backend_target(port=port, scenario=instantiated)
+    target.provisioner.bind_cloud_content(referenced_cloud_content(instantiated))
     from shared.raes.artifact_planning import plan_with_artifact_supply
 
-    execution_plan, target = plan_with_artifact_supply(
-        scenario, target, parameters=parameters, supply_provider=artifact_supply_provider
-    )
+    execution_plan, target = plan_with_artifact_supply(instantiated, target, supply_provider=artifact_supply_provider)
 
     # #1710: lower the compiled participant-domain interactive access into the
     # bounded sidecar here -- this is the only point where Shifter holds the

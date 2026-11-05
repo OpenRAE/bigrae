@@ -1,5 +1,14 @@
 [
   {
+    "rule_id": "ADR-070-R1",
+    "owner": "@Brad-Edwards",
+    "reason": "CVE-2026-56857 is a reviewed platform false positive only for opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin in the Linux deployer image. The official Go advisory https://vuln.go.dev/ID/GO-2026-6604.json limits both affected imports to GOOS=windows. Google Cloud CLI 591.0.0 and the latest rapid component manifest name plugin 0.5.20 archive 20261016073856 with SHA-256 7ca2be31d6faa232b733cd3e91b98e182771516732d7230c19196b51cde7f823; the downloaded, checksum-verified binary reports go1.27.1, GOOS=linux, GOARCH=amd64. The exact CVE/path entry in the deployer-only Trivy file expires on the same date; no other artifact or vulnerability is exempted. Tracking: #2321.",
+    "expires_on": "2026-11-30",
+    "paths": [
+      "platform/deployer/gcp/trivyignore.yaml"
+    ]
+  },
+  {
     "rule_id": "ADR-004-R11",
     "owner": "@Brad-Edwards",
     "reason": "CKV_K8S_35 (prefer secret files over environment variables): the guacamole-client Deployment reads the guacamole-runtime Secret through envFrom. The pinned Guacamole 1.6.0 image has a confirmed file-secret regression (GUACAMOLE-2119): its entrypoint has no _FILE variable support, and it links the PostgreSQL authentication extension through an environment-variable-driven feature framework. A correct file-delivery fix must fork the custom image entrypoint to build guacamole.properties from a mounted file and link the extension without the environment path, which is a higher-risk change to participant remote access. The image fork is tracked in #2565. The `checkov.io/skip1: CKV_K8S_35` annotation on the chart's guacamole-client Deployment points back to this entry. The chart is the only renderer since ADR-070, so the same acceptance now covers every rendered profile.",
@@ -83,15 +92,6 @@
     "owner": "@Brad-Edwards",
     "reason": "CKV_AWS_382 (egress 0.0.0.0/0 all-ports): default outbound egress is required for package updates, SSM agent traffic, AWS API calls, container image pulls, and demo internet access. Narrowing to a proxy/NAT path is a future refactor (#860); meanwhile each rule is documented with a description and confined to a single SG.",
     "expires_on": "2027-05-26"
-  },
-  {
-    "rule_id": "ADR-004-R11",
-    "owner": "@Brad-Edwards",
-    "reason": "CKV_AWS_273 / CKV_AWS_274 / CKV_AWS_40 / CKV2_AWS_22 (IAM users without SSO / with AdministratorAccess / direct policy attachment / console access): apply to the se-admins IAM users, PANW SEs who need admin access to the dev AWS account where AWS SSO is not configured. Console access with a first-login password reset is required; AdministratorAccess is attached by design.",
-    "expires_on": "2027-05-26",
-    "paths": [
-      "platform/terraform/global/se-admins/"
-    ]
   },
   {
     "rule_id": "ADR-004-R11",
@@ -270,7 +270,7 @@
   {
     "rule_id": "ADR-004-R11",
     "owner": "@Brad-Edwards",
-    "reason": "Cognito pre-signup Lambda (main.tf) and the operator-triggered client-secret rotation Lambda (rotation.tf, #159) (CKV_AWS_50 / CKV_AWS_115 / CKV_AWS_116 / CKV_AWS_117 / CKV_AWS_173 / CKV_AWS_272): pre-signup is invoked synchronously by Cognito from AWS-owned infrastructure; the rotation Lambda is invoked on demand by an operator and calls only public AWS APIs (Cognito, Secrets Manager, Auto Scaling). DLQ does not apply to these invocations; reserved concurrency is unnecessary; a VPC config buys no security for AWS-API-only calls; env vars are non-sensitive (allowlists / a secret ARN reference); code signing needs CodeArtifact + Signer. CKV_AWS_297 (rotation.tf): the EventBridge Scheduler reminder's input is a non-sensitive reminder message (no secret data), and the portal Secrets CMK is kms:ViaService-scoped to Secrets Manager so the scheduler cannot use it; a CMK adds no protection. Inline skips carry the per-rule justification.",
+    "reason": "Cognito pre-signup Lambda (main.tf) and the operator-triggered client-secret rotation Lambda (rotation.tf, #159) (CKV_AWS_50 / CKV_AWS_115 / CKV_AWS_116 / CKV_AWS_117 / CKV_AWS_173): pre-signup is invoked synchronously by Cognito from AWS-owned infrastructure; the rotation Lambda is invoked on demand by an operator and calls only public AWS APIs (Cognito, Secrets Manager, Auto Scaling). DLQ does not apply to these invocations; reserved concurrency is unnecessary; a VPC config buys no security for AWS-API-only calls; env vars are non-sensitive (allowlists / a secret ARN reference). Both functions deploy only Signer-signed code (#2313). CKV_AWS_297 (rotation.tf): the EventBridge Scheduler reminder's input is a non-sensitive reminder message (no secret data), and the portal Secrets CMK is kms:ViaService-scoped to Secrets Manager so the scheduler cannot use it; a CMK adds no protection. Inline skips carry the per-rule justification.",
     "expires_on": "2027-05-26",
     "paths": [
       "platform/terraform/modules/portal/cognito/main.tf",
@@ -280,7 +280,7 @@
   {
     "rule_id": "ADR-004-R11",
     "owner": "@Brad-Edwards",
-    "reason": "Redis AUTH rotation Lambda + rotation resource (CKV_AWS_50 / CKV_AWS_115 / CKV_AWS_116 / CKV_AWS_173 / CKV_AWS_272 / CKV_AWS_304, #159): a scheduled Secrets Manager rotation function. DLQ and reserved concurrency do not apply (Secrets Manager invokes it serially and owns the retry/alarm lifecycle); env vars are non-sensitive (replication-group id, Redis host/port, ASG name) and the AUTH token is read from Secrets Manager, never an env var; X-Ray adds no observability over CloudWatch logs; code signing needs CodeArtifact + Signer. CKV_AWS_304: rotation IS configured and redis_auth_rotation_days is bounded to <=90 by variable validation, so the cadence is always within the 90-day window; Checkov cannot resolve the variable default. Inline skips carry the per-rule justification.",
+    "reason": "Redis AUTH rotation Lambda + rotation resource (CKV_AWS_50 / CKV_AWS_115 / CKV_AWS_116 / CKV_AWS_173 / CKV_AWS_304, #159): a scheduled Secrets Manager rotation function. DLQ and reserved concurrency do not apply (Secrets Manager invokes it serially and owns the retry/alarm lifecycle); env vars are non-sensitive (replication-group id, Redis host/port, ASG name) and the AUTH token is read from Secrets Manager, never an env var; X-Ray adds no observability over CloudWatch logs. The function deploys only Signer-signed code (#2313). CKV_AWS_304: rotation IS configured and redis_auth_rotation_days is bounded to <=90 by variable validation, so the cadence is always within the 90-day window; Checkov cannot resolve the variable default. Inline skips carry the per-rule justification.",
     "expires_on": "2027-05-26",
     "paths": [
       "platform/terraform/modules/portal/redis/rotation.tf"
@@ -369,17 +369,6 @@
     "paths": [
       "scripts/check_tf_sg_cidrs/check_tf_sg_cidrs.py",
       "shifter/engine/provisioner/terraform/modules/range/vpn.tf"
-    ]
-  },
-  {
-    "rule_id": "ADR-040-R3",
-    "owner": "@Brad-Edwards",
-    "reason": "Issue #1924 deliberately narrows POST /api/v1/ctf/participants/{participant_id}/resend-invite/ from reset-and-email credentials to resend non-secret login information while preserving its operation, status, and response shape. The semantic break ends existing-password disclosure and reset-by-email behavior. The additive POST /api/v1/ctf/participants/{participant_id}/password/ operation is the replacement for explicit generated or organizer-set resets, and the organizer SPA list/detail flows migrate to it. Remove this exception after external consumers have migrated and the deprecated resend operation can be versioned or removed.",
-    "expires_on": "2026-10-29",
-    "paths": [
-      "shifter/shifter_platform/ctf/api/organizer/participants.py",
-      "shifter/shifter_platform/ctf/services/participant/accounts.py",
-      "shifter/shifter_platform/frontend/src/features/ctf/admin/ParticipantPasswordDialog.tsx"
     ]
   },
   {

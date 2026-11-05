@@ -62,8 +62,14 @@ def build_values(
     *,
     runtime_env: Mapping[str, str],
     identities: Mapping[str, str],
+    policy_binding: tuple[str, str] | None = None,
 ) -> dict[str, object]:
-    """Build the non-secret generated Helm values for one deployment."""
+    """Build the non-secret generated Helm values for one deployment.
+
+    ``policy_binding`` is the published OpenFGA store and model; without one,
+    the values bind the pinned settings IDs, or leave the policy client unbound
+    until publication (#2679).
+    """
     from installation.gcp_model_broker import validate_model_broker_readback
     from installation.render import (
         render_gcp_range_telemetry_env,
@@ -84,7 +90,7 @@ def build_values(
         mission_control_lease_env=render_mission_control_lease_env(root_config),  # type: ignore[arg-type]
         range_telemetry_env=render_gcp_range_telemetry_env(root_config),  # type: ignore[arg-type]
         model_broker_runtime=root_config.settings.get("model_broker_runtime"),  # type: ignore[attr-defined]
-        openfga_settings=settings.openfga.model_dump(),  # type: ignore[attr-defined]
+        openfga_settings=_openfga_settings(settings.openfga, policy_binding),  # type: ignore[attr-defined]
         capacity_profile_id=settings.shared_service_capacity_profile,  # type: ignore[attr-defined]
     )
     return render_gcp_helm_values(
@@ -98,6 +104,14 @@ def build_values(
         },
         render_artifacts=artifacts,
     )
+
+
+def _openfga_settings(policy: object, binding: tuple[str, str] | None) -> dict[str, object]:
+    """Return the OpenFGA settings with the published store and model IDs, when there are any."""
+    settings = policy.model_dump()  # type: ignore[attr-defined]
+    if binding is not None:
+        settings["store_id"], settings["model_id"] = binding
+    return settings
 
 
 def write_values(workdir: Path, values: Mapping[str, object]) -> Path:
@@ -166,16 +180,30 @@ def _live_items(
     runner: ProcessRunner, env: Mapping[str, str | None], kind: str, namespace: str
 ) -> dict[str, Mapping[str, object]]:
     """Return the metadata of the live objects of one type, keyed by name."""
-    result = runner.run(["kubectl", "get", kind, *_scope_args(namespace), "-o", "json"], env=env, check=False)
-    if result.returncode != 0:
-        return {}
+    result = runner.run(["kubectl", "get", kind, *_scope_args(namespace), "-o", "json"], env=env)
     try:
-        items = json.loads(result.stdout or "{}").get("items", [])
-    except (json.JSONDecodeError, AttributeError):
-        return {}
-    return {
-        str(item.get("metadata", {}).get("name")): item.get("metadata", {}) for item in items if isinstance(item, dict)
-    }
+        inventory = json.loads(result.stdout)
+        if not isinstance(inventory, dict) or not isinstance(inventory.get("items"), list):
+            raise ValueError
+        items = inventory["items"]
+        metadata = [_inventory_metadata(item, namespace) for item in items]
+        names = [item["name"] for item in metadata]
+        if len(set(names)) != len(names):
+            raise ValueError
+    except (ValueError, TypeError):
+        raise HelmReleaseError("Kubernetes ownership inventory is invalid") from None
+    return {str(item["name"]): item for item in metadata}
+
+
+def _inventory_metadata(item: object, namespace: str) -> Mapping[str, object]:
+    """Validate one live ownership row before the caller can adopt any object."""
+    if not isinstance(item, dict) or not isinstance(item.get("metadata"), dict):
+        raise ValueError
+    metadata = item["metadata"]
+    name = metadata.get("name")
+    if not isinstance(name, str) or not name or metadata.get("namespace", namespace) != namespace:
+        raise ValueError
+    return metadata
 
 
 def _owned_by_release(metadata: Mapping[str, object], target: str) -> bool:
@@ -221,14 +249,18 @@ def adopt_objects(
     grouped: dict[tuple[str, str], list[str]] = {}
     for kind, namespace, name in owned_objects(documents):
         grouped.setdefault((kind, namespace), []).append(name)
+    inventories = {key: _live_items(runner, env, *key) for key in sorted(grouped)}
+    pending: list[tuple[str, str]] = []
     for (kind, namespace), names in sorted(grouped.items()):
-        live = _live_items(runner, env, kind, namespace)
+        live = inventories[kind, namespace]
         for name in names:
             metadata = live.get(name)
             if metadata is None or _owned_by_release(metadata, f"{kind}/{name}"):
                 continue
-            _adopt(runner, env, f"{kind}/{name}", namespace)
-            adopted.append(f"{kind}/{name}")
+            pending.append((f"{kind}/{name}", namespace))
+    for target, namespace in pending:
+        _adopt(runner, env, target, namespace)
+        adopted.append(target)
     if adopted:
         info(f"Adopted {len(adopted)} existing objects into the Helm release")
     return adopted

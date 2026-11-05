@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -11,12 +12,11 @@ from django.utils import timezone
 from cms.exceptions import CMSError
 from cms.models import App, AppType, Credential, Instance, InstanceType, Request
 from engine.services import create_ngfw, prepare_ngfw_creation
-from shared.credentials import resolve_local_credential
 from shared.schemas import RequestSpec
 from shared.schemas.app import NGFWAppRef, NGFWOneTimeRegistration
 from workspaces.services import resolve_range_scope_binding
 
-from ._content_authority import content_scope, require_content_scope
+from ._content_authority import content_scope, fence_content_scope, require_content_scope
 from ._ngfw_hydration import NGFWRegistration, hydrate_ngfw
 from ._scoped_credentials import _authorized_row
 
@@ -24,14 +24,16 @@ if TYPE_CHECKING:
     from shared.credentials import CredentialContext
     from shared.identity_scope import ResourceScope
 
+logger = logging.getLogger(__name__)
+
 
 def _source(
     credential: CredentialContext, scope: ResourceScope | None, identifier: int | None, slug: str
-) -> tuple[Credential, dict[str, object]]:
+) -> tuple[Credential, dict[str, object], CredentialContext]:
     """Resolve a device input credential within the exact launch scope."""
     if identifier is None:
         raise CMSError("Device source unavailable")
-    _, fence = _authorized_row(credential, identifier, "manage_credentials")
+    current, fence = _authorized_row(credential, identifier, "manage_credentials")
     row = Credential.objects.select_related("credential_type").filter(**fence).first()
     if (
         row is None
@@ -40,7 +42,7 @@ def _source(
         or (row.expires_at is not None and row.expires_at <= timezone.now())
     ):
         raise CMSError("Device source unavailable")
-    return row, fence
+    return row, fence, current
 
 
 def create_scoped_device(
@@ -65,11 +67,11 @@ def create_scoped_device(
         current = require_content_scope(credential, scope, "manage_devices")
         name = _validate_ngfw_name(name)
         resolved = resolve_range_scope_binding(scope, member=current.principal)
-        profile, profile_fence = _source(current, scope, profile_id, "deployment_profile")
+        profile, profile_fence, current = _source(current, scope, profile_id, "deployment_profile")
         sources = [(profile, profile_fence)]
         scm = None
         if method == "pin":
-            scm, scm_fence = _source(current, scope, scm_id, "scm")
+            scm, scm_fence, current = _source(current, scope, scm_id, "scm")
             sources.append((scm, scm_fence))
         user_id = human_principal_user_id(current.principal) if current.principal.kind == "human" else None
         request = Request(
@@ -101,10 +103,8 @@ def create_scoped_device(
         prepared = prepare_ngfw_creation(spec, current, scope)
         current = require_content_scope(current, scope, "manage_devices")
         with transaction.atomic():
-            if (
-                resolve_range_scope_binding(scope, member=current.principal, for_update=True) != resolved
-                or resolve_local_credential(current) != current
-            ):
+            fence_content_scope(current, scope)
+            if resolve_range_scope_binding(scope, member=current.principal, for_update=True) != resolved:
                 raise CMSError("Device authority changed")
             if Request.objects.filter(
                 request_type="ngfw",
@@ -123,7 +123,8 @@ def create_scoped_device(
             instance.save(update_fields=["data"])
             create_ngfw(spec, credential=current, resource_scope=scope, prepared_creation=prepared)
         return NGFWAppRef(app_id=app.pk, instance_id=instance.pk, is_deleted=False)
-    except Exception:
+    except Exception as exc:  # noqa: BLE001  # causes can carry NGFW registration secrets (authcode, OTP, PIN)
+        logger.warning("create_scoped_device: device creation refused exc_type=%s", type(exc).__name__)
         raise CMSError("Device creation unavailable") from None
 
 

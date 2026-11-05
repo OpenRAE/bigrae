@@ -21,6 +21,7 @@ from ctf.services.submission import get_participant_submissions
 
 if TYPE_CHECKING:
     from ctf.models import CTFChallenge, CTFEvent, CTFParticipant
+    from shared.credentials import CredentialContext
 
 
 def participant_current_event(participant: CTFParticipant) -> dict[str, Any]:
@@ -31,6 +32,8 @@ def participant_current_event(participant: CTFParticipant) -> dict[str, Any]:
     organizer-only configuration (range_config, reminder schedule, spare counts,
     email templates) is included.
     """
+    from ctf.services.notification.live import effective_live_kinds
+
     event = participant.event
     return {
         "event": {
@@ -50,6 +53,7 @@ def participant_current_event(participant: CTFParticipant) -> dict[str, Any]:
             "rules": event.rules,
             "logo_url": event.logo_url,
             "theme_color": event.theme_color,
+            "live_notifications": effective_live_kinds(event),
         },
         "participant": _participant_self(participant),
     }
@@ -133,7 +137,9 @@ def participant_team(participant: CTFParticipant) -> dict[str, Any] | None:
     }
 
 
-def participant_challenge_detail(participant: CTFParticipant, challenge: CTFChallenge) -> dict[str, Any]:
+def participant_challenge_detail(
+    participant: CTFParticipant, challenge: CTFChallenge, *, credential: CredentialContext
+) -> dict[str, Any]:
     """Return the participant-safe detail projection for one challenge.
 
     Composes the canonical challenge / hint / submission / scoring services and
@@ -210,7 +216,7 @@ def participant_challenge_detail(participant: CTFParticipant, challenge: CTFChal
         ],
         "prerequisites_met": prereqs_met,
         "unmet_prerequisites": [{"id": str(required.id), "name": required.name} for required in unmet],
-        "connection_info": resolve_target_connection_info(challenge, participant),
+        "connection_info": resolve_target_connection_info(challenge, participant, credential=credential),
         # CTF-110: a LOCKED challenge is readable but not submittable; the SPA
         # uses this to replace the submit form with a locked notice.
         "locked": challenge.is_visibility_locked,
@@ -255,6 +261,7 @@ def participant_profile(participant: CTFParticipant) -> dict[str, Any]:
         "id": str(participant.id),
         "name": participant.name,
         "affiliation": participant.affiliation,
+        "time_zone": participant.time_zone,
         "email": participant.email,
         "username": _participant_username(participant),
         "role": participant.role,

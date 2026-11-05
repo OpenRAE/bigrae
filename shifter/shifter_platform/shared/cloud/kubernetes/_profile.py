@@ -80,6 +80,16 @@ class NativeDatabaseProxyProfile:
 
 
 @dataclass(frozen=True)
+class ReadOnlySecretMount:
+    """Host-selected immutable input volume with explicit projected keys."""
+
+    name: str
+    secret_name: str
+    mount_path: str
+    keys: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class KubernetesTaskProfile:
     """Provider-injected wiring for one Kubernetes task-runner instance."""
 
@@ -112,6 +122,7 @@ class KubernetesTaskProfile:
     # acquisition Job, #2463) pins its command here, where admission can match it.
     container_command: tuple[str, ...] = field(default_factory=tuple)
     database_proxy: NativeDatabaseProxyProfile | None = None
+    read_only_secret_mounts: tuple[ReadOnlySecretMount, ...] = field(default_factory=tuple)
 
     def hardening_for(self, container_name: str) -> ProvisionerHardeningProfile | None:
         """Return the hardening profile when it applies to ``container_name``."""

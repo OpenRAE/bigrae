@@ -11,21 +11,23 @@ import pytest
 
 import gcp_terraform
 from gcp_inputs import load_deployment_inputs
-from gcp_kube import apply_manifest, cluster_name, kube_env, kubectl_json
+from gcp_kube import apply_manifest, cluster_name, kube_env, kubectl_json, read_job_log
 from gcp_prereqs import (
     STATE_RETENTION_SECONDS,
     PrerequisiteError,
     ensure_identity_platform,
     ensure_state_bucket,
     release_disabled_broker_load_balancer,
+    remove_deleted_role_bindings,
 )
-from gcp_process import ProcessResult
+from gcp_process import GcpCommandError, ProcessResult
 from gcp_terraform import (
     TerraformStepError,
+    apply_destroy_settings,
     backend_prefix,
     deployment_values,
     drop_unremovable_kms_resources,
-    lift_sql_deletion_protection,
+    kms_adoption_variables,
     owned_keys_in_values,
     state_bucket_name,
     terraform_apply,
@@ -126,15 +128,28 @@ class TestTerraformSteps:
         assert not runner.find("terraform", f"-chdir={ctx.root}", "import")
         assert terraform_outputs(runner, ctx) == {"a": {"value": 1}}
 
-    def test_apply_retries_only_iam_propagation(self, inputs, capsys):
+    def test_apply_retries_only_iam_propagation_and_capacity(self, inputs, capsys):
         ctx = terraform_context(inputs, inputs.workdir, {})
-        attempts = iter([ProcessResult(1, "", "Error 403: permission denied"), ProcessResult(0, "done")])
+        stockout = (
+            "Error waiting for creating GKE cluster: Try a different location, or try again later: "
+            "Google Compute Engine does not have enough resources available to fulfill request: us-central1."
+        )
+        attempts = iter(
+            [
+                ProcessResult(1, "", "Error 403: permission denied"),
+                ProcessResult(1, "", stockout),
+                ProcessResult(0, "done"),
+            ]
+        )
         runner = FakeRunner().on(["terraform", f"-chdir={ctx.root}", "apply"], lambda a, e, s: next(attempts))
         sleeps = []
         terraform_apply(runner, ctx, sleep=sleeps.append)
-        assert sleeps == [10]
-        # The retried error stays visible to the operator (#2601).
-        assert "Error 403: permission denied" in capsys.readouterr().out
+        assert sleeps == [10, 10]
+        out = capsys.readouterr().out
+        # The retried error stays visible to the operator (#2601), with its real cause (#2685).
+        assert "Error 403: permission denied" in out and stockout in out
+        assert "hit an IAM propagation error; retrying in 10s (1/12)" in out
+        assert "hit a Compute Engine capacity shortage; retrying in 10s (2/12)" in out
         hard = FakeRunner().on(["terraform", f"-chdir={ctx.root}", "apply"], ProcessResult(1, "", "invalid config"))
         with pytest.raises(TerraformStepError):
             terraform_apply(hard, ctx, sleep=sleeps.append)
@@ -150,17 +165,41 @@ class TestTerraformSteps:
         state = "\n".join(
             [
                 "module.platform_core.module.portal_cloud_sql.google_sql_database_instance.platform",
+                "module.platform_core.module.portal_cloud_sql.google_sql_database.guacamole",
+                "module.platform_core.module.portal_cloud_sql.google_sql_database.openfga[0]",
+                "module.platform_core.module.portal_cloud_sql.google_sql_user.guacamole",
+                "module.platform_core.module.portal_gcs.google_storage_bucket.assets",
+                "module.platform_core.module.portal_gcs.google_storage_bucket_iam_member.assets",
                 "module.platform_core.module.portal_artifact_registry.google_kms_key_ring.artifact_registry",
                 "module.platform_core.module.portal_artifact_registry.google_kms_crypto_key.artifact_registry",
+                "module.platform_core.module.portal_artifact_registry.google_kms_crypto_key_iam_member.artifact_registry",
+                "module.platform_core.module.portal_gcs.module.cmek.google_kms_key_ring.this",
+                'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["assets"]',
+                'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["audit-logs"]',
+                'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key_iam_member.storage_agent["assets"]',
+                "module.other.google_kms_crypto_key.keys",
             ]
         )
         runner = FakeRunner().on(["terraform", f"-chdir={ctx.root}", "state", "list"], ProcessResult(0, state))
-        lift_sql_deletion_protection(runner, ctx)
+        apply_destroy_settings(runner, ctx)
         drop_unremovable_kms_resources(runner, ctx)
         targeted = runner.find("terraform", f"-chdir={ctx.root}", "apply")[0].argv
-        assert targeted[-1].startswith("-target=") and targeted[-1].endswith("google_sql_database_instance.platform")
+        # The instance, the databases, and the bucket carry stored deletion settings (#2640).
+        assert [arg.rsplit(".", 2)[-2] for arg in targeted if arg.startswith("-target=")] == [
+            "google_sql_database_instance",
+            "google_sql_database",
+            "google_sql_database",
+            "google_storage_bucket",
+        ]
         removed = [call.argv[-1] for call in runner.find("terraform", f"-chdir={ctx.root}", "state", "rm")]
-        assert [address.rsplit(".", 2)[-2] for address in removed] == ["google_kms_crypto_key", "google_kms_key_ring"]
+        # Only the exact owned key rings and keys leave state; their grants and any other KMS address stay (#2564).
+        assert removed == [
+            "module.platform_core.module.portal_artifact_registry.google_kms_crypto_key.artifact_registry",
+            "module.platform_core.module.portal_artifact_registry.google_kms_key_ring.artifact_registry",
+            'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["assets"]',
+            'module.platform_core.module.portal_gcs.module.cmek.google_kms_crypto_key.keys["audit-logs"]',
+            "module.platform_core.module.portal_gcs.module.cmek.google_kms_key_ring.this",
+        ]
         attempts = iter([ProcessResult(1), ProcessResult(0)])
         retrying = FakeRunner().on(["terraform", f"-chdir={ctx.root}", "destroy"], lambda a, e, s: next(attempts))
         sleeps = []
@@ -170,8 +209,71 @@ class TestTerraformSteps:
         with pytest.raises(TerraformStepError):
             terraform_destroy(always, ctx, sleep=lambda _: None)
         empty = FakeRunner()
-        lift_sql_deletion_protection(empty, ctx)
+        apply_destroy_settings(empty, ctx)
         assert not empty.find("terraform", f"-chdir={ctx.root}", "apply")
+
+    def test_an_interrupted_destroy_adopts_detached_keys_before_the_settings_apply(self, inputs):
+        # The keys left state but the buckets survived; the targeted apply must import
+        # the existing keys, not create them (#2564).
+        ctx = terraform_context(inputs, inputs.workdir, {}, destroy=True)
+        state = "module.platform_core.module.portal_gcs.google_storage_bucket.assets\n"
+        runner = FakeRunner().on(["terraform", f"-chdir={ctx.root}", "state", "list"], ProcessResult(0, state))
+        apply_destroy_settings(runner, ctx, variables=kms_adoption_variables(runner, ctx, inputs))
+        (targeted,) = runner.find("terraform", f"-chdir={ctx.root}", "apply")
+        assert "-var=adopt_storage_kms=true" in targeted.argv
+        assert "-target=module.platform_core.module.portal_gcs.google_storage_bucket.assets" in targeted.argv
+
+    def test_reinstall_adopts_the_key_rings_that_a_destroy_left(self, inputs):
+        # gcp-destroy drops the key rings from state; a reinstall adopts them (#2643, #2564).
+        ctx = terraform_context(inputs, inputs.workdir, {})
+        both = FakeRunner()
+        assert kms_adoption_variables(both, ctx, inputs) == {
+            "adopt_artifact_registry_kms": "true",
+            "adopt_storage_kms": "true",
+        }
+        described = [call.argv for call in both.find("gcloud", "kms", "keyrings", "describe")]
+        assert described == [
+            [
+                "gcloud",
+                "kms",
+                "keyrings",
+                "describe",
+                "shifter-acme-ar",
+                "--location",
+                "us-central1",
+                "--project",
+                PROJECT,
+            ],
+            [
+                "gcloud",
+                "kms",
+                "keyrings",
+                "describe",
+                "shifter-acme-gcs",
+                "--location",
+                "us-central1",
+                "--project",
+                PROJECT,
+            ],
+        ]
+        # A deployment from before #2564 has only the Artifact Registry key ring.
+        only_ar = FakeRunner().on(["gcloud", "kms", "keyrings", "describe", "shifter-acme-gcs"], ProcessResult(1))
+        assert kms_adoption_variables(only_ar, ctx, inputs) == {"adopt_artifact_registry_kms": "true"}
+        absent = FakeRunner().on(["gcloud", "kms", "keyrings", "describe"], ProcessResult(1))
+        assert kms_adoption_variables(absent, ctx, inputs) == {}
+        managed = FakeRunner().on(
+            ["terraform", f"-chdir={ctx.root}", "state", "list"],
+            ProcessResult(
+                0,
+                "module.platform_core.module.portal_artifact_registry.google_kms_key_ring.artifact_registry\n"
+                "module.platform_core.module.portal_gcs.module.cmek.google_kms_key_ring.this\n",
+            ),
+        )
+        assert kms_adoption_variables(managed, ctx, inputs) == {}
+        assert not managed.find("gcloud", "kms")
+        applying = FakeRunner()
+        terraform_apply(applying, ctx, variables={"adopt_storage_kms": "true"})
+        assert "-var=adopt_storage_kms=true" in applying.find("terraform", f"-chdir={ctx.root}", "apply")[0].argv
 
     def test_state_list_failure_is_an_empty_state(self, inputs):
         ctx = terraform_context(inputs, inputs.workdir, {})
@@ -285,6 +387,51 @@ class TestPrerequisites:
             )
 
 
+class TestDeletedRoleBindings:
+    def test_only_bindings_to_deleted_custom_roles_are_removed(self):
+        """#2702: a binding to a deleted role blocks every project policy write."""
+        deleted_role = f"projects/{PROJECT}/roles/packerImageExportBucketDiscovery"
+        live_role = f"projects/{PROJECT}/roles/shifterDirectoryReader"
+        roles = json.dumps([{"name": deleted_role, "deleted": True}, {"name": live_role}])
+        stale = f"deleted:serviceAccount:old@{PROJECT}.iam.gserviceaccount.com?uid=1"
+        policy = json.dumps(
+            {
+                "bindings": [
+                    {"role": deleted_role, "members": [stale]},
+                    {"role": live_role, "members": [f"serviceAccount:portal@{PROJECT}.iam.gserviceaccount.com"]},
+                ]
+            }
+        )
+        runner = (
+            FakeRunner()
+            .on(["gcloud", "iam", "roles", "list"], ProcessResult(0, roles))
+            .on(["gcloud", "projects", "get-iam-policy"], ProcessResult(0, policy))
+        )
+        remove_deleted_role_bindings(runner, {}, project_id=PROJECT)
+        removals = [call.argv for call in runner.find("gcloud", "projects", "remove-iam-policy-binding")]
+        assert removals == [
+            [
+                "gcloud",
+                "projects",
+                "remove-iam-policy-binding",
+                PROJECT,
+                f"--member={stale}",
+                f"--role={deleted_role}",
+                "--all",
+            ]
+        ]
+        # No deleted role: the policy is not read or changed.
+        quiet = FakeRunner().on(["gcloud", "iam", "roles", "list"], ProcessResult(0, json.dumps([{"name": live_role}])))
+        remove_deleted_role_bindings(quiet, {}, project_id=PROJECT)
+        assert not quiet.find("gcloud", "projects")
+        with pytest.raises(PrerequisiteError):
+            remove_deleted_role_bindings(
+                FakeRunner().on(["gcloud", "iam", "roles", "list"], ProcessResult(0, "not json")),
+                {},
+                project_id=PROJECT,
+            )
+
+
 class TestKube:
     def test_isolated_kubeconfig_and_helpers(self, tmp_path: Path):
         runner = FakeRunner()
@@ -301,3 +448,20 @@ class TestKube:
         apply_manifest(applier, {}, {"kind": "Secret", "data": {"k": "v"}})
         assert applier.calls[0].argv == ["kubectl", "apply", "-f", "-"]
         assert json.loads(applier.calls[0].input_text)["kind"] == "Secret"
+
+    def test_job_log_read_retries_and_reports_only_kubectl_errors(self, capsys):
+        """#2687: the read is idempotent; container output stays out of the failure."""
+        tunnel = 'Error from server: Get "https://10.0.0.5:10250/containerLogs/x": No agent available'
+        attempts = iter([ProcessResult(1, "", tunnel), ProcessResult(0, "BIGRAE_RESULT=ok\n")])
+        runner = FakeRunner().on(["kubectl", "logs"], lambda a, e, s: next(attempts))
+        sleeps = []
+        assert read_job_log(runner, "probe", namespace="ns", container="portal", sleep=sleeps.append) == (
+            "BIGRAE_RESULT=ok\n"
+        )
+        assert runner.calls[0].argv == ["kubectl", "logs", "job/probe", "-n", "ns", "-c", "portal"]
+        assert sleeps == [15] and "No agent available; retrying in 15s (1/5)" in capsys.readouterr().out
+        failing = FakeRunner().on(["kubectl", "logs"], ProcessResult(1, "private container output", "pod not found"))
+        with pytest.raises(GcpCommandError) as caught:
+            read_job_log(failing, "probe", namespace="ns", sleep=sleeps.append)
+        assert "pod not found" in str(caught.value) and "private" not in str(caught.value)
+        assert len(failing.calls) == 5 and "-c" not in failing.calls[0].argv

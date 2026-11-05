@@ -107,24 +107,6 @@ variable "validate_permissions" {
   ]
 }
 
-variable "promote_permissions" {
-  description = "Custom-role permissions for prod image copy and verified family commit."
-  type        = list(string)
-  default = [
-    "compute.globalOperations.get",
-    "compute.images.create",
-    "compute.images.deprecate",
-    "compute.images.get",
-    "compute.images.getFromFamily",
-    "compute.images.list",
-    "compute.images.setLabels",
-    "compute.images.update",
-    "compute.images.useReadOnly",
-    "resourcemanager.projects.get",
-    "serviceusage.services.use",
-  ]
-}
-
 variable "deploy_roles" {
   description = "Platform-core roles granted only to the deploy identity."
   type        = list(string)
@@ -142,7 +124,6 @@ variable "deploy_roles" {
     "roles/redis.admin",
     "roles/pubsub.admin",
     "roles/secretmanager.admin",
-    "roles/cloudkms.admin",
     "roles/artifactregistry.admin",
     "roles/identityplatform.admin",
     "roles/monitoring.editor",
@@ -176,7 +157,6 @@ variable "destroy_roles" {
     "roles/redis.admin",
     "roles/pubsub.admin",
     "roles/secretmanager.admin",
-    "roles/cloudkms.admin",
     "roles/artifactregistry.admin",
     "roles/identityplatform.admin",
     "roles/monitoring.editor",
@@ -197,6 +177,42 @@ variable "deploy_identity_platform_permissions" {
   default = [
     "firebase.projects.get",
     "firebase.projects.update",
+  ]
+}
+
+variable "deploy_kms_permissions" {
+  description = "Cloud KMS permissions of the deploy identity: create and grant keys, never destroy, disable, or delete them (#2564)."
+  type        = list(string)
+  default = [
+    "cloudkms.cryptoKeyVersions.get",
+    "cloudkms.cryptoKeyVersions.list",
+    "cloudkms.cryptoKeys.create",
+    "cloudkms.cryptoKeys.get",
+    "cloudkms.cryptoKeys.getIamPolicy",
+    "cloudkms.cryptoKeys.list",
+    "cloudkms.cryptoKeys.setIamPolicy",
+    "cloudkms.cryptoKeys.update",
+    "cloudkms.keyRings.create",
+    "cloudkms.keyRings.get",
+    "cloudkms.keyRings.getIamPolicy",
+    "cloudkms.keyRings.list",
+    "cloudkms.locations.get",
+    "cloudkms.locations.list",
+  ]
+}
+
+variable "destroy_kms_permissions" {
+  description = "Cloud KMS permissions of the destroy identity: read keys and remove key grants, never destroy, disable, or delete them (#2564)."
+  type        = list(string)
+  default = [
+    "cloudkms.cryptoKeys.get",
+    "cloudkms.cryptoKeys.getIamPolicy",
+    "cloudkms.cryptoKeys.list",
+    "cloudkms.cryptoKeys.setIamPolicy",
+    "cloudkms.keyRings.get",
+    "cloudkms.keyRings.list",
+    "cloudkms.locations.get",
+    "cloudkms.locations.list",
   ]
 }
 
@@ -276,20 +292,6 @@ variable "destroy_vpn_pool_permissions" {
   ]
 }
 
-variable "promotion_reader_service_account_email" {
-  description = "Prod promote SA email granted read-only access to source images by the source-project root."
-  type        = string
-  default     = ""
-
-  validation {
-    condition = var.promotion_reader_service_account_email == "" || can(regex(
-      "^[a-z][a-z0-9-]{4,28}[a-z0-9]@[a-z][a-z0-9-]{4,28}[a-z0-9]\\.iam\\.gserviceaccount\\.com$",
-      var.promotion_reader_service_account_email,
-    ))
-    error_message = "promotion_reader_service_account_email must be empty or a service-account email."
-  }
-}
-
 variable "terraform_state_bucket_name" {
   description = "Explicit deployment-owned GCS backend bucket receiving scoped deploy/destroy access."
   type        = string
@@ -363,6 +365,12 @@ variable "enable_gcs_usage_log_delivery" {
     (iam.allowedPolicyMemberDomains) forbids the google.com group and fails the
     binding with Error 412. Cloud Audit Logs record config bucket access either way.
   EOT
+  type        = bool
+  default     = false
+}
+
+variable "image_builder_enabled" {
+  description = "Create the image-builder identity for a foundation image-build network. A federated build purpose also creates it (#2679)."
   type        = bool
   default     = false
 }

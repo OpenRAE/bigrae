@@ -8,11 +8,11 @@ Platform architecture, infrastructure, and development documentation.
 - [BigRAE rename cutover and rollback](../how-to/bigrae-rename-cutover.md)
 
 - [Current-state architecture handbook](architecture.md) - System, authority, lifecycle and package ownership
-- [GCP installation and first exercise](handbook/gcp-first-run.md) - Bootstrap and a synthetic smoke range
-- [GitHub-less GCP deployment](handbook/gcp-github-less-deployment.md) - Release, foundation, inputs, deploy, update, and teardown without GitHub
+- [Install BigRAE on GCP](handbook/gcp-first-run.md) - Install a deployment from a published release
+- [GitHub-less GCP deployment](handbook/gcp-github-less-deployment.md) - Release, foundation, inputs, deploy, update, teardown, and bucket encryption keys without GitHub
 - [Scenario contract transition](handbook/scenario-contract-transition.md) - CyberScript, ACES and current RAES
-- [Per-range model-access design](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/index.md) - Proposed architecture, security, operations, ADRs, and implementation backlog for #681
-- [Model-access contracts](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/architecture.md) - Proposed ownership, allocation, accounting, protocol, and lifecycle contracts
+- [Per-range model-access design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/index.md) - Proposed architecture, security, operations, ADRs, and implementation backlog for #681
+- [Model-access contracts](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/architecture.md) - Proposed ownership, allocation, accounting, protocol, and lifecycle contracts
 
 ## Platform Domains
 
@@ -39,7 +39,9 @@ Platform architecture, infrastructure, and development documentation.
 
 - [Development Overview](dev/) - Getting started with development
 - [Local Setup](dev/local-setup) - Local environment
-- [Full Setup](dev/setup) - Complete environment setup
+- [Developer environment setup](dev/setup) - Deploy a development environment from a fork with GitHub Actions
+- [AWS native identity](../ops/aws-native-identity.md) - Identity and policy operations for AWS development deployments
+- [Portal on EKS operations](../ops/portal-eks-operations.md) - Operate the portal in AWS development deployments
 - [Terraform](dev/terraform) - Infrastructure patterns
 - [CI/CD](dev/ci-cd) - Pipeline configuration
 - [Secrets](dev/secrets) - Secrets management

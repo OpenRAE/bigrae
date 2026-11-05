@@ -13,11 +13,6 @@ output "packer_validate_service_account_email" {
   value       = module.cicd_oidc_identity.packer_validate_service_account_email
 }
 
-output "packer_promote_service_account_email" {
-  description = "Packer promote service account email; set as GCP_PACKER_PROMOTE_SERVICE_ACCOUNT."
-  value       = module.cicd_oidc_identity.packer_promote_service_account_email
-}
-
 output "deploy_service_account_email" {
   description = "Platform deploy service account email; set as GCP_DEPLOY_SERVICE_ACCOUNT."
   value       = module.cicd_oidc_identity.deploy_service_account_email
@@ -38,12 +33,16 @@ output "destroy_service_account_email" {
   value       = module.cicd_oidc_identity.destroy_service_account_email
 }
 
-output "release_service_account_email" {
-  description = "Release publisher service account email; set as GCP_RELEASE_SERVICE_ACCOUNT in the gcp-release Environment."
-  value       = module.cicd_oidc_identity.release_service_account_email
-}
 
 output "deployment_config_bucket_name" {
   description = "Deployment config bucket for the GitHub-less input bundle (gcp-deploy --store gs://<name>)."
   value       = module.cicd_oidc_identity.deployment_config_bucket_name
+}
+
+output "storage_cmek_buckets" {
+  description = "Customer-managed key of each foundation bucket; gcp-foundation rewrites the live objects that do not use it (#2564)."
+  value = merge(
+    module.cicd_oidc_identity.storage_cmek_buckets,
+    var.enable_image_export_storage ? module.image_export_storage[0].storage_cmek_buckets : {},
+  )
 }

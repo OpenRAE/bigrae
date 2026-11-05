@@ -11,6 +11,7 @@ full rationale.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -96,7 +97,7 @@ def end_event(event_id: UUID) -> CTFEvent:
     return event
 
 
-def schedule_event(event: CTFEvent) -> bool:
+def schedule_event(event: CTFEvent, *, actor: object) -> bool:
     """Open registration for a draft event (transition to registration).
 
     Args:
@@ -119,7 +120,7 @@ def schedule_event(event: CTFEvent) -> bool:
 
     from ctf.services import event as _e
 
-    _e._schedule_event_tasks(event)
+    _e._schedule_event_tasks(event, actor)
 
     logger.info("Opened registration for CTF event %s", event.id)
     return True
@@ -158,7 +159,8 @@ def activate_event(event: CTFEvent) -> bool:
         try:
             assert_event_content_hydration_ready(locked_event)
             _transition_event(locked_event, EventStatus.ACTIVE)
-        except CTFStateError:
+        except CTFStateError as exc:
+            logger.warning("Cannot activate event %s: transition refused code=%s", locked_event.id, exc.code)
             return False
         event.status = locked_event.status
 
@@ -166,30 +168,60 @@ def activate_event(event: CTFEvent) -> bool:
     return True
 
 
-def complete_event(event: CTFEvent) -> bool:
-    """End an active event (transition to ended).
+def complete_event(
+    event: CTFEvent, *, actor: object | None = None, automatic: bool = False, task_id: UUID | None = None
+) -> bool:
+    """End an active event, or a paused event at its scheduled end (transition to ended).
 
-    Range teardown is enforced independently by each range's server-owned
-    lease at ``event.get_cleanup_time()``.
+    The transition runs under the event lock. An ``automatic`` end rechecks the
+    scheduled end time under that lock, also ends a paused event (CTF-701), and
+    declares the ``event_ended`` organizer alert in the same transaction. Range
+    teardown is enforced independently by each range's server-owned lease at
+    ``event.get_cleanup_time()``.
 
     Args:
         event: The CTFEvent to end.
+        actor: The interactive actor, or None for a scheduler end.
+        automatic: True when the scheduler ends the event at its end time.
+        task_id: The claimed scheduler task that retains a refused alert declaration.
 
     Returns:
         True if transition succeeded, False otherwise.
     """
+    from django.utils import timezone
+
+    from ctf.models import CTFEvent
+
     logger.info("Ending CTF event %s", event.id)
 
-    try:
-        _transition_event(event, EventStatus.ENDED)
-    except CTFStateError:
-        logger.warning(
-            "Cannot end event %s: not in active state (current: %s)",
-            event.id,
-            event.status,
-        )
-        return False
+    with transaction.atomic():
+        locked = CTFEvent.objects.select_for_update().get(pk=event.pk)
+        if automatic and timezone.now() < locked.event_end:
+            logger.info("Skipping automatic end of event %s before its end time", locked.pk)
+            return False
+        try:
+            # CTF-701: only the scheduled end may also end a paused event.
+            _transition_event(locked, EventStatus.ENDED, scheduled_end=automatic)
+        except CTFStateError:
+            logger.warning(
+                "Cannot end event %s: not in active or paused state (current: %s)",
+                locked.id,
+                locked.status,
+            )
+            return False
+        if automatic:
+            from ctf.services.notification import declare_or_retain_lifecycle_alert
 
+            declare_or_retain_lifecycle_alert(locked, "event_ended", occurrence=locked.event_end, task_id=task_id)
+        event.status = locked.status
+
+    finish_ended_event(locked, actor=actor)
+    logger.info("Ended CTF event %s", event.id)
+    return True
+
+
+def finish_ended_event(event: CTFEvent, *, actor: object | None = None) -> None:
+    """Apply the idempotent end effects: final scores, due lease cleanup and the results notice."""
     # Finalize the materialized leaderboard (issue #850) from authoritative
     # rows when the event ends, so the stored per-event scores are exact and
     # self-heal any incremental-maintenance drift before the board goes static.
@@ -203,12 +235,20 @@ def complete_event(event: CTFEvent) -> bool:
     from ctf.services.event.scheduling import has_pending_cleanup_task
 
     if event.auto_cleanup and not has_pending_cleanup_task(event.pk):
-        from ctf.services.range import cleanup_event_ranges
+        if actor is None:
+            # A scheduler-triggered end has no interactive credential. Teardown
+            # is therefore limited to the server-owned leases that are already
+            # due; it must not manufacture organizer authority.
+            from cms.services import expire_due_ranges
 
-        result = cleanup_event_ranges(event.pk)
+            result = expire_due_ranges()
+        else:
+            from ctf.services.range import cleanup_event_ranges
+
+            result = cleanup_event_ranges(event.pk, actor=actor)
         logger.info("Auto-cleanup on event end %s: %s", event.id, result)
 
-    # CTF-801: final-results email to participants; best-effort so a mail
+    # CTF-801: final-results notice to participants; best-effort so a mail
     # outage never blocks the end transition.
     try:
         from ctf.services.notification import send_event_results
@@ -217,11 +257,8 @@ def complete_event(event: CTFEvent) -> bool:
     except Exception:
         logger.exception("Failed to send results for event %s", event.id)
 
-    logger.info("Ended CTF event %s", event.id)
-    return True
 
-
-def cancel_event(event: CTFEvent) -> bool:
+def cancel_event(event: CTFEvent, *, actor: object) -> bool:
     """Cancel a CTF event.
 
     Cancellation is valid from draft, registration, active, or paused states.
@@ -249,6 +286,12 @@ def cancel_event(event: CTFEvent) -> bool:
             from ctf.services.communication import on_event_cancelled
 
             on_event_cancelled(locked_event)
+            # CTF-706: the participant cancellation notice commits with the
+            # cancellation. It follows the task cancellation and the fence above,
+            # so neither removes it; a refused declaration never blocks teardown.
+            from ctf.services.notification import declare_cancellation_notice
+
+            declare_cancellation_notice(locked_event)
             event.status = locked_event.status
     except CTFStateError:
         logger.warning(
@@ -258,25 +301,10 @@ def cancel_event(event: CTFEvent) -> bool:
         )
         return False
 
-    # CTF-706: registered participants learn the event is off before their
-    # ranges disappear; best-effort so a mail outage never blocks teardown.
-    try:
-        from ctf.services.notification import send_announcement
-
-        send_announcement(
-            event.pk,
-            f"{event.name} has been cancelled",
-            f"{event.name} has been cancelled by the organizer. "
-            "All event ranges are being shut down and no further submissions are possible.",
-            created_by=event.created_by,
-        )
-    except Exception:
-        logger.exception("Failed to send cancellation notice for event %s", event.id)
-
     # Always destroy ranges on cancel — orphaned VMs waste money
     from ctf.services.range import cleanup_event_ranges
 
-    result = cleanup_event_ranges(event.pk)
+    result = cleanup_event_ranges(event.pk, actor=actor)
     logger.info("Range cleanup on event cancel %s: %s", event.id, result)
 
     logger.info("Cancelled CTF event %s", event.id)
@@ -342,7 +370,8 @@ def resume_event(event: CTFEvent) -> bool:
         try:
             assert_event_content_hydration_ready(locked_event)
             _transition_event(locked_event, EventStatus.ACTIVE)
-        except CTFStateError:
+        except CTFStateError as exc:
+            logger.warning("Cannot resume event %s: transition refused code=%s", locked_event.id, exc.code)
             return False
         event.status = locked_event.status
 
@@ -375,12 +404,14 @@ def archive_event(event: CTFEvent) -> bool:
     return True
 
 
-def _transition_event(event: CTFEvent, target: EventStatus) -> None:
+def _transition_event(event: CTFEvent, target: EventStatus, *, scheduled_end: bool = False) -> None:
     """Perform a validated state transition.
 
     Args:
         event: The event to transition.
         target: The target status.
+        scheduled_end: True only for the scheduler's end at or after the end
+            time, checked by the caller under the event lock (CTF-701).
 
     Raises:
         CTFStateError: If the transition is invalid.
@@ -393,7 +424,7 @@ def _transition_event(event: CTFEvent, target: EventStatus) -> None:
             details={"event_id": str(event.id), "status": event.status},
         ) from None
 
-    if not validate_transition(current, target):
+    if not validate_transition(current, target, scheduled_end=scheduled_end):
         raise CTFStateError(
             f"Cannot transition from {current.value} to {target.value}",
             details={
@@ -413,7 +444,7 @@ def _transition_event(event: CTFEvent, target: EventStatus) -> None:
 # system actor; the organizer endpoint routes through
 # ``apply_event_lifecycle_transition`` so the event policy is asserted at the
 # service boundary too (#1922 review).
-_INTERACTIVE_LIFECYCLE_ACTIONS = {
+_INTERACTIVE_LIFECYCLE_ACTIONS: dict[str, Callable[..., bool]] = {
     "open_registration": open_registration,
     "activate": activate_event,
     "pause": pause_event,
@@ -423,7 +454,7 @@ _INTERACTIVE_LIFECYCLE_ACTIONS = {
 }
 
 
-def apply_event_lifecycle_transition(event: CTFEvent, action: str, *, actor_id: int | None = None) -> bool:
+def apply_event_lifecycle_transition(event: CTFEvent, action: str, *, actor_id: object | None = None) -> bool:
     """Apply one interactive lifecycle transition, asserting the ``lifecycle`` capability.
 
     Args:
@@ -449,4 +480,8 @@ def apply_event_lifecycle_transition(event: CTFEvent, action: str, *, actor_id: 
     transition = _INTERACTIVE_LIFECYCLE_ACTIONS.get(action)
     if transition is None:
         raise CTFValidationError("Unknown lifecycle action", details={"action": action})
+    if action in {"open_registration", "end", "cancel"}:
+        if actor_id is None:
+            raise CTFValidationError("Lifecycle authority unavailable")
+        return transition(event, actor=actor_id)
     return transition(event)
