@@ -19,9 +19,16 @@ their own records. A shared request builder checks the following invariants.
 
 The shared builder uses the existing registered CTF participation callback.
 Engine imports no CTF or CMS implementation. Both owning services apply the
-same request rule before secrets or transport. Guacamole's HTTP admission
+same request rule before secrets or transport. CMS selects the event-management
+override or the shared range request in one typed helper. Missing request or owner
+facts cause an explicit denial; authorization does not depend on assertions. Guacamole's HTTP admission
 accepts event participation for range access. Device access keeps its existing
 action ceiling.
+
+The reviewed HTTP surface inventory records both range access and event
+participation for these remote endpoints. Range connection requests select
+authority from the actual credential kind and event parent. Bootstrap status
+and open requests keep their persisted protocol and target selector.
 
 The retained remote binding still names the exact native range, guest, owner,
 request, generation and ancestry. Delayed work and open sessions reauthorize
