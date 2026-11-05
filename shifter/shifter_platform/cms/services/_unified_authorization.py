@@ -140,7 +140,24 @@ def require_range_action(
                 raise ValueError(_UNAVAILABLE)
             target = authority_target
             request_parent = None
-        request = AuthorizationRequest(current.principal, action, target, scope, current.ceiling, parent=request_parent)
+        if authority_target is None:
+            from shared.range_access_authority import range_action_request
+
+            assert instance.request is not None
+            assert isinstance(instance.owner_principal_uuid, UUID)
+            request = range_action_request(
+                current,
+                action,
+                range_uuid=instance.uuid,
+                request_uuid=instance.request.request_id,
+                owner_uuid=instance.owner_principal_uuid,
+                scope=scope,
+                parent=parent,
+            )
+        else:
+            request = AuthorizationRequest(
+                current.principal, action, target, scope, current.ceiling, parent=request_parent
+            )
         require_authorization(request)
         return instance
     except AuthorizationProviderBindingError:
