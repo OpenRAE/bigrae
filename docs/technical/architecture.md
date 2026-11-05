@@ -379,6 +379,11 @@ tenancy verification through its own service facade.
 
 ## API and extension contracts
 
+Temporary participants access only their own assigned range through the
+existing event participation permission. Their credentials stay bound to that
+event. Both range owners check live participation, assignment and native custody
+before remote access. See the [participant access design](../architecture/temporary-participant-range-access-2785.md).
+
 The versioned application API is `/api/v1/`, composed by `config/api_urls.py`.
 Authenticated `/api/v1/schema/` and `/api/v1/docs/` expose OpenAPI and Swagger;
 the [published contract](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/openapi/v1.json)
