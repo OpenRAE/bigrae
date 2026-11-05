@@ -32,6 +32,31 @@ def _workspace_scope() -> ResourceScope:
     )
 
 
+@pytest.mark.parametrize("change", ["service", "action", "unbounded", "broad", "non_boolean"])
+def test_temporary_participation_cannot_expand_credential_authority(change):
+    target = TargetRef("event", WORKSPACE_ID)
+    values = {
+        "principal": PrincipalRef(PRINCIPAL_ID, "human"),
+        "action": "event.participate",
+        "target": target,
+        "scope": _workspace_scope(),
+        "credential": CredentialCeiling(frozenset({"event.read", "event.participate"}), target),
+        "temporary_participation": True,
+    }
+    if change == "service":
+        values["principal"] = PrincipalRef(PRINCIPAL_ID, "service")
+    elif change == "action":
+        values["action"] = "event.read"
+    elif change == "unbounded":
+        values["credential"] = CredentialCeiling(frozenset({"event.participate"}))
+    elif change == "broad":
+        values["credential"] = CredentialCeiling(frozenset({"event.participate", "event.manage"}), target)
+    else:
+        values["temporary_participation"] = 1
+    with pytest.raises(AuthorizationContractError, match="participation"):
+        AuthorizationRequest(**values)
+
+
 def test_application_administrator_is_exactly_every_administrative_action() -> None:
     registered = frozenset(action.code for action in ACTION_CATALOG if action.administrative)
 

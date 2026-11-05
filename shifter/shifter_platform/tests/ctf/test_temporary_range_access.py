@@ -14,6 +14,7 @@ from ctf.models import CTFEvent, CTFParticipant
 from engine.models import Range
 from tests.cms.conftest import make_pack as make_pack
 from tests.ctf.test_range_launch_crash_recovery import launch_event as launch_event
+from tests.integration.authorization.test_openfga_released_server import provider as provider
 
 pytestmark = [pytest.mark.postgres, pytest.mark.django_db(transaction=True)]
 
@@ -96,6 +97,63 @@ def test_normal_participant_opens_only_its_assigned_range(participant_remote):
     assert authority["authority_target_uuid"] == case.leaf.uuid
     assert authority["authority_owner_uuid"] == case.credential.principal.uuid
     assert case.reads == ["synthetic-participant-key"]
+
+
+@pytest.mark.openfga
+@pytest.mark.parametrize("denial", ["deny_event_participate", "excluded"])
+def test_temporary_participation_with_released_policy_server(participant_remote, provider, monkeypatch, denial):
+    from dataclasses import replace
+
+    from openfga_sdk.client.models import ClientTuple, ClientWriteRequest
+
+    from cms.services import connect_range_terminal
+    from engine.services import project_range_authority
+    from shared.authorization import port
+    from shared.range_access_authority import range_action_request
+
+    case = participant_remote
+    projection = project_range_authority(case.participant.range_request_id)
+    scope = projection.scope
+    # These are synthetic policy ancestry facts, not participation grants.
+    parents = [(f"account:{scope.account_uuid}", "installation", "installation:root")]
+    parent_type, parent_uuid = "account", scope.account_uuid
+    for kind, identity in (("organization", scope.organization_uuid), ("workspace", scope.workspace_uuid)):
+        if identity is not None:
+            parents.append((f"{kind}:{identity}", parent_type, f"{parent_type}:{parent_uuid}"))
+            parent_type, parent_uuid = kind, identity
+    event = f"event:{case.event.pk}"
+    parents.append((event, parent_type, f"{parent_type}:{parent_uuid}"))
+    provider._client.write(
+        ClientWriteRequest(writes=[ClientTuple(user, relation, obj) for obj, relation, user in parents]),
+        {"authorization_model_id": provider._settings.model_id},
+    )
+    monkeypatch.setattr(port, "_provider_factory", lambda: provider)
+    request = range_action_request(
+        case.credential,
+        "range.access",
+        range_uuid=projection.public_uuid,
+        request_uuid=projection.request_uuid,
+        owner_uuid=projection.owner_principal_uuid,
+        scope=scope,
+        parent=projection.parent,
+    )
+    assert not provider.check(replace(request, temporary_participation=False)).allowed
+    assert provider.check(request).allowed
+    assert provider.batch_check((request,))[0].allowed
+    transport = object()
+    assert (
+        connect_range_terminal(case.credential, case.guest, connection_factory=lambda **_facts: transport) is transport
+    )
+    case.reads.clear()
+    provider._client.write(
+        ClientWriteRequest(writes=[ClientTuple(f"principal:{case.credential.principal.uuid}", denial, event)]),
+        {"authorization_model_id": provider._settings.model_id},
+    )
+    assert not provider.check(request).allowed
+    assert not provider.batch_check((request,))[0].allowed
+    with pytest.raises((PermissionError, ValueError)):
+        connect_range_terminal(case.credential, case.guest, connection_factory=lambda **_facts: object())
+    assert not case.reads
 
 
 def test_normal_participant_can_queue_browser_ssh(participant_remote, settings, monkeypatch):
