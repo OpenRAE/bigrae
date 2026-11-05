@@ -409,6 +409,11 @@ image recipes, answers and acceptance evidence stay in their owner's repository.
 A compatibility probe, buildable SDK, or accepted manifest proves neither a
 published package release nor a qualified live range.
 
+Runtime adapter workers complete every response byte and flush stdout before
+they report success. This includes short writes with unbuffered Python output
+(#2781). Preparation output stays encrypted, with the same response format and
+size limits.
+
 Named adapter input files use CMS's existing content scope, signed upload,
 immutable object installation, quota and cleanup. Administrators manage them in
 Mission Control → Assets → Files and bind declared input names to logical file
