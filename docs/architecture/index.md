@@ -41,6 +41,7 @@ These retain their stated design authority and are not historical preflights:
 - [Disposable trial worker boundary](disposable-trial-workers-boundary-2741.md)
 - [Pack experiment admission boundary](experiment-admission-boundary-2742.md)
 - [Trial archive custody design](trial-archive-custody.md)
+- [Retained experiment result exports](experiment-result-exports.md)
 - [External runtime boundary](external-scenario-runtime-design.md)
 - [Named file assets and adapter inputs](named-file-assets-2719.md)
 - [Adapter values before provisioning](adapter-pre-provisioning-2718.md)

@@ -35,6 +35,7 @@ class TrialArchiveTransfer(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
     organization_uuid = models.UUIDField(db_index=True)
     expected = models.JSONField()
+    plan_metadata = models.JSONField(null=True, editable=False)
     identity_digest = models.CharField(max_length=64, db_index=True)
     bucket = models.CharField(max_length=222)
     object_key = models.CharField(max_length=512, unique=True)

@@ -37,9 +37,10 @@ class WorkerHoldView:
 
 
 def _lock_worker(worker_id: UUID) -> DisposableWorker:
-    """Lock native runtime before its retained worker custody row."""
-    from engine.models import DisposableWorker, Range
+    """Take the admission mutex before native range and retained custody locks."""
+    from engine.models import DisposableWorker, Range, WorkerPolicyRecord
 
+    WorkerPolicyRecord.objects.select_for_update().get(pk=1)
     native_id = DisposableWorker.objects.values_list("range_id", flat=True).get(pk=worker_id)
     runtime = Range.objects.select_for_update(of=("self",)).select_related("request").get(pk=native_id)
     worker = DisposableWorker.objects.select_for_update().get(pk=worker_id, range=runtime)

@@ -91,3 +91,42 @@ Its license remains beside the fixture.
 Tests use published manifests and no private pack content.
 
 See the [architecture](../../architecture/experiment-admission-design-2742.md) and [operator instructions](../../how-to/admit-pack-experiments.md).
+
+## Result organization
+
+The authenticated `experiment_batch export` operation reads retained admission
+inputs and the complete operational entry inventory through CMS services.
+It does not claim, start, retry or replace an entry. Assignment metadata is
+reported separately from observed start times and scientific outcomes.
+See [the result export design](../../architecture/experiment-result-exports.md)
+for the manifest, CSV/JSON indexes and explicit size limits.
+
+Result indexes retain condition, block, replicate, plan-entry, run-version and
+execution-attempt identities. Selected configurations remain admission facts;
+execution accounting alone does not prove an observed configuration. Run
+realization records and referenced original usage disclosures supply observations
+where present. Replacement origins retain their root and parent identities.
+
+Distinct original archive observations remain separate index rows. Counts use
+unique execution-attempt identities, so overlapping histories do not add trials.
+Usage retains its recorded attempt scope; an unassigned usage disclosure stays
+unknown instead of being allocated to an attempt. Current content-read and
+content-management authority are checked before publication and each storage effect.
+
+The observed configuration includes recorded realized bindings and selections.
+The manifest lists missing attempt archives as well as missing expected entries.
+An earlier collected archive cannot satisfy a distinct later claim. Listing a
+missing archive does not assert that its claim started or produced an outcome.
+
+Export collection completeness includes unresolved archive versions and transfers,
+even when an earlier version of the same attempt was collected. A matching
+verified later delivery resolves an interrupted transfer without adding an attempt.
+
+Interrupted transfers and identical-byte successful retries remain separate custody
+observations. When the archive becomes unavailable, reconciliation preserves
+receipt summaries and every source reference; different custody states alone
+do not create a scientific conflict.
+
+The private `_experiment_export_records` module owns deterministic projections
+and formatting. `_experiment_exports` composes inventory reads, while
+`_trial_archive_exports` publishes through existing custody primitives.

@@ -21,11 +21,15 @@ The service supports the deployment-selected GCE backend.
 Other backends fail before reservation or dispatch.
 Policy changes affect new workers only.
 An unchanged replay recovers retained custody and the original apparatus.
+Creation retains its original trial argument independently of a later trial binding.
+An identical creation retry returns the current assignment; a changed original argument conflicts.
 Database guards prevent bulk custody rewrites, trial reset, and deletion of the single-use worker record.
 Workers retain the admitted profile for their complete lifetime.
 
 The host plan has one Linux VM and one private network.
 The existing RAES validator checks its realization contract.
+Compile the outer plan with the RAES version pinned by the target release.
+A serialized plan from another version is refused before worker creation.
 The existing image profile validator checks its exact image and resource settings.
 The immutable input carries the numeric image ID through the native image resolver.
 Existing provider checks verify it before credential installation and against the actual boot disk.
@@ -33,12 +37,19 @@ The first worker path uses the existing E2 custom shape derived from the host pl
 The image profile cannot override that machine type.
 This keeps physical CPU allocation consistent with capacity demand.
 The host image supplies the pinned Docker version through standard guest bootstrap.
+Capture the image after cloud-init resets machine identity and Docker stops and clears its daemon identity.
+The existing [Packer procedure](https://github.com/OpenRAE/bigrae/blob/dev/shifter/packer/gcp/README.md) performs this preparation.
+Retire workers from a cloned image and qualify fresh workers from a sealed image.
+A documented local Packer build can supply a private candidate for approved testing.
+Release publication continues to require the existing validation and signing pipeline.
 The service does not use the participant-container bootstrap contract.
 Optional installed software uses an explicit apparatus binding to an installed adapter.
 The adapter SDK distinguishes apparatus identity from pack identity.
 The networkless planning Job and the provisioner action executor remain the executable boundary.
 
 A singleton policy row serializes global count admission.
+Worker service custody operations acquire that policy mutex before native range and worker locks.
+This serializes terminal capacity settlement against admission's reservation and subnet allocation.
 Provisioning, failed, held, retiring, and recovery workers count until verified provider absence.
 Only accepted native readiness frees a provisioning slot before retirement.
 Admission draws from an existing enforcing capacity reservation for the pinned resource demand.
@@ -55,7 +66,7 @@ The existing native launch outbox commits operation input, launch intent, and di
 A range lock fences retirement against this deferred dispatch.
 Deferred dispatch takes ancestry, the worker policy mutex, and then the range lock, matching admission order.
 This prevents lock inversion with another creation's exclusive native subnet allocator.
-Provider calls remain outside SQL transactions.
+Relationship publication and primary readback remain outside SQL transactions.
 
 ## Identity, access, and retirement
 
@@ -86,6 +97,8 @@ Engine stores bounded qualification facts and never reads a host-management key.
 Qualification expires after 15 minutes or at worker retirement, deadline, or a generation change.
 The forward migration requires all existing workers to be retired before it clears old duplicate management references.
 Historical operation results remain immutable.
+The creation-intent migration uses the strict native binding audit to recover original trial arguments.
+PostgreSQL captures inserts from an older application process during rollout and freezes the original value.
 It exposes no SSH material, provider output, or guest output.
 
 Holds begin on ready workers.
@@ -165,9 +178,11 @@ Reference evidence:
 | [Compute custom images](https://docs.cloud.google.com/compute/docs/instances/create-vm-from-custom-image) | Compute Engine, image creation | Exact host image and independent VMs |
 | [Compute custom machine types](https://docs.cloud.google.com/compute/docs/instances/creating-instance-with-custom-machine-type) | Compute Engine, E2 limits | Resource bounds and exact capacity demand |
 | [Docker system info](https://docs.docker.com/reference/cli/docker/system/info/) | Engine CLI, format | Local daemon identity and runtime version |
+| [Cloud-init image cleanup](https://docs.cloud-init.io/en/latest/reference/cli.html#clean) | clean, machine-id | A fresh machine identity after image capture |
+| [Moby daemon identity](https://github.com/moby/moby/blob/master/daemon/id.go) | LoadOrCreateID | A new daemon identity after cloning |
 | [ASD-STE100](https://asd-ste100.org/) | Issue 9, sections 1, 5, and 6 | Vocabulary, sentence length, and document purpose |
 
-The RAES 10.6.0 public contracts and installed source define host plan validation.
+The release's pinned RAES public contracts and installed source define host plan validation.
 The adapter SDK defines bounded input, planning, and guest actions.
 `bigrae.runtime-plugin/v2` requires apparatus identity and forbids pack identity.
 The existing version 1 contracts continue to require pack identity.

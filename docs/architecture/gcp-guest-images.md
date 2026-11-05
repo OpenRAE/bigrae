@@ -127,14 +127,14 @@ The release manifest names one exact identity for each role:
 
 ```json
 "base_images": {
-  "dc": "ghcr.io/<owner>/<repository>/gce-dc@sha256:<digest>",
   "kali": "ghcr.io/<owner>/<repository>/gce-kali@sha256:<digest>",
   "ubuntu": "ghcr.io/<owner>/<repository>/gce-ubuntu@sha256:<digest>"
 }
 ```
 
-The map names all three roles or none. A guest build revision can be older than
-the application revision. A release without `base_images` deploys an existing
+The map requires `kali` and `ubuntu`; it may also name `dc` when that role is
+published. A guest build revision can be older than the application revision.
+A release without `base_images` deploys an existing
 tenant, and `gcp-images` refuses it with a clear error.
 
 ### Import
@@ -157,6 +157,12 @@ canonical reference, role, and digest, with status `READY` and the required
 guest features, is reused with no download. An all-reused set creates no
 transfer bucket. The command writes `range-images.json` only after every role is
 ready, then releases the lock.
+
+The conversion to `range-images.json` uses the same required-role set as release
+validation. Required Kali and Ubuntu imports are sufficient. A DC import is
+retained when present; its absence does not invalidate a required-only release.
+Unknown roles and incomplete required sets fail before the configuration is
+written. This rule applies to both fresh imports and reused images.
 
 The transfer bucket is private and run-owned, in the range project and region.
 The command deletes its objects and the bucket on success and on failure. Raw

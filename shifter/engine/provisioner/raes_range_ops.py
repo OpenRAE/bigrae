@@ -57,7 +57,6 @@ if TYPE_CHECKING:
     from runtime_plugin_execution import GuestPluginPlans
 
 logger = logging.getLogger(__name__)
-_GceNetworkAllocation = GceNetworkAllocation
 
 #: The single closed failure code an RAES realization/teardown failure reports.
 #: The bounded diagnostic rides the result payload; only this code reaches the

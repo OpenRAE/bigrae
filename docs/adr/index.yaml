@@ -4473,7 +4473,9 @@
       "shifter/shifter_platform/management/management/commands/check_model_fks.py",
       "docs/features/content-range-authority.md",
       "shifter/shifter_platform/tests/cms/services/test_principal_range_launch.py",
-      "shifter/shifter_platform/engine/field_encryption.py"
+      "shifter/shifter_platform/engine/field_encryption.py",
+      "shifter/shifter_platform/engine/migrations/0124_worker_creation_intent.py",
+      "shifter/shifter_platform/tests/engine/services/test_worker_creation_intent.py"
     ]
   },
   {

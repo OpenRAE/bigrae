@@ -1,21 +1,7 @@
-"""CMS service interface.
+"""Public CMS services and legacy patch bindings.
 
-Content and asset management for Shifter platform. The implementation is
-split across private submodules (``_common``, ``_agents``, ``_credentials``,
-``_range_queries``, ``_raes_range_create``, ``_range_destroy``, ``_range_pause``,
-``_range_resume``, ``_uploads``, ``_scenarios``, ``_ngfws``, ``_queries``)
-and re-exported here so callers continue to use
-``from cms.services import X``.
-
-The re-exports also rebind names that tests historically patch at
-``cms.services.<name>`` (``audit_log``, the ``engine_*`` aliases, ``RangeInstance``) so existing
-``unittest.mock.patch`` targets still work.
-
-The cross-layer re-export (``cms.signals.*``) is
-preserved on the facade so the layer-imports gate
-(``scripts/check_layer_imports/layer_imports.yaml``) continues to allow
-only ``cms.services`` from mission_control / ctf rather than reaching into
-``cms.signals`` directly.
+Private modules own implementations; this facade preserves existing caller and
+patch targets. Cross-layer imports remain confined to this service interface.
 """
 
 from __future__ import annotations
@@ -87,6 +73,7 @@ from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
 from ._experiment_batches import (
     admit_experiment_batch,
     claim_experiment_entry,
+    list_experiment_entries,
     load_experiment_batch,
     observe_experiment_attempt,
     record_experiment_cleanup,
@@ -94,6 +81,12 @@ from ._experiment_batches import (
     record_experiment_worker,
     recover_experiment_claim,
 )
+from ._experiment_export_records import (
+    ExperimentExportAssociationError,
+    ExperimentExportDataError,
+    ExperimentExportLimitError,
+)
+from ._experiment_exports import export_experiment_batch
 from ._file_assets import (
     cancel_file_upload,
     complete_file_upload,
@@ -258,6 +251,7 @@ from ._trial_archives import (
     configure_trial_archive_destination,
     intake_trial_archive,
     list_trial_archives,
+    publish_experiment_export,
     purge_trial_archives,
     retrieve_trial_archive,
 )
@@ -295,6 +289,9 @@ __all__ = (
     "EngineEventCapacitySignal",
     "EngineSharingError",
     "ExperimentClaim",
+    "ExperimentExportAssociationError",
+    "ExperimentExportDataError",
+    "ExperimentExportLimitError",
     "LeasePolicyAuditContext",
     "LeasePolicyOverride",
     "MissionControlLeasePolicyAdminError",
@@ -388,6 +385,7 @@ __all__ = (
     "engine_resume_range",
     "engine_validate_sharing_binding",
     "expire_due_ranges",
+    "export_experiment_batch",
     "extend_mission_control_range",
     "fence_pack_reference",
     "find_model_access_selected_ranges",
@@ -422,6 +420,7 @@ __all__ = (
     "is_event_range_cleanup_verified_absent",
     "list_agents",
     "list_credentials",
+    "list_experiment_entries",
     "list_file_assets",
     "list_launchable_scenarios",
     "list_mission_control_range_history",
@@ -447,6 +446,7 @@ __all__ = (
     "project_range_cleanup_outcome",
     "project_scenario_images",
     "project_scenario_model_demands",
+    "publish_experiment_export",
     "purge_trial_archives",
     "range_credential_scope",
     "range_egress_compatible_with_event",

@@ -1,57 +1,52 @@
-# Quickstart
+# Launch your first range
 
-Launch your first range.
+This page launches the `smoke-linux` scenario on a new deployment and then
+destroys it. To install BigRAE first, see
+[Install BigRAE on GCP](../technical/handbook/gcp-first-run.md).
 
-## Prerequisites
+## Before you start
 
-- XDR or XSIAM agent installer downloaded from your console
-- Windows (`.msi`), Linux shell (`.tar.gz`), Debian (`.deb`), or RPM (`.rpm`)
+- Sign in to the portal with an account that can launch ranges. The first
+  administrator can.
+- Have an agent installer file. The launch form requires an agent, but the
+  `smoke-linux` scenario does not install it.
 
-## Steps
+## 1. Upload an agent
 
-### 1. Upload Your Agent
+1. In the sidebar, select **Assets > Agents**.
+2. In **Upload agent**, enter an **Agent name**.
+3. Select the **Agent type**.
+4. Select the **Installer file**.
+5. Select **Upload agent**.
 
-1. Go to **Assets > Agents** in the sidebar
-2. Enter a name you'll recognize (for example "Acme Corp XSIAM")
-3. Select your installer file
-4. Click **Upload Agent**
+## 2. Launch the range
 
-### 2. Launch a Range
+1. In the sidebar, select **Ranges**.
+2. Select **Launch a range**.
+3. In **Scenario**, select the `smoke-linux` scenario.
+4. In **Agent**, select the agent that you uploaded.
+5. Select **Launch range**.
 
-1. Go to **Ranges** in the sidebar
-2. Select **Basic Range** scenario
-3. Select victim OS (Windows or Linux)
-4. Select your uploaded agent
-5. Click **Launch Range**
+The range status changes from **Pending** to **Provisioning** to **Ready**.
 
-### 3. Wait for Provisioning
+## 3. Connect to the range
 
-Provisioning time depends on the selected scenario and cloud backend. You'll see
-status updates:
+1. In the sidebar, select **Terminal**.
+2. Select the tab of a device. The `smoke-linux` range has two devices:
+   - `attacker`: Kali;
+   - `victim`: Ubuntu.
 
-- **Pending** - Queued for provisioning
-- **Provisioning** - Infrastructure spinning up
-- **Ready** - Range is live
+The terminal opens an SSH session on the device.
 
-### 4. Access Your Range
+## 4. Destroy the range
 
-Once ready:
+1. In the sidebar, select **Ranges**.
+2. Select **Destroy**.
+3. Confirm with **Destroy**.
 
-1. Go to **Terminal** in the sidebar
-2. Click on an instance tab to open SSH
-3. For Windows/Kali GUI: click the **RDP** button
+## Next steps
 
-## What You Get
-
-Basic Range includes:
-
-- **Attacker** - Kali Linux with standard attack tools
-- **Workstation** - Your selected OS with your agent installed
-
-Your agent reports to your XDR/XSIAM console. Run attacks from Kali, see alerts in your console.
-
-## Next Steps
-
-- [Basic Range Details](../scenarios/basic-range) - Full scenario documentation
-- [Terminal Guide](../features/terminal) - SSH and RDP access
-- [Other Scenarios](../scenarios/) - AD labs, NGFW integration
+- [Key concepts](concepts.md): the terms that the portal uses.
+- [Artifact preparation](../ops/artifact-preparation.md): register your own
+  scenario pack.
+- [CTF organizer guide](../features/ctf-organizer-guide.md): run a CTF event.

@@ -40,6 +40,18 @@ metadata. Pagination and response bytes are bounded. A denied, redirected or
 incomplete response fails capture; it never produces an empty inventory.
 Baseline secret payloads and private service-account keys are never accessed.
 
+Policy reads use each provider API's request contract (#2773):
+
+| Policy owner | HTTP method | Policy version 3 option |
+| --- | --- | --- |
+| Project | POST | JSON request body |
+| Service account | POST with no request body | Query parameters |
+| Secret | GET | Query parameters |
+
+The service-account request follows Google's
+[IAM policy API](https://docs.cloud.google.com/iam/docs/reference/rest/v1/projects.serviceAccounts/getIamPolicy).
+An unsupported request method fails capture; it cannot produce a partial baseline.
+
 The existing worker identity needs metadata read permissions on the dedicated
 project: `resourcemanager.projects.get`, `resourcemanager.projects.getIamPolicy`,
 `iam.serviceAccounts.list`, `iam.serviceAccounts.getIamPolicy`,
