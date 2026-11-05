@@ -83,6 +83,18 @@ def inspect_invocation(request: InspectionInput) -> InspectionResult:
     )
 
 
+def _write_output(output: str) -> None:
+    """Complete raw stdout writes, including when Python is unbuffered."""
+    remaining = memoryview((output + "\n").encode("utf-8"))
+    stream = sys.stdout.buffer
+    while remaining:
+        written = stream.write(remaining)
+        if written is None or written <= 0:
+            raise OSError("Plugin output stream is unavailable")
+        remaining = remaining[written:]
+    stream.flush()
+
+
 def main() -> int:
     """Read bounded injected input and emit only the versioned plan response."""
     raw = os.environ.pop("BIGRAE_PLUGIN_INPUT", None)
@@ -111,7 +123,11 @@ def main() -> int:
             return 2
     else:
         output = json.dumps(result.model_dump(mode="json"), separators=(",", ":"))
-    sys.stdout.write(output + "\n")
+    try:
+        _write_output(output)
+    except OSError:
+        sys.stderr.write("plugin output unavailable\n")
+        return 2
     return 1 if result.status == "failed" else 0
 
 
