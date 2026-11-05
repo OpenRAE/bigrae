@@ -490,6 +490,10 @@ PostgreSQL guards enforce exclusive unreleased project use and require current
 applied destroy/restoration evidence before release. The worker lowers admitted
 native cloud declarations to data-only Terraform using the pinned provider.
 State stays encrypted in the existing private bucket under the lease identity.
+The GCP IAM module gives only the provisioner prefix-limited baseline creation
+and state object access (#2775). Baseline creation cannot overwrite or delete;
+state access supports replacement and lock removal. Other assets retain their
+existing access rules.
 The Terraform validation inventory classifies this runtime root under the
 provisioner's Terraform version with the Google provider family, so CI validates
 its committed provider lock without credentials.
