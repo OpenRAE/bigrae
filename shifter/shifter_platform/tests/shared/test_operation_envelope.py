@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -132,3 +133,20 @@ def test_native_plan_inputs_have_a_bounded_larger_budget_without_growing_other_e
     payload["plan"]["description"] = "x" * MAX_RAES_INPUT_BYTES
     with pytest.raises(OperationEnvelopeError, match="exceeds"):
         validate_operation_envelope(_valid(resource="raes-range", payload=payload))
+
+
+@pytest.mark.parametrize("operation", ["provision", "destroy"])
+@pytest.mark.parametrize("offset", [-1, 0, 1])
+def test_native_input_budget_has_an_exact_byte_boundary(operation, offset):
+    candidate = _valid(
+        resource="raes-range",
+        operation=operation,
+        payload={"plan": {"kind": "raes_provisioning_plan", "description": ""}},
+    )
+    overhead = len(json.dumps(candidate, sort_keys=True, separators=(",", ":")).encode())
+    candidate["payload"]["plan"]["description"] = "x" * (8 * 1024**2 + offset - overhead)
+    if offset > 0:
+        with pytest.raises(OperationEnvelopeError, match="exceeds 8388608 bytes"):
+            validate_operation_envelope(candidate)
+    else:
+        assert validate_operation_envelope(candidate) == candidate
