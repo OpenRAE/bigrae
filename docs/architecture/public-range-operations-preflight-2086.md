@@ -149,6 +149,11 @@ all outstanding recovery obligations; later key reuse must be explicit.
 | Cleanup pending/unknown | Incomplete cleanup, unavailable provider/secret/DB evidence, interrupt exhaustion and missing terminal results retain obligations. Timeout, DLQ, FAILED or a missing Job is not proof of absence. |
 | Verified terminal cleanup | Successful owning lifecycle plus independent inventory/readback of owned resources, with scope and observation time. A later discovered residual remains actionable and corrects the cleanup projection without rewriting historical results. |
 
+Participant recovery must submit failed old ranges to the existing authorized
+event cleanup bridge (#2783). A failed status cannot skip teardown or release
+registered-project custody. Replacement admission and cleanup completion remain
+separate facts; the native cleanup owner releases custody only after verification.
+
 Publish bounded status/results, cancel support and reason codes through the
 existing service projections and explicit DRF serializers. Keep execution,
 resource status, cancel disposition and cleanup evidence as distinct facts;

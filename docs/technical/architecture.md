@@ -109,6 +109,10 @@ unavailable until their recorded model/content initialization commits; recovery
 revalidates the original credential and pinned content before completing it.
 Permanent event deletion commits native cleanup for each retained range before
 removing its aggregate records. Failed cleanup admission preserves those records.
+
+Participant recovery also submits failed old ranges to authorized native cleanup
+(#2783). A failed status does not prove that resources or project reservations
+are absent. Verified native cleanup controls reservation release.
 Owner-handoff recovery can read back its exact admitted revoke after the source
 loses administrative authority; it requires the original live credential and
 does not replay a provider write.
