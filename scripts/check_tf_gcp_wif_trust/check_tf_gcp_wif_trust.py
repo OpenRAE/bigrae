@@ -21,8 +21,8 @@ else:
 PURPOSES = ("build", "validate", "release_scan", "deploy", "destroy")
 # Purposes that operators may impersonate without GitHub (ADR-070).
 IMPERSONATION_PURPOSES = ("release_scan", "deploy", "destroy")
-# Purpose identities that must hold no project-wide IAM role.
-NO_PROJECT_ROLE_PURPOSES = ("release_scan",)
+# The scanner needs project quota consumption, but no project-wide data access.
+SCANNER_QUOTA_ROLE = "roles/serviceusage.serviceUsageConsumer"
 PROJECT_IAM_MEMBER_RE = re.compile(r'^\s*resource\s+"google_project_iam_member"\s+"([^\"]+)"\s*\{')
 VARIABLE_HEADER_RE = re.compile(r'^\s*variable\s+"([^\"]+)"\s*\{')
 DOUBLE_QUOTED_RE = re.compile(r'"([^\"]+)"')
@@ -243,13 +243,18 @@ def check_role_boundaries(path: Path, lines: list[str]) -> list[Violation]:
     violations: list[Violation] = []
     stripped_lines = _strip_hcl_comments("\n".join(lines)).splitlines()
     for line_no, block in _iter_resource_blocks(stripped_lines, PROJECT_IAM_MEMBER_RE):
-        for purpose in NO_PROJECT_ROLE_PURPOSES:
-            if re.search(rf"member\s*=.*local\.service_account_emails\.{purpose}\b", "\n".join(block)):
+        body = "\n".join(block)
+        if re.search(r"member\s*=.*local\.service_account_emails\.release_scan\b", body):
+            roles = re.findall(r'^\s*role\s*=\s*"([^\"]+)"\s*$', body, re.MULTILINE)
+            quota_only = roles == [SCANNER_QUOTA_ROLE] and re.search(
+                r"^\s*project\s*=\s*var\.project_id\s*$", body, re.MULTILINE
+            )
+            if not quota_only:
                 violations.append(
                     Violation(
                         path,
                         line_no,
-                        "release-scan identity must have no project-wide IAM role; use repository-scoped grants (#2084, ADR-070)",
+                        "release-scan project roles must allow only quota consumption on the configured project; use resource-scoped data grants (#2789, ADR-070)",
                     )
                 )
     platform_roles = _variable_values(stripped_lines, "platform_roles")

@@ -4637,7 +4637,7 @@
       },
       {
         "id": "ADR-070-R4",
-        "description": "Operators run each command stage as the deploy, release-scan, or destroy purpose identity through service-account impersonation, with no service-account key. Only the principals in impersonation_principals receive roles/iam.serviceAccountTokenCreator, each only on the identity of its own purpose (ADR-004-R23). GitHub federation is optional: an empty purpose_contexts creates no WIF pool or provider. CI uses --identity ambient. scripts/check_tf_gcp_wif_trust and the native Terraform tests enforce the identity contract.",
+        "description": "Operators run each command stage as the deploy, release-scan, or destroy purpose identity through service-account impersonation, with no service-account key. Only the principals in impersonation_principals receive roles/iam.serviceAccountTokenCreator, each only on the identity of its own purpose (ADR-004-R23). GitHub federation is optional: an empty purpose_contexts creates no WIF pool or provider. CI uses --identity ambient. The release-scan identity may hold only roles/serviceusage.serviceUsageConsumer at project scope on its configured deployment project for quota-billed API calls (#2789); repository, bucket, and object-prefix grants still bound all data access. scripts/check_tf_gcp_wif_trust and the native Terraform tests enforce the identity contract.",
         "checks": []
       },
       {
