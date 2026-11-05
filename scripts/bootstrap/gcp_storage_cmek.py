@@ -127,7 +127,7 @@ def _is_live(item: Mapping[str, object]) -> bool:
 
 
 def _needs_rewrite(item: Mapping[str, object], key: str) -> bool:
-    """Return whether a generation is a live, addressable object that does not use ``key``."""
+    """Return whether a live, addressable object still needs the bucket key."""
     addressable = bool(item.get("generation")) and not _WILDCARD_RE.search(str(item["name"]))
     return _is_live(item) and addressable and not _uses_key(item, key) and not _uses_project_state_key(item)
 
@@ -152,6 +152,20 @@ def _rewrite_live_objects(runner: ProcessRunner, bucket: str, key: str, env: Map
     return rewritten
 
 
+def _classify_live_encryption(live: list[dict[str, object]], key: str) -> tuple[list[dict[str, object]], int]:
+    """Classify authoritative metadata once for each live object."""
+    pending: list[dict[str, object]] = []
+    supplied_state = 0
+    for item in live:
+        if _uses_key(item, key):
+            continue
+        if _uses_project_state_key(item):
+            supplied_state += 1
+        else:
+            pending.append(item)
+    return pending, supplied_state
+
+
 def _verified_report(
     after: list[dict[str, object]],
     bucket: str,
@@ -161,10 +175,9 @@ def _verified_report(
     rewritten: int,
     soft_deleted: int | None,
 ) -> MigrationReport:
-    """Count the generations after the rewrite; fail when an addressable live object still lacks ``key``."""
+    """Count protected generations and reject live objects without an approved key."""
     live = [item for item in after if _is_live(item)]
-    pending = [item for item in live if not _uses_key(item, key) and not _uses_project_state_key(item)]
-    supplied_state = sum(1 for item in live if _uses_project_state_key(item))
+    pending, supplied_state = _classify_live_encryption(live, key)
     retained = pending if locked else []
     unaddressable = [] if locked else [item for item in pending if _WILDCARD_RE.search(str(item["name"]))]
     unmigrated = len(pending) - len(retained) - len(unaddressable)
