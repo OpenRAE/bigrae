@@ -32,8 +32,8 @@ if TYPE_CHECKING:
 
 logger = logging.getLogger(__name__)
 
-# Range statuses that mean "already torn down" -- teardown is a no-op for these.
-_OLD_RANGE_TERMINAL_STATUSES = {ResourceStatus.DESTROYED.value, ResourceStatus.FAILED.value}
+# Failure does not prove that resources or registered-project custody are absent.
+_OLD_RANGE_TERMINAL_STATUSES = {ResourceStatus.DESTROYED.value}
 
 
 def _range_error(message: str, *, category: RecoveryFailureCategory, **details: Any) -> CTFRangeError:
