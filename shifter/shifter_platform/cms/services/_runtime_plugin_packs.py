@@ -2,7 +2,7 @@
 
 from dataclasses import asdict
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 from django.db import transaction
 from django.db.models import Q
@@ -16,12 +16,16 @@ from engine.services import (
     bind_runtime_plugin,
     list_runtime_plugin_bindings,
     prepare_runtime_plugin_binding,
+    project_parameters_for_binding,
+    runtime_plugin_plan_parameters,
 )
-from shared.audit import RequestAudit
+from shared.audit import AuditAction, AuditEntityType, AuditEvent, RequestAudit, audit_log, principal_actor_fields
 from shared.authorization import TargetRef
 from shared.credentials import CredentialContext, resolve_credential_scope, resolve_current_credential
 from shared.exceptions import ValidationError
 from shared.identity_scope import ResourceScope
+from shared.raes.pack_conformance import validate_pack_contract
+from shared.raes.project_parameters import required_project_parameters, select_project_parameters
 from shared.raes.realizability import RealizabilityOutcome, assess_scenario_capability
 from shared.runtime_plugin_binding import PluginTargetBindings, RuntimePluginScope
 from workspaces.services import OrganizationAuthorizationError
@@ -85,6 +89,18 @@ def list_runtime_plugin_packs(user: CredentialContext, organization_uuid: UUID) 
 
 def runtime_plugin_pack_detail(user: CredentialContext, organization_uuid: UUID, pack_id: str) -> dict[str, Any]:
     """Return selectable guest identities only; never apply a compiled plan."""
+    return _pack_detail(user, organization_uuid, pack_id)
+
+
+def _pack_detail(
+    user: CredentialContext,
+    organization_uuid: UUID,
+    pack_id: str,
+    *,
+    bindings: PluginTargetBindings | None = None,
+    report: str = "",
+) -> dict[str, Any]:
+    """A pending template exposes no guest choices until a real project is selected."""
     entry = next((row for row in list_runtime_plugin_packs(user, organization_uuid) if row["id"] == pack_id), None)
     if entry is None:
         raise ValidationError(_PACK_UNAVAILABLE)
@@ -95,7 +111,35 @@ def runtime_plugin_pack_detail(user: CredentialContext, organization_uuid: UUID,
     with _trusted_scenario_path(source) as (path, _gap):
         if path is None:
             raise ValidationError("The registered pack could not be verified; reinstall the pack before binding")
-        assessment = assess_scenario_capability(path, artifact_availability_provider=_availability_provider("gce"))
+        parameters = None
+        try:
+            required = required_project_parameters(path)
+        except ValueError:
+            raise ValidationError("The pack requires unsupported runtime parameters") from None
+        if required:
+            scope = RuntimePluginScope(
+                organization_uuid=organization_uuid, pack_id=pack_id, pack_digest=source.package_digest
+            )
+            if bindings is None:
+                try:
+                    _, facts = runtime_plugin_plan_parameters(scope)
+                except ValidationError:
+                    facts = {}
+                if not facts:
+                    return {**entry, "pack_digest": source.package_digest, "targets": []}
+            else:
+                facts = project_parameters_for_binding(scope, bindings)
+                if not facts:
+                    raise ValidationError("Select a ready registered target project for this pack")
+            parameters = select_project_parameters(path, facts)
+        if report:
+            try:
+                validate_pack_contract(path, report, parameters=parameters)
+            except Exception:  # noqa: BLE001  # untrusted planner errors can contain private source values
+                raise ValidationError("The pack failed validation with the selected project") from None
+        assessment = assess_scenario_capability(
+            path, parameters=parameters, artifact_availability_provider=_availability_provider("gce")
+        )
     if assessment.outcome == RealizabilityOutcome.INDETERMINATE:
         raise ValidationError("The pack's guest targets could not be resolved")
     # Bind to the exact source row whose bytes were verified, not an earlier list
@@ -121,20 +165,26 @@ def set_runtime_plugin_pack(
         raise ValidationError(_PACK_CHANGED)
     try:
         bindings = PluginTargetBindings.model_validate(payload["bindings"])
-        if not set(bindings.targets.values()) <= {row["address"] for row in detail["targets"]}:
-            raise ValueError("Unknown guest")
     except ValueError:
         raise ValidationError("Select a pack guest for every required plugin target") from None
     snapshot = RaesPackageSource.objects.filter(scenario_id=pack_id).first()
     if snapshot is None:
         raise ValidationError(_PACK_UNAVAILABLE)
     source_scope = _require_pack_source(user, organization_uuid, snapshot)
+    if snapshot.conformance_status == "pending" and snapshot.organization_uuid != organization_uuid:
+        raise ValidationError("The pack owner must complete conformance validation")
     plugin_scope = RuntimePluginScope(
         organization_uuid=organization_uuid, pack_digest=detail["pack_digest"], pack_id=pack_id
     )
     admission = prepare_runtime_plugin_binding(
         user, plugin_scope, payload["installation_id"], bindings.model_dump(mode="json"), enabled=payload["enabled"]
     )
+    report = "urn:shifter:pack-conformance:" + str(uuid4())
+    configured = _pack_detail(user, organization_uuid, pack_id, bindings=bindings, report=report)
+    if configured["pack_digest"] != detail["pack_digest"]:
+        raise ValidationError(_PACK_CHANGED)
+    if not set(bindings.targets.values()) <= {row["address"] for row in configured["targets"]}:
+        raise ValidationError("Select a pack guest for every required plugin target")
     from ._runtime_file_admission import fence_file_selection, prepare_file_selection
 
     tenant_scope = resolve_credential_scope(TargetRef("organization", organization_uuid))
@@ -155,7 +205,7 @@ def set_runtime_plugin_pack(
         ):
             raise ValidationError(_PACK_CHANGED)
         fence_file_selection(user, tenant_scope, files, assignment=True)
-        return bind_runtime_plugin(
+        result = bind_runtime_plugin(
             admission,
             plugin_scope,
             payload["installation_id"],
@@ -163,3 +213,23 @@ def set_runtime_plugin_pack(
             enabled=payload["enabled"],
             audit=audit,
         )
+        if source.conformance_status == "pending":
+            source.conformance_status = "passed"
+            source.conformance_report_ref = report
+            source.save(update_fields=["conformance_status", "conformance_report_ref", "updated_at"])
+            audit_log(
+                AuditEvent(
+                    entity_type=AuditEntityType.SCENARIO,
+                    entity_id=0,
+                    entity_ref=pack_id,
+                    action=AuditAction.UPDATE,
+                    **principal_actor_fields(user.principal),
+                    new_state={
+                        "package_digest": source.package_digest,
+                        "conformance_status": source.conformance_status,
+                        "conformance_report_ref": report,
+                    },
+                ),
+                strict=True,
+            )
+        return result

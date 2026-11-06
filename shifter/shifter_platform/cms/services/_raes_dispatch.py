@@ -239,6 +239,13 @@ def _launch_pack(
         raise CMSError("RAES package could not be resolved") from None
 
     credential = user if isinstance(user, CredentialContext) else None
+    parameters = None
+    if plugin_scope is not None:
+        from engine.services import runtime_plugin_plan_parameters
+        from shared.raes.project_parameters import select_project_parameters
+
+        plugin_scope, project_facts = runtime_plugin_plan_parameters(plugin_scope)
+        parameters = select_project_parameters(scenario_path, project_facts)
     scope = options.principal_scope
     port = CmsRaesDispatchPort(
         user_id=user.id if isinstance(user, User) and credential is None else None,
@@ -257,7 +264,10 @@ def _launch_pack(
     )
     try:
         result = launch_raes_package(
-            scenario_path=scenario_path, port=port, artifact_supply_provider=port.artifact_supply
+            scenario_path=scenario_path,
+            port=port,
+            parameters=parameters,
+            artifact_supply_provider=port.artifact_supply,
         )
     except RaesPackageError as exc:
         # Launch errors embed scenario, storage provider and server path text: log the class only.
