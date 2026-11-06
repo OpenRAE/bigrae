@@ -250,3 +250,11 @@ or substrate constraint is realized through cloud APIs without adding a VM.
 Its original node remains in completion coverage and receives configuration-bound
 cloud readback. Guest OS/substrate evidence covers actual guest nodes only.
 Any authored guest or substrate demand retains the ordinary workload path.
+
+### State encryption during platform updates
+
+Terraform state uses a customer-supplied AES-256 key derived for its lease. The
+bucket default customer-managed key remains required for other objects. The
+storage migration validates the exact native state path and authoritative GCS
+encryption metadata, preserves the state generation and key, and reports this
+mode separately. See [the storage encryption design](gcp-gcs-cmek-design-2564.md#registered-project-state-2787).
