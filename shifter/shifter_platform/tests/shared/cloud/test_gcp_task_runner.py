@@ -579,7 +579,7 @@ class TestGCPTaskRunnerGetTaskStatus:
 
     def test_returns_running_status(self) -> None:
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = SimpleNamespace(
+        batch_api.read_namespaced_job.return_value = SimpleNamespace(
             status=SimpleNamespace(
                 active=1,
                 failed=0,
@@ -603,7 +603,7 @@ class TestGCPTaskRunnerGetTaskStatus:
 
     def test_returns_succeeded_status(self) -> None:
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = SimpleNamespace(
+        batch_api.read_namespaced_job.return_value = SimpleNamespace(
             status=SimpleNamespace(
                 active=0,
                 failed=0,
@@ -627,7 +627,7 @@ class TestGCPTaskRunnerGetTaskStatus:
 
     def test_returns_failed_status_with_pod_reason(self) -> None:
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = SimpleNamespace(
+        batch_api.read_namespaced_job.return_value = SimpleNamespace(
             status=SimpleNamespace(
                 active=0,
                 failed=1,
@@ -659,7 +659,7 @@ class TestGCPTaskRunnerGetTaskStatus:
 
     def test_returns_none_on_missing_job(self) -> None:
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=404)
+        batch_api.read_namespaced_job.side_effect = _ApiException(status=404)
         core_api = MagicMock()
 
         runner = GCPTaskRunner()
