@@ -1,6 +1,7 @@
 """Tenant administration over verified catalog packs and Engine plugin bindings."""
 
 from dataclasses import asdict
+from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
 
@@ -111,32 +112,14 @@ def _pack_detail(
     with _trusted_scenario_path(source) as (path, _gap):
         if path is None:
             raise ValidationError("The registered pack could not be verified; reinstall the pack before binding")
-        parameters = None
-        try:
-            required = required_project_parameters(path)
-        except ValueError:
-            raise ValidationError("The pack requires unsupported runtime parameters") from None
-        if required:
-            scope = RuntimePluginScope(
-                organization_uuid=organization_uuid, pack_id=pack_id, pack_digest=source.package_digest
-            )
-            if bindings is None:
-                try:
-                    _, facts = runtime_plugin_plan_parameters(scope)
-                except ValidationError:
-                    facts = {}
-                if not facts:
-                    return {**entry, "pack_digest": source.package_digest, "targets": []}
-            else:
-                facts = project_parameters_for_binding(scope, bindings)
-                if not facts:
-                    raise ValidationError("Select a ready registered target project for this pack")
-            parameters = select_project_parameters(path, facts)
+        scope = RuntimePluginScope(
+            organization_uuid=organization_uuid, pack_id=pack_id, pack_digest=source.package_digest
+        )
+        configured, parameters = _pack_project_parameters(path, scope, bindings)
+        if not configured:
+            return {**entry, "pack_digest": source.package_digest, "targets": []}
         if report:
-            try:
-                validate_pack_contract(path, report, parameters=parameters)
-            except Exception:  # noqa: BLE001  # untrusted planner errors can contain private source values
-                raise ValidationError("The pack failed validation with the selected project") from None
+            _validate_configured_pack(path, report, parameters)
         assessment = assess_scenario_capability(
             path, parameters=parameters, artifact_availability_provider=_availability_provider("gce")
         )
@@ -190,20 +173,7 @@ def set_runtime_plugin_pack(
     tenant_scope = resolve_credential_scope(TargetRef("organization", organization_uuid))
     files = prepare_file_selection(user, tenant_scope, bindings.file_assets, assignment=True)
     with transaction.atomic():
-        source = RaesPackageSource.objects.select_for_update().filter(scenario_id=pack_id).first()
-        try:
-            locked_scope = content_scope(source)
-        except CMSError:
-            raise ValidationError(_PACK_CHANGED) from None
-        if (
-            source is None
-            or source.package_digest != detail["pack_digest"]
-            or source.owner_principal_uuid != snapshot.owner_principal_uuid
-            or source.scope_generation != snapshot.scope_generation
-            or source.is_operator_published != snapshot.is_operator_published
-            or locked_scope != source_scope
-        ):
-            raise ValidationError(_PACK_CHANGED)
+        source = _locked_pack_source(pack_id, snapshot, source_scope, detail["pack_digest"])
         fence_file_selection(user, tenant_scope, files, assignment=True)
         result = bind_runtime_plugin(
             admission,
@@ -233,3 +203,56 @@ def set_runtime_plugin_pack(
                 strict=True,
             )
         return result
+
+
+def _pack_project_parameters(
+    path: Path, scope: RuntimePluginScope, bindings: PluginTargetBindings | None
+) -> tuple[bool, dict[str, object] | None]:
+    """Resolve either the saved selection or an admitted replacement selection."""
+    try:
+        required = required_project_parameters(path)
+    except ValueError:
+        raise ValidationError("The pack requires unsupported runtime parameters") from None
+    if not required:
+        return True, None
+    if bindings is None:
+        try:
+            _, facts = runtime_plugin_plan_parameters(scope)
+        except ValidationError:
+            facts = {}
+    else:
+        facts = project_parameters_for_binding(scope, bindings)
+    if facts:
+        return True, select_project_parameters(path, facts)
+    if bindings is not None:
+        raise ValidationError("Select a ready registered target project for this pack")
+    return False, None
+
+
+def _validate_configured_pack(path: Path, report: str, parameters: dict[str, object] | None) -> None:
+    """Keep private planner diagnostics out of the public error chain."""
+    try:
+        validate_pack_contract(path, report, parameters=parameters)
+    except Exception:  # noqa: BLE001  # untrusted planner errors can contain private source values
+        raise ValidationError("The pack failed validation with the selected project") from None
+
+
+def _locked_pack_source(
+    pack_id: str, snapshot: RaesPackageSource, source_scope: ResourceScope, digest: str
+) -> RaesPackageSource:
+    """Fence source identity and authorization inside the binding transaction."""
+    source = RaesPackageSource.objects.select_for_update().filter(scenario_id=pack_id).first()
+    try:
+        locked_scope = content_scope(source)
+    except CMSError:
+        raise ValidationError(_PACK_CHANGED) from None
+    if (
+        source is None
+        or source.package_digest != digest
+        or source.owner_principal_uuid != snapshot.owner_principal_uuid
+        or source.scope_generation != snapshot.scope_generation
+        or source.is_operator_published != snapshot.is_operator_published
+        or locked_scope != source_scope
+    ):
+        raise ValidationError(_PACK_CHANGED)
+    return source

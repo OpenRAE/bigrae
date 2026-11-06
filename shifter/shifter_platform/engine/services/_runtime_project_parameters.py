@@ -26,7 +26,7 @@ def project_parameters_for_binding(scope: RuntimePluginScope, bindings: PluginTa
         project = GcpRangeProject.objects.filter(
             project_id=project_id, organization_uuid=scope.organization_uuid, status="ready"
         ).first()
-        if project is None or not re.fullmatch(r"[1-9][0-9]{5,19}", project.project_number):
+        if project is None or not re.fullmatch(r"[1-9]\d{5,19}", project.project_number, flags=re.ASCII):
             raise ValueError(_UNAVAILABLE)
         baseline = GcpBaselineRef.model_validate(project.baseline)
         if baseline.registration_id != project.pk:
