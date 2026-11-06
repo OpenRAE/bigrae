@@ -53,6 +53,7 @@ from . import _range as _api_range
 from . import _range_by_request as _api_range_by_request
 from . import _range_escape as _api_range_escape
 from . import _range_ownership as _api_range_ownership
+from . import _range_relationships as _api_range_relationships
 from . import _receipt as _api_receipt
 from . import _runtime_plugin_bindings as _api_runtime_plugin_bindings
 from . import _runtime_plugin_controller as _api_runtime_plugin_controller
@@ -291,6 +292,7 @@ prepare_ngfw_lifecycle = _api_principal_ngfw.prepare_ngfw_lifecycle
 
 PreparedRaesRangeCreation = _api_principal_range_create.PreparedRaesRangeCreation
 prepare_raes_range_creation = _api_principal_range_create.prepare_raes_range_creation
+publish_range_relationships = _api_range_relationships.publish_range_relationships
 
 PreparedWarmRangeClaim = _api_principal_warm_claim.PreparedWarmRangeClaim
 commit_warm_range_claim = _api_principal_warm_claim.commit_warm_range_claim

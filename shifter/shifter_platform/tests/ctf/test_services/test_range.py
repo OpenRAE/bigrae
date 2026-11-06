@@ -624,7 +624,7 @@ class TestCmsBridgeRangeSource:
     """
 
     @pytest.fixture
-    def _ctf_raes_source(self, ctf_event, organizer_user, monkeypatch, settings):
+    def _ctf_raes_source(self, ctf_event, organizer_user, monkeypatch, settings, transactional_db):
         from cms.models import RaesPackageSource
         from cms.raes.dispatch import CmsRaesDispatchPort
         from workspaces.services import resource_scope_from_ids

@@ -122,7 +122,7 @@ def principal_owner_policy(monkeypatch):
     from types import SimpleNamespace
 
     from cms.models import RangeInstance
-    from shared.authorization import AuthorizationDecision, DecisionKind, port
+    from shared.authorization import AuthorizationDecision, DecisionKind, RelationshipState, port
 
     def check(request):
         allowed = (
@@ -136,11 +136,14 @@ def principal_owner_policy(monkeypatch):
             "policy_allowed" if allowed else "policy_denied",
         )
 
+    relationships = set()
     provider = SimpleNamespace(
         store_id="test-store",
         model_id="test-model",
         check=check,
         batch_check=lambda requests: tuple(check(request) for request in requests),
+        write_relationships=lambda change: relationships.add(change.grant_tuple),
+        read_relationships=lambda change: RelationshipState(change.grant_tuple in relationships, False),
     )
     monkeypatch.setattr(port, "_provider_factory", lambda: provider)
     return provider
