@@ -67,9 +67,10 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2718: optional sealed result key in the same invocation Secret; only plugin admission changes.
 # Regenerated for #2716: generation-bound registered-project capture/verification; only provisioner admission changes.
 # Regenerated for #2793: GCP gateway HTTPS uses the existing content CONNECT proxy.
+# Regenerated for #2834: only the two maintenance-worker CPU limits change.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "ad071dad6671d2af9f3fe9628fb2885f0cf9dd29ca4cb4737340bd01f4e1089d",
-    "gcp-dev": "d114fd12a56fa5e70b3063a9b37aa9ee7121809857cf425216f85131d2512008",
+    "gcp-prod": "f813d69bd3d1d88768d2caae204a31a2add7ed62f91839f831b6c9285ec0611d",
+    "gcp-dev": "46d7d4c91ee0b5438e58e7d2208a359a28d2f583e553918a67d26cfc2de1b623",
 }
 
 
