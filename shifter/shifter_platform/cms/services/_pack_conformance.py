@@ -53,7 +53,27 @@ def validate_registered_pack_conformance(
         with _trusted_scenario_path(source) as (scenario_path, _):
             if scenario_path is None:
                 raise ValueError("pack integrity verification failed")
-            validate_pack_contract(scenario_path, report)
+            from shared.raes.project_parameters import required_project_parameters, select_project_parameters
+
+            if required_project_parameters(scenario_path):
+                from engine.services import runtime_plugin_plan_parameters
+                from shared.runtime_plugin_binding import RuntimePluginScope
+
+                organization_uuid = source.organization_uuid or scope.organization_uuid
+                if organization_uuid is None:
+                    raise ValueError("Target configuration required")
+                _, facts = runtime_plugin_plan_parameters(
+                    RuntimePluginScope(
+                        organization_uuid=organization_uuid,
+                        pack_id=source.scenario_id,
+                        pack_digest=source.package_digest,
+                    )
+                )
+                validate_pack_contract(
+                    scenario_path, report, parameters=select_project_parameters(scenario_path, facts)
+                )
+            else:
+                validate_pack_contract(scenario_path, report)
     except Exception as exc:
         # Private parser diagnostics and storage references never leave this gate.
         raise ValidationError("The registered pack failed contract conformance") from exc

@@ -13,6 +13,8 @@ from shifter_adapter_sdk.runtime import ClosedModel, Digest, canonical_digest, d
 MAX_BASELINE_BYTES = 1_048_576
 MAX_BASELINE_CIPHERTEXT_BYTES = 1_500_000
 MAX_PROJECTS_PER_RANGE = 8
+MAX_PROJECT_SERVICE_ACCOUNTS = 1024
+MAX_PROJECT_SECRETS = 4096
 ProjectID = Annotated[str, Field(strict=True, pattern=r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")]
 ProjectNumber = Annotated[str, Field(strict=True, pattern=r"^[1-9][0-9]{5,19}$")]
 JsonObject = dict[str, JsonValue]
@@ -129,8 +131,10 @@ class GcpProjectState(ClosedModel):
 
     project: JsonObject = Field(max_length=128, repr=False)
     policy: JsonObject = Field(max_length=16, repr=False)
-    service_accounts: dict[str, GcpServiceAccountState] = Field(default_factory=dict, max_length=1024, repr=False)
-    secrets: dict[str, GcpSecretState] = Field(default_factory=dict, max_length=1024, repr=False)
+    service_accounts: dict[str, GcpServiceAccountState] = Field(
+        default_factory=dict, max_length=MAX_PROJECT_SERVICE_ACCOUNTS, repr=False
+    )
+    secrets: dict[str, GcpSecretState] = Field(default_factory=dict, max_length=MAX_PROJECT_SECRETS, repr=False)
 
     @property
     def digest(self) -> str:

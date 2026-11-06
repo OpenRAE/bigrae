@@ -220,6 +220,8 @@ PUBLIC_API = (
     "reconcile_runtime_plugin_operations",
     "reconcile_runtime_plugins",
     "runtime_plugin_file_selection",
+    "runtime_plugin_plan_parameters",
+    "project_parameters_for_binding",
     "record_capacity_declaration",
     "record_cleanup_verification",
     "record_model_observations",

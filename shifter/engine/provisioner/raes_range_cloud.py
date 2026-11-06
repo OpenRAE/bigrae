@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import logging
+import traceback
 from typing import Any, Protocol, cast
 
 from shared.gcp_range_projects import GcpProjectRestorationProof, GcpProjectState
@@ -10,6 +12,8 @@ from config import GCERangeCellConfig
 from gcp_project_runtime import RegisteredProjectRuntime, prepare_registered_projects
 from provisioner_db_operation_input import RaesOperationRun
 from raes_plan import RaesPlan, RaesPlanError, parse_plan
+
+logger = logging.getLogger(__name__)
 
 
 def prepare_cloud_plan(
@@ -82,7 +86,13 @@ def restore_cloud_projects(cloud: RegisteredProjectRuntime | None, inventory: di
         return inventory
     try:
         proofs = cloud.destroy()
-    except Exception:  # noqa: BLE001  # preserve closed cleanup evidence without provider diagnostics
+    except Exception as exc:  # noqa: BLE001  # provider messages can contain private material
+        frames = traceback.extract_tb(exc.__traceback__)
+        logger.warning(
+            "Cloud restoration incomplete: exc_type=%s failure_function=%s",
+            type(exc).__name__,
+            frames[-1].name if frames else "unavailable",
+        )
         proofs = [
             GcpProjectRestorationProof(
                 lease_id=work.lease.lease_id,
@@ -95,7 +105,7 @@ def restore_cloud_projects(cloud: RegisteredProjectRuntime | None, inventory: di
         ]
         return {
             "outcome": "INCOMPLETE",
-            "residual_categories": ["cloud-projects"],
+            "residual_categories": [{"category": "cloud-projects", "count": len(cloud.projects)}],
             "scope": {**inventory.get("scope", {}), "gcp_projects": proofs},
         }
     return {**inventory, "scope": {**inventory.get("scope", {}), "gcp_projects": proofs}}
