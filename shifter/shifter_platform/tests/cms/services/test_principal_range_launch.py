@@ -56,7 +56,7 @@ def test_inactive_principal_cannot_receive_a_new_owned_range_lease(principal_ran
 
 
 @pytest.fixture
-def launch_actor(content_actor, settings, make_pack, tmp_path):
+def launch_actor(content_actor, settings, make_pack, tmp_path, transactional_db):
     from uuid import uuid4
 
     from cms.models import RaesPackageSource
@@ -395,7 +395,15 @@ def test_launch_policy_is_evaluated_outside_native_sql_transactions(launch_actor
 
     from types import SimpleNamespace
 
-    monkeypatch.setattr(port, "_provider_factory", lambda: SimpleNamespace(check=check))
+    monkeypatch.setattr(
+        port,
+        "_provider_factory",
+        lambda: SimpleNamespace(
+            check=check,
+            write_relationships=provider.write_relationships,
+            read_relationships=provider.read_relationships,
+        ),
+    )
     create_range(launch_actor.credential, launch_actor.source.scenario_id, scope=launch_actor.scope)
 
 
@@ -496,4 +504,18 @@ def test_mission_control_rejects_event_binding_fields_before_any_reservation(
     assert not Request.objects.exists()
     assert not RangeInstance.all_objects.exists()
     assert not Range.objects.exists()
+    assert not ProvisionerLaunchIntent.objects.exists()
+
+
+@pytest.mark.postgres
+def test_unconfirmed_range_parent_stops_before_provisioner_queue(launch_actor):
+    from cms.exceptions import CMSError
+    from cms.services import create_raes_native_range
+    from engine.models import ProvisionerLaunchIntent
+    from shared.authorization import RelationshipState, configured_authorization_provider
+
+    provider = configured_authorization_provider()
+    provider.read_relationships = lambda change: RelationshipState(False, False)
+    with pytest.raises(CMSError, match="Range launch unavailable"):
+        create_raes_native_range(launch_actor.credential, launch_actor.source.scenario_id, scope=launch_actor.scope)
     assert not ProvisionerLaunchIntent.objects.exists()

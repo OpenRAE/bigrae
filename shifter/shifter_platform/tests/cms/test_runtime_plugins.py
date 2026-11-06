@@ -23,7 +23,7 @@ pytestmark = pytest.mark.django_db
 def tenant(monkeypatch, live_session_credential):
     from types import SimpleNamespace
 
-    from shared.authorization import AuthorizationDecision, DecisionKind, port
+    from shared.authorization import AuthorizationDecision, DecisionKind, RelationshipState, port
     from workspaces.services import create_account
 
     actor = User.objects.create_user(username="plugin-admin", is_staff=False)
@@ -41,7 +41,13 @@ def tenant(monkeypatch, live_session_credential):
             DecisionKind.ALLOWED if allowed else DecisionKind.DENIED, "policy_allowed" if allowed else "policy_denied"
         )
 
-    monkeypatch.setattr(port, "_provider_factory", lambda: SimpleNamespace(check=check))
+    relationships = set()
+    provider = SimpleNamespace(
+        check=check,
+        write_relationships=lambda change: relationships.add(change.grant_tuple),
+        read_relationships=lambda change: RelationshipState(change.grant_tuple in relationships, False),
+    )
+    monkeypatch.setattr(port, "_provider_factory", lambda: provider)
     return actor, organization
 
 
