@@ -225,6 +225,10 @@ Dataplane V2 NetworkPolicy reachability, Google Workload Identity, Job admission
 and application authorization. The Helm chart renders the NetworkPolicies. Each
 BigRAE namespace denies traffic by default, and explicit policies allow each
 required path, for example the portal to the in-cluster Guacamole token API.
+The session cleanup worker also needs that API to close expired native sessions.
+Its separate ingress and egress rules permit only gateway pods in the same
+namespace on TCP 8080. Other workers gain no gateway access. See the
+[session cleanup network design](../architecture/session-cleanup-network-2837.md).
 These controls do not provide authenticated
 pod-to-pod mTLS; a service mesh remains unadopted. No documentation or unit-test
 result proves complete escape detection or live containment qualification.
