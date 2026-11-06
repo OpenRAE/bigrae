@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from django.db.models import Q
 
+from cms.exceptions import CMSError
 from cms.models import RaesPackageSource, ScenarioMetadata
 from cms.services._content_authority import content_scope, content_scope_fields, require_content_scope
 from shared.credentials import CredentialContext
@@ -18,8 +19,6 @@ def list_scoped_scenarios(
     from .registry import _raes_launchable, _raes_source_to_dict
 
     if scope is None:
-        from cms.exceptions import CMSError
-
         raise CMSError("Content unavailable")
     require_content_scope(credential, scope, "read_content")
     shared = Q(
@@ -31,6 +30,15 @@ def list_scoped_scenarios(
         is_operator_published=True,
     )
     private = Q(**content_scope_fields(scope), owner_principal_uuid__isnull=False)
+    if scope.workspace_uuid is not None and scope.organization_uuid is not None:
+        organization = ResourceScope("account", scope.account_uuid, scope.organization_uuid)
+        try:
+            require_content_scope(credential, organization, "read_content")
+        except CMSError:
+            # A workspace grant does not confer organization content access.
+            pass
+        else:
+            private |= Q(**content_scope_fields(organization), owner_principal_uuid__isnull=False)
     sources = tuple(RaesPackageSource.objects.filter(private | shared).order_by("scenario_id"))
     metadata = {
         row.scenario_id: {"enabled": row.enabled, "staff_only": row.staff_only}

@@ -39,11 +39,11 @@ def _extract_stopped_reason(core_api: object, namespace: str, job_name: str) -> 
 
 
 def _read_job_status(batch_api: object, namespace: str, job_name: str, api_exception: type[Exception]) -> object | None:
-    """Return the named Job's status object, or ``None`` on a 404."""
+    """Return the named Job, including status, using its existing read permission."""
     try:
         return _api_call(
             batch_api,
-            "read_namespaced_job_status",
+            "read_namespaced_job",
             name=job_name,
             namespace=namespace,
             _request_timeout=_KUBERNETES_REQUEST_TIMEOUT_SECONDS,

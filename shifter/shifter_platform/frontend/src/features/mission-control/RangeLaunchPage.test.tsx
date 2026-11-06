@@ -171,6 +171,48 @@ describe("RangeLaunchPage", () => {
     await waitFor(() => expect(navigateMock).toHaveBeenCalledWith("/mission-control/"));
   });
 
+  it.each(["requires_windows", "requires_linux", "has_from_agent"])("keeps the agent requirement when %s is true", async (flag) => {
+    const scenarios = { scenarios: [{ ...SCENARIOS.scenarios[0], agent_requirements: {
+      requires_windows: false, requires_linux: false, has_from_agent: false, [flag]: true,
+    } }] };
+    mockApi.mockImplementation((path: string) => {
+      if (path === "/mission-control/launch-workspaces/") return Promise.resolve(LAUNCH_WORKSPACES);
+      if (path === "/mission-control/scenarios/") return Promise.resolve(scenarios);
+      if (path === "/mission-control/agents/") return Promise.resolve(AGENTS);
+      return Promise.reject(new Error(`unexpected path ${path}`));
+    });
+    const user = userEvent.setup();
+    renderRoute(<RangeLaunchPage />);
+    await selectOption(user, "Scenario", "Basic Range");
+    expect(screen.getByRole("combobox", { name: "Agent" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Launch range" }));
+    expect(await screen.findByText("Select an agent to launch.")).toBeInTheDocument();
+    expect(mockApi).not.toHaveBeenCalledWith("/mission-control/range/launch/", expect.anything());
+  });
+
+  it("launches an installed pack without an agent upload when its contract needs none", async () => {
+    const noAgentScenarios = { scenarios: [{ ...SCENARIOS.scenarios[0], agent_requirements: {
+      requires_windows: false, requires_linux: false, has_from_agent: false,
+    } }] };
+    mockApi.mockImplementation((path: string) => {
+      if (path === "/mission-control/launch-workspaces/") return Promise.resolve(LAUNCH_WORKSPACES);
+      if (path === "/mission-control/scenarios/") return Promise.resolve(noAgentScenarios);
+      if (path === "/mission-control/agents/") return Promise.resolve({ ...AGENTS, agents: [] });
+      if (path === "/mission-control/range/launch/") return Promise.resolve({ success: true, range: {} });
+      return Promise.reject(new Error(`unexpected path ${path}`));
+    });
+    const user = userEvent.setup();
+    renderRoute(<RangeLaunchPage />);
+    await user.selectOptions(await screen.findByLabelText("Workspace"), LAUNCH_WORKSPACES.workspaces[0].uuid);
+    await selectOption(user, "Scenario", "Basic Range");
+    expect(screen.queryByRole("combobox", { name: "Agent" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Launch range" }));
+    await waitFor(() => expect(mockApi).toHaveBeenCalledWith("/mission-control/range/launch/", {
+      method: "POST", body: { scenario: "basic", agents: {}, workspace_uuid: LAUNCH_WORKSPACES.workspaces[0].uuid },
+    }));
+    expect(navigateMock).toHaveBeenCalledWith("/mission-control/");
+  });
+
   it("shows a server error without retrying automatically", async () => {
     mockOptions();
     const user = userEvent.setup();
