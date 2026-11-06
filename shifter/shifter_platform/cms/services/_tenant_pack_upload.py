@@ -89,12 +89,10 @@ def _persist(
     user: CredentialContext,
     organization_uuid: UUID,
     request: PackRegistrationRequest,
-    report: str,
+    report: str | None,
     request_id: str,
     model_needs: dict[str, dict[str, object]],
     journal: PackUploadJournal,
-    *,
-    pending: bool = False,
 ) -> dict[str, Any]:
     """Register validated bytes, their owned archive and conformance evidence atomically."""
     admitted = admit_tenant_pack(user, organization_uuid)
@@ -114,8 +112,8 @@ def _persist(
         # Every revision's object stays pack-owned inventory so removal can
         # delete exactly the bytes this pack uploaded (ADR-034-R13).
         retain_installed_archive(journal)
-        row.conformance_status = "pending" if pending else "passed"
-        row.conformance_report_ref = "" if pending else report
+        row.conformance_status = "passed" if report else "pending"
+        row.conformance_report_ref = report or ""
         row.save(update_fields=["conformance_status", "conformance_report_ref", "updated_at"])
         if model_needs:
             overlay = ScenarioModelNeeds.objects.select_for_update().filter(scenario_id=row.scenario_id).first()
@@ -228,11 +226,10 @@ def upload_tenant_pack(
                 user,
                 organization_uuid,
                 request,
-                report,
+                None if pending else report,
                 request_id,
                 model_needs,
                 journal,
-                pending=pending,
             )
         except Exception as exc:  # noqa: BLE001  # untrusted pack content; its error text stays out of the chain
             logger.warning(

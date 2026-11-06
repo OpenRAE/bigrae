@@ -1,38 +1,19 @@
-"""Catalog-side backend realizability projection for the Scenario Editor (ADR-034-R3).
+"""Read-only catalog realizability projection for the Scenario Editor (ADR-034-R3).
 
-ADR-034-R3 requires ingestion to validate realizability against the backend
-manifest and surface non-realizability to the author without creating loopholes.
-This module is the bounded, read-only catalog seam the editor renders: given a
-registered RAES catalog entry it reports whether the server-selected backend can
-realize the pack, and if not, which specific gaps stand in the way.
+Assess a verified RAES pack through the real native compile/plan/validate path,
+then check tenant image supply through the provisioner's shared matching policy.
+Neither assessment dispatches provider work. Editor feedback does not replace
+launch-time digest, plan, image, admission, or provisioner checks.
 
-Two independent contributors produce one ordered answer:
+Catalog lists stay DB-only. Detail assessment reads one pack or a bounded set,
+with one bulk image registry query. Results use current source, target and
+registry state; no assessment is persisted. An unreadable or untrusted pack,
+or an unsupported target, is indeterminate. Legacy scenarios are not applicable
+and are never translated into RAES to improve an assessment.
 
-- **Capability** -- does the declared envelope admit the compiled plan
-  (:mod:`shared.raes.realizability`, which runs the real RAES compile/plan/
-  validate path and never dispatches);
-- **Backend supply** -- does the tenant image registry actually offer a concrete
-  image for every node, resolved through the one shared matching policy the
-  provisioner executes at realization (:mod:`shared.raes.image_policy`).
-
-Boundaries:
-
-- **Detail seam.** ``list_all_scenarios`` stays DB-only. File reads and SDL
-  compilation run for one entry or a bounded set, never across catalog lists.
-  One bulk registry query covers every demanded name.
-- **Derived data.** Nothing is persisted. Each assessment uses current package
-  identity, target identity, and registry state, preventing stale authorization.
-- **Fail closed, but honestly.** Inability to assess (untrusted pack, unreadable
-  SDL, unsupported target) is ``indeterminate`` -- distinct from a proven
-  ``not_realizable`` and never rendered as realizable. Legacy YAML/DB scenarios
-  have no RAES pack and are ``not_applicable``; this module never translates a
-  legacy definition into RAES to produce a greener answer.
-- **Bounded output.** Gaps carry a stable code, category, resource address, and a
-  safe message. Never SDL bodies, authored values, parameter or account values,
-  provider payloads, credentials, or local filesystem paths.
-
-Editor feedback never replaces the launch-time digest, plan, image, admission, or
-provisioner checks; it runs in front of them.
+Gaps contain stable codes, categories, resource addresses and safe messages.
+They never contain source bodies, authored values, account or parameter values,
+provider payloads, credentials, or local paths.
 """
 
 from __future__ import annotations
@@ -45,6 +26,7 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 
 from cms.scenarios.catalog_presentation import RAES_SCENARIO_TYPE
+from cms.scenarios.project_parameters import configured_project_parameters, target_configuration_gap
 from cms.scenarios.registry import get_catalog_entry
 from shared.exceptions import ValidationError
 from shared.log_sanitize import safe_log_value
@@ -143,39 +125,16 @@ def _assess_registered_pack(
     exit -- the SDL must be compiled before that happens.
     """
     with _trusted_scenario_path(source) as (scenario_path, trust_gap):
+        parameters = None
+        if scenario_path is not None:
+            try:
+                parameters = configured_project_parameters(scenario_path, source, scope)
+            except ValueError:
+                scenario_path, trust_gap = None, _gap_pack_unresolvable()
+            except ValidationError:
+                scenario_path, trust_gap = None, target_configuration_gap()
         if scenario_path is None:
             return _result(scenario_id, target_id, RealizabilityOutcome.INDETERMINATE, (trust_gap,))
-        from shared.raes.project_parameters import required_project_parameters, select_project_parameters
-
-        parameters = None
-        try:
-            required = required_project_parameters(scenario_path)
-        except ValueError:
-            return _result(scenario_id, target_id, RealizabilityOutcome.INDETERMINATE, (_gap_pack_unresolvable(),))
-        if required:
-            from engine.services import runtime_plugin_plan_parameters
-            from shared.runtime_plugin_binding import RuntimePluginScope
-
-            organization_uuid = source.organization_uuid or (scope.organization_uuid if scope else None)
-            try:
-                if organization_uuid is None:
-                    raise ValueError("Target configuration required")
-                _, facts = runtime_plugin_plan_parameters(
-                    RuntimePluginScope(
-                        organization_uuid=organization_uuid, pack_id=scenario_id, pack_digest=source.package_digest
-                    )
-                )
-                if not facts:
-                    raise ValueError("Target configuration required")
-                parameters = select_project_parameters(scenario_path, facts)
-            except (ValueError, ValidationError):
-                gap = RealizabilityGap(
-                    code="shifter-realizability.target-configuration-required",
-                    address=_PLAN_ADDRESS,
-                    category=GapCategory.TARGET,
-                    message="Select a ready registered target project in the pack's adapter settings",
-                )
-                return _result(scenario_id, target_id, RealizabilityOutcome.INDETERMINATE, (gap,))
         return _assess_trusted_path(
             scenario_id, scenario_path, target_id, credential=credential, scope=scope, parameters=parameters
         )
