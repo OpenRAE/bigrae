@@ -30,7 +30,7 @@ def task(settings, monkeypatch):
     return intent, runner
 
 
-@pytest.mark.parametrize("state", ["RUNNING", "SUBMITTED", "SUCCEEDED", "UNKNOWN", None])
+@pytest.mark.parametrize("state", ["RUNNING", "SUBMITTED", "SUCCEEDED", "UNKNOWN"])
 def test_active_unknown_or_successful_task_cannot_authorize_retry(task, state):
     intent, runner = task
     runner.get_task_status.return_value = {"status": state} if state is not None else None
@@ -86,3 +86,13 @@ def test_default_service_account_matches_the_effective_kubernetes_identity(task)
     runner.get_task_status.return_value = {"status": "FAILED"}
     assert retire_failed_cleanup_task(intent)
     assert runner.delete_completed_task.call_args.args[2]["service_account_name"] == "default"
+
+
+@pytest.mark.parametrize("verified_absence", [False, True])
+def test_missing_job_requires_provider_verification_of_complete_absence(task, verified_absence):
+    intent, runner = task
+    runner.get_task_status.return_value = None
+    if not verified_absence:
+        runner.delete_completed_task.side_effect = CloudTaskError("Absence is unavailable")
+    assert retire_failed_cleanup_task(intent) is verified_absence
+    runner.delete_completed_task.assert_called_once()

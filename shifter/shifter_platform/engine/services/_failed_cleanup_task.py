@@ -1,4 +1,4 @@
-"""Retire only a failed, identity-checked cleanup task before a native retry."""
+"""Verify the former cleanup worker is stopped before a native retry."""
 
 from datetime import timedelta
 from typing import TYPE_CHECKING, Any
@@ -16,7 +16,7 @@ _IDENTITY_FIELDS = ("task_identity", "image", "container_name", "service_account
 
 
 def retire_failed_cleanup_task(intent: "ProvisionerLaunchIntent") -> bool:
-    """Unknown or changed provider evidence cannot authorize duplicate effects."""
+    """Require terminal identity or complete task absence before another attempt."""
     from engine.models import ProvisionerLaunchStatus
 
     selected = _recorded_identity(intent) if intent.status == ProvisionerLaunchStatus.SUCCEEDED else None
@@ -26,7 +26,7 @@ def retire_failed_cleanup_task(intent: "ProvisionerLaunchIntent") -> bool:
         runner = get_task_runner()
         try:
             observed = runner.get_task_status(cluster=namespace, task_id=intent.task_ref)
-            if observed is not None and observed.get("status") == "FAILED":
+            if observed is None or observed.get("status") == "FAILED":
                 runner.delete_completed_task(namespace, intent.task_ref, identity)
                 retired = True
         except CloudTaskError:

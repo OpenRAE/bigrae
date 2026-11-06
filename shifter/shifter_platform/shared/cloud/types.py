@@ -151,7 +151,7 @@ class TaskRunner(Protocol):
     def get_task_status(self, cluster: str, task_id: str) -> dict[str, Any] | None: ...
 
     def delete_completed_task(self, cluster: str, task_ref: str, expected_identity: dict[str, Any]) -> None:
-        """Remove only a terminal task whose complete workload identity matches."""
+        """Remove an identity-checked terminal task, or verify its reserved slot has no Job or pods."""
         ...
 
     def interrupt_task(
