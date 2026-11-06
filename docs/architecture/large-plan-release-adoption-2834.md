@@ -37,3 +37,13 @@ retain their bytes, and still reject malformed authority metadata.
 Mutate producer admission and the retained cleanup entry to check the tests.
 Run ADR guard, import-linter and the affected writing and Python checks.
 Test the release pair in the test tenant before any customer update.
+
+RAE 11 stores derived digests separately from raw corpus fixtures. Tests that
+use those fixtures first apply the released `seal_payload` helper. The normal
+released model then validates the complete synthetic record. Persisted records
+continue to require their original digests; admission must not repair them.
+
+The two maintenance workers with small CPU limits must also complete cold
+startup before their heartbeat checks expire. Use the existing one-core worker
+limit for bootstrap pruning and pack removal. Keep CPU requests, memory limits
+and all health checks unchanged. Test the combined update before launch.

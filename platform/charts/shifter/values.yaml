@@ -280,7 +280,7 @@ workers:
         memory: 256Mi
         ephemeral-storage: 128Mi
       limits:
-        cpu: 500m
+        cpu: "1"
         memory: 512Mi
         ephemeral-storage: 256Mi
   raesOperationRecordPrune:
@@ -372,7 +372,7 @@ workers:
         memory: 256Mi
         ephemeral-storage: 128Mi
       limits:
-        cpu: 250m
+        cpu: "1"
         memory: 512Mi
         ephemeral-storage: 256Mi
 
