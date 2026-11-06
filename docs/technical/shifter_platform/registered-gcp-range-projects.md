@@ -185,3 +185,8 @@ the native RAES intent, literal Content, provider overlay and readback boundarie
 that complete this feature. Targeted PostgreSQL, contract and synthetic worker
 tests establish the implemented boundaries; full CI and approved live qualification
 remain separate evidence.
+
+An incomplete cloud restoration uses the result contract’s category/count objects.
+It retains the original baseline references and incomplete proof without provider error text.
+Engine must receive that result so it can retain custody and use normal cleanup recovery.
+A malformed result must never turn a provider failure into verified absence.
