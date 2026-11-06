@@ -30,6 +30,8 @@ from .naming import build_idempotent_job_name, parse_job_task_id
 
 logger = logging.getLogger(__name__)
 
+_TASK_CLEANUP_IDENTITY_MISMATCH = "Task cleanup identity mismatch"
+
 
 def _require_absent_task(
     core_api: object, namespace: str, job_name: str, expected: dict[str, Any], api_exception: type[Exception]
@@ -37,9 +39,9 @@ def _require_absent_task(
     """Missing Job metadata cannot hide a still-running owned pod."""
     identity, container = expected.get("task_identity"), expected.get("container_name")
     if not isinstance(identity, str) or not identity or not isinstance(container, str) or not container:
-        raise CloudTaskError("Task cleanup identity mismatch")
+        raise CloudTaskError(_TASK_CLEANUP_IDENTITY_MISMATCH)
     if build_idempotent_job_name(container, identity) != job_name:
-        raise CloudTaskError("Task cleanup identity mismatch")
+        raise CloudTaskError(_TASK_CLEANUP_IDENTITY_MISMATCH)
     if not _pods_gone(core_api, namespace, job_name, api_exception):
         raise CloudTaskError("Task cleanup absence is not verified")
 
@@ -171,7 +173,7 @@ class KubernetesTaskRunner:
         """
         namespace, job_name = parse_job_task_id(task_ref, cluster) if task_ref else ("", "")
         if namespace != cluster or not job_name:
-            raise CloudTaskError("Task cleanup identity mismatch")
+            raise CloudTaskError(_TASK_CLEANUP_IDENTITY_MISMATCH)
         try:
             batch_api, core_api, client_lib, api_exception = self._load_kubernetes_api()
             job = _read_job_status(batch_api, namespace, job_name, api_exception)
@@ -179,7 +181,7 @@ class KubernetesTaskRunner:
                 _require_absent_task(core_api, namespace, job_name, expected_identity, api_exception)
                 return
             if not _is_reserved_intent(job, job_name, expected_identity):
-                raise CloudTaskError("Task cleanup identity mismatch")
+                raise CloudTaskError(_TASK_CLEANUP_IDENTITY_MISMATCH)
             status = getattr(job, "status", None)
             if not (getattr(status, "succeeded", 0) or getattr(status, "failed", 0)):
                 raise CloudTaskError("Task cleanup requires terminal evidence")
