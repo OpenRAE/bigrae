@@ -541,3 +541,5 @@ A native management command admits an installed tenant pack without dispatch.
 Operational claims and worker observations remain separate from scientific inputs.
 The current compiler permits serial execution; configured concurrency grants no provider capacity.
 See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).
+
+Native task observation reads the normal Job resource, which includes its status. It uses the existing Job permission. Completed-task removal retains exact workload identity checks. See [Native Job status reads](../architecture/native-job-status-read-2827.md).
