@@ -2,7 +2,8 @@
 CTF content egress (#2090). The platform namespace denies public egress. This
 credential-less CONNECT proxy is the only platform pod that reaches public HTTPS
 hosts; the CTF scheduler (organizer image copies) and the portal (CTF webhooks)
-reach organizer-chosen hosts only through it. The process admits DNS names on
+reach organizer-chosen hosts only through it. The GCP browser gateway also uses
+it for HTTPS authority checks. The process admits DNS names on
 443, requires global DNS answers and dials the pinned address; TLS terminates at
 the destination. Same shape as model-provider-egress.
 */}}
@@ -74,7 +75,7 @@ spec:
             matchExpressions:
               - key: app.kubernetes.io/component
                 operator: In
-                values: [portal, ctf-scheduler]
+                values: [portal, ctf-scheduler{{ if eq .Values.provider.name "gcp" }}, guacamole-client{{ end }}]
       ports: [{protocol: TCP, port: 3128}]
   egress:
     - to:
@@ -101,7 +102,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: In
-        values: [portal, ctf-scheduler]
+        values: [portal, ctf-scheduler{{ if eq .Values.provider.name "gcp" }}, guacamole-client{{ end }}]
   policyTypes: [Egress]
   egress:
     - to:

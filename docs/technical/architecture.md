@@ -109,6 +109,10 @@ unavailable until their recorded model/content initialization commits; recovery
 revalidates the original credential and pinned content before completing it.
 Permanent event deletion commits native cleanup for each retained range before
 removing its aggregate records. Failed cleanup admission preserves those records.
+
+Participant recovery also submits failed old ranges to authorized native cleanup
+(#2783). A failed status does not prove that resources or project reservations
+are absent. Verified native cleanup controls reservation release.
 Owner-handoff recovery can read back its exact admitted revoke after the source
 loses administrative authority; it requires the original live credential and
 does not replay a provider write.
@@ -192,6 +196,14 @@ chart pins.
 Both providers use the same principal, credential and OpenFGA contracts. The
 [AWS native identity contract](platform_infrastructure/aws-native-identity.md)
 records the AWS bindings and their approved deviations.
+
+On GCP, the browser gateway uses its dedicated Google workload identity to
+call the portal's HTTPS authority endpoint. Deployment obtains that identity's
+email and immutable subject from Terraform and sets the endpoint as the token
+audience. The portal checks both identity claims before it checks access to
+the requested session. The gateway sends HTTPS through the existing
+`content-egress` CONNECT proxy on port 3128. This path adds no project role
+and keeps the default denial of direct public egress.
 
 GCP shared-VPC range cells use per-range subnet/tag firewall policy and explicit
 NAT membership. Guests have no external NIC. Any attached identity is
@@ -379,6 +391,11 @@ tenancy verification through its own service facade.
 
 ## API and extension contracts
 
+Temporary participants access only their own assigned range through the
+existing event participation permission. Their credentials stay bound to that
+event. Both range owners check live participation, assignment and native custody
+before remote access. See the [participant access design](../architecture/temporary-participant-range-access-2785.md).
+
 The versioned application API is `/api/v1/`, composed by `config/api_urls.py`.
 Authenticated `/api/v1/schema/` and `/api/v1/docs/` expose OpenAPI and Swagger;
 the [published contract](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/openapi/v1.json)
@@ -408,6 +425,11 @@ Pack content never authorizes executable installation. Private content, adapters
 image recipes, answers and acceptance evidence stay in their owner's repository.
 A compatibility probe, buildable SDK, or accepted manifest proves neither a
 published package release nor a qualified live range.
+
+Runtime adapter workers complete every response byte and flush stdout before
+they report success. This includes short writes with unbuffered Python output
+(#2781). Preparation output stays encrypted, with the same response format and
+size limits.
 
 Named adapter input files use CMS's existing content scope, signed upload,
 immutable object installation, quota and cleanup. Administrators manage them in

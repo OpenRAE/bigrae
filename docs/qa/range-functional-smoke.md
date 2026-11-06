@@ -71,6 +71,9 @@ so driving Guacamole over RDP widens real coverage. Exit code is `0` only on an
 overall pass. A production-looking target is refused unless
 `--allow-production` is passed.
 
+Guest IDs are opaque path segments. The checker encodes reserved characters in
+the terminal WebSocket URL, as the browser does.
+
 ## Reading the verdict
 
 The report lists every check separately—range readiness, target selection,

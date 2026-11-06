@@ -1,6 +1,8 @@
 """Preparation is explicitly declared, bounded and confidential before host admission."""
 
+import io
 from types import SimpleNamespace
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
@@ -154,3 +156,53 @@ def test_missing_output_secret_never_prints_clear_preparation(monkeypatch, capsy
     captured = capsys.readouterr()
     assert "PRIVATE_SUPPLIED_VALUE" not in captured.out + captured.err
     assert not captured.out
+
+
+class _ShortOutput(io.BytesIO):
+    """A raw output stream that accepts only part of each write."""
+
+    def write(self, value):
+        return super().write(value[:65536])
+
+
+def test_large_encrypted_response_survives_unbuffered_short_writes(monkeypatch):
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    response = planned(
+        request,
+        secret_payloads=[{"version_ref": f"nodes.synthetic.version{i}", "value": "private" * 200} for i in range(80)],
+    )
+    key = Fernet.generate_key().decode()
+    monkeypatch.setenv("BIGRAE_PLUGIN_INPUT", request.model_dump_json())
+    monkeypatch.setenv(runtime.PREPARATION_OUTPUT_ENV, key)
+    monkeypatch.setattr(worker, "_load_plugin", lambda _manifest: SimpleNamespace(plan=lambda _request: response))
+    raw = _ShortOutput()
+    output = io.TextIOWrapper(raw, encoding="utf-8", write_through=True)
+    monkeypatch.setattr(worker.sys, "stdout", output)
+
+    assert worker.main() == 0
+    encoded = raw.getvalue()
+    assert len(encoded) > 65536
+    assert encoded.endswith(b"\n")
+    assert b"private" not in encoded
+    assert runtime.parse_result(encoded, request, result_secret=key) == response
+
+
+@pytest.mark.parametrize("failure", ["zero", "none", "write", "flush"])
+def test_output_failure_cannot_report_worker_success(monkeypatch, capsys, failure):
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    monkeypatch.setenv("BIGRAE_PLUGIN_INPUT", request.model_dump_json())
+    monkeypatch.setenv(runtime.PREPARATION_OUTPUT_ENV, Fernet.generate_key().decode())
+    monkeypatch.setattr(worker, "_load_plugin", lambda _manifest: SimpleNamespace(plan=planned))
+    stream = Mock()
+    stream.write.side_effect = lambda value: len(value)
+    if failure in {"zero", "none"}:
+        stream.write.side_effect = None
+        stream.write.return_value = 0 if failure == "zero" else None
+    elif failure == "write":
+        stream.write.side_effect = OSError("private diagnostic")
+    else:
+        stream.flush.side_effect = OSError("private diagnostic")
+    monkeypatch.setattr(worker.sys, "stdout", SimpleNamespace(buffer=stream))
+
+    assert worker.main() == 2
+    assert capsys.readouterr().err == "plugin output unavailable\n"

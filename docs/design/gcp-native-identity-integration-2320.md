@@ -131,3 +131,25 @@ connections beyond expiry; also test unavailable renewal and disabled admission.
 Keep operational identities and redacted acceptance evidence in their existing
 private destination. No application S8 activation or cloud apply occurs as part
 of this proposed-design artifact.
+
+## Browser gateway deployment correction (#2793)
+
+Terraform exports the existing browser gateway service account email and immutable
+subject ID. The runtime renderer verifies that the email matches the gateway
+workload binding and deployment project. It supplies the portal control endpoint,
+exact audience, email and subject ID. Missing or inconsistent metadata stops
+rendering. No cloud permission is added.
+
+The gateway uses its existing Google workload identity to request a Google ID
+token for the control audience. It sends the token to the deployment's HTTPS
+control endpoint. The portal verifies the token and rechecks the recorded range
+binding. Existing denial and session-termination rules remain unchanged.
+
+Public control requests pass through the existing credential-free CONNECT proxy.
+The GCP gateway uses standard JVM HTTPS proxy properties. Its network policy
+allows the named gateway to reach that proxy on port 3128. The proxy retains its
+public DNS, pinned address and TLS tunnel rules. The gateway receives no direct
+public egress. TLS ends at the portal; the proxy cannot read the control token.
+
+Tests cover the exact Terraform identity, runtime rendering, missing and mismatched
+metadata, JVM proxy configuration and both sides of the proxy network policy.

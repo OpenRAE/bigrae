@@ -194,6 +194,11 @@ output "workload_service_accounts" {
   value       = module.portal_iam.workload_service_accounts
 }
 
+output "guacamole_controller_identity" {
+  description = "Public immutable identity of the browser gateway controller."
+  value       = module.portal_iam.guacamole_controller_identity
+}
+
 output "node_service_account_email" {
   description = "Service account email for GKE nodes."
   value       = module.portal_iam.node_service_account_email
