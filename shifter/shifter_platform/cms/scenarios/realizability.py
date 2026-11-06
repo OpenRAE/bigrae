@@ -46,6 +46,7 @@ from django.conf import settings
 
 from cms.scenarios.catalog_presentation import RAES_SCENARIO_TYPE
 from cms.scenarios.registry import get_catalog_entry
+from shared.exceptions import ValidationError
 from shared.log_sanitize import safe_log_value
 from shared.raes.artifact_inventory import ArtifactSupply, BackendArtifact, build_artifact_supply
 from shared.raes.image_policy import is_concrete_image_ref, resolve_from_candidates
@@ -144,7 +145,40 @@ def _assess_registered_pack(
     with _trusted_scenario_path(source) as (scenario_path, trust_gap):
         if scenario_path is None:
             return _result(scenario_id, target_id, RealizabilityOutcome.INDETERMINATE, (trust_gap,))
-        return _assess_trusted_path(scenario_id, scenario_path, target_id, credential=credential, scope=scope)
+        from shared.raes.project_parameters import required_project_parameters, select_project_parameters
+
+        parameters = None
+        try:
+            required = required_project_parameters(scenario_path)
+        except ValueError:
+            return _result(scenario_id, target_id, RealizabilityOutcome.INDETERMINATE, (_gap_pack_unresolvable(),))
+        if required:
+            from engine.services import runtime_plugin_plan_parameters
+            from shared.runtime_plugin_binding import RuntimePluginScope
+
+            organization_uuid = source.organization_uuid or (scope.organization_uuid if scope else None)
+            try:
+                if organization_uuid is None:
+                    raise ValueError("Target configuration required")
+                _, facts = runtime_plugin_plan_parameters(
+                    RuntimePluginScope(
+                        organization_uuid=organization_uuid, pack_id=scenario_id, pack_digest=source.package_digest
+                    )
+                )
+                if not facts:
+                    raise ValueError("Target configuration required")
+                parameters = select_project_parameters(scenario_path, facts)
+            except (ValueError, ValidationError):
+                gap = RealizabilityGap(
+                    code="shifter-realizability.target-configuration-required",
+                    address=_PLAN_ADDRESS,
+                    category=GapCategory.TARGET,
+                    message="Select a ready registered target project in the pack's adapter settings",
+                )
+                return _result(scenario_id, target_id, RealizabilityOutcome.INDETERMINATE, (gap,))
+        return _assess_trusted_path(
+            scenario_id, scenario_path, target_id, credential=credential, scope=scope, parameters=parameters
+        )
 
 
 def _assess_trusted_path(
@@ -154,10 +188,12 @@ def _assess_trusted_path(
     *,
     credential: CredentialContext | None = None,
     scope: ResourceScope | None = None,
+    parameters: dict[str, object] | None = None,
 ) -> dict[str, Any]:
     """Combine capability and backend-supply contributors into one ordered answer."""
     capability = assess_scenario_capability(
         scenario_path,
+        parameters=parameters,
         artifact_availability_provider=_availability_provider(target_id, credential=credential, scope=scope),
     )
     supply_gaps = _supply_gaps(capability.image_demands, target_id=target_id, credential=credential, scope=scope)
