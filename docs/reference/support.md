@@ -5,7 +5,7 @@ response time, managed operations service or vendor support entitlement.
 For deployment/account access, contact your deployment operator.
 
 Start with the [handbook](../technical/architecture.md),
-[GCP installation and first exercise](../technical/handbook/gcp-first-run.md) and
+[Install on Google Cloud](../getting-started/install-gcp.md) and
 [FAQ](faq.md). Confirm the exact release, backend and scenario qualification
 before reporting unexpected behavior. Inspect unknown cleanup before retrying;
 do not delete recovery evidence to clear a failed range.

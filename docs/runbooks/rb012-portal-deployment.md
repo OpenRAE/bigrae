@@ -55,8 +55,8 @@ the deployer image of an earlier verified release.
 
 Retain release evidence, protected-environment approvals, immutable digests,
 saved Terraform plans, migration results, and smoke output. Rehearse bootstrap
-and rollback against a clean owned environment. See [GCP first
-run](../technical/handbook/gcp-first-run.md) and the
+and rollback against a clean owned environment. See [Install on Google
+Cloud](../getting-started/install-gcp.md) and the
 [GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md).
 
 Escalate when the target is absent from the closed workflow choices, the exact

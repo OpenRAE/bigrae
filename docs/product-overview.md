@@ -1,40 +1,26 @@
-# BigRAE Documentation
+# BigRAE
 
-Run XDR/XSIAM demos without installing tools on your laptop.
+BigRAE creates cloud environments for cyber-range exercises.
+The current installation path uses Google Cloud. AWS support is coming.
 
-## Get Started
+## Install
 
-- [Install BigRAE on GCP](technical/handbook/gcp-first-run.md) - Install a deployment from a published release
-- [Quickstart](getting-started/quickstart) - Launch your first range
-- [Key Concepts](getting-started/concepts) - Agents, ranges, scenarios, terminals
+- [Install on Google Cloud](getting-started/install-gcp.md)
+- [Deploy with a coding agent](getting-started/deploy-with-agent.md)
 
-## How-To Guides
+Both procedures use a published release container. You do not need a repository clone.
 
-- [Set Up NGFW Demo](how-to/ngfw-demo) - Full NGFW integration walkthrough
-- [Troubleshooting](how-to/troubleshooting) - Common issues and solutions
+## Use
 
-## Features
-
-- [Agents](features/agents) - Upload and manage XDR/XSIAM installers
-- [Ranges](features/ranges) - Launch and manage demo environments
-- [Terminal](features/terminal) - SSH and RDP access to instances
-- [Credentials](features/credentials) - SCM and deployment profile management
-- [NGFW](features/ngfw) - Persistent firewall setup for traffic logging
-
-## Scenarios
-
-- [Overview](scenarios/index) - Compare available scenarios
-- [Basic Range](scenarios/basic-range) - Kali + victim (fastest)
-- [AD Attack Lab](scenarios/ad-attack-lab) - Active Directory environment
-- [Basic Range with NGFW](scenarios/ngfw-range) - Basic + network visibility
+- [Launch your first range](getting-started/quickstart.md)
+- [Key concepts](getting-started/concepts.md)
+- [How-to guides](how-to/index.md)
+- [Feature guides](features/index.md)
+- [Scenario guides](scenarios/index.md)
+- [Operations runbooks](runbooks/index.md)
 
 ## Reference
 
-- [FAQ](reference/faq) - Common questions
-- [Support](reference/support) - Getting help
-
-## Technical
-
-Platform architecture and infrastructure for administrators and developers.
-
-- [Technical Documentation](technical/index)
+- [GCP deployment reference](technical/handbook/gcp-github-less-deployment.md)
+- [Technical documentation](technical/index.md)
+- [Support](reference/support.md)

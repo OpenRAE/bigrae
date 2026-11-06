@@ -33,7 +33,7 @@ As the platform grows, undocumented features become a liability for onboarding, 
 - DOCUMENTS → DOCUMENTATION `docs/technical/shifter_platform/ctf.md` (CTF technical documentation)
 - IMPLEMENTS → CODE_FILE `scripts/adr_guard/_guard/checks/documentation.py` (documentation-coverage adr_guard check (ADR-022-R1), check_documentation_coverage)
 - IMPLEMENTS → DOCUMENTATION `docs/technical/architecture.md` (Canonical current-state architecture and ownership handbook)
-- IMPLEMENTS → DOCUMENTATION `docs/technical/handbook/gcp-first-run.md` (GCP installation and synthetic scenario path)
+- IMPLEMENTS → DOCUMENTATION `docs/getting-started/install-gcp.md` (GCP installation from a published release)
 - IMPLEMENTS → DOCUMENTATION `docs/technical/handbook/scenario-contract-transition.md` (Current, transition and target scenario contracts)
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#1531` (Current-state handbook and architecture documentation drift review)
 - IMPLEMENTS → CODE_FILE `scripts/quality_ownership/classify_paths.py` (Always-run CI documentation pairing before path routing)
