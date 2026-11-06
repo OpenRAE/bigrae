@@ -117,6 +117,11 @@ representations, and are bounded by the provider byte limit and the existing
 preparation-output budget. This selection grants no cloud API or key-issuance
 authority to an adapter.
 
+SDK 0.1.3 accepts at most 2048 secret payload selections in one preparation response.
+The complete clear response must still fit 512 KiB.
+Each value must fit 65536 UTF-8 bytes, and version references must be unique.
+The existing invocation, phase, and host authority checks apply to every selection.
+
 An action may request `runtime_values`, a map from local names to closed
 `GuestValueReference(binding=..., field=...)` references. Supported fields are
 `private_address` and `participant_ssh_public_key`. The host resolves these from
