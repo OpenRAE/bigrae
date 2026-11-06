@@ -541,3 +541,5 @@ A native management command admits an installed tenant pack without dispatch.
 Operational claims and worker observations remain separate from scientific inputs.
 The current compiler permits serial execution; configured concurrency grants no provider capacity.
 See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).
+
+Administrator delegation inventories exclude ranges in the destroying and destroyed states. Engine retains their runtime records and cleanup proofs. Live range ancestry checks and direct binding reads are unchanged. See [Retiring range delegation](../architecture/retiring-range-delegation-2824.md).
