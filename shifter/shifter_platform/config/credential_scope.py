@@ -6,8 +6,9 @@ from typing import TYPE_CHECKING
 
 from django.contrib.auth.models import User
 
-from cms.services import range_credential_scope
+from cms.services import range_credential_scope, range_identity_present
 from ctf.services.credential_scope import event_credential_scope
+from engine.services import worker_credential_scope
 from shared.authorization import TargetRef
 from shared.identity_scope import ResourceScope
 from workspaces.services import hierarchy_target_scope
@@ -47,5 +48,8 @@ def credential_target_scope(target: TargetRef) -> ResourceScope:
     if target.type == "event":
         return event_credential_scope(target_uuid)
     if target.type == "range":
-        return range_credential_scope(target_uuid)
+        scope = worker_credential_scope(target_uuid)
+        if scope is not None and range_identity_present(target_uuid):
+            raise ValueError("Range identity is ambiguous")
+        return scope if scope is not None else range_credential_scope(target_uuid)
     return hierarchy_target_scope(target.type, target_uuid)

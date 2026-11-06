@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from collections import deque
 from collections.abc import Iterator
 from datetime import datetime
@@ -434,7 +435,7 @@ def validate_archive_records(
     *,
     trace_attempts: set[str],
     formats: dict[str, str],
-) -> tuple[str, str, bool, int]:
+) -> tuple[str, str, bool, int, JsonObject]:
     """Keep collection and scientific success independent, including partial runs."""
     payloads = [
         _structured_document(raw, formats.get(name, "json"))
@@ -462,4 +463,20 @@ def validate_archive_records(
         raise TrialArchiveError("Seal identity or outcome contradicts its run")
     complete, gap_count = _coverage(marker, run, payloads)
     capture_gaps = _capture_gaps(payloads, inventory, run, plan)
-    return run.run_status, run.outcome_status, complete and capture_gaps == 0, gap_count + capture_gaps
+    entry = plan.entries[expected.entry_id]
+    metadata = {
+        "plan_id": plan.plan_id,
+        "plan_digest": plan.plan_digest,
+        "replacement_origin": plan.replacement_origin.model_dump(mode="json") if plan.replacement_origin else None,
+        "entries": {
+            expected.entry_id: {
+                "plan_entry_id": entry.plan_entry_id,
+                "entry_digest": entry.entry_digest,
+                "run_id": entry.run_id,
+                "coordinate": entry.coordinate.model_dump(mode="json"),
+            }
+        },
+    }
+    if len(json.dumps(metadata).encode()) > 16384:
+        raise TrialArchiveError("Archive plan association exceeds supported metadata size")
+    return run.run_status, run.outcome_status, complete and capture_gaps == 0, gap_count + capture_gaps, metadata

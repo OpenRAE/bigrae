@@ -3076,7 +3076,7 @@
     },
     {
       "authority": {
-        "decision": "range.access|account.access_devices|organization.access_devices|workspace.access_devices",
+        "decision": "range.access|event.participate|account.access_devices|organization.access_devices|workspace.access_devices",
         "scope": "sql:bootstrap;selector=persisted_protocol_and_target",
         "target": "resource"
       },
@@ -3087,7 +3087,7 @@
     },
     {
       "authority": {
-        "decision": "range.access|account.access_devices|organization.access_devices|workspace.access_devices",
+        "decision": "range.access|event.participate|account.access_devices|organization.access_devices|workspace.access_devices",
         "scope": "sql:bootstrap;selector=persisted_protocol_and_target",
         "target": "resource"
       },
@@ -3098,9 +3098,9 @@
     },
     {
       "authority": {
-        "decision": "range.access",
-        "scope": "sql:range_instance",
-        "target": "range"
+        "decision": "range.access|event.participate",
+        "scope": "sql:range_instance;selector=credential_kind_and_event_parent",
+        "target": "resource"
       },
       "disposition": "retained",
       "method": "POST",
@@ -3109,9 +3109,9 @@
     },
     {
       "authority": {
-        "decision": "range.access",
-        "scope": "sql:range_instance",
-        "target": "range"
+        "decision": "range.access|event.participate",
+        "scope": "sql:range_instance;selector=credential_kind_and_event_parent",
+        "target": "resource"
       },
       "disposition": "retained",
       "method": "POST",
@@ -4566,6 +4566,14 @@
       "scope": "native credential_from_file;SQL organization ancestry and approved apparatus configuration",
       "surface": "cms:experiment_batch",
       "target": "organization"
+    },
+    {
+      "decision": "recorded activated bootstrap administrator;installation.manage_cloud_authority:configuration/recovery;parent.launch_range:create;range.read:inspect;range.access:qualification;range.manage:retirement",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "server-only private bootstrap facts;native Knox exact-target credentials;35-minute maximum;personal eligibility;current application policy and SQL membership;revocation on every exit",
+      "surface": "engine:qualify_disposable_workers",
+      "target": "installation;exact account/organization/workspace parent;two exact native workers"
     }
   ],
   "schema": "shifter.identity-authorization-surfaces/v1"

@@ -229,19 +229,30 @@ class TestPureHelpers:
         with pytest.raises(gbi.BaseImageError):
             gbi.validate_artifact_manifest(["not", "a", "dict"], role="kali")
 
-    def test_range_images_from_imports_needs_the_complete_set(self):
-        complete = {
+    @pytest.mark.parametrize("include_dc", [False, True], ids=["required-only", "with-dc"])
+    def test_range_images_from_imports_preserves_verified_roles(self, include_dc):
+        imported = {
             "GCP_RANGE_LINUX_IMAGE": "projects/p/global/images/l",
             "GCP_RANGE_KALI_IMAGE": "projects/p/global/images/k",
-            "GCP_RANGE_DC_IMAGE": "projects/p/global/images/d",
         }
-        assert gbi.range_images_from_imports(complete) == {
+        expected = {
             "linux": "projects/p/global/images/l",
             "kali": "projects/p/global/images/k",
-            "dc": "projects/p/global/images/d",
         }
+        if include_dc:
+            imported["GCP_RANGE_DC_IMAGE"] = "projects/p/global/images/d"
+            expected["dc"] = "projects/p/global/images/d"
+        assert gbi.range_images_from_imports(imported) == expected
+
+    @pytest.mark.parametrize(
+        "roles",
+        [(), ("linux",), ("kali", "dc"), ("linux", "kali", "unknown")],
+        ids=["empty", "missing-kali", "missing-linux", "unknown-role"],
+    )
+    def test_range_images_from_imports_rejects_missing_or_unknown_roles(self, roles):
+        imported = {f"GCP_RANGE_{role.upper()}_IMAGE": f"projects/p/global/images/{role}" for role in roles}
         with pytest.raises(gbi.BaseImageError):
-            gbi.range_images_from_imports({"GCP_RANGE_LINUX_IMAGE": "x"})
+            gbi.range_images_from_imports(imported)
 
     def test_image_name_is_digest_derived(self):
         assert gbi.image_name_for("kali", "abc123def456") == "shifter-kali-abc123def456"

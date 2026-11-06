@@ -19,6 +19,7 @@ the enforced rules are `ADR-037-R1..R6`.
 | Container bases pinned to `@sha256` digests | every committed `Dockerfile` `FROM` | digest-only `FROM` + Dependabot `docker` (`ADR-037-R2`) |
 | Downloaded CLIs integrity-verified | provisioner `terraform` (and `kubectl`/`virtctl` in the GDC build), `kubeconform`, `kube-linter` | `sha256sum -c` before use (`ADR-037-R3`) |
 | Python runtime deps hash-pinned | provisioner image | `pip install --require-hashes` from reviewed locks (`ADR-037-R4`) |
+| Build-only Python package manager removed | portal and deployer images | Remove `pip` after dependencies are installed, including its vendored libraries; exact-image vulnerability scans still block rollout. |
 | SBOM + signed provenance for release images | portal, provisioner, guacd, guacamole-client builds | `docker/build-push-action` `provenance: mode=max` + `sbom: true`, then `actions/attest-build-provenance` (`ADR-037-R5`) |
 | Deploy verifies attestation before rollout | AWS ECS (portal, provisioner, guacd, guacamole-client) | `gh attestation verify oci://<image@digest> --repo "$GITHUB_REPOSITORY" --signer-repo "$GITHUB_REPOSITORY"` (`ADR-037-R6`) |
 | Deploy verifies attestation before rollout | GKE (portal, provisioner, guacd, guacamole-client, openvpn) | `gcp-deploy` verifies the registry-stored Sigstore bundle of each digest with the Sigstore trust root, with no GitHub API (`ADR-037-R6`, ADR-070) |

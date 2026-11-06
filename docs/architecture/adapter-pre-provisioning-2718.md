@@ -31,6 +31,7 @@ identities. Bound guest OS/count facts cannot change underneath guest planning.
 | Original plan | Existing address and pointer, scalar leaf, matching operation/resource payload, original plan digest and immutable metadata. Unknown or ambiguous authority grants nothing. |
 | RAES authority | Each edit is covered by its declared concern. All overlapping authority remains effective. Exact/closed values cannot change. Existing public bounded-domain, legacy structure and current recursive-constraint evaluators enforce the original constraints. Only conformant results are accepted. |
 | Worker output | Fernet encryption before stdout; ciphertext remains within the existing 1 MiB output limit. A missing/wrong invocation key fails closed without printing a response. |
+| Output completion | Worker success requires every response byte and the final newline to reach the binary output stream. Short writes advance by the actual byte count. A stalled or failed write cannot report success. |
 | Controller commit | Original operation, range generation, deadline and cancellation are rechecked. Accepted preparation and planned invocation are committed under the range mutex together. No provider mutation precedes acceptance. |
 | Lifetime custody | The existing range plugin binding retains one write-once preparation snapshot. Its encrypted result is also carried by the existing read-only invocation projection. SQL guards prohibit replacing accepted preparation. |
 | Consumer | Reconstruct the original invocation from source operation, pin, plan and range identities before decrypting/using the mapping. The provisioner remains RAES-free; the application authenticates its semantic approval with the existing field-encryption primitive. |
@@ -40,7 +41,7 @@ Limits reuse the existing request/file/output budgets: 64 KiB request, 16 files
 and 512 KiB aggregate file material, 512 KiB clear preparation response and at
 most 4096 scalar edits. Ciphertext fits the existing 1 MiB bounded log reader.
 The full retained result must also fit the operation envelope with its original
-input: 4 MiB for native RAES range plans, and 256 KiB for other operations.
+input: 8 MiB for native RAES range plans, and 256 KiB for other operations.
 Core validates that future cleanup envelope before
 acceptance; an otherwise valid larger response fails before any provider effect.
 Prepared cleanup reuses the immutable source input, avoiding changed registry
@@ -90,6 +91,12 @@ application fields or another invocation. It is delivered as the sensitive
 `BIGRAE_PLUGIN_RESULT_SECRET` key of the existing Job-owned invocation Secret;
 it never appears literally in the Pod spec or request JSON. The application
 key is never supplied to the adapter.
+
+The worker writes the complete UTF-8 response through stdout's binary stream.
+It retries short writes and flushes the stream before it reports success.
+This also applies when Python uses unbuffered stdout. A text wrapper can report
+all characters written when its raw stream accepts only part of the bytes.
+The wire format, encryption and output limits do not change.
 
 The worker removes the key from its environment before importing adapter code,
 suppresses incidental plugin output as today, then encrypts the bounded response

@@ -24,15 +24,6 @@ from gcp_inputs import private_workdir, write_private_file
 from gcp_process import GcpCommandError, ProcessRunner, script_argv
 
 PLATFORM_NAMESPACE = "shifter-platform"
-RESTART_DEPLOYMENTS = (
-    "portal-web",
-    "guacd",
-    "guacamole-client",
-    "worker-cms",
-    "worker-engine",
-    "worker-mc",
-    "ctf-scheduler",
-)
 CERTIFICATE_NAME = "platform-managed-cert"
 INGRESS_NAME = "platform-external"
 
@@ -48,7 +39,7 @@ def _bool_flag(enabled: bool) -> str:
 
 def restart_workloads(runner: ProcessRunner, env: Mapping[str, str | None], *, model_broker_enabled: bool) -> None:
     """Restart the control-plane Deployments that read hydrated secrets at start."""
-    deployments = [*RESTART_DEPLOYMENTS, *(["model-access-control"] if model_broker_enabled else [])]
+    deployments = release_deployments(runner, env, model_broker_enabled=model_broker_enabled)
     for deployment in deployments:
         runner.run(["kubectl", "rollout", "restart", f"deployment/{deployment}", "-n", PLATFORM_NAMESPACE], env=env)
 

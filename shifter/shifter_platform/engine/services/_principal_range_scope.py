@@ -56,6 +56,10 @@ def prepare_range_scope_move(
 
 def _assert_move_supported(row: Range, *, allow_event: bool = False, allow_principal_vpn: bool = False) -> None:
     """Reject scope changes for runtime states that cannot safely move."""
+    from engine.models import DisposableWorker
+
+    if DisposableWorker.objects.filter(range_id=row.pk).exists():
+        raise ValueError("Worker custody cannot move")
     if row.status not in {"ready", "paused", "failed"} or (row.event_uuid is not None and not allow_event):
         raise ValueError("Range scope move unavailable")
     if row.gcp_project_uses.filter(released_at__isnull=True).exists():

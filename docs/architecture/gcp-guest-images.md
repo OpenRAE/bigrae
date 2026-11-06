@@ -127,14 +127,14 @@ The release manifest names one exact identity for each role:
 
 ```json
 "base_images": {
-  "dc": "ghcr.io/<owner>/<repository>/gce-dc@sha256:<digest>",
   "kali": "ghcr.io/<owner>/<repository>/gce-kali@sha256:<digest>",
   "ubuntu": "ghcr.io/<owner>/<repository>/gce-ubuntu@sha256:<digest>"
 }
 ```
 
-The map names all three roles or none. A guest build revision can be older than
-the application revision. A release without `base_images` deploys an existing
+The map requires `kali` and `ubuntu`; it may also name `dc` when that role is
+published. A guest build revision can be older than the application revision.
+A release without `base_images` deploys an existing
 tenant, and `gcp-images` refuses it with a clear error.
 
 ### Import
@@ -157,6 +157,12 @@ canonical reference, role, and digest, with status `READY` and the required
 guest features, is reused with no download. An all-reused set creates no
 transfer bucket. The command writes `range-images.json` only after every role is
 ready, then releases the lock.
+
+The conversion to `range-images.json` uses the same required-role set as release
+validation. Required Kali and Ubuntu imports are sufficient. A DC import is
+retained when present; its absence does not invalidate a required-only release.
+Unknown roles and incomplete required sets fail before the configuration is
+written. This rule applies to both fresh imports and reused images.
 
 The transfer bucket is private and run-owned, in the range project and region.
 The command deletes its objects and the bucket on success and on failure. Raw
@@ -259,6 +265,21 @@ with `validated=passed`, the numeric image ID, the run, the attempt, the
 verdict, and the evidence digest. It returns the validated ID to the caller. It
 always deletes the VMs. The labels are locators only; the publish job also needs
 the successful validation job of the same run.
+
+### Linux identity at capture
+
+The shared cleanup script stops Docker and its socket before removing the
+persisted daemon identity. It preserves the image cache. The final GCP step runs
+`cloud-init clean --logs --seed --machine-id`, so each clone generates a fresh
+machine identity and applies its own first-boot configuration.
+
+Docker stores its current daemon identity in `engine-id` under its data root;
+older engines use `/etc/docker/key.json`. See the
+[Moby identity implementation](https://github.com/moby/moby/blob/v28.5.1/daemon/id.go)
+and the [cloud-init clean reference](https://docs.cloud-init.io/en/24.2/reference/cli.html#clean).
+Images captured before this cleanup need a new build and publication before
+they qualify as independent disposable workers. Application releases do not
+rebuild guests or repair identities in an existing image.
 
 ### Pre-promoted DC (`dc-prebaked`) vs. generic Windows/DC
 

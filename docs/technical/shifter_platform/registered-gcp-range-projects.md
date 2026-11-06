@@ -40,6 +40,18 @@ metadata. Pagination and response bytes are bounded. A denied, redirected or
 incomplete response fails capture; it never produces an empty inventory.
 Baseline secret payloads and private service-account keys are never accessed.
 
+Policy reads use each provider API's request contract (#2773):
+
+| Policy owner | HTTP method | Policy version 3 option |
+| --- | --- | --- |
+| Project | POST | JSON request body |
+| Service account | POST with no request body | Query parameters |
+| Secret | GET | Query parameters |
+
+The service-account request follows Google's
+[IAM policy API](https://docs.cloud.google.com/iam/docs/reference/rest/v1/projects.serviceAccounts/getIamPolicy).
+An unsupported request method fails capture; it cannot produce a partial baseline.
+
 The existing worker identity needs metadata read permissions on the dedicated
 project: `resourcemanager.projects.get`, `resourcemanager.projects.getIamPolicy`,
 `iam.serviceAccounts.list`, `iam.serviceAccounts.getIamPolicy`,
@@ -60,7 +72,7 @@ replacement baseline.
 
 Only the exact ciphertext hash, size, bucket, generation and semantic state
 digest cross the operation boundary. Registration and ordinary envelopes retain
-the 256 KiB bound. Native RAES plan inputs alone have a 4 MiB limit; their payload
+the 256 KiB bound. Native RAES plan inputs alone have an 8 MiB limit; their payload
 parser still validates the complete closed contract. Result budgets are unchanged. Cleanup reads the retained bucket and generation,
 checks the ciphertext before decryption, and verifies the original organization,
 project identity, capture and lease. Changed current configuration cannot redirect
@@ -84,6 +96,12 @@ original RAES authority before allocation. Its sealed mapping, project reference
 and invocation result commit together, after validating the full future cleanup
 envelope against the existing transport limit. A caught acceptance failure rolls
 back all newly reserved projects.
+
+Runtime preparation accepts content plugin pins and installed worker apparatus
+pins through the shared parser. Both retain the original plan, executable digest
+and operation identity. A worker apparatus with no native cloud resources
+allocates no project lease. Completion validates both pin forms against the
+same accepted preparation.
 
 Each lease records its original provisioning operation. Cleanup recovers that
 operation's immutable input, retaining its project and image references even after
@@ -135,11 +153,26 @@ policy and delete permissions; project policy writes; and access to the existing
 bucket's `raes/project-state/` namespace for state and locks. It needs no
 organization-policy administrator role. Exercise key handling remains external.
 
+The GCP portal IAM module supplies the storage grants (#2775). Only the
+provisioner receives `roles/storage.objectCreator` for the configured assets
+bucket's `raes/project-baselines/` prefix, and `roles/storage.objectUser` for
+its `raes/project-state/` prefix. The first grant cannot overwrite or delete
+baselines. The second supports Terraform state replacement and lock removal.
+The existing bucket read grant supplies listing; neither new grant permits
+writes to other assets or gives another workload these permissions.
+
 Release requires the current native destroy result to be applied, the range to
 be destroyed, the overall inventory to report verified absence without residuals,
 and exact restoration proof for the original lease/baseline. The release update
 and result disposition share the result transaction. Unknown or residual state
 retains custody. Logical status changes and missing Jobs are insufficient.
+
+Native RAES plan inputs have an 8 MiB operation-envelope budget (#2777).
+The released planner records cloud declarations in resources and operations;
+the complete input can exceed 4 MiB even when its declarations are valid.
+Both the portal and provisioner use the same shared validator. Ordinary
+envelopes and results keep their 256 KiB budget. Preparation approval still
+checks the complete retained destroy envelope before any provider effects.
 
 The [design](../../architecture/registered-gcp-range-projects-2716.md) describes
 the native RAES intent, literal Content, provider overlay and readback boundaries

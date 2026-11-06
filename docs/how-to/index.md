@@ -6,7 +6,7 @@ Step-by-step walkthroughs for common tasks.
 
 ## Getting Started
 
-- [Run Your First Demo](first-demo) - Complete walkthrough from zero to demo
+- [Launch your first range](../getting-started/quickstart.md) - Upload an agent, launch, connect, and destroy
 
 ## Advanced Setups
 
@@ -20,3 +20,7 @@ Step-by-step walkthroughs for common tasks.
 ## Troubleshooting
 
 - [Troubleshooting Guide](troubleshooting) - Common issues and solutions
+
+## Disposable workers
+
+- [Qualify disposable VM workers](disposable-workers.md) - Operator qualification and exact-worker recovery.

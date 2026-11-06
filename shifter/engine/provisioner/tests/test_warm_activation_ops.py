@@ -27,6 +27,7 @@ from shared.warm_pool.activation_input import (
 import raes_gcp_activate_realize
 import raes_range_ops
 from raes_gcp_activate_gce import GceActivationOps
+from raes_gcp_network_allocation import GceNetworkAllocation
 
 
 def _activation():
@@ -284,7 +285,7 @@ class TestRunRaesRangeActivate:
         monkeypatch.setattr(
             raes_range_ops,
             "_allocated_networks_for_destroy",
-            lambda *args: raes_range_ops._GceNetworkAllocation(required=False),
+            lambda *args: GceNetworkAllocation(required=False),
         )
         monkeypatch.setattr(raes_range_ops, "_require_gce_live_fire_binding", lambda operation_input: "gce")
         monkeypatch.setattr(raes_range_ops, "load_gce_range_cell_config", lambda **kwargs: object())
@@ -320,7 +321,7 @@ class TestRunRaesRangeActivate:
         monkeypatch.setattr(
             raes_range_ops,
             "_allocated_networks_for_destroy",
-            lambda *args: raes_range_ops._GceNetworkAllocation(required=False),
+            lambda *args: GceNetworkAllocation(required=False),
         )
         monkeypatch.setattr(raes_range_ops, "_require_gce_live_fire_binding", lambda operation_input: "gce")
         monkeypatch.setattr(raes_range_ops, "load_gce_range_cell_config", lambda **kwargs: object())
@@ -363,7 +364,7 @@ class TestRunRaesRangeActivate:
         monkeypatch.setattr(
             raes_range_ops,
             "_allocated_networks_for_destroy",
-            lambda *args: raes_range_ops._GceNetworkAllocation(required=False),
+            lambda *args: GceNetworkAllocation(required=False),
         )
         monkeypatch.setattr(raes_range_ops, "_require_gce_live_fire_binding", lambda operation_input: "gce")
         monkeypatch.setattr(raes_range_ops, "load_gce_range_cell_config", lambda **kwargs: object())
@@ -392,7 +393,7 @@ class TestRunRaesRangeActivate:
             "_allocated_networks_for_destroy",
             lambda request_id, operation_id, plan, value: (
                 recovered.append((request_id, operation_id, value))
-                or raes_range_ops._GceNetworkAllocation(
+                or GceNetworkAllocation(
                     required=True,
                     network_cidrs=(("backend.gce.network.default", "10.90.0.0/28"),),
                 )
@@ -429,7 +430,7 @@ class TestRunRaesRangeActivate:
         monkeypatch.setattr(
             raes_range_ops,
             "_allocated_networks_for_destroy",
-            lambda *args: raes_range_ops._GceNetworkAllocation(required=True),
+            lambda *args: GceNetworkAllocation(required=True),
         )
         monkeypatch.setattr(
             "raes_gcp_activate.default_activation_ops",

@@ -53,6 +53,8 @@ def destroy_range(range_ref: RangeRef) -> bool:
     except Range.DoesNotExist:
         logger.warning("destroy_range: range not found range_id=%s", range_ref.range_id)
         return False
+    if range_obj.owner_principal_uuid is not None:
+        raise PermissionError("Range operation authority unavailable")
     return _apply_destroy_to_range(range_obj, range_ref.range_id, range_ref.user_id, start_teardown)
 
 
@@ -139,6 +141,8 @@ def cancel_range(range_ref: RangeRef) -> None:
             logger.warning("cancel_range: range not found range_id=%s", range_id)
             return
 
+        if range_obj.owner_principal_uuid is not None:
+            raise PermissionError("Range operation authority unavailable")
         if ResourceStatus(range_obj.status) not in CANCELLABLE_STATUSES:
             if range_obj.status in {Range.Status.DESTROYING, Range.Status.DESTROYED, Range.Status.FAILED}:
                 from ._receipt import _revoke_receipt_verifier_for_range

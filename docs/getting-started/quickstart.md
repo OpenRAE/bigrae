@@ -1,15 +1,53 @@
-# Quickstart
+# Launch your first range
 
-## Install a new environment
+This page launches the `smoke-linux` scenario on a new deployment and then
+destroys it. To install BigRAE first, see
+[Install on Google Cloud](install-gcp.md). To sign in for the first time, see
+[First sign-in](../technical/handbook/gcp-first-run.md).
 
-Use [Install on Google Cloud](install-gcp.md) for the complete procedure.
-It covers permissions, tools, configuration, DNS, sign-in, and checks.
-Use [Deploy with a coding agent](deploy-with-agent.md) to delegate that procedure.
+## Before you start
 
-AWS support is coming.
+- Sign in to the portal with an account that can launch ranges. The first
+  administrator can.
+- Have an agent installer file. The launch form requires an agent, but the
+  `smoke-linux` scenario does not install it.
 
-## Use an existing environment
+## 1. Upload an agent
 
-Ask its administrator for the portal URL and an account.
-Then follow [First sign-in and first range](../technical/handbook/gcp-first-run.md).
-A scenario can require its own inputs. Check its instructions before you launch it.
+1. In the sidebar, select **Assets > Agents**.
+2. In **Upload agent**, enter an **Agent name**.
+3. Select the **Agent type**.
+4. Select the **Installer file**.
+5. Select **Upload agent**.
+
+## 2. Launch the range
+
+1. In the sidebar, select **Ranges**.
+2. Select **Launch a range**.
+3. In **Scenario**, select the `smoke-linux` scenario.
+4. In **Agent**, select the agent that you uploaded.
+5. Select **Launch range**.
+
+The range status changes from **Pending** to **Provisioning** to **Ready**.
+
+## 3. Connect to the range
+
+1. In the sidebar, select **Terminal**.
+2. Select the tab of a device. The `smoke-linux` range has two devices:
+   - `attacker`: Kali;
+   - `victim`: Ubuntu.
+
+The terminal opens an SSH session on the device.
+
+## 4. Destroy the range
+
+1. In the sidebar, select **Ranges**.
+2. Select **Destroy**.
+3. Confirm with **Destroy**.
+
+## Next steps
+
+- [Key concepts](concepts.md): the terms that the portal uses.
+- [Artifact preparation](../ops/artifact-preparation.md): register your own
+  scenario pack.
+- [CTF organizer guide](../features/ctf-organizer-guide.md): run a CTF event.

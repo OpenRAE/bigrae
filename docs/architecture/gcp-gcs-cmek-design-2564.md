@@ -96,12 +96,35 @@ bucket and key, the helper does these steps:
 
 1. Read the bucket. Stop if its default key is not the expected key.
 2. List all live and noncurrent generations, and count soft-deleted objects.
-3. Rewrite each live object that does not use the expected key. The rewrite
+3. Validate native lease-encrypted state as described below. Rewrite every other
+   live object that does not use the expected key. The rewrite
    uses the source generation and `--if-generation-match` with that generation.
-4. List the live objects again. Stop if a live object still does not use the
-   expected key, except for the residuals below.
+4. List the live objects again. Stop if a live object uses neither the expected
+   key nor valid native lease encryption, except for the residuals below.
 5. Print counts only. Object names stay private: each rewrite reads its object
    URL from stdin, so no object name reaches argv or the command log.
+
+### Registered-project state (#2787)
+
+The registered-project provisioner uses the Terraform GCS backend with an
+AES-256 customer-supplied key derived for each lease. This protects secret-bearing
+state with the retained application key. The deployment tool must preserve that
+key contract and the original object generation.
+
+The migration recognizes this encryption only for the exact native path
+`raes/project-state/<32 lowercase hexadecimal lease digits>/default.tfstate`.
+Authoritative GCS `customerEncryption` metadata must contain `AES256` and a
+canonical Base64 SHA-256 key hash of 32 bytes. Conflicting KMS metadata is not
+accepted as this state mode. A matching path alone grants no exemption. User-defined
+object metadata is not evidence of encryption.
+
+Valid state remains unchanged. The report counts these objects separately from
+objects that use the bucket key. Every other object retains the existing CMEK
+migration and verification. Malformed state encryption fails that verification.
+The deployer receives no state key and reads no state contents.
+
+This preserves an existing encryption boundary. It does not migrate Terraform
+state to another encryption mode or broaden state-reading permissions.
 
 The helper does not rewrite these objects. It reports them as residuals:
 
@@ -157,6 +180,7 @@ Trust boundaries:
 | Key availability | A lifecycle identity destroys or disables a key version | Deploy and destroy get custom KMS roles without `cryptoKeyVersions.destroy`, `cryptoKeyVersions.update`, or `cryptoKeys.delete` | Terraform test of the role permissions |
 | Key availability | A Terraform plan deletes a key | `prevent_destroy`; destroy removes exact addresses from state | Bootstrap tests |
 | Existing objects | Old data stays Google-managed | Migration after each apply; verification of live objects | Bootstrap tests |
+| Native Terraform state | A bucket rewrite changes the retained lease-key contract | Exact native path plus authoritative AES-256 key metadata; preserve generation and count separately | Native-state migration regression and negative cases |
 | Concurrent writes | A rewrite replaces a newer object with older bytes | `--if-generation-match` with the listed generation | Bootstrap tests |
 | Release evidence | A migration changes immutable evidence | No rewrite in a bucket with a locked retention policy | Bootstrap tests |
 | Object names | Names leak into logs | The migration prints counts only | Bootstrap tests |
@@ -192,3 +216,5 @@ Residual risks:
   use the data source, not a built email address.
 - [Cloud KMS roles](https://docs.cloud.google.com/kms/docs/reference/permissions-and-roles),
   section `roles/cloudkms.admin`: the source of the custom role permissions.
+
+- [Cloud Storage customer-supplied keys](https://docs.cloud.google.com/storage/docs/encryption/customer-supplied-keys): rewrite behavior, required AES-256 metadata, and key hashes.

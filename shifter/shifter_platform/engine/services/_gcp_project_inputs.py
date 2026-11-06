@@ -15,7 +15,7 @@ from shared.raes.operation_input import parse_raes_operation_input
 
 if TYPE_CHECKING:
     from engine.models import Range
-    from shared.runtime_plugin_binding import RuntimePluginPin
+    from shared.runtime_plugin_binding import RuntimePin
 
 _UNAVAILABLE = "Registered project input is unavailable"
 
@@ -76,9 +76,7 @@ def retained_project_leases(target: Range) -> tuple[GcpProjectLease, ...]:
     return leases
 
 
-def projects_for_input(
-    target: Range, plan: dict[str, Any], pin: RuntimePluginPin | None
-) -> tuple[GcpProjectLease, ...]:
+def projects_for_input(target: Range, plan: dict[str, Any], pin: RuntimePin | None) -> tuple[GcpProjectLease, ...]:
     """Project only retained custody; an input projection never grants a new lease."""
     if pin is not None and "provision.prepare" in pin.manifest.capabilities:
         return ()
@@ -123,7 +121,7 @@ def validate_project_preparation(
     effective: dict[str, Any],
     leases: tuple[GcpProjectLease, ...],
     result: RuntimePlan | None = None,
-    pin: RuntimePluginPin | None = None,
+    pin: RuntimePin | None = None,
 ) -> None:
     """Admit all concrete native cloud shapes and payloads before committing custody."""
     from shared.field_encryption import decrypt_value

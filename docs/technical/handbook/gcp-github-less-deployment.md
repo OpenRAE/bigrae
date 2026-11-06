@@ -140,8 +140,8 @@ project and the pipeline.
    DIGEST=$(oras resolve "$REG/deployer-gcp:$REV")
    ```
 
-3. Verify the build provenance of the deployer image. This command is not yet
-   confirmed against a real release; confirm it on the first release.
+3. Verify the build provenance of the deployer image. Set `<release ref>` to
+   `refs/heads/main` for a tagged release, or to the branch of a test release:
 
    ```bash
    cosign verify-attestation --type https://slsa.dev/provenance/v1 \
@@ -209,7 +209,9 @@ check verifies the same digests, so a mirror cannot change the release.
 1. Write the deployment input bundle in a private directory
    ([Author and publish the deployment input bundle](#author-and-publish-the-deployment-input-bundle),
    steps 1 to 4). It is the only configuration of the deployment.
-2. Run the install from the deployer image of the release:
+2. Run the install from the deployer image of the release. Mount the bundle
+   directory into the container, for example with
+   `-v /path/to/bundle:/bundle:ro`, and pass `--inputs /bundle`:
 
    ```bash
    ./scripts/bootstrap/deploy.py gcp-install --inputs /path/to/bundle
@@ -397,11 +399,13 @@ Other inputs that refer to secrets:
    | `operator_bootstrap` | The first operator and the first administrator. `gcp-deploy` requires this block. `enabled` defaults to `true` and then requires `admin_email`. `admin_password_secret_ref` defaults to the secret that `gcp-install` creates. |
    | `openfga` | Optional. Leave it unset: the deploy generates the credentials and publishes the release model. To pin your own, set all three `*_secret_ref` values, and optionally `store_id` and `model_id`. |
    | `cloud_sql_iam_auth` | Native SQL login. It defaults to `true`, which the current release requires. |
-   | `post_deploy_smoke.user_email` | An existing portal account for the smoke. An empty value skips the smoke. |
+   | `post_deploy_smoke.user_email` | The portal account that owns the smoke range. The smoke creates the account when it does not exist. An empty value skips the smoke. |
    | `release_trust` | The numeric repository ID and owner ID of the repository that publishes the release. |
 
    The operator email must use the domain in `identity_allowed_email_domain`.
-   To get the release trust IDs, run
+   For a release from `OpenRAE/bigrae`, the release trust IDs are
+   `github_repository_id: "1241599684"` and `github_owner_id: "308592074"`.
+   For a release from another repository, run
    `gh api repos/<owner>/<repo> --jq '.id, .owner.id'` once on any workstation.
    The deployment itself needs no GitHub access.
 3. Write `terraform.tfvars.json` with the platform Terraform values that the
@@ -490,6 +494,7 @@ The preflight checks the tools on `PATH`, loads the bundle, and renders the
 Terraform values. It reports an insecure control-plane input, for example a
 world-open authorized network. From a checkout, the tool check includes `git`.
 The deployer image embeds its source revision, so the check omits `git` there.
+The CLI delegates these tool checks to the shared preflight gate.
 
 ## First install
 

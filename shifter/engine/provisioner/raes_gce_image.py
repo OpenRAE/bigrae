@@ -189,6 +189,7 @@ def _profile(
     """Build a GCERangeImageProfile, filling gaps from authored resources then defaults."""
     return GCERangeImageProfile(
         source_image=image.image_ref if image.image_kind == "image" else "",
+        source_image_id=image.image_id,
         source_machine_image=image.image_ref if image.image_kind == "machine-image" else "",
         machine_type=image.machine_type or _machine_type_from_resources(node) or _DEFAULT_MACHINE_TYPE,
         disk_size_gb=image.disk_size_gb or _DEFAULT_DISK_SIZE_GB,

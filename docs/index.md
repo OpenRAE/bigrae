@@ -1,27 +1,49 @@
 # BigRAE documentation
 
-## Install
+BigRAE is a self-service cyber-range platform for authorized purple, red, and
+blue team exercises and CTF events. It installs on GCP from a published
+release. AWS support comes in an upcoming release.
 
-The current installation path uses Google Cloud and a published release container.
-You do not need a repository clone or a development environment.
-AWS support is coming.
+New to BigRAE? Start with [Get started](getting-started/index.md):
 
-| Task | Procedure |
-| --- | --- |
-| Give the deployment to a coding agent | [Deploy with a coding agent](getting-started/deploy-with-agent.md) |
-| Run each installation step yourself | [Install on Google Cloud](getting-started/install-gcp.md) |
-| Update or remove an installation | [Installation operations](getting-started/install-gcp.md#update-an-installation) |
-| Fix a failed deployment | [GCP deployment runbook](runbooks/rb023-gcp-deployment.md) |
+1. [Install on Google Cloud](getting-started/install-gcp.md), by hand or with
+   a [coding agent](getting-started/deploy-with-agent.md).
+2. [Launch your first range](getting-started/quickstart.md).
 
-## Use an installation
+## Use BigRAE
 
-Start with [First sign-in and first range](technical/handbook/gcp-first-run.md).
-Then use the [feature guides](features/index.md),
-[scenario guides](scenarios/index.md), and [operations runbooks](runbooks/index.md).
+| Section | Read this when |
+|---|---|
+| [Getting started](getting-started/index.md) | You are new and want the install path, the first range, and the key concepts. |
+| [How-to guides](how-to/index.md) | You want step-by-step guides for specific tasks. |
+| [Features](features/index.md) | You need details on agents, ranges, the terminal, credentials, NGFW, or CTF. |
+| [Scenarios](scenarios/index.md) | You are running a specific scenario. |
+| [Reference](reference/index.md) | You need the FAQ or support pointers. |
 
-## Technical reference
+## Deploy and operate on GCP
 
-- [Deployment commands and configuration](technical/handbook/gcp-github-less-deployment.md)
-- [System architecture](technical/architecture.md)
-- [Local development](technical/dev/local-setup.md)
-- [Technical documentation](technical/index.md)
+| Doc | Read this when |
+|---|---|
+| [Install on Google Cloud](getting-started/install-gcp.md) | You install a new deployment from a published release, or update or remove one. |
+| [Deploy with a coding agent](getting-started/deploy-with-agent.md) | You give the installation to a coding agent. |
+| [First sign-in](technical/handbook/gcp-first-run.md) | You sign in to a new deployment for the first time. |
+| [GitHub-less GCP deployment guide](technical/handbook/gcp-github-less-deployment.md) | You need the full detail of the release, the bundle, install, update, mirror, and teardown. |
+| [RB023: GCP deployment](runbooks/rb023-gcp-deployment.md) | An install, update, or teardown fails. |
+| [GCP tenant standup gotchas](dev/gcp-tenant-standup-gotchas.md) | You hit a known deploy problem. |
+| [GCP range-cell deploy](dev/gcp-range-cell-deploy.md) | You configure the GCE range backend and its images. |
+| [Deployment configuration and recovery](dev/deployment-configuration.md) | You need how the deploy renders its Terraform inputs and recovers state. |
+| [Native CTF scenario content](dev/ctf-scenario-content.md) | You are publishing and binding private, digest-pinned native challenges to a scenario. |
+| [GCP event capacity profiles](ops/gcp-event-capacity.md) | You are scaling a GCP tenant for an event, running the p30 public-path gate, checking drift, or scaling down. |
+| [GCP native identity](ops/gcp-native-identity.md) | You are enabling native SQL, separating policy administration or qualifying live renewal and authority. |
+| [GCP range audit telemetry](ops/gcp-range-audit-telemetry.md) | You are changing GCP range flow, NAT, or Vertex AI audit logging, or reading the deploy readback. |
+| [Operations runbooks](runbooks/index.md) | You are diagnosing or recovering a deployed BigRAE environment. |
+| [Model-access operations design](ops/model-access.md) | You are implementing or reviewing planned model access, budgets, revocation, migration, and recovery under #681. |
+
+## Develop and govern
+
+| Section | Read this when |
+|---|---|
+| [Technical docs](technical/index.md) | You are developing the platform: setup, Terraform, CI/CD, architecture, and subsystem docs. |
+| [Architecture handbook](technical/architecture.md) | You need the system context, components, authority, lifecycle, and package boundaries. |
+| [Developer environment setup](technical/dev/setup.md) | You deploy a development environment from your own fork with GitHub Actions, on AWS or GCP. |
+| [ADR enforcement](adr/README.md) | You need how architecture decisions are recorded and enforced in CI. |

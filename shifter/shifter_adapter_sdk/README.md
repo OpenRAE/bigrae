@@ -104,6 +104,10 @@ remain encrypted in core records and are reused for retries and destruction;
 reports keep original plan addresses. See the
 [pre-provisioning design](../../docs/architecture/adapter-pre-provisioning-2718.md).
 
+The worker completes all output bytes and flushes stdout before it reports
+success. This includes short writes with unbuffered Python output. SDK 0.1.2
+contains this correction. The response format and output limits stay the same.
+
 A preparation response may include `secret_payloads`, each with an exact native
 `version_ref` and a literal UTF-8 `value`. Core accepts a selection only for an
 otherwise unspecified native payload and the installed adapter's declared
@@ -197,3 +201,14 @@ or refresh failure must stop client model access.
 The current delivery implementation requires trusted private SSH on Linux. It
 rejects transports that would persist enrollment in a remote command service.
 Client protocol compatibility and both cloud deployments require live qualification.
+
+## Apparatus runtime inputs
+
+`bigrae.runtime-plugin/v2` supports administrator-bound worker software without a content pack.
+Its runtime input requires `apparatus_digest` and forbids `pack_digest`.
+The manifest and response must declare that same protocol.
+Version 1 inputs continue to require their original pack identity.
+The host still pins the installed executable, target bindings, operation, phase, and input digest.
+An adapter cannot install itself through content or choose provider resources.
+Apparatus planning uses the existing isolated worker and bounded guest-action contract.
+A compatible installation probe does not prove guest readiness.

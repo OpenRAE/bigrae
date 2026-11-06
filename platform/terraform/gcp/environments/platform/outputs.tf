@@ -194,6 +194,11 @@ output "workload_service_accounts" {
   value       = module.platform_core.workload_service_accounts
 }
 
+output "guacamole_controller_identity" {
+  description = "Public immutable identity of the browser gateway controller."
+  value       = module.platform_core.guacamole_controller_identity
+}
+
 # The GitHub OIDC provider + packer build service account (the CI auth identity)
 # are outputs of the foundational root platform/terraform/gcp/global/cicd-oidc,
 # not this platform root -- so a platform destroy never removes them. Read

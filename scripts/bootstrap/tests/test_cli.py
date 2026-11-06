@@ -751,6 +751,32 @@ class TestMainCLI:
         ):
             deploy.main()
 
+    @pytest.mark.parametrize(
+        "embedded,missing_tool,passes",
+        [(True, "git", True), (False, "git", False), (True, "trivy", False)],
+    )
+    def test_gcp_preflight_uses_revision_aware_native_tool_checks(
+        self, tmp_path, monkeypatch, mock_stdin_non_tty, embedded, missing_tool, passes
+    ):
+        """Sealed deployers omit Git while keeping real runtime tools mandatory."""
+        from tests.gcp_test_support import REVISION, write_bundle
+
+        bundle = write_bundle(tmp_path)
+        if embedded:
+            monkeypatch.setenv("BIGRAE_SOURCE_REVISION", REVISION)
+        else:
+            monkeypatch.delenv("BIGRAE_SOURCE_REVISION", raising=False)
+        with (
+            patch("sys.argv", ["deploy.py", "preflight", "--cloud", "gcp", "--env", "acme", "--inputs", str(bundle)]),
+            patch("shutil.which", side_effect=lambda name: None if name == missing_tool else "/usr/bin/tool"),
+        ):
+            if passes:
+                deploy.main()
+            else:
+                with pytest.raises(SystemExit) as failure:
+                    deploy.main()
+                assert failure.value.code == 1
+
     def test_preflight_command_fails_on_missing_tool(self, mock_stdin_non_tty):
         """preflight fails fast (exit 1) when a required deploy tool is missing.
 

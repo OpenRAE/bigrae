@@ -1,7 +1,8 @@
 """Range status/provisioned event state application.
 
-Applies authoritative range state changes from provisioner events and writes
-the accompanying audit records. Split out of ``engine/handlers.py`` (#685).
+Applies compatibility events only to ranges without native operation ownership.
+Operation-managed ranges accept state through the result applier; their events
+are notifications. Split out of ``engine/handlers.py`` (#685).
 Transient DB/audit failures propagate so the worker retries (ADR-025); missing,
 unauthorized, or malformed messages log and return.
 """
@@ -10,6 +11,7 @@ from __future__ import annotations
 
 import logging
 
+from django.db import transaction
 from django.utils import timezone
 
 from engine.models import Range
@@ -26,7 +28,7 @@ logger = logging.getLogger("engine.handlers")
 
 
 def _resolve_authorized_range(event: RangeStatusUpdatedPayload) -> Range | None:
-    """Resolve and authorize the range targeted by a status-update event.
+    """Lock and authorize an unfenced legacy range for a compatibility event.
 
     Returns None (after logging) when the event is missing identifiers, the
     range does not exist, or the event's user does not own it.
@@ -40,14 +42,14 @@ def _resolve_authorized_range(event: RangeStatusUpdatedPayload) -> Range | None:
 
     range_obj: Range | None
     try:
-        range_obj = Range.objects.get(id=range_id)
+        range_obj = Range.objects.select_for_update().get(id=range_id)
     except Range.DoesNotExist:
         logger.warning("Range not found: range_id=%s", safe_log_value(range_id))
         return None
 
-    if range_obj.owner_principal_uuid is not None:
+    if range_obj.owner_principal_uuid is not None or range_obj.provisioner_operation_id is not None:
         logger.warning(
-            "Principal range state requires the native operation result boundary range_id=%s", safe_log_value(range_id)
+            "Range state requires the native operation result boundary range_id=%s", safe_log_value(range_id)
         )
         range_obj = None
     elif range_obj.user_id != event.get("user_id"):
@@ -61,6 +63,7 @@ def _resolve_authorized_range(event: RangeStatusUpdatedPayload) -> Range | None:
     return range_obj
 
 
+@transaction.atomic
 def _handle_status_updated(event: RangeStatusUpdatedPayload) -> None:
     """Handle range.status.updated event - update status and timestamps.
 

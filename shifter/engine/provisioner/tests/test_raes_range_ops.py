@@ -951,3 +951,17 @@ class TestOpenVpnOrchestration:
         assert patched.destroy.call_args.args[3].remote_access == names_only
         assert patched.inventory.call_args.args[3].remote_access == names_only
         assert vpn.cleaned == [("req-1", 7, vpn.remote)]
+
+
+def test_worker_observation_refuses_unsupported_backend_before_guest_effects(patched, monkeypatch):
+    import raes_ec2_runtime
+
+    patched.read_input.side_effect = lambda *args, **kwargs: _run(range_backend="ec2", management_targets=("node.web",))
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Unsupported worker must not provision any guests")
+
+    monkeypatch.setattr(raes_ec2_runtime, "provision_ec2_run", forbidden)
+    with pytest.raises(ValueError, match="Worker host observation backend is unsupported"):
+        raes_range_ops.run_raes_range_provision("req-1", operation_id=_OPERATION_ID)
+    assert not patched.apply.called

@@ -77,7 +77,9 @@ _DIGEST_PREFIX = "sha256:"
 # Bounded transport size; operation payloads compose reference-only contracts and
 # must never carry raw provider state, so a few hundred KiB is generous.
 MAX_ENVELOPE_BYTES = 262144
-MAX_RAES_INPUT_BYTES = 4 * 1024 * 1024
+# Native cloud declarations occur in both plan resources and operations. Keep
+# room for that valid producer output plus retained preparation and cleanup.
+MAX_RAES_INPUT_BYTES = 8 * 1024 * 1024
 
 
 def envelope_byte_limit(value: dict[str, Any]) -> int:

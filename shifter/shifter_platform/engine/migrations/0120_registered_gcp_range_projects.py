@@ -127,7 +127,8 @@ def install_guards(apps, schema_editor):
         schema_editor.execute(_PROJECT_SQLITE)
         schema_editor.execute(_USE_SQLITE)
         schema_editor.execute(_RELEASE_SQLITE)
-        schema_editor.execute("""CREATE TRIGGER engine_gcp_project_use_initial BEFORE INSERT ON engine_gcp_range_project_use
+        schema_editor.execute("""CREATE TRIGGER engine_gcp_project_use_initial
+            BEFORE INSERT ON engine_gcp_range_project_use
             WHEN NEW.released_at IS NOT NULL
             BEGIN SELECT RAISE(ABORT, 'registered project restoration is unverified'); END""")
         schema_editor.execute("""

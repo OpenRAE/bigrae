@@ -69,6 +69,16 @@ proof that their production composition or final data constraints are ready.
 
 ## Reference-pattern assessment
 
+### Provider account lookup (#2771)
+
+Human sign-in resolves the exact immutable `ProviderBinding` before it reads a
+legacy profile. The first-install bootstrap uses that binding and an opaque
+username; it does not create a legacy profile subject. A legacy match must not
+replace the native lookup or change ownership of an existing binding. The
+normal account, principal, temporary-account and binding-conflict checks still
+apply. Tests cover the normal session exchange after bootstrap, native binding
+precedence and denial when the bound identity is inactive or is a service.
+
 The design follows the relevant official patterns:
 
 - OpenFGA recommends domain-specific resource types and relations rather than a

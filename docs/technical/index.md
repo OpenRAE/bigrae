@@ -12,11 +12,11 @@ Both use the published release container. AWS support is coming.
 - [BigRAE rename cutover and rollback](../how-to/bigrae-rename-cutover.md)
 
 - [Current-state architecture handbook](architecture.md) - System, authority, lifecycle and package ownership
-- [First sign-in and first range](handbook/gcp-first-run.md) - Verify access and a small range
+- [First sign-in](handbook/gcp-first-run.md) - Sign in to a new deployment and check it
 - [GCP deployment reference](handbook/gcp-github-less-deployment.md) - Release, foundation, inputs, deploy, update, teardown, and bucket encryption keys without GitHub
 - [Scenario contract transition](handbook/scenario-contract-transition.md) - CyberScript, ACES and current RAES
-- [Per-range model-access design](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/index.md) - Proposed architecture, security, operations, ADRs, and implementation backlog for #681
-- [Model-access contracts](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/architecture.md) - Proposed ownership, allocation, accounting, protocol, and lifecycle contracts
+- [Per-range model-access design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/index.md) - Proposed architecture, security, operations, ADRs, and implementation backlog for #681
+- [Model-access contracts](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/architecture.md) - Proposed ownership, allocation, accounting, protocol, and lifecycle contracts
 
 ## Platform Domains
 
@@ -43,7 +43,9 @@ Both use the published release container. AWS support is coming.
 
 - [Development Overview](dev/index.md) - Getting started with development
 - [Local Setup](dev/local-setup.md) - Local environment
-- [Installation setup](dev/setup.md) - Current release installation path
+- [Developer environment setup](dev/setup.md) - Deploy a development environment from a fork with GitHub Actions
+- [AWS native identity](../ops/aws-native-identity.md) - Identity and policy operations for AWS development deployments
+- [Portal on EKS operations](../ops/portal-eks-operations.md) - Operate the portal in AWS development deployments
 - [Terraform](dev/terraform.md) - Infrastructure patterns
 - [CI/CD](dev/ci-cd.md) - Pipeline configuration
 - [Secrets](dev/secrets.md) - Secrets management
@@ -56,11 +58,6 @@ Both use the published release container. AWS support is coming.
 
 - [GCP native identity](../ops/gcp-native-identity.md)
 - [GCP range audit telemetry](../ops/gcp-range-audit-telemetry.md)
-
-These AWS pages describe existing implementation work. AWS installation support is coming.
-
-- [AWS native identity reference](../ops/aws-native-identity.md)
-- [EKS operations reference](../ops/portal-eks-operations.md)
 
 ## Planning & Notes
 

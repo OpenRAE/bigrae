@@ -4,7 +4,7 @@
   "features": [
     {
       "id": "experiment-admission",
-      "title": "Immutable pack experiment admission",
+      "title": "Immutable experiment admission and retained result exports",
       "requirement": "GEN-001",
       "user_docs": [
         "how-to/admit-pack-experiments.md"
@@ -16,7 +16,30 @@
         "shifter/shifter_platform/cms/services/_experiment_batches.py",
         "shifter/shifter_platform/cms/models/experiment_batches.py",
         "shifter/shifter_platform/shared/raes/experiment_admission.py",
-        "shifter/shifter_platform/shared/raes/experiment_pack_snapshot.py"
+        "shifter/shifter_platform/shared/raes/experiment_pack_snapshot.py",
+        "shifter/shifter_platform/cms/services/_experiment_exports.py",
+        "shifter/shifter_platform/cms/services/_experiment_export_records.py",
+        "shifter/shifter_platform/cms/services/_trial_archive_exports.py",
+        "shifter/shifter_platform/shared/raes/trial_results.py"
+      ]
+    },
+    {
+      "id": "disposable-vm-workers",
+      "title": "Disposable VM worker lifecycle",
+      "requirement": "GEN-001",
+      "user_docs": [
+        "how-to/disposable-workers.md"
+      ],
+      "technical_docs": [
+        "technical/shifter_platform/disposable-workers.md"
+      ],
+      "drift_sources": [
+        "shifter/shifter_platform/engine/services/_disposable_workers.py",
+        "shifter/shifter_platform/engine/services/_worker_retirement.py",
+        "shifter/shifter_platform/engine/worker_retention.py",
+        "shifter/shifter_platform/shared/disposable_workers.py",
+        "shifter/shifter_platform/engine/management/commands/qualify_disposable_workers.py",
+        "shifter/shifter_platform/management/worker_validation.py"
       ]
     },
     {

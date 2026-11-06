@@ -35,7 +35,7 @@ class EventEnvelope(TypedDict):
 
 
 class RangeStatusUpdatedPayload(EventEnvelope):
-    """``range.status.updated`` — the only range event that mutates model state."""
+    """``range.status.updated`` — notification; unfenced legacy ranges may apply it."""
 
     range_id: int
     user_id: int | None

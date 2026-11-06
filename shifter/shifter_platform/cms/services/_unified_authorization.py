@@ -14,6 +14,7 @@ from shared.authorization import (
 from shared.authorization.policy import require_authorization, scope_parent
 from shared.credentials import CredentialContext, resolve_current_credential
 from shared.identity_scope import ResourceScope
+from shared.range_access_authority import range_action_request
 from shared.range_workspace_aggregate import range_event_parent
 from workspaces.services import resource_scope_from_ids
 
@@ -106,6 +107,32 @@ def range_authorization_binding(
         raise ValueError(_UNAVAILABLE) from None
 
 
+def _range_decision_request(
+    current: CredentialContext,
+    instance: RangeInstance,
+    action: str,
+    scope: ResourceScope,
+    parent: TargetRef,
+    authority_target: TargetRef | None,
+) -> AuthorizationRequest:
+    """Select authority from the resolved binding and reject missing facts."""
+    if authority_target is not None:
+        if action != "event.manage_ranges" or parent.type != "event" or authority_target != parent:
+            raise ValueError(_UNAVAILABLE)
+        return AuthorizationRequest(current.principal, action, authority_target, scope, current.ceiling)
+    if instance.request is None or not isinstance(instance.owner_principal_uuid, UUID):
+        raise ValueError(_UNAVAILABLE)
+    return range_action_request(
+        current,
+        action,
+        range_uuid=instance.uuid,
+        request_uuid=instance.request.request_id,
+        owner_uuid=instance.owner_principal_uuid,
+        scope=scope,
+        parent=parent,
+    )
+
+
 def require_range_action(
     credential: CredentialContext,
     range_uuid: UUID,
@@ -133,14 +160,7 @@ def require_range_action(
             )
         ):
             raise ValueError(_UNAVAILABLE)
-        target = TargetRef("range", instance.uuid)
-        request_parent: TargetRef | None = parent
-        if authority_target is not None:
-            if action != "event.manage_ranges" or parent.type != "event" or authority_target != parent:
-                raise ValueError(_UNAVAILABLE)
-            target = authority_target
-            request_parent = None
-        request = AuthorizationRequest(current.principal, action, target, scope, current.ceiling, parent=request_parent)
+        request = _range_decision_request(current, instance, action, scope, parent, authority_target)
         require_authorization(request)
         return instance
     except AuthorizationProviderBindingError:

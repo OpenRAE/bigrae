@@ -30,6 +30,28 @@ def _with_file(request, content=b"synthetic parameters\n"):
     return payload
 
 
+def test_apparatus_input_has_explicit_protocol_and_no_pack_identity(request_input):
+    payload = request_input.model_dump(mode="json")
+    payload.pop("pack_digest")
+    payload["apparatus_digest"] = "sha256:" + "c" * 64
+    payload["protocol"] = payload["manifest"]["protocol"] = "bigrae.runtime-plugin/v2"
+    parsed = RuntimeInput.model_validate(payload)
+    assert parsed.pack_digest is None
+    assert parsed.apparatus_digest == payload["apparatus_digest"]
+    assert "pack_digest" not in parsed.model_dump(mode="json")
+    payload["protocol"] = payload["manifest"]["protocol"] = PROTOCOL
+    with pytest.raises(ValueError):
+        RuntimeInput.model_validate(payload)
+
+
+def test_apparatus_cannot_impersonate_a_pack(request_input):
+    payload = request_input.model_dump(mode="json")
+    payload["apparatus_digest"] = "sha256:" + "c" * 64
+    payload["protocol"] = payload["manifest"]["protocol"] = "bigrae.runtime-plugin/v2"
+    with pytest.raises(ValueError):
+        RuntimeInput.model_validate(payload)
+
+
 @pytest.fixture
 def manifest():
     return PluginManifest(
