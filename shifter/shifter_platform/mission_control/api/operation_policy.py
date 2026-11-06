@@ -5,6 +5,7 @@ from shared.authorization.operations import OperationPolicy, scope_actions
 _READ = ("range.read",)
 _MANAGE = ("range.manage",)
 _ACCESS = ("range.access",)
+_REMOTE_ACCESS = (*_ACCESS, "event.participate")
 _DEVICE_ACCESS = scope_actions("access_devices")
 
 API_OPERATION_POLICY: dict[str, OperationPolicy] = {
@@ -27,13 +28,17 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
         scope_actions("manage_credentials"), "scope", "credential"
     ),
     "api_v1_mission_control_guacamole_bootstrap_status_retrieve": OperationPolicy(
-        _ACCESS + _DEVICE_ACCESS, "resource", "bootstrap", selector="persisted_protocol_and_target"
+        _REMOTE_ACCESS + _DEVICE_ACCESS, "resource", "bootstrap", selector="persisted_protocol_and_target"
     ),
     "api_v1_mission_control_guacamole_bootstrap_open_retrieve": OperationPolicy(
-        _ACCESS + _DEVICE_ACCESS, "resource", "bootstrap", selector="persisted_protocol_and_target"
+        _REMOTE_ACCESS + _DEVICE_ACCESS, "resource", "bootstrap", selector="persisted_protocol_and_target"
     ),
-    "api_v1_mission_control_guacamole_rdp_url": OperationPolicy(_ACCESS, "range", "range_instance"),
-    "api_v1_mission_control_guacamole_ssh_url": OperationPolicy(_ACCESS, "range", "range_instance"),
+    "api_v1_mission_control_guacamole_rdp_url": OperationPolicy(
+        _REMOTE_ACCESS, "resource", "range_instance", selector="credential_kind_and_event_parent"
+    ),
+    "api_v1_mission_control_guacamole_ssh_url": OperationPolicy(
+        _REMOTE_ACCESS, "resource", "range_instance", selector="credential_kind_and_event_parent"
+    ),
     "api_v1_mission_control_ngfw_create": OperationPolicy(scope_actions("manage_devices"), "scope", "device_parent"),
     "api_v1_mission_control_ngfw_destroy": OperationPolicy(scope_actions("manage_devices"), "scope", "device"),
     "api_v1_mission_control_ngfw_ssh_url": OperationPolicy(_DEVICE_ACCESS, "scope", "device"),
@@ -75,12 +80,12 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
 
 CHANNEL_POLICY = {
     "ssh": OperationPolicy(
-        _ACCESS + _DEVICE_ACCESS, "resource", "realized_instance", selector="persisted_resource_kind"
+        _REMOTE_ACCESS + _DEVICE_ACCESS, "resource", "realized_instance", selector="persisted_resource_kind"
     ),
     "range_status": OperationPolicy(_READ, "range", "range_request"),
     "ngfw_status": OperationPolicy(scope_actions("read_devices"), "scope", "device"),
     "guacamole": OperationPolicy(
-        _ACCESS + _DEVICE_ACCESS, "resource", "bootstrap", selector="persisted_protocol_and_target"
+        _REMOTE_ACCESS + _DEVICE_ACCESS, "resource", "bootstrap", selector="persisted_protocol_and_target"
     ),
     "vpn": OperationPolicy(_ACCESS, "range", "certificate_generation"),
 }
