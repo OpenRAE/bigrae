@@ -326,7 +326,7 @@ class InstanceContextBase(BaseModel):
     uuid: str | None = None
     name: str = ""
     role: Literal["attacker", "victim", "dc", "ngfw", "raes-node"]
-    os_type: Literal["kali", "ubuntu", "windows", "panos"]
+    os_type: Literal["kali", "ubuntu", "windows", "panos", "linux"]
     join_domain: bool = False
     ami_key: str | None = None
     private_ip: str | None = None

@@ -15,13 +15,13 @@ pytestmark = [pytest.mark.django_db, pytest.mark.postgres]
 @pytest.fixture
 def native(principal_range):
     actor = principal_range
-    actor.member = str(uuid4())
+    actor.member = "provision.node.synthetic_host#0"
     actor.realized.provisioned_instances = [
         {
             "uuid": actor.member,
             "name": "Synthetic workstation",
             "role": "raes-node",
-            "os_type": "ubuntu",
+            "os_type": "linux",
             "private_ip": "10.0.0.7",
             "ssh_key_secret_arn": "PRIVATE_KEY_REFERENCE_MARKER",
             "rdp_password_secret_arn": "PRIVATE_PASSWORD_REFERENCE_MARKER",
@@ -36,7 +36,7 @@ def test_native_member_is_visible_without_a_stored_range_specification(native):
     assert len(result.instances) == 1
     guest = result.instances[0]
     assert guest.uuid == native.member
-    assert guest.role == "raes-node" and guest.os_type == "ubuntu"
+    assert guest.role == "raes-node" and guest.os_type == "linux"
     assert guest.name == "Synthetic workstation" and guest.private_ip == "10.0.0.7"
     assert "PRIVATE_" not in result.model_dump_json()
     native.instance.refresh_from_db()
