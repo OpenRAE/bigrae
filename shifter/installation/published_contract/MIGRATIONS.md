@@ -24,6 +24,13 @@ default to `null`; bundle authors may add them when their lifecycle is available
 through a structured, shell-free argv command whose executable is declared in
 `required_tools`.
 
+## Contract version 1 GCP gateway authority outputs (issue #2793)
+
+The GCP generated runtime inventory adds the browser gateway control endpoint,
+audience, provider identity, service account email and immutable subject. The
+AWS role field is empty on GCP. These are generated deployment outputs. The
+settings schema and version-1 frozen snapshot remain unchanged.
+
 ## Changing the contract
 
 - **Additive change** (new optional field, new enum value, new backend): edit

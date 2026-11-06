@@ -3038,6 +3038,84 @@
           "source": "rendered from validated Terraform outputs and the normalized root config"
         },
         {
+          "description": "Public GCP runtime configuration value (GUACAMOLE_CONTROLLER_ROLE_ARN) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROLLER_ROLE_ARN",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (GUACAMOLE_CONTROL_AUDIENCE) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROL_AUDIENCE",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (GUACAMOLE_CONTROL_IDENTITY) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROL_IDENTITY",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (GUACAMOLE_CONTROL_URL) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "GUACAMOLE_CONTROL_URL",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
           "description": "Public GCP runtime configuration value (GUACAMOLE_POSTGRESQL_DATABASE) emitted into the platform runtime environment.",
           "destination": "runtime-env",
           "kind": "runtime-env",
