@@ -197,6 +197,14 @@ Both providers use the same principal, credential and OpenFGA contracts. The
 [AWS native identity contract](platform_infrastructure/aws-native-identity.md)
 records the AWS bindings and their approved deviations.
 
+On GCP, the browser gateway uses its dedicated Google workload identity to
+call the portal's HTTPS authority endpoint. Deployment obtains that identity's
+email and immutable subject from Terraform and sets the endpoint as the token
+audience. The portal checks both identity claims before it checks access to
+the requested session. The gateway sends HTTPS through the existing
+`content-egress` CONNECT proxy on port 3128. This path adds no project role
+and keeps the default denial of direct public egress.
+
 GCP shared-VPC range cells use per-range subnet/tag firewall policy and explicit
 NAT membership. Guests have no external NIC. Any attached identity is
 participant-visible and must have no management or cross-range authority;

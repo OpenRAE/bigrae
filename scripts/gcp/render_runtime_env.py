@@ -109,6 +109,33 @@ _PROVISIONER_STATIC_SECRET_KEYS = frozenset(
 _FULL_SECRET_REF_RE = re.compile(r"^projects/[^/]+/secrets/[^/]+$")
 
 
+def _gateway_runtime_values(outputs: dict[str, object], *, project_id: str, site_url: str) -> dict[str, str]:
+    """Bind gateway control only to its existing native workload identity."""
+    identity = _value(outputs, "guacamole_controller_identity")
+    accounts = _value(outputs, "workload_service_accounts")
+    if not isinstance(identity, dict) or set(identity) != {"email", "unique_id"} or not isinstance(accounts, dict):
+        raise ValueError("GCP gateway controller identity metadata is incomplete")
+    email, subject = identity["email"], identity["unique_id"]
+    if (
+        not isinstance(email, str)
+        or email != accounts.get("guacamole-client")
+        or not email.endswith(f"@{project_id}.iam.gserviceaccount.com")
+        or not isinstance(subject, str)
+        or not subject.isascii()
+        or not subject.isdecimal()
+    ):
+        raise ValueError("GCP gateway controller identity does not match its workload")
+    endpoint = site_url + "/api/v1/mission-control/guacamole/control/authority/"
+    return {
+        "GUACAMOLE_CONTROL_URL": endpoint,
+        "GUACAMOLE_CONTROL_AUDIENCE": endpoint,
+        "GUACAMOLE_CONTROL_IDENTITY": "google",
+        "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL": email,
+        "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID": subject,
+        "GUACAMOLE_CONTROLLER_ROLE_ARN": "",
+    }
+
+
 def _provisioner_static_secret_values(outputs: dict[str, object]) -> dict[str, str]:
     """Validate and return the exact static references published by Terraform."""
     raw = _value(outputs, "provisioner_static_secret_refs")
@@ -615,6 +642,7 @@ def render_env(outputs: dict[str, object], *, engine_image: str) -> str:
     # Optional transactional-email runtime env (PLAT-002, #671). Absent ->
     # console backend; present -> SendGrid/Mailgun via anymail with the API key
     # hydrated from Secret Manager by the entrypoint.
+    values.update(_gateway_runtime_values(outputs, project_id=real_project, site_url=site_url))
     values.update(_email_runtime_values(outputs))
     values.update(_optional_gce_range_values())
     values.update(_ctf_content_runtime_values(outputs))
