@@ -7,4 +7,5 @@ kubernetes>=35.0.0
 # is not in uv.lock so it is not otherwise constrained here: oauthlib < 4.0.0 is
 # vulnerable to CVE-2026-49264 (JSONP reflection XSS) and CVE-2026-49265 (PKCE
 # timing side-channel). Keep this floor so regenerating the lock cannot reintroduce it.
-oauthlib>=4.0.0
+# Keep the minimum aligned with the provisioner's resolved dependency.
+oauthlib>=4.0.1
