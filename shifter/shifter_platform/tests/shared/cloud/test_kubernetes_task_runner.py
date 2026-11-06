@@ -365,13 +365,49 @@ class TestStatusAndInterrupt:
         with pytest.raises(CloudTaskError, match="identity mismatch"):
             runner.delete_completed_task("ns", "other/job-1", {})
 
-    def test_completed_task_cleanup_treats_missing_job_as_complete(self) -> None:
+    @pytest.mark.parametrize("orphan_pods", [False, True])
+    def test_missing_job_requires_no_remaining_owned_pods(self, orphan_pods) -> None:
+        task_identity = "11111111-1111-1111-1111-111111111111"
+        observed = _observed_job(task_identity=task_identity, image="img:1", command=["c"], service_account_name="sa")
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = None
-        runner = _runner(_profile(), batch_api, MagicMock())
+        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=404)
+        core_api = MagicMock()
+        core_api.list_namespaced_pod.return_value = SimpleNamespace(items=[object()] if orphan_pods else [])
+        runner = _runner(_profile(), batch_api, core_api)
+        identity = {"task_identity": task_identity, "container_name": "pulumi-provisioner"}
+        if orphan_pods:
+            with pytest.raises(CloudTaskError, match="absence is not verified"):
+                runner.delete_completed_task("ns", f"ns/{observed.metadata.name}", identity)
+        else:
+            runner.delete_completed_task("ns", f"ns/{observed.metadata.name}", identity)
+        core_api.list_namespaced_pod.assert_called_once_with(
+            namespace="ns", label_selector=f"job-name={observed.metadata.name}", _request_timeout=30
+        )
+        batch_api.delete_namespaced_job.assert_not_called()
 
-        runner.delete_completed_task("ns", "ns/job-1", {})
+    @pytest.mark.parametrize("identity", [{}, {"task_identity": "other", "container_name": "pulumi-provisioner"}])
+    def test_missing_job_with_unbound_identity_cannot_authorize_a_retry(self, identity) -> None:
+        batch_api, core_api = MagicMock(), MagicMock()
+        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=404)
+        runner = _runner(_profile(), batch_api, core_api)
+        with pytest.raises(CloudTaskError, match="identity mismatch"):
+            runner.delete_completed_task("ns", "ns/job-1", identity)
+        core_api.list_namespaced_pod.assert_not_called()
+        batch_api.delete_namespaced_job.assert_not_called()
 
+    def test_missing_job_with_unavailable_pod_observation_retains_custody(self) -> None:
+        task_identity = "11111111-1111-1111-1111-111111111111"
+        observed = _observed_job(task_identity=task_identity, image="img:1", command=["c"], service_account_name="sa")
+        batch_api, core_api = MagicMock(), MagicMock()
+        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=404)
+        core_api.list_namespaced_pod.side_effect = _ApiException(status=403)
+        runner = _runner(_profile(), batch_api, core_api)
+        with pytest.raises(CloudTaskError, match="unavailable"):
+            runner.delete_completed_task(
+                "ns",
+                f"ns/{observed.metadata.name}",
+                {"task_identity": task_identity, "container_name": "pulumi-provisioner"},
+            )
         batch_api.delete_namespaced_job.assert_not_called()
 
     def test_completed_task_cleanup_rejects_mismatched_reservation(self) -> None:

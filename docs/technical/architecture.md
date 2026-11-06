@@ -552,3 +552,8 @@ A native management command admits an installed tenant pack without dispatch.
 Operational claims and worker observations remain separate from scientific inputs.
 The current compiler permits serial execution; configured concurrency grants no provider capacity.
 See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).
+
+A retained cleanup task can be retried after its exact provider workload fails.
+The owning range transaction verifies terminal failure and workload identity, then reserves a fresh operation.
+Unknown or active tasks retain custody. Only verified provider absence releases the target.
+See the [failed cleanup retry design](../architecture/failed-cleanup-retry-2822.md).

@@ -65,6 +65,9 @@ class TestProtocolStructuralTyping:
             def get_task_status(self, cluster, task_id):
                 return None
 
+            def delete_completed_task(self, cluster, task_ref, expected_identity):
+                pass
+
             def interrupt_task(self, cluster, task_ref, expected_identity, grace_seconds=None):
                 return ""
 
