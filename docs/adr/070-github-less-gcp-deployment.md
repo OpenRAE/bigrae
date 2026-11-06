@@ -91,7 +91,11 @@ tracks the AWS path.
    only on the identity of its own purpose. GitHub federation is optional: an
    empty `purpose_contexts` creates no Workload Identity pool or provider. CI uses
    `--identity ambient`, because federation already gives each job its purpose
-   identity.
+   identity. The release scanner may hold only
+   `roles/serviceusage.serviceUsageConsumer` at project scope, on its configured
+   deployment project (#2789). This permits quota use; it grants no access to
+   stored evidence or images. Its data access remains at repository, bucket,
+   and object-prefix scope. The trust checker rejects other project roles.
 5. **The command runs the ADR-037 gates and fails closed.** Before rollout, the
    release-scan identity scans each exact digest for HIGH and CRITICAL findings.
    Every operator rollout scans, also with `--stage rollout`. CI scans in its
