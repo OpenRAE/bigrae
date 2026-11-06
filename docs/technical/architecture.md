@@ -457,6 +457,9 @@ trust boundaries, retention and admission checks.
 
 Adapters declaring `provision.prepare` may propose bounded scalar values and
 literal UTF-8 secret payloads for explicitly declared provisioning concerns.
+SDK 0.1.3 accepts at most 2048 distinct secret payload selections per response.
+Each value is limited to 64 KiB, and the complete clear response remains limited to 512 KiB.
+The host checks the original invocation and declared authority before it uses any selection.
 Secret payload selection addresses an unbound native version; it cannot replace
 an authored Content reference. Core checks every original RAES
 authority, including overlapping exact constraints, before accepting a result.

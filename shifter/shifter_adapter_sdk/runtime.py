@@ -317,7 +317,7 @@ class RuntimePlan(ClosedModel):
         default_factory=list, max_length=4096, repr=False, exclude_if=lambda value: not value
     )
     secret_payloads: list[SecretPayloadValue] = Field(
-        default_factory=list, max_length=1024, repr=False, exclude_if=lambda value: not value
+        default_factory=list, max_length=2048, repr=False, exclude_if=lambda value: not value
     )
 
     @model_validator(mode="after")
