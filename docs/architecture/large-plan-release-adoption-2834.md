@@ -47,3 +47,10 @@ The two maintenance workers with small CPU limits must also complete cold
 startup before their heartbeat checks expire. Use the existing one-core worker
 limit for bootstrap pruning and pack removal. Keep CPU requests, memory limits
 and all health checks unchanged. Test the combined update before launch.
+
+The result applier must validate the retained large plan when it processes a
+snapshot and terminal result. Use a 512 MiB memory request, a 2 GiB memory
+limit and the existing one-core worker limit. The previous 512 MiB limit can
+terminate the process before it commits the result. Pending inbox rows remain
+the recovery input; never mark them applied or mark the range ready manually.
+Verify recovery with the original pending results and the existing range.
