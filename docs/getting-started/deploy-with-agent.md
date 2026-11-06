@@ -17,7 +17,7 @@ Complete this table before you start.
 | Operator email | The Google account with permission to install in the project. |
 | Region | For example, `us-central1`. |
 | Zone | A zone in that region. For example, `us-central1-a`. |
-| Release build | A completed successful [GCP release build](https://github.com/OpenRAE/bigrae/actions/workflows/release-gcp.yml), or permission to use the latest successful build. |
+| Release tag | A [release](https://github.com/OpenRAE/bigrae/releases) tag such as `vX.Y.Z`, or permission to use the latest release that has a deployer image. Releases v4.1.1 and earlier have no deployer image. |
 
 You must have permission to create the cloud resources and change the hostname's
 DNS record. The installation creates billable resources.
@@ -41,13 +41,14 @@ Use these inputs:
 - Operator email: <Google account email>
 - Region: <region>
 - Zone: <zone>
-- Release build: <build URL, or "latest successful GCP release build">
+- Release tag: <vX.Y.Z, or "latest release that has a deployer image">
 
 Check all prerequisites before you change cloud resources.
 Ask me only for missing inputs, authentication, or an action you cannot perform.
 Use the release's deployer container. Do not clone or build the repository.
 Do not start a release workflow.
-Verify the release attestation and exact source revision before you run it.
+Verify the deployer image provenance with cosign, as the procedure shows, before you run it.
+Accept only a release build from main at the release tag's source revision.
 Keep this installation's files and logs in a private directory.
 Select the Google account for each command. Do not change my default account.
 Create the two deployment input files described in the procedure.
@@ -71,8 +72,8 @@ State any remaining action or failed check explicitly.
 
 ## Complete the steps that need you
 
-1. Complete the Google and GitHub browser sign-ins when the tools request them.
-2. When the agent provides an public IP address, add the requested DNS A record.
+1. Complete the Google browser sign-ins when the tools request them.
+2. When the agent provides a public IP address, add the requested DNS A record.
 3. If your DNS provider has a proxy option, turn the proxy off for this record.
 4. Open the portal after its certificate is active.
 5. Retrieve the initial password with the command the agent provides.

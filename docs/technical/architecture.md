@@ -469,7 +469,8 @@ registration path or the scenario content boundary on this page.
 
 ## Install, exercise and maintain
 
-Start with the [GCP installation and first exercise](handbook/gcp-first-run.md).
+Start with [Install on Google Cloud](../getting-started/install-gcp.md) and
+[First sign-in](handbook/gcp-first-run.md).
 The [contract transition](handbook/scenario-contract-transition.md) explains
 CyberScript → ACES → RAES, current release pins and rollback constraints.
 [Support](../reference/support.md) describes response limits and private security

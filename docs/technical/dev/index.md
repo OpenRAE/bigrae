@@ -7,6 +7,8 @@ AWS installation support is coming.
 ## Set up development
 
 - [Local development setup](local-setup.md)
+- [Developer environment setup](setup.md): deploy a development environment
+  from your own fork with GitHub Actions, on AWS or GCP
 - [Configuration schema](installation-config.md)
 - [Test commands](../../dev/testing.md)
 - [Architecture rules](adr-enforcement.md)

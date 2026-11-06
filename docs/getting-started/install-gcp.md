@@ -21,11 +21,13 @@ Install these tools on that machine:
 | --- | --- | --- |
 | Docker | [Docker installation](https://docs.docker.com/engine/install/) | `docker info` must connect to the Docker service. |
 | Google Cloud CLI | [Google Cloud CLI installation](https://docs.cloud.google.com/sdk/docs/install-sdk) | `gcloud version` must print a version. |
-| GitHub CLI | [GitHub CLI installation](https://cli.github.com/) | `gh attestation verify --help` must show the verification command. |
+| Git | [Git installation](https://git-scm.com/downloads) | `git --version` must print a version. |
+| ORAS | [ORAS installation](https://oras.land/docs/installation) | `oras version` must print a version. |
+| cosign | [cosign installation](https://docs.sigstore.dev/cosign/system_config/installation/) | `cosign version` must print a version. |
 
 The machine needs space for the release container and guest image downloads.
 Guest images can be several gigabytes each. It must reach Google Cloud,
-GitHub, and `ghcr.io` over HTTPS.
+GitHub, `ghcr.io`, and Sigstore over HTTPS.
 
 Run every command below in the same Bash session. Run one block at a time.
 If a command fails, stop at that step and read its error.
@@ -38,7 +40,6 @@ You need:
 - Project administration access for the initial installation.
 - A hostname and access to its DNS provider.
 - A Google account email address for the first administrator.
-- A GitHub account for the release verification tool on your machine.
 - An authenticator application for the administrator's second sign-in factor.
 
 Identity and Access Management (IAM) controls Google Cloud permissions.
@@ -47,6 +48,9 @@ Editor alone does not have the required IAM administration access.
 If your organisation uses delegated roles, its administrator must grant the
 required project, IAM, service-account, storage, encryption, network, and compute permissions.
 See [project roles](../technical/handbook/gcp-github-less-deployment.md#prerequisites-and-roles).
+
+If your configuration uses Vertex AI models, enable each model in the project.
+The Vertex AI API alone does not enable a model.
 
 The project must permit the required Google services and service-account creation.
 Project permissions do not override an organisation policy.
@@ -60,7 +64,8 @@ Its retained objects cannot be deleted before that period ends.
 
 The installer creates its deployment service accounts, storage, encryption keys,
 initial password, application secrets, and guest image copies.
-You do not need GitHub repository administration, Actions environments, or runners.
+You do not need a GitHub account, GitHub repository administration, Actions
+environments, or runners.
 The installed application does not need your GitHub credentials.
 
 ## 1. Record the installation inputs
@@ -98,7 +103,6 @@ Keep this directory. Do not add its files to a source repository.
 ```bash
 gcloud auth login "$OPERATOR_EMAIL" --no-activate
 gcloud auth application-default login "$OPERATOR_EMAIL"
-gh auth login --hostname github.com --web --git-protocol https
 ```
 
 Complete each browser sign-in. Select the same Google account for both Google
@@ -120,35 +124,40 @@ Resolve an access error or disabled billing before you continue.
 
 ## 3. Select and verify a release
 
-1. Open the [GCP release builds](https://github.com/OpenRAE/bigrae/actions/workflows/release-gcp.yml).
-2. Select a completed successful build. Use the build approved for your installation.
-3. Open its summary.
-4. Copy **Source revision** and **Deployer image** from that same summary.
+1. Open the [releases](https://github.com/OpenRAE/bigrae/releases).
+2. Select the release approved for your installation. Releases v4.1.1 and
+   earlier have no deployer image.
 
-A source revision is a 40-character build identifier.
-The image address ends with `@sha256:` and a digest. This address identifies
-the exact container. Do not replace it with a moving image tag.
-
-Set both values:
+Set the release tag and get its source revision:
 
 ```bash
-RELEASE_REVISION='COPY_SOURCE_REVISION_HERE'
-DEPLOYER_IMAGE='COPY_DEPLOYER_IMAGE_HERE'
+RELEASE_TAG='vX.Y.Z'
+REG=ghcr.io/openrae/bigrae
+RELEASE_REVISION="$(git ls-remote https://github.com/OpenRAE/bigrae \
+  "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" | tail -n 1 | cut -f 1)"
+printf '%s\n' "$RELEASE_REVISION"
 ```
 
-Verify the build record before you run the container:
+The command must print one 40-character revision. If it prints nothing, check
+the release tag. This command reads the tag. It does not clone the repository.
+
+Resolve the deployer image digest and verify its build provenance:
 
 ```bash
-gh attestation verify "oci://$DEPLOYER_IMAGE" \
-  --repo OpenRAE/bigrae \
-  --signer-workflow OpenRAE/bigrae/.github/workflows/release-gcp.yml \
-  --source-digest "$RELEASE_REVISION" \
-  --deny-self-hosted-runners
+DIGEST="$(oras resolve "$REG/deployer-gcp:$RELEASE_REVISION")"
+DEPLOYER_IMAGE="$REG/deployer-gcp@$DIGEST"
+cosign verify-attestation --type https://slsa.dev/provenance/v1 \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity "https://github.com/OpenRAE/bigrae/.github/workflows/release-gcp.yml@refs/heads/main" \
+  --certificate-github-workflow-sha "$RELEASE_REVISION" \
+  "$DEPLOYER_IMAGE" > /dev/null
 ```
 
 Continue only if verification succeeds. A failed verification blocks installation.
-The [GitHub CLI verification reference](https://cli.github.com/manual/gh_attestation_verify)
-explains the check.
+The check accepts only a release build from `main` at the selected revision.
+`DEPLOYER_IMAGE` ends with `@sha256:` and a digest. This address identifies the
+exact container. Do not replace it with a moving image tag.
+See [Get and verify the deployer image](../technical/handbook/gcp-github-less-deployment.md#get-and-verify-the-deployer-image).
 
 Download the verified container and retain its release manifest:
 
@@ -265,6 +274,9 @@ The command performs these steps:
 6. Scan the exact application images.
 7. Start the application, configure identity and permissions, and register the initial catalog.
 
+The output shows the ingress address and the command that reads the initial
+password. Record both.
+
 Keep the terminal open. To watch the log from another terminal, use
 `tail -f` with the full path to `install.log`.
 The first install can complete while its certificate is still inactive.
@@ -336,8 +348,8 @@ agent conversation, or installation log.
 2. Sign in with the operator email and initial password.
 3. Follow the portal's authenticator setup steps.
 4. Complete the second-factor sign-in.
-5. Use [First sign-in and first range](../technical/handbook/gcp-first-run.md)
-   to check a scenario and its teardown.
+5. Use [Launch your first range](quickstart.md) to check a scenario and its
+   teardown.
 
 ## Resume in a new terminal
 
