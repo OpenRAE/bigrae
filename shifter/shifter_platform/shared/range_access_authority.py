@@ -32,7 +32,14 @@ def range_action_request(
                 raise ValueError("Participant range access unavailable")
             require_range_remote_participation(credential, request_uuid, parent.uuid, owner_uuid)
         if credential.kind == "temporary":
-            return AuthorizationRequest(credential.principal, "event.participate", parent, scope, credential.ceiling)
+            return AuthorizationRequest(
+                credential.principal,
+                "event.participate",
+                parent,
+                scope,
+                credential.ceiling,
+                temporary_participation=True,
+            )
     return AuthorizationRequest(
         credential.principal, action, TargetRef("range", range_uuid), scope, credential.ceiling, parent=parent
     )

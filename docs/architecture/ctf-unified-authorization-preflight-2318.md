@@ -152,3 +152,21 @@ communications, participant login, range provisioning, cloud IAM, or private
 pack authorization. Public registration and truly public reads keep their
 explicit publication and abuse controls; they are not made authenticated by
 default. Cloud and model-access grants remain separate from application policy.
+
+## Temporary participant remote access (#2791)
+
+A temporary participant has no permanent OpenFGA permission grant. For remote
+access to its assigned range, the CTF service first checks the live event,
+participant eligibility, exact principal ownership, and current range assignment.
+Only then may the shared range request carry `temporary_participation=True`.
+The request contract limits this fact to a human principal, `event.participate`,
+and that same event's temporary credential ceiling. It cannot authorize an
+administrative action or another event.
+
+The OpenFGA adapter translates the fact into one contextual grant tuple for the
+request's principal and event. It uses the official SDK for single and batch
+checks. The tuple exists for that check only. It does not alter stored policy.
+The existing ancestry checks, explicit denials, inherited exclusions, and
+provider failure handling still apply. Tests must use the released OpenFGA
+server as well as the participant service boundary; a permissive substitute
+cannot prove this behavior.

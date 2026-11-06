@@ -39,5 +39,8 @@ def admit_owned_range_remote_participation(
         return
     # Retained participation must not become unrestricted operator access when
     # a ban, soft deletion or assignment removal invalidates the live predicate.
-    if CTFParticipant.all_objects.filter(event_id=event_uuid, principal_uuid=owner_uuid).exists():
+    if (
+        credential.kind == "temporary"
+        or CTFParticipant.all_objects.filter(event_id=event_uuid, principal_uuid=owner_uuid).exists()
+    ):
         require_assigned_range_participation(credential, request_id, event_uuid)
