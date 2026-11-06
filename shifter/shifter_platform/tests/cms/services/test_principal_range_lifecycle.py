@@ -628,7 +628,11 @@ def test_failed_cleanup_retry_reserves_one_fresh_attempt_with_the_original_autho
 
     from cms.services import destroy_range
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+    from engine.services._principal_lifecycle import (
+        _commit_destroy,
+        commit_prepared_range_lifecycle,
+        prepare_system_range_cleanup,
+    )
 
     fixture = lifecycle_range
     destroy_range(fixture.credential, fixture.instance.pk)
@@ -642,12 +646,14 @@ def test_failed_cleanup_retry_reserves_one_fresh_attempt_with_the_original_autho
     runner = Mock()
     runner.get_task_status.return_value = {"status": "FAILED"}
     monkeypatch.setattr("engine.services._failed_cleanup_task.get_task_runner", lambda: runner)
+    assert commit_prepared_range_lifecycle(prepare_system_range_cleanup(fixture.request.request_id))
+    runner.get_task_status.assert_not_called()
     prepared = [prepare_system_range_cleanup(fixture.request.request_id) for _ in range(2)]
 
     def retry(request):
         close_old_connections()
         try:
-            return commit_prepared_range_lifecycle(request)
+            return _commit_destroy(request, _failed_task_retry=True)
         finally:
             connection.close()
 
@@ -665,4 +671,46 @@ def test_failed_cleanup_retry_reserves_one_fresh_attempt_with_the_original_autho
     runner.get_task_status.return_value = {"status": "RUNNING"}
     assert commit_prepared_range_lifecycle(prepare_system_range_cleanup(fixture.request.request_id))
     assert ProvisionerLaunchIntent.objects.count() == count
+    runner.delete_completed_task.assert_called_once()
+
+
+def test_launcher_observes_current_cleanup_once_per_minute_and_retries_only_failure(lifecycle_range, monkeypatch):
+    from datetime import timedelta
+    from io import StringIO
+    from unittest.mock import Mock
+
+    from django.core.management import call_command
+    from django.utils import timezone
+
+    from cms.services import destroy_range
+    from engine.models import ProvisionerLaunchIntent
+    from engine.services._failed_cleanup_task import retry_due_failed_cleanup_tasks
+    from engine.services._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+
+    fixture = lifecycle_range
+    destroy_range(fixture.credential, fixture.instance.pk)
+    assert commit_prepared_range_lifecycle(prepare_system_range_cleanup(fixture.request.request_id))
+    fixture.realized.refresh_from_db()
+    previous = ProvisionerLaunchIntent.objects.get(operation_id=fixture.realized.provisioner_operation_id)
+    ProvisionerLaunchIntent.objects.update(status="SUCCEEDED")
+    previous.status = "SUCCEEDED"
+    previous.next_attempt_at = timezone.now() - timedelta(seconds=1)
+    previous.save(update_fields=["status", "next_attempt_at"])
+    runner = Mock()
+    runner.get_task_status.return_value = {"status": "RUNNING"}
+    monkeypatch.setattr("engine.services._failed_cleanup_task.get_task_runner", lambda: runner)
+    call_command("drain_provisioner_launch_outbox", stdout=StringIO())
+    assert retry_due_failed_cleanup_tasks() == 0
+    runner.get_task_status.assert_called_once()
+    runner.delete_completed_task.assert_not_called()
+    fixture.realized.refresh_from_db()
+    assert fixture.realized.provisioner_operation_id == previous.operation_id
+    previous.refresh_from_db()
+    previous.next_attempt_at = timezone.now() - timedelta(seconds=1)
+    previous.save(update_fields=["next_attempt_at"])
+    runner.get_task_status.return_value = {"status": "FAILED"}
+    assert retry_due_failed_cleanup_tasks() == 1
+    fixture.realized.refresh_from_db()
+    assert fixture.realized.provisioner_operation_id != previous.operation_id
+    assert retry_due_failed_cleanup_tasks() == 0
     runner.delete_completed_task.assert_called_once()

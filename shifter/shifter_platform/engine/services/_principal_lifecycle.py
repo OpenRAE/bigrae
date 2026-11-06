@@ -85,7 +85,9 @@ def commit_prepared_range_lifecycle(prepared: PreparedRangeLifecycle) -> bool:
     return _commit_pause_resume(prepared)
 
 
-def _commit_destroy(prepared: PreparedRangeLifecycle, *, _verification_retry: bool = False) -> bool:
+def _commit_destroy(
+    prepared: PreparedRangeLifecycle, *, _verification_retry: bool = False, _failed_task_retry: bool = False
+) -> bool:
     """Commit only the admitted native destruction generation and its durable queue."""
     from engine.launch_intents import _enqueue_admitted_provisioner_launch
     from engine.models import Range
@@ -107,7 +109,7 @@ def _commit_destroy(prepared: PreparedRangeLifecycle, *, _verification_retry: bo
             _is_undispatched_cleanup(row, fields) or _is_quiescent_warm_claim_cleanup(row, fields)
         ):
             raise ValueError("Provision generation requires native interruption")
-        if row.status == "destroying" and _destroy_already_queued(row, fields):
+        if row.status == "destroying" and _destroy_already_queued(row, fields, failed_task_retry=_failed_task_retry):
             return True
         resource = "raes-range" if is_raes_provisioning_plan(row.range_config) else "range"
         row.status = "destroying"
@@ -319,7 +321,7 @@ def _commit_pause_resume(prepared: PreparedRangeLifecycle) -> bool:
         return True
 
 
-def _destroy_already_queued(row: Range, fields: dict[str, object]) -> bool:
+def _destroy_already_queued(row: Range, fields: dict[str, object], *, failed_task_retry: bool = False) -> bool:
     """Retain a queued teardown generation while allowing recorded cleanup to replace ordinary dispatch."""
     from engine.models import ProvisionerLaunchIntent
 
@@ -329,6 +331,8 @@ def _destroy_already_queued(row: Range, fields: dict[str, object]) -> bool:
         else None
     )
     queued = fields.get("authority_kind") != "cleanup"
+    if not failed_task_retry:
+        return queued or (existing is not None and existing.authority_kind == "cleanup")
     if not queued and existing is not None and existing.authority_kind == "cleanup":
         from ._failed_cleanup_task import retire_failed_cleanup_task
 
