@@ -155,6 +155,7 @@ def _retry_or_raise_token_exchange(
     attempts_left = attempt + 1 < attempts
     delay_ms = base_delay_ms * (2**attempt)
     if isinstance(exc, urllib.error.HTTPError):
+        exc.close()
         if exc.code in _RETRYABLE_HTTP_STATUSES and attempts_left:
             logger.warning(
                 "Guacamole token request returned %s on attempt %d/%d; retrying in %dms",
@@ -200,7 +201,7 @@ class GuacamoleClientConfig:
     api_base_url: str | None = None
     retry_attempts: int = 3
     retry_base_delay_ms: int = 200
-    timeout_seconds: float = 10.0
+    timeout_seconds: float = 30.0
 
 
 @dataclass(frozen=True)

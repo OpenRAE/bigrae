@@ -49,6 +49,26 @@ self-heals as other sessions end, without a permanent failure for the user.
 
 ## Controls
 
+### Connection opening budgets (#2799)
+
+The configured Uvicorn WebSocket protocol has a finite 30-second opening
+deadline. The library's default 10 seconds can expire while the application
+checks current authority and opens SSH. A small subclass of Uvicorn's maintained
+WebSocket protocol sets that deadline. Existing keepalive, session caps, authorization, revocation and
+SSH timeouts remain in force.
+
+The browser gateway's authority HTTP response has a finite 10-second read
+deadline. The portal can use up to five seconds for Google certificate lookup
+before it checks the recorded range binding. A three-second response deadline
+cannot cover that valid path. Identity, explicit denial, response size, worker
+capacity and the existing 90-second authority lease remain unchanged.
+The portal allows 30 seconds for the enclosing gateway token exchange, so its
+deadline covers gateway identity lookup and the bounded authority callbacks.
+
+Tests use synthetic local servers to delay valid responses beyond the previous
+deadlines. The WebSocket test uses the configured transport and exchanges real
+frames. Gateway tests retain malformed-response and denial cases.
+
 Defined in `config/settings.py`, read by `mission_control.consumers`, and wired
 through SSM/tfvars for retuning without an image rebuild (#930; see "Tuning
 without an image rebuild"). A value `<= 0` disables that individual limit. The

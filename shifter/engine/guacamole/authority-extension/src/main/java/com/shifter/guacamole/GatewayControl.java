@@ -58,7 +58,7 @@ final class GatewayControl implements GatewayRenewals.Control, AutoCloseable {
         HttpURLConnection request = (HttpURLConnection) endpoint.toURL().openConnection();
         request.setInstanceFollowRedirects(false);
         request.setConnectTimeout(2000);
-        request.setReadTimeout(3000);
+        request.setReadTimeout(10_000);
         request.setRequestMethod("POST");
         request.setRequestProperty("Authorization", assertion);
         request.setRequestProperty("Content-Type", "application/json");
