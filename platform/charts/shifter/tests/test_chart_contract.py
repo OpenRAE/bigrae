@@ -66,9 +66,10 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2719: only the plugin file-input admission policy and Secret object quota change.
 # Regenerated for #2718: optional sealed result key in the same invocation Secret; only plugin admission changes.
 # Regenerated for #2716: generation-bound registered-project capture/verification; only provisioner admission changes.
+# Regenerated for #2793: GCP gateway HTTPS uses the existing content CONNECT proxy.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "0528a8c4bec27346e40b961ea74fe9b533100ebdcbac54314aa8fd4acccf741b",
-    "gcp-dev": "3defac47c89fdd6aa1eda621f27b87193892a4907b8d1dea4b958deb3bd68af9",
+    "gcp-prod": "ad071dad6671d2af9f3fe9628fb2885f0cf9dd29ca4cb4737340bd01f4e1089d",
+    "gcp-dev": "d114fd12a56fa5e70b3063a9b37aa9ee7121809857cf425216f85131d2512008",
 }
 
 
@@ -111,10 +112,24 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         self.assertEqual(len(accounts), 1)
         env = {value["name"]: value for value in pod["containers"][0]["env"]}
         self.assertEqual(env["OPENFGA_ENABLED"]["value"], "true")
+        self.assertEqual(env["JAVA_OPTS"]["value"], "-Dhttps.proxyHost=content-egress -Dhttps.proxyPort=3128")
         for name in ("GUACAMOLE_CONTROL_URL", "GUACAMOLE_CONTROL_AUDIENCE"):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
             self.assertEqual(ref["name"], "platform-runtime")
             self.assertEqual(ref["key"], name)
+
+    def test_gcp_gateway_reaches_public_control_only_through_the_existing_proxy(self):
+        _, documents = _render(VALUES_FILES["gcp-dev"])
+        policies = {doc["metadata"]["name"]: doc for doc in documents if doc["kind"] == "NetworkPolicy"}
+        boundary = policies["content-egress-boundary"]["spec"]
+        callers = boundary["ingress"][0]["from"][0]["podSelector"]["matchExpressions"][0]["values"]
+        self.assertEqual(set(callers), {"portal", "ctf-scheduler", "guacamole-client"})
+        clients = policies["allow-ctf-content-egress-clients"]["spec"]
+        self.assertEqual(set(clients["podSelector"]["matchExpressions"][0]["values"]), set(callers))
+        self.assertEqual(clients["egress"], [{
+            "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/component": "content-egress"}}}],
+            "ports": [{"protocol": "TCP", "port": 3128}],
+        }])
 
     def test_range_access_selects_smoke_without_broadening_destinations(self) -> None:
         for profile in ("gcp-dev", "gcp-prod"):
