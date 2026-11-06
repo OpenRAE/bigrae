@@ -144,9 +144,9 @@ def test_native_input_budget_has_an_exact_byte_boundary(operation, offset):
         payload={"plan": {"kind": "raes_provisioning_plan", "description": ""}},
     )
     overhead = len(json.dumps(candidate, sort_keys=True, separators=(",", ":")).encode())
-    candidate["payload"]["plan"]["description"] = "x" * (8 * 1024**2 + offset - overhead)
+    candidate["payload"]["plan"]["description"] = "x" * (16 * 1024**2 + offset - overhead)
     if offset > 0:
-        with pytest.raises(OperationEnvelopeError, match="exceeds 8388608 bytes"):
+        with pytest.raises(OperationEnvelopeError, match="exceeds 16777216 bytes"):
             validate_operation_envelope(candidate)
     else:
         assert validate_operation_envelope(candidate) == candidate

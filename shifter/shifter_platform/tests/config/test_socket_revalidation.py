@@ -109,3 +109,51 @@ async def test_protected_output_and_privileged_input_recheck_before_delivery(mon
     assert await communicator.receive_output() == {"type": "websocket.close", "code": 4001}
     await communicator.wait()
     assert received == [{"type": "websocket.disconnect", "code": 4001}]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "path,override,expected",
+    [
+        ("/ws/terminal/00000000-0000-4000-8000-000000000001/", None, 15.0),
+        ("/ws/notifications/", None, 5.0),
+        ("/ws/terminal/not-a-target/", None, 5.0),
+        ("/ws/terminal/00000000-0000-4000-8000-000000000001/", 0.25, 0.25),
+    ],
+)
+async def test_complete_authority_checks_use_the_route_budget_for_open_input_and_output(
+    monkeypatch, path, override, expected
+):
+    monkeypatch.setattr("config.session_credentials.validate_socket_session", lambda scope, **kwargs: True)
+    deadlines = []
+    real_timeout = asyncio.timeout
+
+    def timed_check(delay):
+        deadlines.append(delay)
+        return real_timeout(delay)
+
+    monkeypatch.setattr("config.websocket_auth.asyncio.timeout", timed_check)
+
+    async def authority(scope):
+        return True
+
+    async def application(scope, receive, send):
+        await receive()
+        await send({"type": "websocket.accept"})
+        incoming = await receive()
+        assert incoming["type"] == "websocket.receive"
+        await send({"type": "websocket.send", "text": "protected output"})
+
+    boundary = CredentialSessionWebSocketBoundary(application, resource_authorizer=authority, timeout_seconds=override)
+    communicator = ApplicationCommunicator(boundary, {"path": path})
+    try:
+        await communicator.send_input({"type": "websocket.connect"})
+        assert await communicator.receive_output() == {"type": "websocket.accept"}
+        await communicator.send_input({"type": "websocket.receive", "text": "input"})
+        assert await communicator.receive_output() == {"type": "websocket.send", "text": "protected output"}
+        await communicator.wait()
+        # The periodic watcher has its own interval timeout. Opening, input,
+        # and output must each use the route authority budget.
+        assert deadlines.count(expected) >= 3
+    finally:
+        communicator.stop()
