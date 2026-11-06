@@ -32,15 +32,18 @@ def _mission_control_policy(monkeypatch):
     """Exercise Mission Control through the post-cutover policy boundary."""
     from types import SimpleNamespace
 
-    from shared.authorization import AuthorizationDecision, DecisionKind, port
+    from shared.authorization import AuthorizationDecision, DecisionKind, RelationshipState, port
 
     decision = AuthorizationDecision(DecisionKind.ALLOWED, "policy_allowed")
+    relationships = set()
     monkeypatch.setattr(
         port,
         "_provider_factory",
         lambda: SimpleNamespace(
             check=lambda _request: decision,
             batch_check=lambda requests: tuple(decision for _ in requests),
+            write_relationships=lambda change: relationships.add(change.grant_tuple),
+            read_relationships=lambda change: RelationshipState(change.grant_tuple in relationships, False),
         ),
     )
 
@@ -584,7 +587,7 @@ def make_agent(db, windows_os) -> Callable[..., AgentConfig]:
 
 
 @pytest.fixture
-def hydratable_scenario(db, monkeypatch, settings) -> RaesPackageSource:
+def hydratable_scenario(transactional_db, monkeypatch, settings) -> RaesPackageSource:
     """A conformance-passed RAES source with dispatch held at the cloud seam."""
     staff = User.objects.create_user(
         username="scenario-author@example.com",

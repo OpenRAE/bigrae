@@ -4292,6 +4292,14 @@
       "disposition": "retained",
       "kind": "management-command",
       "scope": "deployment-operator",
+      "surface": "engine:reconcile_range_authorization",
+      "target": "installation"
+    },
+    {
+      "decision": "deployment-command",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "deployment-operator",
       "surface": "engine:render_preparation_runtime",
       "target": "installation"
     },

@@ -24,11 +24,11 @@ interface FormErrors {
   agent?: string;
 }
 
-/** Require both a scenario and an agent to be selected before launching. */
-function validateLaunchForm(scenarioId: string, agentId: string): FormErrors {
+/** Require a scenario and any agent upload that its contract needs. */
+function validateLaunchForm(scenarioId: string, agentId: string, requiresAgent: boolean): FormErrors {
   const errors: FormErrors = {};
   if (!scenarioId) errors.scenario = "Select a scenario to launch.";
-  if (!agentId) errors.agent = "Select an agent to launch.";
+  if (requiresAgent && !agentId) errors.agent = "Select an agent to launch.";
   return errors;
 }
 
@@ -39,6 +39,14 @@ function FieldError({ id, message }: Readonly<{ id: string; message?: string }>)
       {message}
     </p>
   );
+}
+
+/** Only an explicit no-agent contract permits launch without an upload. */
+function needsAgent(scenario: ScenarioListItem | undefined): boolean {
+  const requirements = scenario?.agent_requirements;
+  return !(requirements?.requires_windows === false
+    && requirements.requires_linux === false
+    && requirements.has_from_agent === false);
 }
 
 interface LaunchOptionsFormProps {
@@ -101,7 +109,7 @@ function LaunchOptionsForm({
             <FieldError id="f-scenario-e" message={errors.scenario} />
           </div>
 
-          <div className="flex flex-col gap-2">
+          {needsAgent(selectedScenario) ? <div className="flex flex-col gap-2">
             <Label htmlFor="f-agent">Agent</Label>
             <Select value={agentId} onValueChange={onAgentIdChange}>
               <SelectTrigger
@@ -121,7 +129,7 @@ function LaunchOptionsForm({
               </SelectContent>
             </Select>
             <FieldError id="f-agent-e" message={errors.agent} />
-          </div>
+          </div> : null}
           <ModelSourcePicker scenario={scenarioId} workspace={workspace} value={modelSources} onChange={onModelSourcesChange} disabled={isPending} />
         </CardContent>
         <CardFooter className="justify-end gap-2">
@@ -170,15 +178,7 @@ function LaunchOptionsSection({ optionsError, optionsLoading, ...formProps }: Re
   return <LaunchOptionsForm {...formProps} />;
 }
 
-/**
- * Launch-a-range form (#1370). Mirrors the legacy `static/js/dashboard.js`
- * launch flow but only the simple single-agent path
- * (`LaunchRangeSerializer.agent_id`): every scenario returned by
- * `useScenarios()` is already launchable (the backend's
- * `list_launchable_scenarios` filters that), and the SPA does not yet
- * replicate the legacy from-agent/Windows/Linux OS-map UI, so a scenario plus
- * one agent is always sufficient here.
- */
+/** Launch an authorized scenario in the selected workspace. */
 export function RangeLaunchPage() {
   const navigate = useNavigate();
   const [workspace, setWorkspace] = useState("");
@@ -202,12 +202,13 @@ export function RangeLaunchPage() {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const nextErrors = validateLaunchForm(scenarioId, agentId);
+    const requiresAgent = needsAgent(scenarioList.find((scenario) => scenario.id === scenarioId));
+    const nextErrors = validateLaunchForm(scenarioId, agentId, requiresAgent);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
     launch.mutate(
-      { scenario: scenarioId, agent_id: Number(agentId), ...(workspace ? { workspace_uuid: workspace } : {}), ...(modelSources.aliases.length ? { model_sources: modelSources } : {}) },
+      { scenario: scenarioId, ...(requiresAgent ? { agent_id: Number(agentId) } : { agents: {} }), ...(workspace ? { workspace_uuid: workspace } : {}), ...(modelSources.aliases.length ? { model_sources: modelSources } : {}) },
       { onSuccess: () => navigate(missionControlDashboardPath()) },
     );
   }
@@ -222,7 +223,7 @@ export function RangeLaunchPage() {
         <span className="text-foreground">Launch</span>
       </nav>
 
-      <PageHeader title="Launch a range" description="Choose a scenario and an agent to start a new range." />
+      <PageHeader title="Launch a range" description="Choose a workspace and a scenario to start a range." />
 
       {serverError ? (
         <Alert variant="destructive" className="mb-4">

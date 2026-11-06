@@ -67,11 +67,11 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2718: optional sealed result key in the same invocation Secret; only plugin admission changes.
 # Regenerated for #2716: generation-bound registered-project capture/verification; only provisioner admission changes.
 # Regenerated for #2793: GCP gateway HTTPS uses the existing content CONNECT proxy.
-# Regenerated for #2834: only the two maintenance-worker CPU limits change.
-# Regenerated for #2834: admit the large-plan result-applier memory budget.
+# Regenerated for #2834/#2837 integration: retain the two session-cleanup
+# gateway rules, maintenance CPU limits, and large-plan result-worker memory.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "c44068c0b14e7989432bdc2a1fddb5d1efc1b4d4bc46b32d45e70a6891dc52d9",
-    "gcp-dev": "081923fb554bbeba2078b5b6d0578368c7e0488d88b8b7677c397c8da8b3d7e8",
+    "gcp-prod": "8bc6e108a9b64b5e2612c5740837a3a5119afb649249ce94e2a2e9301d3572ee",
+    "gcp-dev": "a2eee1c073007d20c5a5eac3d2466361201f158a3ca2a02df52fc81f2ae10de1",
 }
 
 
@@ -105,6 +105,62 @@ def _identity(document: dict[str, object]) -> tuple[str, str]:
 
 
 class BackendNeutralChartContractTests(unittest.TestCase):
+    def test_session_cleanup_has_only_the_gateway_api_network_path(self):
+        for profile in ("gcp-dev", "gcp-prod", "aws-dev"):
+            with self.subTest(profile=profile):
+                _, documents = _render(VALUES_FILES[profile])
+                policies = {
+                    doc["metadata"]["name"]: doc
+                    for doc in documents
+                    if doc["kind"] == "NetworkPolicy"
+                }
+                ingress = policies["allow-bootstrap-pruner-to-guacamole-client"]
+                egress = policies["allow-bootstrap-pruner-egress-to-guacamole-client"]
+                self.assertEqual(
+                    ingress["metadata"]["namespace"], egress["metadata"]["namespace"]
+                )
+                for policy, direction, component, peer, peer_field in (
+                    (
+                        ingress,
+                        "Ingress",
+                        "guacamole-client",
+                        "guacamole-bootstrap-prune",
+                        "from",
+                    ),
+                    (
+                        egress,
+                        "Egress",
+                        "guacamole-bootstrap-prune",
+                        "guacamole-client",
+                        "to",
+                    ),
+                ):
+                    self.assertEqual(
+                        policy["spec"],
+                        {
+                            "podSelector": {
+                                "matchLabels": {
+                                    "app.kubernetes.io/component": component
+                                }
+                            },
+                            "policyTypes": [direction],
+                            direction.lower(): [
+                                {
+                                    peer_field: [
+                                        {
+                                            "podSelector": {
+                                                "matchLabels": {
+                                                    "app.kubernetes.io/component": peer
+                                                }
+                                            }
+                                        }
+                                    ],
+                                    "ports": [{"protocol": "TCP", "port": 8080}],
+                                }
+                            ],
+                        },
+                    )
+
     def test_guacamole_uses_dedicated_identity_and_common_authority_configuration(self):
         _, documents = _render(VALUES_FILES["gcp-dev"])
         deployment = next(doc for doc in documents if _identity(doc) == ("Deployment", "guacamole-client"))

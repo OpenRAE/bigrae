@@ -225,6 +225,10 @@ Dataplane V2 NetworkPolicy reachability, Google Workload Identity, Job admission
 and application authorization. The Helm chart renders the NetworkPolicies. Each
 BigRAE namespace denies traffic by default, and explicit policies allow each
 required path, for example the portal to the in-cluster Guacamole token API.
+The session cleanup worker also needs that API to close expired native sessions.
+Its separate ingress and egress rules permit only gateway pods in the same
+namespace on TCP 8080. Other workers gain no gateway access. See the
+[session cleanup network design](../architecture/session-cleanup-network-2837.md).
 These controls do not provide authenticated
 pod-to-pod mTLS; a service mesh remains unadopted. No documentation or unit-test
 result proves complete escape detection or live containment qualification.
@@ -552,6 +556,8 @@ A native management command admits an installed tenant pack without dispatch.
 Operational claims and worker observations remain separate from scientific inputs.
 The current compiler permits serial execution; configured concurrency grants no provider capacity.
 See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).
+
+Native task observation reads the normal Job resource, which includes its status. It uses the existing Job permission. Completed-task removal retains exact workload identity checks. See [Native Job status reads](../architecture/native-job-status-read-2827.md).
 
 Administrator delegation inventories exclude ranges in the destroying and destroyed states. Engine retains their runtime records and cleanup proofs. Live range ancestry checks and direct binding reads are unchanged. See [Retiring range delegation](../architecture/retiring-range-delegation-2824.md).
 

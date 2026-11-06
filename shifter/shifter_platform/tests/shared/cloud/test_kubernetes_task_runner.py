@@ -280,14 +280,17 @@ class TestSensitiveEnvProjection:
 class TestStatusAndInterrupt:
     def test_status_maps_running(self) -> None:
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = SimpleNamespace(
+        batch_api.read_namespaced_job.return_value = SimpleNamespace(
             status=SimpleNamespace(active=1, failed=0, succeeded=0, start_time="t", completion_time=None, conditions=[])
         )
+        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=403)
         runner = _runner(_profile(), batch_api, MagicMock())
         result = runner.get_task_status("ns", "ns/job-1")
         assert result is not None
         assert result["status"] == "RUNNING"
         assert result["task_id"] == "ns/job-1"
+        batch_api.read_namespaced_job.assert_called_once_with(name="job-1", namespace="ns", _request_timeout=30)
+        batch_api.read_namespaced_job_status.assert_not_called()
 
     def test_interrupt_matching_intent_foreground_deletes(self) -> None:
         task_identity = "11111111-1111-1111-1111-111111111111"
@@ -320,7 +323,8 @@ class TestStatusAndInterrupt:
         observed = _observed_job(task_identity=task_identity, image="img:1", command=["c"], service_account_name="sa")
         observed.status = SimpleNamespace(succeeded=1, failed=0)
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = observed
+        batch_api.read_namespaced_job.return_value = observed
+        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=403)
         runner = _runner(_profile(), batch_api, MagicMock())
 
         runner.delete_completed_task(
@@ -342,7 +346,7 @@ class TestStatusAndInterrupt:
         observed = _observed_job(task_identity=task_identity, image="img:1", command=["c"], service_account_name="sa")
         observed.status = SimpleNamespace(succeeded=0, failed=0)
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = observed
+        batch_api.read_namespaced_job.return_value = observed
         runner = _runner(_profile(), batch_api, MagicMock())
 
         with pytest.raises(CloudTaskError, match="terminal evidence"):
@@ -370,7 +374,7 @@ class TestStatusAndInterrupt:
         task_identity = "11111111-1111-1111-1111-111111111111"
         observed = _observed_job(task_identity=task_identity, image="img:1", command=["c"], service_account_name="sa")
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=404)
+        batch_api.read_namespaced_job.side_effect = _ApiException(status=404)
         core_api = MagicMock()
         core_api.list_namespaced_pod.return_value = SimpleNamespace(items=[object()] if orphan_pods else [])
         runner = _runner(_profile(), batch_api, core_api)
@@ -388,7 +392,7 @@ class TestStatusAndInterrupt:
     @pytest.mark.parametrize("identity", [{}, {"task_identity": "other", "container_name": "pulumi-provisioner"}])
     def test_missing_job_with_unbound_identity_cannot_authorize_a_retry(self, identity) -> None:
         batch_api, core_api = MagicMock(), MagicMock()
-        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=404)
+        batch_api.read_namespaced_job.side_effect = _ApiException(status=404)
         runner = _runner(_profile(), batch_api, core_api)
         with pytest.raises(CloudTaskError, match="identity mismatch"):
             runner.delete_completed_task("ns", "ns/job-1", identity)
@@ -399,7 +403,7 @@ class TestStatusAndInterrupt:
         task_identity = "11111111-1111-1111-1111-111111111111"
         observed = _observed_job(task_identity=task_identity, image="img:1", command=["c"], service_account_name="sa")
         batch_api, core_api = MagicMock(), MagicMock()
-        batch_api.read_namespaced_job_status.side_effect = _ApiException(status=404)
+        batch_api.read_namespaced_job.side_effect = _ApiException(status=404)
         core_api.list_namespaced_pod.side_effect = _ApiException(status=403)
         runner = _runner(_profile(), batch_api, core_api)
         with pytest.raises(CloudTaskError, match="unavailable"):
@@ -419,7 +423,7 @@ class TestStatusAndInterrupt:
         )
         observed.status = SimpleNamespace(succeeded=1, failed=0)
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = observed
+        batch_api.read_namespaced_job.return_value = observed
         runner = _runner(_profile(), batch_api, MagicMock())
 
         with pytest.raises(CloudTaskError, match="identity mismatch"):
@@ -443,7 +447,7 @@ class TestStatusAndInterrupt:
         observed = _observed_job(task_identity=task_identity, image="img:1", command=["c"], service_account_name="sa")
         observed.status = SimpleNamespace(succeeded=1, failed=0)
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = observed
+        batch_api.read_namespaced_job.return_value = observed
         batch_api.delete_namespaced_job.side_effect = _ApiException(status)
         runner = _runner(_profile(), batch_api, MagicMock())
         identity = {
@@ -465,7 +469,7 @@ class TestStatusAndInterrupt:
         observed = _observed_job(task_identity=task_identity, image="img:1", command=["c"], service_account_name="sa")
         observed.status = SimpleNamespace(succeeded=1, failed=0)
         batch_api = MagicMock()
-        batch_api.read_namespaced_job_status.return_value = observed
+        batch_api.read_namespaced_job.return_value = observed
         batch_api.delete_namespaced_job.side_effect = RuntimeError("private provider detail")
         runner = _runner(_profile(), batch_api, MagicMock())
 

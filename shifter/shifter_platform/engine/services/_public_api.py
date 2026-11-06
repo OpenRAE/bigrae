@@ -188,6 +188,7 @@ PUBLIC_API = (
     "prepare_ngfw_creation",
     "prepare_ngfw_lifecycle",
     "prepare_raes_range_creation",
+    "publish_range_relationships",
     "prepare_runtime_plugin_binding",
     "prepare_runtime_plugin_pack_binding_removal",
     "prepare_warm_range_claim",
