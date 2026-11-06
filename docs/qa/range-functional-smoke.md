@@ -81,15 +81,19 @@ Two rows carry the product claim:
 
 - `terminal_nonce_exchange`—input produced matching output from the guest's own
   shell. A WebSocket upgrade alone is *not* sufficient.
-- `guacamole_session_connected`—guacd completed the protocol handshake and
-  opened the session. Bootstrap `succeeded` and one-time URL delivery are
+- `guacamole_session_connected`—the browser tunnel supplies its identifier,
+  accepts a display synchronization response, and sends a further display
+  update. The checker acknowledges synchronization and image data as the
+  [Apache browser client does](https://guacamole.apache.org/doc/1.6.0/guacamole-common-js/main_webapp_modules_Client.js.html).
+  It does not wait for the internal `ready` instruction, which the gateway
+  consumes before it opens the browser tunnel. Bootstrap `succeeded` and one-time URL delivery are
   necessary but *not* sufficient: they prove only that the server minted a
   credential.
 
 A run that reports `guacamole_bootstrap_succeeded: passed` alongside
-`guacamole_session_connected: failed` means the portal is minting session
-credentials that guacd cannot use—a real user-facing outage, not a harness
-problem.
+`guacamole_session_connected: failed` proves credential delivery but does not
+prove usable browser access. Check the connection error and protocol exchange
+before you assign the cause to the gateway or guest.
 
 The report carries identifiers and provenance only: no cookie, token, Guacamole
 URL, SSH key, private address, raw response body, traceback, or terminal output.
