@@ -674,7 +674,10 @@ def test_failed_cleanup_retry_reserves_one_fresh_attempt_with_the_original_autho
     runner.delete_completed_task.assert_called_once()
 
 
-def test_launcher_observes_current_cleanup_once_per_minute_and_retries_only_failure(lifecycle_range, monkeypatch):
+@pytest.mark.parametrize("terminal_state", ["FAILED", None])
+def test_launcher_observes_current_cleanup_once_per_minute_and_retries_only_failure(
+    lifecycle_range, monkeypatch, terminal_state
+):
     from datetime import timedelta
     from io import StringIO
     from unittest.mock import Mock
@@ -708,7 +711,7 @@ def test_launcher_observes_current_cleanup_once_per_minute_and_retries_only_fail
     previous.refresh_from_db()
     previous.next_attempt_at = timezone.now() - timedelta(seconds=1)
     previous.save(update_fields=["next_attempt_at"])
-    runner.get_task_status.return_value = {"status": "FAILED"}
+    runner.get_task_status.return_value = {"status": terminal_state} if terminal_state else None
     assert retry_due_failed_cleanup_tasks() == 1
     fixture.realized.refresh_from_db()
     assert fixture.realized.provisioner_operation_id != previous.operation_id
