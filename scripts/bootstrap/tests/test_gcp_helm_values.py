@@ -41,6 +41,18 @@ def test_build_values_rejects_missing_broker_readback(tmp_path: Path):
         _values(tmp_path, model_broker=broker)
 
 
+def test_build_values_supplies_gateway_native_authority(tmp_path: Path):
+    values = _values(tmp_path)
+    runtime = values["runtimeEnv"]
+    endpoint = "https://portal.example.test/api/v1/mission-control/guacamole/control/authority/"
+    assert runtime["GUACAMOLE_CONTROL_URL"] == endpoint
+    assert runtime["GUACAMOLE_CONTROL_AUDIENCE"] == endpoint
+    assert runtime["GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL"] == (
+        f"shiftergcpdev-guacamole-client@{PROJECT}.iam.gserviceaccount.com"
+    )
+    assert runtime["GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID"] == "123456789012345678901"
+
+
 def test_build_values_writes_the_range_telemetry_policy(tmp_path: Path):
     values = _values(tmp_path, range_telemetry={"nat_logs": {"filter": "ERRORS_ONLY"}})
     policy = json.loads(values["runtimeEnv"]["GCP_RANGE_TELEMETRY_POLICY_JSON"])

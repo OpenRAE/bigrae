@@ -52,6 +52,11 @@ spec:
           env:
             - name: OPENFGA_ENABLED
               value: "true"
+            {{- if eq .Values.provider.name "gcp" }}
+            # Keep native control HTTPS inside the existing CONNECT boundary.
+            - name: JAVA_OPTS
+              value: "-Dhttps.proxyHost=content-egress -Dhttps.proxyPort=3128"
+            {{- end }}
             {{- $controlEnv := list "GUACAMOLE_CONTROL_URL" "GUACAMOLE_CONTROL_AUDIENCE" }}
             {{- if eq .Values.provider.name "aws" }}
             {{- /* AWS (#2313): STS web identity selection and the SDK region. */}}

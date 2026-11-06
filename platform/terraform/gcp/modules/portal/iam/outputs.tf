@@ -16,6 +16,14 @@ output "workload_service_accounts" {
   }
 }
 
+output "guacamole_controller_identity" {
+  description = "Public immutable identity of the browser gateway controller."
+  value = {
+    email     = google_service_account.workload["guacamole-client"].email
+    unique_id = google_service_account.workload["guacamole-client"].unique_id
+  }
+}
+
 output "range_host_service_account_email" {
   description = "Email of the GCE range host service account, attached only to hosts that need cloud APIs."
   value       = google_service_account.range_host.email

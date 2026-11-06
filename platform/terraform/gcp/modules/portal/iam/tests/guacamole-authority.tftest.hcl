@@ -1,5 +1,29 @@
 # Credential-free plan: gateway metadata identity is isolated from cloud workers.
-mock_provider "google" {}
+mock_provider "google" {
+  mock_resource "google_service_account" {
+    defaults = {
+      name = "projects/synthetic-project/serviceAccounts/default@synthetic-project.iam.gserviceaccount.com"
+    }
+  }
+}
+
+override_resource {
+  target = google_service_account.workload["guacamole-client"]
+  values = {
+    name      = "projects/synthetic-project/serviceAccounts/gateway@synthetic-project.iam.gserviceaccount.com"
+    email     = "gateway@synthetic-project.iam.gserviceaccount.com"
+    unique_id = "111111111111111111111"
+  }
+}
+
+override_resource {
+  target = google_service_account.workload["portal"]
+  values = {
+    name      = "projects/synthetic-project/serviceAccounts/portal@synthetic-project.iam.gserviceaccount.com"
+    email     = "portal@synthetic-project.iam.gserviceaccount.com"
+    unique_id = "222222222222222222222"
+  }
+}
 
 variables {
   workload_identity_pool    = "synthetic-project.svc.id.goog"
@@ -34,5 +58,16 @@ run "guacamole_identity_isolated_from_application_workers" {
   assert {
     condition     = alltrue([for binding in values(local.workload_secret_bindings) : binding.workload != "guacamole-client"])
     error_message = "The gateway must not inherit platform runtime-secret access."
+  }
+}
+
+run "controller_output_uses_exact_gateway_identity" {
+  command = apply
+  assert {
+    condition = (
+      output.guacamole_controller_identity.email == "gateway@synthetic-project.iam.gserviceaccount.com" &&
+      output.guacamole_controller_identity.unique_id == "111111111111111111111"
+    )
+    error_message = "Gateway control must use the gateway's email and immutable subject, never the portal identity."
   }
 }
