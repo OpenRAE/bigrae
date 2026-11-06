@@ -616,3 +616,53 @@ def test_source_lifecycle_policy_is_evaluated_before_sql_critical_sections(lifec
     monkeypatch.setattr(port, "_provider_factory", lambda: SimpleNamespace(check=check))
     pause_range(lifecycle_range.credential, lifecycle_range.instance.pk)
     assert checked
+
+
+@pytest.mark.postgres
+@pytest.mark.django_db(transaction=True)
+def test_failed_cleanup_retry_reserves_one_fresh_attempt_with_the_original_authority(lifecycle_range, monkeypatch):
+    from concurrent.futures import ThreadPoolExecutor
+    from unittest.mock import Mock
+
+    from django.db import close_old_connections, connection
+
+    from cms.services import destroy_range
+    from engine.models import ProvisionerLaunchIntent
+    from engine.services._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+
+    fixture = lifecycle_range
+    destroy_range(fixture.credential, fixture.instance.pk)
+    assert commit_prepared_range_lifecycle(prepare_system_range_cleanup(fixture.request.request_id))
+    fixture.realized.refresh_from_db()
+    previous = ProvisionerLaunchIntent.objects.get(operation_id=fixture.realized.provisioner_operation_id)
+    assert previous.authority_kind == "cleanup"
+    previous.status = "SUCCEEDED"  # Delivery completed; the provider task itself failed.
+    previous.save(update_fields=["status"])
+    generation = fixture.realized.resource_generation
+    runner = Mock()
+    runner.get_task_status.return_value = {"status": "FAILED"}
+    monkeypatch.setattr("engine.services._failed_cleanup_task.get_task_runner", lambda: runner)
+    prepared = [prepare_system_range_cleanup(fixture.request.request_id) for _ in range(2)]
+
+    def retry(request):
+        close_old_connections()
+        try:
+            return commit_prepared_range_lifecycle(request)
+        finally:
+            connection.close()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        assert all(pool.map(retry, prepared))
+    fixture.realized.refresh_from_db()
+    current = ProvisionerLaunchIntent.objects.get(operation_id=fixture.realized.provisioner_operation_id)
+    assert current.operation_id != previous.operation_id
+    assert current.authority_kind == "cleanup"
+    assert current.cleanup_origin_operation_uuid == previous.cleanup_origin_operation_uuid
+    assert fixture.realized.resource_generation == generation
+    assert current.payload["operation"] == "destroy"
+    assert ProvisionerLaunchIntent.objects.filter(operation_id=previous.operation_id).exists()
+    count = ProvisionerLaunchIntent.objects.count()
+    runner.get_task_status.return_value = {"status": "RUNNING"}
+    assert commit_prepared_range_lifecycle(prepare_system_range_cleanup(fixture.request.request_id))
+    assert ProvisionerLaunchIntent.objects.count() == count
+    runner.delete_completed_task.assert_called_once()

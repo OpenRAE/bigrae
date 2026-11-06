@@ -328,4 +328,15 @@ def _destroy_already_queued(row: Range, fields: dict[str, object]) -> bool:
         if row.provisioner_operation_id is not None
         else None
     )
-    return fields.get("authority_kind") != "cleanup" or (existing is not None and existing.authority_kind == "cleanup")
+    queued = fields.get("authority_kind") != "cleanup"
+    if not queued and existing is not None and existing.authority_kind == "cleanup":
+        from ._failed_cleanup_task import retire_failed_cleanup_task
+
+        queued = not retire_failed_cleanup_task(existing)
+        if not queued:
+            # The exact failed workload is quiescent. Preserve its immutable
+            # records and original resource generation; reserve a fresh attempt.
+            row.provisioner_operation = ""
+            row.provisioner_operation_id = None
+            row.save(update_fields=["provisioner_operation", "provisioner_operation_id"])
+    return queued
