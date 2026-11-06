@@ -107,6 +107,47 @@ class FakeClient:
         return SimpleNamespace(changes=[SimpleNamespace()], continuation_token="next-page")
 
 
+@pytest.mark.parametrize("batch", [False, True])
+@pytest.mark.parametrize("temporary", [False, True])
+def test_temporary_participation_context_is_exact_and_never_overrides_denial(batch, temporary):
+    event = uuid4()
+
+    class EventClient(FakeClient):
+        def read(self, body, options):
+            parents = {
+                (f"account:{ACCOUNT_ID}", "installation"): "installation:root",
+                (f"event:{event}", "account"): f"account:{ACCOUNT_ID}",
+            }
+            parent = parents.get((body.object, body.relation))
+            return SimpleNamespace(
+                tuples=[SimpleNamespace(key=SimpleNamespace(user=parent))] if parent else [],
+                continuation_token="",
+            )
+
+    client = EventClient(allowed=False, batch_result={"0": SimpleNamespace(allowed=False, error=None)})
+    provider = OpenFgaAuthorizationProvider(_settings(), client=client)
+    target = TargetRef("event", event)
+    request = AuthorizationRequest(
+        PrincipalRef(PRINCIPAL_ID, "human"),
+        "event.participate",
+        target,
+        ResourceScope("account", ACCOUNT_ID),
+        CredentialCeiling(frozenset({"event.participate"}), target),
+        temporary_participation=temporary,
+    )
+    decision = provider.batch_check((request,))[0] if batch else provider.check(request)
+    assert decision.kind == DecisionKind.DENIED
+    call = client.batch_call if batch else client.check_call
+    assert call is not None
+    body = call[0].checks[0] if batch else call[0]
+    if temporary:
+        assert [(item.user, item.relation, item.object) for item in body.contextual_tuples] == [
+            (f"principal:{PRINCIPAL_ID}", "grant_event_participate", f"event:{event}")
+        ]
+    else:
+        assert body.contextual_tuples is None
+
+
 def test_range_requires_its_exact_sql_parent_and_rejects_another_event_in_the_same_account():
     expected_event, other_event, range_uuid = uuid4(), uuid4(), uuid4()
     edges = {

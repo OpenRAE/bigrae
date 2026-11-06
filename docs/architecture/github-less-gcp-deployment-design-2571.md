@@ -591,3 +591,13 @@ lists the steps.
 Review checks STE sentence length, one word for one meaning, and that every
 statement matches the code. The updated documents are listed in issue #2571
 and in the pull request.
+
+### Release scanner quota consumption (#2789)
+
+The release-scan identity holds `roles/serviceusage.serviceUsageConsumer` on its
+deployment project. This permits the quota-billed API calls used to create scan
+evidence when the operator selects that project as the quota project. The grant
+exists only when the scanner is enabled. Evidence read access and its create-only
+`release-scans/` write boundary remain unchanged; this role adds no storage mutation
+permission. The foundation contract tests check the exact project, role and member,
+and check that disabling the scanner removes this grant.
