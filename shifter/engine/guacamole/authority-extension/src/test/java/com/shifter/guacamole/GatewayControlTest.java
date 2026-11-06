@@ -10,6 +10,29 @@ import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GatewayControlTest {
+    @Test void validBoundedAuthorityMayTakeLongerThanThreeSeconds() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/authority", exchange -> {
+            try { Thread.sleep(3200); }
+            catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                exchange.close();
+                return;
+            }
+            byte[] response = "{\"allowed\":true}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try (GatewayControl control = new GatewayControl(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/authority"),
+                () -> "Bearer synthetic-workload")) {
+            assertTrue(control.authorize(UUID.randomUUID()));
+        }
+        finally { server.stop(0); }
+    }
+
     @Test void workloadAssertionAndOpaqueBindingAreTheOnlyRequestAuthority() throws Exception {
         UUID bootstrap = UUID.randomUUID();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
