@@ -138,9 +138,12 @@ def test_explicit_conformance_uses_the_existing_project_selection(configured_pac
     client, url, payload, source, _, _, _ = configured_pack
     actor, _ = tenant
     assert client.post(url, payload, format="json").status_code == 200
-    assert validate_registered_pack_conformance(
-        user=actor.credential, scenario_id=source.scenario_id, expected_package_digest=source.package_digest
-    ) == "passed"
+    assert (
+        validate_registered_pack_conformance(
+            user=actor.credential, scenario_id=source.scenario_id, expected_package_digest=source.package_digest
+        )
+        == "passed"
+    )
 
 
 @pytest.mark.parametrize("fault", ["foreign", "disabled", "missing", "bad-number", "wrong-baseline"])
