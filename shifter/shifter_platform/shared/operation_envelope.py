@@ -79,7 +79,7 @@ _DIGEST_PREFIX = "sha256:"
 MAX_ENVELOPE_BYTES = 262144
 # Native cloud declarations occur in both plan resources and operations. Keep
 # room for that valid producer output plus retained preparation and cleanup.
-MAX_RAES_INPUT_BYTES = 8 * 1024 * 1024
+MAX_RAES_INPUT_BYTES = 16 * 1024 * 1024
 
 
 def envelope_byte_limit(value: dict[str, Any]) -> int:

@@ -530,9 +530,13 @@ Independent inventory and payload readback must match the baseline plus overlay;
 teardown releases custody only after exact baseline restoration. Cloud-only
 nodes retain their native identities without allocating extra guest VMs.
 These routes have local contract and lifecycle checks; live qualification is
-still required. Native provisioning inputs have an 8 MiB transport limit; other
+still required. Native provisioning inputs have a 16 MiB transport limit; other
 operation inputs retain the existing 256 KiB limit. See the
 [registered-project contract](shifter_platform/registered-gcp-range-projects.md).
+
+Project inventory reads permit at most 4096 secrets and 4 MiB of metadata in total.
+Each response remains limited to 1 MiB. The original clear baseline remains limited to 1 MiB.
+Admission checks the combined baseline and planned resource counts before provider changes.
 
 ## Experiment admission
 

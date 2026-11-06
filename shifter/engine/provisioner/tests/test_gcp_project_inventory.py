@@ -2,10 +2,13 @@
 
 import base64
 import json
+from datetime import UTC, datetime
+from uuid import uuid4
 
 import pytest
+from shared.gcp_range_projects import MAX_BASELINE_BYTES, MAX_PROJECT_SECRETS, GcpProjectBaseline
 
-from gcp_project_inventory import GcpProjectInventory
+from gcp_project_inventory import MAX_INVENTORY_BYTES, GcpProjectInventory
 
 _PROJECT = "synthetic-project"
 _NUMBER = "123456789012"
@@ -194,10 +197,60 @@ def test_ambiguous_or_oversized_provider_response_is_refused(routes, raw):
 
 
 def test_aggregate_inventory_budget_bounds_memory_across_individually_valid_pages(routes):
-    keys = list(routes)
-    project = json.loads(routes[keys[0]].material)
-    project["displayName"] = "x" * 600_000
-    routes[keys[0]] = Response(project)
-    routes[keys[1]] = Response({"version": 3, "bindings": [], "etag": "x" * 600_000})
+    for key in list(routes)[:6]:
+        body = json.loads(routes[key].material)
+        body["padding"] = "x" * 700_000
+        routes[key] = Response(body)
     with pytest.raises(ValueError, match="unavailable"):
         GcpProjectInventory(Session(routes)).read(_PROJECT)
+
+
+def many_secrets(routes, count):
+    """Supply actual paginated metadata shapes without payload access."""
+    root = f"https://secretmanager.googleapis.com/v1/projects/{_NUMBER}/secrets"
+    for offset in range(0, count, 100):
+        names = [f"projects/{_NUMBER}/secrets/synthetic-{i}" for i in range(offset, min(offset + 100, count))]
+        token = "" if offset == 0 else str(offset)
+        body = {
+            "secrets": [
+                {"name": name, "replication": {"automatic": {}}, "annotations": {"synthetic": "x" * 512}}
+                for name in names
+            ]
+        }
+        if offset + 100 < count:
+            body["nextPageToken"] = str(offset + 100)
+        routes[(root, token)] = Response(body)
+        for name in names:
+            routes[(f"https://secretmanager.googleapis.com/v1/{name}:getIamPolicy", "")] = Response({"version": 3})
+            routes[(f"https://secretmanager.googleapis.com/v1/{name}/versions", "")] = Response(
+                {"versions": [{"name": name + "/versions/1", "state": "ENABLED"}]}
+            )
+
+
+def test_large_complete_inventory_does_not_increase_the_original_baseline_bound(routes):
+    many_secrets(routes, 2048)
+    session = Session(routes)
+    state = GcpProjectInventory(session).read(_PROJECT)
+    assert len(state.secrets) == 2048
+    assert all(len(secret.versions) == 1 for secret in state.secrets.values())
+    assert MAX_BASELINE_BYTES < len(state.model_dump_json().encode()) < MAX_INVENTORY_BYTES
+    assert not any(":access" in url for _, url, _ in session.calls)
+    with pytest.raises(ValueError):
+        GcpProjectBaseline(
+            schema_version="bigrae.gcp-project-baseline/v1",
+            registration_id=uuid4(),
+            capture_operation_id=uuid4(),
+            organization_uuid=uuid4(),
+            project_id=_PROJECT,
+            project_number=_NUMBER,
+            captured_at=datetime.now(UTC),
+            state=state,
+        )
+
+
+def test_excess_inventory_is_rejected_before_followup_reads_not_truncated(routes):
+    many_secrets(routes, 4097)
+    session = Session(routes)
+    with pytest.raises(ValueError, match="unavailable"):
+        GcpProjectInventory(session).read(_PROJECT)
+    assert not any(f"synthetic-{MAX_PROJECT_SECRETS}:getIamPolicy" in url for _, url, _ in session.calls)

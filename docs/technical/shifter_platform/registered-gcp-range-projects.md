@@ -72,7 +72,7 @@ replacement baseline.
 
 Only the exact ciphertext hash, size, bucket, generation and semantic state
 digest cross the operation boundary. Registration and ordinary envelopes retain
-the 256 KiB bound. Native RAES plan inputs alone have an 8 MiB limit; their payload
+the 256 KiB bound. Native RAES plan inputs alone have a 16 MiB limit; their payload
 parser still validates the complete closed contract. Result budgets are unchanged. Cleanup reads the retained bucket and generation,
 checks the ciphertext before decryption, and verifies the original organization,
 project identity, capture and lease. Changed current configuration cannot redirect
@@ -167,12 +167,18 @@ and exact restoration proof for the original lease/baseline. The release update
 and result disposition share the result transaction. Unknown or residual state
 retains custody. Logical status changes and missing Jobs are insufficient.
 
-Native RAES plan inputs have an 8 MiB operation-envelope budget (#2777).
+Native RAES plan inputs have a 16 MiB operation-envelope budget (#2816).
 The released planner records cloud declarations in resources and operations;
 the complete input can exceed 4 MiB even when its declarations are valid.
 Both the portal and provisioner use the same shared validator. Ordinary
 envelopes and results keep their 256 KiB budget. Preparation approval still
 checks the complete retained destroy envelope before any provider effects.
+
+Complete inventory reads permit 4096 secrets and 1024 service accounts, including baseline objects.
+The reader permits 4 MiB of metadata in total and 1 MiB per response.
+It rejects excessive counts, repeated pages, and incomplete reads without returning partial inventory.
+The clear baseline retains its 1 MiB limit.
+Admission rejects combined baseline and planned counts that exceed the inventory limits before provider changes.
 
 The [design](../../architecture/registered-gcp-range-projects-2716.md) describes
 the native RAES intent, literal Content, provider overlay and readback boundaries

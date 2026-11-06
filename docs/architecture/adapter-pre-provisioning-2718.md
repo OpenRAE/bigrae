@@ -41,7 +41,7 @@ Limits reuse the existing request/file/output budgets: 64 KiB request, 16 files
 and 512 KiB aggregate file material, 512 KiB clear preparation response and at
 most 4096 scalar edits. Ciphertext fits the existing 1 MiB bounded log reader.
 The full retained result must also fit the operation envelope with its original
-input: 8 MiB for native RAES range plans, and 256 KiB for other operations.
+input: 16 MiB for native RAES range plans, and 256 KiB for other operations.
 Core validates that future cleanup envelope before
 acceptance; an otherwise valid larger response fails before any provider effect.
 Prepared cleanup reuses the immutable source input, avoiding changed registry
