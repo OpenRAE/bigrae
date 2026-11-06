@@ -14,8 +14,7 @@ import yaml
 
 CHART_DIR = Path(__file__).resolve().parents[1]
 VALUES_FILES = {
-    path.stem.removeprefix("values-"): path
-    for path in CHART_DIR.glob("values-*.yaml")
+    path.stem.removeprefix("values-"): path for path in CHART_DIR.glob("values-*.yaml")
 }
 
 # Placeholder AWS edge identity carried by the non-operational values-aws-dev.yaml
@@ -67,9 +66,10 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2718: optional sealed result key in the same invocation Secret; only plugin admission changes.
 # Regenerated for #2716: generation-bound registered-project capture/verification; only provisioner admission changes.
 # Regenerated for #2793: GCP gateway HTTPS uses the existing content CONNECT proxy.
+# Regenerated for #2837: only the two session-cleanup gateway rules are added.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "ad071dad6671d2af9f3fe9628fb2885f0cf9dd29ca4cb4737340bd01f4e1089d",
-    "gcp-dev": "d114fd12a56fa5e70b3063a9b37aa9ee7121809857cf425216f85131d2512008",
+    "gcp-prod": "bbf08e46f60489d3f75dfe800878460311181928918ef937d2eb5710b1cc0b70",
+    "gcp-dev": "6bd49fa06ee53503edf1f452187ec0a0df97d55631802da6eab0f4060ba03e55",
 }
 
 
@@ -103,16 +103,83 @@ def _identity(document: dict[str, object]) -> tuple[str, str]:
 
 
 class BackendNeutralChartContractTests(unittest.TestCase):
+    def test_session_cleanup_has_only_the_gateway_api_network_path(self):
+        for profile in ("gcp-dev", "gcp-prod", "aws-dev"):
+            with self.subTest(profile=profile):
+                _, documents = _render(VALUES_FILES[profile])
+                policies = {
+                    doc["metadata"]["name"]: doc
+                    for doc in documents
+                    if doc["kind"] == "NetworkPolicy"
+                }
+                ingress = policies["allow-bootstrap-pruner-to-guacamole-client"]
+                egress = policies["allow-bootstrap-pruner-egress-to-guacamole-client"]
+                self.assertEqual(
+                    ingress["metadata"]["namespace"], egress["metadata"]["namespace"]
+                )
+                for policy, direction, component, peer, peer_field in (
+                    (
+                        ingress,
+                        "Ingress",
+                        "guacamole-client",
+                        "guacamole-bootstrap-prune",
+                        "from",
+                    ),
+                    (
+                        egress,
+                        "Egress",
+                        "guacamole-bootstrap-prune",
+                        "guacamole-client",
+                        "to",
+                    ),
+                ):
+                    self.assertEqual(
+                        policy["spec"],
+                        {
+                            "podSelector": {
+                                "matchLabels": {
+                                    "app.kubernetes.io/component": component
+                                }
+                            },
+                            "policyTypes": [direction],
+                            direction.lower(): [
+                                {
+                                    peer_field: [
+                                        {
+                                            "podSelector": {
+                                                "matchLabels": {
+                                                    "app.kubernetes.io/component": peer
+                                                }
+                                            }
+                                        }
+                                    ],
+                                    "ports": [{"protocol": "TCP", "port": 8080}],
+                                }
+                            ],
+                        },
+                    )
+
     def test_guacamole_uses_dedicated_identity_and_common_authority_configuration(self):
         _, documents = _render(VALUES_FILES["gcp-dev"])
-        deployment = next(doc for doc in documents if _identity(doc) == ("Deployment", "guacamole-client"))
+        deployment = next(
+            doc
+            for doc in documents
+            if _identity(doc) == ("Deployment", "guacamole-client")
+        )
         pod = deployment["spec"]["template"]["spec"]
         self.assertEqual(pod["serviceAccountName"], "guacamole-client")
-        accounts = [doc for doc in documents if _identity(doc) == ("ServiceAccount", "guacamole-client")]
+        accounts = [
+            doc
+            for doc in documents
+            if _identity(doc) == ("ServiceAccount", "guacamole-client")
+        ]
         self.assertEqual(len(accounts), 1)
         env = {value["name"]: value for value in pod["containers"][0]["env"]}
         self.assertEqual(env["OPENFGA_ENABLED"]["value"], "true")
-        self.assertEqual(env["JAVA_OPTS"]["value"], "-Dhttps.proxyHost=content-egress -Dhttps.proxyPort=3128")
+        self.assertEqual(
+            env["JAVA_OPTS"]["value"],
+            "-Dhttps.proxyHost=content-egress -Dhttps.proxyPort=3128",
+        )
         for name in ("GUACAMOLE_CONTROL_URL", "GUACAMOLE_CONTROL_AUDIENCE"):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
             self.assertEqual(ref["name"], "platform-runtime")
@@ -120,52 +187,124 @@ class BackendNeutralChartContractTests(unittest.TestCase):
 
     def test_gcp_gateway_reaches_public_control_only_through_the_existing_proxy(self):
         _, documents = _render(VALUES_FILES["gcp-dev"])
-        policies = {doc["metadata"]["name"]: doc for doc in documents if doc["kind"] == "NetworkPolicy"}
+        policies = {
+            doc["metadata"]["name"]: doc
+            for doc in documents
+            if doc["kind"] == "NetworkPolicy"
+        }
         boundary = policies["content-egress-boundary"]["spec"]
-        callers = boundary["ingress"][0]["from"][0]["podSelector"]["matchExpressions"][0]["values"]
+        callers = boundary["ingress"][0]["from"][0]["podSelector"]["matchExpressions"][
+            0
+        ]["values"]
         self.assertEqual(set(callers), {"portal", "ctf-scheduler", "guacamole-client"})
         clients = policies["allow-ctf-content-egress-clients"]["spec"]
-        self.assertEqual(set(clients["podSelector"]["matchExpressions"][0]["values"]), set(callers))
-        self.assertEqual(clients["egress"], [{
-            "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/component": "content-egress"}}}],
-            "ports": [{"protocol": "TCP", "port": 3128}],
-        }])
+        self.assertEqual(
+            set(clients["podSelector"]["matchExpressions"][0]["values"]), set(callers)
+        )
+        self.assertEqual(
+            clients["egress"],
+            [
+                {
+                    "to": [
+                        {
+                            "podSelector": {
+                                "matchLabels": {
+                                    "app.kubernetes.io/component": "content-egress"
+                                }
+                            }
+                        }
+                    ],
+                    "ports": [{"protocol": "TCP", "port": 3128}],
+                }
+            ],
+        )
 
     def test_range_access_selects_smoke_without_broadening_destinations(self) -> None:
         for profile in ("gcp-dev", "gcp-prod"):
             with self.subTest(profile=profile):
-                rendered = _helm("template", "contract-test", str(CHART_DIR),
-                                 "-f", str(VALUES_FILES[profile]),
-                                 "--set", "network.rangeAccessCidrs[0]=10.50.0.0/16").stdout
-                documents = [doc for doc in yaml.safe_load_all(rendered) if isinstance(doc, dict)]
-                policy = next(doc for doc in documents if _identity(doc) == (
-                    "NetworkPolicy", "allow-platform-range-access-egress"))
-                self.assertEqual(policy["spec"]["podSelector"], {"matchExpressions": [{
-                    "key": "app.kubernetes.io/component", "operator": "In",
-                    "values": ["portal", "guacd", "post-deploy-smoke"],
-                }]})
-                self.assertEqual(policy["spec"]["egress"], [{
-                    "to": [{"ipBlock": {"cidr": "10.50.0.0/16"}}],
-                    "ports": [{"protocol": "TCP", "port": port} for port in (22, 3389)],
-                }])
+                rendered = _helm(
+                    "template",
+                    "contract-test",
+                    str(CHART_DIR),
+                    "-f",
+                    str(VALUES_FILES[profile]),
+                    "--set",
+                    "network.rangeAccessCidrs[0]=10.50.0.0/16",
+                ).stdout
+                documents = [
+                    doc for doc in yaml.safe_load_all(rendered) if isinstance(doc, dict)
+                ]
+                policy = next(
+                    doc
+                    for doc in documents
+                    if _identity(doc)
+                    == ("NetworkPolicy", "allow-platform-range-access-egress")
+                )
+                self.assertEqual(
+                    policy["spec"]["podSelector"],
+                    {
+                        "matchExpressions": [
+                            {
+                                "key": "app.kubernetes.io/component",
+                                "operator": "In",
+                                "values": ["portal", "guacd", "post-deploy-smoke"],
+                            }
+                        ]
+                    },
+                )
+                self.assertEqual(
+                    policy["spec"]["egress"],
+                    [
+                        {
+                            "to": [{"ipBlock": {"cidr": "10.50.0.0/16"}}],
+                            "ports": [
+                                {"protocol": "TCP", "port": port} for port in (22, 3389)
+                            ],
+                        }
+                    ],
+                )
                 # Provisioner Jobs dial the management channels and the OpenVPN
                 # gateway health responder (#2030); the portal does not.
-                jobs = next(doc for doc in documents if _identity(doc) == (
-                    "NetworkPolicy", "allow-jobs-range-access-egress"))
-                self.assertEqual(jobs["spec"]["egress"], [{
-                    "to": [{"ipBlock": {"cidr": "10.50.0.0/16"}}],
-                    "ports": [{"protocol": "TCP", "port": port} for port in (22, 2222, 3389, 5985, 5986, 1195)],
-                }])
+                jobs = next(
+                    doc
+                    for doc in documents
+                    if _identity(doc)
+                    == ("NetworkPolicy", "allow-jobs-range-access-egress")
+                )
+                self.assertEqual(
+                    jobs["spec"]["egress"],
+                    [
+                        {
+                            "to": [{"ipBlock": {"cidr": "10.50.0.0/16"}}],
+                            "ports": [
+                                {"protocol": "TCP", "port": port}
+                                for port in (22, 2222, 3389, 5985, 5986, 1195)
+                            ],
+                        }
+                    ],
+                )
 
     def test_aws_supplies_gvisor_runtime_class_for_only_the_isolated_pool(self) -> None:
         _, documents = _render(VALUES_FILES["aws-dev"])
-        runtime = next(doc for doc in documents if _identity(doc) == ("RuntimeClass", "gvisor"))
+        runtime = next(
+            doc for doc in documents if _identity(doc) == ("RuntimeClass", "gvisor")
+        )
         self.assertEqual(runtime["handler"], "runsc")
-        self.assertEqual(runtime["scheduling"]["nodeSelector"],
-                         {"node-restriction.kubernetes.io/shifter-pool": "runtime-plugin"})
-        self.assertEqual(runtime["scheduling"]["tolerations"], [{
-            "key": "shifter.dev/runtime-plugin", "operator": "Equal", "value": "true", "effect": "NoSchedule",
-        }])
+        self.assertEqual(
+            runtime["scheduling"]["nodeSelector"],
+            {"node-restriction.kubernetes.io/shifter-pool": "runtime-plugin"},
+        )
+        self.assertEqual(
+            runtime["scheduling"]["tolerations"],
+            [
+                {
+                    "key": "shifter.dev/runtime-plugin",
+                    "operator": "Equal",
+                    "value": "true",
+                    "effect": "NoSchedule",
+                }
+            ],
+        )
         # GKE owns its managed RuntimeClass; the chart must not replace it.
         _, gcp = _render(VALUES_FILES["gcp-dev"])
         self.assertFalse(any(doc["kind"] == "RuntimeClass" for doc in gcp))
@@ -173,48 +312,98 @@ class BackendNeutralChartContractTests(unittest.TestCase):
     def test_aws_node_pool_labeler_is_bounded_to_the_pool_label(self) -> None:
         """#2526: the trusted labeler renders only when enabled and may toggle only the pool label."""
         _, default = _render(VALUES_FILES["aws-dev"])
-        self.assertFalse(any(_identity(doc)[1] == "node-pool-labeler" for doc in default))
+        self.assertFalse(
+            any(_identity(doc)[1] == "node-pool-labeler" for doc in default)
+        )
         node_group = "eks-runtime-plugins-1234-abcd"
         labeler_role = "arn:aws:iam::123456789012:role/shifter-dev-node-pool-labeler"
         rendered = _helm(
-            "template", "contract-test", str(CHART_DIR), "-f", str(VALUES_FILES["aws-dev"]),
-            "--set", "runtimePluginPool.labeler.enabled=true",
-            "--set", "openfga.enabled=true",
-            "--set", "openfga.storeId=01J00000000000000000000001",
-            "--set", "openfga.modelId=01J00000000000000000000000",
-            "--set", "openfga.databaseCidrs={10.60.0.12/32}",
-            "--set", "openfga.runtimeDatabaseUser=synthetic_runtime",
-            "--set", "openfga.adminDatabaseUser=synthetic_admin",
-            "--set", f"runtimePluginPool.labeler.nodeGroupAsg={node_group}",
-            "--set", f"identity.serviceAccountRoleArns.nodePoolLabeler={labeler_role}",
-            "--set", "runtimeEnv.AWS_REGION=us-east-2",
-            "--set", "network.kubernetesApiCidrs={10.100.0.0/16}",
+            "template",
+            "contract-test",
+            str(CHART_DIR),
+            "-f",
+            str(VALUES_FILES["aws-dev"]),
+            "--set",
+            "runtimePluginPool.labeler.enabled=true",
+            "--set",
+            "openfga.enabled=true",
+            "--set",
+            "openfga.storeId=01J00000000000000000000001",
+            "--set",
+            "openfga.modelId=01J00000000000000000000000",
+            "--set",
+            "openfga.databaseCidrs={10.60.0.12/32}",
+            "--set",
+            "openfga.runtimeDatabaseUser=synthetic_runtime",
+            "--set",
+            "openfga.adminDatabaseUser=synthetic_admin",
+            "--set",
+            f"runtimePluginPool.labeler.nodeGroupAsg={node_group}",
+            "--set",
+            f"identity.serviceAccountRoleArns.nodePoolLabeler={labeler_role}",
+            "--set",
+            "runtimeEnv.AWS_REGION=us-east-2",
+            "--set",
+            "network.kubernetesApiCidrs={10.100.0.0/16}",
         ).stdout
-        docs = {_identity(doc): doc for doc in yaml.safe_load_all(rendered) if isinstance(doc, dict)}
+        docs = {
+            _identity(doc): doc
+            for doc in yaml.safe_load_all(rendered)
+            if isinstance(doc, dict)
+        }
         account = docs[("ServiceAccount", "node-pool-labeler")]
-        self.assertEqual(account["metadata"]["annotations"], {"eks.amazonaws.com/role-arn": labeler_role})
-        self.assertEqual(docs[("ClusterRole", "shifter-node-pool-labeler")]["rules"], [
-            {"apiGroups": [""], "resources": ["nodes"], "verbs": ["get", "list", "watch", "patch"]},
-        ])
+        self.assertEqual(
+            account["metadata"]["annotations"],
+            {"eks.amazonaws.com/role-arn": labeler_role},
+        )
+        self.assertEqual(
+            docs[("ClusterRole", "shifter-node-pool-labeler")]["rules"],
+            [
+                {
+                    "apiGroups": [""],
+                    "resources": ["nodes"],
+                    "verbs": ["get", "list", "watch", "patch"],
+                },
+            ],
+        )
         policy = docs[("ValidatingAdmissionPolicy", "restrict-node-pool-labeler")]
-        self.assertEqual(policy["spec"]["matchConditions"][0]["expression"],
-                         "request.userInfo.username == 'system:serviceaccount:shifter-platform:node-pool-labeler'")
-        self.assertEqual(docs[("ValidatingAdmissionPolicyBinding", "restrict-node-pool-labeler")]["spec"][
-            "validationActions"], ["Deny"])
-        container = docs[("Deployment", "node-pool-labeler")]["spec"]["template"]["spec"]["containers"][0]
-        self.assertEqual(container["command"], ["python", "-m", "shared.cloud.eks_node_pool_labeler"])
-        self.assertIn({"name": "RUNTIME_PLUGIN_NODE_GROUP_ASG", "value": node_group}, container["env"])
+        self.assertEqual(
+            policy["spec"]["matchConditions"][0]["expression"],
+            "request.userInfo.username == 'system:serviceaccount:shifter-platform:node-pool-labeler'",
+        )
+        self.assertEqual(
+            docs[("ValidatingAdmissionPolicyBinding", "restrict-node-pool-labeler")][
+                "spec"
+            ]["validationActions"],
+            ["Deny"],
+        )
+        container = docs[("Deployment", "node-pool-labeler")]["spec"]["template"][
+            "spec"
+        ]["containers"][0]
+        self.assertEqual(
+            container["command"], ["python", "-m", "shared.cloud.eks_node_pool_labeler"]
+        )
+        self.assertIn(
+            {"name": "RUNTIME_PLUGIN_NODE_GROUP_ASG", "value": node_group},
+            container["env"],
+        )
         pod = docs[("Deployment", "node-pool-labeler")]["spec"]["template"]["spec"]
         self.assertEqual({volume["name"] for volume in pod["volumes"]}, {"tmp"})
-        self.assertEqual({volume["name"] for volume in container["volumeMounts"]}, {"tmp"})
-        self.assertIn(("NetworkPolicy", "allow-node-pool-labeler-kubernetes-api-egress"), docs)
+        self.assertEqual(
+            {volume["name"] for volume in container["volumeMounts"]}, {"tmp"}
+        )
+        self.assertIn(
+            ("NetworkPolicy", "allow-node-pool-labeler-kubernetes-api-egress"), docs
+        )
         # GKE applies the pool label itself; the labeler never renders there.
         _, gcp = _render(VALUES_FILES["gcp-dev"])
         self.assertFalse(any(_identity(doc)[1] == "node-pool-labeler" for doc in gcp))
 
     def test_chart_has_schema_and_all_backend_profiles(self) -> None:
         schema = json.loads((CHART_DIR / "values.schema.json").read_text())
-        self.assertEqual(schema["$schema"], "https://json-schema.org/draft/2020-12/schema")
+        self.assertEqual(
+            schema["$schema"], "https://json-schema.org/draft/2020-12/schema"
+        )
         self.assertEqual(
             set(VALUES_FILES),
             {"aws-dev", "aws-prod", "gcp-dev", "gcp-prod"},
@@ -319,7 +508,9 @@ class BackendNeutralChartContractTests(unittest.TestCase):
             },
             "services": {
                 "portal": {"backendConfig": {"timeoutSec": 3600}},
-                "guacamoleClient": {"backendConfig": {"enabled": True, "timeoutSec": 3600}},
+                "guacamoleClient": {
+                    "backendConfig": {"enabled": True, "timeoutSec": 3600}
+                },
             },
         }
         with tempfile.TemporaryDirectory() as directory:
@@ -330,27 +521,56 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         by_identity = {_identity(document): document for document in documents}
         portal = by_identity[("Deployment", "portal-web")]
         guacd = by_identity[("Deployment", "guacd")]
-        self.assertEqual(portal["metadata"]["annotations"]["shifter.dev/capacity-profile"], "gcp-shared-v1-p30")
-        self.assertEqual(guacd["metadata"]["annotations"]["shifter.dev/capacity-profile"], "gcp-shared-v1-p30")
+        self.assertEqual(
+            portal["metadata"]["annotations"]["shifter.dev/capacity-profile"],
+            "gcp-shared-v1-p30",
+        )
+        self.assertEqual(
+            guacd["metadata"]["annotations"]["shifter.dev/capacity-profile"],
+            "gcp-shared-v1-p30",
+        )
         self.assertEqual(portal["spec"]["replicas"], 5)
         self.assertEqual(guacd["spec"]["replicas"], 2)
-        self.assertEqual(portal["spec"]["template"]["spec"]["terminationGracePeriodSeconds"], 330)
-        self.assertEqual(guacd["spec"]["template"]["spec"]["terminationGracePeriodSeconds"], 330)
+        self.assertEqual(
+            portal["spec"]["template"]["spec"]["terminationGracePeriodSeconds"], 330
+        )
+        self.assertEqual(
+            guacd["spec"]["template"]["spec"]["terminationGracePeriodSeconds"], 330
+        )
         guacamole = by_identity[("Deployment", "guacamole-client")]
-        self.assertEqual(guacamole["spec"]["template"]["spec"]["terminationGracePeriodSeconds"], 330)
-        guacamole_env = {entry["name"]: entry for entry in guacamole["spec"]["template"]["spec"]["containers"][0]["env"]}
-        self.assertEqual(guacamole_env["POSTGRESQL_ABSOLUTE_MAX_CONNECTIONS"]["value"], "30")
+        self.assertEqual(
+            guacamole["spec"]["template"]["spec"]["terminationGracePeriodSeconds"], 330
+        )
+        guacamole_env = {
+            entry["name"]: entry
+            for entry in guacamole["spec"]["template"]["spec"]["containers"][0]["env"]
+        }
+        self.assertEqual(
+            guacamole_env["POSTGRESQL_ABSOLUTE_MAX_CONNECTIONS"]["value"], "30"
+        )
         self.assertIn(("HorizontalPodAutoscaler", "portal-web"), by_identity)
         self.assertIn(("HorizontalPodAutoscaler", "guacd"), by_identity)
         self.assertIn(("PodDisruptionBudget", "portal-web"), by_identity)
         self.assertIn(("PodDisruptionBudget", "guacd"), by_identity)
-        self.assertEqual(by_identity[("BackendConfig", "portal-web")]["spec"]["timeoutSec"], 3600)
-        self.assertEqual(by_identity[("BackendConfig", "guacamole-client")]["spec"]["timeoutSec"], 3600)
+        self.assertEqual(
+            by_identity[("BackendConfig", "portal-web")]["spec"]["timeoutSec"], 3600
+        )
+        self.assertEqual(
+            by_identity[("BackendConfig", "guacamole-client")]["spec"]["timeoutSec"],
+            3600,
+        )
         # The Guacamole backend checks the served application path, not the default "/" (#2692).
-        guacamole_check = by_identity[("BackendConfig", "guacamole-client")]["spec"]["healthCheck"]
-        self.assertEqual((guacamole_check["requestPath"], guacamole_check["port"]), ("/guacamole/", 8080))
+        guacamole_check = by_identity[("BackendConfig", "guacamole-client")]["spec"][
+            "healthCheck"
+        ]
+        self.assertEqual(
+            (guacamole_check["requestPath"], guacamole_check["port"]),
+            ("/guacamole/", 8080),
+        )
 
-    def test_aws_generated_projection_wires_edge_identity_and_secret_references(self) -> None:
+    def test_aws_generated_projection_wires_edge_identity_and_secret_references(
+        self,
+    ) -> None:
         digest = "a" * 64
         generated = {
             "provider": {"name": "aws"},
@@ -425,7 +645,10 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         self.assertNotIn("kind: Secret", rendered)
         # #1826: AWS dispatches the provisioner as a Kubernetes Job, so the
         # dedicated launcher renders alongside the edge/secret projection.
-        self.assertIn(("Deployment", "worker-provisioner-launcher"), {_identity(d) for d in documents})
+        self.assertIn(
+            ("Deployment", "worker-provisioner-launcher"),
+            {_identity(d) for d in documents},
+        )
 
     def test_aws_dev_scaffold_renders_alb_edge_with_acm_and_waf(self) -> None:
         rendered, documents = _render(VALUES_FILES["aws-dev"])
@@ -492,7 +715,13 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         # An ALB edge missing its certificate, WAF, hostname, HTTPS-only
         # listener, or the ALB class itself must be rejected by the schema
         # rather than rendering a silently-insecure Ingress.
-        base = ["template", "contract-test", str(CHART_DIR), "-f", str(VALUES_FILES["aws-dev"])]
+        base = [
+            "template",
+            "contract-test",
+            str(CHART_DIR),
+            "-f",
+            str(VALUES_FILES["aws-dev"]),
+        ]
         cases = {
             "missing certificate": ["--set-string", "edge.certificateArn="],
             "missing waf": ["--set-string", "edge.wafAclArn="],
@@ -501,7 +730,10 @@ class BackendNeutralChartContractTests(unittest.TestCase):
                 "--set-string",
                 r'edge.ingress.annotations.alb\.ingress\.kubernetes\.io/listen-ports=[{"HTTP":80}]',
             ],
-            "certificate without alb class": ["--set-string", "edge.ingress.className=nginx"],
+            "certificate without alb class": [
+                "--set-string",
+                "edge.ingress.className=nginx",
+            ],
             # The ALB controller consumes the annotation values, not the parallel
             # edge.* identity fields, so an empty/malformed annotation value must
             # fail closed even while edge.certificateArn/wafAclArn stay populated.
@@ -552,15 +784,37 @@ class BackendNeutralChartContractTests(unittest.TestCase):
             overlay = Path(temporary) / "enrollment.json"
             for profile, endpoint in endpoints.items():
                 with self.subTest(profile=profile):
-                    overlay.write_text(json.dumps({"modelBroker": {"enrollment_env": {**common, **endpoint}}}))
+                    overlay.write_text(
+                        json.dumps(
+                            {"modelBroker": {"enrollment_env": {**common, **endpoint}}}
+                        )
+                    )
                     # Real Helm schema validation must accept the exact projection
                     # emitted by each cloud adapter before deployment can proceed.
                     _render(VALUES_FILES[profile], overlay)
-                    overlay.write_text(json.dumps({"modelBroker": {"enrollment_env": {
-                        **common, **endpoint, "UNDECLARED_SETTING": "unexpected",
-                    }}}))
-                    rejected = _helm("template", "contract-test", str(CHART_DIR),
-                                     "-f", str(VALUES_FILES[profile]), "-f", str(overlay), check=False)
+                    overlay.write_text(
+                        json.dumps(
+                            {
+                                "modelBroker": {
+                                    "enrollment_env": {
+                                        **common,
+                                        **endpoint,
+                                        "UNDECLARED_SETTING": "unexpected",
+                                    }
+                                }
+                            }
+                        )
+                    )
+                    rejected = _helm(
+                        "template",
+                        "contract-test",
+                        str(CHART_DIR),
+                        "-f",
+                        str(VALUES_FILES[profile]),
+                        "-f",
+                        str(overlay),
+                        check=False,
+                    )
                     self.assertNotEqual(rejected.returncode, 0)
                     self.assertIn("UNDECLARED_SETTING", rejected.stderr)
 
@@ -570,7 +824,11 @@ class BackendNeutralChartContractTests(unittest.TestCase):
                 _, documents = _render(values_file)
                 identities = {_identity(document) for document in documents}
                 by_identity = {_identity(document): document for document in documents}
-                for name in ("default-deny-platform", "default-deny-jobs", "plugin-deny-all"):
+                for name in (
+                    "default-deny-platform",
+                    "default-deny-jobs",
+                    "plugin-deny-all",
+                ):
                     self.assertIn(("NetworkPolicy", name), identities)
                     policy = by_identity[("NetworkPolicy", name)]["spec"]
                     self.assertEqual(policy["podSelector"], {})
@@ -610,7 +868,9 @@ class BackendNeutralChartContractTests(unittest.TestCase):
             "effect": "NoSchedule",
         }
 
-        def _pod_spec(documents: list[dict[str, object]], name: str) -> dict[str, object]:
+        def _pod_spec(
+            documents: list[dict[str, object]], name: str
+        ) -> dict[str, object]:
             for document in documents:
                 if _identity(document) == ("Deployment", name):
                     return document["spec"]["template"]["spec"]
@@ -686,11 +946,16 @@ class BackendNeutralChartContractTests(unittest.TestCase):
             with self.subTest(profile=profile):
                 _, documents = _render(values_file)
                 deployment = next(
-                    (d for d in documents if _identity(d) == ("Deployment", "ctf-communication-worker")),
+                    (
+                        d
+                        for d in documents
+                        if _identity(d) == ("Deployment", "ctf-communication-worker")
+                    ),
                     None,
                 )
                 self.assertIsNotNone(
-                    deployment, f"{profile}: ctf-communication-worker Deployment must render"
+                    deployment,
+                    f"{profile}: ctf-communication-worker Deployment must render",
                 )
                 assert deployment is not None  # for type-narrowing
                 pod_spec = deployment["spec"]["template"]["spec"]
@@ -703,10 +968,14 @@ class BackendNeutralChartContractTests(unittest.TestCase):
                     "ctf-communication-worker-heartbeat",
                     " ".join(container["livenessProbe"]["exec"]["command"]),
                 )
-                self.assertEqual(container["envFrom"][0]["configMapRef"]["name"], "platform-runtime")
+                self.assertEqual(
+                    container["envFrom"][0]["configMapRef"]["name"], "platform-runtime"
+                )
         # The neutral (provider-agnostic) defaults also render the worker.
         _, neutral = _render()
-        self.assertIn(("Deployment", "ctf-communication-worker"), {_identity(d) for d in neutral})
+        self.assertIn(
+            ("Deployment", "ctf-communication-worker"), {_identity(d) for d in neutral}
+        )
 
 
 if __name__ == "__main__":
