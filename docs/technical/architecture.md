@@ -557,3 +557,5 @@ A retained cleanup task can be retried after its exact provider workload fails.
 The owning range transaction verifies terminal failure and workload identity, then reserves a fresh operation.
 Unknown or active tasks retain custody. Only verified provider absence releases the target.
 See the [failed cleanup retry design](../architecture/failed-cleanup-retry-2822.md).
+
+Administrator delegation inventories exclude ranges in the destroying and destroyed states. Engine retains their runtime records and cleanup proofs. Live range ancestry checks and direct binding reads are unchanged. See [Retiring range delegation](../architecture/retiring-range-delegation-2824.md).

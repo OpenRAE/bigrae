@@ -22,6 +22,7 @@ def list_authorization_range_uuids(workspace_ids: Sequence[int], limit: int) -> 
         return ()
     values = tuple(
         Range.objects.filter(workspace_id__in=workspace_ids)
+        .exclude(status__in=(Range.Status.DESTROYING, Range.Status.DESTROYED))
         .order_by("uuid")
         .values_list("cms_range_uuid", flat=True)[:limit]
     )
@@ -40,7 +41,13 @@ def _authorization_event_range_targets(event_uuid: UUID, limit: int) -> tuple[Ta
     from ._range_authority import project_range_authority
 
     result = []
-    for row in Range.objects.filter(event_uuid=event_uuid).select_related("request").order_by("uuid")[:limit]:
+    rows = (
+        Range.objects.filter(event_uuid=event_uuid)
+        .exclude(status__in=(Range.Status.DESTROYING, Range.Status.DESTROYED))
+        .select_related("request")
+        .order_by("uuid")[:limit]
+    )
+    for row in rows:
         if row.request is None:
             raise AuthorizationDescendantResolutionError("Range request unavailable")
         projection = project_range_authority(row.request.request_id)
