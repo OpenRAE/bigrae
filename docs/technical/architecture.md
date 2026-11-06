@@ -241,6 +241,10 @@ allows the portal's bounded Google certificate lookup and range authorization.
 The enclosing gateway token exchange has a 30-second HTTP deadline.
 These transport deadlines retain the existing identity checks, keepalive and
 authority lease expiry.
+Terminal session and range checks have a finite 15-second budget, including
+serialized validation work. Other socket routes keep their five-second budget.
+Checks still run before opening, input, and protected output; timeout and denial
+close the socket. See the [terminal authority design](../architecture/terminal-authority-budget-2818.md).
 
 Control-plane workloads run as the non-root runtime identity UID 10001, with a
 read-only root filesystem, dropped capabilities, and the `RuntimeDefault` seccomp
