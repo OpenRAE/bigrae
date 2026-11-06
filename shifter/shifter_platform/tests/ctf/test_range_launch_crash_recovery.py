@@ -43,7 +43,7 @@ def test_launch_proof_inputs_and_cancellation_are_immutable(launch_event, ctf_pa
 
 
 @pytest.fixture
-def launch_event(ctf_event, organizer_user, settings, tmp_path, make_pack):
+def launch_event(ctf_event, organizer_user, settings, tmp_path, make_pack, transactional_db):
     from cms.scenarios.pack_validation import pack_digest
     from workspaces.services import resource_scope_from_ids
 

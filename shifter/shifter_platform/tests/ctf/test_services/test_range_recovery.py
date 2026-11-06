@@ -198,7 +198,7 @@ def _make_pooled_spare(
 
 
 @pytest.fixture
-def event_with_scenario(ctf_event, organizer_user, monkeypatch, settings):
+def event_with_scenario(ctf_event, organizer_user, monkeypatch, settings, transactional_db):
     """CTF event configured to rebuild through the RAES creation path.
 
     ``team_mode=True`` so ``rich_participant`` can validly join a team/bracket.
