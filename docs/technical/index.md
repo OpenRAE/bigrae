@@ -8,7 +8,7 @@ Platform architecture, infrastructure, and development documentation.
 - [BigRAE rename cutover and rollback](../how-to/bigrae-rename-cutover.md)
 
 - [Current-state architecture handbook](architecture.md) - System, authority, lifecycle and package ownership
-- [Install BigRAE on GCP](handbook/gcp-first-run.md) - Install a deployment from a published release
+- [Install on Google Cloud](../getting-started/install-gcp.md) - Install a deployment from a published release
 - [GitHub-less GCP deployment](handbook/gcp-github-less-deployment.md) - Release, foundation, inputs, deploy, update, teardown, and bucket encryption keys without GitHub
 - [Scenario contract transition](handbook/scenario-contract-transition.md) - CyberScript, ACES and current RAES
 - [Per-range model-access design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/index.md) - Proposed architecture, security, operations, ADRs, and implementation backlog for #681

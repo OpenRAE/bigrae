@@ -13,9 +13,9 @@ account, no fork, and no repository checkout. AWS support comes in an upcoming
 release.
 
 1. Select a release (see [Releases](#releases)).
-2. Follow [Install BigRAE on GCP](docs/technical/handbook/gcp-first-run.md).
+2. Follow [Install on Google Cloud](docs/getting-started/install-gcp.md).
    You need a GCP project with billing on, a domain that you control, Docker,
-   the `gcloud` CLI, ORAS, and cosign.
+   the `gcloud` CLI, Git, ORAS, and cosign.
 3. [Launch your first range](docs/getting-started/quickstart.md).
 
 ## Releases

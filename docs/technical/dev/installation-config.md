@@ -31,7 +31,7 @@ uv run --project shifter/installation bigrae-config doctor bigrae.yaml
 ```
 
 Every check is labelled local-only, cloud-read-only, or deployment-mutating, and
-`doctor` is non-mutating by default. See [Setup](setup) for the full setup and
+`doctor` is non-mutating by default. See [Setup](setup.md) for the full setup and
 validation flow.
 
 ## Start From An Example
@@ -40,12 +40,12 @@ Scaffold a starting `bigrae.yaml` for a backend, or copy an example directly:
 
 ```bash
 # Scaffold ./bigrae.yaml from the checked example (omit --backend to list backends).
-uv run --project shifter/installation bigrae-config init --backend aws
+uv run --project shifter/installation bigrae-config init --backend gcp
 # Or copy the example directly:
-cp shifter/installation/examples/aws.yaml bigrae.yaml
+cp shifter/installation/examples/gcp.yaml bigrae.yaml
 ```
 
-Use `--backend gcp` (or `examples/gcp.yaml`) for GCP, then run `validate` and `doctor`.
+Run `validate` and `doctor` after you edit the generated GCP configuration.
 
 ## Supported Backends
 

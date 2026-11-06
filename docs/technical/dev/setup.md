@@ -5,7 +5,7 @@ repository, with GitHub Actions. It is the path for AWS, and the CI path for
 GCP. It needs GitHub secrets, variables, and Environments.
 
 To install BigRAE from a published release, use
-[Install BigRAE on GCP](../handbook/gcp-first-run.md). That install needs no
+[Install on Google Cloud](../../getting-started/install-gcp.md). That install needs no
 GitHub access.
 
 ## Before You Start
@@ -348,7 +348,7 @@ Run `scripts/bootstrap/deploy.py gcp-foundation --inputs <file> --yes`. The
 inputs select the mode:
 
 - **Without GitHub:** `gcp-install` applies the foundation. See
-  [Install BigRAE on GCP](../handbook/gcp-first-run.md).
+  [Install on Google Cloud](../../getting-started/install-gcp.md).
 - **For CI:** start from `scripts/bootstrap/gcp-foundation.example.tfvars.json`.
   The command verifies the project and repository numeric IDs and requires
   explicit purpose Environment and workflow trust tuples. Follow the ordering in
@@ -379,7 +379,7 @@ image Environments itself.
 
 - **Without GitHub:** write the deployment input bundle. `gcp-install`
   publishes it and creates the first operator password. See
-  [Install BigRAE on GCP](../handbook/gcp-first-run.md).
+  [Install on Google Cloud](../../getting-started/install-gcp.md).
 - **For CI:** set the GitHub secrets and variables in
   [`docs/dev/deploy-secrets.md`](../../dev/deploy-secrets.md).
 
@@ -394,7 +394,7 @@ Use the supported keyless-direct guest model path where required.
 ### 4. Deploy
 
 - **Without GitHub:** `gcp-install` runs the first deploy. See
-  [Install BigRAE on GCP](../handbook/gcp-first-run.md).
+  [Install on Google Cloud](../../getting-started/install-gcp.md).
 
 - **For CI:** dispatch the deploy workflow:
 
