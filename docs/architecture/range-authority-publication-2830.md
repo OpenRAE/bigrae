@@ -7,3 +7,11 @@ Commit strict creation audit with the native range and CMS binding. After that t
 The Engine service owns publication. CMS calls its public facade outside its runtime transaction. A targeted management command uses the same service to repair an existing range. Repeated publication is idempotent. A missing receipt, changed custody or missing readback stops confirmation and dispatch. Installation-owned warm ranges have no customer parent and keep their existing path. No user grants or permission checks change.
 
 Validate successful publication, write acknowledgment loss, absent readback, changed custody and the transaction boundary with synthetic fixtures. Verify the correction on the existing live range.
+
+Retry-key launches add an outer transaction around creation and the retry binding.
+Register publication and dispatch with Django's existing `on_commit` callback.
+Run them immediately when there is no outer transaction. A rolled-back contender
+must publish nothing and dispatch nothing. A deferred retry binding retains the
+request identity and its existing nullable operation field; it must not invent
+an operation that has not been dispatched. The creation receipt remains available
+if publication fails after commit.

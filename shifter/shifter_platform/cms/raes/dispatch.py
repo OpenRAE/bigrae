@@ -211,11 +211,17 @@ class CmsRaesDispatchPort:
         )
         prepared = prepare_raes_range_creation(bindings, self.workspace_id, instance.user_id, compiled_plan)
         ref = self._commit_principal_runtime(instance, current, metadata, bindings, prepared, compiled_plan)
-        publish_range_relationships(UUID(self.request_id))
-        if prepare_models:
-            prepare_model_access_for_dispatch(UUID(self.request_id), range_id=UUID(ref.range_id))
-        if self.authority_target is None:
-            ref = dispatch_created_raes_range(UUID(self.request_id), credential=current, prepared_creation=prepared)
+
+        def publish_and_dispatch() -> None:
+            """Publish only committed custody, including an outer retry-key binding."""
+            nonlocal ref
+            publish_range_relationships(UUID(self.request_id))
+            if prepare_models:
+                prepare_model_access_for_dispatch(UUID(self.request_id), range_id=UUID(ref.range_id))
+            if self.authority_target is None:
+                ref = dispatch_created_raes_range(UUID(self.request_id), credential=current, prepared_creation=prepared)
+
+        transaction.on_commit(publish_and_dispatch)
         return ShifterDispatchResult(
             request_id=ref.request_id, accepted=ref.accepted, status=ref.status, range_id=ref.range_id
         )
