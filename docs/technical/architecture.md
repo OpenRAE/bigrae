@@ -559,3 +559,5 @@ Unknown or active tasks retain custody. Only verified provider absence releases 
 See the [failed cleanup retry design](../architecture/failed-cleanup-retry-2822.md).
 
 Administrator delegation inventories exclude ranges in the destroying and destroyed states. Engine retains their runtime records and cleanup proofs. Live range ancestry checks and direct binding reads are unchanged. See [Retiring range delegation](../architecture/retiring-range-delegation-2824.md).
+
+Native task observation reads the normal Job resource, which includes its status. It uses the existing Job permission. Completed-task removal retains exact workload identity checks. See [Native Job status reads](../architecture/native-job-status-read-2827.md).
