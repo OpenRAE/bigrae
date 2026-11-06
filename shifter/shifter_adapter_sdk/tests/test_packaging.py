@@ -100,8 +100,8 @@ def test_installed_sdk_and_external_adapter_need_no_application(tmp_path, prefix
         from importlib.metadata import version
 
         assert PluginSelection is BigRAESelection
-        assert version("bigrae-adapter-sdk") == "0.1.1"
-        assert version("shifter-adapter-sdk") == "0.2.1"
+        assert version("bigrae-adapter-sdk") == "0.1.2"
+        assert version("shifter-adapter-sdk") == "0.2.2"
 
         assert importlib.util.find_spec("shared") is None
         assert importlib.util.find_spec("django") is None
