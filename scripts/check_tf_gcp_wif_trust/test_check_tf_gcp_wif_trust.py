@@ -167,13 +167,24 @@ class GenericSourceTests(unittest.TestCase):
             "build role set must use resource-scoped GCS grants",
         )
 
-    def test_release_scan_cannot_have_a_project_wide_role(self):
+    def test_release_scan_cannot_have_a_project_wide_data_role(self):
         resource = (MODULE / "main.tf").read_text()
         addition = '\nresource "google_project_iam_member" "invalid_scan_role" {\n  project = var.project_id\n  role = "roles/viewer"\n  member = "serviceAccount:${local.service_account_emails.release_scan}"\n}\n'
         self.assert_violation(
             self.check_changed(resource, resource + addition),
-            "release-scan identity must have no project-wide IAM role",
+            "release-scan project roles must allow only quota consumption",
         )
+
+    def test_release_scan_quota_grant_cannot_change_role_or_project(self):
+        for before, after in [
+            ('role       = "roles/serviceusage.serviceUsageConsumer"', 'role       = "roles/viewer"'),
+            ('project    = var.project_id', 'project    = var.other_project_id'),
+        ]:
+            with self.subTest(after=after):
+                self.assert_violation(
+                    self.check_changed(before, after),
+                    "release-scan project roles must allow only quota consumption",
+                )
 
     def test_impersonation_grant_cannot_be_widened(self):
         for before, after in [

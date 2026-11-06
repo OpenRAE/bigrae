@@ -45,7 +45,7 @@ from shared.authorization import (
     RelationshipTuple,
     VersionedRelationshipChange,
 )
-from shared.authorization.model import decision_relation_for_action
+from shared.authorization.model import decision_relation_for_action, grant_relation_for_action
 from shared.identity_scope import ResourceScope
 
 logger = logging.getLogger(__name__)
@@ -162,7 +162,21 @@ def _check_body(request: AuthorizationRequest) -> ClientCheckRequest:
         user=f"principal:{request.principal.uuid}",
         relation=decision_relation_for_action(request.action),
         object=_provider_object(request),
+        contextual_tuples=_temporary_participation_tuples(request),
     )
+
+
+def _temporary_participation_tuples(request: AuthorizationRequest) -> list[ClientTuple] | None:
+    """Carry only the event owner's already-verified temporary participation."""
+    if not request.temporary_participation:
+        return None
+    return [
+        ClientTuple(
+            user=f"principal:{request.principal.uuid}",
+            relation=grant_relation_for_action("event.participate"),
+            object=_provider_object(request),
+        )
+    ]
 
 
 def _decision(allowed: bool) -> AuthorizationDecision:
@@ -290,6 +304,7 @@ class OpenFgaAuthorizationProvider:
                 relation=decision_relation_for_action(request.action),
                 object=_provider_object(request),
                 correlation_id=str(index),
+                contextual_tuples=_temporary_participation_tuples(request),
             )
             for index, request in enumerate(requests)
         ]
