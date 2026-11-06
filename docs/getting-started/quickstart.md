@@ -2,7 +2,7 @@
 
 This page launches the `smoke-linux` scenario on a new deployment and then
 destroys it. To install BigRAE first, see
-[Install BigRAE on GCP](../technical/handbook/gcp-first-run.md).
+[Install on Google Cloud](install-gcp.md).
 
 ## Before you start
 

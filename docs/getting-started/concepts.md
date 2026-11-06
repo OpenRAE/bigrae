@@ -4,7 +4,7 @@
 
 One published version of BigRAE: the control-plane images and the deployer
 image, with signed build provenance. A deployment runs exactly one release.
-See [Install BigRAE on GCP](../technical/handbook/gcp-first-run.md#2-select-a-release).
+See [Select and verify a release](install-gcp.md#3-select-and-verify-a-release).
 
 ## Deployment
 
