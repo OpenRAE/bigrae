@@ -109,6 +109,10 @@ unavailable until their recorded model/content initialization commits; recovery
 revalidates the original credential and pinned content before completing it.
 Permanent event deletion commits native cleanup for each retained range before
 removing its aggregate records. Failed cleanup admission preserves those records.
+
+Participant recovery also submits failed old ranges to authorized native cleanup
+(#2783). A failed status does not prove that resources or project reservations
+are absent. Verified native cleanup controls reservation release.
 Owner-handoff recovery can read back its exact admitted revoke after the source
 loses administrative authority; it requires the original live credential and
 does not replay a provider write.
@@ -413,6 +417,11 @@ Pack content never authorizes executable installation. Private content, adapters
 image recipes, answers and acceptance evidence stay in their owner's repository.
 A compatibility probe, buildable SDK, or accepted manifest proves neither a
 published package release nor a qualified live range.
+
+Runtime adapter workers complete every response byte and flush stdout before
+they report success. This includes short writes with unbuffered Python output
+(#2781). Preparation output stays encrypted, with the same response format and
+size limits.
 
 Named adapter input files use CMS's existing content scope, signed upload,
 immutable object installation, quota and cleanup. Administrators manage them in
