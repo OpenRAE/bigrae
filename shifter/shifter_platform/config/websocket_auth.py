@@ -41,15 +41,16 @@ class CredentialSessionWebSocketBoundary:
         *,
         resource_authorizer: Callable[[ASGIScope], Awaitable[bool]] | None = None,
         recheck_seconds: float | None = None,
-        timeout_seconds: float = 5.0,
+        timeout_seconds: float | None = None,
     ) -> None:
         self.application = application
         self.resource_authorizer = resource_authorizer
         self.recheck_seconds = (
             min(15.0, settings.IDENTITY_SESSION_RECHECK_SECONDS) if recheck_seconds is None else recheck_seconds
         )
-        self.timeout_seconds = timeout_seconds
-        if any(not math.isfinite(value) or value <= 0 for value in (self.recheck_seconds, timeout_seconds)):
+        self.timeout_seconds = 5.0 if timeout_seconds is None else timeout_seconds
+        self.terminal_timeout_seconds = 15.0 if timeout_seconds is None else timeout_seconds
+        if any(not math.isfinite(value) or value <= 0 for value in (self.recheck_seconds, self.timeout_seconds)):
             raise ValueError("Socket validation requires finite positive bounds")
 
     async def __call__(self, scope: ASGIScope, receive: ASGIReceive, send: ASGISend) -> None:
@@ -77,7 +78,12 @@ class CredentialSessionWebSocketBoundary:
         from config.session_credentials import validate_socket_session
 
         try:
-            async with asyncio.timeout(self.timeout_seconds), lock:
+            timeout = (
+                self.terminal_timeout_seconds
+                if TERMINAL_TARGET_PATH_RE.fullmatch(str(scope.get("path", "")))
+                else self.timeout_seconds
+            )
+            async with asyncio.timeout(timeout), lock:
                 checked_scope = dict(scope)
                 if not await database_sync_to_async(validate_socket_session)(
                     checked_scope, touch=touch
