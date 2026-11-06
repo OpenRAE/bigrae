@@ -116,6 +116,12 @@ def _sample_gcp_control_plane_outputs(project_id: str = "example-gcp-project") -
                 "user_name": "guacamole",
             }
         },
+        "guacamole_controller_identity": {
+            "value": {
+                "email": f"shiftergcpdev-guacamole-client@{project_id}.iam.gserviceaccount.com",
+                "unique_id": "123456789012345678901",
+            }
+        },
         "public_ingress_ip_name": {"value": "shifter-gcp-dev-platform-ip"},
         "public_ingress_ip_address": {"value": "34.123.45.67"},
         "public_hostname": {"value": "portal.example.test"},
@@ -131,6 +137,7 @@ def _sample_gcp_control_plane_outputs(project_id: str = "example-gcp-project") -
         "workload_service_accounts": {
             "value": {
                 "portal": f"shiftergcpdev-portal@{project_id}.iam.gserviceaccount.com",
+                "guacamole-client": f"shiftergcpdev-guacamole-client@{project_id}.iam.gserviceaccount.com",
                 "workers": f"shiftergcpdev-workers@{project_id}.iam.gserviceaccount.com",
                 "ctf-scheduler": f"shiftergcpdev-ctf-scheduler@{project_id}.iam.gserviceaccount.com",
                 "migrator": f"shiftergcpdev-migrator@{project_id}.iam.gserviceaccount.com",
@@ -634,6 +641,9 @@ class TestGdcControlPlaneHelmValues:
         )
         outputs["workload_service_accounts"]["value"]["guacamole-client"] = (
             f"synthetic-guac@{config.project_id}.iam.gserviceaccount.com"
+        )
+        outputs["guacamole_controller_identity"]["value"]["email"] = (
+            outputs["workload_service_accounts"]["value"]["guacamole-client"]
         )
         outputs["native_identity"] = {
             "value": {
