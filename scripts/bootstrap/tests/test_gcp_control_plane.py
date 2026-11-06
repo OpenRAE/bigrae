@@ -642,9 +642,9 @@ class TestGdcControlPlaneHelmValues:
         outputs["workload_service_accounts"]["value"]["guacamole-client"] = (
             f"synthetic-guac@{config.project_id}.iam.gserviceaccount.com"
         )
-        outputs["guacamole_controller_identity"]["value"]["email"] = (
-            outputs["workload_service_accounts"]["value"]["guacamole-client"]
-        )
+        outputs["guacamole_controller_identity"]["value"]["email"] = outputs["workload_service_accounts"]["value"][
+            "guacamole-client"
+        ]
         outputs["native_identity"] = {
             "value": {
                 "enabled": True,
