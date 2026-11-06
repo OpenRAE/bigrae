@@ -1,9 +1,5 @@
 # Installation Config
 
-For a new installation, use [Install on Google Cloud](../../getting-started/install-gcp.md).
-This page describes the configuration schema and source tools.
-AWS installation support is coming.
-
 `bigrae.yaml` is the root installation config. It selects one backend bundle
 and provides deployment-level settings. For local runs it lives at the
 repository root. A GCP deployment that runs without GitHub keeps it in its

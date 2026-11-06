@@ -1,9 +1,4 @@
-# GCP deployment reference
-
-For a new installation, use [Install on Google Cloud](../../getting-started/install-gcp.md).
-It gives the complete procedure without a repository clone, including an agent instruction.
-This page is the reference for individual commands and advanced settings.
-AWS support is coming.
+# GitHub-less GCP deployment
 
 Applicability: GCP deployments that use the GitHub-less deploy path (ADR-070).
 Operator: platform owner. Verified against the repository: 2026-10-29.

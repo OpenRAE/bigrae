@@ -5,8 +5,8 @@ repository, with GitHub Actions. It is the path for AWS, and the CI path for
 GCP. It needs GitHub secrets, variables, and Environments.
 
 To install BigRAE from a published release, use
-[Install on Google Cloud](../../getting-started/install-gcp.md). That install
-needs no GitHub access.
+[Install on Google Cloud](../../getting-started/install-gcp.md). That install needs no
+GitHub access.
 
 ## Before You Start
 

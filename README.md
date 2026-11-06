@@ -13,17 +13,10 @@ account, no fork, and no repository checkout. AWS support comes in an upcoming
 release.
 
 1. Select a release (see [Releases](#releases)).
-2. Follow [Install on Google Cloud](docs/getting-started/install-gcp.md), or
-   give the instruction in
-   [Deploy with a coding agent](docs/getting-started/deploy-with-agent.md) to a
-   coding agent. You need a GCP project with billing on, a domain that you
-   control, Docker, the `gcloud` CLI, Git, ORAS, and cosign.
+2. Follow [Install on Google Cloud](docs/getting-started/install-gcp.md).
+   You need a GCP project with billing on, a domain that you control, Docker,
+   the `gcloud` CLI, Git, ORAS, and cosign.
 3. [Launch your first range](docs/getting-started/quickstart.md).
-
-To update or remove an installation, see
-[Update an installation](docs/getting-started/install-gcp.md#update-an-installation).
-For an installation failure, use the
-[GCP deployment runbook](docs/runbooks/rb023-gcp-deployment.md).
 
 ## Releases
 

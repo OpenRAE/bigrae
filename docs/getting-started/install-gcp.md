@@ -169,7 +169,8 @@ printf '%s\n' "$DEPLOYER_IMAGE" > "$DEPLOY_DIR/deployer-image.txt"
 printf '%s\n' "$RELEASE_REVISION" > "$DEPLOY_DIR/release-revision.txt"
 ```
 
-The installer uses this manifest to verify the application images.
+The saved manifest is a record of the release. The installer uses the copy
+in the container to verify the application images.
 Selecting a published release does not start a new release build.
 
 ## 4. Create the two input files
@@ -361,6 +362,7 @@ set -o pipefail
 PROJECT_ID='your-project-id'
 DEPLOYMENT_NAME='training'
 OPERATOR_EMAIL='operator@example.com'
+REGION='us-central1'
 DEPLOY_DIR='/full/path/to/bigrae-install-training'
 DEPLOYER_IMAGE="$(cat "$DEPLOY_DIR/deployer-image.txt")"
 ```
@@ -373,6 +375,21 @@ repeat the Google sign-ins from step 2.
 Keep the same project, deployment name, configuration bucket, and input directory.
 Select and verify the new release with step 3. This changes `DEPLOYER_IMAGE`
 to the new immutable image. The shell function then uses that image.
+
+An update does not import the guest images of the new release. The installation
+keeps the guest images that it recorded before. To use the guest images of the
+new release, import them before the update:
+
+```bash
+deploy gcp-images --project-id "$PROJECT_ID" --region "$REGION" \
+  --store "gs://$PROJECT_ID-deployment-config" \
+  2>&1 | tee "$DEPLOY_DIR/images.log"
+```
+
+The command verifies each guest image before it changes the installation.
+It reuses an image that did not change.
+
+Start the update:
 
 ```bash
 deploy gcp-deploy --store "gs://$PROJECT_ID-deployment-config" \

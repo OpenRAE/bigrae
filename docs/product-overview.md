@@ -12,7 +12,6 @@ Both procedures use a published release container. You do not need a repository 
 
 ## Use
 
-- [First sign-in](technical/handbook/gcp-first-run.md)
 - [Launch your first range](getting-started/quickstart.md)
 - [Key concepts](getting-started/concepts.md)
 - [How-to guides](how-to/index.md)

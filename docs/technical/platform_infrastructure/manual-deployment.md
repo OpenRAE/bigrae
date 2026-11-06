@@ -1,9 +1,5 @@
 # Manual Deployment
 
-To install BigRAE, use [Install on Google Cloud](../../getting-started/install-gcp.md).
-This page describes AWS stacks for development deployments. AWS installation
-support is coming.
-
 Infrastructure stacks that are deployed manually (not via CI/CD).
 
 ## Global Terraform Stacks

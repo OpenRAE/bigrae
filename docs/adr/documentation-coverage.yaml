@@ -65,7 +65,7 @@
       "title": "Current-state architecture handbook",
       "requirement": "GEN-001",
       "user_docs": [
-        "technical/handbook/gcp-first-run.md"
+        "getting-started/install-gcp.md"
       ],
       "technical_docs": [
         "technical/architecture.md"
@@ -108,7 +108,7 @@
       "title": "Scenario contract current, transition and target states",
       "requirement": "GEN-001",
       "user_docs": [
-        "technical/handbook/gcp-first-run.md"
+        "getting-started/install-gcp.md"
       ],
       "technical_docs": [
         "technical/handbook/scenario-contract-transition.md"

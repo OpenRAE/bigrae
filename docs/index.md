@@ -6,8 +6,7 @@ release. AWS support comes in an upcoming release.
 
 New to BigRAE? Start with [Get started](getting-started/index.md):
 
-1. [Install on Google Cloud](getting-started/install-gcp.md), by hand or with
-   a [coding agent](getting-started/deploy-with-agent.md).
+1. [Install on Google Cloud](getting-started/install-gcp.md).
 2. [Launch your first range](getting-started/quickstart.md).
 
 ## Use BigRAE
@@ -24,9 +23,7 @@ New to BigRAE? Start with [Get started](getting-started/index.md):
 
 | Doc | Read this when |
 |---|---|
-| [Install on Google Cloud](getting-started/install-gcp.md) | You install a new deployment from a published release, or update or remove one. |
-| [Deploy with a coding agent](getting-started/deploy-with-agent.md) | You give the installation to a coding agent. |
-| [First sign-in](technical/handbook/gcp-first-run.md) | You sign in to a new deployment for the first time. |
+| [Install on Google Cloud](getting-started/install-gcp.md) | You install a new deployment from a published release. |
 | [GitHub-less GCP deployment guide](technical/handbook/gcp-github-less-deployment.md) | You need the full detail of the release, the bundle, install, update, mirror, and teardown. |
 | [RB023: GCP deployment](runbooks/rb023-gcp-deployment.md) | An install, update, or teardown fails. |
 | [GCP tenant standup gotchas](dev/gcp-tenant-standup-gotchas.md) | You hit a known deploy problem. |

@@ -1,27 +1,5 @@
 # FAQ
 
-## Installation
-
-**Which cloud can I install on?**
-
-Use Google Cloud. AWS support is coming.
-
-**Do I need a source checkout?**
-
-No. Use the published release container. Follow
-[Install on Google Cloud](../getting-started/install-gcp.md).
-
-**Can a coding agent do the installation?**
-
-Yes. Use the complete instruction in
-[Deploy with a coding agent](../getting-started/deploy-with-agent.md).
-You must complete authentication and any DNS changes that the agent cannot perform.
-
-**What must I prepare?**
-
-Use the [prerequisite checklist](../getting-started/install-gcp.md#before-you-start).
-It lists the tools, project access, billing, hostname, and administrator account.
-
 ## Provisioning
 
 **How long does provisioning take?**
