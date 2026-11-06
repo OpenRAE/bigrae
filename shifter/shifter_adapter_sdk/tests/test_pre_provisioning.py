@@ -8,6 +8,7 @@ from uuid import uuid4
 import pytest
 from cryptography.fernet import Fernet
 from shifter_adapter_sdk import runtime, worker
+from shifter_adapter_sdk.runtime_sealing import seal_result
 
 
 @pytest.mark.parametrize("phase", ["validate", "configure", "verify", "cleanup"])
@@ -68,6 +69,40 @@ def request_payload():
             "provisioning_concerns": ["synthetic-values"],
         },
     }
+
+
+def test_large_secret_preparation_round_trips_with_the_original_invocation():
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    result = runtime.RuntimePlan(
+        protocol=request.protocol,
+        invocation_id=request.invocation_id,
+        input_digest=request.digest,
+        phase="prepare",
+        status="planned",
+        secret_payloads=[{"version_ref": f"nodes.synthetic.secret-{i}.v1", "value": "synthetic"} for i in range(2048)],
+    )
+    result.authorize(request)
+    key = Fernet.generate_key().decode()
+    sealed = seal_result(result.model_dump_json(), key)
+    assert len(result.model_dump_json().encode()) < runtime.MAX_PREPARATION_BYTES
+    assert runtime.parse_result(sealed, request, result_secret=key) == result
+    other = runtime.RuntimeInput.model_validate({**request_payload(), "invocation_id": str(uuid4())})
+    with pytest.raises(ValueError):
+        runtime.parse_result(sealed, other, result_secret=key)
+
+
+@pytest.mark.parametrize("count,value", [(2049, "synthetic"), (2048, "x" * 256)])
+def test_large_secret_preparation_still_enforces_count_and_total_bytes(count, value):
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    with pytest.raises(ValueError):
+        runtime.RuntimePlan(
+            protocol=request.protocol,
+            invocation_id=request.invocation_id,
+            input_digest=request.digest,
+            phase="prepare",
+            status="planned",
+            secret_payloads=[{"version_ref": f"nodes.synthetic.secret-{i}.v1", "value": value} for i in range(count)],
+        )
 
 
 def planned(request, **changes):
