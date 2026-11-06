@@ -4,12 +4,58 @@ import com.sun.net.httpserver.HttpServer;
 import java.net.*;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import static org.junit.jupiter.api.Assertions.*;
 
 class GatewayControlTest {
+    @Test void validBoundedAuthorityMayTakeLongerThanThreeSeconds() throws Exception {
+        CountDownLatch requestReceived = new CountDownLatch(1);
+        CountDownLatch responseAllowed = new CountDownLatch(1);
+        ExecutorService client = Executors.newSingleThreadExecutor();
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext("/authority", exchange -> {
+            requestReceived.countDown();
+            try {
+                if (!responseAllowed.await(10, TimeUnit.SECONDS)) {
+                    exchange.close();
+                    return;
+                }
+            }
+            catch (InterruptedException interrupted) {
+                Thread.currentThread().interrupt();
+                exchange.close();
+                return;
+            }
+            byte[] response = "{\"allowed\":true}".getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+        try (GatewayControl control = new GatewayControl(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort() + "/authority"),
+                () -> "Bearer synthetic-workload")) {
+            Future<Boolean> authorization = client.submit(() -> control.authorize(UUID.randomUUID()));
+            assertTrue(requestReceived.await(2, TimeUnit.SECONDS));
+            assertThrows(TimeoutException.class, () -> authorization.get(3200, TimeUnit.MILLISECONDS));
+            responseAllowed.countDown();
+            assertTrue(authorization.get(2, TimeUnit.SECONDS));
+        }
+        finally {
+            responseAllowed.countDown();
+            client.shutdownNow();
+            server.stop(0);
+        }
+    }
+
     @Test void workloadAssertionAndOpaqueBindingAreTheOnlyRequestAuthority() throws Exception {
         UUID bootstrap = UUID.randomUUID();
         HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

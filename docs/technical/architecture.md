@@ -235,6 +235,13 @@ explicit health check: `/health/` on port 8000 for the portal and `/guacamole/`
 on port 8080 for Guacamole. The check does not depend on the pods that exist
 when GKE creates the backend.
 
+The portal's WebSocket opening deadline is 30 seconds, including access checks
+and SSH setup. The gateway authority HTTP read deadline is 10 seconds, which
+allows the portal's bounded Google certificate lookup and range authorization.
+The enclosing gateway token exchange has a 30-second HTTP deadline.
+These transport deadlines retain the existing identity checks, keepalive and
+authority lease expiry.
+
 Control-plane workloads run as the non-root runtime identity UID 10001, with a
 read-only root filesystem, dropped capabilities, and the `RuntimeDefault` seccomp
 profile. The admission policies pin that identity for the provisioner,
