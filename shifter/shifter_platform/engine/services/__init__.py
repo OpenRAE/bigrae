@@ -59,6 +59,7 @@ from . import _runtime_plugin_controller as _api_runtime_plugin_controller
 from . import _runtime_plugin_file_selection as _api_runtime_plugin_file_selection
 from . import _runtime_plugin_operations as _api_runtime_plugin_operations
 from . import _runtime_plugins as _api_runtime_plugins
+from . import _runtime_project_parameters as _api_runtime_project_parameters
 from . import _sharing as _api_sharing
 from . import _subnet_coordination as _api_subnet_coordination
 from . import _terminal as _api_terminal
@@ -373,6 +374,8 @@ RuntimePluginPackView = _api_runtime_plugin_bindings.RuntimePluginPackView
 bind_runtime_plugin = _api_runtime_plugin_bindings.bind_runtime_plugin
 has_runtime_plugin_binding = _api_runtime_plugin_bindings.has_runtime_plugin_binding
 runtime_plugin_file_selection = _api_runtime_plugin_file_selection.runtime_plugin_file_selection
+runtime_plugin_plan_parameters = _api_runtime_project_parameters.runtime_plugin_plan_parameters
+project_parameters_for_binding = _api_runtime_project_parameters.project_parameters_for_binding
 list_runtime_plugin_bindings = _api_runtime_plugin_bindings.list_runtime_plugin_bindings
 prepare_runtime_plugin_binding = _api_runtime_plugin_bindings.prepare_runtime_plugin_binding
 prepare_runtime_plugin_pack_binding_removal = _api_runtime_plugin_bindings.prepare_runtime_plugin_pack_binding_removal
