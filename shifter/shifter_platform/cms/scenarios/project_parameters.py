@@ -1,5 +1,7 @@
 """Resolve configured project facts for read-only catalog assessment."""
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -13,9 +15,11 @@ if TYPE_CHECKING:
     from cms.models import RaesPackageSource
     from shared.identity_scope import ResourceScope
 
+_CONFIGURATION_REQUIRED = "Target configuration required"
+
 
 def configured_project_parameters(
-    path: Path, source: "RaesPackageSource", scope: "ResourceScope | None"
+    path: Path, source: RaesPackageSource, scope: ResourceScope | None
 ) -> dict[str, object] | None:
     """Keep unsupported source parameters separate from missing project settings."""
     parameters = None
@@ -23,17 +27,17 @@ def configured_project_parameters(
         organization_uuid = source.organization_uuid or (scope.organization_uuid if scope else None)
         try:
             if organization_uuid is None:
-                raise ValueError("Target configuration required")
+                raise ValueError(_CONFIGURATION_REQUIRED)
             _, facts = runtime_plugin_plan_parameters(
                 RuntimePluginScope(
                     organization_uuid=organization_uuid, pack_id=source.scenario_id, pack_digest=source.package_digest
                 )
             )
             if not facts:
-                raise ValueError("Target configuration required")
+                raise ValueError(_CONFIGURATION_REQUIRED)
             parameters = select_project_parameters(path, facts)
         except (ValueError, ValidationError):
-            raise ValidationError("Target configuration required") from None
+            raise ValidationError(_CONFIGURATION_REQUIRED) from None
     return parameters
 
 
