@@ -10,10 +10,11 @@ if TYPE_CHECKING:
 from dataclasses import dataclass
 from uuid import UUID
 
-from shared.authorization import AuthorizationRequest, TargetRef, resolve_authorization_event_scope
+from shared.authorization import TargetRef, resolve_authorization_event_scope
 from shared.authorization.policy import require_authorization, scope_parent
 from shared.credentials import CredentialContext, resolve_credential_scope, resolve_current_credential
 from shared.identity_scope import ResourceScope
+from shared.range_access_authority import range_action_request
 
 from ._common import EngineError
 
@@ -124,8 +125,14 @@ def require_native_range_action(credential: CredentialContext, request_uuid: UUI
         if resolve_credential_scope(target) != projection.scope:
             raise ValueError("Range projection changed")
         require_authorization(
-            AuthorizationRequest(
-                current.principal, action, target, projection.scope, current.ceiling, parent=projection.parent
+            range_action_request(
+                current,
+                action,
+                range_uuid=projection.public_uuid,
+                request_uuid=projection.request_uuid,
+                owner_uuid=projection.owner_principal_uuid,
+                scope=projection.scope,
+                parent=projection.parent,
             )
         )
         row = (
