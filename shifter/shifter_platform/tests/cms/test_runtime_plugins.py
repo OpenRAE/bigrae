@@ -365,8 +365,9 @@ def test_original_principal_can_renew_expired_installation_authority(
     assert row.state == "ready"
 
 
+@pytest.mark.parametrize("scoped", [False, True])
 def test_renewal_retains_original_limits_and_audits_safe_references(
-    tenant, manifest, live_session_credential, monkeypatch
+    tenant, manifest, live_session_credential, monkeypatch, scoped
 ):
     from dataclasses import replace
 
@@ -384,6 +385,8 @@ def test_renewal_retains_original_limits_and_audits_safe_references(
     result = install_runtime_plugin(original, organization.uuid, manifest)
     change_runtime_plugin(original, organization.uuid, result.id, "disable")
     current = live_session_credential(actor)
+    if scoped:
+        current = replace(current, ceiling=CredentialCeiling(current.ceiling.actions, original.ceiling.target))
     change_runtime_plugin(current, organization.uuid, result.id, "enable")
     row = RuntimePluginInstallation.objects.get(pk=result.id)
     receipt = RuntimePluginProbeAuthority.objects.get(pk=row.probe_id)
@@ -501,6 +504,47 @@ def test_another_administrator_carries_the_valid_renewed_proof_into_the_next_pro
     reconcile_runtime_plugins()
     row.refresh_from_db()
     assert row.state == "ready"
+
+
+def test_concurrent_reactivation_cannot_replace_a_newer_narrowed_probe(
+    tenant, manifest, live_session_credential, monkeypatch
+):
+    from dataclasses import replace
+
+    from engine.services import _runtime_plugins
+    from shared.authorization import CredentialCeiling, TargetRef
+
+    actor, organization = tenant
+    result = install_runtime_plugin(actor.credential, organization.uuid, manifest)
+    change_runtime_plugin(actor.credential, organization.uuid, result.id, "disable")
+    current = live_session_credential(actor)
+    concurrent = replace(
+        live_session_credential(actor),
+        ceiling=CredentialCeiling(
+            frozenset({"organization.manage_adapters"}), TargetRef("organization", organization.uuid)
+        ),
+    )
+    prepare = _runtime_plugins._reactivation_credential
+    interleaved = False
+
+    def interleave(row, user, action):
+        nonlocal interleaved
+        renewed = prepare(row, user, action)
+        if not interleaved and action == "enable":
+            interleaved = True
+            change_runtime_plugin(concurrent, organization.uuid, result.id, "enable")
+            change_runtime_plugin(concurrent, organization.uuid, result.id, "disable")
+        return renewed
+
+    monkeypatch.setattr(_runtime_plugins, "_reactivation_credential", interleave)
+    with pytest.raises(ValidationError):
+        change_runtime_plugin(current, organization.uuid, result.id, "enable")
+    row = RuntimePluginInstallation.objects.get(pk=result.id)
+    receipt = RuntimePluginProbeAuthority.objects.get(pk=row.probe_id)
+    assert row.state == "disabled"
+    assert receipt.credential_uuid == concurrent.credential_uuid
+    assert receipt.credential_ceiling_actions == "organization.manage_adapters"
+    assert receipt.credential_target_uuid == organization.uuid
 
 
 def test_retirement_is_irreversible_and_expired_probe_cannot_enable(tenant, manifest, worker, monkeypatch):
