@@ -127,7 +127,13 @@ def resolve_gce_image_from_runtime_profile(
         domain_dns_name=profile.domain_dns_name,
         domain_netbios_name=profile.domain_netbios_name,
     )
-    return replace(resolved, allow_public_web_egress=profile.allow_public_web_egress)
+    return replace(
+        resolved,
+        allow_public_web_egress=profile.allow_public_web_egress,
+        nic_type=profile.nic_type,
+        disk_interface=profile.disk_interface,
+        enable_secure_boot=profile.enable_secure_boot,
+    )
 
 
 def registry_image_resolver(operation_input: RaesOperationInput) -> Callable[[RaesPlanNode], GCERangeImageProfile]:

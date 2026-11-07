@@ -89,6 +89,28 @@ describe("pack adapter assignments", () => {
     expect(await screen.findByText("Assignment saved. Existing ranges keep their original adapter.")).toBeInTheDocument();
   });
 
+  it("preserves explicit GCE hardware and boot choices", async () => {
+    renderRoute(<AdapterPackBindings organization="org-1" adapters={[adapter]} />);
+    await fillAssignment();
+    fireEvent.click(screen.getByLabelText("Use an administrator-selected provider image for server"));
+    fireEvent.change(screen.getByLabelText("Image reference for server"), {
+      target: { value: "projects/example/global/images/arm-guest-v1" },
+    });
+    fireEvent.change(screen.getByLabelText("Network interface for server"), { target: { value: "GVNIC" } });
+    fireEvent.change(screen.getByLabelText("Boot disk interface for server"), { target: { value: "NVME" } });
+    fireEvent.click(screen.getByLabelText("Enable Secure Boot for server"));
+    fireEvent.click(screen.getByRole("button", { name: "Review assignment" }));
+    fireEvent.click(screen.getByRole("button", { name: "Save assignment" }));
+    await waitFor(() => {
+      const body = mockApi.mock.calls.find(([, options]) => options?.method === "POST")?.[1]?.body as
+        | { bindings: { image_profiles: { server: Record<string, unknown> } } }
+        | undefined;
+      expect(body?.bindings.image_profiles.server).toMatchObject({
+        nic_type: "GVNIC", disk_interface: "NVME", enable_secure_boot: false,
+      });
+    });
+  });
+
   it("lets an administrator bind a machine image and readiness contract", async () => {
     renderRoute(<AdapterPackBindings organization="org-1" adapters={[adapter]} />);
     await fillAssignment();

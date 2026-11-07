@@ -46,6 +46,9 @@ class RuntimeTargetImageProfile(ClosedModel):
     machine_type: Annotated[str, Field(max_length=100)] = ""
     disk_size_gb: Annotated[int, Field(strict=True, ge=1, le=16_384)] | None = None
     disk_type: Annotated[str, Field(max_length=100)] = ""
+    nic_type: Literal["", "GVNIC", "VIRTIO_NET"] = Field(default="", exclude_if=lambda value: not value)
+    disk_interface: Literal["", "NVME", "SCSI"] = Field(default="", exclude_if=lambda value: not value)
+    enable_secure_boot: bool = Field(default=True, strict=True, exclude_if=lambda value: value is True)
     allow_public_web_egress: bool = Field(default=False, strict=True)
     bootstrap_capability: Annotated[str, Field(max_length=64)] = "standard"
     management_ssh_username: Annotated[str, Field(max_length=32)] = ""
@@ -62,6 +65,7 @@ class RuntimeTargetImageProfile(ClosedModel):
         """Reject provider image details that cannot be realized safely."""
         if self.machine_type and not _MACHINE_TYPE.fullmatch(self.machine_type):
             raise ValueError("image profile machine type is invalid")
+        _validate_hardware_override(self)
         for value in (self.management_ssh_username, self.participant_username):
             if value and not _LOCAL_USER.fullmatch(value):
                 raise ValueError("image profile usernames must be local OS usernames")
@@ -70,6 +74,13 @@ class RuntimeTargetImageProfile(ClosedModel):
         else:
             _validate_gcp_image_profile(self)
         return self
+
+
+def _validate_hardware_override(profile: RuntimeTargetImageProfile) -> None:
+    """Keep guest hardware overrides within the GCP boot-image contract."""
+    selected = profile.nic_type or profile.disk_interface or not profile.enable_secure_boot
+    if selected and (profile.provider != "gcp" or profile.image_kind != "image"):
+        raise ValueError("GCE hardware overrides require a GCP boot image")
 
 
 def _participant_profile(profile: RuntimeTargetImageProfile) -> tuple[str, str, str, str]:

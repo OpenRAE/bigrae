@@ -6,6 +6,7 @@ import re
 from typing import Protocol, cast
 
 from gcp_range_cell_clients import GCEClients
+from gcp_range_cell_host_binding import assert_runtime_hardware_binding
 from gcp_range_cell_types import InstancePlan, RangeCellPlan
 
 _GCE_RESOURCE_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
@@ -66,6 +67,7 @@ def observe_gce_substrates(plan: RangeCellPlan, clients: GCEClients) -> list[dic
         )
         if actual is None or actual.name != instance["resource_name"] or not actual.id or not actual.machine_type:
             raise ValueError("compute-substrate observation is unavailable or invalid")
+        assert_runtime_hardware_binding(actual, instance)
         expected_image_id = getattr(instance.get("profile"), "source_image_id", "")
         if expected_image_id:
             _verify_boot_image(plan, actual, clients, expected_image_id)
