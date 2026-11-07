@@ -165,7 +165,8 @@ prove a live repository, publisher or workload-identity cutover.
   `make test` completion boundary. The companion `make policy` target runs the
   full ADR guard, import-linter contracts, diff whitespace validation, and Vale
   against Markdown changed from `origin/dev`; `tools/install-vale.sh` supplies
-  the pinned local Vale binary when it is not already installed.
+  the pinned local Vale binary when it is not already installed. The installer
+  verifies the release archive SHA-256 before extraction.
 - Local commits run file hygiene, secret scanning, changed-file cloud identifier
   checks, commit-message policy, Ruff, ShellCheck, actionlint, and Terraform
   formatting, plus the changed-line Ruff/Sonar rule check above. Full tests and
@@ -1100,6 +1101,8 @@ python3 scripts/adr_guard/adr_guard.py --changed --level fast
 Markdown prose is linted with [Vale](https://vale.sh/) against the Google
 developer documentation style. The config lives in `.vale.ini`; the synced
 style package under `.vale/styles/` is gitignored and fetched with `vale sync`.
+`.vale.ini` pins the Google style package to a release URL. The workflow and
+`tools/install-vale.sh` verify the Vale archive SHA-256 before extraction.
 
 The `.github/workflows/vale.yml` workflow runs on pull requests that touch
 Markdown. It lints only the Markdown files the PR changes, at the config's
@@ -1542,16 +1545,3 @@ are checked before dispatch. No cloud I/O belongs in the portal or adapter worke
 These checks establish custody; they do not claim live provider realization or
 deployment qualification. The [design](../../architecture/registered-gcp-range-projects-2716.md)
 describes the remaining provider preflight, execution and readback boundaries.
-
-## Local implementation design checks
-
-The `.ground-control.yaml` module mappings select existing implementations and
-governing architecture decisions. Repository-wide decisions apply to all paths;
-CMS and `shared.raes` also select their admission and archive designs.
-The design stage compiles platform modules, checks the existing import rules,
-and generates a dependency view from Python imports. It then runs each named
-acceptance test on the local design commit through `tests/design_checks.py`.
-An assertion failure establishes missing behavior; collection errors, fixture
-errors, skipped tests, and ambiguous selection do not. The design review runs
-before implementation. These commands add no runtime dependency or deployment.
-Existing CI, pre-commit, architecture and completed-work review checks still apply.

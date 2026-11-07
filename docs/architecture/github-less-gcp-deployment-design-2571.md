@@ -136,8 +136,7 @@ The workflow does these steps:
 
 `platform/deployer/gcp/trivyignore.yaml` holds the only accepted deployer
 exposures. Each entry is a HIGH finding in a vendor binary that no vendor build
-fixes yet: `gcloud-crc32c`, `helm`, `kubectl`, `oras`, and `trivy`. Each entry
-expires on 2026-11-30. After that
+fixes yet. The only entry is for `gcloud-crc32c`. It expires on 2026-11-30. After that
 date, the gate blocks each release until the tools are updated. The file does
 not apply to the control-plane image gate.
 
@@ -149,10 +148,13 @@ GitHub API.
 
 The deployer image is the GitHub-less execution unit. It holds the repository
 subset that the commands read and pinned tools: Terraform 1.17.1, Helm
-v3.22.1, kubectl v1.34.13, Trivy 0.76.1, ORAS 1.3.6, the Google Cloud CLI
+v3.22.1, kubectl v1.34.13, Trivy 0.76.2, ORAS 1.3.6, the Google Cloud CLI
 591.0.0, and `gke-gcloud-auth-plugin`. The image builds the plugin from an
 exact `kubernetes/cloud-provider-gcp` commit with a pinned Go image, because
-the newest Google build uses a Go release with a CRITICAL finding (#2618). A
+the newest Google build uses a Go release with a CRITICAL finding (#2618).
+It builds Helm, kubectl, and ORAS from their release commits the same way. No
+vendor build of the plugin, Helm, or kubectl has `golang.org/x/net` 0.62.0
+(CVE-2026-78661), and the ORAS build uses an older Go release. A
 provider mirror holds the Terraform providers of each root. Docker `FROM` stages are digest-pinned. Each
 downloaded tool is verified against a SHA-256 value that the reviewed
 Dockerfile pins; the build does not fetch the checksum from the download
