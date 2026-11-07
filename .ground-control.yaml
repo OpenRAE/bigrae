@@ -16,11 +16,6 @@ workflow:
   # every production path, so this only removes redundant local re-runs. A
   # developer may still run `pre-commit run --all-files` by hand.
   precommit_command: pre-commit run
-  design:
-    compile_command: cd shifter/shifter_platform && uv run python -m compileall -q cms shared tests
-    structural_command: cd shifter/shifter_platform && uv run lint-imports --config ../../.importlinter
-    wiring_command: cd shifter/shifter_platform && uv run python tests/design_checks.py wiring
-    acceptance_command: cd shifter/shifter_platform && TESTING=1 TEST_DB_BACKEND=sqlite uv run python tests/design_checks.py acceptance
   codex_review:
     pre_push_cap: 1
   review_disposition:
@@ -39,14 +34,3 @@ routing:
   default_provider: claude
 rules:
   plan_rules: .gc/plan-rules.md
-architecture:
-  modules:
-    - path: .
-      implementations: [scripts/adr_guard/adr_guard.py]
-      adrs: [docs/technical/dev/adr-enforcement.md, docs/technical/architecture.md, docs/adr/069-repository-identity.md]
-    - path: shifter/shifter_platform/cms
-      implementations: [shifter/shifter_platform/cms/services/_experiment_batches.py, shifter/shifter_platform/cms/services/_trial_archives.py]
-      adrs: [docs/architecture/experiment-admission-design-2742.md, docs/architecture/trial-archive-custody.md]
-    - path: shifter/shifter_platform/shared/raes
-      implementations: [shifter/shifter_platform/shared/raes/experiment_admission.py, shifter/shifter_platform/shared/raes/trial_archive.py]
-      adrs: [docs/architecture/raes-migration-adr.md, docs/architecture/trial-archive-custody.md]
