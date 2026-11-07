@@ -35,7 +35,7 @@ WorkerImage = Annotated[
     Field(max_length=1024, pattern=r"^[a-z0-9][a-z0-9.:-]+/[a-z0-9/._-]+@sha256:[a-f0-9]{64}$"),
 ]
 Phase = Literal["prepare", "validate", "configure", "verify", "cleanup"]
-Capability = Literal["provision.prepare", "guest.configure", "guest.verify"]
+Capability = Literal["provision.prepare", "guest.configure", "guest.verify", "trial.control"]
 
 
 class ClosedModel(BaseModel):
@@ -81,7 +81,7 @@ class PluginManifest(ClosedModel):
     distribution: Identifier
     entry_point: Identifier
     worker_image: WorkerImage
-    capabilities: list[Capability] = Field(min_length=1, max_length=3)
+    capabilities: list[Capability] = Field(min_length=1, max_length=4)
     required_bindings: list[Identifier] = Field(max_length=64)
     provisioning_concerns: list[Identifier] = Field(
         default_factory=list, max_length=64, exclude_if=lambda value: not value
@@ -111,6 +111,10 @@ class PluginManifest(ClosedModel):
             raise ValueError("a runtime plugin must provide readiness verification")
         if not self.required_bindings and self.capabilities != ["provision.prepare"]:
             raise ValueError("a plugin without guests must provide only preparation")
+        if "trial.control" in self.capabilities and (
+            self.protocol != "bigrae.runtime-plugin/v2" or "guest.configure" not in self.capabilities
+        ):
+            raise ValueError("trial control requires the apparatus protocol and a configure phase")
         return self
 
     @property
