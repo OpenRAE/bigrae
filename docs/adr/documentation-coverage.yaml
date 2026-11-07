@@ -24,6 +24,24 @@
       ]
     },
     {
+      "id": "experiment-dispatch",
+      "title": "Admitted trial dispatch on disposable workers",
+      "requirement": "GEN-001",
+      "user_docs": [
+        "how-to/run-experiment-batches.md"
+      ],
+      "technical_docs": [
+        "technical/shifter_platform/experiment-dispatch.md"
+      ],
+      "drift_sources": [
+        "shifter/shifter_platform/cms/services/_experiment_dispatch.py",
+        "shifter/shifter_platform/engine/services/_worker_trials.py",
+        "shifter/shifter_platform/shared/worker_trial.py",
+        "shifter/engine/provisioner/worker_trial_ops.py",
+        "shifter/shifter_adapter_sdk/trial.py"
+      ]
+    },
+    {
       "id": "disposable-vm-workers",
       "title": "Disposable VM worker lifecycle",
       "requirement": "GEN-001",

@@ -187,8 +187,14 @@ def _collect(
     expected = experiment_archive_identity(inputs, row.plan_entry_id, str(row.token))
     with tempfile.TemporaryDirectory(prefix="trial-collect-") as workdir:
         path = Path(workdir) / "archive"
-        get_object_storage().download_object(
-            settings.STORAGE_BUCKET_NAME, archive["key"], str(path), max_bytes=MAX_ARCHIVE_BYTES
+        storage = get_object_storage()
+        identity = storage.head_object(settings.STORAGE_BUCKET_NAME, archive["key"])
+        storage.download_object(
+            settings.STORAGE_BUCKET_NAME,
+            archive["key"],
+            str(path),
+            max_bytes=MAX_ARCHIVE_BYTES,
+            expected_identity=identity,
         )
         if hashlib.sha256(path.read_bytes()).hexdigest() != archive["sha256"]:
             raise CMSError("The trial archive differs from its export report")

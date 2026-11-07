@@ -119,6 +119,9 @@ The native cancellation path handles an active provisioner.
 The native cleanup retry path handles unknown terminal teardown.
 Database protection prevents deletion of retained ownership through a range cascade.
 
+Inspection reports `retiring` after retirement is requested and `retired` after verified provider absence.
+A worker can run one [worker trial](experiment-dispatch.md#engine-worker-trials).
+
 ## Data flow and security
 
 ```mermaid

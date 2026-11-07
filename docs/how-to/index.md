@@ -1,6 +1,7 @@
 # How-To Guides
 
 - [Admit pack experiments](admit-pack-experiments.md) - Retain scientific inputs without dispatch
+- [Run experiment batches](run-experiment-batches.md) - Run admitted trials on disposable workers
 
 Step-by-step walkthroughs for common tasks.
 

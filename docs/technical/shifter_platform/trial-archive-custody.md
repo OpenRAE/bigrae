@@ -87,6 +87,10 @@ Its metadata hooks reject oversized extension bodies before allocation.
 Each scan keeps only typed byte indexes and bounded structured metadata.
 Links, traversal, duplicate names, special files, sparse files, and undeclared bytes are rejected.
 
+A LilRAE trial seal (`lilrae-trial-record/v1`) has no RAES plan or run record.
+Intake binds it through `trial/record.json`: its run and attempt identities must equal the expected identity.
+Its plan metadata is empty. Every inventory member and checksum is still validated.
+
 ## Receipt and failure semantics
 
 The receipt is the SQL commit after destination readback succeeds.
