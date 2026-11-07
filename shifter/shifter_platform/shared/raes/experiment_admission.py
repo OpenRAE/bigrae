@@ -40,7 +40,7 @@ from raes_contracts.realization_envelope import BackendRealizationEnvelopeModel
 from raes_env_packs import PackExperiment, load_pack_experiments, resolve_pack_artifact, validate_pack_content_manifest
 from raes_processor.trial_compiler import compile_admitted_trial_plan
 from raes_processor.trial_realization import instantiate_admitted_trial_entry
-from raes_processor.trial_scheduler import plan_batch_schedule
+from raes_processor.trial_scheduler import BatchSchedule, plan_batch_schedule
 
 from shared.raes.pack_delivery_inputs import pack_artifact_relative_path
 from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
@@ -114,18 +114,17 @@ def validate_retained(raw: str) -> dict[str, Any]:
     if set(payload["snapshots"]) != set(plan.entries):
         raise ValueError("Retained snapshot set differs from plan entries")
     limits = payload["resource_limits"]
-    _concurrency(
-        limits["requested_concurrency"], limits["configured_concurrency_ceiling"], schedule.admitted_parallelism_ceiling
-    )
+    _concurrency(limits["requested_concurrency"], limits["configured_concurrency_ceiling"], schedule)
     if limits["admitted_parallelism_ceiling"] != schedule.admitted_parallelism_ceiling:
         raise ValueError("Retained admitted parallelism ceiling differs from plan")
     return payload
 
 
-def _concurrency(requested: int, configured: int, admitted: int) -> None:
-    """Keep requested concurrency inside both the administrative and the admitted plan limits."""
-    if type(requested) is not int or not 1 <= requested <= min(configured, admitted):
-        raise ValueError("Requested concurrency exceeds configured or admitted limits")
+def _concurrency(requested: int, configured: int, schedule: BatchSchedule) -> None:
+    """Keep requested concurrency inside the administrative limit and the admitted plan bounds."""
+    floor, ceiling = schedule.admitted_parallelism_floor, schedule.admitted_parallelism_ceiling
+    if type(requested) is not int or not floor <= requested <= min(configured, ceiling):
+        raise ValueError("Requested concurrency is outside the configured or admitted limits")
 
 
 def _context(experiment: PackExperiment, authority: ExperimentAuthority) -> dict[str, Any]:
@@ -394,7 +393,7 @@ def compile_pack_experiment(
         raise ValueError("Experiment compilation refused the supplied combination")
     plan = result.plan
     schedule = plan_batch_schedule(plan)
-    _concurrency(concurrency, configuration.max_concurrency, schedule.admitted_parallelism_ceiling)
+    _concurrency(concurrency, configuration.max_concurrency, schedule)
     # The private staged tree is bounded and unchanged during this operation.
     custody = _ArtifactCustody(root)
     references = list(experiment.experiment.artifact_refs) + list(experiment.task.artifact_refs)
