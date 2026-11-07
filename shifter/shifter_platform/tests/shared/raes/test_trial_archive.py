@@ -8,6 +8,7 @@ import tarfile
 from importlib.resources import files
 
 import pytest
+from raes_contracts.contract_seals import seal_payload
 from raes_contracts.contracts import AdmittedTrialPlanModel, ExperimentRunModel
 
 
@@ -18,7 +19,7 @@ def encoded(value):
 def records():
     """Use the released synthetic minimal plan; create a failed partial run."""
     path = files("raes_contracts").joinpath("_corpus/fixtures/plans/admitted-trial-plan-v1/valid/minimal.json")
-    plan = AdmittedTrialPlanModel.model_validate_json(path.read_bytes())
+    plan = AdmittedTrialPlanModel.model_validate(seal_payload(AdmittedTrialPlanModel, json.loads(path.read_bytes())))
     entry = next(iter(plan.entries.values()))
     run = ExperimentRunModel.model_validate(
         {
