@@ -60,11 +60,11 @@ Dependabot is the reminder, not the guarantee.
 HashiCorp's `SHA256SUMS`. Only the GDC build (`INSTALL_KUBEVIRT=true`)
 installs `kubectl`, verified against the published `kubectl.sha256`, and
 `virtctl`, verified against a pinned SHA-256 value. The GCP deployer
-image (`platform/deployer/gcp/Dockerfile`) verifies `terraform`, `helm`,
-`kubectl`, `trivy`, and `oras` against SHA-256 values pinned in that
-Dockerfile. Change each version and its SHA-256 value together. It builds
-`gke-gcloud-auth-plugin` from a pinned `kubernetes/cloud-provider-gcp` commit,
-checks the fetched commit, and relies on `go.sum` for each module.
+image (`platform/deployer/gcp/Dockerfile`) verifies `terraform` and `trivy`
+against SHA-256 values pinned in that Dockerfile. Change each version and its
+SHA-256 value together. It builds `gke-gcloud-auth-plugin`, `kubectl`, `helm`,
+and `oras` from pinned upstream commits. Each build checks the fetched commit
+and relies on `go.sum` and the Go checksum database for each module.
 `kubeconform` is verified against its release `CHECKSUMS` manifest. `kube-linter` publishes a
 cosign `.sig` but no SHA manifest, so its tarball sha256 is pinned in
 `_quality.yml` (`KUBE_LINTER_SHA256`) and verified before extraction; bump it
