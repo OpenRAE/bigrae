@@ -54,6 +54,7 @@ def _current_operation_id(trial: WorkerTrial) -> UUID:
 
 
 def _view(trial: WorkerTrial) -> WorkerTrialView:
+    """Project the trial and the state of its current operation."""
     from engine.models import ProvisionerLaunchIntent
 
     intent = ProvisionerLaunchIntent.objects.get(operation_id=_current_operation_id(trial))
@@ -168,6 +169,7 @@ def _operation_finished(intent: ProvisionerLaunchIntent) -> bool:
 
 
 def _payload(trial: WorkerTrial, operation: str) -> dict[str, object]:
+    """Return the canonical launch payload for one trial operation."""
     return {
         "version": 1,
         "resource": _RESOURCE,
@@ -178,6 +180,7 @@ def _payload(trial: WorkerTrial, operation: str) -> dict[str, object]:
 
 
 def _input(trial: WorkerTrial) -> dict[str, object]:
+    """Return the immutable provisioner input for the trial."""
     worker_range = trial.worker.range
     if worker_range.provisioner_operation_id is None:
         raise ValueError("Worker provisioning is unavailable")
@@ -242,6 +245,7 @@ def _queue(trial: WorkerTrial, operation: str) -> None:
 
 
 def _audit(trial: WorkerTrial, operation: str) -> None:
+    """Audit a queued trial operation against the worker's range."""
     from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
     from shared.operation_authority import credential_reference_from_record
 
@@ -359,6 +363,13 @@ def apply_worker_trial_result(result: OperationResultInbox, payload: dict[str, A
     if result.result_kind == "TERMINAL_FAILURE":
         mark_worker_trial_operation_failed(trial)
         return OperationResultDisposition.APPLIED, "worker trial operation failed"
+    return _record_receipt(trial, payload)
+
+
+def _record_receipt(trial: WorkerTrial, payload: dict[str, Any]) -> tuple[str, str]:
+    """Record the observed trial facts from a receipt that names this trial."""
+    from engine.models import OperationResultDisposition
+
     receipt = parse_worker_trial_receipt(payload)
     if receipt.trial_id != trial.pk:
         return OperationResultDisposition.REJECTED_OWNERSHIP, "receipt names another trial"

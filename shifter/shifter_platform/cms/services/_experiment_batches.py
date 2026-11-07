@@ -6,7 +6,6 @@ import hashlib
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -17,7 +16,6 @@ from django.utils import timezone
 
 from cms.models import ExperimentBatch, ExperimentEntry, RaesPackageSource, TrialArchiveDestination, TrialArchiveReceipt
 from cms.scenarios.pack_validation import PackDigestError, verify_pack_digest
-from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.cloud import get_object_storage
 from shared.cloud.exceptions import CloudStorageError
 from shared.credentials import CredentialContext
@@ -34,44 +32,11 @@ from shared.raes.experiment_admission import (
 from shared.raes.experiment_pack_snapshot import stage_local_experiment_pack
 from shared.raes.object_source import stage_object_pack
 from shared.raes.package_loader import RaesPackageError, resolve_pack_root
-from workspaces.services import OrganizationAuthorizationError
 
 from ._content_authority import content_scope, fence_content_scope, require_content_scope
+from ._experiment_authority import _UNAVAILABLE, _audit, _authorize, _fence
 from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
-from ._tenant_pack_authority import TenantPackAdmission, admit_tenant_pack, fence_tenant_pack
-
-_UNAVAILABLE = "Experiment operation unavailable"
-
-
-def _authorize(credential: CredentialContext, organization_uuid: UUID, operation: str) -> TenantPackAdmission:
-    """Authorize the native tenant operation without disclosing denial details."""
-    try:
-        return admit_tenant_pack(credential, organization_uuid, operation)
-    except OrganizationAuthorizationError:
-        raise CMSError(_UNAVAILABLE) from None
-
-
-def _fence(admission: TenantPackAdmission) -> None:
-    """Recheck credential and ancestry inside the current transaction."""
-    try:
-        fence_tenant_pack(admission)
-    except OrganizationAuthorizationError:
-        raise CMSError(_UNAVAILABLE) from None
-
-
-def _audit(admission: TenantPackAdmission, reference: UUID, disposition: str) -> None:
-    """Record opaque operational identifiers through the strict audit boundary."""
-    audit_log(
-        AuditEvent(
-            entity_type=AuditEntityType.EXPERIMENT,
-            entity_id=0,
-            entity_ref=str(reference),
-            action=AuditAction.UPDATE,
-            **principal_actor_fields(admission.credential.principal),
-            new_state={"organization_uuid": str(admission.organization_uuid), "disposition": disposition},
-        ),
-        strict=True,
-    )
+from ._tenant_pack_authority import TenantPackAdmission
 
 
 def _project(row: ExperimentBatch) -> RetainedExperimentBatch:
@@ -325,38 +290,6 @@ def claim_experiment_entry(
         row.token, row.state = token, "claimed"
         _audit(admission, row.id, "experiment-entry-claimed")
         return _claim(row)
-
-
-def stop_experiment_batch(credential: CredentialContext, organization_uuid: UUID, batch_id: UUID) -> None:
-    """Persist a dispatch stop once; claims and trial starts check it."""
-    admission = _authorize(credential, organization_uuid, "manage_content")
-    with transaction.atomic():
-        _fence(admission)
-        row = ExperimentBatch.objects.select_for_update().get(pk=batch_id, organization_uuid=organization_uuid)
-        if row.dispatch_stopped_at is None:
-            row.dispatch_stopped_at = timezone.now()
-            row.save(update_fields=["dispatch_stopped_at"])
-            _audit(admission, row.id, "experiment-dispatch-stopped")
-
-
-def experiment_dispatch_stopped(organization_uuid: UUID, batch_id: UUID) -> bool:
-    return ExperimentBatch.objects.filter(
-        pk=batch_id, organization_uuid=organization_uuid, dispatch_stopped_at__isnull=False
-    ).exists()
-
-
-def reserve_trial_deadline(
-    credential: CredentialContext, organization_uuid: UUID, token: UUID, timeout_seconds: int
-) -> datetime:
-    """Set the attempt's trial deadline once and return the stored value."""
-    admission = _authorize(credential, organization_uuid, "manage_content")
-    with transaction.atomic():
-        _fence(admission)
-        row = _attempt(organization_uuid, token, locked=True)
-        if row.trial_deadline is None:
-            row.trial_deadline = (timezone.now() + timedelta(seconds=timeout_seconds)).replace(microsecond=0)
-            row.save(update_fields=["trial_deadline", "updated_at"])
-        return row.trial_deadline
 
 
 def recover_experiment_claim(

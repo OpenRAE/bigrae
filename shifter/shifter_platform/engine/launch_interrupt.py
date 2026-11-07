@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import logging
 from datetime import timedelta
+from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
@@ -148,8 +149,6 @@ def _mark_destroy_enqueued(claimed: ProvisionerLaunchIntent) -> None:
 
 def _enqueue_destroy(claimed: ProvisionerLaunchIntent) -> bool:
     """Enqueue the canonical RAES destroy for the cancelled range. Idempotent."""
-    from engine.launch_intents import enqueue_provisioner_launch
-
     payload = claimed.payload or {}
     if payload.get("resource") == "vpn-profile":
         from engine.services._vpn_profile_operations import enqueue_interrupted_vpn_cleanup
@@ -159,6 +158,13 @@ def _enqueue_destroy(claimed: ProvisionerLaunchIntent) -> bool:
         from engine.services._worker_trials import enqueue_interrupted_worker_trial
 
         return enqueue_interrupted_worker_trial(claimed)
+    return _enqueue_provider_destroy(claimed, payload)
+
+
+def _enqueue_provider_destroy(claimed: ProvisionerLaunchIntent, payload: dict[str, Any]) -> bool:
+    """Enqueue the NGFW deprovision or the RAES range destroy for the cancelled intent."""
+    from engine.launch_intents import enqueue_provisioner_launch
+
     if payload.get("resource") == "ngfw" and payload.get("operation") == "deprovision":
         enqueue_provisioner_launch(
             ["ngfw", "deprovision", "--request-id", str(payload["request_id"])], cleanup_for=claimed.operation_id

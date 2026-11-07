@@ -81,12 +81,7 @@ from ._experiment_batches import (
     record_experiment_worker,
     recover_experiment_claim,
 )
-from ._experiment_dispatch import (
-    DispatchStep,
-    reconcile_experiment_dispatch,
-    start_experiment_dispatch,
-    stop_experiment_dispatch,
-)
+from ._experiment_dispatch import reconcile_experiment_dispatch, start_experiment_dispatch, stop_experiment_dispatch
 from ._experiment_export_records import (
     ExperimentExportAssociationError,
     ExperimentExportDataError,
@@ -292,7 +287,6 @@ __all__ = (
     "CtfOpenVpnProfileConflict",
     "CtfOpenVpnProfileNotFound",
     "CtfOpenVpnProfileUnavailable",
-    "DispatchStep",
     "EngineEventCapacitySignal",
     "EngineSharingError",
     "ExperimentClaim",

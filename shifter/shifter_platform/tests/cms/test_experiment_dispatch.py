@@ -127,7 +127,7 @@ def run(dispatch, operation="reconcile", **options):
 
 def finish(dispatch, worker_id, entry, *, attempt_id):
     """The worker exported a sealed archive for the expected attempt and trial SDL."""
-    from shared.raes.experiment_admission import trial_scenario_bytes
+    from shared.raes.experiment_dispatch_inputs import trial_scenario_bytes
 
     scenario = "sha256:" + hashlib.sha256(trial_scenario_bytes(dispatch.batch.inputs, entry.plan_entry_id)).hexdigest()
     raw = trial_record_archive(run_id=entry.run_id, attempt_id=attempt_id, scenario=scenario)

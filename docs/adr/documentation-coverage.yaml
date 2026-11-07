@@ -14,6 +14,7 @@
       ],
       "drift_sources": [
         "shifter/shifter_platform/cms/services/_experiment_batches.py",
+        "shifter/shifter_platform/cms/services/_experiment_authority.py",
         "shifter/shifter_platform/cms/models/experiment_batches.py",
         "shifter/shifter_platform/shared/raes/experiment_admission.py",
         "shifter/shifter_platform/shared/raes/experiment_pack_snapshot.py",
@@ -35,6 +36,8 @@
       ],
       "drift_sources": [
         "shifter/shifter_platform/cms/services/_experiment_dispatch.py",
+        "shifter/shifter_platform/cms/services/_experiment_dispatch_state.py",
+        "shifter/shifter_platform/shared/raes/experiment_dispatch_inputs.py",
         "shifter/shifter_platform/engine/services/_worker_trials.py",
         "shifter/shifter_platform/shared/worker_trial.py",
         "shifter/engine/provisioner/worker_trial_ops.py",
@@ -75,6 +78,7 @@
         "shifter/shifter_platform/shared/raes/trial_archive.py",
         "shifter/shifter_platform/shared/raes/trial_archive_jsonl.py",
         "shifter/shifter_platform/shared/raes/trial_archive_records.py",
+        "shifter/shifter_platform/shared/raes/trial_archive_lilrae.py",
         "shifter/shifter_platform/cms/models/trial_archives.py"
       ]
     },

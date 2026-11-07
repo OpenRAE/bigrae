@@ -25,34 +25,36 @@ from django.core.exceptions import ObjectDoesNotExist
 from cms.models import ExperimentEntry
 from shared.cloud import get_object_storage
 from shared.exceptions import CMSError
-from shared.raes.experiment_admission import (
+from shared.raes.experiment_admission import experiment_archive_identity
+from shared.raes.experiment_dispatch_inputs import (
     entry_attempt_timeout,
-    experiment_archive_identity,
     trial_scenario_bytes,
+    trial_scenario_sha256,
     worker_absence_cleanup_receipt,
 )
 from shared.worker_trial import MAX_ARCHIVE_BYTES, TRIAL_INPUT_PREFIX, StagedObject
 
+from ._experiment_authority import _authorize
 from ._experiment_batches import (
-    _authorize,
     _load,
     claim_experiment_entry,
-    experiment_dispatch_stopped,
     observe_experiment_attempt,
     record_experiment_cleanup,
     record_experiment_collection,
     record_experiment_worker,
-    reserve_trial_deadline,
-    stop_experiment_batch,
 )
+from ._experiment_dispatch_state import experiment_dispatch_stopped, reserve_trial_deadline, stop_experiment_batch
 from ._trial_archives import intake_trial_archive
 
 if TYPE_CHECKING:
+    from engine.services import WorkerTrialView, WorkerView
+    from shared.cloud.types import ObjectStorage
     from shared.credentials import CredentialContext
     from shared.identity_scope import ResourceScope
 
 _WORKER_NAMESPACE = uuid5(NAMESPACE_URL, "bigrae:experiment-worker")
 _HOLD_REASON = "evidence"
+_WORKER_REF_PREFIX = "worker:"
 _RUN_OUTCOMES = {"completed": "succeeded", "failed": "failed", "aborted": "aborted"}
 
 
@@ -75,9 +77,15 @@ def worker_id_for(token: UUID) -> UUID:
 
 
 def _entries(organization_uuid: UUID, batch_id: UUID) -> list[ExperimentEntry]:
+    """Return the batch's entries in plan order."""
     return list(
         ExperimentEntry.objects.filter(batch_id=batch_id, organization_uuid=organization_uuid).order_by("plan_entry_id")
     )
+
+
+def _worker_id(row: ExperimentEntry) -> UUID:
+    """Return the worker bound to the entry's attempt."""
+    return UUID(row.worker_ref.removeprefix(_WORKER_REF_PREFIX))
 
 
 def _attempt_token(row: ExperimentEntry) -> UUID:
@@ -96,7 +104,7 @@ def _create_worker(
     token = _attempt_token(row)
     worker_id = worker_id_for(token)
     create_disposable_worker(credential, scope=scope, worker_id=worker_id, experiment_id=row.batch_id, trial_id=token)
-    record_experiment_worker(credential, organization_uuid, token, f"worker:{worker_id}")
+    record_experiment_worker(credential, organization_uuid, token, f"{_WORKER_REF_PREFIX}{worker_id}")
     return worker_id
 
 
@@ -120,7 +128,7 @@ def start_experiment_dispatch(
     return reconcile_experiment_dispatch(credential, organization_uuid, batch_id, scope=scope)
 
 
-def _stage_object(storage: Any, key: str, data: bytes) -> StagedObject:
+def _stage_object(storage: ObjectStorage, key: str, data: bytes) -> StagedObject:
     """Create one staged object, or reuse an identical one that a concurrent stager created."""
     bucket = settings.STORAGE_BUCKET_NAME
     digest = hashlib.sha256(data).hexdigest()
@@ -134,10 +142,6 @@ def _stage_object(storage: Any, key: str, data: bytes) -> StagedObject:
     else:
         storage.upload_file(io.BytesIO(data), bucket, key, "application/octet-stream")
     return StagedObject(key=key, sha256=digest, size_bytes=len(data))
-
-
-def _scenario_sha256(inputs: dict[str, Any], plan_entry_id: str) -> str:
-    return "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, plan_entry_id)).hexdigest()
 
 
 def stage_trial(
@@ -173,6 +177,22 @@ def _hold_evidence(credential: CredentialContext, worker_id: UUID) -> None:
         acquire_worker_hold(credential, worker_id, reason=_HOLD_REASON)
 
 
+def _worker_blocker(credential: CredentialContext, worker_id: UUID) -> str | None:
+    """Return why the worker cannot start a trial yet; qualify a ready worker first."""
+    from engine.services import get_disposable_worker, qualify_disposable_worker
+
+    worker = get_disposable_worker(credential, worker_id)
+    blocker = None
+    if worker.status != "ready":
+        blocker = "waiting-for-worker"
+    elif not worker.qualified:
+        try:
+            qualify_disposable_worker(credential, worker_id)
+        except ValueError:
+            blocker = "qualification-failed"
+    return blocker
+
+
 def _start_trial(
     credential: CredentialContext,
     organization_uuid: UUID,
@@ -181,23 +201,13 @@ def _start_trial(
     worker_id: UUID,
 ) -> str:
     """Qualify the worker, hold evidence, stage inputs and start the trial."""
-    from engine.services import (
-        collect_worker_trial,
-        get_disposable_worker,
-        qualify_disposable_worker,
-        start_worker_trial,
-    )
+    from engine.services import collect_worker_trial, start_worker_trial
 
     if experiment_dispatch_stopped(organization_uuid, row.batch_id):
         return "stopped"
-    worker = get_disposable_worker(credential, worker_id)
-    if worker.status != "ready":
-        return "waiting-for-worker"
-    if not worker.qualified:
-        try:
-            qualify_disposable_worker(credential, worker_id)
-        except ValueError:
-            return "qualification-failed"
+    blocker = _worker_blocker(credential, worker_id)
+    if blocker is not None:
+        return blocker
     _hold_evidence(credential, worker_id)
     staged, deadline = stage_trial(credential, organization_uuid, inputs, row)
     token = _attempt_token(row)
@@ -218,7 +228,7 @@ def _collect(
 ) -> str:
     """Intake the sealed archive with independently derived identities."""
     token = _attempt_token(row)
-    scenario = _scenario_sha256(inputs, row.plan_entry_id)
+    scenario = trial_scenario_sha256(inputs, row.plan_entry_id)
     expected = experiment_archive_identity(inputs, row.plan_entry_id, str(token), scenario_sha256=scenario)
     with tempfile.TemporaryDirectory(prefix="trial-collect-") as workdir:
         path = Path(workdir) / "archive"
@@ -262,13 +272,14 @@ def _record_cleanup(
     worker_id: UUID,
     run_status: str,
 ) -> str:
+    """Record the verified-absence cleanup receipt for the retired worker."""
     token = _attempt_token(row)
     receipt = worker_absence_cleanup_receipt(
         inputs,
         row.plan_entry_id,
         str(token),
         trial_outcome=_RUN_OUTCOMES.get(run_status, "aborted"),
-        evidence_ref=f"worker:{worker_id}:verified-absent",
+        evidence_ref=f"{_WORKER_REF_PREFIX}{worker_id}:verified-absent",
     )
     record_experiment_cleanup(credential, organization_uuid, token, receipt)
     return "cleanup-recorded"
@@ -282,32 +293,45 @@ def _advance(
     row: ExperimentEntry,
     *,
     collect_only: bool,
-) -> tuple[str, Any]:
+) -> tuple[str, WorkerTrialView | None]:
     """Advance one claimed entry by at most one step."""
     from engine.services import get_disposable_worker, get_worker_trial
 
     if not row.worker_ref:
-        return (
-            ("waiting", None) if collect_only else (_create_and_report(credential, organization_uuid, scope, row), None)
-        )
-    worker_id = UUID(row.worker_ref.removeprefix("worker:"))
+        action = "waiting" if collect_only else _create_and_report(credential, organization_uuid, scope, row)
+        return action, None
+    worker_id = _worker_id(row)
     worker = get_disposable_worker(credential, worker_id)
     try:
         trial = get_worker_trial(credential, worker_id)
     except ObjectDoesNotExist:
-        trial = None
-    if trial is None:
-        if collect_only or worker.retiring:
-            return "not-started", None
-        return _start_trial(credential, organization_uuid, inputs, row, worker_id), None
+        unstarted = collect_only or worker.retiring
+        return (
+            "not-started" if unstarted else _start_trial(credential, organization_uuid, inputs, row, worker_id)
+        ), None
+    return _advance_started(credential, organization_uuid, inputs, row, worker_id, worker, trial), trial
+
+
+def _advance_started(
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    inputs: dict[str, Any],
+    row: ExperimentEntry,
+    worker_id: UUID,
+    worker: WorkerView,
+    trial: WorkerTrialView,
+) -> str:
+    """Collect the started trial, then retire its worker, then record cleanup."""
     receipt = row.receipt
     if receipt is None:
-        return _advance_collection(credential, organization_uuid, inputs, row, worker_id, trial), trial
-    if not worker.retiring:
-        return _retire(credential, worker_id), trial
-    if worker.retired and not row.cleanup_receipt_json:
-        return _record_cleanup(credential, organization_uuid, inputs, row, worker_id, receipt.run_status), trial
-    return "waiting-for-cleanup", trial
+        action = _advance_collection(credential, organization_uuid, inputs, row, worker_id, trial)
+    elif not worker.retiring:
+        action = _retire(credential, worker_id)
+    elif worker.retired and not row.cleanup_receipt_json:
+        action = _record_cleanup(credential, organization_uuid, inputs, row, worker_id, receipt.run_status)
+    else:
+        action = "waiting-for-cleanup"
+    return action
 
 
 def _advance_collection(
@@ -316,29 +340,32 @@ def _advance_collection(
     inputs: dict[str, Any],
     row: ExperimentEntry,
     worker_id: UUID,
-    trial: Any,
+    trial: WorkerTrialView,
 ) -> str:
     """Collect a sealed run, or recover collection without starting another trial."""
     from engine.services import collect_worker_trial
 
     if trial.state == "exited" and trial.archive is not None:
-        return _collect(credential, organization_uuid, inputs, row, trial.archive)
-    if not trial.operation_finished:
+        action = _collect(credential, organization_uuid, inputs, row, trial.archive)
+    elif not trial.operation_finished:
+        action = "running"
         if trial.overdue:
             collect_worker_trial(credential, worker_id, stop=True)
-            return "recovery-requested"
-        return "running"
-    if trial.state == "prepared":
-        return "start-failed"
-    if trial.state == "exited" and trial.operation == "collect" and not trial.operation_failed:
-        return "not-sealed"
-    collect_worker_trial(credential, worker_id)
-    return "collect-requested"
+            action = "recovery-requested"
+    elif trial.state == "prepared":
+        action = "start-failed"
+    elif trial.state == "exited" and trial.operation == "collect" and not trial.operation_failed:
+        action = "not-sealed"
+    else:
+        collect_worker_trial(credential, worker_id)
+        action = "collect-requested"
+    return action
 
 
 def _create_and_report(
     credential: CredentialContext, organization_uuid: UUID, scope: ResourceScope, row: ExperimentEntry
 ) -> str:
+    """Create the attempt's worker, or report that worker capacity is exhausted."""
     try:
         _create_worker(credential, organization_uuid, scope, row)
     except ValueError:
@@ -359,7 +386,7 @@ def reconcile_experiment_dispatch(
     inputs = _load(admission, batch_id).inputs
     steps = []
     for row in _entries(organization_uuid, batch_id):
-        trial = None
+        trial: WorkerTrialView | None = None
         if row.token is None or row.cleanup_receipt_json:
             action = "none"
         else:
@@ -381,7 +408,7 @@ def stop_experiment_dispatch(
         action = "none"
         if row.worker_ref and row.receipt_id is None:
             try:
-                collect_worker_trial(credential, UUID(row.worker_ref.removeprefix("worker:")), stop=True)
+                collect_worker_trial(credential, _worker_id(row), stop=True)
                 action = "stop-requested"
             except ObjectDoesNotExist:
                 action = "not-started"
@@ -389,12 +416,13 @@ def stop_experiment_dispatch(
     return steps
 
 
-def _step(row: ExperimentEntry, trial: Any, action: str) -> DispatchStep:
+def _step(row: ExperimentEntry, trial: WorkerTrialView | None, action: str) -> DispatchStep:
+    """Project one entry's observed position after this pass."""
     return DispatchStep(
         plan_entry_id=row.plan_entry_id,
         execution_attempt_id=str(row.token) if row.token else None,
-        worker_id=row.worker_ref.removeprefix("worker:") or None,
-        trial_state=getattr(trial, "state", None),
+        worker_id=row.worker_ref.removeprefix(_WORKER_REF_PREFIX) or None,
+        trial_state=None if trial is None else trial.state,
         collected=row.receipt_id is not None,
         cleanup_recorded=bool(row.cleanup_receipt_json),
         action=action,

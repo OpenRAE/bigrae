@@ -25,6 +25,7 @@ from shared.enums import ResourceStatus
 from shared.exceptions import ValidationError as OperationResultError
 from shared.operation_result_members import _parse_private_host_results, _parse_raes_members
 from shared.raes.status import RAES_OPERATION_STATES, RAES_STATE_SUCCEEDED
+from shared.worker_trial import parse_worker_trial_result
 
 __all__ = [
     "MAX_DIAGNOSTIC_CHARS",
@@ -469,16 +470,6 @@ def _parse_vpn_pki(payload: dict[str, Any], spec: StepSpec) -> dict[str, Any]:
         raise OperationResultError("VPN PKI receipt unavailable") from None
 
 
-def _parse_worker_trial(payload: dict[str, Any], _spec: StepSpec) -> dict[str, Any]:
-    """Validate the closed worker trial receipt."""
-    from shared.worker_trial import parse_worker_trial_receipt
-
-    try:
-        return parse_worker_trial_receipt(payload).model_dump(mode="json")
-    except ValueError:
-        raise OperationResultError("Worker trial receipt unavailable") from None
-
-
 def _parse_gcp_project(payload: dict[str, Any], _spec: StepSpec) -> dict[str, Any]:
     """Validate a reference-only project capture without leaking provider metadata."""
     from shared.gcp_project_registration import GcpProjectRegistrationReceipt
@@ -492,7 +483,7 @@ def _parse_gcp_project(payload: dict[str, Any], _spec: StepSpec) -> dict[str, An
 PARSERS = {
     Shape.GCP_PROJECT: _parse_gcp_project,
     Shape.VPN_PKI: _parse_vpn_pki,
-    Shape.WORKER_TRIAL: _parse_worker_trial,
+    Shape.WORKER_TRIAL: parse_worker_trial_result,
     Shape.INSTANCES: _parse_instances,
     Shape.NGFW: _parse_ngfw,
     Shape.RANGE_TERMINAL: _parse_range_terminal,

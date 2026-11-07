@@ -8,10 +8,12 @@ storage under fixed prefixes; their digests bind them to this operation.
 
 from __future__ import annotations
 
-from typing import Annotated, Literal, Self
+from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+from shared.exceptions import ValidationError
 
 TRIAL_INPUT_PREFIX = "trial-inputs/"
 TRIAL_EXPORT_PREFIX = "trial-exports/"
@@ -28,10 +30,14 @@ ObjectKey = Annotated[str, Field(min_length=1, max_length=512, pattern=r"^[A-Za-
 
 
 class _Closed(BaseModel):
+    """A frozen model that refuses unknown fields."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
 
 class StagedObject(_Closed):
+    """One staged trial input object under the trial input prefix."""
+
     key: ObjectKey
     sha256: Sha256
     size_bytes: Annotated[int, Field(ge=1, le=MAX_STAGED_BYTES)]
@@ -62,6 +68,8 @@ class WorkerTrialInput(_Closed):
 
 
 class ArchiveObject(_Closed):
+    """One exported trial archive object under the trial export prefix."""
+
     key: ObjectKey
     sha256: Sha256
     size_bytes: Annotated[int, Field(ge=1, le=MAX_ARCHIVE_BYTES)]
@@ -92,8 +100,18 @@ class WorkerTrialReceipt(_Closed):
 
 
 def parse_worker_trial_input(payload: object) -> WorkerTrialInput:
+    """Validate a native ``worker-trial`` operation input."""
     return WorkerTrialInput.model_validate(payload)
 
 
 def parse_worker_trial_receipt(payload: object) -> WorkerTrialReceipt:
+    """Validate a closed ``worker-trial`` operation receipt."""
     return WorkerTrialReceipt.model_validate(payload)
+
+
+def parse_worker_trial_result(payload: dict[str, Any], _spec: object) -> dict[str, Any]:
+    """Return the closed receipt of a terminal ``worker-trial`` operation result."""
+    try:
+        return parse_worker_trial_receipt(payload).model_dump(mode="json")
+    except ValueError:
+        raise ValidationError("Worker trial receipt unavailable") from None

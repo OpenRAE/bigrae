@@ -17,11 +17,11 @@ import threading
 import time
 from typing import IO, BinaryIO, cast
 
+from executors._ssh_process import SSH_CLIENT_MISSING, GuestSSHConnectionError, invoke_ssh_to_file
 from executors._ssh_readiness import _probe_failure_category
 from executors.base import (
     CommandResult,
     ExecutorCommandError,
-    ExecutorConnectionError,
     ExecutorError,
     ExecutorTimeoutError,
     GuestReadinessTimeoutError,
@@ -35,10 +35,6 @@ logger = logging.getLogger(__name__)
 GuestSSHExecutorError = ExecutorError
 CommandError = ExecutorCommandError
 TimeoutError = ExecutorTimeoutError
-
-
-class GuestSSHConnectionError(ExecutorConnectionError):
-    """Raised when SSH connection fails."""
 
 
 #: Chunk size for streaming a local file to a remote script's stdin.
@@ -67,29 +63,6 @@ def _expire(process: subprocess.Popen[bytes], timed_out: threading.Event) -> Non
     """Watchdog action: mark the streamed run timed out and kill the ssh client."""
     timed_out.set()
     process.kill()
-
-
-def _invoke_ssh_to_file(ssh_args: list[str], output_path: str, max_bytes: int, timeout_seconds: int) -> int:
-    """Stream the client's standard output to a file within a byte and time bound."""
-    deadline = time.monotonic() + timeout_seconds
-    with open(output_path, "wb") as output, tempfile.TemporaryFile() as stderr_file:
-        try:
-            process = subprocess.Popen(  # noqa: S603  # NOSONAR — trusted ssh binary with controlled args
-                ssh_args, stdin=subprocess.DEVNULL, stdout=output, stderr=stderr_file
-            )
-        except FileNotFoundError as e:
-            raise GuestSSHConnectionError("ssh binary not found. Ensure openssh-client is installed.") from e
-        except OSError as e:
-            raise GuestSSHConnectionError(f"SSH subprocess failed: {e}") from e
-        while process.poll() is None:
-            if os.path.getsize(output_path) > max_bytes or time.monotonic() > deadline:
-                process.kill()
-                process.wait()
-                raise TimeoutError("SSH output exceeded its byte or time bound")
-            time.sleep(0.5)
-    if os.path.getsize(output_path) > max_bytes:
-        raise TimeoutError("SSH output exceeded its byte bound")
-    return process.returncode
 
 
 def _write_stream(stdin: IO[bytes], prefix: bytes, payload: BinaryIO) -> None:
@@ -353,7 +326,7 @@ class GuestSSHExecutor:
         remote_command = self._remote_command(script, document_name, stdin_channel=True)
         ssh_args = self._build_ssh_args(instance_id, remote_command)
         logger.info("Copying %s script output over SSH from %s as %s", document_name, instance_id, self._username)
-        return _invoke_ssh_to_file(ssh_args, output_path, max_bytes, timeout_seconds)
+        return invoke_ssh_to_file(ssh_args, output_path, max_bytes, timeout_seconds)
 
     def _invoke_ssh(self, ssh_args: list[str], command_input: bytes, timeout_seconds: int) -> tuple[int, bytes, bytes]:
         """Run the ssh client locally and return (returncode, stdout, stderr).
@@ -373,7 +346,7 @@ class GuestSSHExecutor:
         except subprocess.TimeoutExpired as e:
             raise TimeoutError(f"SSH command timed out after {timeout_seconds}s") from e
         except FileNotFoundError as e:
-            raise GuestSSHConnectionError("ssh binary not found. Ensure openssh-client is installed.") from e
+            raise GuestSSHConnectionError(SSH_CLIENT_MISSING) from e
         except OSError as e:
             raise GuestSSHConnectionError(f"SSH subprocess failed: {e}") from e
 
@@ -399,7 +372,7 @@ class GuestSSHExecutor:
                     ssh_args, stdin=subprocess.PIPE, stdout=stdout_file, stderr=stderr_file
                 )
             except FileNotFoundError as e:
-                raise GuestSSHConnectionError("ssh binary not found. Ensure openssh-client is installed.") from e
+                raise GuestSSHConnectionError(SSH_CLIENT_MISSING) from e
             except OSError as e:
                 raise GuestSSHConnectionError(f"SSH subprocess failed: {e}") from e
             timed_out = threading.Event()

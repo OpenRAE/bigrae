@@ -51,7 +51,7 @@ def _resolve_operation_target(
     result's ``operation_id`` — i.e. the generation is current. A rotated (or
     absent) generation resolves to None, which the caller treats as stale.
     """
-    from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile
+    from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile, WorkerTrial
 
     target: Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial | None
     if resource in _RANGE_RESOURCES:
@@ -71,8 +71,6 @@ def _resolve_operation_target(
             .first()
         )
     elif resource == "worker-trial":
-        from engine.models import WorkerTrial
-
         target = WorkerTrial.objects.filter(provisioner_operation_id=operation_id).first()
     else:
         target = None

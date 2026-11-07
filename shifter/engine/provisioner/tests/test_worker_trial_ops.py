@@ -164,9 +164,9 @@ def test_a_transport_without_the_bounded_ports_is_refused(storage, operation, re
 
 
 def test_bounded_ssh_copy_refuses_oversized_output(tmp_path):
-    from executors.guest_ssh_executor import _invoke_ssh_to_file
+    from executors._ssh_process import invoke_ssh_to_file
 
     path = os.fspath(tmp_path / "out")
     with pytest.raises(Exception, match="byte"):
-        _invoke_ssh_to_file(["sh", "-c", "head -c 4096 /dev/zero"], path, 16, 30)
-    assert _invoke_ssh_to_file(["sh", "-c", "printf ok"], path, 16, 30) == 0
+        invoke_ssh_to_file(["sh", "-c", "head -c 4096 /dev/zero"], path, 16, 30)
+    assert invoke_ssh_to_file(["sh", "-c", "printf ok"], path, 16, 30) == 0

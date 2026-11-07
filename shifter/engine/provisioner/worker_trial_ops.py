@@ -90,6 +90,7 @@ def _verb_output(execution: GuestExecutionContext, verb: str, workdir: str) -> b
 
 
 def _run(execution: GuestExecutionContext, command: str) -> None:
+    """Run one trial-control command and refuse a failed exit."""
     result = execution.executor.run_command(
         execution.target, command, timeout_seconds=_VERB_TIMEOUT_SECONDS, document_name=execution.document_name
     )
@@ -99,7 +100,8 @@ def _run(execution: GuestExecutionContext, command: str) -> None:
 
 def trial_status(execution: GuestExecutionContext, value: WorkerTrialInput, workdir: str) -> TrialStatus:
     """Return the adapter's status for this exact trial."""
-    del value  # Intake binds the archive to the expected run and attempt identities.
+    # Intake binds the archive to the expected run and attempt identities.
+    del value
     return parse_trial_output(_verb_output(execution, "status", workdir), TrialStatus)
 
 
@@ -209,7 +211,13 @@ def run_worker_trial_operation(request_id: str, trial_id: str, operation: str, o
         execution = worker_guest(value)
         receipt = execute_worker_trial(execution, value, operation, validated.operation_id)
     except Exception as exc:  # noqa: BLE001  # guest boundary: causes can carry guest output; authored failure only
-        logger.error("Worker trial %s failed for trial_id=%s exc_type=%s", operation, trial_id, type(exc).__name__)
+        logger.error(
+            "Worker trial %s failed for trial_id=%s exc_type=%s",
+            operation,
+            trial_id,
+            type(exc).__name__,
+            exc_info=False,
+        )
         append_operation_step_result(
             ref,
             resource="worker-trial",

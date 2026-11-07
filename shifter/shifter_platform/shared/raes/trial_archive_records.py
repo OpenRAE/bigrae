@@ -25,6 +25,7 @@ from raes_contracts.timestamps import parse_rfc3339_datetime
 
 from shared.audit.integrity import _SECRET_KEY_SUFFIXES, _SECRET_KEYS
 from shared.raes.trial_archive import MAX_JSON_BYTES, TrialArchiveError, TrialArchiveIdentity, _json, safe_archive_path
+from shared.raes.trial_archive_lilrae import TRIAL_RECORD_CONTRACT, validate_trial_record
 from shared.schemas._raes_validation import JsonObject, _reject_secret_value
 
 
@@ -427,37 +428,6 @@ def _execution_history(
     return receipts
 
 
-TRIAL_RECORD_CONTRACT = "lilrae-trial-record/v1"
-TRIAL_RECORD_NAME = "trial/record.json"
-
-
-def _validate_trial_record(
-    documents: dict[str, bytes], marker: JsonObject, expected: TrialArchiveIdentity, trace_attempts: set[str]
-) -> tuple[str, str, bool, int, None]:
-    """Bind a LilRAE trial seal to the attempt and the exact admitted trial SDL.
-
-    The trial record has no RAES plan. The expected scenario digest is the digest
-    of the retained entry's trial SDL, so it binds the admitted plan entry.
-    """
-    record = _json(documents[TRIAL_RECORD_NAME])
-    if (
-        not expected.scenario_sha256
-        or record.get("schema_version") != TRIAL_RECORD_CONTRACT
-        or record.get("run_id") != expected.run_id
-        or record.get("attempt_id") != expected.attempt_id
-        or record.get("scenario_sha256") != expected.scenario_sha256
-        or marker.get("run_id") != expected.run_id
-        or marker.get("run_version") != expected.run_version
-        or not trace_attempts <= {expected.attempt_id}
-    ):
-        raise TrialArchiveError("Trial record identity differs from the expected attempt")
-    completeness = marker.get("completeness")
-    limitations = completeness.get("limitations") if isinstance(completeness, dict) else None
-    if not isinstance(limitations, list):
-        raise TrialArchiveError("Trial seal limitations are invalid")
-    return str(marker["run_status"]), str(marker["outcome_status"]), not limitations, len(limitations), None
-
-
 def validate_archive_records(
     documents: dict[str, bytes],
     inventory: dict[str, tuple[int, str]],
@@ -477,7 +447,7 @@ def validate_archive_records(
         trace_attempts.update(validate_structured_bindings(payload, expected))
     _verify_byte_references(payloads, inventory, expected.run_id)
     if marker.get("sealed_contract_versions") == [TRIAL_RECORD_CONTRACT]:
-        return _validate_trial_record(documents, marker, expected, trace_attempts)
+        return validate_trial_record(documents, marker, expected, trace_attempts)
     run = ExperimentRunModel.model_validate(_json(documents["manifest.json"]))
     plan = _retained_plan(payloads)
     _validate_plan_identity(plan, run, expected)

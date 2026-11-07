@@ -20,6 +20,8 @@ from workspaces.services import hierarchy_target_scope
 
 
 class Command(BaseCommand):
+    """Drive a retained experiment batch through the experiment dispatch services."""
+
     help = "Start, show, stop, collect, or reconcile a retained experiment batch on disposable workers."
 
     def add_arguments(self, parser: CommandParser) -> None:
@@ -52,7 +54,7 @@ class Command(BaseCommand):
                         credential, organization, batch, scope=scope, collect_only=operation == "collect"
                     )
                 rows = [asdict(step) for step in steps]
-        except (CMSError, ValueError, TypeError, OSError, PermissionError):
+        except (CMSError, ValueError, TypeError, OSError):
             raise CommandError(
                 f"Experiment dispatch {operation} failed; verify authority, worker capacity and batch state"
             ) from None
