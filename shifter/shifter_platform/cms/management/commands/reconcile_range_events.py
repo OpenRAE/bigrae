@@ -374,6 +374,7 @@ class Command(BaseCommand):
 
         self._reconcile_model_access(batch_size)
         self._reconcile_workers(batch_size)
+        self._reconcile_range_cleanup(batch_size)
 
         total_reconciled = ri_counts["reconciled"]
         total_converged = ri_counts["converged"]
@@ -418,3 +419,14 @@ class Command(BaseCommand):
             reconcile_disposable_workers(limit=min(batch_size, 100))
         except Exception:  # noqa: BLE001  # isolate bounded cleanup without exposing provider diagnostics
             logger.warning("reconcile_range_events: worker recovery pass failed")
+
+    def _reconcile_range_cleanup(self, batch_size: int) -> None:
+        """Retry ordinary unknown cleanup through the same native Engine service."""
+        from engine.services import reconcile_range_cleanup_verification
+
+        try:
+            queued = reconcile_range_cleanup_verification(limit=min(batch_size, 100))
+            if queued:
+                logger.info("reconcile_range_events: queued %d cleanup verification retries", queued)
+        except Exception:  # noqa: BLE001  # isolate recovery without exposing provider diagnostics
+            logger.warning("reconcile_range_events: range cleanup recovery pass failed")
