@@ -100,6 +100,11 @@ locals {
     migrator             = "roles/storage.objectViewer"
   }
 
+  # Worker trial exports (#2743): the provisioner returns each trial's sealed
+  # archive under this prefix. It may only create objects there. The portal
+  # reads and removes them with its existing object admin on the bucket.
+  trial_export_object_prefix = "projects/_/buckets/${var.assets_bucket_name}/objects/trial-exports/"
+
   # CTF organizer image copies (#2090, ADR-036): the CTF scheduler copies external
   # images into this prefix of the assets bucket and removes stale copies. The
   # portal already holds object admin on the bucket for reads and removals.
@@ -326,6 +331,18 @@ resource "google_storage_bucket_iam_member" "feature_artifact_delivery" {
     title       = "feature-artifact-delivery-prefix"
     description = "Only objects under the content-addressed feature-artifact delivery prefix."
     expression  = "resource.name.startsWith(\"${local.feature_artifact_object_prefix}\")"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "provisioner_trial_exports" {
+  bucket = var.assets_bucket_name
+  role   = "roles/storage.objectCreator"
+  member = "serviceAccount:${google_service_account.workload["provisioner"].email}"
+
+  condition {
+    title       = "worker-trial-export-prefix"
+    description = "Only new worker trial archives."
+    expression  = "resource.name.startsWith(\"${local.trial_export_object_prefix}\")"
   }
 }
 
