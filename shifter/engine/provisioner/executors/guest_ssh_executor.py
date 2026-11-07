@@ -69,6 +69,29 @@ def _expire(process: subprocess.Popen[bytes], timed_out: threading.Event) -> Non
     process.kill()
 
 
+def _invoke_ssh_to_file(ssh_args: list[str], output_path: str, max_bytes: int, timeout_seconds: int) -> int:
+    """Stream the client's standard output to a file within a byte and time bound."""
+    deadline = time.monotonic() + timeout_seconds
+    with open(output_path, "wb") as output, tempfile.TemporaryFile() as stderr_file:
+        try:
+            process = subprocess.Popen(  # noqa: S603  # NOSONAR — trusted ssh binary with controlled args
+                ssh_args, stdin=subprocess.DEVNULL, stdout=output, stderr=stderr_file
+            )
+        except FileNotFoundError as e:
+            raise GuestSSHConnectionError("ssh binary not found. Ensure openssh-client is installed.") from e
+        except OSError as e:
+            raise GuestSSHConnectionError(f"SSH subprocess failed: {e}") from e
+        while process.poll() is None:
+            if os.path.getsize(output_path) > max_bytes or time.monotonic() > deadline:
+                process.kill()
+                process.wait()
+                raise TimeoutError("SSH output exceeded its byte or time bound")
+            time.sleep(0.5)
+    if os.path.getsize(output_path) > max_bytes:
+        raise TimeoutError("SSH output exceeded its byte bound")
+    return process.returncode
+
+
 def _write_stream(stdin: IO[bytes], prefix: bytes, payload: BinaryIO) -> None:
     """Write ``prefix`` then ``payload`` to a process stdin in chunks, then close it.
 
@@ -311,6 +334,26 @@ class GuestSSHExecutor:
             ssh_args, stdin_prefix.encode(), stdin_path, timeout_seconds
         )
         return _command_result(returncode, stdout_bytes, stderr_bytes)
+
+    def run_command_to_file(
+        self,
+        instance_id: str,
+        script: str,
+        *,
+        output_path: str,
+        max_bytes: int,
+        timeout_seconds: int = 300,
+        document_name: str = "AWS-RunShellScript",
+    ) -> int:
+        """Run ``script`` and write its standard output to ``output_path``.
+
+        The guest is untrusted: the client is killed when the output exceeds
+        ``max_bytes`` or the deadline passes. Returns the remote exit status.
+        """
+        remote_command = self._remote_command(script, document_name, stdin_channel=True)
+        ssh_args = self._build_ssh_args(instance_id, remote_command)
+        logger.info("Copying %s script output over SSH from %s as %s", document_name, instance_id, self._username)
+        return _invoke_ssh_to_file(ssh_args, output_path, max_bytes, timeout_seconds)
 
     def _invoke_ssh(self, ssh_args: list[str], command_input: bytes, timeout_seconds: int) -> tuple[int, bytes, bytes]:
         """Run the ssh client locally and return (returncode, stdout, stderr).

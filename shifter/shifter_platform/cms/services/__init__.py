@@ -81,6 +81,12 @@ from ._experiment_batches import (
     record_experiment_worker,
     recover_experiment_claim,
 )
+from ._experiment_dispatch import (
+    DispatchStep,
+    reconcile_experiment_dispatch,
+    start_experiment_dispatch,
+    stop_experiment_dispatch,
+)
 from ._experiment_export_records import (
     ExperimentExportAssociationError,
     ExperimentExportDataError,
@@ -286,6 +292,7 @@ __all__ = (
     "CtfOpenVpnProfileConflict",
     "CtfOpenVpnProfileNotFound",
     "CtfOpenVpnProfileUnavailable",
+    "DispatchStep",
     "EngineEventCapacitySignal",
     "EngineSharingError",
     "ExperimentClaim",
@@ -458,6 +465,7 @@ __all__ = (
     "reassign_range_owner",
     "rebind_range_workspace",
     "reconcile_ctf_range_leases",
+    "reconcile_experiment_dispatch",
     "reconcile_tenant_pack_removal",
     "reconcile_tenant_pack_removals",
     "reconcile_warm_pool",
@@ -488,6 +496,8 @@ __all__ = (
     "revoke_range_model_sources",
     "run_event_range_lifecycle",
     "set_catalog_publication",
+    "start_experiment_dispatch",
+    "stop_experiment_dispatch",
     "transfer_user_ownership",
     "validate_registered_pack_conformance",
     "validate_scenario_requirements",

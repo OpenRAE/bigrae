@@ -85,6 +85,9 @@ class ResultStep(StrEnum):
     VPN_PKI_READY = "vpn_pki_ready"
     VPN_PKI_FAILED = "vpn_pki_failed"
 
+    WORKER_TRIAL_OBSERVED = "worker_trial_observed"
+    WORKER_TRIAL_FAILED = "worker_trial_failed"
+
     # range pause
     RANGE_INSTANCES_PAUSED = "range_instances_paused"
     RANGE_NGFW_CASCADE_PAUSING = "range_ngfw_cascade_pausing"
@@ -217,6 +220,11 @@ _VPN_PKI_STEPS = {
     ResultStep.VPN_PKI_FAILED: failure(10),
 }
 
+_WORKER_TRIAL_STEPS = {
+    ResultStep.WORKER_TRIAL_OBSERVED: StepSpec(10, "TERMINAL_SUCCESS", Shape.WORKER_TRIAL, None, True),
+    ResultStep.WORKER_TRIAL_FAILED: failure(10),
+}
+
 _GCP_PROJECT_STEPS = {
     ResultStep.GCP_PROJECT_READY: StepSpec(10, "TERMINAL_SUCCESS", Shape.GCP_PROJECT, None, True),
     ResultStep.GCP_PROJECT_FAILED: failure(10),
@@ -229,6 +237,8 @@ _CONTRACT: dict[tuple[str, str], dict[ResultStep, StepSpec]] = {
     ("vpn-profile", "revoke"): _VPN_PKI_STEPS,
     ("vpn-profile", "refresh-crl"): _VPN_PKI_STEPS,
     ("vpn-profile", "purge"): _VPN_PKI_STEPS,
+    ("worker-trial", "run"): _WORKER_TRIAL_STEPS,
+    ("worker-trial", "collect"): _WORKER_TRIAL_STEPS,
     ("range", "pause"): _RANGE_PAUSE_STEPS,
     ("range", "resume"): _RANGE_RESUME_STEPS,
     ("raes-range", "pause"): _RANGE_PAUSE_STEPS,

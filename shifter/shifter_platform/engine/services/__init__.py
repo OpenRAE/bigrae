@@ -140,6 +140,18 @@ from ._worker_retirement import (
 from ._worker_retirement import (
     retire_disposable_worker as retire_disposable_worker,
 )
+from ._worker_trials import (
+    WorkerTrialView as WorkerTrialView,
+)
+from ._worker_trials import (
+    collect_worker_trial as collect_worker_trial,
+)
+from ._worker_trials import (
+    get_worker_trial as get_worker_trial,
+)
+from ._worker_trials import (
+    start_worker_trial as start_worker_trial,
+)
 
 transaction = _api_django_db.transaction
 

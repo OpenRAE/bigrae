@@ -70,6 +70,10 @@ def _resolve_operation_target(
             .select_related("range__request")
             .first()
         )
+    elif resource == "worker-trial":
+        from engine.models import WorkerTrial
+
+        target = WorkerTrial.objects.filter(provisioner_operation_id=operation_id).first()
     else:
         target = None
     return target
@@ -79,10 +83,12 @@ def _request_matches(
     target: Range | Instance | VpnAccessProfile | GcpRangeProject, expected_request_id: object
 ) -> bool:
     """Return True if the target row's request matches the result's request_id."""
-    from engine.models import GcpRangeProject
+    from engine.models import GcpRangeProject, WorkerTrial
 
     if isinstance(target, GcpRangeProject):
         return str(target.pk) == str(expected_request_id)
+    if isinstance(target, WorkerTrial):
+        return str(target.generation) == str(expected_request_id)
     request = getattr(target, "request", None)
     actual_request_id = getattr(request, "request_id", None)
     return actual_request_id is not None and str(actual_request_id) == str(expected_request_id)

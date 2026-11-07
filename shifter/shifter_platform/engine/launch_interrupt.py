@@ -155,6 +155,10 @@ def _enqueue_destroy(claimed: ProvisionerLaunchIntent) -> bool:
         from engine.services._vpn_profile_operations import enqueue_interrupted_vpn_cleanup
 
         return enqueue_interrupted_vpn_cleanup(claimed)
+    if payload.get("resource") == "worker-trial":
+        from engine.services._worker_trials import enqueue_interrupted_worker_trial
+
+        return enqueue_interrupted_worker_trial(claimed)
     if payload.get("resource") == "ngfw" and payload.get("operation") == "deprovision":
         enqueue_provisioner_launch(
             ["ngfw", "deprovision", "--request-id", str(payload["request_id"])], cleanup_for=claimed.operation_id

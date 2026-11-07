@@ -30,6 +30,11 @@ def authorize_provisioner_payload(
 
         authorize_vpn_operation(payload, expected_operation_id)
         return
+    if payload.get("resource") == "worker-trial":
+        from engine.services._worker_trials import authorize_worker_trial_operation
+
+        authorize_worker_trial_operation(payload, expected_operation_id)
+        return
     if expected_operation_id is not None:
         row = _resolve_runtime(payload, target)
         _authorize_recorded_principal(row, payload, expected_operation_id)

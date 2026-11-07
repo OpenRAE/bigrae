@@ -46,6 +46,7 @@ class WorkerView:
     recovery_reason: str
     recovery_attempts: int
     next_recovery_at: datetime
+    retiring: bool = False
 
 
 def _installation_authority(credential: CredentialContext) -> CredentialContext:
@@ -359,6 +360,7 @@ def _view(row: DisposableWorker) -> WorkerView:
         row.recovery_reason,
         row.recovery_attempts,
         row.next_recovery_at,
+        row.retirement_at is not None,
     )
 
 
