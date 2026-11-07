@@ -22,7 +22,9 @@
 # is verified against a SHA-256 pinned in this reviewed file before it runs (R3).
 # A pin comes from the vendor's published checksum for that exact version; it is
 # not fetched from the download origin at build time, so a compromised origin can
-# not supply both a tampered archive and a matching checksum. Python dependencies install from the frozen uv lock with hash
+# not supply both a tampered archive and a matching checksum. A source-built tool pins the
+# commit of an upstream release tag, and go.sum and the Go checksum database verify
+# each module. Python dependencies install from the frozen uv lock with hash
 # enforcement and wheels only (R4). Terraform verifies each provider package
 # against the HashiCorp signature and the committed lock file.
 
@@ -68,20 +70,14 @@ RUN uv export --project scripts/bootstrap --frozen --no-dev --no-emit-project \
 # base image: python:3.12-slim-trixie
 FROM python@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf AS tools
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-# Keep each tool at the latest release of its line (Terraform 1.17, Helm 3,
-# kubectl 1.34, Trivy, ORAS 1.3). Older releases carry fixable HIGH and CRITICAL
-# findings in their compiled Go dependencies.
+# Keep each tool at the latest release of its line (Terraform 1.17, Trivy).
+# Older releases carry fixable HIGH and CRITICAL findings in their compiled Go
+# dependencies. The kubectl, Helm, and ORAS stages below build from source.
 ARG TERRAFORM_VERSION=1.17.1
 # From terraform_1.17.1_SHA256SUMS (signature checked with HashiCorp key C874011F0AB405110D02105534365D9472D7468F).
 ARG TERRAFORM_SHA256=4638628058e71a55212b1c563712eac03b902128f40740f3dc8174df12135061
-ARG HELM_VERSION=v3.22.1
-ARG HELM_SHA256=896cf63684a42a723d61c980369d6e588330927deb13676ca0d85006dd6da0ea
-ARG KUBECTL_VERSION=v1.34.13
-ARG KUBECTL_SHA256=b4bb494e9466a7a94bb851414548bc0d3e2f8da90757e6eccc3371e648648591
-ARG TRIVY_VERSION=0.76.1
-ARG TRIVY_SHA256=c7cbe3137fb8a48a17574bede3dd6beb16742d1e9772929940fc90082c39d9c0
-ARG ORAS_VERSION=1.3.6
-ARG ORAS_SHA256=66fb0ad7206f3f6fa77ed5b552049d364ccf4b50b1684554f731f76302b52ca0
+ARG TRIVY_VERSION=0.76.2
+ARG TRIVY_SHA256=bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
 RUN apt-get update && \
     apt-get install -y --no-install-recommends ca-certificates curl unzip && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
@@ -92,20 +88,10 @@ RUN fetch() { curl --proto '=https' --retry 5 --retry-delay 3 --retry-all-errors
       "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
     echo "${TERRAFORM_SHA256}  terraform_${TERRAFORM_VERSION}_linux_amd64.zip" | sha256sum -c - && \
     unzip -j "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" terraform -d /out/bin && \
-    fetch "helm-${HELM_VERSION}-linux-amd64.tar.gz" "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" && \
-    echo "${HELM_SHA256}  helm-${HELM_VERSION}-linux-amd64.tar.gz" | sha256sum -c - && \
-    tar -xzf "helm-${HELM_VERSION}-linux-amd64.tar.gz" --strip-components=1 -C /out/bin linux-amd64/helm && \
-    fetch kubectl "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/linux/amd64/kubectl" && \
-    echo "${KUBECTL_SHA256}  kubectl" | sha256sum -c - && \
-    install -m 0755 kubectl /out/bin/kubectl && \
     fetch "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
       "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" && \
     echo "${TRIVY_SHA256}  trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | sha256sum -c - && \
     tar -xzf "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -C /out/bin trivy && \
-    fetch "oras_${ORAS_VERSION}_linux_amd64.tar.gz" \
-      "https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz" && \
-    echo "${ORAS_SHA256}  oras_${ORAS_VERSION}_linux_amd64.tar.gz" | sha256sum -c - && \
-    tar -xzf "oras_${ORAS_VERSION}_linux_amd64.tar.gz" -C /out/bin oras && \
     chmod 0755 /out/bin/* && \
     rm -rf /downloads/*
 
@@ -127,26 +113,88 @@ RUN find /opt/bigrae/platform/terraform/gcp -name .terraform.lock.hcl -printf '%
     done < /opt/bigrae/terraform-roots
 
 # ---------------------------------------------------------------------------
-# Build gke-gcloud-auth-plugin with fixed Go, x/net, and x/text dependencies so
-# the deployer scan needs no plugin-specific exceptions. CVE-2026-56857 affects
-# Windows only; the other Go and module findings apply to the vendor's Linux
-# binary. The Go image and upstream source commit are pinned, and go.sum
-# verifies each module. Keep both pins current. Return to the Google binary
-# when it passes the deployer scan without plugin-specific exceptions.
+# Build gke-gcloud-auth-plugin, kubectl, Helm, and ORAS from pinned upstream
+# source with fixed Go and golang.org/x/net so the deployer scan needs no
+# exceptions for them. No vendor build of the first three has golang.org/x/net
+# 0.62.0 (CVE-2026-78661) yet. The ORAS v1.3.6 vendor build uses a Go standard
+# library before 1.27.3 (CVE-2026-111943). Each stage pins the Go image and the commit of an
+# upstream release tag, raises golang.org/x/net with the project's own
+# dependency tooling, and go.sum and the checksum database verify each module.
+# The kubectl, Helm, and ORAS stages fetch the release tag, so the Go build info
+# records the release version (with +dirty) and the scan matches it. Keep the
+# pins current. Return to the vendor binaries when they pass the deployer scan
+# without exceptions.
 # ---------------------------------------------------------------------------
 # base image: golang:1.27.3-trixie
-FROM golang@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385 AS gke-auth-plugin
+FROM golang@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385 AS go-source
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ARG GOLANG_X_NET_VERSION=v0.62.0
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local
+WORKDIR /src
+
+FROM go-source AS gke-auth-plugin
 # The commit that tag v37.1.13 points to.
 ARG CLOUD_PROVIDER_GCP_COMMIT=8ee7ffa8eec98eb6e9a560a5276131516da1e359
-WORKDIR /src
 RUN git init -q . && \
     git fetch -q --depth 1 https://github.com/kubernetes/cloud-provider-gcp.git "${CLOUD_PROVIDER_GCP_COMMIT}" && \
     git checkout -q FETCH_HEAD && \
     test "$(git rev-parse HEAD)" = "${CLOUD_PROVIDER_GCP_COMMIT}" && \
-    CGO_ENABLED=0 GOTOOLCHAIN=local go build -buildvcs=false -trimpath -ldflags "-s -w" \
+    go get "golang.org/x/net@${GOLANG_X_NET_VERSION}" && \
+    tools/update_vendor.sh >/dev/null 2>&1 && \
+    go build -buildvcs=false -trimpath -ldflags "-s -w" \
       -o /out/gke-gcloud-auth-plugin ./cmd/gke-gcloud-auth-plugin && \
     /out/gke-gcloud-auth-plugin --help >/dev/null
+
+FROM go-source AS kubectl
+# The commit that tag v1.34.13 points to. Kubernetes' pin-dependency and
+# update-vendor scripts change the dependency; make sets the version. The
+# changed dependency tree makes the reported version v1.34.13-dirty.
+ARG KUBERNETES_VERSION=v1.34.13
+ARG KUBERNETES_COMMIT=5bafe0f04b114c29e7bda3bd2d08919a8457b8d7
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends jq rsync && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && \
+    git init -q . && \
+    git fetch -q --depth 1 https://github.com/kubernetes/kubernetes.git \
+      "refs/tags/${KUBERNETES_VERSION}:refs/tags/${KUBERNETES_VERSION}" && \
+    test "$(git rev-parse "${KUBERNETES_VERSION}^{commit}")" = "${KUBERNETES_COMMIT}" && \
+    git checkout -q "${KUBERNETES_COMMIT}" && \
+    hack/pin-dependency.sh golang.org/x/net "${GOLANG_X_NET_VERSION}" >/dev/null && \
+    hack/update-vendor.sh >/dev/null && \
+    KUBE_GIT_VERSION="${KUBERNETES_VERSION}" KUBE_GIT_TREE_STATE=dirty KUBE_BUILD_PLATFORMS=linux/amd64 \
+      make WHAT=cmd/kubectl >/dev/null && \
+    install -D -m 0755 _output/local/bin/linux/amd64/kubectl /out/kubectl && \
+    /out/kubectl version --client | grep -Fx "Client Version: ${KUBERNETES_VERSION}-dirty"
+
+FROM go-source AS helm
+# The commit that tag v3.22.1 points to. The Helm Makefile sets the version
+# from the tag.
+ARG HELM_VERSION=v3.22.1
+ARG HELM_COMMIT=d6c1a0e4027caa6abc7892e7ea9f0cda7447baa3
+RUN git init -q . && \
+    git fetch -q --depth 1 https://github.com/helm/helm.git \
+      "refs/tags/${HELM_VERSION}:refs/tags/${HELM_VERSION}" && \
+    test "$(git rev-parse "${HELM_VERSION}^{commit}")" = "${HELM_COMMIT}" && \
+    git checkout -q "${HELM_COMMIT}" && \
+    go get "golang.org/x/net@${GOLANG_X_NET_VERSION}" && \
+    go mod tidy && \
+    make build && \
+    install -D -m 0755 bin/helm /out/helm && \
+    /out/helm version --template '{{.Version}}' | grep -Fx "${HELM_VERSION}"
+
+FROM go-source AS oras
+# The commit that tag v1.3.6 points to. The ORAS Makefile sets the version
+# from the tag. The fixed Go toolchain is the only change.
+ARG ORAS_VERSION=v1.3.6
+ARG ORAS_COMMIT=9b1fc815f6b7fba743f08b9b5c5846639cc11d3c
+RUN git init -q . && \
+    git fetch -q --depth 1 https://github.com/oras-project/oras.git \
+      "refs/tags/${ORAS_VERSION}:refs/tags/${ORAS_VERSION}" && \
+    test "$(git rev-parse "${ORAS_VERSION}^{commit}")" = "${ORAS_COMMIT}" && \
+    git checkout -q "${ORAS_COMMIT}" && \
+    make build-linux-amd64 >/dev/null && \
+    install -D -m 0755 bin/linux/amd64/oras /out/oras && \
+    /out/oras version | grep -Fx "Version:        ${ORAS_VERSION#v}"
 
 # ---------------------------------------------------------------------------
 # Runtime image.
@@ -186,6 +234,9 @@ RUN python3 -m pip uninstall --yes --no-input pip && \
     rm -f /opt/google-cloud-sdk/platform/bundledpythonunix/bin/pip* && \
     test -z "$(find /usr/local/lib /opt/google-cloud-sdk/platform/bundledpythonunix -path '*/site-packages/pip' -print -quit)"
 COPY --from=tools /out/bin/ /usr/local/bin/
+COPY --from=kubectl /out/kubectl /usr/local/bin/kubectl
+COPY --from=helm /out/helm /usr/local/bin/helm
+COPY --from=oras /out/oras /usr/local/bin/oras
 COPY --from=python-deps /opt/bigrae/venv /opt/bigrae/venv
 COPY --from=providers /opt/bigrae/terraform-providers /opt/bigrae/terraform-providers
 COPY --from=providers /opt/bigrae/terraform-roots /opt/bigrae/terraform-roots
