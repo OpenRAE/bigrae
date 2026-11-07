@@ -10,7 +10,7 @@ A pack is registered as a provenance-only reference: BigRAE records where the
 pack lives (`package_ref`), its version and digest, its contract and profile, and
 bounded provenance. It does not copy the pack body into the catalog. Pack content
 is defined by the `raes-env-packs` contract. BigRAE pins
-`raes-env-packs==7.2.2` with its required `raes==10.6.0`, and delegates
+`raes-env-packs==7.2.4` with its required `raes==11.0.0`, and delegates
 validation, canonical content identity, and the artifact-requirement publication
 profile to those released libraries. A broken, malformed, or non-conformant pack
 is rejected.

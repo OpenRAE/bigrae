@@ -74,7 +74,7 @@ def test_installed_pack_admission_retains_all_trials_and_reloads_without_compila
     assert "large-model" in json.dumps(configurations)
     assert "brief-terse" in json.dumps(configurations)
     assert "brief-rich" in json.dumps(configurations)
-    assert raw["resource_limits"]["isolation_ceiling"] == 1
+    assert raw["resource_limits"]["admitted_parallelism_ceiling"] == 1
     assert raw["resource_limits"]["configured_concurrency_ceiling"] == 200
     shutil.rmtree(root)
     monkeypatch.setattr(
@@ -87,7 +87,7 @@ def test_installed_pack_admission_retains_all_trials_and_reloads_without_compila
 
 
 @pytest.mark.parametrize("concurrency", [0, -1, True, 2, 201])
-def test_concurrency_cannot_exceed_authority_or_isolation(experiment_inputs, concurrency):
+def test_concurrency_cannot_exceed_authority_or_admitted_ceiling(experiment_inputs, concurrency):
     with pytest.raises(CMSError):
         admit(experiment_inputs, concurrency=concurrency)
 

@@ -13,7 +13,7 @@ private reference-backend helpers (ADR-032-R7 / issue #1522). This guards the
 *consumer's own* extraction against regression (editing ``raes_plan.py``'s accessors
 breaks these expectations). It is deliberately not a live differential oracle against
 the reference backend's *private* accessors -- those are not a public contract
-(ADR-032-R7). The consumer accepts the exact pinned ``raes==10.7.2`` producer
+(ADR-032-R7). The consumer accepts the exact pinned ``raes==11.0.0`` producer
 and must be re-validated with this fixture and the RAES conformance gate before
 that exact version changes.
 
@@ -162,7 +162,7 @@ class TestProvisionerReaderContract:
         root = _SHIFTER_PLATFORM_PYPROJECT.parent.parent / project
         metadata = tomllib.loads((root / "pyproject.toml").read_text())
         packages = tomllib.loads((root / "uv.lock").read_text())["package"]
-        for name, version in (("raes", "10.7.2"), ("raes-env-packs", "7.2.2")):
+        for name, version in (("raes", "11.0.0"), ("raes-env-packs", "7.2.4")):
             assert f"{name}=={version}" in metadata["project"]["dependencies"]
             locked = [p for p in packages if p["name"] == name]
             assert len(locked) == 1
@@ -192,21 +192,21 @@ class TestProvisionerReaderContract:
         assert reader.SUPPORTED_ACCOUNT_AUTH_METHODS == SUPPORTED_ACCOUNT_AUTH_METHODS
 
     def test_supported_raes_release_agrees_with_pin_and_lock(self, reader):
-        assert reader.SUPPORTED_RAES_VERSION == "10.7.2"
+        assert reader.SUPPORTED_RAES_VERSION == "11.0.0"
         assert importlib.metadata.version("raes") == _exact_dependency_pin("raes")
         assert importlib.metadata.version("raes") == reader.SUPPORTED_RAES_VERSION
 
     def test_environment_pack_and_raes_release_pair_is_exact(self):
         from packaging.requirements import Requirement
 
-        assert importlib.metadata.version("raes") == "10.7.2"
+        assert importlib.metadata.version("raes") == "11.0.0"
         assert importlib.metadata.version("raes") == _exact_dependency_pin("raes")
-        assert importlib.metadata.version("raes-env-packs") == "7.2.2"
+        assert importlib.metadata.version("raes-env-packs") == "7.2.4"
         assert importlib.metadata.version("raes-env-packs") == _exact_dependency_pin("raes-env-packs")
         # raes-env-packs 7 declares a RAES range; the pinned release must satisfy it.
         requirements = [Requirement(item) for item in importlib.metadata.requires("raes-env-packs") or []]
         raes_requirements = [item for item in requirements if item.name == "raes" and not item.marker]
-        assert raes_requirements and all(item.specifier.contains("10.7.2") for item in raes_requirements)
+        assert raes_requirements and all(item.specifier.contains("11.0.0") for item in raes_requirements)
 
     def test_extraction_matches_expected_shifter_fixture(self, reader):
         parsed = reader.parse_plan(serialize_provisioning_plan(_plan()))

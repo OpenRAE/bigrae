@@ -7,7 +7,7 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==10.7.2` and `raes-env-packs==7.2.2` in its
+`raes==11.0.0` and `raes-env-packs==7.2.4` in its
 [package manifest](../../../shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
@@ -34,7 +34,7 @@ the ownership boundary, or the migration contract.
 Only `shared.raes` imports the released RAES module family. It validates and
 compiles authored intent into the RAES ProvisioningPlan. The independent
 provisioner validates and reads plain serialized data, not a second authored
-schema. New realization accepts `raes-provisioning-plan-v2` with producer `10.7.2`.
+schema. New realization accepts `raes-provisioning-plan-v2` with producer `11.0.0`.
 Images, cloud resources, secrets and backend realization remain BigRAE-owned.
 
 ## Transition history

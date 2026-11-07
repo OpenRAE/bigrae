@@ -53,8 +53,9 @@ It reads the immutable retained inputs without loading the source pack or alloca
 
 ## Understand the limits
 
-Requested concurrency must fit both the approved ceiling and the sealed plan's isolation ceiling.
-Current RAES compiler output has a serial ceiling.
+Requested concurrency must fit both the approved ceiling and the sealed plan's admitted parallelism ceiling.
+The SDL `trial_parallelism` value sets the admitted parallelism ceiling.
+A plan without `trial_parallelism` has a serial ceiling of one.
 A configured ceiling of 200 grants no cloud capacity or provider quota.
 A future dispatcher must obtain current capacity before starting a worker.
 

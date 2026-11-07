@@ -51,7 +51,7 @@ ExperimentInputError = RaesError
 MAX_RETAINED_BYTES = 64 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
-SUPPORTED_DEPENDENCIES = {"raes": "10.7.2", "raes-env-packs": "7.2.2"}
+SUPPORTED_DEPENDENCIES = {"raes": "11.0.0", "raes-env-packs": "7.2.4"}
 
 
 class ParticipantAuthority(BaseModel):
@@ -117,14 +117,14 @@ def validate_retained(raw: str) -> dict[str, Any]:
     _concurrency(
         limits["requested_concurrency"], limits["configured_concurrency_ceiling"], schedule.admitted_parallelism_ceiling
     )
-    if limits["isolation_ceiling"] != schedule.admitted_parallelism_ceiling:
-        raise ValueError("Retained isolation ceiling differs from plan")
+    if limits["admitted_parallelism_ceiling"] != schedule.admitted_parallelism_ceiling:
+        raise ValueError("Retained admitted parallelism ceiling differs from plan")
     return payload
 
 
-def _concurrency(requested: int, configured: int, isolation: int) -> None:
-    """Keep requested concurrency inside both administrative and owner limits."""
-    if type(requested) is not int or not 1 <= requested <= min(configured, isolation):
+def _concurrency(requested: int, configured: int, admitted: int) -> None:
+    """Keep requested concurrency inside both the administrative and the admitted plan limits."""
+    if type(requested) is not int or not 1 <= requested <= min(configured, admitted):
         raise ValueError("Requested concurrency exceeds configured or admitted limits")
 
 
@@ -415,7 +415,7 @@ def compile_pack_experiment(
         "resource_limits": {
             "requested_concurrency": concurrency,
             "configured_concurrency_ceiling": configuration.max_concurrency,
-            "isolation_ceiling": schedule.admitted_parallelism_ceiling,
+            "admitted_parallelism_ceiling": schedule.admitted_parallelism_ceiling,
             "compilation": request.limits.model_dump(mode="json"),
             "max_retained_bytes": MAX_RETAINED_BYTES,
             "max_original_document_bytes": MAX_DOCUMENT_BYTES,
