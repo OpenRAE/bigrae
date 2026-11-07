@@ -1542,16 +1542,3 @@ are checked before dispatch. No cloud I/O belongs in the portal or adapter worke
 These checks establish custody; they do not claim live provider realization or
 deployment qualification. The [design](../../architecture/registered-gcp-range-projects-2716.md)
 describes the remaining provider preflight, execution and readback boundaries.
-
-## Local implementation design checks
-
-The `.ground-control.yaml` module mappings select existing implementations and
-governing architecture decisions. Repository-wide decisions apply to all paths;
-CMS and `shared.raes` also select their admission and archive designs.
-The design stage compiles platform modules, checks the existing import rules,
-and generates a dependency view from Python imports. It then runs each named
-acceptance test on the local design commit through `tests/design_checks.py`.
-An assertion failure establishes missing behavior; collection errors, fixture
-errors, skipped tests, and ambiguous selection do not. The design review runs
-before implementation. These commands add no runtime dependency or deployment.
-Existing CI, pre-commit, architecture and completed-work review checks still apply.

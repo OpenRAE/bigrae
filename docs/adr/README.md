@@ -908,8 +908,3 @@ The guardrails change as follows:
   properties that `_gcp-dev.yml` held before #2571. These are the HIGH and
   CRITICAL release scan, the running-image evidence, the private input files,
   the Connect Gateway credentials, and the single range-zone input.
-
-The [local design checks](../technical/dev/adr-enforcement.md#local-implementation-design-checks)
-configure Ground Control's pre-implementation review using the existing Python
-compiler and import rules, a code-derived dependency view and exact pytest
-observations. Module applicability is configured in `.ground-control.yaml`.
