@@ -427,6 +427,32 @@ def _execution_history(
     return receipts
 
 
+TRIAL_RECORD_CONTRACT = "lilrae-trial-record/v1"
+TRIAL_RECORD_NAME = "trial/record.json"
+
+
+def _validate_trial_record(
+    documents: dict[str, bytes], marker: JsonObject, expected: TrialArchiveIdentity
+) -> tuple[str, str, bool, int, None]:
+    """Bind a LilRAE trial seal to the identity that BigRAE assigned the attempt.
+
+    The trial record has no RAES plan; the caller's expected identity supplies it.
+    """
+    record = _json(documents[TRIAL_RECORD_NAME])
+    if (
+        record.get("schema_version") != TRIAL_RECORD_CONTRACT
+        or record.get("run_id") != expected.run_id
+        or record.get("attempt_id") != expected.attempt_id
+        or marker.get("run_id") != expected.run_id
+    ):
+        raise TrialArchiveError("Trial record identity differs from the expected attempt")
+    completeness = marker.get("completeness")
+    limitations = completeness.get("limitations") if isinstance(completeness, dict) else None
+    if not isinstance(limitations, list):
+        raise TrialArchiveError("Trial seal limitations are invalid")
+    return str(marker["run_status"]), str(marker["outcome_status"]), not limitations, len(limitations), None
+
+
 def validate_archive_records(
     documents: dict[str, bytes],
     inventory: dict[str, tuple[int, str]],
@@ -435,7 +461,7 @@ def validate_archive_records(
     *,
     trace_attempts: set[str],
     formats: dict[str, str],
-) -> tuple[str, str, bool, int, JsonObject]:
+) -> tuple[str, str, bool, int, JsonObject | None]:
     """Keep collection and scientific success independent, including partial runs."""
     payloads = [
         _structured_document(raw, formats.get(name, "json"))
@@ -445,6 +471,8 @@ def validate_archive_records(
     for payload in payloads:
         trace_attempts.update(validate_structured_bindings(payload, expected))
     _verify_byte_references(payloads, inventory, expected.run_id)
+    if marker.get("sealed_contract_versions") == [TRIAL_RECORD_CONTRACT]:
+        return _validate_trial_record(documents, marker, expected)
     run = ExperimentRunModel.model_validate(_json(documents["manifest.json"]))
     plan = _retained_plan(payloads)
     _validate_plan_identity(plan, run, expected)

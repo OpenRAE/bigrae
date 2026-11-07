@@ -413,3 +413,60 @@ def test_json_array_trace_keeps_original_bytes_and_validates_nested_bindings(tmp
     )
     with pytest.raises(TrialArchiveError):
         validate_trial_archive(path, current)
+
+
+def trial_record_archive(*, run_id=None, attempt_id="attempt-a", limitations=()):
+    """A LilRAE trial seal: a lab-start manifest and a trial record, no RAES plan."""
+    plan, run = records()
+    run_id = run_id or run["run_id"]
+    members = {
+        "manifest.json": encoded({"schema_version": "aptl.run-record/v2", "run_id": run["run_id"]}),
+        "trial/record.json": encoded(
+            {"schema_version": "lilrae-trial-record/v1", "run_id": run_id, "attempt_id": attempt_id}
+        ),
+    }
+    marker = {
+        "schema_version": "aptl.run-seal/v1",
+        "run_id": run["run_id"],
+        "run_version": run["run_version"],
+        "seal_state": "sealed",
+        "run_status": "aborted" if limitations else "completed",
+        "outcome_status": "not-evaluated",
+        "run_record_digest": "sha256:" + hashlib.sha256(members["manifest.json"]).hexdigest(),
+        "sealed_contract_versions": ["lilrae-trial-record/v1"],
+        "inventory": [
+            {
+                "path": name,
+                "size_bytes": len(raw),
+                "checksum": {"algorithm": "sha256", "value": hashlib.sha256(raw).hexdigest()},
+                "media_type": "application/json",
+                "role": "manifest" if name == "manifest.json" else "trial-record",
+            }
+            for name, raw in members.items()
+        ],
+        "completeness": {"complete": not limitations, "statement": "Every file.", "limitations": list(limitations)},
+    }
+    members["seal.json"] = encoded(marker)
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        for name, raw in members.items():
+            info = tarfile.TarInfo(f"{run['run_id']}/{name}")
+            info.size = len(raw)
+            archive.addfile(info, io.BytesIO(raw))
+    return output.getvalue()
+
+
+def test_lilrae_trial_seal_binds_the_expected_attempt(tmp_path):
+    from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
+
+    path = tmp_path / "archive.tar.gz"
+    path.write_bytes(trial_record_archive())
+    result = validate_trial_archive(path, expected())
+    assert (result.run_status, result.evidence_complete, result.plan_metadata) == ("completed", True, None)
+    path.write_bytes(trial_record_archive(limitations=[{"code": "partial-trial", "detail": "Stopped."}]))
+    partial = validate_trial_archive(path, expected())
+    assert (partial.run_status, partial.evidence_complete, partial.gap_count) == ("aborted", False, 1)
+    for wrong in (trial_record_archive(attempt_id="attempt-b"), trial_record_archive(run_id="other-run")):
+        path.write_bytes(wrong)
+        with pytest.raises(TrialArchiveError):
+            validate_trial_archive(path, expected())
