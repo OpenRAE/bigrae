@@ -250,6 +250,12 @@ def instance_resource(
 ) -> ComputeResource:
     """Render a Compute Engine instance insert body."""
     profile = instance["profile"]
+    network_interface: ComputeResource = {
+        "subnetwork": instance["subnetwork_link"],
+        "network_i_p": instance["private_ip"],
+    }
+    if profile.nic_type:
+        network_interface["nic_type"] = profile.nic_type
     body: ComputeResource = {
         "name": instance["resource_name"],
         "machine_type": _machine_type_self_link(plan["zone"], profile.machine_type),
@@ -278,40 +284,32 @@ def instance_resource(
                 composition_script=composition_script,
             )
         },
-        "network_interfaces": [
-            {
-                "subnetwork": instance["subnetwork_link"],
-                "network_i_p": instance["private_ip"],
-            }
-        ],
+        "network_interfaces": [network_interface],
         "deletion_protection": False,
         "can_ip_forward": False,
     }
     if profile.bootstrap_capability == "preconfigured-machine-host":
         body["advanced_machine_features"] = {"enable_nested_virtualization": True}
-    if profile.nic_type:
-        body["network_interfaces"][0]["nic_type"] = profile.nic_type
     # A machine image supplies its captured disks; a custom image needs an
     # explicitly owned boot disk with the same host hardening.
     if not profile.source_machine_image:
-        body["disks"] = [
-            {
-                "boot": True,
-                "auto_delete": True,
-                "initialize_params": {
-                    "source_image": profile.source_image,
-                    "disk_size_gb": int(profile.disk_size_gb),
-                    "disk_type": _disk_type_self_link(plan["zone"], profile.disk_type),
-                },
-            }
-        ]
+        boot_disk: ComputeResource = {
+            "boot": True,
+            "auto_delete": True,
+            "initialize_params": {
+                "source_image": profile.source_image,
+                "disk_size_gb": int(profile.disk_size_gb),
+                "disk_type": _disk_type_self_link(plan["zone"], profile.disk_type),
+            },
+        }
+        if profile.disk_interface:
+            boot_disk["interface"] = profile.disk_interface
+        body["disks"] = [boot_disk]
         body["shielded_instance_config"] = {
             "enable_secure_boot": profile.enable_secure_boot,
             "enable_vtpm": True,
             "enable_integrity_monitoring": True,
         }
-        if profile.disk_interface:
-            body["disks"][0]["interface"] = profile.disk_interface
     service_account_email = str(instance.get("service_account_email") or "")
     if not service_account_email and config.service_account_email and instance["attach_service_account"]:
         service_account_email = config.service_account_email

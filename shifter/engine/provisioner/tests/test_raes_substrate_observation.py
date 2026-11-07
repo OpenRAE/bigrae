@@ -5,6 +5,7 @@ from unittest.mock import Mock, call
 
 import pytest
 
+from config import GCERangeImageProfile
 from raes_substrate_observation import observe_gce_substrates
 
 
@@ -13,8 +14,8 @@ def _plan():
         "project_id": "tenant",
         "zone": "zone-a",
         "instances": [
-            {"resource_name": "worker-a", "uuid": "node.a#0"},
-            {"resource_name": "worker-b", "uuid": "node.a#1"},
+            {"resource_name": "worker-a", "uuid": "node.a#0", "profile": GCERangeImageProfile()},
+            {"resource_name": "worker-b", "uuid": "node.a#1", "profile": GCERangeImageProfile()},
         ],
     }
 
@@ -50,7 +51,7 @@ def test_missing_or_foreign_instance_cannot_prove_a_vm(actual):
 @pytest.mark.parametrize("source_id", ["555", "999"])
 def test_prepared_image_identity_is_read_from_the_actual_boot_disk(source_id):
     plan = _plan()
-    plan["instances"] = [dict(plan["instances"][0], profile=SimpleNamespace(source_image_id="555"))]
+    plan["instances"] = [dict(plan["instances"][0], profile=GCERangeImageProfile(source_image_id="555"))]
     guest = SimpleNamespace(
         name="worker-a",
         id=1,
