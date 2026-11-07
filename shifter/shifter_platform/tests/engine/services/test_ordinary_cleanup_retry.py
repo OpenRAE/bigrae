@@ -175,3 +175,11 @@ def test_separate_recovery_owners_are_not_retried_by_this_pass(ordinary_destroy,
         )
     assert reconcile_range_cleanup_verification(now=moment + timedelta(hours=1)) == 0
     assert ProvisionerLaunchIntent.objects.filter(payload__operation="destroy").count() == 1
+
+
+def test_changed_owner_retains_cleanup_without_leaking_diagnostics(ordinary_destroy, caplog):
+    runtime, _original = ordinary_destroy
+    Range.objects.filter(pk=runtime.pk).update(owner_principal_uuid=uuid4())
+    assert reconcile_range_cleanup_verification(now=timezone.now() + timedelta(minutes=2)) == 0
+    assert ProvisionerLaunchIntent.objects.filter(payload__operation="destroy").count() == 1
+    assert "Ordinary range cleanup retry remains pending" in caplog.text
