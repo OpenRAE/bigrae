@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -121,10 +120,13 @@ def _within_plugin_limits(current: CredentialContext, limits: CredentialContext)
     old_target, new_target = limits.ceiling.target, current.ceiling.target
     if old_target is not None and new_target is not None and old_target != new_target:
         raise ValidationError(_PLUGIN_AUTHORITY_UNAVAILABLE)
-    return replace(
-        current,
+    return CredentialContext(
+        principal=current.principal,
+        kind=current.kind,
+        credential_uuid=current.credential_uuid,
         ceiling=CredentialCeiling(limits.ceiling.actions & current.ceiling.actions, old_target or new_target),
         scopes=limits.scopes & current.scopes,
+        event_uuid=current.event_uuid,
     )
 
 
