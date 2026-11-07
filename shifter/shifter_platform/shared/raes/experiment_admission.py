@@ -51,7 +51,7 @@ ExperimentInputError = RaesError
 MAX_RETAINED_BYTES = 64 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
-SUPPORTED_DEPENDENCIES = {"raes": "11.0.0", "raes-env-packs": "7.2.4"}
+SUPPORTED_DEPENDENCIES = {"raes": "11.0.1", "raes-env-packs": "7.2.3"}
 
 
 class ParticipantAuthority(BaseModel):
@@ -115,8 +115,8 @@ def validate_retained(raw: str) -> dict[str, Any]:
         raise ValueError("Retained snapshot set differs from plan entries")
     limits = payload["resource_limits"]
     _concurrency(limits["requested_concurrency"], limits["configured_concurrency_ceiling"], schedule)
-    if limits["admitted_parallelism_ceiling"] != schedule.admitted_parallelism_ceiling:
-        raise ValueError("Retained admitted parallelism ceiling differs from plan")
+    if limits["isolation_ceiling"] != schedule.admitted_parallelism_ceiling:
+        raise ValueError("Retained isolation ceiling differs from plan")
     return payload
 
 
@@ -479,7 +479,7 @@ def compile_pack_experiment(
         "resource_limits": {
             "requested_concurrency": concurrency,
             "configured_concurrency_ceiling": configuration.max_concurrency,
-            "admitted_parallelism_ceiling": schedule.admitted_parallelism_ceiling,
+            "isolation_ceiling": schedule.admitted_parallelism_ceiling,
             "compilation": request.limits.model_dump(mode="json"),
             "max_retained_bytes": MAX_RETAINED_BYTES,
             "max_original_document_bytes": MAX_DOCUMENT_BYTES,

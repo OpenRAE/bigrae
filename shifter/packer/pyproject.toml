@@ -6,8 +6,8 @@ requires-python = ">=3.14,<3.15"
 dependencies = [
     "google-auth==2.50.0",
     "pydantic==2.13.4",
-    "raes==11.0.0",
-    "raes-env-packs==7.2.4",
+    "raes==11.0.1",
+    "raes-env-packs==7.2.3",
     "requests==2.33.1",
 ]
 

@@ -11,7 +11,7 @@ def _plan():
     return {
         "kind": "raes_provisioning_plan",
         "contract_version": "raes-provisioning-plan-v2",
-        "raes_version": "11.0.0",
+        "raes_version": "11.0.1",
         "resources": {},
         "operations": [],
         "realization_authority": [],
@@ -71,7 +71,7 @@ def _semantic_plan():
 
 
 def test_new_transport_is_accepted():
-    assert parse_plan(_plan()).raes_version == "11.0.0"
+    assert parse_plan(_plan()).raes_version == "11.0.1"
 
 
 def test_populated_semantic_metadata_is_accepted():
@@ -253,7 +253,7 @@ def test_runtime_selected_carrier_must_match_plan_identity():
     plan["backend_realization_envelope"] = carrier
     plan["realization_envelope"] = identity
 
-    assert parse_plan(plan).raes_version == "11.0.0"
+    assert parse_plan(plan).raes_version == "11.0.1"
 
     plan["backend_realization_envelope"]["digest"] = "sha256:" + "3" * 64
     with pytest.raises(RaesPlanError, match="diverges"):

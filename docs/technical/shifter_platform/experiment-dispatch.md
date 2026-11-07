@@ -68,4 +68,4 @@ The clean-state claim is `fresh-range-required`.
 
 ## Dependency tuple
 
-The tuple is Python 3.14, Django 6.0, RAES 11.0.0, raes-env-packs 7.2.4, and adapter SDK 0.2.0.
+The tuple is Python 3.14, Django 6.0, RAES 11.0.1, raes-env-packs 7.2.3, and adapter SDK 0.2.0.

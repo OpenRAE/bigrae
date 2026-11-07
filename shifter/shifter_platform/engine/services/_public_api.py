@@ -217,6 +217,7 @@ PUBLIC_API = (
     "reconcile_model_allocations",
     "reconcile_model_requests",
     "reconcile_preparations",
+    "reconcile_range_cleanup_verification",
     "reconcile_retained_warm_generations",
     "reconcile_runtime_plugin_operations",
     "reconcile_runtime_plugins",

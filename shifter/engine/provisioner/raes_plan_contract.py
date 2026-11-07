@@ -10,7 +10,7 @@ from typing import Any
 from raes_plan_types import RaesPlanError
 
 CONTRACT_VERSION = "raes-provisioning-plan-v2"
-PRODUCER_VERSION = "11.0.0"
+PRODUCER_VERSION = "11.0.1"
 _LEGACY_PAIR = ("raes-provisioning-plan-v1", "2.0.0")
 # Retained ranges keep their original producer and resource identities. These
 # reviewed v2 pairs are accepted only for cleanup, with the same wire checks.

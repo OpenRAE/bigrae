@@ -7,7 +7,7 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==11.0.0` and `raes-env-packs==7.2.4` in its
+`raes==11.0.1` and `raes-env-packs==7.2.3` in its
 [package manifest](../../../shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
@@ -34,7 +34,7 @@ the ownership boundary, or the migration contract.
 Only `shared.raes` imports the released RAES module family. It validates and
 compiles authored intent into the RAES ProvisioningPlan. The independent
 provisioner validates and reads plain serialized data, not a second authored
-schema. New realization accepts `raes-provisioning-plan-v2` with producer `11.0.0`.
+schema. New realization accepts `raes-provisioning-plan-v2` with producer `11.0.1`.
 Images, cloud resources, secrets and backend realization remain BigRAE-owned.
 
 ## Transition history
@@ -51,7 +51,7 @@ bytes as a new producer is not migration. Retired source/sidecar records are
 removed by cutover migrations; terminal opaque historical envelopes remain
 factual and inert.
 
-Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `10.6.0`,
+Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `10.7.2`, `v2` / `10.6.0`,
 `v2` / `10.2.0` and `v2` / `3.5.0` pairs through the current wire checks. It also accepts the exact
 `raes-provisioning-plan-v1` / `2.0.0` pair through its isolated cleanup view. This preserves cleanup identities
 without allowing old producers for new realization. It does not revive the
@@ -111,3 +111,8 @@ pending completion results. The completion validator also requires the installed
 producer version. Preserve original plans; never relabel or replay them as the
 new version. Retained ranges keep their cleanup-only reader. Deployment and
 live tenant qualification require explicit user approval.
+
+The 11.0.1 update (#2834) uses the released fix for bounded verification of
+large secret plans. It retains the existing verification rules and adds
+10.7.2 to the cleanup-only producer list. See the
+[adoption design](../../architecture/large-plan-release-adoption-2834.md).
