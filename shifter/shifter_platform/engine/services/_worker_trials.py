@@ -21,7 +21,7 @@ from shared.worker_trial import RUN_OVERDUE_SECONDS, StagedObject, WorkerTrialIn
 
 if TYPE_CHECKING:
     from engine.models import OperationResultInbox, ProvisionerLaunchIntent, WorkerTrial
-    from shared.identity_scope import CredentialContext
+    from shared.credentials import CredentialContext
 
 _RESOURCE = "worker-trial"
 _OPERATIONS = frozenset({"run", "collect"})
@@ -46,10 +46,17 @@ class WorkerTrialView:
     overdue: bool
 
 
+def _current_operation_id(trial: WorkerTrial) -> UUID:
+    """Return the trial's current operation; every created trial has one."""
+    if trial.provisioner_operation_id is None:
+        raise ValueError(_UNAVAILABLE)
+    return trial.provisioner_operation_id
+
+
 def _view(trial: WorkerTrial) -> WorkerTrialView:
     from engine.models import ProvisionerLaunchIntent
 
-    intent = ProvisionerLaunchIntent.objects.get(operation_id=trial.provisioner_operation_id)
+    intent = ProvisionerLaunchIntent.objects.get(operation_id=_current_operation_id(trial))
     return WorkerTrialView(
         trial_id=trial.pk,
         worker_id=trial.worker_id,
@@ -70,7 +77,7 @@ def _range_authority(credential: CredentialContext, worker_request_id: UUID) -> 
     """Record exact range-manage authority on the worker's native range."""
     from ._launch_authority import admit_launch_authority
 
-    payload = {"resource": "raes-range", "request_id": str(worker_request_id), "operation": "trial"}
+    payload: dict[str, object] = {"resource": "raes-range", "request_id": str(worker_request_id), "operation": "trial"}
     return admit_launch_authority(payload, credential)
 
 
@@ -138,7 +145,7 @@ def collect_worker_trial(credential: CredentialContext, worker_id: UUID, *, stop
         if stop and not trial.stop_requested:
             trial.stop_requested = True
             trial.save(update_fields=["stop_requested", "updated_at"])
-        intent = ProvisionerLaunchIntent.objects.select_for_update().get(operation_id=trial.provisioner_operation_id)
+        intent = ProvisionerLaunchIntent.objects.select_for_update().get(operation_id=_current_operation_id(trial))
         if not _operation_finished(intent):
             if stop and trial.provisioner_operation == "run":
                 _request_intent_interrupt(intent)
@@ -172,6 +179,8 @@ def _payload(trial: WorkerTrial, operation: str) -> dict[str, object]:
 
 def _input(trial: WorkerTrial) -> dict[str, object]:
     worker_range = trial.worker.range
+    if worker_range.provisioner_operation_id is None:
+        raise ValueError("Worker provisioning is unavailable")
     value = WorkerTrialInput(
         trial_id=trial.pk,
         generation=trial.generation,
@@ -330,11 +339,10 @@ def fail_worker_trial_dispatch(payload: dict[str, Any], operation_id: UUID | str
     """Exhausted dispatch fails only the trial operation that still owns its generation."""
     from engine.models import WorkerTrial
 
-    trial = (
-        WorkerTrial.objects.select_for_update()
-        .filter(pk=payload.get("trial_id"), provisioner_operation_id=operation_id)
-        .first()
-    )
+    trial_id = payload.get("trial_id")
+    if trial_id is None:
+        return False
+    trial = WorkerTrial.objects.select_for_update().filter(pk=trial_id, provisioner_operation_id=operation_id).first()
     if trial is None:
         return False
     mark_worker_trial_operation_failed(trial)

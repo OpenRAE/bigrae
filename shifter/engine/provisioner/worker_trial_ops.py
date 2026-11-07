@@ -37,6 +37,7 @@ from shifter_adapter_sdk.trial import (
 
 from cloud import get_object_storage
 from config import load_raes_content_delivery_config
+from executors.base import FileOutputCommandExecutor, StreamingCommandExecutor
 from raes_content_payload import sha256_file
 
 if TYPE_CHECKING:
@@ -57,10 +58,24 @@ class WorkerTrialError(RuntimeError):
     """A refused or failed worker trial step; never carries guest output."""
 
 
+def _file_output(execution: GuestExecutionContext) -> FileOutputCommandExecutor:
+    """Return the transport that copies bounded output, or refuse the trial."""
+    if not isinstance(execution.executor, FileOutputCommandExecutor):
+        raise WorkerTrialError("the worker transport cannot copy trial output")
+    return execution.executor
+
+
+def _streaming(execution: GuestExecutionContext) -> StreamingCommandExecutor:
+    """Return the transport that streams a local file to stdin, or refuse the trial."""
+    if not isinstance(execution.executor, StreamingCommandExecutor):
+        raise WorkerTrialError("the worker transport cannot stream trial inputs")
+    return execution.executor
+
+
 def _verb_output(execution: GuestExecutionContext, verb: str, workdir: str) -> bytes:
     """Run one read-only verb and return its bounded standard output."""
     path = os.path.join(workdir, f"{verb}.json")
-    code = execution.executor.run_command_to_file(  # type: ignore[attr-defined]
+    code = _file_output(execution).run_command_to_file(
         execution.target,
         f"{TRIAL_CONTROL_COMMAND} {verb}",
         output_path=path,
@@ -104,7 +119,7 @@ def stage_inputs(
             local = os.path.join(staging, name)
             _download_staged(storage, bucket, item, local)
             target = f"{TRIAL_INPUT_DIRECTORY}/{name}"
-            result = execution.executor.run_command_streaming(
+            result = _streaming(execution).run_command_streaming(
                 execution.target,
                 f"install -d -m 0700 {TRIAL_INPUT_DIRECTORY} && cat > {target}.part && mv {target}.part {target}",
                 stdin_path=local,
@@ -138,7 +153,7 @@ def export_archive(
     with tempfile.TemporaryDirectory(prefix="worker-trial-export-") as workdir:
         export = parse_trial_output(_verb_output(execution, "export", workdir), TrialExport)
         local = os.path.join(workdir, "archive")
-        code = execution.executor.run_command_to_file(  # type: ignore[attr-defined]
+        code = _file_output(execution).run_command_to_file(
             execution.target,
             f"cat {TRIAL_EXPORT_DIRECTORY}/{export.file}",
             output_path=local,

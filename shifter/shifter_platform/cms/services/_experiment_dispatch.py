@@ -48,7 +48,8 @@ from ._experiment_batches import (
 from ._trial_archives import intake_trial_archive
 
 if TYPE_CHECKING:
-    from shared.identity_scope import CredentialContext, ResourceScope
+    from shared.credentials import CredentialContext
+    from shared.identity_scope import ResourceScope
 
 _WORKER_NAMESPACE = uuid5(NAMESPACE_URL, "bigrae:experiment-worker")
 _HOLD_REASON = "evidence"
@@ -79,17 +80,23 @@ def _entries(organization_uuid: UUID, batch_id: UUID) -> list[ExperimentEntry]:
     )
 
 
+def _attempt_token(row: ExperimentEntry) -> UUID:
+    """Return the claimed entry's attempt identity; a pending entry has none."""
+    if row.token is None:
+        raise CMSError("The experiment entry has no attempt")
+    return row.token
+
+
 def _create_worker(
     credential: CredentialContext, organization_uuid: UUID, scope: ResourceScope, row: ExperimentEntry
 ) -> UUID:
     """Create or replay the attempt's worker and bind it to the attempt."""
     from engine.services import create_disposable_worker
 
-    worker_id = worker_id_for(row.token)
-    create_disposable_worker(
-        credential, scope=scope, worker_id=worker_id, experiment_id=row.batch_id, trial_id=row.token
-    )
-    record_experiment_worker(credential, organization_uuid, row.token, f"worker:{worker_id}")
+    token = _attempt_token(row)
+    worker_id = worker_id_for(token)
+    create_disposable_worker(credential, scope=scope, worker_id=worker_id, experiment_id=row.batch_id, trial_id=token)
+    record_experiment_worker(credential, organization_uuid, token, f"worker:{worker_id}")
     return worker_id
 
 
@@ -140,16 +147,17 @@ def stage_trial(
 
     The attempt's deadline is persisted first, so every stager produces the same bytes.
     """
+    token = _attempt_token(row)
     deadline = reserve_trial_deadline(
-        credential, organization_uuid, row.token, entry_attempt_timeout(inputs, row.plan_entry_id)
+        credential, organization_uuid, token, entry_attempt_timeout(inputs, row.plan_entry_id)
     )
     storage = get_object_storage()
-    prefix = f"{TRIAL_INPUT_PREFIX}{row.token}/"
+    prefix = f"{TRIAL_INPUT_PREFIX}{token}/"
     scenario = _stage_object(storage, prefix + "scenario.sdl", trial_scenario_bytes(inputs, row.plan_entry_id))
     trial = {
         "schema_version": "bigrae.trial-input/v1",
         "run_id": row.run_id,
-        "attempt_id": str(row.token),
+        "attempt_id": str(token),
         "deadline": deadline.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         "scenario_sha256": scenario.sha256,
     }
@@ -192,8 +200,9 @@ def _start_trial(
             return "qualification-failed"
     _hold_evidence(credential, worker_id)
     staged, deadline = stage_trial(credential, organization_uuid, inputs, row)
-    start_worker_trial(credential, worker_id, owner_reference=row.token, staged=staged, deadline=deadline)
-    observe_experiment_attempt(credential, organization_uuid, row.token, "running")
+    token = _attempt_token(row)
+    start_worker_trial(credential, worker_id, owner_reference=token, staged=staged, deadline=deadline)
+    observe_experiment_attempt(credential, organization_uuid, token, "running")
     if experiment_dispatch_stopped(organization_uuid, row.batch_id):
         # A stop committed while this trial was starting: stop it too.
         collect_worker_trial(credential, worker_id, stop=True)
@@ -208,8 +217,9 @@ def _collect(
     archive: dict[str, Any],
 ) -> str:
     """Intake the sealed archive with independently derived identities."""
+    token = _attempt_token(row)
     scenario = _scenario_sha256(inputs, row.plan_entry_id)
-    expected = experiment_archive_identity(inputs, row.plan_entry_id, str(row.token), scenario_sha256=scenario)
+    expected = experiment_archive_identity(inputs, row.plan_entry_id, str(token), scenario_sha256=scenario)
     with tempfile.TemporaryDirectory(prefix="trial-collect-") as workdir:
         path = Path(workdir) / "archive"
         storage = get_object_storage()
@@ -227,9 +237,9 @@ def _collect(
             collection = intake_trial_archive(credential, organization_uuid, expected, source)
     if not collection.worker_copy_disposable:
         raise CMSError("The trial archive is not yet safe to discard from the worker")
-    record_experiment_collection(credential, organization_uuid, row.token, collection.id, scenario_sha256=scenario)
+    record_experiment_collection(credential, organization_uuid, token, collection.id, scenario_sha256=scenario)
     final = "finished" if collection.run_status == "completed" else "failed"
-    observe_experiment_attempt(credential, organization_uuid, row.token, final)
+    observe_experiment_attempt(credential, organization_uuid, token, final)
     return "collected"
 
 
@@ -252,14 +262,15 @@ def _record_cleanup(
     worker_id: UUID,
     run_status: str,
 ) -> str:
+    token = _attempt_token(row)
     receipt = worker_absence_cleanup_receipt(
         inputs,
         row.plan_entry_id,
-        str(row.token),
+        str(token),
         trial_outcome=_RUN_OUTCOMES.get(run_status, "aborted"),
         evidence_ref=f"worker:{worker_id}:verified-absent",
     )
-    record_experiment_cleanup(credential, organization_uuid, row.token, receipt)
+    record_experiment_cleanup(credential, organization_uuid, token, receipt)
     return "cleanup-recorded"
 
 
@@ -289,12 +300,13 @@ def _advance(
         if collect_only or worker.retiring:
             return "not-started", None
         return _start_trial(credential, organization_uuid, inputs, row, worker_id), None
-    if row.receipt_id is None:
+    receipt = row.receipt
+    if receipt is None:
         return _advance_collection(credential, organization_uuid, inputs, row, worker_id, trial), trial
     if not worker.retiring:
         return _retire(credential, worker_id), trial
     if worker.retired and not row.cleanup_receipt_json:
-        return _record_cleanup(credential, organization_uuid, inputs, row, worker_id, row.receipt.run_status), trial
+        return _record_cleanup(credential, organization_uuid, inputs, row, worker_id, receipt.run_status), trial
     return "waiting-for-cleanup", trial
 
 

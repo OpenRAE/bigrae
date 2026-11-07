@@ -35,7 +35,7 @@ from ._operation_apply_domain import apply_validated_result
 # engine.models is imported lazily inside functions below (app-registry load
 # order); this block is type-check-only.
 if TYPE_CHECKING:
-    from engine.models import GcpRangeProject, Instance, OperationResultInbox, Range, VpnAccessProfile
+    from engine.models import GcpRangeProject, Instance, OperationResultInbox, Range, VpnAccessProfile, WorkerTrial
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ _RANGE_RESOURCES = frozenset({"range", "raes-range"})
 
 def _resolve_operation_target(
     resource: str, operation_id: UUID | str
-) -> Range | Instance | VpnAccessProfile | GcpRangeProject | None:
+) -> Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial | None:
     """Return the domain row that currently owns this operation generation, or None.
 
     A row is returned only when its ``provisioner_operation_id`` still equals the
@@ -53,7 +53,7 @@ def _resolve_operation_target(
     """
     from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile
 
-    target: Range | Instance | VpnAccessProfile | GcpRangeProject | None
+    target: Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial | None
     if resource in _RANGE_RESOURCES:
         target = Range.objects.filter(provisioner_operation_id=operation_id).select_related("request").first()
     elif resource == "ngfw":
@@ -80,7 +80,7 @@ def _resolve_operation_target(
 
 
 def _request_matches(
-    target: Range | Instance | VpnAccessProfile | GcpRangeProject, expected_request_id: object
+    target: Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial, expected_request_id: object
 ) -> bool:
     """Return True if the target row's request matches the result's request_id."""
     from engine.models import GcpRangeProject, WorkerTrial

@@ -149,6 +149,20 @@ def test_the_deadline_forces_a_stop_and_a_changed_archive_is_refused(storage, mo
     assert storage.uploaded == {}
 
 
+class CommandOnlyWorker:
+    """A transport that runs commands but cannot stream input or copy output."""
+
+    def run_command(self, target, script, *, timeout_seconds, document_name):
+        raise AssertionError("a refused transport runs no command")
+
+
+@pytest.mark.parametrize(("operation", "reason"), [("run", "stream trial inputs"), ("collect", "copy trial output")])
+def test_a_transport_without_the_bounded_ports_is_refused(storage, operation, reason):
+    with pytest.raises(worker_trial_ops.WorkerTrialError, match=reason):
+        worker_trial_ops.execute_worker_trial(execution(CommandOnlyWorker()), trial_input(), operation, "op-5")
+    assert storage.uploaded == {}
+
+
 def test_bounded_ssh_copy_refuses_oversized_output(tmp_path):
     from executors.guest_ssh_executor import _invoke_ssh_to_file
 

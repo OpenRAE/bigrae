@@ -9,8 +9,8 @@ import pytest
 from django.core.exceptions import ObjectDoesNotExist
 
 from tests.cms.experiment_admission_fixtures import admit, experiment_inputs
-from tests.cms.test_trial_archives import custody
 from tests.cms.test_runtime_plugins import tenant
+from tests.cms.test_trial_archives import custody
 from tests.shared.raes.test_trial_archive import trial_record_archive
 
 __all__ = ["custody", "experiment_inputs", "tenant"]
@@ -159,7 +159,6 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert set(staged) == {"trial.json", "scenario.sdl"}
     assert all(("bigrae-assets", item.key) in dispatch.storage.objects for item in staged.values())
     # A concurrent or repeated stager reuses the persisted deadline and the identical objects.
-    from cms.models import ExperimentEntry
     from cms.services._experiment_dispatch import stage_trial
 
     entry = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
