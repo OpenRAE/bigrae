@@ -335,6 +335,11 @@ def validate_experiment_cleanup(inputs: dict[str, Any], entry_id: str, attempt_i
         raise ValueError("Experiment cleanup receipt is invalid or unverified") from None
 
 
+def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
+    """Return the exact concrete trial SDL bytes that dispatch stages for one entry."""
+    return canonical_json_bytes(inputs["snapshots"][entry_id])
+
+
 _OUTCOME_TRIGGERS = {
     "succeeded": "success",
     "failed": "failure",
@@ -397,6 +402,8 @@ def experiment_archive_identity(
     entry_id: str,
     attempt_id: str,
     run_version: str = "1",
+    *,
+    scenario_sha256: str = "",
 ) -> TrialArchiveIdentity:
     """Use the incumbent custody identity contract at both admission and collection."""
     plan = inputs["plan"]
@@ -411,6 +418,7 @@ def experiment_archive_identity(
         plan_digest=plan["plan_digest"],
         entry_digest=entry["entry_digest"],
         run_version=run_version,
+        scenario_sha256=scenario_sha256,
     )
 
 

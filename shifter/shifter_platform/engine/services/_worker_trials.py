@@ -8,7 +8,7 @@ closed receipt. ``run`` can start a trial; ``collect`` never starts one.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
@@ -17,7 +17,7 @@ from django.db import transaction
 from django.utils import timezone
 
 from shared.operation_envelope import build_operation_envelope
-from shared.worker_trial import StagedObject, WorkerTrialInput, parse_worker_trial_receipt
+from shared.worker_trial import RUN_OVERDUE_SECONDS, StagedObject, WorkerTrialInput, parse_worker_trial_receipt
 
 if TYPE_CHECKING:
     from engine.models import OperationResultInbox, ProvisionerLaunchIntent, WorkerTrial
@@ -41,9 +41,15 @@ class WorkerTrialView:
     archive: dict[str, Any] | None
     operation: str
     stop_requested: bool
+    operation_failed: bool
+    operation_finished: bool
+    overdue: bool
 
 
 def _view(trial: WorkerTrial) -> WorkerTrialView:
+    from engine.models import ProvisionerLaunchIntent
+
+    intent = ProvisionerLaunchIntent.objects.get(operation_id=trial.provisioner_operation_id)
     return WorkerTrialView(
         trial_id=trial.pk,
         worker_id=trial.worker_id,
@@ -54,6 +60,9 @@ def _view(trial: WorkerTrial) -> WorkerTrialView:
         archive=trial.archive,
         operation=trial.provisioner_operation,
         stop_requested=trial.stop_requested,
+        operation_failed=trial.operation_failed,
+        operation_finished=_operation_finished(intent),
+        overdue=timezone.now() > trial.deadline + timedelta(seconds=RUN_OVERDUE_SECONDS),
     )
 
 
@@ -77,6 +86,7 @@ def start_worker_trial(
     from engine.models import WorkerTrial
 
     from ._disposable_workers import _authorized_worker
+    from ._worker_qualification import has_current_qualification
     from ._worker_retirement import _lock_worker
 
     worker = _authorized_worker(credential, worker_id, "range.manage")
@@ -93,6 +103,8 @@ def start_worker_trial(
             raise ValueError("Worker is retiring")
         if worker.range.provisioner_operation != "provision" or worker.range.provisioner_operation_id is None:
             raise ValueError("Worker provisioning is unavailable")
+        if not has_current_qualification(worker):
+            raise ValueError("Worker qualification is not current")
         trial = WorkerTrial.objects.create(
             worker=worker, owner_reference=owner_reference, deadline=deadline, staged=staged_json, **fields
         )
@@ -215,7 +227,8 @@ def _queue(trial: WorkerTrial, operation: str) -> None:
     )
     trial.provisioner_operation_id = operation_id
     trial.provisioner_operation = operation
-    trial.save(update_fields=["provisioner_operation_id", "provisioner_operation", "updated_at"])
+    trial.operation_failed = False
+    trial.save(update_fields=["provisioner_operation_id", "provisioner_operation", "operation_failed", "updated_at"])
     _audit(trial, operation)
 
 
@@ -307,6 +320,27 @@ def enqueue_interrupted_worker_trial(origin: ProvisionerLaunchIntent) -> bool:
         return True
 
 
+def mark_worker_trial_operation_failed(trial: WorkerTrial) -> None:
+    """Record a failed operation without changing the observed trial facts."""
+    trial.operation_failed = True
+    trial.save(update_fields=["operation_failed", "updated_at"])
+
+
+def fail_worker_trial_dispatch(payload: dict[str, Any], operation_id: UUID | str) -> bool:
+    """Exhausted dispatch fails only the trial operation that still owns its generation."""
+    from engine.models import WorkerTrial
+
+    trial = (
+        WorkerTrial.objects.select_for_update()
+        .filter(pk=payload.get("trial_id"), provisioner_operation_id=operation_id)
+        .first()
+    )
+    if trial is None:
+        return False
+    mark_worker_trial_operation_failed(trial)
+    return True
+
+
 def apply_worker_trial_result(result: OperationResultInbox, payload: dict[str, Any]) -> tuple[str, str]:
     """Apply the closed receipt of the exact current operation."""
     from engine.models import OperationResultDisposition, WorkerTrial
@@ -315,8 +349,7 @@ def apply_worker_trial_result(result: OperationResultInbox, payload: dict[str, A
     if trial is None or str(trial.generation) != str(result.request_id):
         return OperationResultDisposition.REJECTED_STALE, "worker trial generation is no longer current"
     if result.result_kind == "TERMINAL_FAILURE":
-        trial.state = "failed"
-        trial.save(update_fields=["state", "updated_at"])
+        mark_worker_trial_operation_failed(trial)
         return OperationResultDisposition.APPLIED, "worker trial operation failed"
     receipt = parse_worker_trial_receipt(payload)
     if receipt.trial_id != trial.pk:

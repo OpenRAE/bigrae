@@ -19,17 +19,21 @@ def staged(prefix="trial-inputs/attempt/"):
 
     return {
         name: StagedObject(key=prefix + name, sha256=str(index) * 64, size_bytes=10 + index)
-        for index, name in enumerate(("trial.json", "scenario.sdl", "pack.tar"), start=1)
+        for index, name in enumerate(("trial.json", "scenario.sdl"), start=1)
     }
 
 
 @pytest.fixture
-def ready_worker(apparatus):
+def ready_worker(apparatus, monkeypatch):
     from engine.models import Range
 
     worker = create(apparatus)
     Range.objects.update(status="ready", provisioner_operation="provision", provisioner_operation_id=uuid4())
-    return SimpleNamespace(apparatus=apparatus, worker_id=worker.worker_id)
+    qualified = {"current": True}
+    monkeypatch.setattr(
+        "engine.services._worker_qualification.has_current_qualification", lambda _worker: qualified["current"]
+    )
+    return SimpleNamespace(apparatus=apparatus, worker_id=worker.worker_id, qualified=qualified)
 
 
 def start(ready_worker, **kwargs):
@@ -56,14 +60,18 @@ def test_start_persists_one_trial_and_its_run_operation_before_launch(ready_work
     from engine.models import OperationInput, ProvisionerLaunchIntent, WorkerTrial
     from engine.services._worker_trials import validate_worker_trial_operation
 
+    ready_worker.qualified["current"] = False
+    with pytest.raises(ValueError, match="qualification"):
+        start(ready_worker)
+    ready_worker.qualified["current"] = True
     view = start(ready_worker)
-    assert (view.state, view.operation) == ("pending", "run")
+    assert (view.state, view.operation, view.operation_finished) == ("pending", "run", False)
     trial, intent = current_intent(view.trial_id)
     assert intent.payload["resource"] == "worker-trial" and intent.payload["trial_id"] == str(trial.pk)
     command = command_from_payload({**intent.payload, "operation_id": str(intent.operation_id)})
     assert validate_provisioner_command(command)["trial_id"] == str(trial.pk)
     stored = OperationInput.objects.get(operation_id=intent.operation_id).envelope["payload"]
-    assert set(stored["staged"]) == {"trial.json", "scenario.sdl", "pack.tar"} and stored["stop"] is False
+    assert set(stored["staged"]) == {"trial.json", "scenario.sdl"} and stored["stop"] is False
     assert validate_worker_trial_operation(intent.payload, intent.operation_id) == trial
 
     # A replay returns the same trial; a different attempt or input conflicts and adds nothing.
@@ -113,9 +121,13 @@ def test_receipts_apply_only_to_the_current_operation_and_failure_allows_collect
     )
     foreign = {**receipt, "trial_id": str(uuid4())}
     assert apply_worker_trial_result(current, foreign)[0] == OperationResultDisposition.REJECTED_OWNERSHIP
+    exited = {"trial_id": str(trial.pk), "state": "exited", "exit_code": 3, "sealed": False, "archive": None}
+    assert apply_worker_trial_result(current, exited)[0] == OperationResultDisposition.APPLIED
     failed = SimpleNamespace(operation_id=run.operation_id, request_id=trial.generation, result_kind="TERMINAL_FAILURE")
     assert apply_worker_trial_result(failed, {})[0] == OperationResultDisposition.APPLIED
-    assert WorkerTrial.objects.get(pk=trial.pk).state == "failed"
+    observed = WorkerTrial.objects.get(pk=trial.pk)
+    # The failure keeps the observed exit, so the exit-code constraint still holds.
+    assert (observed.state, observed.exit_code, observed.operation_failed) == ("exited", 3, True)
 
     # The run is not finished until its terminal result is applied; then collect may launch.
     collect_worker_trial(ready_worker.apparatus.credential, ready_worker.worker_id)
@@ -140,3 +152,15 @@ def test_receipts_apply_only_to_the_current_operation_and_failure_allows_collect
     assert apply_worker_trial_result(done, receipt)[0] == OperationResultDisposition.APPLIED
     trial.refresh_from_db()
     assert (trial.state, trial.exit_code, trial.sealed, trial.archive) == ("exited", 0, True, archive)
+    assert not trial.operation_failed
+
+
+def test_exhausted_dispatch_fails_only_the_current_trial_operation(ready_worker):
+    from engine.launch_intents_failure import fail_current_provisioner_operation
+    from engine.models import WorkerTrial
+
+    view = start(ready_worker)
+    _trial, run = current_intent(view.trial_id)
+    assert not fail_current_provisioner_operation(run.payload, uuid4())
+    assert fail_current_provisioner_operation(run.payload, run.operation_id)
+    assert WorkerTrial.objects.get(pk=view.trial_id).operation_failed

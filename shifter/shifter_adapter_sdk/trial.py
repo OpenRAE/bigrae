@@ -26,7 +26,6 @@ TRIAL_ROOT: Final = "/var/lib/bigrae/trial"
 TRIAL_INPUT_DIRECTORY: Final = TRIAL_ROOT + "/input"
 TRIAL_INPUT_FILE: Final = "trial.json"
 TRIAL_SCENARIO_FILE: Final = "scenario.sdl"
-TRIAL_PACK_FILE: Final = "pack.tar"
 TRIAL_EXPORT_DIRECTORY: Final = TRIAL_ROOT + "/export"
 TRIAL_VERBS: Final = ("start", "status", "stop", "export")
 MAX_TRIAL_OUTPUT_BYTES: Final = 65_536
@@ -39,14 +38,13 @@ _UTC_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
 
 
 class TrialInput(ClosedModel):
-    """The staged ``trial.json``: identities and the digests of the staged files."""
+    """The staged ``trial.json``: identities, the deadline and the trial SDL digest."""
 
     schema_version: Literal["bigrae.trial-input/v1"] = "bigrae.trial-input/v1"
     run_id: TrialIdentifier
     attempt_id: TrialIdentifier
     deadline: Annotated[str, Field(max_length=40)]
     scenario_sha256: Sha256
-    pack_sha256: Sha256
 
     @model_validator(mode="after")
     def utc_deadline(self) -> Self:
@@ -98,7 +96,6 @@ __all__ = [
     "TRIAL_EXPORT_DIRECTORY",
     "TRIAL_INPUT_DIRECTORY",
     "TRIAL_INPUT_FILE",
-    "TRIAL_PACK_FILE",
     "TRIAL_ROOT",
     "TRIAL_SCENARIO_FILE",
     "TRIAL_VERBS",

@@ -12,10 +12,9 @@ from __future__ import annotations
 import hashlib
 import io
 import json
-import tarfile
 import tempfile
 from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import NAMESPACE_URL, UUID, uuid5
@@ -23,13 +22,13 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 
-from cms.models import ExperimentEntry, RaesPackageSource
-from cms.scenarios.pack_validation import verify_pack_digest
+from cms.models import ExperimentEntry
 from shared.cloud import get_object_storage
 from shared.exceptions import CMSError
 from shared.raes.experiment_admission import (
     entry_attempt_timeout,
     experiment_archive_identity,
+    trial_scenario_bytes,
     worker_absence_cleanup_receipt,
 )
 from shared.worker_trial import MAX_ARCHIVE_BYTES, TRIAL_INPUT_PREFIX, StagedObject
@@ -37,12 +36,14 @@ from shared.worker_trial import MAX_ARCHIVE_BYTES, TRIAL_INPUT_PREFIX, StagedObj
 from ._experiment_batches import (
     _authorize,
     _load,
-    _pack_snapshot,
     claim_experiment_entry,
+    experiment_dispatch_stopped,
     observe_experiment_attempt,
     record_experiment_cleanup,
     record_experiment_collection,
     record_experiment_worker,
+    reserve_trial_deadline,
+    stop_experiment_batch,
 )
 from ._trial_archives import intake_trial_archive
 
@@ -113,48 +114,55 @@ def start_experiment_dispatch(
 
 
 def _stage_object(storage: Any, key: str, data: bytes) -> StagedObject:
-    storage.upload_file(io.BytesIO(data), settings.STORAGE_BUCKET_NAME, key, "application/octet-stream")
-    return StagedObject(key=key, sha256=hashlib.sha256(data).hexdigest(), size_bytes=len(data))
+    """Create one staged object, or reuse an identical one that a concurrent stager created."""
+    bucket = settings.STORAGE_BUCKET_NAME
+    digest = hashlib.sha256(data).hexdigest()
+    if storage.object_exists(bucket, key):
+        with tempfile.TemporaryDirectory(prefix="trial-stage-") as workdir:
+            path = Path(workdir) / "existing"
+            identity = storage.head_object(bucket, key)
+            storage.download_object(bucket, key, str(path), max_bytes=len(data), expected_identity=identity)
+            if hashlib.sha256(path.read_bytes()).hexdigest() != digest:
+                raise CMSError("A staged trial input conflicts with the attempt's inputs")
+    else:
+        storage.upload_file(io.BytesIO(data), bucket, key, "application/octet-stream")
+    return StagedObject(key=key, sha256=digest, size_bytes=len(data))
 
 
-def _pack_archive(organization_uuid: UUID, inputs: dict[str, Any]) -> bytes:
-    """Archive the installed pack that admission retained, verified by its digest."""
-    digest = inputs["source"]["package_digest"]
-    source = RaesPackageSource.objects.filter(organization_uuid=organization_uuid, package_digest=digest).first()
-    if source is None:
-        raise CMSError("The admitted pack is no longer installed")
-    with _pack_snapshot(source) as root:
-        if not verify_pack_digest(root, digest):
-            raise CMSError("The installed pack differs from the admitted pack")
-        buffer = io.BytesIO()
-        with tarfile.open(fileobj=buffer, mode="w") as archive:
-            archive.add(root, arcname=source.package_identity)
-        return buffer.getvalue()
+def _scenario_sha256(inputs: dict[str, Any], plan_entry_id: str) -> str:
+    return "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, plan_entry_id)).hexdigest()
 
 
 def stage_trial(
-    organization_uuid: UUID, inputs: dict[str, Any], row: ExperimentEntry
+    credential: CredentialContext, organization_uuid: UUID, inputs: dict[str, Any], row: ExperimentEntry
 ) -> tuple[dict[str, StagedObject], datetime]:
-    """Stage the retained trial SDL, the admitted pack and ``trial.json``."""
+    """Stage the retained trial SDL and ``trial.json``; the worker image holds the runtime.
+
+    The attempt's deadline is persisted first, so every stager produces the same bytes.
+    """
+    deadline = reserve_trial_deadline(
+        credential, organization_uuid, row.token, entry_attempt_timeout(inputs, row.plan_entry_id)
+    )
     storage = get_object_storage()
     prefix = f"{TRIAL_INPUT_PREFIX}{row.token}/"
-    scenario = json.dumps(inputs["snapshots"][row.plan_entry_id], sort_keys=True).encode()
-    pack = _pack_archive(organization_uuid, inputs)
-    deadline = datetime.now(UTC) + timedelta(seconds=entry_attempt_timeout(inputs, row.plan_entry_id))
-    staged = {
-        "scenario.sdl": _stage_object(storage, prefix + "scenario.sdl", scenario),
-        "pack.tar": _stage_object(storage, prefix + "pack.tar", pack),
-    }
+    scenario = _stage_object(storage, prefix + "scenario.sdl", trial_scenario_bytes(inputs, row.plan_entry_id))
     trial = {
         "schema_version": "bigrae.trial-input/v1",
         "run_id": row.run_id,
         "attempt_id": str(row.token),
-        "deadline": deadline.isoformat().replace("+00:00", "Z"),
-        "scenario_sha256": staged["scenario.sdl"].sha256,
-        "pack_sha256": staged["pack.tar"].sha256,
+        "deadline": deadline.astimezone(UTC).isoformat().replace("+00:00", "Z"),
+        "scenario_sha256": scenario.sha256,
     }
-    staged["trial.json"] = _stage_object(storage, prefix + "trial.json", json.dumps(trial).encode())
-    return staged, deadline
+    encoded = json.dumps(trial, sort_keys=True, separators=(",", ":")).encode()
+    return {"scenario.sdl": scenario, "trial.json": _stage_object(storage, prefix + "trial.json", encoded)}, deadline
+
+
+def _hold_evidence(credential: CredentialContext, worker_id: UUID) -> None:
+    """Hold the worker once for this coordinator."""
+    from engine.services import acquire_worker_hold, list_worker_holds
+
+    if not any(hold.reason == _HOLD_REASON for hold in list_worker_holds(credential, worker_id)):
+        acquire_worker_hold(credential, worker_id, reason=_HOLD_REASON)
 
 
 def _start_trial(
@@ -164,15 +172,31 @@ def _start_trial(
     row: ExperimentEntry,
     worker_id: UUID,
 ) -> str:
-    """Hold evidence, stage inputs and start the trial on a qualified worker."""
-    from engine.services import acquire_worker_hold, get_disposable_worker, start_worker_trial
+    """Qualify the worker, hold evidence, stage inputs and start the trial."""
+    from engine.services import (
+        collect_worker_trial,
+        get_disposable_worker,
+        qualify_disposable_worker,
+        start_worker_trial,
+    )
 
-    if not get_disposable_worker(credential, worker_id).qualified:
+    if experiment_dispatch_stopped(organization_uuid, row.batch_id):
+        return "stopped"
+    worker = get_disposable_worker(credential, worker_id)
+    if worker.status != "ready":
         return "waiting-for-worker"
-    acquire_worker_hold(credential, worker_id, reason=_HOLD_REASON)
-    staged, deadline = stage_trial(organization_uuid, inputs, row)
+    if not worker.qualified:
+        try:
+            qualify_disposable_worker(credential, worker_id)
+        except ValueError:
+            return "qualification-failed"
+    _hold_evidence(credential, worker_id)
+    staged, deadline = stage_trial(credential, organization_uuid, inputs, row)
     start_worker_trial(credential, worker_id, owner_reference=row.token, staged=staged, deadline=deadline)
     observe_experiment_attempt(credential, organization_uuid, row.token, "running")
+    if experiment_dispatch_stopped(organization_uuid, row.batch_id):
+        # A stop committed while this trial was starting: stop it too.
+        collect_worker_trial(credential, worker_id, stop=True)
     return "trial-started"
 
 
@@ -184,7 +208,8 @@ def _collect(
     archive: dict[str, Any],
 ) -> str:
     """Intake the sealed archive with independently derived identities."""
-    expected = experiment_archive_identity(inputs, row.plan_entry_id, str(row.token))
+    scenario = _scenario_sha256(inputs, row.plan_entry_id)
+    expected = experiment_archive_identity(inputs, row.plan_entry_id, str(row.token), scenario_sha256=scenario)
     with tempfile.TemporaryDirectory(prefix="trial-collect-") as workdir:
         path = Path(workdir) / "archive"
         storage = get_object_storage()
@@ -202,7 +227,7 @@ def _collect(
             collection = intake_trial_archive(credential, organization_uuid, expected, source)
     if not collection.worker_copy_disposable:
         raise CMSError("The trial archive is not yet safe to discard from the worker")
-    record_experiment_collection(credential, organization_uuid, row.token, collection.id)
+    record_experiment_collection(credential, organization_uuid, row.token, collection.id, scenario_sha256=scenario)
     final = "finished" if collection.run_status == "completed" else "failed"
     observe_experiment_attempt(credential, organization_uuid, row.token, final)
     return "collected"
@@ -248,7 +273,7 @@ def _advance(
     collect_only: bool,
 ) -> tuple[str, Any]:
     """Advance one claimed entry by at most one step."""
-    from engine.services import collect_worker_trial, get_disposable_worker, get_worker_trial
+    from engine.services import get_disposable_worker, get_worker_trial
 
     if not row.worker_ref:
         return (
@@ -265,17 +290,38 @@ def _advance(
             return "not-started", None
         return _start_trial(credential, organization_uuid, inputs, row, worker_id), None
     if row.receipt_id is None:
-        if trial.state == "exited" and trial.archive is not None:
-            return _collect(credential, organization_uuid, inputs, row, trial.archive), trial
-        if trial.state == "failed" or (trial.state == "exited" and not trial.sealed):
-            collect_worker_trial(credential, worker_id)
-            return "collect-requested", trial
-        return "running", trial
+        return _advance_collection(credential, organization_uuid, inputs, row, worker_id, trial), trial
     if not worker.retiring:
         return _retire(credential, worker_id), trial
     if worker.retired and not row.cleanup_receipt_json:
         return _record_cleanup(credential, organization_uuid, inputs, row, worker_id, row.receipt.run_status), trial
     return "waiting-for-cleanup", trial
+
+
+def _advance_collection(
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    inputs: dict[str, Any],
+    row: ExperimentEntry,
+    worker_id: UUID,
+    trial: Any,
+) -> str:
+    """Collect a sealed run, or recover collection without starting another trial."""
+    from engine.services import collect_worker_trial
+
+    if trial.state == "exited" and trial.archive is not None:
+        return _collect(credential, organization_uuid, inputs, row, trial.archive)
+    if not trial.operation_finished:
+        if trial.overdue:
+            collect_worker_trial(credential, worker_id, stop=True)
+            return "recovery-requested"
+        return "running"
+    if trial.state == "prepared":
+        return "start-failed"
+    if trial.state == "exited" and trial.operation == "collect" and not trial.operation_failed:
+        return "not-sealed"
+    collect_worker_trial(credential, worker_id)
+    return "collect-requested"
 
 
 def _create_and_report(
@@ -317,7 +363,7 @@ def stop_experiment_dispatch(
     """Request a stop for each running trial; collection follows through reconcile."""
     from engine.services import collect_worker_trial
 
-    _authorize(credential, organization_uuid, "manage_content")
+    stop_experiment_batch(credential, organization_uuid, batch_id)
     steps = []
     for row in _entries(organization_uuid, batch_id):
         action = "none"

@@ -125,7 +125,7 @@ def _identity_digest(expected: TrialArchiveIdentity) -> str:
     # Digests bind admission, but changing them cannot evade a committed
     # scientific identity's conflict check. Run versions are scientific identity.
     """Bind scientific identity independently of admission digest changes."""
-    identity = {key: value for key, value in asdict(expected).items() if key not in {"plan_digest", "entry_digest"}}
+    identity = {key: value for key, value in expected.as_record().items() if key not in {"plan_digest", "entry_digest"}}
     return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -140,7 +140,7 @@ def _reserve(admission: TenantPackAdmission, expected: TrialArchiveIdentity) -> 
         row = TrialArchiveTransfer.objects.create(
             id=transfer_id,
             organization_uuid=admission.organization_uuid,
-            expected=asdict(expected),
+            expected=expected.as_record(),
             identity_digest=_identity_digest(expected),
             bucket=destination.bucket,
             object_key=f"{destination.prefix}/trial-archives/{transfer_id}.tar.gz",

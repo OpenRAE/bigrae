@@ -16,6 +16,8 @@ BigRAE core contains no scenario-specific code.
 | Archive intake | CMS `_trial_archives` | Validates the sealed run and stores it with a receipt |
 | Adapter | External distribution | Installs the trial runtime and implements the verbs |
 
+Each worker boots from a pre-built image that holds the trial runtime and its environment pack.
+BigRAE stages only the trial SDL and `trial.json`.
 The coordinator uses existing services for each step.
 `claim_experiment_entry` enforces the batch concurrency.
 The admitted plan's parallel limit bounds that concurrency (RAES 11).
@@ -48,7 +50,7 @@ flowchart LR
   O[Operator] -->|credential file and batch selector| C[CMS coordinator]
   C -->|claims and collection records| B[(Batch tables)]
   C -->|worker create, hold, retire| E[Engine services]
-  C -->|scenario snapshot, pack archive, trial.json| S[(Provisioner object storage)]
+  C -->|trial SDL and trial.json| S[(Provisioner object storage)]
   E -->|worker-trial run or collect intent| L[Launcher]
   L --> P[Provisioner Job]
   S -->|staged inputs| P
@@ -71,6 +73,8 @@ Its output selects no command, path, or destination.
 | Threat | Control | Verification |
 | --- | --- | --- |
 | Duplicate trial start | `run` starts only on `prepared` status; one trial row per worker; database uniqueness | Engine and provisioner tests |
+| Concurrent staging | The attempt deadline is persisted before upload; staged bytes are deterministic; a different existing object is refused | Coordinator tests |
+| Start after stop | A persisted batch stop blocks claims and starts; a start that races a stop is stopped | Coordinator tests |
 | Changed trial inputs | `trial.json` digests; the adapter checks them; staged objects carry SHA-256 | SDK and provisioner tests |
 | Forged or wrong archive | Intake binds expected plan, entry, run, and attempt identities; worker output is data | Intake tests |
 | Evidence loss before collection | Hold before start; retire only after a committed receipt | Coordinator tests |
@@ -80,8 +84,10 @@ Its output selects no command, path, or destination.
 
 ## Failure behavior
 
-A lost `run` result leaves the trial row in its last state.
-`reconcile` launches `collect` for a worker whose trial is not collected.
+Each worker is qualified through the existing service immediately before its trial starts.
+An overdue `run` is interrupted; its interrupt launches `collect`.
+A failed or exhausted operation sets `operation_failed` and keeps the observed trial facts.
+`reconcile` launches `collect` for a finished operation without a sealed archive.
 `reconcile` never starts a trial.
 A failed collection keeps the hold and the worker, and the entry shows **not collected**.
 A failed retirement keeps capacity occupied until verified absence.
@@ -89,7 +95,8 @@ A failed retirement keeps capacity occupied until verified absence.
 ## LilRAE trial archives
 
 LilRAE seals a trial with `aptl.run-seal/v1` and a `lilrae-trial-record/v1` record.
-Intake accepts this seal when the trial record's run and attempt identities match the expected identity.
+Intake accepts this seal only when the trial record's run, attempt and trial SDL digest match the expected identity.
+The trial SDL digest binds the admitted plan entry. Evidence that names another attempt is refused.
 Intake still validates every inventory member and checksum.
 
 ## Limits

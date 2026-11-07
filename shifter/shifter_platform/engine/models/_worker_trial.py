@@ -25,6 +25,8 @@ class WorkerTrial(RecordedAuthorityFields):
     sealed = models.BooleanField(default=False)
     archive = models.JSONField(null=True, blank=True)
     stop_requested = models.BooleanField(default=False)
+    #: The latest operation ended without a receipt; observed trial facts stay unchanged.
+    operation_failed = models.BooleanField(default=False)
     provisioner_operation_id = models.UUIDField(null=True, blank=True, unique=True)
     provisioner_operation = models.CharField(max_length=16, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)
@@ -35,7 +37,7 @@ class WorkerTrial(RecordedAuthorityFields):
 
         constraints = [
             models.CheckConstraint(
-                condition=models.Q(state__in=("pending", "prepared", "running", "exited", "failed")),
+                condition=models.Q(state__in=("pending", "prepared", "running", "exited")),
                 name="worker_trial_state_closed",
             ),
             models.CheckConstraint(

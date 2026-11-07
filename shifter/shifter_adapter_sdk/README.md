@@ -226,13 +226,14 @@ Its configure phase installs one executable at `/usr/local/libexec/bigrae/trial-
 BigRAE then uses that executable to run one trial on the worker.
 `shifter_adapter_sdk.trial` defines the paths, verbs, and closed models.
 
-Before `start`, the host stages three files in `/var/lib/bigrae/trial/input`:
+Before `start`, the host stages two files in `/var/lib/bigrae/trial/input`:
 
 | File | Content |
 | --- | --- |
-| `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 of the two other files |
+| `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 of `scenario.sdl` |
 | `scenario.sdl` | The complete concrete trial SDL |
-| `pack.tar` | The admitted environment pack archive |
+
+The worker image supplies the trial runtime and its environment pack.
 
 The host runs the executable as root with one verb argument:
 

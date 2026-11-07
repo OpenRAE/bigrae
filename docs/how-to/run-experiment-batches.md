@@ -10,7 +10,8 @@ BigRAE collects the sealed run and then retires the worker.
    It cannot exceed the plan's parallel limit, which the scenario's `trial_parallelism` sets.
 2. Install the apparatus adapter as worker software.
    Its plugin must declare `bigrae.runtime-plugin/v2` and the `trial.control` capability.
-3. Publish a [worker policy](disposable-workers.md) whose host profile selects that installation.
+   It installs only the trial-control command on each worker.
+3. Publish a [worker policy](disposable-workers.md) whose host profile pins the pre-built trial runtime image and selects that installation.
 4. Reserve worker capacity for the batch concurrency.
 5. Apply the deployment infrastructure. The provisioner needs create-only access to `trial-exports/` in the assets bucket.
 
@@ -39,7 +40,8 @@ uv run python manage.py experiment_dispatch start \
 | `show` | Prints each entry's state; changes nothing |
 
 Each command prints one JSON line per entry, with the action it took.
-Run `reconcile` again until every entry reports `cleanup-recorded`.
+Run `reconcile` every few minutes until every entry reports `cleanup-recorded`.
+Run it soon after workers become ready: qualification needs a fresh host observation.
 A restart loses nothing: each run reads the stored state.
 
 ## Entry steps
@@ -56,6 +58,9 @@ A restart loses nothing: each run reads the stored state.
 A failed collection keeps the worker and its hold. The entry stays not collected.
 Fix the cause, then run `collect` or `reconcile`.
 A failed worker operation leads to `collect-requested`; collection never starts a trial again.
+An overdue run leads to `recovery-requested`: BigRAE stops it and collects what it sealed.
+`not-sealed` and `start-failed` need operator review; the worker and its hold stay.
+`stop` persists a batch stop. No new entry is claimed or started after it.
 A failed teardown keeps the slot occupied until the VM is verified absent.
 BigRAE does not redispatch an entry automatically.
 

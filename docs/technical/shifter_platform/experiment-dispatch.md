@@ -30,15 +30,17 @@ The launcher rechecks that authority before the provisioner starts.
 
 ## Staged inputs
 
-The coordinator stages three objects under `trial-inputs/<attempt>/` in the assets bucket:
+The coordinator stages two objects under `trial-inputs/<attempt>/` in the assets bucket:
 
 | Object | Content |
 | --- | --- |
 | `scenario.sdl` | The retained concrete trial SDL of the entry |
-| `pack.tar` | The installed pack, verified against the admitted digest |
-| `trial.json` | Run ID, attempt ID, deadline, and the digests of the other two objects |
+| `trial.json` | Run ID, attempt ID, deadline, and the digest of `scenario.sdl` |
 
 The deadline is the staging time plus the entry's admitted attempt timeout.
+It is persisted on the entry before upload, so every stager writes identical bytes.
+An existing object with different bytes is refused.
+The worker image supplies the trial runtime and its environment pack.
 The provisioner copies the objects to the worker's fixed trial input directory.
 
 ## Provisioner operations
@@ -52,7 +54,9 @@ The archive returns through a bounded copy, digest verification, and a create-on
 ## Archive intake
 
 Intake accepts the LilRAE trial seal (`lilrae-trial-record/v1`).
-The trial record's run and attempt identities must equal the expected identity.
+The trial record's run, attempt and trial SDL digest must equal the expected identity.
+The SDL digest is the digest of the retained entry's staged trial SDL.
+Evidence that names another attempt is refused.
 Intake still validates every inventory member and checksum.
 A trial seal has no RAES plan, so its plan metadata is empty.
 

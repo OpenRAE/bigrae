@@ -15,9 +15,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 TRIAL_INPUT_PREFIX = "trial-inputs/"
 TRIAL_EXPORT_PREFIX = "trial-exports/"
-STAGED_FILES = ("trial.json", "scenario.sdl", "pack.tar")
-MAX_STAGED_BYTES = 1024**3
+STAGED_FILES = ("trial.json", "scenario.sdl")
+#: A staged file is at most the complete retained admission record bound.
+MAX_STAGED_BYTES = 64 * 1024**2
 MAX_ARCHIVE_BYTES = 8 * 1024**3
+
+#: After the trial deadline: adapter drain, stop wait and archive copy, with margin.
+RUN_OVERDUE_SECONDS = 2 * 3600
 
 Sha256 = Annotated[str, Field(pattern=r"^[a-f0-9]{64}$")]
 ObjectKey = Annotated[str, Field(min_length=1, max_length=512, pattern=r"^[A-Za-z0-9][A-Za-z0-9/._-]*$")]

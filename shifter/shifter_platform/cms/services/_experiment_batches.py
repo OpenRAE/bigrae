@@ -6,7 +6,7 @@ import hashlib
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -300,7 +300,11 @@ def claim_experiment_entry(
         raise CMSError(_UNAVAILABLE)
     with transaction.atomic():
         _fence(admission)
-        parent = ExperimentBatch.objects.select_for_update().only("id", "concurrency").get(pk=batch_id)
+        parent = (
+            ExperimentBatch.objects.select_for_update()
+            .only("id", "concurrency", "dispatch_stopped_at")
+            .get(pk=batch_id)
+        )
         if (
             ExperimentEntry.objects.filter(batch=parent, cleanup_receipt_json="").exclude(state="pending").count()
             >= parent.concurrency
@@ -321,6 +325,38 @@ def claim_experiment_entry(
         row.token, row.state = token, "claimed"
         _audit(admission, row.id, "experiment-entry-claimed")
         return _claim(row)
+
+
+def stop_experiment_batch(credential: CredentialContext, organization_uuid: UUID, batch_id: UUID) -> None:
+    """Persist a dispatch stop once; claims and trial starts check it."""
+    admission = _authorize(credential, organization_uuid, "manage_content")
+    with transaction.atomic():
+        _fence(admission)
+        row = ExperimentBatch.objects.select_for_update().get(pk=batch_id, organization_uuid=organization_uuid)
+        if row.dispatch_stopped_at is None:
+            row.dispatch_stopped_at = timezone.now()
+            row.save(update_fields=["dispatch_stopped_at"])
+            _audit(admission, row.id, "experiment-dispatch-stopped")
+
+
+def experiment_dispatch_stopped(organization_uuid: UUID, batch_id: UUID) -> bool:
+    return ExperimentBatch.objects.filter(
+        pk=batch_id, organization_uuid=organization_uuid, dispatch_stopped_at__isnull=False
+    ).exists()
+
+
+def reserve_trial_deadline(
+    credential: CredentialContext, organization_uuid: UUID, token: UUID, timeout_seconds: int
+) -> datetime:
+    """Set the attempt's trial deadline once and return the stored value."""
+    admission = _authorize(credential, organization_uuid, "manage_content")
+    with transaction.atomic():
+        _fence(admission)
+        row = _attempt(organization_uuid, token, locked=True)
+        if row.trial_deadline is None:
+            row.trial_deadline = (timezone.now() + timedelta(seconds=timeout_seconds)).replace(microsecond=0)
+            row.save(update_fields=["trial_deadline", "updated_at"])
+        return row.trial_deadline
 
 
 def recover_experiment_claim(
@@ -418,13 +454,16 @@ def record_experiment_collection(
     receipt_id: UUID,
     *,
     run_version: str = "1",
+    scenario_sha256: str = "",
 ) -> None:
     """Join committed archive custody to this exact attempt, without asserting cleanup."""
     admission = _authorize(credential, organization_uuid, "manage_content")
     attempt = _attempt(organization_uuid, token, locked=False)
     batch = _load(admission, attempt.batch_id)
     try:
-        expected = asdict(experiment_archive_identity(batch.inputs, attempt.plan_entry_id, str(token), run_version))
+        expected = experiment_archive_identity(
+            batch.inputs, attempt.plan_entry_id, str(token), run_version, scenario_sha256=scenario_sha256
+        ).as_record()
     except (ValueError, ValidationError):
         raise CMSError("Experiment collection identity is invalid") from None
     with transaction.atomic():
