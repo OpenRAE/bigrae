@@ -61,6 +61,9 @@ class GCERangeImageProfile:
     sftp_root_directory: str = ""
     # Set only by a verified artifact binding, never resolved from a source alias.
     source_image_id: str = ""
+    nic_type: str = ""
+    disk_interface: str = ""
+    enable_secure_boot: bool = True
 
 
 def gce_image_profile_fingerprint(profile: GCERangeImageProfile) -> str:
@@ -74,6 +77,10 @@ def gce_image_profile_fingerprint(profile: GCERangeImageProfile) -> str:
         profile_fields.pop("participant_readiness_manifest_sha256")
     if not profile.source_image_id:
         profile_fields.pop("source_image_id")
+    # Preserve retained fingerprints for profiles created before these options.
+    for key, default in (("nic_type", ""), ("disk_interface", ""), ("enable_secure_boot", True)):
+        if profile_fields[key] == default:
+            profile_fields.pop(key)
     canonical = json.dumps(profile_fields, separators=(",", ":"), sort_keys=True)
     return hashlib.sha256(canonical.encode("utf-8")).hexdigest()[:24]
 

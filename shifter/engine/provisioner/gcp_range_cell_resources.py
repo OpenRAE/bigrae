@@ -289,6 +289,8 @@ def instance_resource(
     }
     if profile.bootstrap_capability == "preconfigured-machine-host":
         body["advanced_machine_features"] = {"enable_nested_virtualization": True}
+    if profile.nic_type:
+        body["network_interfaces"][0]["nic_type"] = profile.nic_type
     # A machine image supplies its captured disks; a custom image needs an
     # explicitly owned boot disk with the same host hardening.
     if not profile.source_machine_image:
@@ -304,10 +306,12 @@ def instance_resource(
             }
         ]
         body["shielded_instance_config"] = {
-            "enable_secure_boot": True,
+            "enable_secure_boot": profile.enable_secure_boot,
             "enable_vtpm": True,
             "enable_integrity_monitoring": True,
         }
+        if profile.disk_interface:
+            body["disks"][0]["interface"] = profile.disk_interface
     service_account_email = str(instance.get("service_account_email") or "")
     if not service_account_email and config.service_account_email and instance["attach_service_account"]:
         service_account_email = config.service_account_email
