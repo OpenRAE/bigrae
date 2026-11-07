@@ -70,12 +70,22 @@ def assert_runtime_hardware_binding(existing: object, instance: InstancePlan) ->
     if getattr(shielded, "enable_secure_boot", None) is not profile.enable_secure_boot:
         raise GCEInstanceBindingError("GCE guest Secure Boot state differs from the selected profile")
     if profile.nic_type:
-        interfaces = list(getattr(existing, "network_interfaces", None) or [])
-        actual = getattr(interfaces[0], "nic_type", None) if len(interfaces) == 1 else None
-        if getattr(actual, "name", actual) != profile.nic_type:
-            raise GCEInstanceBindingError("GCE guest NIC differs from the selected profile")
+        _assert_nic_type(existing, profile.nic_type)
     if profile.disk_interface:
-        disks = [disk for disk in (getattr(existing, "disks", None) or []) if getattr(disk, "boot", False)]
-        actual = getattr(disks[0], "interface", None) if len(disks) == 1 else None
-        if getattr(actual, "name", actual) != profile.disk_interface:
-            raise GCEInstanceBindingError("GCE guest boot disk interface differs from the selected profile")
+        _assert_boot_disk_interface(existing, profile.disk_interface)
+
+
+def _assert_nic_type(existing: object, expected: str) -> None:
+    """Require one provider NIC with the selected interface type."""
+    interfaces = list(getattr(existing, "network_interfaces", None) or [])
+    actual = getattr(interfaces[0], "nic_type", None) if len(interfaces) == 1 else None
+    if getattr(actual, "name", actual) != expected:
+        raise GCEInstanceBindingError("GCE guest NIC differs from the selected profile")
+
+
+def _assert_boot_disk_interface(existing: object, expected: str) -> None:
+    """Require one provider boot disk with the selected interface type."""
+    disks = [disk for disk in (getattr(existing, "disks", None) or []) if getattr(disk, "boot", False)]
+    actual = getattr(disks[0], "interface", None) if len(disks) == 1 else None
+    if getattr(actual, "name", actual) != expected:
+        raise GCEInstanceBindingError("GCE guest boot disk interface differs from the selected profile")

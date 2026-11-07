@@ -65,10 +65,7 @@ class RuntimeTargetImageProfile(ClosedModel):
         """Reject provider image details that cannot be realized safely."""
         if self.machine_type and not _MACHINE_TYPE.fullmatch(self.machine_type):
             raise ValueError("image profile machine type is invalid")
-        if (self.nic_type or self.disk_interface or not self.enable_secure_boot) and (
-            self.provider != "gcp" or self.image_kind != "image"
-        ):
-            raise ValueError("GCE hardware overrides require a GCP boot image")
+        _validate_hardware_override(self)
         for value in (self.management_ssh_username, self.participant_username):
             if value and not _LOCAL_USER.fullmatch(value):
                 raise ValueError("image profile usernames must be local OS usernames")
@@ -77,6 +74,13 @@ class RuntimeTargetImageProfile(ClosedModel):
         else:
             _validate_gcp_image_profile(self)
         return self
+
+
+def _validate_hardware_override(profile: RuntimeTargetImageProfile) -> None:
+    """Keep guest hardware overrides within the GCP boot-image contract."""
+    selected = profile.nic_type or profile.disk_interface or not profile.enable_secure_boot
+    if selected and (profile.provider != "gcp" or profile.image_kind != "image"):
+        raise ValueError("GCE hardware overrides require a GCP boot image")
 
 
 def _participant_profile(profile: RuntimeTargetImageProfile) -> tuple[str, str, str, str]:
