@@ -254,6 +254,17 @@ def _boot_disk_resource(profile: GCERangeImageProfile, zone: str) -> ComputeReso
     return disk
 
 
+def _network_interface_resource(instance: InstancePlan) -> ComputeResource:
+    """Render the selected guest subnet, address, and NIC type."""
+    interface: ComputeResource = {
+        "subnetwork": instance["subnetwork_link"],
+        "network_i_p": instance["private_ip"],
+    }
+    if instance["profile"].nic_type:
+        interface["nic_type"] = instance["profile"].nic_type
+    return interface
+
+
 def instance_resource(
     plan: RangeCellPlan,
     instance: InstancePlan,
@@ -266,12 +277,6 @@ def instance_resource(
 ) -> ComputeResource:
     """Render a Compute Engine instance insert body."""
     profile = instance["profile"]
-    network_interface: ComputeResource = {
-        "subnetwork": instance["subnetwork_link"],
-        "network_i_p": instance["private_ip"],
-    }
-    if profile.nic_type:
-        network_interface["nic_type"] = profile.nic_type
     body: ComputeResource = {
         "name": instance["resource_name"],
         "machine_type": _machine_type_self_link(plan["zone"], profile.machine_type),
@@ -300,7 +305,7 @@ def instance_resource(
                 composition_script=composition_script,
             )
         },
-        "network_interfaces": [network_interface],
+        "network_interfaces": [_network_interface_resource(instance)],
         "deletion_protection": False,
         "can_ip_forward": False,
     }
