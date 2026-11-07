@@ -436,6 +436,8 @@ a credential failure. Use the API's operation/retry contract where provided.
 See [artifact preparation](../ops/artifact-preparation.md),
 [verification plugins](shifter_platform/scenario-verification.md) and the
 [adapter SDK](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_adapter_sdk/README.md).
+GCE runtime image profiles carry explicit NIC, disk-interface, and Secure Boot choices.
+See [guest hardware profiles](../architecture/gce-guest-hardware-profiles.md).
 Pack content never authorizes executable installation. Private content, adapters,
 image recipes, answers and acceptance evidence stay in their owner's repository.
 A compatibility probe, buildable SDK, or accepted manifest proves neither a

@@ -25053,6 +25053,11 @@
           "pool"
         ]
       },
+      "BlankEnum": {
+        "enum": [
+          ""
+        ]
+      },
       "Bootstrap": {
         "type": "object",
         "description": "Top-level SPA bootstrap payload.",
@@ -27945,6 +27950,14 @@
           "subject_uuid"
         ]
       },
+      "DiskInterfaceEnum": {
+        "enum": [
+          "NVME",
+          "SCSI"
+        ],
+        "type": "string",
+        "description": "* `` - \n* `NVME` - NVME\n* `SCSI` - SCSI"
+      },
       "Drain": {
         "type": "object",
         "description": "Drain request: the binding id and its expected definition revision.",
@@ -30412,6 +30425,14 @@
           "idempotency_key",
           "principal_uuid"
         ]
+      },
+      "NicTypeEnum": {
+        "enum": [
+          "GVNIC",
+          "VIRTIO_NET"
+        ],
+        "type": "string",
+        "description": "* `` - \n* `GVNIC` - GVNIC\n* `VIRTIO_NET` - VIRTIO_NET"
       },
       "NotificationListItem": {
         "type": "object",
@@ -35243,6 +35264,32 @@
             "type": "string",
             "default": "",
             "maxLength": 100
+          },
+          "nic_type": {
+            "default": "",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/NicTypeEnum"
+              },
+              {
+                "$ref": "#/components/schemas/BlankEnum"
+              }
+            ]
+          },
+          "disk_interface": {
+            "default": "",
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/DiskInterfaceEnum"
+              },
+              {
+                "$ref": "#/components/schemas/BlankEnum"
+              }
+            ]
+          },
+          "enable_secure_boot": {
+            "type": "boolean",
+            "default": true
           },
           "allow_public_web_egress": {
             "type": "boolean",

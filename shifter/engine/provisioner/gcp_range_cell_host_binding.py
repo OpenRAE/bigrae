@@ -46,6 +46,7 @@ def _assert_instance_image_binding(existing: object, instance: InstancePlan) -> 
 
 def _assert_preconfigured_host_binding(existing: object, plan: RangeCellPlan, instance: InstancePlan) -> None:
     """Never adopt a participant host with different ownership or image policy."""
+    assert_runtime_hardware_binding(existing, instance)
     if instance["profile"].bootstrap_capability != GCE_BOOTSTRAP_PRECONFIGURED_MACHINE_HOST:
         return
     expected = {
@@ -56,3 +57,35 @@ def _assert_preconfigured_host_binding(existing: object, plan: RangeCellPlan, in
     }
     if any(_existing_label(existing, key) != value for key, value in expected.items()):
         raise GCEInstanceBindingError("Existing GCE participant host has a conflicting range or image-profile binding")
+
+
+def assert_runtime_hardware_binding(existing: object, instance: InstancePlan) -> None:
+    """Read back explicit hardware choices before reusing or admitting a guest."""
+    profile = instance["profile"]
+    if not (profile.nic_type or profile.disk_interface or not profile.enable_secure_boot):
+        return
+    if str(getattr(existing, "machine_type", "")).rsplit("/", 1)[-1] != profile.machine_type:
+        raise GCEInstanceBindingError("GCE guest machine type differs from the selected profile")
+    shielded = getattr(existing, "shielded_instance_config", None)
+    if getattr(shielded, "enable_secure_boot", None) is not profile.enable_secure_boot:
+        raise GCEInstanceBindingError("GCE guest Secure Boot state differs from the selected profile")
+    if profile.nic_type:
+        _assert_nic_type(existing, profile.nic_type)
+    if profile.disk_interface:
+        _assert_boot_disk_interface(existing, profile.disk_interface)
+
+
+def _assert_nic_type(existing: object, expected: str) -> None:
+    """Require one provider NIC with the selected interface type."""
+    interfaces = list(getattr(existing, "network_interfaces", None) or [])
+    actual = getattr(interfaces[0], "nic_type", None) if len(interfaces) == 1 else None
+    if getattr(actual, "name", actual) != expected:
+        raise GCEInstanceBindingError("GCE guest NIC differs from the selected profile")
+
+
+def _assert_boot_disk_interface(existing: object, expected: str) -> None:
+    """Require one provider boot disk with the selected interface type."""
+    disks = [disk for disk in (getattr(existing, "disks", None) or []) if getattr(disk, "boot", False)]
+    actual = getattr(disks[0], "interface", None) if len(disks) == 1 else None
+    if getattr(actual, "name", actual) != expected:
+        raise GCEInstanceBindingError("GCE guest boot disk interface differs from the selected profile")
