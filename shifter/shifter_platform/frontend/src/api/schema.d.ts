@@ -5198,6 +5198,8 @@ export interface components {
                 [key: string]: unknown;
             };
         };
+        /** @enum {unknown} */
+        BlankEnum: "";
         /** @description Top-level SPA bootstrap payload. */
         Bootstrap: {
             principal: components["schemas"]["BootstrapPrincipal"];
@@ -6098,6 +6100,13 @@ export interface components {
             idempotency_key: string;
             action: string;
         };
+        /**
+         * @description * `` -
+         *     * `NVME` - NVME
+         *     * `SCSI` - SCSI
+         * @enum {string}
+         */
+        DiskInterfaceEnum: "NVME" | "SCSI";
         /** @description Drain request: the binding id and its expected definition revision. */
         Drain: {
             sharing_binding_id: string;
@@ -6985,6 +6994,13 @@ export interface components {
             effect: components["schemas"]["EffectEnum"];
             idempotency_key: string;
         };
+        /**
+         * @description * `` -
+         *     * `GVNIC` - GVNIC
+         *     * `VIRTIO_NET` - VIRTIO_NET
+         * @enum {string}
+         */
+        NicTypeEnum: "GVNIC" | "VIRTIO_NET";
         /** @description List projection of one notification for an event. */
         NotificationListItem: {
             readonly id: string;
@@ -8546,6 +8562,12 @@ export interface components {
             disk_size_gb?: number | null;
             /** @default  */
             disk_type: string;
+            /** @default  */
+            nic_type: components["schemas"]["NicTypeEnum"] | components["schemas"]["BlankEnum"];
+            /** @default  */
+            disk_interface: components["schemas"]["DiskInterfaceEnum"] | components["schemas"]["BlankEnum"];
+            /** @default true */
+            enable_secure_boot: boolean;
             /** @default false */
             allow_public_web_egress: boolean;
             /** @default standard */
