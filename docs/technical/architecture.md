@@ -565,3 +565,7 @@ A retained cleanup task can be retried after its exact provider workload fails.
 The owning range transaction verifies terminal failure and workload identity, then reserves a fresh operation.
 Unknown or active tasks retain custody. Only verified provider absence releases the target.
 See the [failed cleanup retry design](../architecture/failed-cleanup-retry-2822.md).
+
+Ordinary native ranges retain project custody when cleanup inventory is incomplete.
+The existing range reconciler uses the Engine cleanup retry service and its current
+generation checks and delay. See [automatic cleanup verification retry](../architecture/ordinary-cleanup-retry-2841.md).

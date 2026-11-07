@@ -112,6 +112,7 @@ from ._range_authority import has_range_runtime as has_range_runtime
 from ._range_authority import lock_range_remote_authority as lock_range_remote_authority
 from ._range_authority import native_range_id_by_request as native_range_id_by_request
 from ._range_authority import project_range_authority as project_range_authority
+from ._range_cleanup_retry import reconcile_range_cleanup_verification as reconcile_range_cleanup_verification
 from ._vpn_profiles import get_vpn_crl as get_vpn_crl
 from ._worker_qualification import (
     WorkerQualification as WorkerQualification,
