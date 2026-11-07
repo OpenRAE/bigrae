@@ -56,6 +56,14 @@ class RuntimePluginInstallation(RecordedAuthorityFields):
         return f"Runtime plugin {self.id} ({self.state})"
 
 
+class RuntimePluginProbeAuthority(RecordedAuthorityFields):
+    """Append-only admitted proof for one explicit installation reactivation."""
+
+    id = models.UUIDField(primary_key=True, editable=False)
+    installation = models.ForeignKey(RuntimePluginInstallation, on_delete=models.PROTECT)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+
 class RuntimePluginPackBinding(models.Model):
     """Tenant administration affects new ranges; existing ranges keep snapshots."""
 

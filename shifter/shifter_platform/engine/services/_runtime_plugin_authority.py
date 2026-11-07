@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -9,7 +10,7 @@ if TYPE_CHECKING:
 
 from uuid import UUID
 
-from shared.authorization import AuthorizationRequest, TargetRef
+from shared.authorization import AuthorizationRequest, CredentialCeiling, TargetRef
 from shared.authorization.policy import require_authorization
 from shared.credentials import (
     CredentialContext,
@@ -87,12 +88,53 @@ def validate_plugin_scope(row: RuntimePluginInstallation, fields: dict[str, obje
         raise ValidationError(_PLUGIN_AUTHORITY_UNAVAILABLE)
 
 
-def reauthorize_plugin_initiator(row: RuntimePluginInstallation) -> None:
+def reauthorize_plugin_initiator(row: RuntimePluginInstallation) -> CredentialContext:
     """The controller and retries intersect the original exact credential ceiling."""
-    fields = admit_plugin_authority(credential_reference_from_record(row), row.organization_uuid)
+    current = _within_plugin_limits(_probe_credential(row), credential_reference_from_record(row))
+    current = current_plugin_credential(current)
+    fields = admit_plugin_authority(current, row.organization_uuid)
+    _validate_plugin_authority(row, fields)
+    return current
+
+
+def renew_plugin_initiator(row: RuntimePluginInstallation, current: CredentialContext) -> CredentialContext:
+    """Admit the same principal's current proof within the retained limits."""
+    renewed = _within_plugin_limits(current, _probe_credential(row))
+    renewed = _within_plugin_limits(renewed, credential_reference_from_record(row))
+    fields = admit_plugin_authority(renewed, row.organization_uuid)
+    _validate_plugin_authority(row, fields)
+    return renewed
+
+
+def _probe_credential(row: RuntimePluginInstallation) -> CredentialContext:
+    """Resolve the current probe receipt, with the original path for existing probes."""
+    from engine.models import RuntimePluginProbeAuthority
+
+    receipt = RuntimePluginProbeAuthority.objects.filter(pk=row.probe_id, installation_id=row.pk).first()
+    return credential_reference_from_record(receipt if receipt is not None else row)
+
+
+def _within_plugin_limits(current: CredentialContext, limits: CredentialContext) -> CredentialContext:
+    """Use retained fields only as limits on an independently authenticated proof."""
+    if limits.principal != current.principal:
+        raise ValidationError(_PLUGIN_AUTHORITY_UNAVAILABLE)
+    old_target, new_target = limits.ceiling.target, current.ceiling.target
+    if old_target is not None and new_target is not None and old_target != new_target:
+        raise ValidationError(_PLUGIN_AUTHORITY_UNAVAILABLE)
+    return replace(
+        current,
+        ceiling=CredentialCeiling(limits.ceiling.actions & current.ceiling.actions, old_target or new_target),
+        scopes=limits.scopes & current.scopes,
+    )
+
+
+def _validate_plugin_authority(row: RuntimePluginInstallation, fields: dict[str, object]) -> None:
+    """Retain the original owner, organization, target, and management action."""
     validate_plugin_scope(row, fields)
     if (
         fields["authority_target_uuid"] != row.authority_target_uuid
+        or fields["authority_target_type"] != row.authority_target_type
+        or fields["authority_owner_uuid"] != row.authority_owner_uuid
         or row.authority_action != _ORGANIZATION_MANAGE_ADAPTERS
     ):
         raise ValidationError(_PLUGIN_AUTHORITY_UNAVAILABLE)

@@ -198,7 +198,6 @@ def change_runtime_plugin(
     credentials = _retry_registry_credentials(registry_credentials, action)
     from ._runtime_plugin_authority import (
         admit_plugin_authority,
-        reauthorize_plugin_initiator,
         validate_plugin_scope,
     )
 
@@ -211,8 +210,7 @@ def change_runtime_plugin(
     if snapshot is None:
         raise ValidationError("The plugin is unavailable")
     validate_plugin_scope(snapshot, fields)
-    if action in {"retry", "enable"}:
-        reauthorize_plugin_initiator(snapshot)
+    renewed = _reactivation_credential(snapshot, user, action)
     with transaction.atomic():
         row = (
             RuntimePluginInstallation.objects.select_for_update()
@@ -231,10 +229,65 @@ def change_runtime_plugin(
                 raise ValidationError("A retired plugin version cannot be reactivated")
             return _view(row)
         previous = row.state
+        previous_credential = row.credential_uuid
+        _fence_reactivation_credential(row, snapshot, renewed, fields)
         _apply_action(row, action, credentials)
+        _store_reactivation_credential(row, renewed, fields)
         row.save()
-        _audit(user, row, AuditAction.UPDATE, audit, previous=previous)
+        _audit(
+            user,
+            row,
+            AuditAction.UPDATE,
+            audit,
+            previous=previous,
+            previous_credential=previous_credential,
+            probe_credential=renewed.credential_uuid if renewed is not None else None,
+        )
         return _view(row)
+
+
+def _reactivation_credential(
+    row: RuntimePluginInstallation, user: CredentialContext, action: str
+) -> CredentialContext | None:
+    """Renew the initiator's proof or retain another administrator's existing path."""
+    from ._runtime_plugin_authority import reauthorize_plugin_initiator, renew_plugin_initiator
+
+    if action not in {"retry", "enable"}:
+        return None
+    if row.initiating_principal_uuid == user.principal.uuid:
+        return renew_plugin_initiator(row, user)
+    return reauthorize_plugin_initiator(row)
+
+
+def _fence_reactivation_credential(
+    row: RuntimePluginInstallation,
+    snapshot: RuntimePluginInstallation,
+    renewed: CredentialContext | None,
+    fields: dict[str, object],
+) -> None:
+    """Fence the inspected record and current proof before storing only safe references."""
+    from ._runtime_plugin_authority import fence_plugin_authority
+
+    if renewed is None:
+        return
+    if row.probe_id != snapshot.probe_id:
+        raise ValidationError("Plugin authority changed")
+    fence_plugin_authority(renewed, fields)
+
+
+def _store_reactivation_credential(
+    row: RuntimePluginInstallation, renewed: CredentialContext | None, fields: dict[str, object]
+) -> None:
+    """Append a probe-bound receipt without changing the immutable installation."""
+    from engine.models import RuntimePluginProbeAuthority
+    from shared.operation_authority import credential_reference_fields
+
+    if renewed is not None:
+        RuntimePluginProbeAuthority.objects.create(
+            id=row.probe_id,
+            installation=row,
+            **{**fields, "authority_owner_uuid": row.authority_owner_uuid, **credential_reference_fields(renewed)},
+        )
 
 
 def _apply_action(row: RuntimePluginInstallation, action: str, credentials: str) -> None:
@@ -275,6 +328,8 @@ def _audit(
     audit: RequestAudit | None,
     *,
     previous: str = "",
+    previous_credential: UUID | None = None,
+    probe_credential: UUID | None = None,
 ) -> None:
     """Record actor attribution and bounded installation state changes."""
     attribution = audit or RequestAudit()
@@ -289,9 +344,12 @@ def _audit(
             request_id=attribution.request_id,
             source_ip=attribution.source_ip,
             user_agent=attribution.user_agent,
-            previous_state={"state": previous} if previous else {},
+            previous_state={"state": previous, "credential_uuid": str(previous_credential)} if previous else {},
             new_state={
                 "state": row.state,
+                "credential_uuid": str(row.credential_uuid),
+                "probe_credential_uuid": str(probe_credential) if probe_credential is not None else None,
+                "probe_id": str(row.probe_id),
                 "manifest_digest": row.manifest_digest,
                 "organization_uuid": str(row.organization_uuid),
             },

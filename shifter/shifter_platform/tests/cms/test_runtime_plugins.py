@@ -11,7 +11,7 @@ from django.utils import timezone
 from rest_framework.test import APIClient
 from shifter_adapter_sdk.runtime import InspectionResult
 
-from engine.models import RuntimePluginInstallation
+from engine.models import RuntimePluginInstallation, RuntimePluginProbeAuthority
 from engine.services import change_runtime_plugin, install_runtime_plugin, reconcile_runtime_plugins
 from shared.exceptions import ValidationError
 from workspaces.models import Organization, OrganizationMembership
@@ -329,6 +329,178 @@ def test_private_exception_is_bounded_and_retry_uses_fresh_probe(tenant, manifes
     row.refresh_from_db()
     assert row.state == "checking"
     assert row.probe_id != original_probe
+
+
+@pytest.mark.parametrize("action", ["enable", "retry"])
+def test_original_principal_can_renew_expired_installation_authority(
+    tenant, manifest, worker, live_session_credential, action
+):
+    from datetime import timedelta
+
+    from management.models import PrincipalSession
+
+    actor, organization = tenant
+    original = actor.credential
+    result = install_runtime_plugin(original, organization.uuid, manifest)
+    if action == "enable":
+        change_runtime_plugin(original, organization.uuid, result.id, "disable")
+    else:
+        worker.side_effect = RuntimeError("probe unavailable")
+        reconcile_runtime_plugins()
+        worker.side_effect = None
+    row = RuntimePluginInstallation.objects.get(pk=result.id)
+    old_probe = row.probe_id
+    PrincipalSession.objects.filter(credential_uuid=original.credential_uuid).update(
+        expire_date=timezone.now() - timedelta(seconds=1)
+    )
+    current = live_session_credential(actor)
+    change_runtime_plugin(current, organization.uuid, result.id, action)
+    row.refresh_from_db()
+    assert row.state == "checking"
+    assert row.credential_uuid == original.credential_uuid
+    assert RuntimePluginProbeAuthority.objects.get(pk=row.probe_id).credential_uuid == current.credential_uuid
+    assert row.probe_id != old_probe
+    reconcile_runtime_plugins()
+    row.refresh_from_db()
+    assert row.state == "ready"
+
+
+def test_renewal_retains_original_limits_and_audits_safe_references(
+    tenant, manifest, live_session_credential, monkeypatch
+):
+    from dataclasses import replace
+
+    from shared.authorization import CredentialCeiling, TargetRef
+
+    actor, organization = tenant
+    original = replace(
+        actor.credential,
+        ceiling=CredentialCeiling(
+            frozenset({"organization.manage_adapters"}), TargetRef("organization", organization.uuid)
+        ),
+    )
+    events = []
+    monkeypatch.setattr("engine.services._runtime_plugins.audit_log", lambda event, **kwargs: events.append(event))
+    result = install_runtime_plugin(original, organization.uuid, manifest)
+    change_runtime_plugin(original, organization.uuid, result.id, "disable")
+    current = live_session_credential(actor)
+    change_runtime_plugin(current, organization.uuid, result.id, "enable")
+    row = RuntimePluginInstallation.objects.get(pk=result.id)
+    receipt = RuntimePluginProbeAuthority.objects.get(pk=row.probe_id)
+    assert row.credential_uuid == original.credential_uuid
+    assert receipt.credential_uuid == current.credential_uuid
+    assert receipt.credential_ceiling_actions == "organization.manage_adapters"
+    assert receipt.credential_target_type == "organization"
+    assert receipt.credential_target_uuid == organization.uuid
+    assert events[-1].previous_state["credential_uuid"] == str(original.credential_uuid)
+    assert events[-1].new_state["probe_credential_uuid"] == str(current.credential_uuid)
+    assert row.manifest_digest == result.manifest_digest
+    assert row.manifest["worker_image"] == manifest["worker_image"]
+
+
+@pytest.mark.parametrize("expired", [False, True])
+def test_another_administrator_cannot_replace_the_initiating_proof(tenant, manifest, live_session_credential, expired):
+    from datetime import timedelta
+
+    from management.models import PrincipalSession
+
+    actor, organization = tenant
+    result = install_runtime_plugin(actor.credential, organization.uuid, manifest)
+    change_runtime_plugin(actor.credential, organization.uuid, result.id, "disable")
+    other = User.objects.create_user(username="other-plugin-admin")
+    current = live_session_credential(other)
+    actor.policy_principals.add(current.principal.uuid)
+    if expired:
+        PrincipalSession.objects.filter(credential_uuid=actor.credential.credential_uuid).update(
+            expire_date=timezone.now() - timedelta(seconds=1)
+        )
+        with pytest.raises(ValidationError):
+            change_runtime_plugin(current, organization.uuid, result.id, "enable")
+    else:
+        change_runtime_plugin(current, organization.uuid, result.id, "enable")
+    row = RuntimePluginInstallation.objects.get(pk=result.id)
+    assert row.credential_uuid == actor.credential.credential_uuid
+    assert row.state == ("disabled" if expired else "checking")
+
+
+def test_current_proof_revocation_after_renewal_admission_prevents_enable(
+    tenant, manifest, live_session_credential, monkeypatch
+):
+    from datetime import timedelta
+
+    from engine.services import _runtime_plugins
+    from management.models import PrincipalSession
+
+    actor, organization = tenant
+    result = install_runtime_plugin(actor.credential, organization.uuid, manifest)
+    change_runtime_plugin(actor.credential, organization.uuid, result.id, "disable")
+    current = live_session_credential(actor)
+    prepare = _runtime_plugins._reactivation_credential
+
+    def revoke_after_admission(row, user, action):
+        renewed = prepare(row, user, action)
+        PrincipalSession.objects.filter(credential_uuid=current.credential_uuid).update(
+            expire_date=timezone.now() - timedelta(seconds=1)
+        )
+        return renewed
+
+    monkeypatch.setattr(_runtime_plugins, "_reactivation_credential", revoke_after_admission)
+    with pytest.raises(ValidationError):
+        change_runtime_plugin(current, organization.uuid, result.id, "enable")
+    row = RuntimePluginInstallation.objects.get(pk=result.id)
+    assert row.state == "disabled"
+    assert row.credential_uuid == actor.credential.credential_uuid
+
+
+@pytest.mark.parametrize("mutation", ["update", "delete"])
+def test_probe_authority_receipt_is_immutable_in_sql(tenant, manifest, live_session_credential, mutation):
+    from django.db import IntegrityError, transaction
+
+    actor, organization = tenant
+    result = install_runtime_plugin(actor.credential, organization.uuid, manifest)
+    change_runtime_plugin(actor.credential, organization.uuid, result.id, "disable")
+    current = live_session_credential(actor)
+    change_runtime_plugin(current, organization.uuid, result.id, "enable")
+    row = RuntimePluginInstallation.objects.get(pk=result.id)
+    receipts = RuntimePluginProbeAuthority.objects.filter(pk=row.probe_id)
+    with pytest.raises(IntegrityError), transaction.atomic():
+        if mutation == "update":
+            receipts.update(credential_uuid=uuid4())
+        else:
+            receipts.delete()
+    assert receipts.get().credential_uuid == current.credential_uuid
+
+
+def test_another_administrator_carries_the_valid_renewed_proof_into_the_next_probe(
+    tenant, manifest, live_session_credential, worker
+):
+    from datetime import timedelta
+
+    from management.models import PrincipalSession
+
+    actor, organization = tenant
+    original = actor.credential
+    result = install_runtime_plugin(original, organization.uuid, manifest)
+    change_runtime_plugin(original, organization.uuid, result.id, "disable")
+    PrincipalSession.objects.filter(credential_uuid=original.credential_uuid).update(
+        expire_date=timezone.now() - timedelta(seconds=1)
+    )
+    renewed = live_session_credential(actor)
+    change_runtime_plugin(renewed, organization.uuid, result.id, "enable")
+    reconcile_runtime_plugins()
+    change_runtime_plugin(renewed, organization.uuid, result.id, "disable")
+    other = User.objects.create_user(username="subsequent-plugin-admin")
+    current = live_session_credential(other)
+    actor.policy_principals.add(current.principal.uuid)
+    change_runtime_plugin(current, organization.uuid, result.id, "enable")
+    row = RuntimePluginInstallation.objects.get(pk=result.id)
+    receipt = RuntimePluginProbeAuthority.objects.get(pk=row.probe_id)
+    assert row.credential_uuid == original.credential_uuid
+    assert receipt.credential_uuid == renewed.credential_uuid
+    assert receipt.authority_owner_uuid == original.principal.uuid
+    reconcile_runtime_plugins()
+    row.refresh_from_db()
+    assert row.state == "ready"
 
 
 def test_retirement_is_irreversible_and_expired_probe_cannot_enable(tenant, manifest, worker, monkeypatch):

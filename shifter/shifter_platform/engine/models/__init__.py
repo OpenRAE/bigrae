@@ -84,6 +84,7 @@ from ._runtime_plugins import (
     RuntimePluginInstallation,
     RuntimePluginInvocation,
     RuntimePluginPackBinding,
+    RuntimePluginProbeAuthority,
     RuntimePluginRangeBinding,
 )
 from ._sharing import (
@@ -164,6 +165,7 @@ __all__ = [
     "RuntimePluginInstallation",
     "RuntimePluginInvocation",
     "RuntimePluginPackBinding",
+    "RuntimePluginProbeAuthority",
     "RuntimePluginRangeBinding",
     "SharingAuthorityFence",
     "SharingBindingRecord",
