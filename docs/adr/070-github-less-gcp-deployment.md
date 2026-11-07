@@ -58,10 +58,12 @@ tracks the AWS path.
    Trivy gate. The only accepted exposures are time-boxed vendor-binary entries
    in `platform/deployer/gcp/trivyignore.yaml`. Each entry stops applying on its
    expiry date.
-   The deployer builds `gke-gcloud-auth-plugin` from a pinned upstream commit
-   with a digest-pinned Go toolchain. Go verifies the module checksums. The
-   plugin has no scan exceptions. Return to the Google binary when it passes
-   the blocking deployer scan without plugin-specific exceptions.
+   The deployer builds `gke-gcloud-auth-plugin`, `kubectl`, `helm`, and `oras`
+   from pinned upstream release commits with a digest-pinned Go toolchain. It
+   raises `golang.org/x/net` with each project's own dependency tooling where no
+   vendor build has the fix. Go verifies the module checksums. These tools have
+   no scan exceptions. Return to a vendor binary when it passes the blocking
+   deployer scan without exceptions.
 2. **One deploy implementation serves every deploy.** `deploy.py gcp-deploy` is
    the deploy for the first install and for each update. An operator runs it from
    the deployer image or from a clean checkout of the release revision. The GCP
