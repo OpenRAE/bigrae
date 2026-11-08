@@ -1,30 +1,19 @@
 # How to contribute
 
-:+1::tada: First off, thanks for taking the time to contribute. :tada::+1:
+Thank you for contributing.
 
-It's people like you that make security open source such a force in preventing
-successful cyber-attacks. Following these guidelines helps keep the project
-maintainable, easy to contribute to, and more secure. Thank you for taking the
-time to follow this guide.
+Contributions help prevent successful cyber-attacks. Follow this guide to keep the project maintainable and secure.
 
 ## Where to start
 
-There are many ways to contribute. You can fix a bug, improve the documentation,
-submit bug reports and feature requests, or take a first shot at a feature you
-need for yourself.
+You can fix a bug, improve documentation, or submit a bug report or feature request.
+You can also implement a feature that you need.
 
 Pull requests are necessary for all contributions of code or documentation.
 
-## New to open source?
+## New to open source
 
-If you're **new to open source** and not sure what a pull request is, welcome!!
-We're glad to have you. All of us once had a contribution to make and didn't
-know where to start.
-
-Even if you don't write code for your job, don't worry, the skills you learn
-during your first contribution to open source can be applied in so many ways,
-you'll wonder what you ever did before you had this knowledge. It's worth
-learning.
+You can contribute without prior open-source experience. The guide below explains how to create a pull request.
 
 [Learn how to make a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request)
 
@@ -38,8 +27,7 @@ Many fixes require little effort or review, such as:
 
 These small changes can be made directly in GitHub if you like.
 
-Click the pencil icon in GitHub above the file to edit the file directly in
-GitHub. This will automatically create a fork and pull request with the change.
+Click the pencil icon above the file in GitHub. Follow the editor steps to create a fork and pull request.
 See:
 [Make a small change with a Pull Request](https://www.freecodecamp.org/news/how-to-make-your-first-pull-request-on-github/)
 
@@ -59,13 +47,12 @@ of making a fork and pull request yourself:
 receives release-PR promotions; `dev` is the integration branch where
 day-to-day work merges. Feature PRs to `dev` must have a Conventional Commit
 title (`<type>(<optional-scope>): <subject>`, lowercase subject); the
-`pr-title-lint` workflow enforces the shape. Squash-merging makes that title the
-commit release-please reads on `main`, so use `feat`, `fix`, or `perf` (or a
-`!` breaking marker) when the change should cut a release.
+`pr-title-lint` workflow enforces the shape. Squash-merging makes that title the commit release-please reads on `main`.
+Use `feat`, `fix`, or `perf` when the change should produce a release.
+Use a `!` breaking marker for a breaking change.
 
 Please use clear commit messages so we can understand what each commit does.
-We'll review every PR and might offer feedback or request changes before
-merging.
+We review every PR and can request changes before merging.
 
 ## BigRAE project specifics
 
@@ -96,3 +83,73 @@ secrets/repository variables, never hardcoded in the committed tree. The full
 inventory is in [`docs/dev/deploy-secrets.md`](docs/dev/deploy-secrets.md).
 
 Architecture interface changes include review of the [current-state handbook](docs/technical/architecture.md). The documentation coverage manifest maps the affected source paths to their technical pages.
+
+
+## Documentation
+
+Choose a Diataxis purpose: tutorial, how-to guide, reference, or explanation.
+Landing pages can route readers to those forms.
+Verify current claims against code. Verify historical claims against their source revision.
+Preserve technical meaning, quantities, conditions, obligations, commands, identifiers, and useful links.
+Record source paths, revision, checks, results, and corrected differences in the PR.
+
+Use the [shared documentation skill](https://github.com/OpenRAE/doc-tools/tree/v0.1.0/skills/documentation).
+Its guidance covers Diataxis and ASD-STE100 writing without a second local style guide.
+Install its pinned version through your agent's supported mechanism.
+
+For Claude Code:
+
+```text
+/plugin marketplace add OpenRAE/doc-tools#v0.1.0
+/plugin install doc-tools@openrae-doc-tools
+```
+
+For Codex, use the preinstalled skill installer:
+
+```shell
+python3 "${CODEX_HOME:-$HOME/.codex}/skills/.system/skill-installer/scripts/install-skill-from-github.py" \
+  --repo OpenRAE/doc-tools --path skills/documentation --ref v0.1.0
+```
+
+An existing personal skill with the same name can conflict.
+Follow the package's [installation and upgrade guide](https://github.com/OpenRAE/doc-tools/blob/v0.1.0/docs/how-to-install.md).
+Skill installation is separate from tool setup.
+
+From the repository root on Linux x64, install the checksum-verified tools:
+
+```shell
+make docs-tools
+```
+
+Automatic Vale setup currently supports Linux x64.
+The shared package documents its additional STE platforms.
+Check explicit changed paths, including staged, unstaged, or new files:
+
+```shell
+.tools/vale/current/vale CONTRIBUTING.md path/to/page.md
+bash .tools/doc-tools/0.1.0/tools/ste-lint.sh CONTRIBUTING.md path/to/page.md
+```
+
+Use actual file paths in place of the example path.
+Quote filenames that contain spaces.
+These commands do not change the files.
+The STE wrapper refuses an invocation without paths.
+
+CI reports legacy findings and checks rewritten pages listed in `.ste-required.txt`.
+Add a page to that list after its full rewrite passes both tools.
+Keep preserved records out through narrow, documented exclusions.
+Edit generated prose at its maintained source.
+
+The selected STE checks cover contractions, sentence length, and paragraph length.
+They run locally with the dictionary and remote analyzer disabled.
+Passing them does not prove full STE conformance, factual accuracy, or a clear Diataxis purpose.
+Review those properties separately against the [official STE source](https://www.asd-ste100.org/).
+
+Check rendered headings, descriptive links, and diagram alternatives.
+Check keyboard access when navigation changes.
+Do not use color alone to convey meaning.
+
+For an upgrade or rollback, review the release notes and restore or update the recorded version and checksums.
+Keep the installer, Makefile, Vale configuration, and skill references aligned.
+Run the targeted checks before changing the pin in a PR.
+The existing [ADR enforcement reference](docs/technical/dev/adr-enforcement.md#docs-prose-vale) describes the migration gates and exclusions.

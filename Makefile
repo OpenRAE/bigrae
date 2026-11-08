@@ -160,17 +160,57 @@ test-adr-guard: ## Repository-guard suite (adr_guard checks, quality ownership, 
 	    -m unittest discover -s scripts/adr_guard/tests -p 'test_*.py'
 	uv run --python 3.11 --with coverage coverage xml -o scripts/adr_guard/coverage.xml
 
+DOC_TOOLS_DIR := .tools/doc-tools/0.1.0
+VALE_BIN := .tools/vale/current/vale
+export DOCS_BASE ?= origin/dev
+
+.PHONY: docs-tools docs-changed docs-required docs-report docs-build
+docs-tools: ## Install and verify the pinned documentation tools and styles (Linux x64)
+	bash tools/install-vale.sh --docs
+
+docs-changed docs-required docs-report: SHELL := /bin/bash
+
+docs-changed: ## Check Markdown committed since DOCS_BASE; authoring uses explicit paths
+	@set -euo pipefail; \
+	selected="$$(mktemp)"; trap 'rm -f "$$selected"' EXIT; \
+	git diff --name-only --diff-filter=ACMRT -z "$${DOCS_BASE}...HEAD" -- '*.md' > "$$selected"; \
+	mapfile -d '' -t files < "$$selected"; \
+	if [ "$${#files[@]}" -eq 0 ]; then echo 'No changed Markdown files.'; exit 0; fi; \
+	files=("$${files[@]/#/./}"); \
+	$(VALE_BIN) "$${files[@]}"
+
+docs-required: ## Enforce Vale and STE on the rewritten-page list
+	@set -euo pipefail; \
+	mapfile -t files < .ste-required.txt; \
+	if [ "$${#files[@]}" -eq 0 ]; then echo 'The rewritten-page list is empty.' >&2; exit 2; fi; \
+	for file in "$${files[@]}"; do \
+	  if [[ "$$file" != *.md || ! -f "./$$file" ]]; then echo "Invalid rewritten page: $$file" >&2; exit 2; fi; \
+	done; \
+	files=("$${files[@]/#/./}"); \
+	$(VALE_BIN) "$${files[@]}"; \
+	bash $(DOC_TOOLS_DIR)/tools/ste-lint.sh "$${files[@]}"
+
+docs-report: ## CI migration report; findings are advisory, tool errors still fail
+	@set -euo pipefail; \
+	selected="$$(mktemp)"; trap 'rm -f "$$selected"' EXIT; \
+	git ls-files -z -- '*.md' \
+	  ':!:CHANGELOG.md' ':!:shifter/engine/provisioner/CHANGELOG.md' \
+	  ':!:changelog.d/*.md' ':!:CODE_OF_CONDUCT.md' \
+	  ':!:platform/terraform/gcp/modules/portal/identity-platform/functions/identity-platform/vendor/node-forge/README.md' > "$$selected"; \
+	mapfile -d '' -t files < "$$selected"; \
+	if [ "$${#files[@]}" -eq 0 ]; then echo 'No maintained Markdown files.' >&2; exit 2; fi; \
+	files=("$${files[@]/#/./}"); \
+	$(VALE_BIN) --no-exit "$${files[@]}"; \
+	bash $(DOC_TOOLS_DIR)/tools/ste-lint.sh --fail-over -1 --summary "$${files[@]}"
+
+docs-build: ## Build the existing public documentation site without publishing
+	mkdocs build --strict
+
 policy: ## Run repository architecture, import, diff, and changed-doc policy
 	python3 scripts/adr_guard/adr_guard.py --all --level ci
 	cd shifter/shifter_platform && uv run lint-imports --config ../../.importlinter
 	git diff --check
-	@if ! command -v vale >/dev/null 2>&1 && [ ! -x .tools/vale/current/vale ]; then \
-	  bash tools/install-vale.sh; \
-	fi
-	@vale_bin="$$(command -v vale 2>/dev/null || true)"; \
-	if [ -z "$$vale_bin" ]; then vale_bin=".tools/vale/current/vale"; fi; \
-	git diff --name-only --diff-filter=d -z origin/dev...HEAD -- '*.md' | \
-	  xargs -0 -r "$$vale_bin"
+	$(MAKE) docs-tools docs-changed
 
 # Not silenced with `@`: this is the one target that mutates the remote, so the
 # operator sees the exact command before it runs. `gh` owns authentication,
