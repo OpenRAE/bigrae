@@ -2,10 +2,12 @@
 
 from uuid import UUID
 
-from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile
+from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile, WorkerTrial
 
 
-def lock_provisioner_target(payload: dict[str, object]) -> Range | Instance | VpnAccessProfile | GcpRangeProject | None:
+def lock_provisioner_target(
+    payload: dict[str, object],
+) -> Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial | None:
     """Lock the named target before its intent, inside the caller's transaction.
 
     A missing or malformed target cannot authorize an effect. Returning None
@@ -13,7 +15,7 @@ def lock_provisioner_target(payload: dict[str, object]) -> Range | Instance | Vp
     Generation, custody and input checks remain with the owning validators.
     """
     resource = payload.get("resource")
-    target: Range | Instance | VpnAccessProfile | GcpRangeProject | None = None
+    target: Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial | None = None
     try:
         if resource == "range-project":
             target = GcpRangeProject.objects.select_for_update().filter(pk=UUID(str(payload.get("request_id")))).first()
@@ -21,6 +23,12 @@ def lock_provisioner_target(payload: dict[str, object]) -> Range | Instance | Vp
             target = (
                 VpnAccessProfile.objects.select_for_update(of=("self",))
                 .filter(pk=UUID(str(payload.get("profile_id"))))
+                .first()
+            )
+        elif resource == "worker-trial":
+            target = (
+                WorkerTrial.objects.select_for_update(of=("self",))
+                .filter(pk=UUID(str(payload.get("trial_id"))))
                 .first()
             )
         elif resource in {"range", "raes-range", "ngfw"}:

@@ -25,6 +25,7 @@ from raes_contracts.timestamps import parse_rfc3339_datetime
 
 from shared.audit.integrity import _SECRET_KEY_SUFFIXES, _SECRET_KEYS
 from shared.raes.trial_archive import MAX_JSON_BYTES, TrialArchiveError, TrialArchiveIdentity, _json, safe_archive_path
+from shared.raes.trial_archive_lilrae import TRIAL_RECORD_CONTRACT, validate_trial_record
 from shared.schemas._raes_validation import JsonObject, _reject_secret_value
 
 
@@ -435,7 +436,7 @@ def validate_archive_records(
     *,
     trace_attempts: set[str],
     formats: dict[str, str],
-) -> tuple[str, str, bool, int, JsonObject]:
+) -> tuple[str, str, bool, int, JsonObject | None]:
     """Keep collection and scientific success independent, including partial runs."""
     payloads = [
         _structured_document(raw, formats.get(name, "json"))
@@ -445,6 +446,8 @@ def validate_archive_records(
     for payload in payloads:
         trace_attempts.update(validate_structured_bindings(payload, expected))
     _verify_byte_references(payloads, inventory, expected.run_id)
+    if marker.get("sealed_contract_versions") == [TRIAL_RECORD_CONTRACT]:
+        return validate_trial_record(documents, marker, expected, trace_attempts)
     run = ExperimentRunModel.model_validate(_json(documents["manifest.json"]))
     plan = _retained_plan(payloads)
     _validate_plan_identity(plan, run, expected)

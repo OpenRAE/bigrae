@@ -73,6 +73,14 @@ class ObjectStorage(Protocol):
 
     def object_exists(self, bucket: str, key: str) -> bool: ...
 
+    def upload_new_object(self, bucket: str, key: str, source_path: str) -> None:
+        """Create ``bucket``/``key`` from a local file; never replace an existing object.
+
+        Raises ``ObjectPreconditionError`` when the object already exists and
+        ``CloudStorageError`` on any other failure.
+        """
+        ...
+
     def delete_object(self, bucket: str, key: str) -> None: ...
 
     def head_object(self, bucket: str, key: str) -> dict[str, Any]:

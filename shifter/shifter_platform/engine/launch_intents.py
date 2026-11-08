@@ -139,6 +139,10 @@ def validate_provisioner_command(command: list[str]) -> dict[str, object]:
         from engine.services._vpn_profile_operations import validate_vpn_command
 
         payload = validate_vpn_command(base)
+    elif base[:1] == ["worker-trial"]:
+        from engine.services._worker_trials import validate_worker_trial_command
+
+        payload = validate_worker_trial_command(base)
     else:
         payload = _request_payload(base) or _legacy_range_payload(base)
     if payload is None:
@@ -158,6 +162,8 @@ def command_from_payload(payload: dict[str, object]) -> list[str]:
         command = [str(resource), str(operation), "--request-id", str(payload["request_id"])]
         if resource == "vpn-profile":
             command.extend(["--profile-id", str(payload["profile_id"])])
+        elif resource == "worker-trial":
+            command.extend(["--trial-id", str(payload["trial_id"])])
     else:
         command = [
             str(resource),
@@ -280,9 +286,34 @@ def assert_provisioner_input_matches(payload: dict[str, object], operation_id: U
 
         validate_vpn_operation(payload, operation_id)
         return
+    if payload.get("resource") == "worker-trial":
+        from engine.services._worker_trials import validate_worker_trial_operation
+
+        validate_worker_trial_operation(payload, operation_id)
+        return
     intent = ProvisionerLaunchIntent.objects.filter(operation_id=operation_id).first()
     if intent is not None and intent.authority_kind:
         _assert_stored_intent_matches(payload, operation_id)
+
+
+def _validate_native_generation(payload: dict[str, object], expected_operation_id: UUID | str | None) -> bool:
+    """Fence a project, VPN profile or worker trial operation; return False for other resources."""
+    resource = payload.get("resource")
+    if resource == "range-project":
+        from engine.services._gcp_project_operations import validate_project_operation
+
+        validate_project_operation(payload, expected_operation_id)
+    elif resource == "vpn-profile":
+        from engine.services._vpn_profile_operations import validate_vpn_operation
+
+        validate_vpn_operation(payload, expected_operation_id)
+    elif resource == "worker-trial":
+        from engine.services._worker_trials import validate_worker_trial_operation
+
+        validate_worker_trial_operation(payload, expected_operation_id)
+    else:
+        return False
+    return True
 
 
 def validate_provisioner_generation(
@@ -292,15 +323,7 @@ def validate_provisioner_generation(
     expected_operation_id: UUID | str | None = None,
 ) -> None:
     """Fence domain facts only; callers admitting effects first authorize policy."""
-    if payload.get("resource") == "range-project":
-        from engine.services._gcp_project_operations import validate_project_operation
-
-        validate_project_operation(payload, expected_operation_id)
-        return
-    if payload.get("resource") == "vpn-profile":
-        from engine.services._vpn_profile_operations import validate_vpn_operation
-
-        validate_vpn_operation(payload, expected_operation_id)
+    if _validate_native_generation(payload, expected_operation_id):
         return
     if "request_id" not in payload:
         _authorize_legacy_range(payload, target, expected_operation_id)

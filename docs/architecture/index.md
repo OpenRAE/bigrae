@@ -40,6 +40,7 @@ These retain their stated design authority and are not historical preflights:
 - [Tenant trial archive intake boundary](experiments-trial-archive-intake-boundary-2740.md)
 - [Disposable trial worker boundary](disposable-trial-workers-boundary-2741.md)
 - [Pack experiment admission boundary](experiment-admission-boundary-2742.md)
+- [Admitted trials on disposable workers](parallel-trial-dispatch-boundary-2743.md)
 - [Trial archive custody design](trial-archive-custody.md)
 - [Retained experiment result exports](experiment-result-exports.md)
 - [External runtime boundary](external-scenario-runtime-design.md)
@@ -56,3 +57,4 @@ These retain their stated design authority and are not historical preflights:
 - [Team captain controls (#646)](ctf-team-captain-preflight-646.md)
 
 - [Pack experiment admission design](experiment-admission-design-2742.md) — retained inputs, security boundaries, and claim persistence.
+- [Parallel trial dispatch design](parallel-trial-dispatch-design-2743.md) — worker trials, native operations, data flow, and controls.

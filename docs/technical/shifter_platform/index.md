@@ -1,6 +1,7 @@
 # BigRAE Platform
 
 - [Experiment admission](experiment-admission.md) - Immutable inputs and fenced operational claims
+- [Experiment dispatch](experiment-dispatch.md) - Worker trials, staging, collection and cleanup
 
 Django application architecture for the BigRAE cyber range platform.
 

@@ -117,7 +117,7 @@ representations, and are bounded by the provider byte limit and the existing
 preparation-output budget. This selection grants no cloud API or key-issuance
 authority to an adapter.
 
-SDK 0.1.3 accepts at most 2048 secret payload selections in one preparation response.
+SDK 0.2.0 accepts at most 2048 secret payload selections in one preparation response.
 The complete clear response must still fit 512 KiB.
 Each value must fit 65536 UTF-8 bytes, and version references must be unique.
 The existing invocation, phase, and host authority checks apply to every selection.
@@ -217,3 +217,35 @@ The host still pins the installed executable, target bindings, operation, phase,
 An adapter cannot install itself through content or choose provider resources.
 Apparatus planning uses the existing isolated worker and bounded guest-action contract.
 A compatible installation probe does not prove guest readiness.
+
+## Worker trial control
+
+An apparatus plugin can declare the `trial.control` capability.
+It must use `bigrae.runtime-plugin/v2` and declare `guest.configure`.
+Its configure phase installs one executable at `/usr/local/libexec/bigrae/trial-control`.
+BigRAE then uses that executable to run one trial on the worker.
+`shifter_adapter_sdk.trial` defines the paths, verbs, and closed models.
+
+Before `start`, the host stages two files in `/var/lib/bigrae/trial/input`:
+
+| File | Content |
+| --- | --- |
+| `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 of `scenario.sdl` |
+| `scenario.sdl` | The complete concrete trial SDL |
+
+The worker image supplies the trial runtime and its environment pack.
+
+The host runs the executable as root with one verb argument:
+
+| Verb | Behavior | Output |
+| --- | --- | --- |
+| `start` | Run the trial in the foreground until it ends. The host detaches this command. | None |
+| `status` | Return at once. | One `TrialStatus` JSON object |
+| `stop` | Request a stop and return at once. | None |
+| `export` | Write one sealed archive in `/var/lib/bigrae/trial/export`. | One `TrialExport` JSON object |
+
+Validate every staged file against `trial.json` before `start` uses it.
+Use the supplied run and attempt IDs without change.
+Keep output within 64 KiB; the host refuses larger or ambiguous output.
+`sealed` in `TrialStatus` is an adapter claim; BigRAE validates the exported archive itself.
+The executable must not upload data or create cloud resources.

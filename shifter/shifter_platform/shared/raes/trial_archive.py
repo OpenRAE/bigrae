@@ -49,6 +49,8 @@ class TrialArchiveIdentity:
     plan_digest: str
     entry_digest: str
     run_version: str
+    #: The exact trial SDL digest; required for a LilRAE trial seal, absent otherwise.
+    scenario_sha256: str = ""
 
     def __post_init__(self) -> None:
         """Require bounded expected identifiers and explicit admission digests."""
@@ -58,6 +60,15 @@ class TrialArchiveIdentity:
         for digest in (self.plan_digest, self.entry_digest):
             if not isinstance(digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
                 raise TrialArchiveError("Expected archive digest is required")
+        if self.scenario_sha256 and not re.fullmatch(r"sha256:[a-f0-9]{64}", self.scenario_sha256):
+            raise TrialArchiveError("Expected scenario digest is invalid")
+
+    def as_record(self) -> dict[str, str]:
+        """Return the stored identity; an absent scenario digest keeps earlier records unchanged."""
+        record = {name: getattr(self, name) for name in self.__slots__}
+        if not self.scenario_sha256:
+            del record["scenario_sha256"]
+        return record
 
 
 @dataclass(frozen=True, slots=True)

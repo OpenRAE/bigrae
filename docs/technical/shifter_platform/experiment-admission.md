@@ -34,7 +34,7 @@ If a claim response is lost, an operator with organization `manage_content` auth
 Recovery does not allocate another attempt, release capacity, or authorize redispatch.
 Reconcile the existing worker and verify cleanup before releasing capacity; claims never expire into automatic redispatch.
 
-The future dispatcher must validate live capacity, provider quotas, worker isolation, and cleanup before resource use.
+[Experiment dispatch](experiment-dispatch.md) validates worker capacity, isolation, and cleanup before resource use.
 The batch lock enforces requested concurrency for active claims.
 An observed terminal disposition remains active until an authorized caller records verified cleanup.
 The released RAES validator checks the cleanup receipt against the retained plan and exact attempt identity.

@@ -324,7 +324,6 @@ def test_corrupt_retained_digest_is_refused_before_projection(experiment_inputs)
 
 
 def test_collection_joins_existing_custody_receipt_and_does_not_release_claim(experiment_inputs, tmp_path):
-    from dataclasses import asdict
 
     from cms.models import ExperimentEntry
     from cms.services import (
@@ -395,7 +394,7 @@ def test_collection_joins_existing_custody_receipt_and_does_not_release_claim(ex
     original.write_bytes(raw)
     validate_trial_archive(original, identity)
     receipt = intake_trial_archive(actor.credential, organization.uuid, identity, io.BytesIO(raw))
-    assert receipt.expected == asdict(identity)
+    assert receipt.expected == identity.as_record()
     record_experiment_collection(actor.credential, organization.uuid, claim.token, receipt.id)
     record_experiment_collection(actor.credential, organization.uuid, claim.token, receipt.id)
     assert ExperimentEntry.objects.get(token=claim.token).receipt_id == receipt.id

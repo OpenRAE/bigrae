@@ -79,7 +79,7 @@ Unknown owner hooks and unsupported combinations fail closed.
 | Revoked proof during admission | Recheck local proof and ancestry before commit | Credential revocation test |
 | Changed scientific input | Registered pack digest, complete retained digest, database immutability triggers | Tamper and reload tests |
 | Duplicate dispatch | Batch row lock, pending-state compare, unique claim token | PostgreSQL concurrent-claim test |
-| Capacity escalation | Validate positive concurrency against configured ceiling and RAES isolation ceiling | Boundary tests |
+| Capacity escalation | Validate positive concurrency against configured ceiling and RAES admitted parallelism ceiling | Boundary tests |
 | Secret retention or error disclosure | Existing credential rejection checks; fixed public errors and opaque audit fields | Credential and error tests |
 | Forged collection | Join committed receipt with retained scientific identities and attempt token | Receipt mismatch tests |
 
@@ -98,7 +98,7 @@ The configured concurrency ceiling defaults to 200.
 The closed native apparatus authority document configures this ceiling under installation authority.
 The CLI concurrency request cannot raise that document's approved ceiling.
 This slice adds no environment binding or deployment configuration.
-The current compiler emits no parallel isolation proof, so its admitted plans have a serial ceiling.
+The SDL `trial_parallelism` value sets the admitted parallelism ceiling. A plan without it has a serial ceiling.
 Large factorial requests fail at their owner limits.
 Admission never reduces, partitions, or rewrites a study.
 Future owner-supported partitioning requires a new reviewed dependency tuple.

@@ -35,7 +35,7 @@ from ._operation_apply_domain import apply_validated_result
 # engine.models is imported lazily inside functions below (app-registry load
 # order); this block is type-check-only.
 if TYPE_CHECKING:
-    from engine.models import GcpRangeProject, Instance, OperationResultInbox, Range, VpnAccessProfile
+    from engine.models import GcpRangeProject, Instance, OperationResultInbox, Range, VpnAccessProfile, WorkerTrial
 
 logger = logging.getLogger(__name__)
 
@@ -44,16 +44,16 @@ _RANGE_RESOURCES = frozenset({"range", "raes-range"})
 
 def _resolve_operation_target(
     resource: str, operation_id: UUID | str
-) -> Range | Instance | VpnAccessProfile | GcpRangeProject | None:
+) -> Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial | None:
     """Return the domain row that currently owns this operation generation, or None.
 
     A row is returned only when its ``provisioner_operation_id`` still equals the
     result's ``operation_id`` — i.e. the generation is current. A rotated (or
     absent) generation resolves to None, which the caller treats as stale.
     """
-    from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile
+    from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile, WorkerTrial
 
-    target: Range | Instance | VpnAccessProfile | GcpRangeProject | None
+    target: Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial | None
     if resource in _RANGE_RESOURCES:
         target = Range.objects.filter(provisioner_operation_id=operation_id).select_related("request").first()
     elif resource == "ngfw":
@@ -70,19 +70,23 @@ def _resolve_operation_target(
             .select_related("range__request")
             .first()
         )
+    elif resource == "worker-trial":
+        target = WorkerTrial.objects.filter(provisioner_operation_id=operation_id).first()
     else:
         target = None
     return target
 
 
 def _request_matches(
-    target: Range | Instance | VpnAccessProfile | GcpRangeProject, expected_request_id: object
+    target: Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial, expected_request_id: object
 ) -> bool:
     """Return True if the target row's request matches the result's request_id."""
-    from engine.models import GcpRangeProject
+    from engine.models import GcpRangeProject, WorkerTrial
 
     if isinstance(target, GcpRangeProject):
         return str(target.pk) == str(expected_request_id)
+    if isinstance(target, WorkerTrial):
+        return str(target.generation) == str(expected_request_id)
     request = getattr(target, "request", None)
     actual_request_id = getattr(request, "request_id", None)
     return actual_request_id is not None and str(actual_request_id) == str(expected_request_id)
