@@ -157,7 +157,7 @@ Quote filenames that contain spaces.
 These commands do not change the files.
 The STE wrapper refuses an invocation without paths.
 
-CI reports legacy findings and checks rewritten pages listed in `.ste-required.txt`.
+CI reports legacy finding counts and checks rewritten pages listed in `.ste-required.txt`.
 Add a page to that list after its full rewrite passes both tools.
 Keep preserved records out through narrow, documented exclusions.
 Edit generated prose at its maintained source.

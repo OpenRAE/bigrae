@@ -1138,6 +1138,8 @@ The Vale workflow runs setup, changed-page checks, required-page checks, and the
 It also exercises negative and corrected samples through the installed wrapper.
 The report uses Vale `--no-exit` and STE `--fail-over -1`.
 Those options report legacy findings while preserving configuration and execution errors.
+The corpus log retains Vale's native summary line and the STE summary.
+It does not repeat retained source excerpts.
 Later rewrites add full pages to `.ste-required.txt` after both checks pass.
 No baseline or second inventory is introduced.
 

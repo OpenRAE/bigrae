@@ -206,6 +206,9 @@ Native nonzero exits stop setup and required-page checks.
 Report mode changes only the finding threshold, never configuration or execution failures.
 Pinned upstream code remains a supply chain risk that checksum verification cannot remove.
 
+Corpus reports use native summary lines to avoid repeating retained evidence.
+Explicit authoring checks retain full findings.
+
 ## Reference evidence
 
 | Source | Version and section | Application |

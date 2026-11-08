@@ -60,6 +60,9 @@ class DocumentationToolsTests(unittest.TestCase):
                 "import json, os, sys\n"
                 "with open(os.environ['LINT_CAPTURE'], 'a') as stream:\n"
                 f"    stream.write(json.dumps({{'tool': {name!r}, 'args': sys.argv[1:]}}) + '\\n')\n"
+                "if '--no-exit' in sys.argv:\n"
+                "    print('SYNTHETIC_EVIDENCE: a retained source excerpt')\n"
+                "    print('Legacy Vale summary')\n"
                 "sys.exit(int(os.environ.get('LINT_STATUS', '0')))\n"
             )
             if name == "ste":
@@ -151,6 +154,8 @@ class DocumentationToolsTests(unittest.TestCase):
         self.git("commit", "-qm", "Add corpus fixture")
         result = self.run_target("docs-report")
         self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("SYNTHETIC_EVIDENCE", result.stdout)
+        self.assertIn("Legacy Vale summary", result.stdout)
         calls = self.calls()
         self.assertEqual(len(calls), 2)
         for call in calls:

@@ -200,7 +200,7 @@ docs-report: ## CI migration report; findings are advisory, tool errors still fa
 	mapfile -d '' -t files < "$$selected"; \
 	if [ "$${#files[@]}" -eq 0 ]; then echo 'No maintained Markdown files.' >&2; exit 2; fi; \
 	files=("$${files[@]/#/./}"); \
-	$(VALE_BIN) --no-exit "$${files[@]}"; \
+	$(VALE_BIN) --no-exit "$${files[@]}" | tail -n 1; \
 	bash $(DOC_TOOLS_DIR)/tools/ste-lint.sh --fail-over -1 --summary "$${files[@]}"
 
 docs-build: ## Build the existing public documentation site without publishing
