@@ -14,6 +14,8 @@ class ExperimentBatch(models.Model):
     retained_json = models.TextField(editable=False)
     retained_digest = models.CharField(max_length=64, editable=False)
     concurrency = models.PositiveIntegerField(editable=False)
+    #: A dispatch stop blocks new claims and trial starts; collection and cleanup continue.
+    dispatch_stopped_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -42,6 +44,8 @@ class ExperimentEntry(models.Model):
     worker_ref = models.CharField(max_length=256, blank=True)
     receipt = models.ForeignKey("cms.TrialArchiveReceipt", on_delete=models.PROTECT, null=True)
     cleanup_receipt_json = models.TextField(blank=True, default="")
+    #: Set once before trial inputs are staged, so every stager stages the same bytes.
+    trial_deadline = models.DateTimeField(null=True, blank=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

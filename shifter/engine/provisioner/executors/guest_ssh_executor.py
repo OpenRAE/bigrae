@@ -17,11 +17,11 @@ import threading
 import time
 from typing import IO, BinaryIO, cast
 
+from executors._ssh_process import SSH_CLIENT_MISSING, GuestSSHConnectionError, invoke_ssh_to_file
 from executors._ssh_readiness import _probe_failure_category
 from executors.base import (
     CommandResult,
     ExecutorCommandError,
-    ExecutorConnectionError,
     ExecutorError,
     ExecutorTimeoutError,
     GuestReadinessTimeoutError,
@@ -35,10 +35,6 @@ logger = logging.getLogger(__name__)
 GuestSSHExecutorError = ExecutorError
 CommandError = ExecutorCommandError
 TimeoutError = ExecutorTimeoutError
-
-
-class GuestSSHConnectionError(ExecutorConnectionError):
-    """Raised when SSH connection fails."""
 
 
 #: Chunk size for streaming a local file to a remote script's stdin.
@@ -312,6 +308,26 @@ class GuestSSHExecutor:
         )
         return _command_result(returncode, stdout_bytes, stderr_bytes)
 
+    def run_command_to_file(
+        self,
+        instance_id: str,
+        script: str,
+        *,
+        output_path: str,
+        max_bytes: int,
+        timeout_seconds: int = 300,
+        document_name: str = "AWS-RunShellScript",
+    ) -> int:
+        """Run ``script`` and write its standard output to ``output_path``.
+
+        The guest is untrusted: the client is killed when the output exceeds
+        ``max_bytes`` or the deadline passes. Returns the remote exit status.
+        """
+        remote_command = self._remote_command(script, document_name, stdin_channel=True)
+        ssh_args = self._build_ssh_args(instance_id, remote_command)
+        logger.info("Copying %s script output over SSH from %s as %s", document_name, instance_id, self._username)
+        return invoke_ssh_to_file(ssh_args, output_path, max_bytes, timeout_seconds)
+
     def _invoke_ssh(self, ssh_args: list[str], command_input: bytes, timeout_seconds: int) -> tuple[int, bytes, bytes]:
         """Run the ssh client locally and return (returncode, stdout, stderr).
 
@@ -330,7 +346,7 @@ class GuestSSHExecutor:
         except subprocess.TimeoutExpired as e:
             raise TimeoutError(f"SSH command timed out after {timeout_seconds}s") from e
         except FileNotFoundError as e:
-            raise GuestSSHConnectionError("ssh binary not found. Ensure openssh-client is installed.") from e
+            raise GuestSSHConnectionError(SSH_CLIENT_MISSING) from e
         except OSError as e:
             raise GuestSSHConnectionError(f"SSH subprocess failed: {e}") from e
 
@@ -356,7 +372,7 @@ class GuestSSHExecutor:
                     ssh_args, stdin=subprocess.PIPE, stdout=stdout_file, stderr=stderr_file
                 )
             except FileNotFoundError as e:
-                raise GuestSSHConnectionError("ssh binary not found. Ensure openssh-client is installed.") from e
+                raise GuestSSHConnectionError(SSH_CLIENT_MISSING) from e
             except OSError as e:
                 raise GuestSSHConnectionError(f"SSH subprocess failed: {e}") from e
             timed_out = threading.Event()

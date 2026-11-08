@@ -2,7 +2,7 @@
 
 Admission retains an installed pack's trial plan and exact scientific inputs.
 It creates no VM and makes no model call.
-Remote dispatch is a separate operation.
+[Dispatch](run-experiment-batches.md) is a separate operation.
 
 ## Prepare the inputs
 
@@ -53,10 +53,11 @@ It reads the immutable retained inputs without loading the source pack or alloca
 
 ## Understand the limits
 
-Requested concurrency must fit both the approved ceiling and the sealed plan's isolation ceiling.
-Current RAES compiler output has a serial ceiling.
+Requested concurrency must fit both the approved ceiling and the sealed plan's admitted parallelism ceiling.
+The SDL `trial_parallelism` value sets the admitted parallelism ceiling.
+A plan without `trial_parallelism` has a serial ceiling of one.
 A configured ceiling of 200 grants no cloud capacity or provider quota.
-A future dispatcher must obtain current capacity before starting a worker.
+[Dispatch](run-experiment-batches.md) obtains current worker capacity before it starts a worker.
 
 The released compiler bounds coordinates, domain values, and product outputs at 10000 each.
 The plan limit is 32 MiB.

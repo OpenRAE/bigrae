@@ -25,6 +25,7 @@ from shared.enums import ResourceStatus
 from shared.exceptions import ValidationError as OperationResultError
 from shared.operation_result_members import _parse_private_host_results, _parse_raes_members
 from shared.raes.status import RAES_OPERATION_STATES, RAES_STATE_SUCCEEDED
+from shared.worker_trial import parse_worker_trial_result
 
 __all__ = [
     "MAX_DIAGNOSTIC_CHARS",
@@ -59,6 +60,7 @@ class Shape(StrEnum):
     RAES_SNAPSHOT = "raes_snapshot"
     RAES_READY = "raes_ready"
     VPN_PKI = "vpn_pki"
+    WORKER_TRIAL = "worker_trial"
     GCP_PROJECT = "gcp_project"
 
 
@@ -481,6 +483,7 @@ def _parse_gcp_project(payload: dict[str, Any], _spec: StepSpec) -> dict[str, An
 PARSERS = {
     Shape.GCP_PROJECT: _parse_gcp_project,
     Shape.VPN_PKI: _parse_vpn_pki,
+    Shape.WORKER_TRIAL: parse_worker_trial_result,
     Shape.INSTANCES: _parse_instances,
     Shape.NGFW: _parse_ngfw,
     Shape.RANGE_TERMINAL: _parse_range_terminal,

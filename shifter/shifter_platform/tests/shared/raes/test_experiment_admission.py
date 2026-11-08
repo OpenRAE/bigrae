@@ -51,3 +51,27 @@ def test_snapshot_refuses_unsafe_members_before_reading_bytes(tmp_path, unsafe):
         (root / "link").symlink_to(root / "member")
     with pytest.raises((RaesPackageError, OSError)), stage_local_experiment_pack(root, max_bytes=1, max_entries=10):
         pytest.fail("Unsafe source bytes must not reach the compiler")
+
+
+@pytest.mark.parametrize(
+    ("requested", "configured", "accepted"),
+    [(2, 4, True), (3, 4, True), (1, 4, False), (4, 4, False), (2, 1, False)],
+)
+def test_concurrency_stays_within_the_admitted_floor_and_ceiling(requested, configured, accepted):
+    from raes_processor.trial_scheduler import BatchSchedule
+
+    from shared.raes.experiment_admission import _concurrency
+
+    schedule = BatchSchedule(
+        plan_id="plan",
+        plan_digest="sha256:" + "0" * 64,
+        scheduling_policy_id="policy",
+        admitted_parallelism_ceiling=3,
+        entries=(),
+        admitted_parallelism_floor=2,
+    )
+    if accepted:
+        _concurrency(requested, configured, schedule)
+    else:
+        with pytest.raises(ValueError, match="outside the configured or admitted limits"):
+            _concurrency(requested, configured, schedule)

@@ -181,6 +181,8 @@ __all__ = [
     "WorkerHostObservation",
     "WorkerPolicyRecord",
     "WorkerRetirementHold",
+    "WorkerTrial",
 ]
 
 from ._disposable_worker import DisposableWorker, WorkerHostObservation, WorkerPolicyRecord, WorkerRetirementHold
+from ._worker_trial import WorkerTrial

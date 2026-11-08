@@ -6,7 +6,6 @@ import hashlib
 import re
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 from uuid import UUID, uuid4
@@ -17,7 +16,6 @@ from django.utils import timezone
 
 from cms.models import ExperimentBatch, ExperimentEntry, RaesPackageSource, TrialArchiveDestination, TrialArchiveReceipt
 from cms.scenarios.pack_validation import PackDigestError, verify_pack_digest
-from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.cloud import get_object_storage
 from shared.cloud.exceptions import CloudStorageError
 from shared.credentials import CredentialContext
@@ -34,44 +32,11 @@ from shared.raes.experiment_admission import (
 from shared.raes.experiment_pack_snapshot import stage_local_experiment_pack
 from shared.raes.object_source import stage_object_pack
 from shared.raes.package_loader import RaesPackageError, resolve_pack_root
-from workspaces.services import OrganizationAuthorizationError
 
 from ._content_authority import content_scope, fence_content_scope, require_content_scope
+from ._experiment_authority import _UNAVAILABLE, _audit, _authorize, _fence
 from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
-from ._tenant_pack_authority import TenantPackAdmission, admit_tenant_pack, fence_tenant_pack
-
-_UNAVAILABLE = "Experiment operation unavailable"
-
-
-def _authorize(credential: CredentialContext, organization_uuid: UUID, operation: str) -> TenantPackAdmission:
-    """Authorize the native tenant operation without disclosing denial details."""
-    try:
-        return admit_tenant_pack(credential, organization_uuid, operation)
-    except OrganizationAuthorizationError:
-        raise CMSError(_UNAVAILABLE) from None
-
-
-def _fence(admission: TenantPackAdmission) -> None:
-    """Recheck credential and ancestry inside the current transaction."""
-    try:
-        fence_tenant_pack(admission)
-    except OrganizationAuthorizationError:
-        raise CMSError(_UNAVAILABLE) from None
-
-
-def _audit(admission: TenantPackAdmission, reference: UUID, disposition: str) -> None:
-    """Record opaque operational identifiers through the strict audit boundary."""
-    audit_log(
-        AuditEvent(
-            entity_type=AuditEntityType.EXPERIMENT,
-            entity_id=0,
-            entity_ref=str(reference),
-            action=AuditAction.UPDATE,
-            **principal_actor_fields(admission.credential.principal),
-            new_state={"organization_uuid": str(admission.organization_uuid), "disposition": disposition},
-        ),
-        strict=True,
-    )
+from ._tenant_pack_authority import TenantPackAdmission
 
 
 def _project(row: ExperimentBatch) -> RetainedExperimentBatch:
@@ -300,7 +265,11 @@ def claim_experiment_entry(
         raise CMSError(_UNAVAILABLE)
     with transaction.atomic():
         _fence(admission)
-        parent = ExperimentBatch.objects.select_for_update().only("id", "concurrency").get(pk=batch_id)
+        parent = (
+            ExperimentBatch.objects.select_for_update()
+            .only("id", "concurrency", "dispatch_stopped_at")
+            .get(pk=batch_id)
+        )
         if (
             ExperimentEntry.objects.filter(batch=parent, cleanup_receipt_json="").exclude(state="pending").count()
             >= parent.concurrency
@@ -418,13 +387,16 @@ def record_experiment_collection(
     receipt_id: UUID,
     *,
     run_version: str = "1",
+    scenario_sha256: str = "",
 ) -> None:
     """Join committed archive custody to this exact attempt, without asserting cleanup."""
     admission = _authorize(credential, organization_uuid, "manage_content")
     attempt = _attempt(organization_uuid, token, locked=False)
     batch = _load(admission, attempt.batch_id)
     try:
-        expected = asdict(experiment_archive_identity(batch.inputs, attempt.plan_entry_id, str(token), run_version))
+        expected = experiment_archive_identity(
+            batch.inputs, attempt.plan_entry_id, str(token), run_version, scenario_sha256=scenario_sha256
+        ).as_record()
     except (ValueError, ValidationError):
         raise CMSError("Experiment collection identity is invalid") from None
     with transaction.atomic():
