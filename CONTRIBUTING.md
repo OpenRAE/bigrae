@@ -1,21 +1,38 @@
+<!-- GEN-2003 requires the imported contribution template to remain verbatim.
+Source: https://github.com/PaloAltoNetworks/.github/blob/master/CONTRIBUTING.md
+Source blob: 8171634e9574577d0d0222023d582f98044ccd47
+Only this preserved policy block is excluded; project addenda below are checked. -->
+<!-- vale off -->
+<!-- ste-disable -->
 # How to contribute
 
-Thank you for contributing.
+:+1::tada: First off, thanks for taking the time to contribute! :tada::+1:
 
-Contributions help prevent successful cyber-attacks. Follow this guide to keep the project maintainable and secure.
+It's people like you that make security open source such a force in preventing
+successful cyber-attacks. Following these guidelines helps keep the project
+maintainable, easy to contribute to, and more secure. Thank you for taking the
+time to follow this guide.
 
 ## Where to start
 
-You can fix a bug, improve documentation, or submit a bug report or feature request.
-You can also implement a feature that you need.
+There are many ways to contribute. You can fix a bug, improve the documentation,
+submit bug reports and feature requests, or take a first shot at a feature you
+need for yourself.
 
 Pull requests are necessary for all contributions of code or documentation.
 
-## New to open source
+## New to open source?
 
-You can contribute without prior open-source experience. The guide below explains how to create a pull request.
+If you're **new to open source** and not sure what a pull request is, welcome!!
+We're glad to have you! All of us once had a contribution to make and didn't
+know where to start.
 
-[Learn how to make a pull request](https://docs.github.com/en/pull-requests/collaborating-with-pull-requests/proposing-changes-to-your-work-with-pull-requests/creating-a-pull-request)
+Even if you don't write code for your job, don't worry, the skills you learn
+during your first contribution to open source can be applied in so many ways,
+you'll wonder what you ever did before you had this knowledge. It's worth
+learning.
+
+[Learn how to make a pull request](https://github.com/PaloAltoNetworks/.github/blob/master/Learn-GitHub.md#learn-how-to-make-a-pull-request)
 
 ## Fixing a typo, or a one or two line fix
 
@@ -27,7 +44,8 @@ Many fixes require little effort or review, such as:
 
 These small changes can be made directly in GitHub if you like.
 
-Click the pencil icon above the file in GitHub. Follow the editor steps to create a fork and pull request.
+Click the pencil icon in GitHub above the file to edit the file directly in
+GitHub. This will automatically create a fork and pull request with the change.
 See:
 [Make a small change with a Pull Request](https://www.freecodecamp.org/news/how-to-make-your-first-pull-request-on-github/)
 
@@ -43,6 +61,15 @@ of making a fork and pull request yourself:
 > 5. Create a pull request to pull the changes from your fork back into the
 >    upstream repository
 
+Please use clear commit messages so we can understand what each commit does.
+We'll review every PR and might offer feedback or request changes before
+merging.
+
+<!-- ste-enable -->
+<!-- vale on -->
+
+## BigRAE project specifics
+
 **Base PRs off `dev`, not `main`.** `main` is the stable release line and only
 receives release-PR promotions; `dev` is the integration branch where
 day-to-day work merges. Feature PRs to `dev` must have a Conventional Commit
@@ -50,11 +77,6 @@ title (`<type>(<optional-scope>): <subject>`, lowercase subject); the
 `pr-title-lint` workflow enforces the shape. Squash-merging makes that title the commit release-please reads on `main`.
 Use `feat`, `fix`, or `perf` when the change should produce a release.
 Use a `!` breaking marker for a breaking change.
-
-Please use clear commit messages so we can understand what each commit does.
-We review every PR and can request changes before merging.
-
-## BigRAE project specifics
 
 The local development loop is in
 [`docs/technical/dev/local-setup.md`](docs/technical/dev/local-setup.md). Every

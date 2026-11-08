@@ -54,5 +54,15 @@ jobs:
           jq -e '[.findings[].rule_id] | unique == ["STE-4.2", "STE-5.1", "STE-6.6"]' "$report"
           printf 'Read the instructions. Verify the prerequisites. Then start the lab.\n' > "$sample"
           bash .tools/doc-tools/0.1.0/tools/ste-lint.sh "$sample"
+          # Preserved policy text must not silence the maintained addendum.
+          cat CONTRIBUTING.md > "$sample"
+          printf '\nYou cannot skip this check.\n' >> "$sample"
+          bash .tools/doc-tools/0.1.0/tools/ste-lint.sh "$sample"
+          printf "\nYou can't skip this check.\n" >> "$sample"
+          if bash .tools/doc-tools/0.1.0/tools/ste-lint.sh --format json "$sample" > "$report"; then
+            echo 'The maintained addendum must remain checked.' >&2
+            exit 1
+          fi
+          jq -e 'any(.findings[]; .rule_id == "STE-4.2")' "$report"
       - name: Report legacy prose findings
         run: make docs-report

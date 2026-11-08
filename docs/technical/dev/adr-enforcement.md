@@ -1145,6 +1145,8 @@ The narrow file exclusions preserve generated root and provisioner changelogs, r
 `.vale.ini` records their reasons. `make docs-report` uses the same exclusions.
 Preserve exact quotations and evidence with supported inline checker directives when needed.
 Document the reason beside each directive.
+`CONTRIBUTING.md` retains its upstream policy block verbatim under GEN-2003.
+Inline directives exclude only that block; the maintained project addenda remain checked.
 A whole architecture folder or all hidden files cannot be excluded as records.
 
 Structured records, source docstrings, command help, and generator inputs also need reader-purpose and meaning review.
