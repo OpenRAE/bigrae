@@ -1,6 +1,6 @@
 # ADR Enforcement
 
-Architecture rules in this repo are enforced by tooling, not just prose.
+Architecture rules in this repo are enforced by tooling, not only prose.
 
 ## What Exists
 
@@ -1098,24 +1098,68 @@ python3 scripts/adr_guard/adr_guard.py --changed --level fast
 
 ## Docs Prose (Vale)
 
-Markdown prose is linted with [Vale](https://vale.sh/) against the Google
-developer documentation style. The config lives in `.vale.ini`; the synced
-style package under `.vale/styles/` is gitignored and fetched with `vale sync`.
-`.vale.ini` pins the Google style package to a release URL. The workflow and
-`tools/install-vale.sh` verify the Vale archive SHA-256 before extraction.
+The [shared documentation boundary](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/documentation-tool-adoption-2804.md) describes the package, data flows, and existing security controls.
+The [contributor guide](https://github.com/OpenRAE/bigrae/blob/dev/CONTRIBUTING.md#documentation) gives authoring and skill-installation steps.
 
-The `.github/workflows/vale.yml` workflow runs on pull requests that touch
-Markdown. It lints only the Markdown files the PR changes, at the config's
-error level, so new and edited docs must be clean without forcing a one-shot
-cleanup of the pre-existing backlog across the repo's Markdown corpus.
+`tools/install-vale.sh --docs` installs doc-tools v0.1.0 and Vale 3.9.1 under ignored `.tools/` paths.
+It verifies reviewed SHA-256 pins before extracting any download.
+It verifies Google v0.7.1 and DocTools style archives before `vale sync` loads them.
+The shared installer separately verifies ste-cli 0.10.1.
+Use `make docs-tools` for the same setup that CI uses.
+Automatic Vale installation supports Linux x64.
 
-Run it locally the same way CI does:
+The package owns the STE wrapper, configuration, and documentation skill.
+BigRAE does not copy their implementation.
+The selected rules are STE-4.2, STE-5.1, and STE-6.6.
+They check contractions, sentence length, and paragraph length.
+The wrapper requires explicit paths and sets `--no-baseline --fail-over 0`.
+Dictionary and remote analyzer features remain disabled.
 
-```bash
-vale sync                       # once, to fetch the Google style package
-vale path/to/changed-doc.md     # lint a specific file
-git diff --name-only origin/dev...HEAD -- '*.md' | xargs -r vale
-```
+`.vale.ini` retains Google errors and adds the shared DocTools style.
+`Google.Contractions = NO` prevents conflicting contraction advice.
+A successful check does not establish factual accuracy, Diataxis purpose, or full STE conformance.
+Review those properties separately.
+
+| Entry point | Scope and failure behavior |
+| --- | --- |
+| `make docs-tools` | Verified package, tool, and style setup; download or checksum errors fail |
+| `make docs-changed` | Vale errors on Markdown committed since `DOCS_BASE`, which defaults to `origin/dev` |
+| `make docs-required` | Vale and strict STE checks on every path in `.ste-required.txt`; empty or stale lists fail |
+| `make docs-report` | CI-only report for tracked Markdown, including hidden guidance and off-site prose |
+| `make docs-build` | Existing `mkdocs build --strict`; no publication |
+
+Changed-file selection checks Git before reading NUL-delimited paths.
+Deleted paths are omitted. Rename destinations, spaces, and hidden paths are retained.
+A failed Git command cannot pass as an empty selection.
+The changed-file target checks committed changes only.
+Use the contributor guide's explicit-path commands while editing staged, unstaged, or new files.
+
+The Vale workflow runs setup, changed-page checks, required-page checks, and the legacy corpus report.
+It also exercises negative and corrected samples through the installed wrapper.
+The report uses Vale `--no-exit` and STE `--fail-over -1`.
+Those options report legacy findings while preserving configuration and execution errors.
+The corpus log retains Vale's native summary line and the STE summary.
+It does not repeat retained source excerpts.
+Later rewrites add full pages to `.ste-required.txt` after both checks pass.
+No baseline or second inventory is introduced.
+
+The narrow file exclusions preserve generated root and provisioner changelogs, retained release fragments, Contributor Covenant text, and one vendored README.
+`.vale.ini` records their reasons. `make docs-report` uses the same exclusions.
+Preserve exact quotations and evidence with supported inline checker directives when needed.
+Document the reason beside each directive.
+`CONTRIBUTING.md` retains its upstream policy block verbatim under GEN-2003.
+Inline directives exclude only that block; the maintained project addenda remain checked.
+A whole architecture folder or all hidden files cannot be excluded as records.
+
+Structured records, source docstrings, command help, and generator inputs also need reader-purpose and meaning review.
+The Markdown checker does not establish coverage for those formats.
+Edit maintained generator wording at its source and preserve machine-valued fields.
+The delivery PR assigns those families to the later rewrite issues.
+
+The Docs workflow builds the same existing MkDocs site through `make docs-build`.
+Publication exclusions remain in `mkdocs.yml`.
+Pages upload and deployment retain their existing conditions and permissions.
+Prose-check coverage does not change the published set.
 
 ## How To Add A Rule
 

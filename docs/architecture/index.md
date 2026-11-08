@@ -56,5 +56,6 @@ These retain their stated design authority and are not historical preflights:
 
 - [Team captain controls (#646)](ctf-team-captain-preflight-646.md)
 
-- [Pack experiment admission design](experiment-admission-design-2742.md) — retained inputs, security boundaries, and claim persistence.
-- [Parallel trial dispatch design](parallel-trial-dispatch-design-2743.md) — worker trials, native operations, data flow, and controls.
+- [Pack experiment admission design](experiment-admission-design-2742.md): retained inputs, security boundaries, and claim persistence.
+- [Shared documentation tool boundary (#2804)](documentation-tool-adoption-2804.md)
+- [Parallel trial dispatch design](parallel-trial-dispatch-design-2743.md): worker trials, native operations, data flow, and controls.

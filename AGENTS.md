@@ -174,3 +174,12 @@ To deploy, update, destroy, or debug a GitHub-less GCP deployment, follow
 deploys, follow `.claude/skills/gcp-release/SKILL.md`. These files are the
 agent workflow for Codex and Claude. They link the handbook, RB023, and the
 standup gotchas, which hold the procedure.
+
+
+## Documentation authoring
+
+Use the released documentation skill and explicit-path checks in
+[CONTRIBUTING.md](CONTRIBUTING.md#documentation).
+Verify claims against source code and preserve technical meaning and literal commands.
+Review Diataxis purpose and STE meaning separately from the three automated STE checks.
+Keep maintained hidden guidance and off-site prose in scope.
