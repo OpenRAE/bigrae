@@ -3,6 +3,8 @@
 Applicability: GCP/GCE primary; AWS optional. Operator: range and security
 operator. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A range remains destroying, a cancel or expiry does not converge, or the portal
@@ -26,9 +28,7 @@ shows destroyed while provider resources are still present.
 If the application still offers cancel or destroy, invoke it once through the
 authorized lifecycle service and follow the resulting operation ID. Do not
 delete provider resources first: that breaks the operation-result and cleanup
-proof. If a credential must be revoked to contain an active range, use the
-approved credential/lifecycle service, preserve the accepted cleanup authority,
-and confirm that the destroy intent remains executable after caller revocation.
+proof. To revoke a credential for containment, use the approved credential or lifecycle service. Preserve accepted cleanup authority. Confirm that the destroy intent remains executable after caller revocation.
 
 When the owning operation is terminal but residuals remain, block reuse of its
 network and identifiers and escalate to the platform owner. GCP has no approved

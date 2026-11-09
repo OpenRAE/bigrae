@@ -6,6 +6,11 @@ a separate verified step.
 
 ## Required preparation
 
+For standard GCP installation, use `gcp-install`; for updates, use `gcp-deploy`.
+They orchestrate these separate deployment-admin duties.
+Do not run independent migrations or publication beside an active deployment.
+The steps below describe preparation for an explicitly managed custom installation.
+
 Use a deployment-admin identity, separate from the portal runtime workload, to:
 
 1. provision a dedicated PostgreSQL database and least-privilege database identity;
@@ -18,7 +23,7 @@ Do not place database URIs, preshared keys or private keys in Helm values. Do no
 
 ## Server posture
 
-The chart pins OpenFGA 1.20.0 by digest, uses a ClusterIP with no ingress, verifies TLS hostnames through the mounted CA, requires preshared authentication, and binds plaintext gRPC to loopback only. Playground and profiler are disabled. NetworkPolicy permits portal-to-OpenFGA and OpenFGA/deployment-admin-to-PostgreSQL traffic only. Resource requests/limits, PostgreSQL pool bounds, readiness/liveness probes, metrics, a disruption budget and two anti-affined replicas are explicit.
+The chart pins OpenFGA 1.20.0 by digest and uses a ClusterIP without ingress. It verifies TLS hostnames through the mounted CA and requires preshared authentication. Plaintext gRPC binds only to loopback. Playground and profiler are disabled. NetworkPolicy permits portal-to-OpenFGA and OpenFGA/deployment-admin-to-PostgreSQL traffic only. Resource requests/limits, PostgreSQL pool bounds, readiness/liveness probes, metrics, a disruption budget and two anti-affined replicas are explicit.
 
 The `openfga-admin` service account and its database/DNS egress policy are earlier pre-install/pre-upgrade hook prerequisites for the `openfga-datastore-migrate` hook. They remain available for the job's lifetime and are replaced before the next hook run; the completed job is cleaned up. This also permits first-time enablement on an existing namespace with default-deny policies. The migration must finish before rollout. Store/model publication remains an explicit deployment-admin step because the runtime adapter intentionally has no administration API.
 
@@ -28,9 +33,9 @@ The `openfga-admin` service account and its database/DNS egress policy are earli
 - Publish and conformance-test a model before setting its ID in the runtime bundle.
 - Treat store and model IDs as immutable release inputs. A missing or malformed ID fails application startup/configuration closed.
 - Rotate the runtime preshared key through the external secret store and mounted file. Never put it in an environment variable or release metadata.
-- A provider timeout or server error denies checks. A failed policy write becomes `unresolved`; status `GET` requests are observational, while the explicit CSRF-protected reconciliation `POST` checks its exact generation-bound tuple state before a conflicting edit is allowed. Replaying a generation is append-only and idempotent; a superseded generation cannot restore access.
+- A provider timeout or server error denies checks. A failed policy write becomes `unresolved`. Status `GET` requests only observe state. The CSRF-protected reconciliation `POST` checks exact generation-bound tuple state before permitting a conflicting edit. Replaying a generation is append-only and idempotent; a superseded generation cannot restore access.
 - Prepare the platform's locked environment with `uv sync --frozen` from `shifter/shifter_platform`, then run `scripts/run_openfga_integration.sh` there to reproduce the released-server PostgreSQL/TLS/auth conformance suite locally. The harness uses the prepared environment without resolving dependencies or building packages during execution.
-- The opt-in `platform/charts/shifter/tests/test_openfga_rollout.py` exercises a real two-worker scheduler upgrade. Create a disposable kind cluster named `shifter-2315-rollout` with one control-plane and two workers, then run the test with `OPENFGA_ROLLOUT_KUBECONFIG` pointing at that cluster's dedicated kubeconfig. It retains the rendered placement and rollout settings and runs the pinned server with in-memory storage and no exposed Service; it is a scheduling test, not a replacement for the PostgreSQL/TLS suite.
+- The opt-in `platform/charts/shifter/tests/test_openfga_rollout.py` exercises a real two-worker scheduler upgrade. Create a disposable kind cluster named `shifter-2315-rollout` with one control-plane and two workers, then run the test with `OPENFGA_ROLLOUT_KUBECONFIG` pointing at that cluster's dedicated kubeconfig. It retains rendered placement and rollout settings. The pinned server uses in-memory storage without an exposed Service. This scheduling test does not replace the PostgreSQL/TLS suite.
 
 ## Replace retained TLS certificates
 
@@ -49,15 +54,12 @@ Transfer bundle payloads through process input, never command arguments or logs.
 2. Publish a CA trust bundle containing the old and new public CAs. Synchronize
    it through `sync_openfga_secrets.py`, restart policy clients and verify that
    their mounted trust files contain both CAs before changing either server.
-   Use the full application workload inventory, including background workers;
-   a list limited to the portal and the original workers is incomplete.
+   Use the full application workload inventory, including background workers. Portal and original-worker lists are incomplete.
 3. Add new runtime and admin secret versions with the replacement TLS material
    and the existing authentication keys. Synchronize the bundles, then roll
    `openfga` and `openfga-admin` and wait for both Deployments to become ready.
 4. Verify each live server with strict TLS and the new CA alone, including its
-   expected certificate identity. After all servers and clients have completed
-   the change, publish the new CA alone, synchronize it, restart policy clients
-   and verify native identity readiness. Retain previous secret versions for recovery.
+   expected certificate identity. Publish the new CA alone after every server and client completes the change. Synchronize it, restart policy clients, and verify native identity readiness. Retain previous secret versions for recovery.
 5. Run the normal deployment. Require the publisher's verified HTTPS connection,
    native identity activation, workload readiness and running-image checks.
 

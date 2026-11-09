@@ -3,6 +3,8 @@
 Applicability: Cloud SQL primary; RDS optional. Operator: platform and data
 owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 Portal or worker logs report database connection failures, migrations cannot
@@ -26,9 +28,7 @@ connect, or Cloud SQL/RDS reaches connection or resource limits.
 ## Resolution
 
 Repair the owning dependency or identity through Terraform and the protected
-deployment workflow. If clients hold stale connections after the database is
-healthy, redeploy the affected workload through the same workflow, one duty at
-a time, and watch connection counts. Do not share a more privileged login,
+deployment workflow. If clients retain stale connections after database recovery, redeploy through the same workflow. Change one workload duty at a time. Watch connection counts. Do not share a more privileged login,
 disable TLS, expose the database publicly, or raise `max_connections` as the
 first response. Validate `/health/`, worker heartbeats, a read-only application
 path, and pending operation processing.

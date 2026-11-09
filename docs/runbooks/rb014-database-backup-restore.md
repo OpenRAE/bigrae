@@ -3,6 +3,8 @@
 Applicability: Cloud SQL primary; RDS optional. Operator: data owner, platform
 owner, and incident commander. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 Durable application state must be restored after loss or corruption, or backup

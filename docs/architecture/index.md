@@ -74,3 +74,5 @@ These retain their stated design authority and are not historical preflights:
 - [Shared documentation tool boundary (#2804)](documentation-tool-adoption-2804.md)
 - [Architecture and historical documentation boundary (#2808)](architecture-history-documentation-2808.md)
 - [Parallel trial dispatch design](parallel-trial-dispatch-design-2743.md): worker trials, native operations, data flow, and controls.
+
+- [Interface documentation boundary (#2807)](interface-documentation-design-2807.md)

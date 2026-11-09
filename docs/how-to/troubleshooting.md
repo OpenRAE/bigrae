@@ -28,7 +28,9 @@ Common issues and how to resolve them.
 3. Try a different scenario (Basic Range is most reliable)
 4. Destroy and relaunch
 
-### Can't Launch Range - "Already Have Active Range"
+<a id="cant-launch-range-already-have-active-range"></a>
+
+### Cannot Launch Range - "Already Have Active Range" { #cant-launch-range---already-have-active-range }
 
 **Symptoms**: Launch button disabled or error about existing range.
 
@@ -36,7 +38,7 @@ Common issues and how to resolve them.
 
 ## Terminal Issues
 
-### Terminal Won't Connect
+### Terminal Will not Connect { #terminal-wont-connect }
 
 **Symptoms**: Terminal shows "Connecting..." indefinitely or "Not connected."
 
@@ -59,7 +61,7 @@ Common issues and how to resolve them.
 
 ### RDP Button Does Nothing
 
-**Symptoms**: Clicking RDP doesn't open a new window.
+**Symptoms**: Clicking RDP does not open a new window.
 
 **Solutions**:
 
@@ -87,7 +89,7 @@ Common issues and how to resolve them.
 
 **Cause**: OS is detected from file format, not contents.
 
-**Solution**: If detection is wrong, delete and re-upload with correct format. Ensure you're using:
+**Solution**: If detection is wrong, delete and re-upload with correct format. Ensure you are using:
 
 - `.msi` or `.zip` for Windows
 - `.tar.gz` for Linux shell installer
@@ -111,67 +113,50 @@ Common issues and how to resolve them.
    - Trigger behavioral detections
 3. Check console filters:
 
-   - Ensure you're looking at the right time range
-   - Check severity filters aren't hiding alerts
+   - Ensure you are looking at the right time range
+   - Check severity filters are not hiding alerts
 4. Wait a few minutes - some alerts take time to process
 
 ## NGFW Issues
 
+Use the [NGFW setup and recovery guide](ngfw-demo.md#troubleshooting) for provider investigation and cleanup.
+The checks below do not authorize a second provisioning operation.
+
 ### NGFW Stuck Provisioning
 
-**Symptoms**: Provisioning progress stuck for 30+ minutes.
+Record the request id, NGFW id, status, and last bounded error.
+Check the cloud operation, capacity, licensing, and credential metadata before retrying.
+The earlier 15–30 minute estimate and 45-minute escalation point are not proof of failure.
+Do not deprovision an active operation solely because an estimate elapsed.
 
-**Solutions**:
+### Cannot Associate Device in SCM { #cant-associate-device-in-scm }
 
-1. NGFW provisioning genuinely takes 15-30 minutes - be patient
-2. If stuck beyond 45 minutes, try deprovisioning and starting over
-3. Verify your deployment profile authcode is valid
-4. Check SCM credential has correct PIN
+Confirm the serial number and folder authority with the SCM owner.
+Check PIN metadata without exposing its value.
+A successful external association does not prove application readiness.
 
-### Can't Associate Device in SCM
+### NGFW-Enabled Range Will not Launch { #ngfw-enabled-range-wont-launch }
 
-**Symptoms**: SCM rejects the serial number or association fails.
-
-**Solutions**:
-
-1. Double-check serial number (copy-paste to avoid typos)
-2. Verify SCM folder exists and accepts new devices
-3. Check PIN hasn't expired
-4. Ensure you have permissions in SCM
-
-### NGFW-Enabled Range Won't Launch
-
-**Symptoms**: Launching Basic Range with NGFW or Cortex BYOT fails.
-
-**Solutions**:
-
-1. Verify NGFW status is "Ready" (not "Provisioning" or "Failed")
-2. Complete SCM association and XDR/XSIAM connection first
-3. Check NGFW wasn't deprovisioned
+Confirm the NGFW is ready and the selected scenario is installed and admitted.
+Check the owning range operation before another launch.
+Use [RB001](../runbooks/rb001-range-provisioning-failed.md) for a failed provisioning operation.
 
 ### No Network Alerts in XDR/XSIAM
 
-**Symptoms**: Have endpoint alerts but no network/NGFW alerts.
-
-**Solutions**:
-
-1. Verify NGFW is connected in XDR/XSIAM settings
-2. Check log forwarding is configured in SCM
-3. Generate network traffic that produces logs:
-
-   - HTTP requests (not just ICMP/ping)
-   - Known bad URLs or IPs
-   - Suspicious traffic patterns
+Check firewall log generation, forwarding, SCM ingestion, and XDR/XSIAM ingestion separately.
+Use an approved synthetic sample with the security owner.
+HTTP traffic and ICMP exercise different paths.
+An endpoint alert alone does not prove network-log delivery.
 
 ## Account Issues
 
-### Can't Access Certain Features
+### Cannot Access Certain Features { #cant-access-certain-features }
 
 **Symptoms**: Buttons disabled, features unavailable.
 
 **Solutions**:
 
-1. Ensure you're logged in
+1. Ensure you are logged in
 2. Check if feature requires setup first (for example NGFW scenarios require NGFW)
 3. Contact support if you believe this is an error
 
@@ -181,4 +166,4 @@ If none of these solutions work:
 
 1. Note the exact error message
 2. Note what you were trying to do
-3. Contact support (see [Support](../reference/support))
+3. Contact support (see [Support](../reference/support.md))

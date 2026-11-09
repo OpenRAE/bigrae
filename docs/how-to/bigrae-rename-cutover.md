@@ -27,31 +27,23 @@ of a deployment. Do not provision infrastructure to manufacture rename evidence.
    overlap or cloud apply is needed.
 4. Test source compatibility and rollback using local immutable build candidates
    and synthetic fixtures. Do not describe this as a live deployment rehearsal.
-   Package candidates remain candidates until the existing release process
-   publishes them; this issue does not authorize publication to a new service.
+   Package candidates remain unpublished until the existing release process publishes them. This procedure grants no authority to use a new service.
 
 ## GitHub repository rename
 
-1. Read back repository `1241599684`, owner `56809295`, its current name,
-   branch protections/rulesets for `dev` and `main`, required checks,
-   Environments and approval rules, Actions permissions, Pages configuration,
-   apps/webhooks, runners and repository variables. Inspect secret names only.
+1. For the historical cutover, inspect repository `1241599684` under its then-owner `56809295`. Read its name, protections, required checks, Environments, approvals, Actions permissions, Pages, integrations, runners, and variable names. These historical owner values are not current release trust anchors. Inspect secret names only.
    These checks concern GitHub configuration, not cloud deployments.
 2. Prepare the implementation PR against `dev`. Rename the same repository to
    `Brad-Edwards/bigrae` within its existing ownership boundary, preserving its
    immutable ID and protections. Keep the old name unused so repository URL
    redirects remain available.
-3. Update the local `origin` URL and canonical repository references in
-   `.ground-control.yaml`, `.gc/plan-rules.md`, agent instructions, `Makefile`,
-   `.cursor/mcp.json`, `mcp/ops`, current docs, OCI source labels, attestation
-   verification, Packer evidence expectations and future-deployment templates.
+3. Update `origin` and canonical repository references in configuration, agent guidance, tooling, and maintained docs. Include `.ground-control.yaml`, `.gc/plan-rules.md`, `Makefile`, `.cursor/mcp.json`, and `mcp/ops`. Reconcile OCI source labels, attestations, Packer evidence, and future deployment templates.
    Update `_quality.yml` and the ADR guard's expression model/tests together.
    Remove any temporary old-name acceptance before delivery readiness.
 4. Verify required hosted CI and SonarCloud against the renamed repository.
    Read back the GitHub settings from preparation and test clone, issue and
    release redirects. An absent or skipped required scan is not a passed gate.
-   Check Pages configuration separately because its URL is not a repository
-   URL redirect; no new hosting destination is authorized by this procedure.
+   Check Pages separately; a repository redirect does not redirect its published site. This procedure authorizes no new hosting destination.
 
 The old Pages path, `https://brad-edwards.github.io/shifter/`, retires at the
 2026-10-25 repository cutover. On 2026-10-29 the repository moved to the

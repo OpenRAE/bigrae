@@ -1,5 +1,7 @@
 # Account administration implementation
 
+Reference for native account administration, publication receipts, and recovery.
+
 ADR-066 S4 composes policy-aware services with DRF, the existing policy journal,
 Django locks/constraints, strict shared.audit writes, signed invitations and the
 existing React query client. S8 mounts these domain routes in the production
@@ -17,12 +19,8 @@ reversed. S8 maps historical facts explicitly rather than activating guessed
 membership or policy.
 
 The cutover inventories user-keyed organization and workspace memberships even
-when their organization already has an account. It converts supported roles to
-principal facts and the recorded policy intent, then rejects activation if any
-legacy user/role row or planned membership disposition remains incomplete.
-Legacy workspace administrators require an explicit policy disposition before
-conversion: the native administrator grant also permits ownership transfer, so
-substituting it would elevate the old role. Existing SQL account ancestry also
+when their organization already has an account. It converts supported roles to principal facts and recorded policy intent. Activation is rejected while any legacy user/role row or planned membership disposition remains incomplete.
+Legacy workspace administrators require an explicit policy disposition before conversion. The native administrator grant also permits ownership transfer; substituting it would elevate the old role. Existing SQL account ancestry also
 determines resource conversion for already-bound organizations and workspaces.
 
 CTF migration `0071_remove_ctfsparerange_owner_user` refuses to remove ownership
@@ -79,9 +77,9 @@ The ordinary API contract describes the mounted production routes. The
 SPA routes account and platform pages through action-derived navigation hints;
 individual presentation comes from the principal/account context. Parent scope
 keys reset child drafts, query keys contain exact paths, and policy mutations
-reuse the incumbent frozen idempotency and reconciliation behavior.
+reuse the existing frozen idempotency and reconciliation behavior.
 
-See [the operation inventory](../../architecture/account-administration-coverage-2317.md)
+See [the operation inventory](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/account-administration-coverage-2317.md)
 for baseline replacements and tests. The released OpenFGA/PostgreSQL suite
 verifies human/service hierarchy discovery using the declared administrator
 credential ceiling and proves that narrowed credentials cannot edit descendants.
@@ -104,7 +102,7 @@ leaves legacy role rows unchanged.
 
 Known per-resource policy, membership, ownership and projection rejections retain
 earlier committed offboarding effects. The prepared `workspaces_blocked` count
-covers all workspace rejections; the incumbent missing-membership count retains
+covers all workspace rejections; the existing missing-membership count retains
 its narrower meaning. Archived ownership is reported as blocked after an exact
 policy check, without preventing transfers of eligible resources. Standalone
 organization operation recovery derives the
@@ -115,7 +113,7 @@ revocation. Metadata email changes require that owner's human session under the
 same locked user boundary. The administrative grant alone cannot redirect a
 password reset to another recipient.
 
-The exact generated TypeScript declaration follows the incumbent schema analysis
+The exact generated TypeScript declaration follows the existing schema analysis
 exclusion recorded as an owned, time-bounded ADR-003-R7 exception. DRF drift,
 TypeScript compilation and consumer tests remain enforced; handwritten code is
 fully analyzed.

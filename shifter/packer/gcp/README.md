@@ -39,6 +39,12 @@ There is no GCP equivalent of the AWS `/shifter/ami/*` SSM parameter. Instead:
 
 ## Quick start
 
+These are contributor build commands, not an operator installation path.
+Use a dedicated build project and the foundation-owned private build network.
+Obtain image-build authority and approve the compute, storage, and export costs before building.
+Private builds require the configured IAP path and permissions.
+Use the admitted workflow for validation and publication; a local build alone does not qualify an image.
+
 ```bash
 packer init .
 # Validate (uses the committed placeholder var-file)
@@ -46,10 +52,10 @@ packer validate -var-file=dev.pkrvars.hcl .
 # Build one image type. Real builds override the placeholder project/network/SA.
 packer build -only='googlecompute.ubuntu' \
   -var="project_id=my-proj" -var="zone=us-central1-a" \
-  -var="network=default" -var="subnetwork=default" \
+  -var="network=<private-build-network>" -var="subnetwork=<private-build-subnet>" \
   -var="service_account_email=packer-builder@my-proj.iam.gserviceaccount.com" \
   -var="image_prefix=shifter" -var="machine_type=e2-standard-2" \
-  -var="use_internal_ip=false" -var="source_revision=$(git rev-parse HEAD)" \
+  -var="use_internal_ip=true" -var="source_revision=$(git rev-parse HEAD)" \
   -var="build_id=0-1" .
 ```
 
@@ -70,26 +76,18 @@ CLI flags) so secrets cannot appear in a process list. See
 ### Kali (debian-12 base, converted to Kali Rolling)
 
 GCP has no public Kali image (the AWS path uses an AWS Marketplace product
-code; there is no Offensive-Security-published GCP image). Importing Kali's
-official generic-cloud disk does **not** work on GCE: it has no Google guest
-environment, so it never gets metadata-based SSH-key injection or GCE network
-setup and packer can never connect to it.
+code; there is no Offensive-Security-published GCP image). The official generic-cloud disk lacks Google guest integration for metadata SSH injection and network setup. This build path therefore uses GCE-native Debian instead.
 
-Instead the kali builder starts from Google's GCE-native `debian-12` image and
-its first provisioning script (`../scripts/kali/gce-debian-to-kali.sh`) converts
-it to Kali Rolling in place: add Kali's official apt repo + keyring,
-`full-upgrade` onto kali-rolling (`--force-overwrite` clears the 64-bit `time_t`
-library-transition file conflicts), and re-assert Google's guest-environment apt
-repo so `google-guest-agent` survives (the Kali repos omit it). No imported base
+The first Kali script, `../scripts/kali/gce-debian-to-kali.sh`, converts Google's GCE-native `debian-12` base in place. It adds Kali's repository/keyring and runs `full-upgrade` onto Kali Rolling. `--force-overwrite` resolves the 64-bit `time_t` library-transition conflicts. The script restores Google's guest-environment repository so `google-guest-agent` remains available; Kali repositories omit it. No imported base
 image and no `kali_source_image` / `GCP_KALI_SOURCE_IMAGE` are required:
 
 ```bash
 packer build -only='googlecompute.kali' \
   -var="project_id=my-proj" -var="zone=us-central1-a" \
-  -var="network=default" -var="subnetwork=default" \
+  -var="network=<private-build-network>" -var="subnetwork=<private-build-subnet>" \
   -var="service_account_email=packer-builder@my-proj.iam.gserviceaccount.com" \
   -var="image_prefix=shifter" -var="machine_type=e2-standard-2" \
-  -var="use_internal_ip=false" -var="source_revision=$(git rev-parse HEAD)" \
+  -var="use_internal_ip=true" -var="source_revision=$(git rev-parse HEAD)" \
   -var="build_id=0-1" .
 ```
 
@@ -105,9 +103,7 @@ VM from a per-build `winrm_bootstrap_password`, injected by CI via
 `GCESysprep` (`scripts/windows/sysprep.ps1`) and discarded, so the credential
 never reaches the published image.
 
-Packer connects over **WinRM-over-TLS only** (port 5986): the shared bootstrap
-in `locals.pkr.hcl` stands up an HTTPS listener bound to a self-signed cert,
-disables HTTP Basic and unencrypted transport, and opens only 5986. The
+Packer uses WinRM-over-TLS on port 5986. The shared `locals.pkr.hcl` bootstrap creates an HTTPS listener with a self-signed certificate. It disables HTTP Basic and unencrypted transport and opens only 5986. The
 bootstrap password therefore never crosses the wire in cleartext. `winrm_insecure`
 is set only to skip validation of the ephemeral builder's self-signed cert; the
 channel is still encrypted.

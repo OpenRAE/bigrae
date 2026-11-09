@@ -13,8 +13,8 @@ management command, and SPA page are always available to authorized operators.
 
 You need:
 
-- CMS authoring access (staff or the Threat Research group). The same access
-  gates the Scenario Editor.
+- A current native credential with `installation.prepare_content` authority on installation scope.
+  Django staff flags and group names do not grant this authority.
 - The authored image `source` name and version from the scenario or package, and
   the concrete provider image reference to map it to (a GCE `source_image` or
   image family URL, or an AWS AMI id).
@@ -25,8 +25,9 @@ Registering is idempotent: it creates the mapping, or updates the existing one
 for the same `(provider, source_name, source_version)`. A blank version is the
 any-version fallback for that source name.
 
-Choose one of the three surfaces. All three delegate to the same validated
-service write path, so they behave identically.
+Use the SPA or authenticated API for native installation image administration.
+The retained management command writes legacy unscoped rows without native credential input.
+It does not create the same owned installation inventory and is not an equivalent administration path.
 
 ### SPA (Author area)
 
@@ -61,6 +62,10 @@ curl -sS -X POST https://<host>/api/v1/cms/raes-image-mappings/ \
 ```
 
 ### Management command
+
+The following syntax describes the retained legacy command.
+It does not accept a native credential or create native installation-owned rows.
+Do not use it to repair native registry authorization or substitute for the authenticated API.
 
 ```sh
 python manage.py raes_image_registry --action register \
@@ -100,5 +105,5 @@ single image with `source: {name: alpine, version: "3.19"}`. Before running the
 RAES backend validation, register a `gce` mapping for `source_name=alpine`,
 `source_version=3.19` pointing at a concrete Alpine-compatible GCE image or
 image family. See
-[the architecture registry](../adr/index.yaml) for
+[the architecture registry](https://github.com/OpenRAE/bigrae/blob/dev/docs/adr/index.yaml) for
 the full validation evidence contract.

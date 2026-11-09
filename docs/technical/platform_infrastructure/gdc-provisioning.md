@@ -4,19 +4,18 @@ Range guest provisioning on Google Distributed Cloud (GDC). GDC uses KubeVirt fo
 
 On AWS, ranges are EC2 instances in isolated VPC subnets. On GDC, ranges can be KubeVirt VMs or lightweight pods on a GDC cluster, connected via custom L2 networks.
 
-> **Status: non-user modes only, not approved for live-fire (ADR-030).**
-> The GDC VM Runtime backend, its scenario Pods, and its L2 Networks are **not** an
-> approved containment boundary for live-fire ranges (participants and agents that
-> run arbitrary activity). The supported GCP live-fire backend is **GCE VM range
-> cells** (`GCP_RANGE_BACKEND=gce`, the default). Normal Mission Control and CTF
-> range provisioning **fails closed** on GDC: the CMS service boundary rejects a
-> live-fire launch whenever `GCP_RANGE_BACKEND=gdc`, and the provisioner
-> independently denies a live-fire GDC apply as defense in depth (issue #1348).
-> GDC provisioning documented here is for the deterministic demo/BAS and
-> operator-validation modes only; that evidence is **not** live-fire containment
-> evidence. Those modes reach GDC by minting an explicit instantiation purpose.
-> See [Range Instantiation Policy](range-instantiation-policy) for the model and
-> the enforcement points (issue #1354).
+**Status: non-user validation only; no live-fire approval (ADR-030).**
+
+GDC VM Runtime, scenario Pods, and L2 Networks do not provide an approved live-fire containment boundary.
+Live-fire participants and agents can run arbitrary activity.
+GCE VM range cells are the default GCP live-fire backend (`GCP_RANGE_BACKEND=gce`).
+
+CMS rejects normal Mission Control and CTF launches on GDC.
+The provisioner independently rejects live-fire GDC apply calls (issue #1348).
+Retained deterministic demo/BAS and operator-validation modes require an explicit trusted instantiation purpose.
+Their evidence does not establish live-fire containment.
+Policy admission also does not establish RAES realization support.
+See [Range Instantiation Policy](range-instantiation-policy.md) for independent admission and capability checks.
 
 ## Runtime Primitives
 
@@ -81,22 +80,19 @@ Provisions Palo Alto Networks VM-Series as KubeVirt VMs with:
 
 `GCP_RANGE_BACKEND` selects which backend a *new* GCP range is admitted on (`gce`
 range cells by default, or `gdc` VM Runtime for validation). It is a deploy-wide
-selector, not durable ownership. Since #1666 the admitted backend and trusted
-instantiation purpose are persisted as a write-once binding on the Engine `Range`
-(`range_backend`, `instantiation_purpose`) at provision time, sourced from the
-CMS live-fire admission result. Destroy, compensation, retry, and reconciliation
-route from that persisted binding (read through the provisioner's request-scoped
-database projection), never from a re-read of the selector, so flipping the
-deploy selector `gdc -> gce` can no longer route an existing GDC range through the
-GCE path and strand its namespaces, VMs, disks, secrets, L2 Networks, and subnet
-allocations.
+selector, not durable ownership. CMS admission supplies the backend and trusted purpose.
+
+Engine persists them as write-once `Range.range_backend` and `Range.instantiation_purpose` bindings at provisioning (#1666). Destroy, compensation, retry, and reconciliation use that binding through the request-scoped provisioner database projection. They do not reread the deployment selector.
+
+Changing `gdc` to `gce` cannot redirect cleanup or strand GDC namespaces, VMs, disks, secrets, L2 Networks, or subnets.
 
 Ranges created before #1666 carry no binding. On destroy the provisioner resolves
 their backend only from durable ownership evidence (the `asset_type` discriminant
 persisted on each instance's state: `vm_runtime_vm`/`scenario_pod` for GDC,
-`gce_vm` for GCE range cells). A range whose evidence is ambiguous or absent fails
-closed with a `prerequisite` diagnostic and keeps its cleanup state; back-fill its
-binding explicitly, while the historical selector is still known, before retrying:
+`gce_vm` for GCE range cells). Ambiguous or absent ownership produces `prerequisite` and preserves cleanup state. While the historical selector is known, backfill the binding explicitly before retrying:
+
+Only an authorized operator may backfill a binding after reviewing durable ownership evidence.
+Use an approved management-command transport; this example does not authorize production pod execution.
 
 ```bash
 python manage.py backfill_range_backend_binding --request-id <uuid> --backend gdc
@@ -130,6 +126,6 @@ shifter/engine/provisioner/
 
 ## Related Docs
 
-- [GCP Infrastructure](gcp-infrastructure) - GKE cluster and platform services
-- [Cloud Adapters](../dev/cloud-adapters) - Protocol-based cloud abstraction
-- [Networking](networking) - AWS VPC networking (parallel architecture)
+- [GCP Infrastructure](gcp-infrastructure.md) - GKE cluster and platform services
+- [Cloud Adapters](../dev/cloud-adapters.md) - Protocol-based cloud abstraction
+- [Networking](networking.md) - AWS VPC networking (parallel architecture)

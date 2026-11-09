@@ -4,6 +4,9 @@ BigRAE runs authorized cyber-range exercises through one application control
 plane and separately isolated guest workloads. Start here for the current
 architecture; subsystem guides provide detail.
 
+The [supported interface reference](../reference/interfaces.md) maps native routes, SDK exports, commands, and schemas to their maintained sources.
+Its documentation correction preserves the runtime boundaries described here.
+
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
 
@@ -35,7 +38,9 @@ configuration and future-deployment templates.
 Existing deployments require their own verified trust and workload migration.
 Plugin jobs
 remain isolated and receive one Secret-backed invocation input under either
-exact supported name. The source preparation does not change deployed resource
+exact supported name.
+
+The source preparation does not change deployed resource
 names, authorization, internal imports, historical provenance or metric identity.
 The [identity and lifecycle contracts](shifter_platform/identity-lifecycle-contracts.md)
 define the DFDs, state transitions, failure recovery and lock order.
@@ -81,7 +86,9 @@ Disposable trial workers reuse Engine's native lifecycle and capacity ledger.
 Only the provisioner reads host-management keys and runs the fixed bounded SSH probe.
 The shared result/member parsers validate the closed observation shape.
 Engine validates credential-free host observations against the accepted
-operation, generation, membership, apparatus profile and freshness. Numeric VM
+operation, generation, membership, apparatus profile and freshness.
+
+Numeric VM
 identity comes from authenticated provider readback. PostgreSQL prevents reuse of
 VM, machine or Docker identity.
 
@@ -129,7 +136,9 @@ CTF keeps new events
 unavailable until their recorded model/content initialization commits; recovery
 revalidates the original credential and pinned content before completing it.
 Permanent event deletion commits native cleanup for each retained range before
-removing its aggregate records. Failed cleanup admission preserves those records.
+removing its aggregate records.
+
+Failed cleanup admission preserves those records.
 
 Participant recovery also submits failed old ranges to authorized native cleanup
 (#2783). A failed status does not prove that resources or project reservations
@@ -169,19 +178,25 @@ protected image responses after permission changes.
 The canonical control-plane package is the shared Helm chart, hosted on GKE for
 GCP or EKS for AWS. Provisioner Jobs use the selected cluster; CI runner placement
 is a separate concern. Older ECS files do not define the current AWS package.
+
 The AWS bundle owns the Terraform modules and environments under
 `platform/terraform`. Vendor connector templates are not part of the package.
 
 GCP uses one Terraform execution root with separate environment values and state metadata.
+
 See [deployment configuration](../dev/deployment-configuration.md) for selection and recovery.
 A GCP deployment runs from a published release. Operators use the
 `deploy.py gcp-deploy` command, which reads the deployment input bundle from the
-deployment config bucket or a local directory. Secret values stay in Secret
+deployment config bucket or a local directory.
+
+Secret values stay in Secret
 Manager (ADR-070, [GitHub-less GCP deployment guide](handbook/gcp-github-less-deployment.md)).
 
 A release also names one signed guest image for each published range role.
 A developer builds and validates those images in a build project that they
-supply. Each release takes the newest verified publication of each role, and
+supply.
+
+Each release takes the newest verified publication of each role, and
 the deploy imports the release guests after it verifies them
 ([GCP guest images](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md), #2668). Keep platform hosting separate from the range guest backend.
 
@@ -202,7 +217,9 @@ administrator from the configured operator account. A tenant platform creates no
 image-build infrastructure; only maintainer build environments opt in.
 
 After each rollout, the deploy checks the image of every running platform
-container (#2698). Release containers must run the release images. The OpenFGA
+container (#2698).
+
+Release containers must run the release images. The OpenFGA
 servers and the Cloud SQL proxy sidecars must run the images that the release
 chart pins.
 
@@ -250,7 +267,9 @@ storage first; see the [CSP enforcement design](https://github.com/Brad-Edwards/
 
 ADR-056 defines provider-enforced guest containment. ADR-057 separates GKE
 Dataplane V2 NetworkPolicy reachability, Google Workload Identity, Job admission,
-and application authorization. The Helm chart renders the NetworkPolicies. Each
+and application authorization. The Helm chart renders the NetworkPolicies.
+
+Each
 BigRAE namespace denies traffic by default, and explicit policies allow each
 required path, for example the portal to the in-cluster Guacamole token API.
 
@@ -261,7 +280,9 @@ namespace on TCP 8080. Other workers gain no gateway access.
 See the
 [session cleanup network design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/session-cleanup-network-2837.md).
 These controls do not provide authenticated
-pod-to-pod mTLS; a service mesh remains unadopted. No documentation or unit-test
+pod-to-pod mTLS; a service mesh remains unadopted.
+
+No documentation or unit-test
 result proves complete escape detection or live containment qualification.
 
 On GCP, the external Application Load Balancer reaches the portal and Guacamole
@@ -274,11 +295,13 @@ The portal's WebSocket opening deadline is 30 seconds, including access checks
 and SSH setup. The gateway authority HTTP read deadline is 10 seconds, which
 allows the portal's bounded Google certificate lookup and range authorization.
 The enclosing gateway token exchange has a 30-second HTTP deadline.
+
 These transport deadlines retain the existing identity checks, keepalive and
 authority lease expiry.
 
 Terminal session and range checks have a finite 15-second budget, including
 serialized validation work. Other socket routes keep their five-second budget.
+
 Checks still run before opening, input, and protected output; timeout and denial
 close the socket. See the [terminal authority design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/terminal-authority-budget-2818.md).
 
@@ -292,7 +315,9 @@ The provisioner Job policy inlines the platform-runtime values as its
 parameters, because GKE 1.36 and EKS do not resolve ConfigMap parameters (#2633).
 The repository tests render deployment-owned runtime values into each supported
 policy form, then evaluate the unchanged CEL against valid and tampered Jobs.
-The expected configuration is independent of the submitted Job. The inline map
+The expected configuration is independent of the submitted Job.
+
+The inline map
 must equal the runtime ConfigMap; the optional parameter reference must retain
 its namespace and deny-on-missing behavior.
 
@@ -385,7 +410,9 @@ Use request/operation/generation identifiers for correlation. The portal keeps a
 client `X-Request-ID` only when it is a token of 64 or fewer safe characters, and
 replaces any other value. Audit attribution trusts only the load balancer's own
 `X-Forwarded-For` hops: one on the AWS ALB and two on the GCP external Application
-Load Balancer (`AUDIT_TRUSTED_PROXY_HOPS`, set by the GCP runtime renderer). Existing structured
+Load Balancer (`AUDIT_TRUSTED_PROXY_HOPS`, set by the GCP runtime renderer).
+
+Existing structured
 logging and sanitized error builders exclude raw provider responses, credentials,
 signed URLs and private scenario material. Audit evidence is not a work queue.
 Engine capacity decisions use the shared capacity-assessment audit vocabulary
@@ -398,22 +425,27 @@ Backup existence is not evidence of a successful restore rehearsal.
 Engine owns disposable VM workers through its native range lifecycle.
 Account-scoped worker identities use Engine's SQL ancestry through the composition root.
 Worker and CMS public identities cannot overlap.
+
 Each worker retains one apparatus profile, one experiment reference, and at most one trial reference.
 
 Global count limits and enforcing capacity draws precede durable launch.
 Active worker draws survive capacity-window expiry until exact-generation provider absence.
+
 Ready workers can carry caller-owned evidence holds that fence native destructive admission and dispatch.
 Overdue holds and exhausted cleanup retain tracked custody for explicit operator recovery.
 
 Optional installed software uses the existing isolated adapter machinery with explicit apparatus identity.
+
 The generic management probe requires no experiment runtime.
 Native result validation preserves guest count limits, unique identities, and the separate private management boundary.
 
 Engine's qualification command selects the recorded bootstrap administrator through exact private facts.
+
 Management issues short-lived native credentials for fixed actions and exact targets, then revokes them on exit.
 The command creates no identity or policy grant and preserves ordinary scope, membership and authorization checks.
 
 The apparatus pins the numeric provider image identity and a capacity partition that matches deployment placement.
+
 Linux image capture clears machine and Docker identities before independent workers boot.
 See [disposable workers](shifter_platform/disposable-workers.md) for contracts, data flows, controls, and references.
 
@@ -516,11 +548,13 @@ Adapters declaring `provision.prepare` may propose bounded scalar values and
 literal UTF-8 secret payloads for explicitly declared provisioning concerns.
 SDK 0.2.0 accepts at most 2048 distinct secret payload selections per response.
 Each value is limited to 64 KiB, and the complete clear response remains limited to 512 KiB.
+
 The host checks the original invocation and declared authority before it uses any selection.
 
 Secret payload selection addresses an unbound native version; it cannot replace
 an authored Content reference. Core checks every original RAES
 authority, including overlapping exact constraints, before accepting a result.
+
 The worker encrypts its response with an invocation-specific key; accepted values
 remain encrypted in the existing range binding and invocation projection.
 Provisioning uses an execution-only copy, reports original addresses, and cleanup
@@ -592,7 +626,9 @@ provisioner's Terraform version with the Google provider family.
 CI validates its committed provider lock without credentials.
 
 Independent inventory and payload readback must match the baseline plus overlay;
-teardown releases custody only after exact baseline restoration. Cloud-only
+teardown releases custody only after exact baseline restoration.
+
+Cloud-only
 nodes retain their native identities without allocating extra guest VMs.
 These routes have local contract and lifecycle checks; live qualification is still required.
 

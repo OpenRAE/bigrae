@@ -1,5 +1,7 @@
 # Registered GCP range projects
 
+Reference for project registration, baseline capture, and custody release.
+
 Issue #2716 introduces Engine-owned project registration and retained range
 leases. Registration, encrypted baseline capture and custody enforcement are
 implemented in code. Native launch and preparation acceptance retain the selected
@@ -11,9 +13,7 @@ Nothing in this page claims a tenant deployment or live acceptance.
 
 Provider secret-version reads accept only ASCII decimal project and version
 identities beneath an explicitly owned secret. Payload decoding retains the
-64 KiB byte limit. Scope, account, policy, payload and restoration checks remain
-separate from node projection and keep the same retained identities and custody
-transactions when their implementation is refactored.
+64 KiB byte limit. Scope, account, policy, payload, and restoration checks remain separate from node projection. Refactoring preserves their retained identities and custody transactions.
 
 The installation-authorized API queues `range-project/register` through the
 existing `ProvisionerLaunchIntent`, immutable `OperationInput`, installed worker
@@ -25,10 +25,13 @@ The input fixes the selected project, organization, existing private bucket and
 protected deployment and registered image projects. The worker independently excludes its current
 control projects. Disabled/failed registrations with an accepted baseline use
 `range-project/verify`, which compares fresh inventory with the original immutable
-artifact before re-enabling. A retry never replaces an accepted baseline.
+artifact before re-enabling.
+
+A retry never replaces an accepted baseline.
 Canonical command validation and the provisioner Job admission
 policy admit only the registration command; launched registration Jobs require
 an operation UUID. No cloud role is added to portal or adapter processes.
+
 The worker also validates the existing keyed image-profile configuration and
 excludes every image-owning project, including machine-image projects, before
 creating an inventory client. A malformed profile cannot remove an exclusion.
@@ -73,10 +76,14 @@ replacement baseline.
 Only the exact ciphertext hash, size, bucket, generation and semantic state
 digest cross the operation boundary. Registration and ordinary envelopes retain
 the 256 KiB bound. Native RAES plan inputs alone have a 16 MiB limit; their payload
-parser still validates the complete closed contract. Result budgets are unchanged. Cleanup reads the retained bucket and generation,
+parser still validates the complete closed contract.
+
+Result budgets are unchanged. Cleanup reads the retained bucket and generation,
 checks the ciphertext before decryption, and verifies the original organization,
 project identity, capture and lease. Changed current configuration cannot redirect
-that read. Provider change tokens are excluded from semantic comparison;
+that read.
+
+Provider change tokens are excluded from semantic comparison;
 resource identities, conditions, audit settings and nested authored values remain
 significant.
 
@@ -121,9 +128,7 @@ lease inputs; unsupported shapes fail before effects. An unaccepted preparation
 still uses its explicit pre-effect cleanup proof.
 
 Service accounts precede grants; reverse dependencies remove grants before
-accounts. Independent inventory checks account unique IDs, names/display names,
-secret create times, replication and versions, every policy and audit setting,
-and payload equality only for new range-owned versions. Baseline secret values
+accounts. Independent inventory checks account unique IDs, names/display names, secret create times, replication, versions, policies, and audit settings. Payload equality is checked only for new range-owned versions. Baseline secret values
 are never accessed. Cleanup refuses changed resource incarnations and restores
 project policy using its current etag, then compares the entire baseline.
 
@@ -147,11 +152,12 @@ accepts new plans only from that producer; retained 10.7.2 and 10.6.0 inputs rem
 for cleanup under the existing closed transport checks.
 
 Required APIs are enabled before baseline capture. Their setup is not owned or
-reversed by the range overlay. The worker needs project-scoped account create,
-update/delete and IAM-policy permissions; Secret Manager create/version/access,
-policy and delete permissions; project policy writes; and access to the existing
-bucket's `raes/project-state/` namespace for state and locks. It needs no
-organization-policy administrator role. Exercise key handling remains external.
+reversed by the range overlay. The worker needs project-scoped account create, update/delete, and IAM-policy permissions.
+
+It also needs Secret Manager create/version/access, policy/delete permissions, and project policy writes. State and locks require access to the existing bucket's `raes/project-state/` namespace. It needs no
+organization-policy administrator role.
+
+Exercise key handling remains external.
 
 The GCP portal IAM module supplies the storage grants (#2775). Only the
 provisioner receives `roles/storage.objectCreator` for the configured assets
@@ -161,9 +167,7 @@ baselines. The second supports Terraform state replacement and lock removal.
 The existing bucket read grant supplies listing; neither new grant permits
 writes to other assets or gives another workload these permissions.
 
-Release requires the current native destroy result to be applied, the range to
-be destroyed, the overall inventory to report verified absence without residuals,
-and exact restoration proof for the original lease/baseline. The release update
+Release requires the applied current native destroy result, destroyed range state, and verified absence without residuals. It also requires exact restoration proof for the original lease/baseline. The release update
 and result disposition share the result transaction. Unknown or residual state
 retains custody. Logical status changes and missing Jobs are insufficient.
 
@@ -180,7 +184,7 @@ It rejects excessive counts, repeated pages, and incomplete reads without return
 The clear baseline retains its 1 MiB limit.
 Admission rejects combined baseline and planned counts that exceed the inventory limits before provider changes.
 
-The [design](../../architecture/registered-gcp-range-projects-2716.md) describes
+The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/registered-gcp-range-projects-2716.md) describes
 the native RAES intent, literal Content, provider overlay and readback boundaries
 that complete this feature. Targeted PostgreSQL, contract and synthetic worker
 tests establish the implemented boundaries; full CI and approved live qualification

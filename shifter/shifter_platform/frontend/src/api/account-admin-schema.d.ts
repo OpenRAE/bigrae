@@ -534,7 +534,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Prepared replacement for workspace-only or staff-only presentation assumptions. */
+        /** @description Return native principal context and current action hints. */
         get: operations["accounts_context_retrieve"];
         put?: never;
         post?: never;
@@ -997,7 +997,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description S8 policy-aware audit API, prepared without changing current routing. */
+        /** @description List and retrieve audit events under current native policy. */
         get: operations["audit_list"];
         put?: never;
         post?: never;
@@ -1014,7 +1014,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description S8 policy-aware audit API, prepared without changing current routing. */
+        /** @description List and retrieve audit events under current native policy. */
         get: operations["audit_retrieve"];
         put?: never;
         post?: never;
@@ -2275,15 +2275,12 @@ export interface components {
         PatchedOrganizationProfileUpdate: {
             name?: string;
             description?: string;
-            /** Format: email */
             support_email?: string;
-            /** Format: uri */
             support_url?: string;
         };
         /** @description Contact/display fields only; provider bindings and authority are immutable here. */
         PatchedPolicyUserMetadataCommand: {
             username?: string;
-            /** Format: email */
             email?: string;
             first_name?: string;
             last_name?: string;

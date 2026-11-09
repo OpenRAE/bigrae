@@ -1,6 +1,6 @@
 # BigRAE Engine
 
-Infrastructure lifecycle. Range provisioning, NGFW operations, terminal connections.
+Reference for realized range state, device operations, and terminal access.
 
 ## Responsibility
 
@@ -23,11 +23,15 @@ Infrastructure lifecycle. Range provisioning, NGFW operations, terminal connecti
 
 ## Service Interface
 
+Signatures below abbreviate optional arguments.
+Native operations require current admitted credentials and exact resource custody.
+The `engine.services` exports and their typed definitions are authoritative.
+
 ### Range Operations
 
 | Function | Purpose |
 |----------|---------|
-| `create_range(request_spec)` | Start provisioning from RequestSpec |
+| `create_raes_range(...)` | Create an admitted native RAES generation |
 | `destroy_range_by_request(request_id)` | Destroy range by request UUID |
 | `cancel_range_by_request(request_id)` | Cancel in-progress provisioning |
 | `get_range_status(range_id)` | Get status, instances, progress |
@@ -38,8 +42,8 @@ Infrastructure lifecycle. Range provisioning, NGFW operations, terminal connecti
 
 | Function | Purpose |
 |----------|---------|
-| `connect_terminal(user, instance_uuid)` | Get SSH connection to instance |
-| `get_rdp_connection_info(user, instance_uuid)` | Get Guacamole RDP connection |
+| `connect_terminal(...)` | Resolve admitted SSH access for the exact guest |
+| `get_rdp_connection_info(...)` | Resolve admitted Guacamole RDP access |
 
 ### NGFW Operations
 
@@ -49,35 +53,32 @@ Infrastructure lifecycle. Range provisioning, NGFW operations, terminal connecti
 | `destroy_ngfw(request_id)` | Destroy NGFW |
 | `start_ngfw(request_id)` | Start stopped NGFW |
 | `stop_ngfw(request_id)` | Stop running NGFW |
-| `complete_ngfw_setup(request_id)` | Mark NGFW setup as complete |
+
+`complete_ngfw_setup` is not exported or implemented in the current Engine service.
+Do not use it as an integration operation.
 
 ### Internal Services
 
-Not exposed to MC. Used within Engine.
+These implementation modules are private to Engine.
+Other layers use the `engine.services` facade; adapters use the public SDK.
 
 | Module | Purpose |
-|--------|---------|
-| `allocation` | Subnet index allocation with row locking |
-| `scenarios` | Scenario validation and instance config |
-| `serialization` | Range to DTO conversion |
-| `ecs` | Container task execution (uses cloud adapter internally) |
-| `ssh` | Async SSH connection management |
-| `secrets` | Secret retrieval (uses cloud adapter internally) |
+| --- | --- |
+| `services/_subnet_coordination.py` | Native subnet allocation coordination |
+| `services/_raes_range.py` | Native RAES range creation and immutable bindings |
+| `services/_operation_apply_domain.py` | Validate and apply accepted native operation results |
+| `ecs/` | Existing task-control adapter |
+| `ssh.py` | SSH connection transport |
+| `secrets.py` | Provider secret lookup |
 
 ## Event Handling
 
-Engine receives events from the Provisioner via the message bus (SNS/SQS on AWS, Pub/Sub on GCP). The `engine/handlers.py` module processes these events:
-
-```python
-def process_range_event(message):
-    """Update Range model from provisioner events."""
-    # range.status.updated -> update Range.status, timestamps
-    # range.provisioned -> audit log (state written directly by provisioner)
-```
-
-Engine handlers update Engine models only. Mission Control handlers (not Engine) broadcast to WebSocket clients.
-
-See [BigRAE Platform](.) for the full event flow diagram.
+Provisioner Jobs read immutable operation inputs and append bounded results.
+Engine validates result identity, generation, ownership, and operation family before applying state.
+The provisioner does not write arbitrary range lifecycle state directly.
+Engine commits accepted state, audit, and outbox events through its owning services.
+CMS mirrors accepted results; Mission Control delivers notifications.
+See [lifecycle contracts](identity-lifecycle-contracts.md) for the complete result and cleanup flow.
 
 ## Range warm pool (#28, ADR-039-R11)
 

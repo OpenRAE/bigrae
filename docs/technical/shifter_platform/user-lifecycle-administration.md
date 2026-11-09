@@ -1,5 +1,7 @@
 # User lifecycle administration (technical)
 
+Reference for account states, lifecycle commands, reset, and ownership transfer.
+
 This note describes the implementation of user lifecycle administration
 (PLAT-236, issue #1943): account state transitions, administrator-triggered
 password reset, and bounded ownership transfer. It is constrained by PLAT-241
@@ -26,26 +28,19 @@ could disagree with `is_active`:
 - `available_actions(user, actor)` returns the server-derived, authority-aware
   action hints the detail projection exposes.
 - `transition_account(user, *, action, actor, audit)` is the one command for the
-  closed action set (`activate`, `deactivate`, `suspend`, `delete`). It locks the
-  user and profile rows, derives the current state, validates a closed transition
-  table, updates `is_active` and `suspended_at` together, revokes the target's
-  live API tokens for a disabling action, and writes one strict, request
-  attributed `shared.audit` event in the same transaction. Repeating the current
+  closed action set (`activate`, `deactivate`, `suspend`, `delete`). It locks the user and profile rows, derives current state, and validates the closed transition table. It updates `is_active` and `suspended_at` together and revokes live API tokens for disabling actions. A strict request-attributed audit event commits in the same transaction. Repeating the current
   state is an idempotent no-op that writes no audit and claims no transition.
 
-Guards enforced under the lock: no self-disable, a non-superuser cannot mutate a
-superuser, and a disabling action never removes the last active superuser.
+Locked guards prohibit self-disable and removal of the last active superuser.
+Native callers need current installation policy.
+The retained legacy user branch also restricts superuser-target changes.
 
 ## Authentication enforcement
 
 Deactivated, suspended, and soft-deleted accounts all hold `is_active=False`, so
 every authentication path converges on that one bit:
 
-- `config.oidc.ShifterOIDCBackend` and `config.identity_platform.IdentityPlatformBackend`
-  return no principal from `get_user` for an inactive account, and refuse an
-  inactive account in `authenticate`, so an existing provider session cannot
-  reload and a provider re-login cannot reactivate a blocked account through
-  claims sync.
+- `config.oidc.ShifterOIDCBackend` and `config.identity_platform.IdentityPlatformBackend` reject inactive accounts in both `get_user` and `authenticate`. Existing provider sessions cannot reload; claims synchronization cannot reactivate a blocked account.
 - `shared.api_tokens.authentication.ApiTokenAuthentication` rejects a token whose
   owner is missing, inactive, or soft-deleted, on top of the token revocation the
   transition already performs.
@@ -62,55 +57,45 @@ pre-existing soft-deleted accounts.
 `management.password_reset` is an account-origin-aware dispatcher whose first
 implementation is Django's local password reset. `reset_eligibility(user)` admits
 only an active, local, non-CTF account with a usable password and a valid email.
-`request_password_reset` consumes the shared `shared.credential_delivery` budget,
-builds the link domain from the validated public origin (`shared.site_url`,
-extracted so no domain copies the validator), records a strict, secret-free
-audit event, and sends Django's `PasswordResetForm` email on transaction
-commit. It refuses with `reset_delivery_unavailable` before the audit when
+`request_password_reset` uses the shared `shared.credential_delivery` budget and validated public origin from `shared.site_url`.
+
+It records strict secret-free audit and sends Django's `PasswordResetForm` email on transaction commit. It refuses with `reset_delivery_unavailable` before the audit when
 `EMAIL_DELIVERY_AVAILABLE` is false. The form sends through one bounded
-`shared.email.attempt_email()` call (ADR-071). A non-accepted send raises
+`shared.email.attempt_email()` call (ADR-071).
+
+A non-accepted send raises
 `reset_delivery_failed`, which the API returns as 503; the request and its audit
-stay committed. The confirm and complete landing pages are wired at
-`config.password_reset_views` using Django's proven reset-confirm views; the
-confirm view records a strict audit event for the completed password change.
+stay committed. `config.password_reset_views` mounts Django's reset-confirm and complete landing pages. The confirm view records strict audit after a completed password change.
 
 ## Ownership transfer
 
-The composition-root view `config.api_administer.AdministerTransferOwnershipView`
-requires a **superuser** session (not merely `auth.change_user`), resolves and
-authorizes the source and replacement accounts, then delegates to
-`cms.services.transfer_user_ownership`. Requiring a superuser closes the
-escalation where a staff user holding `auth.change_user` and a membership in
-another tenant's workspace could seize ranges; a superuser already holds
-cross-tenant root authority, so the transfer is not an escalation. CMS is the
-single layer permitted to import both `engine.services` and `workspaces.services`
-(ADR-001), so the one bounded, per-kind orchestration lives there rather than at
-the composition root.
+The mounted composition-root view is `PolicyAdministerTransferOwnershipView`.
+It requires current `installation.manage_principals` authority and a matching credential ceiling.
+Staff, superuser, and `auth.change_user` values do not independently authorize transfer.
+The view delegates to `cms.services.policy_transfer_user_ownership`.
+CMS composes Workspaces and Engine through their public service facades.
+Each transfer preserves the expected departing owner and rechecks current resource custody.
 
 The manifest is a closed set of resource kinds; there is no wildcard, generic
 `owner_id` rewrite, or reflective scan:
 
-- **ranges** delegate per range to `cms.services.reassign_range_owner`, which
-  preserves the CMS and Engine ownership projections, the new owner's workspace
-  membership requirement, active-range uniqueness, and the live-VPN refusal.
-- **workspaces** delegate to `workspaces.services.admin_transfer_workspace_ownership`,
-  the platform-administrator offboarding override accepted by ADR-046-R13. It
-  transfers non-personal workspaces the source owns to a replacement who already
-  holds a membership, promotes the replacement to owner before demoting the
-  source (preserving the last-owner invariant), excludes personal workspaces, and
-  writes a strict audit per workspace.
+- **Ranges** use `cms.services.policy_reassign_range_owner` for each selected range.
+  The service preserves CMS/Engine custody, expected departing owner, active-range uniqueness, and live-VPN refusal.
+- **Workspaces** use `workspaces.services.admin_transfer_workspace_principal` for each eligible ownership candidate.
+  Current policy, destination membership, expected owner, last-owner, and archive checks remain mandatory.
 
-Workspaces are transferred before ranges so a replacement promoted to workspace
-owner then satisfies the membership requirement for that workspace's ranges. The
-view records a bounded, secret-free summary audit of the offboarding action.
+Workspace transfers precede range transfers.
+Each successful resource transfer commits independently with strict audit.
+Blocked resources retain bounded counts; offboarding is not one globally atomic transaction.
+An intervening owner change blocks that resource without undoing earlier successful transfers.
 
 ## API surface
 
 All routes extend `/api/v1/administer/users/`:
 
-- `POST .../<pk>/lifecycle/` (`auth.change_user`): activate, deactivate, suspend.
-- `POST .../<pk>/reset-password/` (`auth.change_user`): trigger a Django reset.
-- `POST .../<pk>/transfer-ownership/` (superuser session): the offboarding
+- `POST .../<pk>/lifecycle/` (`installation.manage_principals`): activate, deactivate, suspend.
+- `POST .../<pk>/reset-password/` (`installation.manage_principals`): trigger a Django reset.
+- `POST .../<pk>/transfer-ownership/` (`installation.manage_principals`): the offboarding
   transfer, served at the composition root.
 - `POST .../<pk>/set-active/` and `POST .../<pk>/delete/` remain as v1
   compatibility adapters that delegate to the one transition service.
