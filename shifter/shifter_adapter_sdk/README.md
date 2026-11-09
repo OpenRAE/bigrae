@@ -230,8 +230,8 @@ Before `start`, the host stages two files in `/var/lib/bigrae/trial/input`:
 
 | File | Content |
 | --- | --- |
-| `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 of `scenario.sdl` |
-| `scenario.sdl` | The complete concrete trial SDL |
+| `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 of `trial-unit.json` |
+| `trial-unit.json` | The admitted RAES trial plan, the plan entry ID, and the entry's instantiated snapshot |
 
 The worker image supplies the trial runtime and its environment pack.
 

@@ -18,6 +18,7 @@ from shifter_adapter_sdk.runtime import (
     RuntimePlan,
     parse_result,
 )
+from shifter_adapter_sdk.validation import ValidationInput, ValidationResult
 
 from shared.cloud.exceptions import CloudTaskError
 from shared.cloud.kubernetes import (
@@ -70,7 +71,7 @@ def plugin_task_profile(
     )
 
 
-def plugin_task_identity(request: RuntimeInput | InspectionInput) -> dict[str, Any]:
+def plugin_task_identity(request: RuntimeInput | InspectionInput | ValidationInput) -> dict[str, Any]:
     """Identity derives exclusively from the host's pinned invocation."""
     return {
         "task_identity": str(request.invocation_id),
@@ -81,13 +82,13 @@ def plugin_task_identity(request: RuntimeInput | InspectionInput) -> dict[str, A
     }
 
 
-def plugin_task_ref(request: RuntimeInput | InspectionInput) -> str:
+def plugin_task_ref(request: RuntimeInput | InspectionInput | ValidationInput) -> str:
     """Derive the isolated Job reference from the immutable invocation identity."""
     return f"{PLUGIN_NAMESPACE}/{build_idempotent_job_name(PLUGIN_CONTAINER, str(request.invocation_id))}"
 
 
 def launch_plugin(
-    request: RuntimeInput | InspectionInput,
+    request: RuntimeInput | InspectionInput | ValidationInput,
     *,
     image_pull_secret: str = "",
     result_secret: str = "",
@@ -118,8 +119,8 @@ def launch_plugin(
 
 
 def observe_plugin(
-    request: RuntimeInput | InspectionInput, *, result_secret: str = ""
-) -> RuntimePlan | InspectionResult | None:
+    request: RuntimeInput | InspectionInput | ValidationInput, *, result_secret: str = ""
+) -> RuntimePlan | InspectionResult | ValidationResult | None:
     """A malformed or replayed response never becomes an accepted result.
 
     Cleanup follows result retrieval and parsing, but it is not part of the
@@ -145,7 +146,7 @@ def observe_plugin(
     return result
 
 
-def interrupt_plugin(request: RuntimeInput | InspectionInput) -> str:
+def interrupt_plugin(request: RuntimeInput | InspectionInput | ValidationInput) -> str:
     """Only stop the reserved invocation; existing range cleanup is independent."""
     return KubernetesTaskRunner(plugin_task_profile()).interrupt_task(
         PLUGIN_NAMESPACE,

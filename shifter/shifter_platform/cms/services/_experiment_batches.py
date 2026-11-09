@@ -21,6 +21,7 @@ from shared.cloud.exceptions import CloudStorageError
 from shared.credentials import CredentialContext
 from shared.exceptions import CMSError, ValidationError
 from shared.identity_scope import ResourceScope
+from shared.raes.participant_owner_replay import OwnerValidation
 from shared.raes.experiment_admission import (
     ExperimentInputError,
     compile_pack_experiment,
@@ -151,6 +152,15 @@ def _source_unchanged(
     return all(getattr(current, name) == getattr(source, name) for name in fields)
 
 
+def _owner_validation(organization_uuid: UUID) -> OwnerValidation:
+    """Run backend participant owners in the organization's installed adapter."""
+    from engine.services import validate_participant_configurations
+
+    return lambda owner, family_digest, requests: validate_participant_configurations(
+        organization_uuid, owner=owner, family_digest=family_digest, requests=requests
+    )
+
+
 def admit_experiment_batch(
     credential: CredentialContext,
     organization_uuid: UUID,
@@ -178,6 +188,7 @@ def admit_experiment_batch(
                 authority=authority,
                 concurrency=concurrency,
                 experiment_version=experiment_version,
+                owner_validation=_owner_validation(organization_uuid),
             )
     except (
         ValueError,

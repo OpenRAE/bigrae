@@ -48,10 +48,10 @@ def test_trial_input_binds_identity_deadline_and_digests():
         run_id="run-1",
         attempt_id="0f0e0d0c-0b0a-4908-8706-050403020100",
         deadline="2026-11-08T12:00:00Z",
-        scenario_sha256="b" * 64,
+        unit_sha256="b" * 64,
     )
     assert TrialInput.model_validate_json(value.model_dump_json()) == value
-    for field, bad in (("deadline", "2026-11-08T12:00:00+00:00"), ("run_id", "../x"), ("scenario_sha256", "B" * 64)):
+    for field, bad in (("deadline", "2026-11-08T12:00:00+00:00"), ("run_id", "../x"), ("unit_sha256", "B" * 64)):
         with pytest.raises(ValueError):
             TrialInput.model_validate({**value.model_dump(), field: bad})
 

@@ -153,6 +153,9 @@ from ._worker_trials import (
 from ._worker_trials import (
     start_worker_trial as start_worker_trial,
 )
+from ._participant_validation import (
+    validate_participant_configurations as validate_participant_configurations,
+)
 
 transaction = _api_django_db.transaction
 

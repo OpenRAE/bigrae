@@ -12,7 +12,7 @@ from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
-from raes import canonical_sdl_bytes
+from raes import canonical_sdl_bytes, canonical_sdl_digest
 from raes.canonical import canonical_instantiated_sdl_bytes
 from raes.participant_control_context import SDLControlContextConfigurationValidator, authored_control_context_bindings
 from raes.scenario import InstantiatedScenario
@@ -43,6 +43,11 @@ from raes_processor.trial_realization import instantiate_admitted_trial_entry
 from raes_processor.trial_scheduler import BatchSchedule, plan_batch_schedule
 
 from shared.raes.pack_delivery_inputs import pack_artifact_relative_path
+from shared.raes.participant_owner_replay import (
+    OwnerValidation,
+    ReplayedConfigurationValidator,
+)
+from shared.raes.participant_owner_replay import validation_requests as _validation_requests
 from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
 from shared.raes.trial_archive_records import reject_retained_credentials
 
@@ -127,8 +132,11 @@ def _concurrency(requested: int, configured: int, schedule: BatchSchedule) -> No
         raise ValueError("Requested concurrency is outside the configured or admitted limits")
 
 
-def _context(experiment: PackExperiment, authority: ExperimentAuthority) -> dict[str, Any]:
+def _context(
+    experiment: PackExperiment, authority: ExperimentAuthority, owner_validation: OwnerValidation | None = None
+) -> dict[str, Any]:
     """Compose explicit owner manifests into the released compiler context."""
+    owned: dict[tuple[str, str], list[dict[str, Any]]] = {}
     manifests = {}
     references = []
     for kind, manifest in (("backend", authority.backend), ("processor", authority.processor)):
@@ -170,10 +178,19 @@ def _context(experiment: PackExperiment, authority: ExperimentAuthority) -> dict
         registry = manifest.configuration_registry
         if registry is not None:
             owner = (registry.owner.validator_id, registry.owner.validator_version)
-            # This is the published SDL owner adapter, never a pack-named import.
-            if owner != ("participant-config", "1"):
+            # The published SDL owner adapter runs here; any other owner runs in its
+            # installed adapter (``validate`` phase) and is replayed, never imported.
+            if owner == ("participant-config", "1"):
+                validators[owner] = SDLControlContextConfigurationValidator(experiment.family)
+            elif owner_validation is None:
                 raise ValueError("Unsupported participant configuration owner")
-            validators[owner] = SDLControlContextConfigurationValidator(experiment.family)
+            else:
+                owned.setdefault(owner, []).extend(
+                    _validation_requests(experiment, binding.participant_address, manifest)
+                )
+    for owner, requests in owned.items():
+        results = owner_validation(f"{owner[0]}@{owner[1]}", canonical_sdl_digest(experiment.family).value, requests)
+        validators[owner] = ReplayedConfigurationValidator.from_results(requests, results)
     apparatus = AdmittedApparatusBindingModel(
         manifest_refs=references,
         participant_manifest_refs=participant_refs,
@@ -380,6 +397,7 @@ def compile_pack_experiment(
     authority: object,
     concurrency: int,
     experiment_version: str | None = None,
+    owner_validation: OwnerValidation | None = None,
 ) -> dict[str, Any]:
     """Compile one explicitly selected installed experiment and retain its inputs."""
     dependencies = dependency_tuple()
@@ -390,7 +408,7 @@ def compile_pack_experiment(
     if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
         raise ValueError("Requested concurrency exceeds configured limit")
     experiment = _select_experiment(root, experiment_id, experiment_version)
-    request = experiment.compilation_request(**_context(experiment, configuration))
+    request = experiment.compilation_request(**_context(experiment, configuration, owner_validation))
     result = compile_admitted_trial_plan(request)
     if result.plan is None:
         raise ValueError("Experiment compilation refused the supplied combination")

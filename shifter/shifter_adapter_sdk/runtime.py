@@ -6,10 +6,11 @@ Producing a plan never constitutes evidence that a guest is configured or ready.
 
 from __future__ import annotations
 
+
 import hashlib
 import json
 from pathlib import Path
-from typing import Annotated, Final, Literal, Protocol, Self
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -35,7 +36,10 @@ WorkerImage = Annotated[
     Field(max_length=1024, pattern=r"^[a-z0-9][a-z0-9.:-]+/[a-z0-9/._-]+@sha256:[a-f0-9]{64}$"),
 ]
 Phase = Literal["prepare", "validate", "configure", "verify", "cleanup"]
-Capability = Literal["provision.prepare", "guest.configure", "guest.verify", "trial.control"]
+if TYPE_CHECKING:
+    from .validation import ValidationInput, ValidationResult
+
+Capability = Literal["provision.prepare", "guest.configure", "guest.verify", "trial.control", "participant.validate"]
 
 
 class ClosedModel(BaseModel):
@@ -81,7 +85,7 @@ class PluginManifest(ClosedModel):
     distribution: Identifier
     entry_point: Identifier
     worker_image: WorkerImage
-    capabilities: list[Capability] = Field(min_length=1, max_length=4)
+    capabilities: list[Capability] = Field(min_length=1, max_length=5)
     required_bindings: list[Identifier] = Field(max_length=64)
     provisioning_concerns: list[Identifier] = Field(
         default_factory=list, max_length=64, exclude_if=lambda value: not value
@@ -91,6 +95,10 @@ class PluginManifest(ClosedModel):
         default_factory=list, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
     )
     model_bindings: dict[Identifier, Identifier] = Field(default_factory=dict, max_length=16)
+    #: Participant configuration owners (``validator_id@version``) the plugin validates.
+    participant_validators: list[Annotated[str, Field(min_length=3, max_length=128)]] = Field(
+        default_factory=list, max_length=8, exclude_if=lambda value: not value
+    )
 
     @model_validator(mode="after")
     def unique_declarations(self) -> Self:
@@ -115,6 +123,10 @@ class PluginManifest(ClosedModel):
             self.protocol != "bigrae.runtime-plugin/v2" or "guest.configure" not in self.capabilities
         ):
             raise ValueError("trial control requires the apparatus protocol and a configure phase")
+        if ("participant.validate" in self.capabilities) != bool(self.participant_validators) or (
+            self.participant_validators and self.protocol != "bigrae.runtime-plugin/v2"
+        ):
+            raise ValueError("participant validation requires the apparatus protocol and declared owners")
         return self
 
     @property
@@ -383,17 +395,21 @@ class RuntimePlugin(Protocol):
     def plan(self, request: RuntimeInput) -> RuntimePlan: ...
 
 
-def parse_input(raw: str | bytes) -> RuntimeInput | InspectionInput:
+def parse_input(raw: str | bytes) -> RuntimeInput | InspectionInput | ValidationInput:
     """Parse a bounded request without importing any executable plugin."""
+    from .validation import ValidationInput
+
     value = decode_message(raw, limit=MAX_INPUT_BYTES)
     if isinstance(value, dict) and value.get("phase") == "inspect":
         return InspectionInput.model_validate(value)
+    if isinstance(value, dict) and value.get("phase") == "validate":
+        return ValidationInput.model_validate(value)
     return RuntimeInput.model_validate(value)
 
 
 def parse_result(
-    raw: str | bytes, request: RuntimeInput | InspectionInput, *, result_secret: str = ""
-) -> RuntimePlan | InspectionResult:
+    raw: str | bytes, request: RuntimeInput | InspectionInput | ValidationInput, *, result_secret: str = ""
+) -> RuntimePlan | InspectionResult | ValidationResult:
     """Host-side parser: validate shape and invocation before using worker output."""
     if request.phase == "prepare":
         from .runtime_sealing import open_result
@@ -405,6 +421,12 @@ def parse_result(
         inspection = InspectionResult.model_validate(value)
         inspection.authorize(request)
         return inspection
+    if request.phase == "validate":
+        from .validation import ValidationResult
+
+        validation = ValidationResult.model_validate(value)
+        validation.authorize(request)
+        return validation
     plan = RuntimePlan.model_validate(value)
     plan.authorize(request)
     return plan

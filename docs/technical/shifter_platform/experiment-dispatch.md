@@ -34,8 +34,8 @@ The coordinator stages two objects under `trial-inputs/<attempt>/` in the assets
 
 | Object | Content |
 | --- | --- |
-| `scenario.sdl` | The retained concrete trial SDL of the entry |
-| `trial.json` | Run ID, attempt ID, deadline, and the digest of `scenario.sdl` |
+| `trial-unit.json` | The admitted plan, the plan entry ID, and the entry's instantiated snapshot |
+| `trial.json` | Run ID, attempt ID, deadline, and the digest of `trial-unit.json` |
 
 The deadline is the staging time plus the entry's admitted attempt timeout.
 It is persisted on the entry before upload, so every stager writes identical bytes.
@@ -68,4 +68,4 @@ The clean-state claim is `fresh-range-required`.
 
 ## Dependency tuple
 
-The tuple is Python 3.14, Django 6.0, RAES 11.0.1, raes-env-packs 7.2.3, and adapter SDK 0.2.0.
+The tuple is Python 3.14, Django 6.0, RAES 11.0.1, raes-env-packs 7.2.3, and adapter SDK 0.3.0.

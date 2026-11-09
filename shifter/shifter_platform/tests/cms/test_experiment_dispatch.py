@@ -156,7 +156,7 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["trial-started"]
     assert dispatch.engine.workers[worker_id].qualified
     staged = dispatch.engine.trials[worker_id].staged
-    assert set(staged) == {"trial.json", "scenario.sdl"}
+    assert set(staged) == {"trial.json", "trial-unit.json"}
     assert all(("bigrae-assets", item.key) in dispatch.storage.objects for item in staged.values())
     # A concurrent or repeated stager reuses the persisted deadline and the identical objects.
     from cms.services._experiment_dispatch import stage_trial
