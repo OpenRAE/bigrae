@@ -28,7 +28,7 @@ messages identify the stage:
 
 | Stage | Messages |
 | --- | --- |
-| Inputs | `required tools are missing from PATH`; `deployment inputs must include bigrae.yaml`; `deployment inputs must include terraform.tfvars or terraform.tfvars.json`; `range-images.json role ... must be projects/<project>/global/images/[family/]<name>`; `the deploy tooling revision does not match the release revision`; `the deploy tooling has local changes`; `a release manifest is required`; `settings.release_trust is required to verify release provenance`; `derived ... identity ... is not a valid service account` |
+| Inputs | `required tools are missing from PATH`; `deployment inputs must include bigrae.yaml`; `deployment inputs must include terraform.tfvars or terraform.tfvars.json`; `range-images.json role ... must be projects/<project>/global/images/[family/]<name>`; `the deploy tooling revision does not match the release revision`; `the deploy tooling has local changes`; `--allow-unreleased-tooling requires settings.deployment_tier: test`; `a release manifest is required`; `settings.release_trust is required to verify release provenance`; `derived ... identity ... is not a valid service account` |
 | Lock | `the deployment lock is held by <command> run <run id> (started <time>)` |
 | Infrastructure | `settings.operator_bootstrap is required`; `settings.operator_bootstrap.admin_password_secret_ref is required`; `the operator password secret has an empty latest version`; `cannot read the operator password from Secret Manager`; `GCP operator email must use the ... domain`; `terraform apply failed with exit status <n>` |
 | Preconditions | `Required GCE range-cell input ... is not set`; `Range guest image not imported`; `Range guest image check failed` |

@@ -46,6 +46,7 @@ FULL_DEPLOYMENT = {
     },
     "post_deploy_smoke": {"user_email": "smoke@example.com"},
     "release_trust": {"github_repository_id": "1234", "github_owner_id": "5678"},
+    "deployment_tier": "test",
 }
 
 
@@ -58,6 +59,8 @@ class TestDeploymentSettings:
         assert settings.operator_bootstrap is None
         assert settings.post_deploy_smoke.user_email == ""
         assert settings.release_trust is None
+        # #2689: a deployment is production unless its bundle says test.
+        assert settings.deployment_tier == "production"
 
     def test_full_deployment_inputs_project_onto_runtime_and_terraform(self):
         settings = GcpBackendSettings.model_validate(_settings(**FULL_DEPLOYMENT))
@@ -124,6 +127,7 @@ class TestDeploymentSettings:
             {"release_trust": {"github_repository_id": "0123", "github_owner_id": "5"}},
             {"release_trust": {"github_repository_id": "123"}},
             {"participant_openvpn": {"enabled": True, "extra": 1}},
+            {"deployment_tier": "staging"},
         ],
     )
     def test_invalid_deployment_inputs_fail_closed(self, overrides: dict[str, object]):
@@ -140,3 +144,4 @@ class TestDeploymentSettings:
         rebuilt = GcpBackendSettings.from_root_settings(root_settings)
         assert rebuilt.range_cells.zone == "us-central1-a"
         assert rebuilt.post_deploy_smoke.user_email == "smoke@example.com"
+        assert rebuilt.deployment_tier == "test"
