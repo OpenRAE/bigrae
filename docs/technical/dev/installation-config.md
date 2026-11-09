@@ -68,6 +68,7 @@ closed settings blocks too:
 | `operator_bootstrap` | The first operator (`enabled`, `admin_email`, `admin_password_secret_ref`) and the staff and superuser email lists |
 | `post_deploy_smoke` | The portal account of the post-deploy smoke (`user_email`) |
 | `release_trust` | The immutable repository and owner IDs that sign releases (`github_repository_id`, `github_owner_id`) |
+| `deployment_tier` | `production` (the default) or `test`. Only a test deployment accepts `gcp-deploy --allow-unreleased-tooling` (#2689) |
 
 `operator_bootstrap.admin_password_secret_ref` is a versionless Secret Manager
 reference (`projects/<project>/secrets/<id>`), never the password.
