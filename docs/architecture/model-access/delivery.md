@@ -1,5 +1,13 @@
 # Model-access implementation and dependency ledger
 
+> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+> These retained contracts do not authorize broker activation or establish live qualification.
+> Independently supported native source and range controls retain their own boundaries.
+> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+
+<!-- Retained broker design and delivery evidence below; preserve its original contract and issue history. -->
+<!-- vale off -->
+
 Design: [#681 / PLAT-202](index.md). Created and verified 2026-09-06.
 The full capability remains tracked by [#681](https://github.com/Brad-Edwards/bigrae/issues/681).
 The design PR references it without a closing keyword.
@@ -175,3 +183,5 @@ This change does not mutate requirement status or fabricate IMPLEMENTS/TESTS
 links. Requirement management and actual implementation/test traceability
 remain in the Ground Control MCP workflow when implementation starts.
 Repository requirement snapshots are not edited as a substitute for that API.
+
+<!-- vale on -->

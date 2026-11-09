@@ -1,5 +1,13 @@
 # REV1 Milestones And Issue Map
 
+> **Applicability** Dated review reference, 2026-07-11. The recorded baseline is `cb3668ea66de45bdab66933c675f944357e60943`.
+> Findings and test results below apply to that review, not the current system.
+> This documentation review did not repeat the original verification.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Principles
 
 - Fix security and correctness boundaries before expanding features.
@@ -128,3 +136,5 @@ declared complete before its component evidence exists.
 
 The sequence is intentionally independent of calendar estimates. Each milestone
 exits on evidence, not on elapsed time or issue count.
+
+<!-- vale on -->

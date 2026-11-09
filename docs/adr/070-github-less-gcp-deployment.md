@@ -139,7 +139,7 @@ tracks the AWS path.
    `refs/heads/dev` or `refs/heads/main`. The import holds the deployment lock,
    reuses an unchanged image, and writes `range-images.json`. A mirror changes
    only the transport. No BigRAE deployment creates image-build resources. The
-   [guest image design](../architecture/gcp-guest-images.md) records the
+   [guest image design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md) records the
    components.
 9. **The release registry is public.** One release serves every deployment.
    A deployment trusts a release only through the provenance policy of

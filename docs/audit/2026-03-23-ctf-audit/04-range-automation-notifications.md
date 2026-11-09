@@ -1,5 +1,13 @@
 # Chunk Report: Range Integration, Automation, Notifications
 
+> **Applicability** Dated audit reference, 2026-03-23. The audit names no exact source revision.
+> Its original worktree cannot be reconstructed from this record alone.
+> Findings and test counts below are historical evidence, not a current defect or delivery assessment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Status: `Partial`
 
 ## What Still Looks Good
@@ -110,3 +118,5 @@ Highest-value integration fixes:
 2. Define one CTF range reference type and use it consistently end-to-end.
 3. Normalize the `provisioned_instances` contract so the bridge and engine agree on one structure.
 4. Decide whether `CTF-1006` is meant literally. If yes, the current separate scheduler-process model does not satisfy it.
+
+<!-- vale on -->

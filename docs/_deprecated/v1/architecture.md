@@ -1,5 +1,13 @@
 # Architecture
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Infrastructure Overview
 
 Two VPCs, decoupled via RDS:
@@ -160,3 +168,5 @@ Users access their range instances via browser-based terminal integrated into th
 - **Victim terminal (right)**: Configure vulnerabilities, check detections
 
 The terminal uses Django Channels with WebSocket connections for real-time SSH interaction. See GitHub issue #267.
+
+<!-- vale on -->

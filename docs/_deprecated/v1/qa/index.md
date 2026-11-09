@@ -1,5 +1,13 @@
 # QA Smoke Tests
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Standardized smoke test protocols for verifying Shifter deployments.
 
 ## When to Run
@@ -41,3 +49,5 @@ Document failures in the issue tracker with:
 2. Which check failed
 3. Error output
 4. Timestamp
+
+<!-- vale on -->

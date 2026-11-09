@@ -1,5 +1,14 @@
 # Model-access security design
 
+> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+> These retained contracts do not authorize broker activation or establish live qualification.
+> Independently supported native source and range controls retain their own boundaries.
+> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 Proposed security contract for [#681](index.md), ADR-059 through ADR-061.
 This document defines required tests; it does not assert that they have run.
 
@@ -243,3 +252,5 @@ approval in that policy; regional intent cannot be widened under load.
 No real scenario secrets are used in qualification prompts. Evidence exports
 remain deployment-scoped, protected and body-free; application audit does
 not claim zero provider retention or a billing invoice guarantee.
+
+<!-- vale on -->

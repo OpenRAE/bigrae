@@ -1,5 +1,14 @@
 # Durable model allocations
 
+> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+> These retained contracts do not authorize broker activation or establish live qualification.
+> Independently supported native source and range controls retain their own boundaries.
+> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 Issue #2120 implements Engine-owned quota allocation and non-usable pending
 grants. It extends ADR-047 assessments with exact-integer model reservations
 and draws, joined to the existing operation-input and launch-intent transaction.
@@ -134,3 +143,5 @@ tests cover atomic outbox rollback, warm claims, resume, explicit spare authorit
 provider-pool restrictions, snapshot-bound refresh, optional absence and
 installer/runtime schema parity. These are local and synthetic results, not
 live provider, broker or billing qualification.
+
+<!-- vale on -->

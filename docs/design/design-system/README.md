@@ -1,28 +1,28 @@
 # Shifter Design System: Foundation Artifacts
 
-Framework-neutral foundation for the SPA cutover, produced by issue
-[#1299](https://github.com/Brad-Edwards/bigrae/issues/1299). The full
-contract (token inventory, component inventory, state matrix, accessibility
-baseline, Django-coexistence guidance, and the migration map) lives in
-[`../spa-design-system-foundation-1299.md`](../spa-design-system-foundation-1299.md).
+This reference explains the framework-neutral examples produced for
+[#1299](https://github.com/Brad-Edwards/bigrae/issues/1299).
+The [foundation design](../spa-design-system-foundation-1299.md) records tokens, components, states, accessibility targets, Django coexistence, and the migration map.
 
-This directory is the *reference implementation* of that contract: the tokens
-and primitive component styles both the SPA and legacy Django templates consume,
-plus a living style guide that renders them.
+This directory contains example tokens, component styles, and an HTML style guide.
+It is not the current portal stylesheet.
+The SPA loads `frontend/src/index.css` through `frontend/src/main.tsx` under `shifter/shifter_platform/`.
+Source inspection did not establish product consumption of these example assets.
 
 ## Files
 
 | File | Purpose |
 | --- | --- |
-| `tokens.css` | Design tokens as CSS custom properties. Primitive scales → semantic role tokens. Dark default, light via `[data-theme="light"]` / `prefers-color-scheme`, reduced-motion aware. **The single source of truth for the visual language.** |
-| `components.css` | Framework-neutral primitive classes (`.ds-*`) that consume only semantic tokens. The class + token contract surfaces build on. |
-| `index.html` | Living style guide. Renders every token and component; toggles light/dark. |
-| `styleguide.css` | Page scaffold for the style guide only (not product styles). |
-| `styleguide.js` | Theme toggle for the style guide (external file, no inline scripts). |
+| `tokens.css` | Example CSS custom properties, primitive scales, and semantic tokens; dark and light themes; reduced-motion rules |
+| `components.css` | Framework-neutral `.ds-*` component classes that use the example token contract |
+| `index.html` | HTML examples with a theme toggle and component states |
+| `styleguide.css` | Style-guide page layout |
+| `styleguide.js` | External theme-toggle script |
 
 ## Viewing the style guide
 
-No build step. Open `index.html` directly, or serve the directory:
+The example needs no build step.
+Open `index.html` directly, or serve the directory:
 
 ```bash
 cd docs/design/design-system
@@ -30,8 +30,9 @@ python3 -m http.server 8791
 # open http://localhost:8791/index.html
 ```
 
-Use the header toggle to preview light and dark. Tab through the page to see
-focus states.
+Use the header toggle to preview light and dark themes.
+Use Tab to inspect focus states.
+These examples do not establish the shipping portal's accessibility conformance.
 
 ## Consuming the tokens
 
@@ -42,24 +43,21 @@ Load `tokens.css` first, then `components.css`, then app/surface CSS:
 <link rel="stylesheet" href="components.css" />
 ```
 
-Components must reference **semantic** tokens only (for example
-`--ds-color-accent`, `--ds-space-4`), never the raw ramps (`--ds-blue-500`,
-`--ds-neutral-900`) or
-literal values. That indirection is what lets a future visual-identity pass
-reskin the product by editing token *values* in one file.
+The foundation contract requires components to reference **semantic** tokens, such as `--ds-color-accent` and `--ds-space-4`.
+They must not reference raw ramps, such as `--ds-blue-500` and `--ds-neutral-900`, or literal values.
+This contract separates component rules from token values.
 
 ## Reskinning
 
-To change the look without touching components: edit the **semantic** token
-values in `tokens.css` (the `:root` dark block and the two light blocks). Keep
-the raw ramps if you only want a new mapping; add/replace ramp values for a new
-palette. Re-run the contrast check documented in the foundation doc before
-claiming AA.
+To change the example appearance, edit the **semantic** values in `tokens.css`.
+The dark values use `:root`; the light values use the two light-theme blocks.
+Keep raw ramps when only the mapping changes.
+Add or replace ramp values for a new palette.
+Repeat the foundation document's contrast check before claiming AA.
 
 ## Status
 
-Stack-neutral foundation. It does not choose the SPA framework (that is issue
-[#1300](https://github.com/Brad-Edwards/bigrae/issues/1300)) and does not
-modify the shipping portal templates or CSS (per-surface migration is later
-work). See the foundation doc's migration map for how today's portal CSS maps
-onto these tokens.
+These artifacts preserve the stack-neutral foundation design.
+[#1300](https://github.com/Brad-Edwards/bigrae/issues/1300) owned framework selection.
+The foundation's migration map describes its original portal baseline.
+It does not prove that the current portal uses these tokens or that every example meets AA.

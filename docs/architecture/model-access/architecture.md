@@ -1,5 +1,13 @@
 # Model-access architecture and contracts
 
+> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+> These retained contracts do not authorize broker activation or establish live qualification.
+> Independently supported native source and range controls retain their own boundaries.
+> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+
+<!-- Retained broker design and delivery evidence below; preserve its original contract and issue history. -->
+<!-- vale off -->
+
 This is proposed behavior for [#681](index.md). Names and JSON shapes below
 are design contracts for implementation, not installed endpoints or RAES
 schema additions. ADR-059 through ADR-061 govern the design.
@@ -642,3 +650,5 @@ projection do not implement M05 authentication/streaming or M08 enrollment,
 and do not mark any grant active. Their consumers must use the exact
 broker-only inventory and the explicit admitted egress seam; setting a global
 broker VIP never enrolls a range.
+
+<!-- vale on -->
