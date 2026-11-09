@@ -1,121 +1,104 @@
-# Troubleshooting Guide
+# Troubleshooting guide
 
-Common issues and how to resolve them.
+Use this guide for user, range, installer, and connection failures.
+Keep the displayed error and affected range identity before changing anything.
+Use [operations runbooks](../runbooks/index.md) for deployment or provider recovery.
+Do not send raw credentials, pack content, or unredacted logs to a public issue.
 
-## Range Issues
+## Range issues
 
-### Range Stuck in "Provisioning"
+### Range stuck in Provisioning {#range-stuck-in-provisioning}
 
-**Symptoms**: Status shows "Provisioning" for more than 10 minutes.
+Provisioning duration depends on capacity, images, and guest setup.
+Elapsed time alone does not prove failure.
 
-**Solutions**:
+1. Check the displayed status and operation error.
+2. Refresh status if the live connection is offline.
+3. Ask the operator to inspect the accepted operation if progress remains unknown.
+4. Use **Cancel launch** only when cancellation is the intended action.
+5. Confirm terminal cleanup before another launch.
 
-1. Wait a bit longer - some scenarios take 10-15 minutes
-2. Cancel the range and relaunch
-3. If repeated failures, check your agent file is valid
+Do not retry by deleting database rows, state, or locks.
 
-### Range Shows "Failed"
+### Range shows Failed
 
-**Symptoms**: Status shows "Failed" with an error message.
+1. Record the range identity and safe error code.
+2. Check that the selected scenario is enabled and realizable on this backend.
+3. Confirm required images, adapter bindings, installers, and workspace authority with the operator.
+4. Resolve the reported cause.
+5. [Destroy the failed range](../features/ranges.md#destroy-a-range) and confirm cleanup before a fresh launch.
 
-**Solutions**:
+Changing to an unrelated scenario does not resolve the original operation.
 
-1. Read the error message - it usually indicates the cause
-2. Check your agent file:
+<a id="cant-launch-range---already-have-active-range"></a>
 
-   - Is it the right format for the OS you selected?
-   - Is the file corrupted? Try re-downloading from your console
-3. Try a different scenario (Basic Range is most reliable)
-4. Destroy and relaunch
+### Cannot launch range: already have active range {#cant-launch-range-already-have-active-range}
 
-<a id="cant-launch-range-already-have-active-range"></a>
+Open **Ranges** and inspect the existing range.
+Finish or destroy it through its lifecycle controls.
+Wait for cleanup confirmation before launching another Mission Control range.
+For a lost API response, use the [original retry key](../features/retry-safe-range-operations.md).
 
-### Cannot Launch Range - "Already Have Active Range" { #cant-launch-range---already-have-active-range }
+## Terminal issues
 
-**Symptoms**: Launch button disabled or error about existing range.
+### Terminal cannot connect {#terminal-wont-connect}
 
-**Solution**: Destroy your current range first. Go to Ranges, click Destroy on the active range.
+1. Confirm that the range is **Ready** and the selected device is correct.
+2. Read the connection error or close reason.
+3. Check that the scenario declares the selected protocol.
+4. Ask the operator to inspect guest readiness when the service is unavailable.
+5. Reconnect only after correcting the cause.
 
-## Terminal Issues
+Current permission and credential checks also apply while a session is connected.
+A revoked credential or unavailable authority service can close it.
 
-### Terminal Will not Connect { #terminal-wont-connect }
+### Terminal disconnects frequently
 
-**Symptoms**: Terminal shows "Connecting..." indefinitely or "Not connected."
+Check your network and the displayed connection reason.
+Use **Reconnect** when the error permits it.
+Switching device tabs replaces the visible connection.
+Use a guest session that can survive reconnection for long-running authorized work.
 
-**Solutions**:
+### RDP button does nothing
 
-1. Refresh the page
-2. Wait a minute - instance may still be starting
-3. Check if range is in "Ready" status
-4. Try a different browser
+Permit popups from the portal and select **RDP** again.
+Read the queue or connection error if a session is refused.
+An RDP button does not prove that the image has a working desktop service.
+Ask the operator to verify the guest's access contract.
 
-### Terminal Disconnects Frequently
+## Agent issues
 
-**Symptoms**: Connection drops, have to reconnect.
+### Upload fails
 
-**Solutions**:
+1. Check the deployment's displayed per-file limit.
+2. Confirm available storage in the destination content scope.
+3. Check the supported extension and matching file header.
+4. Obtain a fresh installer from the approved source if the file is damaged.
+5. Resolve the error before a new upload submission.
 
-1. Check your network connection
-2. Avoid letting the browser tab go idle for long periods
-3. Refresh and reconnect
+Defaults are 2 GiB per file and a 5 GiB scoped storage budget.
+Pending uploads reserve budget too.
+See [Agents](../features/agents.md).
 
-### RDP Button Does Nothing
+### Agent shows wrong OS
 
-**Symptoms**: Clicking RDP does not open a new window.
+The validator maps supported extension/header formats to OS categories.
+It does not inspect every installer payload or prove guest compatibility.
+A `.zip` upload maps to Windows; `.tar.gz` and `.tgz` map to generic Linux.
+Debian and RPM packages have their own mappings.
+Do not rename a file to force a different platform.
+Ask an authorized content administrator to retire an incorrect upload.
 
-**Solutions**:
+### No alerts in console after attack
 
-1. Check browser popup blocker - allow popups from BigRAE
-2. Try right-click > "Open in new tab"
-3. Wait for instance to fully boot (RDP service may not be ready)
+1. Confirm endpoint enrollment and connection in the approved console.
+2. Confirm that the installed scenario performs the expected installer work.
+3. Use the approved detection test for the exercise.
+4. Check the console's time range and alert filters.
+5. Ask the console owner to inspect telemetry delivery.
 
-## Agent Issues
-
-### Upload Fails
-
-**Symptoms**: Upload errors or stuck at 0%.
-
-**Solutions**:
-
-1. Check file size - max 2 GB per file
-2. Check total storage - max 5 GB across all agents
-3. Verify file format is supported
-4. Try a different browser
-5. Check network connection
-
-### Agent Shows Wrong OS
-
-**Symptoms**: Agent listed as wrong platform.
-
-**Cause**: OS is detected from file format, not contents.
-
-**Solution**: If detection is wrong, delete and re-upload with correct format. Ensure you are using:
-
-- `.msi` or `.zip` for Windows
-- `.tar.gz` for Linux shell installer
-- `.deb` for Debian/Ubuntu
-- `.rpm` for RHEL/CentOS
-
-### No Alerts in Console After Attack
-
-**Symptoms**: Running attacks but no alerts appear.
-
-**Solutions**:
-
-1. Verify agent is installed and connected:
-
-   - Check your XDR/XSIAM console for agent status
-   - Agent should show as "Connected" or similar
-2. Run a more obvious attack:
-
-   - Execute known malware samples
-   - Run detection test tools
-   - Trigger behavioral detections
-3. Check console filters:
-
-   - Ensure you are looking at the right time range
-   - Check severity filters are not hiding alerts
-4. Wait a few minutes - some alerts take time to process
+The Linux smoke tutorial does not install an endpoint agent or promise an alert.
+Do not introduce malware or external targets to compensate for missing telemetry.
 
 ## NGFW Issues
 
@@ -138,6 +121,9 @@ A successful external association does not prove application readiness.
 ### NGFW-Enabled Range Will not Launch { #ngfw-enabled-range-wont-launch }
 
 Confirm the NGFW is ready and the selected scenario is installed and admitted.
+The GCE range-cell path does not support the retained NGFW attachment contract.
+A ready standalone firewall cannot supply that capability.
+See [NGFW scenario limits](../scenarios/ngfw-range.md).
 Check the owning range operation before another launch.
 Use [RB001](../runbooks/rb001-range-provisioning-failed.md) for a failed provisioning operation.
 
@@ -148,22 +134,17 @@ Use an approved synthetic sample with the security owner.
 HTTP traffic and ICMP exercise different paths.
 An endpoint alert alone does not prove network-log delivery.
 
-## Account Issues
+## Account issues
 
-### Cannot Access Certain Features { #cant-access-certain-features }
+### Cannot access certain features {#cant-access-certain-features}
 
-**Symptoms**: Buttons disabled, features unavailable.
+Confirm the deployment URL, active login, selected scope, and requested permission.
+Ask an authorized administrator to inspect the relevant policy and credential ceiling.
+Membership, ownership, and staff status do not automatically grant every action.
+Do not change cloud IAM to bypass an application denial.
 
-**Solutions**:
+## Getting more help
 
-1. Ensure you are logged in
-2. Check if feature requires setup first (for example NGFW scenarios require NGFW)
-3. Contact support if you believe this is an error
-
-## Getting More Help
-
-If none of these solutions work:
-
-1. Note the exact error message
-2. Note what you were trying to do
-3. Contact support (see [Support](../reference/support.md))
+Record the task, deployment revision, safe error code, request identifier, and range identity when available.
+Remove secrets and private scenario material before sharing evidence.
+Follow [support guidance](../reference/support.md) for the approved reporting channel.

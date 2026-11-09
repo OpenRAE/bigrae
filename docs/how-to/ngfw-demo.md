@@ -88,22 +88,27 @@ Wait for the recorded status to become **Ready**.
 If it does not, follow the investigation steps below.
 The earlier final-configuration estimate of up to 15 minutes is historical, not a current completion gate.
 
-## Step 7: Access NGFW Management (Optional)
+## Step 7: Access NGFW management {#step-7-access-ngfw-management-optional}
 
-1. Open the ready NGFW detail page.
-2. Under **CLI access**, select **Open CLI**.
-3. Use the authorized PAN-OS session for the required inspection.
+Use the [NGFW CLI procedure](../features/ngfw.md#accessing-ngfw-management) for the ready firewall.
+The current detail page provides **Open CLI**.
+It does not establish a local SSH tunnel or a general GUI session.
+Ask the operator for any separate management-network procedure.
 
-The current page does not expose the earlier **GUI Access** instructions.
-Do not expose management ports publicly to work around missing access.
-Use the deployment's supported access boundary.
+## Step 8: Launch an NGFW-enabled range {#step-8-launch-ngfw-enabled-range}
 
-## Step 8: Launch NGFW-Enabled Range
+Confirm the installed pack and backend support before launch.
+The GCE range-cell path does not support the retained NGFW attachment contract.
+A standalone ready firewall does not supply that missing capability.
 
-Use the normal range launch procedure for an available, admitted scenario that requires this NGFW.
-Select the correct scope, content, and participant inputs.
-Confirm that the NGFW is ready before launch.
-Scenario availability and labels depend on installed content; the earlier scenario labels are not a compatibility promise.
+1. Open **Ranges > Launch a range**.
+2. Select the approved workspace and compatible installed scenario.
+3. Select the required installer.
+4. Select **Launch range**.
+5. Inspect the operation result before connecting.
+6. Follow [range cleanup](../features/ranges.md#destroy-a-range) after the exercise.
+
+The operator owns firewall setup, routing verification, and persistent-firewall cleanup.
 
 ## Verifying the Setup
 

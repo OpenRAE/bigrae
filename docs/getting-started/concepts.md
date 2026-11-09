@@ -1,31 +1,47 @@
 # Key concepts
 
+This explanation describes the objects used in the first-range tutorial.
+
 ## Release
 
-One published version of BigRAE: the control-plane images and the deployer
-image, with signed build provenance. A deployment runs exactly one release.
-See [Select and verify a release](install-gcp.md#3-select-and-verify-a-release).
+A release identifies one published source revision and its available artifacts.
+The GCP container installation route requires control-plane images, a deployer image, and verified provenance.
+The latest release checked on 2026-11-09, `v4.1.1`, predates that deployer.
+See [release selection](install-gcp.md#3-select-and-verify-a-release).
 
 ## Deployment
 
-One installation of BigRAE in one GCP project, with one portal hostname.
+A deployment is one installation of BigRAE with its own configuration and portal address.
+Cloud IAM authorizes cloud operations.
+Application policies separately authorize actions inside BigRAE.
 
 ## Scenario
 
-A template that defines the devices, networks, and access of a range. An
-administrator registers each scenario as an environment pack. A new deployment
-has one scenario, `smoke-linux`: a Kali attacker and an Ubuntu victim.
+A scenario defines the intended devices, networks, and access for a range.
+An administrator installs scenario content as an environment pack.
+The catalog reports availability and realizability for the configured backend.
+Those results do not prove live qualification.
+
+The public `smoke-linux` scenario declares a Kali attacker and an Ubuntu victim.
+Other scenarios depend on the deployment's installed catalog and image mappings.
+See [scenario selection](../scenarios/index.md).
 
 ## Range
 
-A running copy of a scenario. Each range has its own isolated network. A range
-does not affect other ranges.
+A range is one realized scenario with its own identity, owner, scope, and lifecycle.
+A workspace groups resources; membership alone does not grant access to another principal's range.
+The platform checks current permissions and credential limits for each operation.
+Cleanup is complete only when the platform verifies the terminal result.
 
 ## Agent
 
-An installer file that you upload. A scenario can install it on its devices
-when the range launches.
+An endpoint agent is an uploaded installer, such as an XDR/XSIAM package.
+A scenario can require that installer for selected guests.
+A no-agent scenario can launch without one.
+An executable runtime adapter is a separate administrator-managed component.
 
 ## Terminal
 
-Browser access to the devices of a range.
+The terminal provides browser access to authorized range devices.
+SSH, RDP, and file-transfer capabilities depend on the guest and its access contract.
+See [terminal tasks](../features/terminal.md) and the [architecture explanation](../technical/architecture.md).

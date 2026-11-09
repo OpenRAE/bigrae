@@ -1,46 +1,60 @@
 # Agents
 
-Upload and manage your XDR/XSIAM agent installers.
+Upload an approved endpoint installer for a scenario that requires one.
+The scenario determines which guests receive it.
+Uploading an installer alone does not install it on a running guest.
 
-## What's an Agent?
+## What is an agent? {#whats-an-agent}
 
-An agent is your XDR or XSIAM installer file. When you launch a range, BigRAE deploys this agent to victim machines. Alerts from attacks appear in your XDR/XSIAM console.
+An agent is an XDR/XSIAM, XDR Collector, or Cloud Identity Engine installer.
+It is separate from a runtime adapter and a platform API credential.
+Confirm the required installer type with the scenario owner.
 
-## Supported Formats
+## Supported formats
 
-Upload the installer as downloaded from your XDR/XSIAM console:
+The server checks both the extension and the file header.
+A matching header does not prove that an installer is safe or compatible with every guest.
 
-| Installer Type | File Extension | Platform |
-|----------------|----------------|----------|
-| Windows MSI | `.msi` | Windows |
-| Windows ZIP | `.zip` | Windows |
-| Linux shell | `.tar.gz`, `.tgz` | Linux (generic) |
-| Debian package | `.deb` | Debian, Ubuntu |
-| RPM package | `.rpm` | RHEL, CentOS, Fedora |
+| Installer | Extension | Detected platform |
+| --- | --- | --- |
+| Windows Installer | `.msi` | Windows |
+| ZIP archive | `.zip` | Windows |
+| Gzip tarball | `.tar.gz`, `.tgz` | Generic Linux |
+| Debian package | `.deb` | Debian Linux |
+| RPM package | `.rpm` | RHEL Linux |
 
-## Storage Limits
+## Storage limits
 
-- Maximum file size: 2 GB per agent
-- Total storage: 5 GB per user
+The default per-file ceiling is 2048 MiB, or 2 GiB.
+The default storage budget is 5120 MiB, or 5 GiB, for the authorized content scope.
+Pending uploads also reserve space in that budget.
+Use the upload limit shown by your deployment; do not rename a file to bypass validation.
 
-## Upload an Agent
+## Upload an agent
 
-1. Go to **Assets > Agents** in the sidebar
-2. Enter a name (for example "Acme Corp XSIAM Production")
-3. Select your installer file
-4. Click **Upload Agent**
-5. Wait for upload to complete
+You need content-management permission for the destination scope.
+Obtain the installer from its approved source before starting.
 
-## Manage Agents
+1. Open **Assets > Agents**.
+2. In **Upload agent**, enter an **Agent name**, such as `Example Linux installer`.
+3. Select the **Agent type**.
+4. Select the **Installer file**.
+5. Select **Upload agent**.
+6. Wait for the new row in the agent list.
+7. Check its type, detected OS, filename, and size.
 
-From the Agents page you can:
+A failed upload shows an error.
+Correct the cause before a fresh submission; the form does not retry automatically.
+Select **Cancel** to stop an upload in progress.
 
-- View all uploaded agents
-- See file size and upload date
-- Delete agents you no longer need
+## Manage agents
+
+The current SPA lists uploaded installers and their metadata.
+It does not provide a delete action in this table.
+Ask an authorized content administrator to retire an installer through the supported service interface.
+See [troubleshooting](../how-to/troubleshooting.md#agent-issues) for upload failures.
 
 ## Tips
 
-- Use descriptive names - you may have agents for different customers or versions
-- Download fresh agents from your console to ensure they're current
-- Delete old agents to free up storage space
+Use names that identify the operating system and installer version.
+Use only installers approved for the exercise and the destination scope.

@@ -1,38 +1,44 @@
-# Features
+# Feature guides
 
-Detailed guides for each BigRAE feature.
+Use these how-to guides to complete tasks on an existing deployment.
+Available actions depend on its revision, installed content, and your current permissions.
+Start with the [first-range tutorial](../getting-started/quickstart.md) if you need a learning exercise.
 
-## Core Features
+## Core features
 
-- [Agents](agents) - Upload and manage XDR/XSIAM installers
-- [Ranges](ranges) - Launch and manage demo environments
-- [Retry-safe range operations](retry-safe-range-operations) - Idempotent launch with a caller retry key and truthful cleanup outcomes
-- [Terminal](terminal) - Access range instances via SSH and RDP
+- [Agents](agents.md): upload an endpoint installer.
+- [Ranges](ranges.md): launch, monitor, extend, cancel, or destroy a range.
+- [Retry-safe range operations](retry-safe-range-operations.md): recover a lost API launch response.
+- [Terminal](terminal.md): connect to range devices.
+- [Scenario catalog](../scenarios/index.md): inspect content and realizability.
+- [Install a content pack](../scenarios/index.md#install-a-content-pack): upload administrator-approved scenario content.
 
 ## Events
 
-- [CTF](ctf) - Capture-the-flag events with scored challenges and automated provisioning
-- [CTF Organizer Guide](ctf-organizer-guide) - Run guide with walkthroughs, hints, and timing
-
-- [Scoped CTF communications](ctf-communications.md) - REST authoring, session inbox and truthful acceptance
+- [CTF](ctf.md): join an event, solve challenges, and read scores.
+- [CTF organizer guide](ctf-organizer-guide.md): prepare and run an event.
+- [Scoped CTF communications](ctf-communications.md): send notices and use the participant inbox.
 
 ## Governance
 
-- [Access credentials](access-credentials.md) - Personal tokens and independent service identities
-- [Content, ranges and continuing access](content-range-authority.md) - Customer scope, independent service ownership and session revocation
+- [Access credentials](access-credentials.md): manage personal tokens and independent service identities.
+- [Content, ranges and continuing access](content-range-authority.md): understand ownership and revocation.
+- [Workspace membership](workspaces.md): add members and manage invitations.
+- [Authorization policies and groups](authorization-policies-and-groups.md): assign and revoke permissions.
+- [Organization/workspace admin console](org-workspace-admin-console.md): manage hierarchy, ownership, quotas, and egress.
+- [Account administration](account-administration.md): choose an account or directly permitted scope.
+- [User lifecycle administration](user-lifecycle-administration.md): manage accounts and offboarding.
+- [Range-to-workspace scoping](range-workspace-scoping-administration.md): move an eligible range's scope.
+- [Audit and activity history](admin-audit-activity.md): inspect authorized audit records.
 
-- [Workspace Membership](workspaces) - Manage workspace members and fixed roles
-- [Authorization policies and groups](authorization-policies-and-groups) - Scoped groups, policies, grants and revocations
-- [Organization/workspace admin console](org-workspace-admin-console) - Staff console shell for administering organizations and workspaces
-- [User lifecycle administration](user-lifecycle-administration) - Activate, deactivate, suspend, reset, and transfer ownership for user accounts
-- [Range-to-workspace scoping administration](range-workspace-scoping-administration) - View ranges scoped to a workspace and reassign a range's workspace scope
-- [Audit and activity history](admin-audit-activity) - Staff-facing search over the platform audit record
+## Advanced features
 
-## Advanced Features
+- [Artifact preparation](../ops/artifact-preparation.md): prepare approved images, packs, and adapters.
+- [Credentials](credentials.md): manage SCM and deployment profile credentials.
+- [NGFW](ngfw.md): use an operator-prepared firewall on a compatible backend.
+- [Model sources](model-access.md): administer sources and distinguish the parked broker from supported direct access.
 
-- [Artifact preparation](../ops/artifact-preparation.md) - Prepare permitted images and install private packs and adapters in an existing tenant
-- [Credentials](credentials) - Manage SCM and deployment profile credentials
-- [NGFW](ngfw) - Set up persistent firewalls for traffic logging
-- [Per-range model access (planned)](model-access.md) - Proposed organizer, participant, and operator experience under #681
+## Reference and explanation
 
-- [Account administration preparation](account-administration.md) - Typed hierarchy, principal administration and the coordinated activation boundary
+Use the [FAQ](../reference/faq.md) and [technical reference](../technical/shifter_platform/index.md) for exact behavior.
+Read [key concepts](../getting-started/concepts.md) for the relationships between platform objects.

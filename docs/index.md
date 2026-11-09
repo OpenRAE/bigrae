@@ -1,23 +1,29 @@
 # BigRAE documentation
 
-BigRAE is a self-service cyber-range platform for authorized purple, red, and
-blue team exercises and CTF events. It installs on GCP from a published
-release. AWS support comes in an upcoming release.
+BigRAE provides cyber ranges for authorized purple, red, and blue team exercises and CTF events.
+Use the route that matches your task.
 
-New to BigRAE? Start with [Get started](getting-started/index.md):
+## Start here
 
-1. [Install on Google Cloud](getting-started/install-gcp.md).
-2. [Launch your first range](getting-started/quickstart.md).
+1. Read [Get started](getting-started/index.md) to install or join a deployment.
+2. Follow [Launch your first range](getting-started/quickstart.md) on an installed GCP tenant.
+
+The current GCP install procedure requires a release with a verified deployer image.
+The latest published release checked on 2026-11-09, `v4.1.1`, has no such image.
+[Check release eligibility](getting-started/install-gcp.md#3-select-and-verify-a-release) before running deployment commands.
+GCP and AWS backend source is separate from published-release and live deployment evidence.
 
 ## Use BigRAE
 
-| Section | Read this when |
-|---|---|
-| [Getting started](getting-started/index.md) | You are new and want the install path, the first range, and the key concepts. |
-| [How-to guides](how-to/index.md) | You want step-by-step guides for specific tasks. |
-| [Features](features/index.md) | You need details on agents, ranges, the terminal, credentials, NGFW, or CTF. |
-| [Scenarios](scenarios/index.md) | You are running a specific scenario. |
-| [Reference](reference/index.md) | You need the FAQ or support pointers. |
+| Purpose | Destination |
+| --- | --- |
+| Tutorials | [First range](getting-started/quickstart.md): launch, inspect, and clean up a Linux exercise. |
+| How-to guides | [Features](features/index.md) and [task guides](how-to/index.md): complete a known task. |
+| Reference | [FAQ](reference/faq.md) and [technical contracts](technical/shifter_platform/index.md): find exact behavior. |
+| Explanation | [Key concepts](getting-started/concepts.md) and [architecture](technical/architecture.md): understand objects and boundaries. |
+
+Use the [scenario catalog guide](scenarios/index.md) to inspect installed content and realizability.
+Use [pack installation](scenarios/index.md#install-a-content-pack) for administrator-approved content uploads.
 
 ## Deploy and operate on GCP
 

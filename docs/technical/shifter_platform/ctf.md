@@ -85,7 +85,7 @@ inherit `CTFBaseModel` with a `SoftDeleteManager` (soft delete by default).
 | `CTFEvent` | Competition: window, scenario, capacity, team mode, throttles, scoreboard policy, cleanup policy |
 | `CTFPublicRegistrationRequest` | Minimal event-scoped name/email intake with pending, approved, or rejected disposition; never participant authority |
 | `CTFChallenge` | Scored task: category, points, difficulty, release time, prerequisite, target instance/port, tags/topics |
-| `CTFFlag` | Flag truth: one or more flags per challenge. Storage uses hashes for static flags, patterns for regex, or sentinels for programmable/HTTP validators. Each retains type, case sensitivity, and validator configuration. |
+| `CTFFlag` | Flag truth: one or more flags per challenge. Storage uses normalized plaintext for static flags, patterns for regex, or validator configuration for programmable/HTTP flags. Each retains type, case sensitivity, and validator configuration. |
 | `CTFTopic`, `CTFChallengeTag`, `CTFChallengeFile`, `CTFChallengePrerequisite` | Challenge taxonomy, attachments, and unlock graph |
 | `CTFBracket`, `CTFTeam`, `CTFParticipant` | Cohorts, teams, and per-user participation |
 | `CTFSubmission`, `CTFReceiptConsumption`, `CTFAward` | Flag attempts, durable issuer-scoped signed-receipt replay evidence, and manual point awards |
@@ -97,10 +97,11 @@ inherit `CTFBaseModel` with a `SoftDeleteManager` (soft delete by default).
 
 `CTFEvent` retains immutable scalar scope ancestry. Native event creation selects an authorized account, organization, or workspace parent. Individual-account events require no artificial workspace. Domain boundaries use scalar identities rather than cross-layer foreign keys. This is the scope a communication campaign is confined to.
 
-Flag material is persisted only as `CTFFlag` rows (static flags as hashes, regex as
-patterns, programmable/HTTP as validator config), never on the challenge itself.
-Plaintext is never stored after flag creation, and submission checking compares
-against the `CTFFlag` records. A single plaintext `flag` on challenge create/update
+Flag material is persisted in `CTFFlag` rows, not on the challenge.
+Static values are stored as normalized plaintext.
+Regex flags store patterns, and programmable/HTTP flags store validator configuration.
+Submission checking uses those records.
+Protect flag-reading access and exports as sensitive authoring material. A single plaintext `flag` on challenge create/update
 is normalized into one static `CTFFlag`; a challenge with no flag rows is
 unverifiable (every submission is rejected).
 

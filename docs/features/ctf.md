@@ -1,123 +1,92 @@
 # CTF
 
-Capture-the-flag events with scored challenges and a personal range per participant.
+Use this guide to join an event, work in your assigned range, and submit flags.
+Your organizer supplies the exercise rules and authorized targets.
 
-A CTF event is a time-boxed competition. Organizers publish a set of challenges; you
-solve them by working inside your own isolated range and submitting the flags you
-recover. Correct submissions earn points and move you up the scoreboard.
+## Joining an event
 
-## Joining an Event
+An optional public registration page accepts a request for organizer review.
+It does not create an account, reserve capacity, or provision a range.
+A duplicate request receives the same generic confirmation.
+If the page is unavailable, contact the organizer.
 
-An organizer may first share an event-specific public registration page. It shows
-only the event name, description, dates, and registration deadline. Submitting your
-username, email, and optional time zone creates a request for organizer review; it
-does not create an account, reserve a place, or provision a range. A generic
-confirmation is shown whether a matching request already exists.
+After approval:
 
-When an organizer approves or adds you with a delivery email, you get a
-registration confirmation by email. It gives the event name, start, end and
-timezone. It never contains a password. The platform sends it only when the
-deployment has a mail provider.
+1. Open the dedicated CTF login URL supplied by your organizer.
+2. Enter the temporary username and initial password through that page.
+3. Choose a new password when prompted before opening other CTF pages.
+4. Read the event state and time remaining on the dashboard.
 
-After the organizer approves you:
+A registration email contains event details, not a password.
+Mail requires a configured provider.
+Temporary CTF credentials work only on participant CTF pages.
+Normal platform credentials use the separate platform login.
+Access ends at event end; anonymization follows the configured retention window.
 
-1. Open the dedicated CTF login page from the URL your organizer provides.
-2. Sign in with the temporary username and initial password. On first login, choose
-   a new password before opening any other CTF page.
-3. When the event opens, your dashboard shows the event status, your score, and the
-   time remaining.
-
-To set the time zone of reminder emails, open **Account** and enter an IANA time
-zone, for example `Europe/Paris`. Select **Use** to enter your browser's time zone.
-Leave the field blank to use the event time zone.
-
-Temporary CTF credentials work only on participant CTF pages, never on the normal
-platform login or staff/operator surfaces. Platform credentials cannot use the CTF
-login. Access stops at event end and the temporary account is anonymized after the
-configured retention window.
-
-Public registration is optional and off by default for every event. If no public
-page is available, contact the organizer; hidden, disabled, and unavailable events
-all intentionally look the same from the public internet.
+To set reminder time zone, open **Account** and enter an IANA value, such as `Europe/Paris`.
+Select **Use** for the browser time zone, or leave the field blank for the event time zone.
 
 ## Briefing
 
-Some events include a **Briefing**—event-specific orientation from the organizer:
-what environment you are in, how to reach your range, and where to start. When one is
-published, a **Briefing** entry appears on your event home and opens a dedicated
-briefing page. If the event has no briefing, the standard help applies instead.
+Open **Briefing** when the organizer publishes one.
+It gives event-specific orientation and starting points.
+Without a briefing, use the standard help and organizer instructions.
 
-## Your Range
+## Your range
 
-Each participant gets a dedicated range built from the event's scenario. The range is
-isolated from other participants' ranges.
+1. Open **Range** to inspect provisioning and access details.
+2. Wait for the assigned range to become ready.
+3. Use [Terminal](terminal.md) for the supported guest channels.
+4. Use **Download VPN profile** only when the ready range advertises that capability.
 
-- Open the **Range** page to see your range's status and connection details.
-- Ranges are provisioned around event start; allow a few minutes for the range to
-  become ready (the organizer sets a spin-up window).
-- Connect to range instances with the same SSH/RDP terminal flow used elsewhere in
-  the portal. See [Terminal](terminal).
-- When the range is ready and supports direct VPN access, select **Download VPN
-  profile**. Import the `.ovpn` file into a standard OpenVPN client to reach your
-  assigned Kali target. The profile is a private credential: do not share it, and
-  delete your local copy after the event.
-
-You do not launch or destroy your CTF range yourself—the platform provisions it for
-you and cleans it up after the event.
+Keep an `.ovpn` profile private.
+Remove the local copy after the event.
+The platform provisions event ranges; participants do not launch or destroy them through Mission Control.
+Ask the organizer for recovery when a range fails.
+Event cleanup follows the organizer's configured lifecycle.
 
 ## Challenges
 
-The **Challenges** page lists the challenges available to you.
+Open **Challenges** and select an available challenge.
+Read its description, category, points, difficulty, target, and current state.
+Scheduled releases and prerequisites can keep other challenges locked.
+Use only targets within the event's authorization.
 
-| Field | Meaning |
-|-------|---------|
-| Category | The kind of challenge (web, forensics, etc.) |
-| Points | Awarded on first correct flag for that challenge |
-| Difficulty | Organizer-assigned difficulty label |
-| Status | Locked, available, or solved |
+## Submitting flags
 
-Some challenges are released on a schedule or unlock only after you solve a
-prerequisite, so the list can grow during the event.
+1. Recover the flag through the authorized challenge steps.
+2. Enter it in the challenge submission form.
+3. Submit it and read the result.
 
-## Submitting Flags
-
-1. Open a challenge to read its description and target.
-2. Recover the flag from your range.
-3. Enter the flag in the submission box and submit.
-
-Flags are checked server-side against a stored hash—the platform never holds your
-flag in plaintext. Submissions are rate-limited: an event may set a cooldown between
-attempts and a per-challenge attempt limit. A correct submission scores the
-challenge's points the first time; later correct submissions for the same challenge do
-not double-count.
+The server validates submissions against the configured flag type.
+Static flag values are stored as normalized plaintext; they are not protected by a one-way hash.
+Organizers must protect authoring access and exports accordingly.
+The challenge can enforce a cooldown and attempt limit.
+A repeated correct submission does not award the same solve twice.
 
 ## Hints
 
-A challenge may offer hints. Taking a hint can reduce the points you earn for that
-challenge, so the cost is shown before you reveal it.
+Read the displayed cost before revealing a hint.
+A hint can reduce the score for that challenge.
 
-## Teams and Brackets
+## Teams and brackets
 
-If the event runs in team mode, you compete as part of a team (up to the event's team
-size limit) and your team shares a score. Organizers may also group participants into
-brackets so leaderboards are ranked within a cohort.
+In team mode, join or create a team before submitting flags.
+The event's team-size limit applies, and the team shares a score.
+Solo events require no team membership.
+Brackets provide separate cohort standings when the organizer uses them.
 
-The team captain can rename the team, remove members, and transfer captaincy.
-A captain can disband a team only when its current members have no recorded correct solves.
-Zero-point solves also prevent disbanding. Leaving as the last member follows the same rule.
-
-In team mode, join or create a team before you submit flags.
-An event in solo mode does not require team membership.
+A captain can rename the team, remove members, and transfer captaincy.
+Disbanding requires the current members to have no recorded correct solve.
+A zero-point solve still prevents disbanding.
+The same rule applies when the last member leaves.
 
 ## Scoreboard
 
-The **Scoreboard** ranks participants (or teams) by score. An open scoreboard
-refreshes every 15 seconds, so you do not need to reload the page. Organizers can:
+Open **Scoreboard** for the permitted standings.
+An open scoreboard refreshes every **15 seconds**.
+The organizer can hide it or freeze results near event end.
+Do not infer final standings from a frozen display.
 
-- Hide the scoreboard entirely, or
-- Freeze the scoreboard at a set time near the end so final standings are not
-  revealed until the event closes.
-
-Running a CTF as an organizer is covered in the
-[CTF Organizer Guide](ctf-organizer-guide). The implementation is described in the
-technical [CTF documentation](../technical/shifter_platform/ctf).
+See [participant messages](ctf-communications.md#participant-inbox) for event notices.
+See the [organizer guide](ctf-organizer-guide.md) for event administration and the [CTF reference](../technical/shifter_platform/ctf.md) for contracts.

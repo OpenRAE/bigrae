@@ -1,63 +1,55 @@
 # Basic Range
 
-Minimal attacker-victim setup. One Kali Linux attacker, one victim workstation with your XDR/XSIAM agent.
+Use this guide for an operator-installed attacker-and-victim scenario.
+The name does not identify a guaranteed entry in every deployment.
+For the public GCP exercise, use [Launch your first range](../getting-started/quickstart.md).
 
 ## Architecture
 
-```mermaid
-graph LR
-    subgraph Range
-        A[Kali Attacker] --- B[Victim Workstation]
-    end
-    B -->|Reports to| C[Your XDR/XSIAM Console]
-```
+The exercise places an attacker and a victim in the pack's declared network.
+An installed endpoint agent can send telemetry to its approved console.
+The pack and backend determine the actual topology.
 
 ## Instances
 
-| Instance | OS | Role | Agent |
-|----------|-----|------|-------|
-| Attacker | Kali Linux | Attack machine | No |
-| Workstation | Windows/Linux* | Victim | Yes |
-
-*OS determined by your uploaded agent type.
+Check the catalog detail for guest images, roles, and agent requirements.
+Do not infer the victim OS solely from the display name.
+The selected installer and scenario contract must be compatible.
 
 ## Network
 
-Single subnet. Attacker and victim can communicate directly.
+Ask the operator to confirm the scenario's isolation and outbound access policy.
+Do not assume that all guests or external destinations are reachable.
 
 ## Access
 
-- **Attacker (Kali)**: SSH terminal, RDP for GUI
-- **Workstation**: SSH terminal, RDP if Windows
+Use the channels declared by the pack and supported by the realized image.
+See [Terminal](../features/terminal.md).
 
-## Use Cases
+## Use cases
 
-- Quick XDR/XSIAM demos
-- Single-machine attack scenarios
-- Agent deployment verification
-- Simple malware execution tests
+Use the range for approved endpoint tests and attacker-victim exercises.
+Keep the test within the authorized guests and network boundaries.
 
-## Launch Steps
+## Launch steps
 
-1. Go to **Ranges** in the sidebar
-2. Select **Basic Range** scenario
-3. Select victim OS (Windows or Linux)
-4. Select your agent
-5. Click **Launch Range**
-6. Wait 2-5 minutes for provisioning
+1. Ask the operator which installed scenario implements this exercise.
+2. Check its catalog detail and realizability.
+3. Open **Ranges > Launch a range**.
+4. Select the approved workspace and scenario.
+5. Select an agent only when the scenario requires one.
+6. Select **Launch range**.
+7. Wait for **Ready** before connecting.
+8. Follow [range cleanup](../features/ranges.md#destroy-a-range) when finished.
 
-## What's Installed
+## What is installed? {#whats-installed}
 
-### Kali Attacker
+### Kali attacker
 
-Standard Kali tools including:
+The pack's selected image defines the installed tools.
+A generic Kali label does not guarantee particular tool versions.
 
-- Metasploit
-- Nmap
-- Burp Suite
-- Common attack utilities
+### Victim workstation
 
-### Victim Workstation
-
-- Your XDR/XSIAM agent (auto-installed during provisioning)
-- Standard OS configuration
+The pack declares the guest configuration and any installer work.
+Check the endpoint console to confirm agent enrollment before a detection test.
