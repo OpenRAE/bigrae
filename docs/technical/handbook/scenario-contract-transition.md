@@ -1,5 +1,7 @@
 # Scenario contracts: CyberScript, ACES and RAES
 
+Reference for current producer compatibility, cleanup readers, and the historical contract transition.
+
 This page records the transition requested by #1531 and the current supported
 contract. Return to the [current-state handbook](../architecture.md).
 
@@ -15,8 +17,7 @@ parser added for #2090, do not change these pins.
 
 Repository-wide maintenance can change this manifest without a change to the
 scenario contract. The 2026-10-25 dependency security refresh changed only
-supporting framework and tool dependencies. The 2026-10-28 logging and
-exception-handling cleanup (#2569) changed only the Ruff lint rules. The
+supporting framework and tool dependencies. In that manifest, the 2026-10-28 logging and exception-handling cleanup (#2569) changed only Ruff lint rules. The
 2026-10-28 CI change (#2582) added the `pytest-split` test dependency and raised
 the `autobahn` floor for CVE-2026-116579. These changes did not alter the RAES
 package pins, the serialized plan versions, the ownership boundary, or the
@@ -94,8 +95,8 @@ Keep old and new writers stopped during reconciliation.
 Verify identity, policy, object references, cleanup authority, and provider resources before reopening admission.
 Do not infer rollback safety from an atomic Helm upgrade or a source-only test.
 
-The [hard-cut decision](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/raes-migration-adr.md)
-and [ADR registry](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/adr/index.yaml)
+The [hard-cut decision](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/raes-migration-adr.md)
+and [ADR registry](https://github.com/OpenRAE/bigrae/blob/dev/docs/adr/index.yaml)
 retain the detailed migration and realization constraints. Earlier preflights
 are historical records and do not override them.
 

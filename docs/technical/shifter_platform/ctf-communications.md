@@ -1,31 +1,33 @@
 # Communication API and receipt boundaries
 
+Reference for supported communication APIs, channel limits, and receipt behavior.
+
 The `/api/v1/ctf/communications/` controllers translate closed DRF inputs into
 `CampaignDraft` and the existing communication services. PostgreSQL remains the
 workflow authority; no second outbox, scheduler, or transport layer is added.
-See the [API and cutover preflight](../../architecture/ctf-communication-api-cutover-preflight-2100.md)
+See the [API and cutover preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-communication-api-cutover-preflight-2100.md)
 and [operator guide](../../features/ctf-communications.md).
 
-The [console design (#2052)](../../architecture/ctf-communications-console-design-2052.md)
+The [console design (#2052)](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-communications-console-design-2052.md)
 records the preview, reporting, timeline, and console architecture. The #2052
-[API](../../architecture/ctf-api-integration-preflight-2052.md),
-[console](../../design/ctf-communications-console-boundaries-2052.md), and
-[scheduling](../../architecture/ctf-multi-event-communications-preflight-2052.md)
+[API](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-api-integration-preflight-2052.md),
+[console](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-communications-console-boundaries-2052.md), and
+[scheduling](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-multi-event-communications-preflight-2052.md)
 preflights record the boundaries.
 
-The [email delivery design (#1525)](../../architecture/email-delivery-design-1525.md),
-its [preflight](../../architecture/ctf-email-durable-delivery-preflight-1525.md),
+The [email delivery design (#1525)](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/email-delivery-design-1525.md),
+its [preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-email-durable-delivery-preflight-1525.md),
 ADR-051-R14, and ADR-071 define the email channel on this same ledger and
 worker.
 
-The [participant milestone preflight (CTF-801 / #664)](../../architecture/ctf-participant-email-preflight-664.md)
+The [participant milestone preflight (CTF-801 / #664)](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-participant-email-preflight-664.md)
 records registration admission, durable handoff and the cancellation/readiness
 gaps that existing email transport alone does not resolve. It changes no runtime
 behavior; cancellation's required fence specialization belongs to #662.
 
 ADR-065-R4 adds organizer recipients to this ledger. The
-[organizer-alert design (#528)](../../architecture/ctf-organizer-alerts-design-528.md)
-and its [preflight](../../architecture/ctf-organizer-alerts-preflight-528.md)
+[organizer-alert design (#528)](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-organizer-alerts-design-528.md)
+and its [preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-organizer-alerts-preflight-528.md)
 record the architecture and the boundaries.
 
 ## Organizer recipients
@@ -34,11 +36,14 @@ record the architecture and the boundaries.
 `event_started`, `event_start_refused`, `ranges_not_ready` and `event_ended`.
 Each declaration is a system campaign with the internal `event_organizers`
 audience and an absolute due time. `schedule_declaration` commits the scheduled
-intent and its `RELEASE_COMMUNICATION` task in the caller's transaction. The
+intent and its `RELEASE_COMMUNICATION` task in the caller's transaction.
+
+The
 lifecycle service declares start and end alerts under the event lock, in the
 transaction that changes the state. The campaign UUID derives from the event,
 the alert kind and the schedule occurrence, so a replay returns the first intent.
 Organizer alerts skip the shared system authoring rate budget at creation.
+
 Release-time admission backpressure still applies. When a declaration is
 refused, `declare_or_retain_lifecycle_alert` records the alert in the claimed
 task's `pending_alerts` metadata in the same transaction. The handler calls
@@ -52,7 +57,7 @@ remains, so the task retries with its existing backoff.
 | Release | `prepare_organizer_recipients` checks the pinned action for each candidate with `principals_holding_event_action` before locks. Under the event lock, release keeps only prechecked principals that are still candidates. A policy outage reschedules the release within the grace window. |
 | Email | The campaign `notice_kind` is `organizer_alert`. The email adapter renders `ctf/email/notice/organizer_alert` and links to the event's organizer Alerts tab (`ctf:admin_event_alerts`). |
 | Snapshot | `recipient_kind="organizer"`, `principal_uuid`, `user_id` and the encrypted email coordinate. No participant identity. Database constraints enforce the shape and one row for each intent, event and principal. |
-| Worker | Before the claim lock, `recipient_fence.organizer_policy_stop` rechecks the pinned action with `principals_holding_event_action`. A denial suppresses with `organizer_policy_denied`. An evaluator outage settles the command as retriable with `authority_unavailable` and no I/O. Under the lock, pre-flight suppresses with `organizer_ineligible` when the principal is no longer a candidate. |
+| Worker | Before the claim lock, `recipient_fence.organizer_policy_stop` rechecks the pinned action with `principals_holding_event_action`. A denial suppresses with `organizer_policy_denied`. An evaluator outage settles the command as retriable with `authority_unavailable`, without I/O. Under the lock, pre-flight suppresses an ineligible principal with `organizer_ineligible`. |
 | Removal | Staff revocation, and a change from co-organizer to another role, call `on_organizer_removed`. It cancels unclaimed commands and erases the coordinate. |
 | Console | The campaign list excludes organizer campaigns. `authorized_campaign` returns not found for them. |
 | Participant inbox | Selects participant rows only. |
@@ -69,9 +74,12 @@ The scheduler start handler calls `run_automatic_start` in
 `ctf.services.event.automation`. It runs `start_event_automatically` and then
 `alert_if_ranges_not_ready`. The readiness check uses `get_provision_progress`:
 the eligible registered cohort, where `ready` needs a current range assignment.
+
 A refused start raises, so the executor retries with backoff. After the end
 time, the automatic start returns `expired` and never activates the event. A spin-up yields
-when a different non-spin-up task is due. The requeued run is a continuation:
+when a different non-spin-up task is due.
+
+The requeued run is a continuation:
 it uses the time left before start as its window and skips the repeated
 capacity admission. Capacity and provisioning-failure organizer callbacks stay
 unavailable.
@@ -94,13 +102,19 @@ another kind.
 The pair renders the pinned subject and Markdown source with escaped scalar
 values. These values are the participant name and the event name, dates, and
 portal URL of the snapshot event. The reminder pair shows the event start in the
-participant time zone (`CTFParticipant.time_zone`). When that value is blank or
+participant time zone (`CTFParticipant.time_zone`).
+
+When that value is blank or
 not valid, it uses the event time zone, then UTC. The email shows the zone name
 and the UTC offset (#582). The URL comes from `SITE_URL`; an unsafe
-value is retriable as `site_url_unavailable`. Organizers cannot override the
+value is retriable as `site_url_unavailable`.
+
+Organizers cannot override the
 templates (#580). The adapter calls `shared.email.attempt_email()` with
 the worker transport timeout and the row `idempotency_key`. The key becomes a
-stable Message-ID. A missing snapshot or erased coordinate is terminal. An
+stable Message-ID.
+
+A missing snapshot or erased coordinate is terminal. An
 unreadable coordinate is retriable within the worker budget.
 
 The worker expires a claim before I/O when its attempt or elapsed ceiling is
@@ -130,11 +144,15 @@ state. Direct service calls require an `AdmissionActor` and a campaign UUID.
 Separate grouped queries keep receipts from being multiplied by channel rows.
 The delivery projection adds the latest `release_communication` task status for
 a scheduled intent. Preview returns each event's local due time from
-`event_timezone`. Native principal and credential attribution identify the
+`event_timezone`.
+
+Native principal and credential attribution identify the
 actual revision, release and cancellation actor. Services never inherit a human
 contact identity. Historical migration `0065_communication_attribution` preserves
 revision-1 authors; `0077` joins both migration histories, and `0078` adds native
-revision and cancellation attribution. Strict
+revision and cancellation attribution.
+
+Strict
 `shared.audit` stays the investigator record; it has no organizer read surface.
 
 `_reschedule_event_tasks` cancels only the event-derived task types it
@@ -173,28 +191,36 @@ with bounded errors. API errors use authored messages through `shared.api.errors
 
 ## Inbox and socket policy
 
-The [participant inbox boundary note](../../design/ctf-participant-inbox-boundaries-2053.md)
+The [participant inbox boundary note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-participant-inbox-boundaries-2053.md)
 (#2053) records the preflight constraints, including CTF-014's trusted-app,
 branding and Django/gettext boundaries. It does not claim multilingual SPA support.
-The [participant inbox design](../../architecture/ctf-participant-inbox-design-2053.md)
+The [participant inbox design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-participant-inbox-design-2053.md)
 records the receipt states, views, content checks, security controls and data flow.
 
 `ctf.services.communication.inbox` matches event, immutable participant public
 identity and user together. A committed receipt and released intent prove in-app
 availability. Inbox reads exclude campaigns past the retention cut-off from
-`retention.expired_campaign_ids`, so purge lag does not extend access. A GET never
+`retention.expired_campaign_ids`, so purge lag does not extend access.
+
+A GET never
 creates or changes a receipt. `interact_with_receipt` takes one closed
 `ReceiptAction` (`read`, `dismiss`, `acknowledge`). It locks the event, the
 participant and the receipt, rechecks live participation, and then sets that
-action's first timestamp. No action changes another timestamp. The pinned
+action's first timestamp.
+
+No action changes another timestamp. The pinned
 acknowledgement policy governs explicit acknowledgement. Retained inbox access
 is distinct from permission to compete or temporary-account lifetime.
 
 `InboxFilter` selects the list view. `inbox` hides a dismissed message only when
 its pinned policy has no open obligation. `action_required` lists open
-obligations. `dismissed` lists dismissed messages. The list adds inbox-wide counts
+obligations.
+
+`dismissed` lists dismissed messages. The list adds inbox-wide counts
 and the deployment link-host allowlist. Every inbox response carries Django's
-never-cache headers (`no-store`, `private`). Validation errors use one generic
+never-cache headers (`no-store`, `private`).
+
+Validation errors use one generic
 `invalid` envelope that does not repeat the input.
 
 Admission parses the body with `markdown-it-py` (CommonMark, tables and
@@ -207,20 +233,28 @@ The exact `/ws/notifications/` path is admitted for an eligible temporary accoun
 after password change, through the existing origin/session/account stack. The
 consumer retains the actual native credential and checks topic policy on
 subscription, replay and each delivery. It projects retained payloads
-through the current registration. CTF wake-ups contain references only; legacy
+through the current registration.
+
+CTF wake-ups contain references only; legacy
 bodies become a refresh hint. Revocation at final send retains the undelivered
 receipt. The SPA shell refetches the inbox on a `communication` hint and
-refetches CTF reads on a `refresh` hint. It shows a fixed-text toast for a bare
+refetches CTF reads on a `refresh` hint.
+
+It shows a fixed-text toast for a bare
 `position_changed` or `range_ready` hint. It drops other frames.
 
 Each event selects its live notification kinds in `CTFEvent.live_notifications`
 (ADR-072). The SPA opens no notification socket when the effective list is
 empty. The in-app adapter accepts a command without a wake-up when the event
-does not select `messages`; the inbox entry stays available. Challenge release
+does not select `messages`; the inbox entry stays available.
+
+Challenge release
 and first blood are fixed-text in-app ledger notices from `LIVE_NOTICE` scheduler
 tasks. Position changes come from the `RECONCILE_POSITIONS` task. The
-[live notifications design](../../architecture/ctf-live-notifications-design-665.md)
-records the data flows and controls. The
+[live notifications design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-live-notifications-design-665.md)
+records the data flows and controls.
+
+The
 communication Markdown profile on the canonical renderer drops media and renders
 non-allowlisted links as plain text. An unknown content profile shows no body
 and offers no read or acknowledge action.
@@ -272,9 +306,7 @@ maintainer-approved legacy write retirement and ADR-040 exception.
    or receipts. Draft/scheduled announcements become campaigns with their original
    author, target and email channel. Old tasks are cancelled atomically with that
    mapping. Email-unavailable mappings have no runnable release/delivery work.
-6. Start only the new workers and web code. Verify old writes return 410, exact
-   communication scopes work, participant inbox reads stay parent-scoped, and the
-   command's `email_ready` / `channel_unavailable` counts match the deployment.
+6. Start only the new workers and web code. Verify old writes return 410 and exact communication scopes work. Check parent-scoped inbox reads and the deployment's `email_ready` / `channel_unavailable` counts.
 
 The PostgreSQL fence rejects legacy row creation and all scheduler claims from
 an old binary, including lifecycle and provisioning callbacks. New claims must
@@ -302,17 +334,21 @@ remain visibly staged when email is unavailable.
 event task cancellation and `on_event_cancelled`. `ledger.declare_notice`
 commits the campaign, the scheduled intent and its `RELEASE_COMMUNICATION` task
 with the cancellation. A refused declaration is logged and does not block
-cancellation. `is_event_cancellation_notice` is the only exception to the
+cancellation.
+
+`is_event_cancellation_notice` is the only exception to the
 cancelled-event fence in `_assert_release_allowed` and `_fence_reason`
 (ADR-065-R6). The exception needs the `system_milestone` origin, the
 `cancellation` kind and one target event. `create_system_event_campaign` sets
-that kind only for a cancelled event. The
-[cancellation notice design (#662)](../../architecture/ctf-cancellation-notice-design-662.md)
+that kind only for a cancelled event.
+
+The
+[cancellation notice design (#662)](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-cancellation-notice-design-662.md)
 records the architecture.
 
 `notification.ledger.declare_participant_notice` declares registration,
 range-ready and range-failure notices (ADR-065-R5,
-[design](../../architecture/ctf-participant-notices-design-664.md)). It commits
+[design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-participant-notices-design-664.md)). It commits
 the system campaign, the scheduled intent and the `RELEASE_COMMUNICATION` task
 in the caller's transaction. It skips the shared system authoring rate budget.
 Release-time admission backpressure still applies. A `CTFCommunicationError`
@@ -327,10 +363,13 @@ rolls back only the declaration savepoint and is logged with its code.
 A campaign from the older inline path has a `manual` trigger. The declaration
 returns it as `existing` and schedules nothing.
 For a delivered `ready` status, the receiver locks the affected events in
-primary-key order before it writes participant rows. Provisioning and recovery
-use the same event-before-participant order. Organizer-only alerts have no
-participant audience and remain unavailable rather than creating fake recipient
-rows. Password issuance stays volatile in `participant.credentials`; non-secret
-login notices never retain passwords, tokens or issuance objects. The deprecated
+primary-key order before it writes participant rows.
+
+Provisioning and recovery
+use the same event-before-participant order. Organizer alerts use separate native organizer snapshots.
+They never create participant audience rows. Password issuance stays volatile in `participant.credentials`; non-secret
+login notices never retain passwords, tokens or issuance objects.
+
+The deprecated
 credential-resend helper fails at the retired dispatch boundary without changing
 the participant's password.

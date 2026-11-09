@@ -3283,7 +3283,7 @@
     "/api/v1/accounts/context/": {
       "get": {
         "operationId": "accounts_context_retrieve",
-        "description": "Prepared replacement for workspace-only or staff-only presentation assumptions.",
+        "description": "Return native principal context and current action hints.",
         "parameters": [
           {
             "in": "query",
@@ -5403,7 +5403,7 @@
     "/api/v1/audit/": {
       "get": {
         "operationId": "audit_list",
-        "description": "S8 policy-aware audit API, prepared without changing current routing.",
+        "description": "List and retrieve audit events under current native policy.",
         "parameters": [
           {
             "in": "query",
@@ -5535,7 +5535,7 @@
     "/api/v1/audit/{id}/": {
       "get": {
         "operationId": "audit_retrieve",
-        "description": "S8 policy-aware audit API, prepared without changing current routing.",
+        "description": "List and retrieve audit events under current native policy.",
         "parameters": [
           {
             "in": "path",
@@ -36841,7 +36841,7 @@
         "type": "http",
         "scheme": "bearer",
         "bearerFormat": "Knox opaque credential or native cloud service identity token",
-        "description": "Personal Knox credential with live authorization, or an explicitly admitted audience-bound native service identity token: a Google service ID token on GCP or an AWS STS web identity token on AWS. Cloud access tokens and human provider ID tokens are not application bearer credentials."
+        "description": "Use a personal Knox credential with live authorization, or an explicitly admitted audience-bound native service identity token. GCP accepts Google service ID tokens; AWS accepts STS web identity tokens. Cloud access tokens and human provider ID tokens are not application bearer credentials."
       },
       "cookieAuth": {
         "type": "apiKey",

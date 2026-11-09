@@ -1,5 +1,9 @@
 # BigRAE adapter SDK
 
+Reference for independently packaged adapters, with local integration procedures.
+See the [interface inventory](../../docs/reference/interfaces.md#adapter-sdk) and
+[verification guide](../../docs/technical/shifter_platform/scenario-verification.md) for the separate operator API.
+
 The wheel is `bigrae-adapter-sdk`. Its canonical imports use
 `bigrae_adapter_sdk`; legacy `shifter_adapter_sdk` imports remain available in
 the same wheel and expose the same classes. The runtime protocol accepts both
@@ -46,6 +50,8 @@ Plugin authors must build images that run under these constraints. Host callers
 use `parse_result` with their original input to reject replay and undeclared
 targets. Neither a plan nor a compatibility response proves guest readiness.
 
+## Required files
+
 An adapter can declare `required_files`, a list of up to 16 named input files.
 Administrators upload and replace these in Mission Control → Assets → Files,
 then select each file in the pack's adapter assignment. Each file and their
@@ -73,6 +79,8 @@ uses exit status as evidence. Each binding currently targets exactly one guest.
 Guest-only cleanup is performed by core range destruction, independently of the
 image registry.
 
+## Preparation plans
+
 An adapter can also declare `provision.prepare` with nonempty
 `provisioning_concerns`. The host asks for a `prepare` plan before any provider
 work. Preparation-only adapters declare `required_bindings: []`; guest adapters
@@ -83,12 +91,16 @@ CMS access, or additional input discovery.
 Return `provisioning_values`, each containing an authored resource `address`, a
 declared `concern`, an RFC 6901 `payload_pointer` and a scalar `value`. Only an
 existing payload scalar may change. New paths, collection replacement, resource
-identities and operation graphs are outside this contract. Core evaluates every
+identities and operation graphs are outside this contract.
+
+Core evaluates every
 original RAES authority, including exact ancestors and recursive constraints;
 unsupported or unresolved constraints refuse preparation. At most 4096 proposals
 and 512 KiB of clear response are permitted by the SDK. Core additionally
 requires the complete encrypted snapshot plus original input to fit its 256 KiB
-operation envelope before acceptance. Preparation cannot execute guest
+operation envelope before acceptance.
+
+Preparation cannot execute guest
 actions. For example, a synthetic concern may propose:
 
 ```json
@@ -97,11 +109,15 @@ actions. For example, a synthetic concern may propose:
 
 The worker seals preparation stdout using the host-supplied
 `BIGRAE_PLUGIN_RESULT_SECRET`. Authors use the standard worker entrypoint and do
-not handle this key. A missing key fails without plaintext output. Host callers
+not handle this key. A missing key fails without plaintext output.
+
+Host callers
 supply the invocation key to `parse_result(..., result_secret=...)`; cleartext
 preparation output is refused. Guest-only output is unchanged. Accepted values
 remain encrypted in core records and are reused for retries and destruction;
-reports keep original plan addresses. See the
+reports keep original plan addresses.
+
+See the
 [pre-provisioning design](../../docs/architecture/adapter-pre-provisioning-2718.md).
 
 The worker completes all output bytes and flushes stdout before it reports
@@ -122,14 +138,20 @@ The complete clear response must still fit 512 KiB.
 Each value must fit 65536 UTF-8 bytes, and version references must be unique.
 The existing invocation, phase, and host authority checks apply to every selection.
 
+## Guest runtime values
+
 An action may request `runtime_values`, a map from local names to closed
 `GuestValueReference(binding=..., field=...)` references. Supported fields are
 `private_address` and `participant_ssh_public_key`. The host resolves these from
 the exact realized guest bindings and supplies bounded base64 JSON in
-`SHIFTER_RUNTIME_VALUES_B64` to that guest action. All references are checked
+`SHIFTER_RUNTIME_VALUES_B64` to that guest action.
+
+All references are checked
 before the first action; participant keys require declared SSH access and a
 verified account credential. The management key is never a fallback. The isolated
-worker does not receive these values. Guest Python code can use the standard
+worker does not receive these values.
+
+Guest Python code can use the standard
 library-only `bigrae_adapter_sdk.guest.read_runtime_values()` helper when the SDK
 is installed, or decode the documented JSON transport directly. Treat values as
 data rather than interpolating them into shell source.
@@ -147,7 +169,7 @@ that a package release has been published.
 Local wheel builds are sufficient for independent adapter development and runtime
 qualification. SDK publication is not a prerequisite. The release and distribution
 model, its implementation and author documentation belong to
-[issue #2241](https://github.com/Brad-Edwards/bigrae/issues/2241).
+[issue #2241](https://github.com/OpenRAE/bigrae/issues/2241).
 
 Pull-request CI retains the tested wheel, source distribution and `SHA256SUMS`
 in the `adapter-sdk-candidate-<revision>` artifact. Pack authors can build and test
@@ -163,13 +185,11 @@ The following scaffold is dormant pending the release-model decision in #2241.
 Its presence does not select PyPI as the distribution model or require a release.
 
 The SDK has its own version in `pyproject.toml`, independent of platform release
-tags. The `Publish adapter SDK` workflow accepts that exact version from `main`,
-runs the SDK checks, builds the wheel and source distribution, and verifies the
-built wheel in a fresh environment. Its publishing job downloads the exact build
+tags. The `Publish adapter SDK` workflow accepts the exact committed version from `main`. It runs SDK checks, builds wheel and source distribution, and verifies the wheel in a fresh environment. Its publishing job downloads the exact build
 artifact by ID; it does not check out or rebuild source.
 
-If the agreed model retains this scaffold, configure `bigrae-adapter-sdk` with
-the GitHub trusted publisher for `Brad-Edwards/bigrae`, workflow
+If the agreed model retains this scaffold, use the canonical repository from `.ground-control.yaml`.
+Configure `bigrae-adapter-sdk` with that repository's GitHub trusted publisher, workflow
 `adapter-sdk-release.yml`, environment `adapter-sdk-pypi`. Configure that GitHub
 environment's release reviewers and restrict it to `main`. The workflow uses
 short-lived OIDC authorization and has no package-index token fallback.
@@ -180,7 +200,12 @@ the exact committed version. A successful publication makes
 `pip install 'bigrae-adapter-sdk[runtime]==<version>'` available to pack authors.
 Preparing this workflow does not create the publisher or publish a package.
 
-### Guest model access
+## Guest model access
+
+The broker integration below is retained contract material.
+[ADR-068](../../docs/adr/068-model-access-broker-parked.md) parks broker execution and its controls.
+Keyless-direct is the supported guest model path.
+SDK helpers and manifest fields do not enable the parked broker or guarantee host enrollment.
 
 A plugin manifest may declare `model_bindings`, mapping workload roles such as
 `participant` to names in `required_bindings`. Administrators choose the concrete
@@ -198,9 +223,12 @@ client's token-helper interface; never log or interpolate its output into a comm
 An adapter owns client/container setup. Move or mount the whole state directory
 into the client environment, with directory mode 0700, files 0600 and ownership
 matching the client's UID. Mounting a single session file breaks atomic refresh.
+
 Keep the directory on tmpfs. Configure the client to use the broker URL and CA,
 and disable direct provider authentication. Do not send session contents back to
-the isolated worker. Re-enrollment invalidates the old credential family; expiry
+the isolated worker.
+
+Re-enrollment invalidates the old credential family; expiry
 or refresh failure must stop client model access.
 
 The current delivery implementation requires trusted private SSH on Linux. It
@@ -212,9 +240,11 @@ Client protocol compatibility and both cloud deployments require live qualificat
 `bigrae.runtime-plugin/v2` supports administrator-bound worker software without a content pack.
 Its runtime input requires `apparatus_digest` and forbids `pack_digest`.
 The manifest and response must declare that same protocol.
+
 Version 1 inputs continue to require their original pack identity.
 The host still pins the installed executable, target bindings, operation, phase, and input digest.
 An adapter cannot install itself through content or choose provider resources.
+
 Apparatus planning uses the existing isolated worker and bounded guest-action contract.
 A compatible installation probe does not prove guest readiness.
 
@@ -224,7 +254,7 @@ An apparatus plugin can declare the `trial.control` capability.
 It must use `bigrae.runtime-plugin/v2` and declare `guest.configure`.
 Its configure phase installs one executable at `/usr/local/libexec/bigrae/trial-control`.
 BigRAE then uses that executable to run one trial on the worker.
-`shifter_adapter_sdk.trial` defines the paths, verbs, and closed models.
+`bigrae_adapter_sdk.trial` defines the paths, verbs, and closed models.
 
 Before `start`, the host stages two files in `/var/lib/bigrae/trial/input`:
 

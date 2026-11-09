@@ -1,19 +1,14 @@
 # BigRAE CTF
 
-Capture-the-flag is a Django app (`ctf`) layered on the platform's range system. It
-owns event/challenge/scoring data and orchestrates a dedicated range per participant
-by calling the existing CMS range services; it does not introduce a second
-provisioning path.
+Reference for native CTF interfaces, models, and service responsibilities.
+
+Capture-the-flag is a Django app (`ctf`) layered on the platform's range system. It owns event, challenge, and scoring data. It calls existing CMS range services for each participant's dedicated range, without a second provisioning path.
 
 ## ADR-066 authorization
 
-The source contract for CTF authorization lives in
-`ctf.api.operation_policy`: it names the registered action and SQL-owned scope
-locator for all 118 current `/api/v1/ctf/` operations, and classifies the
-named browser routes, Django admin models and inlines, CTF management
-commands, scheduled task types, and external service effects. The issue's
-baseline was 114
-operations; the current published API contains four additional operations.
+`ctf.api.operation_policy` defines the registered action and SQL-owned scope locator for each `/api/v1/ctf/` operation. It also classifies browser routes, Django admin models/inlines, management commands, scheduled tasks, and external service effects. The operation catalog and generated schema supply the current inventory.
+Historical issue counts do not define supported coverage.
+
 The browser routes serve an SPA shell; privileged data and effects belong to
 the API and service boundaries. Public registration and scoreboard projection
 retain their explicit publication checks. Scenario discovery retains the CMS
@@ -24,11 +19,15 @@ principal, the credential's exact action ceiling, CTF-owned event scope, and
 the shared OpenFGA provider. Event creation checks the selected existing
 account, organization, or workspace parent. Individual accounts have no
 invented organization or workspace; team and enterprise accounts use an
-organization or workspace parent. OpenFGA must show exactly one matching
+organization or workspace parent.
+
+OpenFGA must show exactly one matching
 event parent. The same exact-parent rule covers event-derived ranges. The
 SQL authorization inventory includes account- and organization-placed events
 in scoped delegation proofs and checks exact event ancestry on direct policy
-mutations. Service participant admission and current-event reads already use the shared check;
+mutations.
+
+Service participant admission and current-event reads already use the shared check;
 the participant row and lifecycle predicates remain separate requirements.
 Provider failures deny with a bounded unavailable response.
 
@@ -62,17 +61,17 @@ for the DFDs, recovery state and lock order.
 
 ## URL Surface
 
-`ctf.urls` (`app_name = "ctf"`) mounts three groups under `/ctf/`:
+`ctf.urls` (`app_name = "ctf"`) mounts browser groups under `/ctf/`.
+The separate `ctf.api.urls` module mounts JSON operations under `/api/v1/ctf/`:
 
 | Group | Prefix | Audience |
 |-------|--------|----------|
 | Public registration | `/ctf/public/events/<event-uuid>/` | Unauthenticated, explicitly published event projection and CSRF-protected request intake |
 | Participant | `/ctf/` | Competitors: dedicated login, password change, dashboard, challenges, range, scoreboard, team |
 | Organizer/Admin | `/ctf/admin/` | Organizers: events, challenges, participants, teams, brackets, ranges, notifications, analytics |
-| API | `/ctf/api/` | JSON endpoints for events, challenges, scenarios |
+| API | `/api/v1/ctf/` | Typed JSON endpoints for CTF operations |
 
-Participant access uses isolated temporary username/password accounts; organizer views are gated to CTF
-organizer roles. The portal sidebar distinguishes participant-only users so the two
+Participant access uses isolated temporary username/password accounts; organizer data and actions require current native event policy. The portal sidebar distinguishes participant-only users so the two
 surfaces stay structurally separate (see ADR-013).
 
 ## Models
@@ -86,7 +85,7 @@ inherit `CTFBaseModel` with a `SoftDeleteManager` (soft delete by default).
 | `CTFEvent` | Competition: window, scenario, capacity, team mode, throttles, scoreboard policy, cleanup policy |
 | `CTFPublicRegistrationRequest` | Minimal event-scoped name/email intake with pending, approved, or rejected disposition; never participant authority |
 | `CTFChallenge` | Scored task: category, points, difficulty, release time, prerequisite, target instance/port, tags/topics |
-| `CTFFlag` | The sole source of flag truth: one or more flags per challenge, each stored as a hash (static), pattern (regex), or sentinel (programmable/http) with type, case sensitivity, and validator config |
+| `CTFFlag` | Flag truth: one or more flags per challenge. Storage uses hashes for static flags, patterns for regex, or sentinels for programmable/HTTP validators. Each retains type, case sensitivity, and validator configuration. |
 | `CTFTopic`, `CTFChallengeTag`, `CTFChallengeFile`, `CTFChallengePrerequisite` | Challenge taxonomy, attachments, and unlock graph |
 | `CTFBracket`, `CTFTeam`, `CTFParticipant` | Cohorts, teams, and per-user participation |
 | `CTFSubmission`, `CTFReceiptConsumption`, `CTFAward` | Flag attempts, durable issuer-scoped signed-receipt replay evidence, and manual point awards |
@@ -94,12 +93,9 @@ inherit `CTFBaseModel` with a `SoftDeleteManager` (soft delete by default).
 | `CTFHint`, `CTFHintUsage` | Optional, point-reducing hints and usage tracking |
 | `CTFNotification`, `CTFScheduledTask` | Announcements and scheduled work (legacy aggregate evidence; see Scoped communications) |
 | `CTFContentHydrationReceipt` | Digest, object-identity fingerprints, bounded counts, and pristine/drifted state for scenario-managed event content |
-| `CommunicationCampaign`, `CommunicationTargetEvent`, `MessageRevision`, `CommunicationIntent`, `RecipientSnapshot`, `DeliveryAttempt`, `RecipientReceipt` | Scoped communications domain (ADR-051): workspace-confined campaigns, immutable content, normalized release occurrences, server-resolved recipients, per-transport delivery commands, and read/acknowledgement state |
+| `CommunicationCampaign`, `CommunicationTargetEvent`, `MessageRevision`, `CommunicationIntent`, `RecipientSnapshot`, `DeliveryAttempt`, `RecipientReceipt` | Scoped communications (ADR-051). Campaigns have one explicit parent. Immutable content, normalized releases, server-resolved recipients, transport commands, and read/acknowledgement state. |
 
-`CTFEvent` carries an immutable scalar `workspace_id` tenancy boundary (ADR-051):
-it is resolved once at creation from an authorized workspace or the creator's
-personal workspace, existing events are backfilled, and it is never a cross-layer
-foreign key. This is the scope a communication campaign is confined to.
+`CTFEvent` retains immutable scalar scope ancestry. Native event creation selects an authorized account, organization, or workspace parent. Individual-account events require no artificial workspace. Domain boundaries use scalar identities rather than cross-layer foreign keys. This is the scope a communication campaign is confined to.
 
 Flag material is persisted only as `CTFFlag` rows (static flags as hashes, regex as
 patterns, programmable/HTTP as validator config), never on the challenge itself.
@@ -156,10 +152,7 @@ regex, and HTTPS HTTP validators; it does not execute package code or enable
 programmable validators.
 
 Event creation composes the resolver with
-`ctf.services.hydrate_event_ctf_content`. The service locks the event, checks
-ownership and state, writes the graph through native challenge/hint/prerequisite
-services, creates one receipt, and records a strict audit event in one atomic
-transaction. An exact pristine replay is a no-op. Foreign rows, changed source
+`ctf.services.hydrate_event_ctf_content`. The service locks the event and checks ownership and state. Native challenge/hint/prerequisite services write the graph. One receipt and strict audit commit with those writes in one atomic transaction. An exact pristine replay is a no-op. Foreign rows, changed source
 evidence, shape mismatch, or a drifted receipt fail closed.
 
 All native organizer mutation paths mark an existing receipt drifted inside
@@ -171,7 +164,7 @@ The deployment reference catalog is the separate closed contract
 `shifter-ctf-content-references/v1`, parsed at startup from private deployment
 configuration. This feature does not reuse the RAES package catalog or persist
 bundle bodies in scenario/event JSON. See the
-[operator runbook](../../dev/ctf-scenario-content) for publication, provider
+[operator runbook](../../dev/ctf-scenario-content.md) for publication, provider
 IAM, runtime settings, rotation, and failure recovery.
 
 ### Range Provisioning
@@ -186,19 +179,10 @@ CMS range services, the same path Mission Control uses to launch a range.
 - `batch.py`: throttled event-wide provisioning, pacing participant spin-ups.
 - `lifecycle.py`, `status.py`, `tasks.py`: teardown, status reads, and task wiring.
 - `vpn.py`: resolves the current participant's generation-bound OpenVPN profile
-  through the CTF → CMS → Engine service boundary. The participant API exposes it
-  only through `POST /api/v1/ctf/range/vpn-profile/` with current event
-  participation and the exact assigned range, CSRF enforcement for sessions, a credential
-  delivery rate limit, no-store response headers, and a delivery audit event.
+  through the CTF → CMS → Engine service boundary. The participant API exposes it through `POST /api/v1/ctf/range/vpn-profile/`. Delivery requires current event participation and the exact assigned range. Sessions require CSRF; delivery also applies rate limits, no-store headers, and audit.
 - `recovery.py`: `recover_participant_range(participant_id, *, strategy,
   operator, spare_range_instance_id=None)` recovers a destroyed participant range
-  (organizer-only). `rebuild` provisions a fresh range via the CMS bridge; `reassign_spare`
-  consumes an available `CTFSpareRange` from the participant's own event pool and
-  reassigns its ownership to the participant principal through the CMS and Engine
-  service boundaries. The intent is persisted as a `CTFRangeRecovery`
-  row keyed on participant + old range + strategy; resumption after a partial failure is
-  data-driven (recorded replacement id and the live old-range status), so retries never
-  duplicate the replacement or the audit row. The old range is always destroyed; there
+  (organizer-only). `rebuild` provisions a fresh range through CMS. `reassign_spare` consumes an available `CTFSpareRange` from the participant's event pool. It transfers ownership to the participant principal through CMS and Engine services. A `CTFRangeRecovery` row retains intent keyed on participant, old range, and strategy. Recovery resumes from the recorded replacement ID and live old-range status. Retries do not duplicate the replacement or audit row. The old range is always destroyed; there
   is no disposition/forensics-retention choice. Recovery writes one shared audit
   row.
 - `spares.py`: `provision_event_spares(event_id, target_count, *, operator=None)` tops up
@@ -214,14 +198,13 @@ does not go stale and provisioning stays responsive to shutdown.
 
 ### Participant OpenVPN access
 
-The CTF bridge mints a closed OpenVPN capability from the event cleanup deadline
-and the single participant-access Kali member, falling back to the unique
-hydrated Kali member for legacy templates without access declarations. Engine persists it beside the
+The CTF bridge derives a closed OpenVPN capability from the event cleanup deadline and the single participant-access Kali member. Legacy inputs without access declarations use the unique hydrated Kali member. Engine persists it beside the
 range; Mission Control ranges and topology without that capability do not create
-a VPN edge. Provisioning admits the deployment's shared OpenVPN pool (#2480) to
-that member only when the capability is present, and stores the participant
-profile in the provider secret store. The pool asks the portal before it admits
+a VPN edge.
+
+Provisioning admits the deployment's shared OpenVPN pool (#2480) to that member only when the capability is present. The participant profile stays in the provider secret store. The pool asks the portal before it admits
 a client and then allows only the member's address and declared ports.
+
 Django persists only a closed, non-secret binding containing the generation, owner,
 target, endpoint, profile version, and secret reference. Profile bytes are resolved
 and validated in memory only after CTF provenance, participant ownership, range
@@ -230,36 +213,30 @@ status, request generation, and target membership checks pass.
 The participant range-status projection exposes only
 `vpn_profile_available`; it does not expose provider, endpoint, target, or secret
 metadata. Paused and non-ready ranges cannot deliver a profile. Destroy removes the
-provider material. Ownership transfer is rejected while a participant VPN binding
-exists because clearing a database reference cannot revoke a downloaded credential;
-recovery must destroy that generation and provision a new one for the replacement
-owner before it becomes ready.
+provider material.
+
+Ownership transfer is rejected while a participant VPN binding exists. Clearing a database reference cannot revoke a downloaded credential. Recovery must destroy that generation and provision a new one for the replacement owner before readiness.
+
 Certificates remain valid through the trusted teardown deadline, subject to a
-397-day maximum capability window that fails before cloud mutation. Each
-participant holds one live session per range; a newer connection replaces the
-older one, and destroy, pause, or the deadline disconnects it within one pool
-heartbeat. On GCE only the provisioner reads the CA, the pool identity reads only
+397-day maximum capability window that fails before cloud mutation. Each participant holds one live session per range. A newer connection replaces the old one.
+
+Destroy, pause, or the deadline disconnects it within one pool heartbeat. On GCE only the provisioner reads the CA, the pool identity reads only
 its server identity, and the shared range-host identity cannot read VPN secrets.
-See [the provider-neutral range substrate](../../architecture/provider-neutral-range-substrate)
-for the ADR-039 contract and [the issue 1695 architecture preflight](../../architecture/ctf-openvpn-participant-access-preflight-1695)
+See [the provider-neutral range substrate](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/provider-neutral-range-substrate.md)
+for the ADR-039 contract and [the issue 1695 architecture preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-openvpn-participant-access-preflight-1695.md)
 for the threat model and containment decisions.
 
 ### Scoped communications (ADR-051)
 
 `ctf.services.communication` owns the durable domain for scoped communications,
-detailed in the [communications preflight](../../architecture/ctf-communications-raes-inject-preflight-2047).
-This is the domain-model slice (issue #2048) of the umbrella capability; the
-transport workers, HTTP endpoints, range-trigger ingress, and browser renderer
-are later slices.
+detailed in the [communications preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-communications-raes-inject-preflight-2047.md).
+The [communication reference](ctf-communications.md) describes delivered HTTP, worker, email, inbox, and browser behavior.
+A planned feature is supported only when its owning service and contract admit it.
 
-- A `CommunicationCampaign` is bound to exactly one immutable workspace and may
-  target one or more events, but only events that share that workspace and admit
-  the author's notification capability. `create_campaign` is the confinement gate:
-  it authorizes active workspace membership through `workspaces.services`
-  (`USE_CTF_COMMUNICATIONS`, the one sanctioned CTF to `workspaces.services` edge)
-  and re-authorizes every target event. Workspace membership never grants event or
-  recipient authority, and a missing or unauthorized target returns one opaque
-  denial.
+- A campaign retains one explicit parent scope and may target multiple events with matching scope. Current author policy must permit each event. Native account and organization placement no longer requires an artificial workspace. `create_campaign` is the confinement gate:
+  it checks native `event.manage_communications` policy for every target and exact parent placement.
+  SQL membership and legacy staff facts cannot grant campaign authority.
+  A missing or unauthorized target returns one opaque denial.
 - Message content is validated at authoring time against the versioned
   `ctf-communication-markdown/v1` profile in `ctf.communication_contracts`
   (bounded subject and body, no raw HTML, no executable URL schemes, and an
@@ -277,11 +254,7 @@ are later slices.
   idempotent on the intent identity, and per-recipient uniqueness means a retry
   can never grow the audience. A recipient's delivery coordinate is stored with
   `shared.field_encryption`, never as authority.
-- Lifecycle transitions (`cancel_campaign`, `on_participant_removed`,
-  `on_event_cancelled`, `on_range_replaced`) stop only not-yet-claimed delivery
-  commands and fence scheduled work; an accepted send is never recalled and the
-  immutable snapshot identity survives as bounded evidence with its coordinate
-  erased. `purge_expired_communications` (management command
+- Lifecycle transitions (`cancel_campaign`, `on_participant_removed`, `on_event_cancelled`, `on_range_replaced`) stop unclaimed delivery commands and fence scheduled work. Accepted sends cannot be recalled. Immutable snapshot identity remains as bounded evidence after its coordinate is erased. `purge_expired_communications` (management command
   `prune_ctf_communications`) physically deletes content and coordinates after
   `CTF_COMMUNICATION_RETENTION_DAYS`, rather than leaving a restorable soft-deleted
   row.
@@ -290,8 +263,8 @@ ADR-065 retires legacy notification writes. Historical `CTFNotification` reads
 remain available; retired write routes return bounded 410 responses. The scoped
 communication ledger owns new participant notices. The shared
 `WebSocketNotification` transport and topic projection are separate from the
-retired email writer. Organizer-only legacy email remains unavailable until a
-supported recipient and transport contract exists.
+retired email writer. Legacy organizer email is retired.
+The native organizer-alert ledger is described in the [communication reference](ctf-communications.md#organizer-recipients).
 
 ### Notification and restricted scoreboard authority
 
@@ -318,7 +291,7 @@ refetch on window focus and on network reconnect. Thus a scoring event shows
 within 30 seconds (CTF-401). A frozen participant board withholds later solves
 by design. The ADR-072 `position_changed` hint is optional and only accelerates
 the refresh. See the
-[design note](../../design/ctf-scoreboard-refresh-576.md).
+[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-scoreboard-refresh-576.md).
 
 ## Scheduled Work
 
@@ -337,9 +310,7 @@ Two management commands operate the event runtime:
   scope, and `registration` status. The service allowlists event metadata and uses
   `effective_registration_deadline`; the page does not project arbitrary event pages
   or organizer/participant state.
-- Anonymous POSTs use Django form validation and CSRF, body/field bounds, shared
-  source/event/fleet rate budgets, generic duplicate success, fixed public errors,
-  no-store/no-referrer/noindex response controls, and an event-row lock. Intake has
+- Anonymous POSTs use Django form validation, CSRF, body/field bounds, and shared source/event/fleet rate budgets. They apply generic duplicate success, fixed public errors, no-store/no-referrer/noindex controls, and an event-row lock. Intake has
   no account, invitation, seat, range, webhook, or mail side effect.
 - Organizer listing and disposition use the existing `participants` event
   capability and exact event API scopes. Approval delegates to
@@ -354,7 +325,7 @@ Two management commands operate the event runtime:
 
 ## See Also
 
-- [CTF](../../features/ctf): participant guide.
-- [CTF Organizer Guide](../../features/ctf-organizer-guide): running an event.
-- [Native CTF scenario content](../../dev/ctf-scenario-content): private
+- [CTF](../../features/ctf.md): participant guide.
+- [CTF Organizer Guide](../../features/ctf-organizer-guide.md): running an event.
+- [Native CTF scenario content](../../dev/ctf-scenario-content.md): private
   publication and deployment binding.
