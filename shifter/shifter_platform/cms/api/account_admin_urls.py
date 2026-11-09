@@ -1,4 +1,4 @@
-"""Public dormant range-scope administration routing surface."""
+"""Mounted native range-scope administration routes."""
 
 from django.urls import path
 

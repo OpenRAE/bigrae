@@ -1,14 +1,16 @@
 # Operations runbooks
 
-These runbooks are the operational handoff for the current BigRAE control
-plane. GCP with GCE range cells is the primary supported release path. AWS
-procedures are called out only where the repository and a deployed AWS tenant
-provide an equivalent surface. GDC VM Runtime remains an operator-validation
-mode and is not a live-fire containment boundary.
+Use these how-to guides to diagnose and recover the BigRAE control plane.
+GCP with GCE range cells is the release deployment path.
+Installation requires a verified release with the deployer image; releases through v4.1.1 do not contain it.
+AWS procedures apply to configured contributor deployments; published AWS installation support is planned.
+GDC VM Runtime remains an operator-validation mode without live-fire containment approval.
 
-The procedures were checked against the repository and deployed service types
-on 2026-10-23. Resolve names from the selected deployment's Terraform outputs
-and protected environment; never copy names from an example or another tenant.
+The earlier source review was dated 2026-10-23.
+The #2806 delivery PR records current source checks and their limits.
+Source checks do not prove live recovery or deployment qualification.
+Resolve names from the selected deployment's Terraform outputs and protected environment.
+Never copy names from an example or another tenant.
 
 ## Shared operating contract
 
@@ -35,21 +37,23 @@ redact user data, tenant identifiers, provider payloads, signed URLs, database
 connection strings, and credential material. Never print Kubernetes Secrets,
 Secret Manager values, process environments, or complete Terraform outputs.
 
-Use the application service boundary for range, account, upload, and credential
-changes. Use the protected deployment workflow for infrastructure, image,
-migration, or workload changes. A GCP deployment without GitHub uses the
-release-driven `gcp-deploy` command instead (see the
+Use the application service boundary for range, account, upload, and credential changes.
+Use release-driven `gcp-deploy` for GCP infrastructure, image, migration, and workload changes (see the
 [GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md)).
+Configured contributor deployments use their protected deployment workflow.
 Direct SQL, hand-built events, hand-run production Terraform or Helm, arbitrary
 `kubectl exec`, and deleting cloud resources by name are not recovery paths.
 
-Escalate when the safe mutation surface is absent, ownership is ambiguous,
-cleanup cannot be proven, a security boundary may have failed, or recovery
-would change infrastructure outside the selected deployment. The incident
-commander owns service restoration; the security lead owns containment and
-credential revocation; the platform owner owns deployment and Terraform; the
-data owner approves restore/cutover; the range owner confirms lifecycle and
-residual inventory.
+Escalate if no safe change interface exists, ownership is ambiguous, or cleanup cannot be proved.
+Also escalate suspected security failures or recovery effects outside the selected deployment.
+
+| Role | Responsibility |
+| --- | --- |
+| Incident commander | Service restoration |
+| Security lead | Containment and credential revocation |
+| Platform owner | Deployment and Terraform |
+| Data owner | Restore and cutover approval |
+| Range owner | Lifecycle state and residual inventory |
 
 Treat application quotas, cloud service quotas, event-capacity profiles,
 model-access budgets, and billing budgets as separate limits. A limit change is

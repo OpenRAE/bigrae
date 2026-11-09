@@ -1,10 +1,22 @@
 # Bootstrap Scripts
 
-Bootstrap automation for Shifter infrastructure.
+Command reference for contributor bootstrap and release-driven GCP operations.
+For operator installation, use [Install on Google Cloud](../../docs/getting-started/install-gcp.md).
+Published AWS installation support is planned.
+
+Run checkout commands from the repository root with the bootstrap dependency project:
+
+```bash
+uv run --project scripts/bootstrap scripts/bootstrap/deploy.py <command>
+```
+
+Examples below abbreviate that prefix as `./scripts/bootstrap/deploy.py`.
+The release deployer image supplies its own dependencies and entrypoint.
+Confirm cloud/repository authority, billing, state selection, and private input handling before mutation.
 
 ## Features
 
-The `deploy.py` CLI provides an interactive walkthrough for bootstrapping a bare AWS or GCP account and deploying infrastructure with intelligent automation:
+The `deploy.py` CLI provides an interactive walkthrough for bootstrapping a bare AWS or GCP account and deploying infrastructure:
 
 **Automated Steps (with confirmation):**
 - GitHub secrets configuration (via `gh` CLI)
@@ -47,7 +59,7 @@ The `deploy.py` CLI provides an interactive walkthrough for bootstrapping a bare
 
 ## Interactive Prompts
 
-When automated options are available, you'll see:
+When automated options are available, you will see:
 ```
 [y/n/m]:
   y = yes (run automatically)
@@ -74,15 +86,19 @@ pager never blocks bootstrap under a non-TTY or PTY.
 Bootstrap has no default GitHub repository (ADR-069). Commands that act on the
 repository read the target from the `gh` default repository of this clone. Set
 the default once in each clone with `gh repo set-default <owner>/<repo>`.
+
 Bootstrap reads the repository and owner IDs from the GitHub API and shows the
 identity before it writes. When no default is set, the command stops. The
-`gcp-foundation` command reads the repository from its inputs file instead. The
+`gcp-foundation` command reads the repository from its inputs file instead.
+
+The
 GCP lifecycle commands and `gcp-images` use no GitHub service.
 
 ### GCP lifecycle commands (ADR-070)
 
 | Command | Purpose |
 | --- | --- |
+| `gcp-install --inputs <private-bundle-directory>` | Initial GCP setup: validate, apply foundation, create operator password, publish inputs, and deploy. |
 | `gcp-deploy --store gs://<bucket>` | Stand up or update one deployment from the release manifest of the deployer image. Add `--first-install` until DNS points at the ingress address. |
 | `gcp-release-scan --release-manifest <file> --project-id <project> --environment <environment>` | Scan the exact images of a release as the release-scan identity. |
 | `gcp-smoke --store gs://<bucket>` | Run the advisory post-deploy range smoke. |
@@ -94,10 +110,12 @@ Each lifecycle command reads a deployment input bundle from `--store
 gs://<bucket>[/<prefix>]` or `--inputs <dir>`. By default, the command
 impersonates the purpose identity of each stage (`--identity impersonate`). CI
 uses `--identity ambient`, because the job credentials already are that
-identity. `gcp-deploy` exits with status 3 when only the advisory smoke failed.
-Each Terraform-owned GCS bucket uses a customer-managed key (ADR-008-R5).
-`gcp-deploy` rewrites the live objects of the platform buckets with their keys
-after the apply. `gcp-destroy` keeps the platform key rings and keys, and the
+identity.
+
+`gcp-deploy` exits with status 3 when only the advisory smoke failed. Each Terraform-owned GCS bucket uses a customer-managed key (ADR-008-R5). `gcp-deploy` rewrites the live objects of the platform buckets with their keys
+after the apply.
+
+`gcp-destroy` keeps the platform key rings and keys, and the
 next deploy adopts them. See
 [Bucket encryption keys](../../docs/technical/handbook/gcp-github-less-deployment.md#bucket-encryption-keys).
 
@@ -108,9 +126,7 @@ Run `deploy.py <command> --help` for every flag. The procedure is in
 ## Fresh AWS Account Order
 
 For a new AWS account, run bootstrap-only first. Do not start with `full`.
-The self-hosted runner Terraform root uses the same S3 backend that
-bootstrap creates, and the AWS deploy workflows cannot run until the
-runners are provisioned and registered.
+The runner root reuses the bootstrap-created S3 backend. AWS deployment workflows require provisioned, registered runners.
 
 On a **re-used** account (one that previously ran Shifter and was torn down), run
 `account-recovery --env <env> --profile <profile>` first to detect orphaned leftovers
@@ -125,13 +141,7 @@ command below.
    `AWS_ROLE_ARN` / `TF_INFRA_STATE_BUCKET`) and update the dev `.s3.tfbackend`
    files.
 2. Run `runners --env dev --profile <profile>` to provision the runner fleet
-   **and** register it automatically (issue #1433). By default it provisions a
-   dedicated, ADR-004-R20-compliant runner VPC (`create_runner_network`), applies
-   `platform/terraform/global/github-runner`, mints a single-use token per runner,
-   registers each over SSM, and verifies it online, with no manual `config.sh`. Pass
-   `--use-existing-network` to place runners in an existing compliant network
-   whose `vpc_id`/`subnet_id` you keep in a gitignored `local.auto.tfvars`
-   instead of the standard managed runner VPC (ADR-004-R20, #1437). Registration tokens
+   **and** register it automatically (issue #1433). By default, it provisions the dedicated runner VPC required by ADR-004-R20. It applies `platform/terraform/global/github-runner`, creates one single-use token per runner, and registers over SSM. It verifies every runner online without manual `config.sh`. Use `--use-existing-network` for an existing compliant network (ADR-004-R20, #1437). Put its `vpc_id` and `subnet_id` in gitignored `local.auto.tfvars`. Registration tokens
    are never written to Terraform state, user data, a secret store, or logs.
 3. Confirm the fleet is online (the `runners` path already verifies this):
    `REPO="$(gh repo set-default --view)"; gh api "repos/$REPO/actions/runners" --jq '.runners[] | {name, status}'`.
@@ -141,32 +151,26 @@ command below.
    `7lgvy7mt78lgoi4lant0znp5h`.
 5. Configure the deployment tfvars secrets documented in
    `docs/dev/deploy-secrets.md`, including `TF_VARS_DEV_PORTAL` and
-   `TF_VARS_DEV_RANGE`. Bootstrap configures the AWS role secret and backend
-   files; deploy-time portal/range values live in those tfvars secrets for
-   GitHub Actions, or in gitignored `local.auto.tfvars` files for local
-   Terraform runs.
+   `TF_VARS_DEV_RANGE`. Bootstrap configures the AWS role secret and backend files. Portal/range deployment values use GitHub tfvars secrets in CI or gitignored `local.auto.tfvars` for local Terraform.
 6. For the first deploy in the moved account, run the `Deploy` GitHub Actions
    workflow with `gh workflow run deploy.yml --ref <branch> -f environment=aws-dev`
    (add `-f aws_first_deploy=true` for the first-ever engine deploy). The
    dispatch forces the full AWS chain (Core -> Range -> Engine -> Platform).
    Deployment is always a manual dispatch selecting the `environment`; pushing to
    a branch runs validation only.
-7. During that first platform apply, publish DNS records for ACM and SES
+7. During infrastructure preparation, publish DNS records for ACM and SES
    validation in the authoritative DNS zone. ACM records come from the root
    Terraform output `acm_validation_records`. SES records come from
    `aws ses get-identity-verification-attributes` for the `_amazonses` TXT
    value and `aws ses get-identity-dkim-attributes` for the three DKIM CNAME
    tokens. In Cloudflare, keep ACM and DKIM CNAMEs DNS-only.
-8. After platform apply creates runtime endpoints, publish routing records:
-   `domain_name` and `chat.<domain_name>` CNAME to the root Terraform output
-   `alb_dns_name`; `ctfd_domain` A-records to `ctfd_elastic_ip`.
+8. After `eks-deploy`, use its actual ingress target and verify DNS, ACM, and HTTPS health.
+   The retired EC2 portal `alb_dns_name` routing recipe does not select the EKS ingress.
+   Current portal roots contain no CTFd deployment or `ctfd_elastic_ip` output.
+   Historical CTFd recovery requires its original source and private state.
 
-The portal VPC creates private AWS service endpoints for the bootstrap-critical
-services used by EKS workloads and retained range infrastructure: ECR, S3, CloudWatch
-Logs, Secrets Manager, SSM, STS/KMS, ECS/EC2/ELB, SNS, SQS, and DynamoDB.
-These endpoints are expected in fresh accounts, especially when portal
-inspection is enabled, because the private default route traverses the
-firewall/NAT path during image pulls, secret hydration and log delivery.
+The portal VPC supplies private endpoints for bootstrap-critical EKS and retained range services. These include ECR, S3, CloudWatch Logs, Secrets Manager, SSM, STS/KMS, ECS/EC2/ELB, SNS, SQS, and DynamoDB.
+Fresh accounts need these endpoints, particularly with portal inspection enabled. Image pulls, secret hydration, and log delivery otherwise traverse the private firewall/NAT route.
 
 ## Fresh GCP Account Order
 
@@ -175,15 +179,11 @@ inputs and images, then deploy. A deployment without GitHub follows
 `docs/technical/handbook/gcp-github-less-deployment.md`. The CI path follows the steps below and
 the GCP Deployment section of `docs/technical/dev/setup.md`.
 
-> **Before starting:** In the target GCP project, enable every Google Cloud API
-> required by the selected Shifter configuration and enable every configured AI
-> model in Vertex AI Model Garden. Model enablement is separate from enabling
-> the Vertex AI API: an authorized project administrator must open each required
-> model, accept any provider or Marketplace terms, and confirm that the model is
-> available in its configured region. Complete both API and model enablement
-> before bootstrap, pack installation, or range qualification; otherwise a
-> deployment can succeed while participant model calls fail with a misleading
-> model-not-found response.
+Before bootstrap, confirm that project policy permits every required Google Cloud API.
+Enable each configured Vertex AI model in its region before pack installation or range qualification.
+Model enablement is separate from enabling the Vertex AI API.
+An authorized administrator must accept applicable provider or Marketplace terms.
+Missing model enablement can leave participant model calls failing after deployment.
 
 For a deployment without GitHub, copy
 `gcp-foundation.github-less.example.tfvars.json` to an operator-owned file
@@ -197,9 +197,12 @@ operator-owned file outside the repository. Supply the project ID and number,
 numeric GitHub repository and owner IDs, bucket names, and exact purpose
 Environment/branch/workflow tuples. Obtain IDs with `gcloud projects describe`
 and `gh api repos/<owner>/<repo>`; bootstrap verifies them before writes.
+
 Deploy uses the selected tenant branch. A destroy tuple must bind protected
 `refs/heads/dev` or `refs/heads/main`; bootstrap rejects any other destroy tuple
-before writes. No GitHub workflow uses a destroy identity after #2668. No secret
+before writes. No GitHub workflow uses a destroy identity after #2668.
+
+No secret
 payload belongs in this file.
 
 For a developer build project (#2668), copy
@@ -216,17 +219,19 @@ policies, secrets, and variables. See `docs/architecture/gcp-guest-images.md`.
 ./scripts/bootstrap/deploy.py gcp-foundation --inputs /path/to/foundation.tfvars.json --yes
 ```
 
-This enables the foundation APIs, including Cloud KMS, creates the private
-versioned state bucket, and applies the independently owned `cicd-oidc` root
-from a saved plan under operator credentials. After an IAM propagation error,
+Foundation enables required APIs, including Cloud KMS, and creates a private versioned state bucket. It applies independent `cicd-oidc` from a saved plan under operator credentials. After an IAM propagation error,
 it makes and checks a new saved plan and applies again. The root creates one
-customer-managed key for each foundation bucket. After the apply, the command
+customer-managed key for each foundation bucket.
+
+After the apply, the command
 rewrites the live objects of each foundation bucket with its key, except in the
 retention-locked evidence bucket. Without GitHub, the root creates no Workload Identity pool
 or provider, and it creates the deployment config bucket. The evidence bucket
 has an irreversible 90-day retention lock. `enable_image_build_network=true` creates a foundation-owned custom VPC,
 private subnet, Cloud NAT, and IAP-only build/validation ingress before any
-platform deployment. It has no peering to runner or runtime networks. For a
+platform deployment.
+
+It has no peering to runner or runtime networks. For a
 developer build project, bootstrap writes its network and subnet outputs to the
 image Environments as `GCP_PACKER_NETWORK` and `GCP_PACKER_SUBNETWORK`, and sets
 `GCP_PACKER_USE_INTERNAL_IP=true` in the build Environment.
@@ -237,10 +242,8 @@ state addresses and existing image network remain unchanged.
 The image-build network's Terraform resources live in
 `platform/terraform/gcp/modules/image-build-network`, instantiated by the
 foundation root. Six `moved` blocks keep existing networks in the same
-`cicd-oidc` state when upgrading from the former root-level resource addresses.
-For an existing tenant that needs the Linux management SSH port, put its
-reviewed, non-secret foundation input JSON in the deployment input bundle as
-`foundation-inputs.json`, and run `gcp-deploy --reconcile-foundation-image-network`.
+`cicd-oidc` state when upgrading from the former root-level resource addresses. For the Linux management SSH port migration, put reviewed non-secret foundation JSON in the bundle as `foundation-inputs.json`. Run `gcp-deploy --reconcile-foundation-image-network`.
+
 A CI deployment sets the tenant Environment variable
 `GCP_FOUNDATION_INPUTS_JSON` instead, then manually dispatches **Deploy** from
 that tenant branch with its matching `environment` and
@@ -248,26 +251,25 @@ that tenant branch with its matching `environment` and
 deploy identity to apply only an action-allowlisted saved plan; all other
 foundation resources must remain no-op. The stage checks the live
 image-build network and firewall before and after, retains the existing
-`cicd-oidc` backend, and is skipped for ordinary deployments. Its plan uses
+`cicd-oidc` backend, and is skipped for ordinary deployments.
+
+Its plan uses
 `-refresh=false` so the deploy identity does not need read access to the
 foundational Workload Identity pool; the live image-build resources are checked
 separately. Do not use this narrowly gated migration stage for general
 foundation identity changes.
 
-The CI path:
+Retained CI adapter reference; this is not a selectable installation path.
+Use the installation guide for current operator setup.
 
 No tenant uses the CI path after #2668. `deploy.yml` offers no GCP environment
 until a tenant is wired in, and #2672 decides the future of this path.
 
 1. Create the GCP project and enable the required APIs.
-2. Apply the foundational OIDC/WIF identity root
-   (`platform/terraform/gcp/global/cicd-oidc`) to create the GitHub Actions
-   Workload Identity pool/provider and purpose-scoped CI service accounts. Apply
+2. Apply `platform/terraform/gcp/global/cicd-oidc`. It creates the GitHub Workload Identity pool/provider and purpose-scoped CI identities. Apply
    selected deployment values in each project. Each project keeps its own state bucket/prefix. Then set each
    purpose Environment's explicit service-account secret and
-   `GCP_WORKLOAD_IDENTITY_PROVIDER` from the applicable profile outputs. This root has its own state prefix, separate from the
-   platform root, so a platform destroy never removes the credentials CI
-   authenticates as (it mirrors the `global/github-runner` containment):
+   `GCP_WORKLOAD_IDENTITY_PROVIDER` from the applicable profile outputs. Its state prefix is separate from platform state. Platform destruction therefore retains CI authentication resources, as with `global/github-runner`:
 
    ```bash
    cd platform/terraform/gcp/global/cicd-oidc
@@ -289,13 +291,8 @@ until a tenant is wired in, and #2672 decides the future of this path.
    ```
    `purpose-contexts.tfvars.json` holds only the `purpose_contexts` key, in
    the shape of `gcp-foundation.example.tfvars.json`.
-   Omit empty optional bucket entries. The external bucket set must exactly
-   cover any non-empty `raes_package_bucket_name` and
-   `ctf_content_bucket_name` used by platform-core so deploy/destroy can manage
-   workload IAM on those exact resources without project-wide Storage Admin.
-   Publish each purpose output only to its matching protected Environment. Existing installations follow the staged, state-address
-   preserving cutover in `docs/dev/deploy-secrets.md` rather than applying the
-   strict identity split from the shared CI principal.
+   Omit empty optional bucket entries. The external bucket set must exactly cover non-empty `raes_package_bucket_name` and `ctf_content_bucket_name` inputs. This permits workload IAM management on those buckets without project-wide Storage Admin.
+   Publish each purpose output only to its matching protected Environment. For existing installations, follow the staged identity cutover and state-address readback in `docs/dev/deploy-secrets.md`. Do not directly replace the shared CI principal.
 3. Configure the GCP deployment secrets and variables in
    `docs/dev/deploy-secrets.md` (the `gcp-dev` section), including
    `SHIFTER_CONFIG_GCP_DEV` and the GCE range-cell variables.
@@ -314,10 +311,7 @@ until a tenant is wired in, and #2672 decides the future of this path.
    the trust from the store and writes `range-images.json`. Without
    `--release-manifest`, it reads the release manifest of the deployer image. The
    command verifies the signed build provenance of all three images before it
-   changes anything. It imports a missing image through a private per-run bucket
-   in the selected project and region, removes that bucket and every transfer
-   object on success or failure, and requires all three native GCE images to be
-   `READY`. A retry reuses matching `READY` images and creates no bucket when no
+   changes anything. Missing images transfer through a private per-run bucket in the selected project and region. Success and failure both remove that bucket and every transfer object. Required native GCE images must report `READY`. A retry reuses matching `READY` images and creates no bucket when no
    import is necessary. Add `--dry-run` to verify and inspect without pulling
    disk payloads or mutating GCP.
 
@@ -329,10 +323,7 @@ until a tenant is wired in, and #2672 decides the future of this path.
    `gcp_require_active_certificate=false`:
    `gh workflow run deploy.yml --ref <branch> -f environment=<environment> -f gcp_require_active_certificate=false`.
    The CI adapter renders the deployment input bundle from the GitHub values,
-   and the jobs run `gcp-deploy`, `gcp-release-scan`, and `gcp-smoke`. The deploy
-   applies the GCP Terraform (GKE, Cloud SQL, Memorystore, Pub/Sub), builds and
-   attests the control-plane images, migrates the database and registers the
-   shipped scenario catalog, then installs the Shifter Helm release.
+   and the jobs run `gcp-deploy`, `gcp-release-scan`, and `gcp-smoke`. Deployment applies GCP Terraform for GKE, Cloud SQL, Memorystore, and Pub/Sub. The CI adapter builds and attests control-plane images. Migration and catalog stages precede final workload readiness.
 6. Subsequent deploys run through CI as a manual dispatch:
    `gh workflow run deploy.yml --ref <branch> -f environment=<environment>` (see
    the CI/CD trigger matrix in `docs/technical/dev/ci-cd.md`). Branch names no
@@ -373,11 +364,7 @@ residue collides with a fresh `terraform apply` one resource at a time
 (`AlreadyExists` / `ResourceAlreadyExistsException`). This is the #1472 leftover set.
 `account-recovery` finds it up front instead of collision-by-collision (issue #1639 / #1618).
 
-Detection always runs first and is read-only. It reports these state-absent classes:
-ECR repositories, Network Firewall rule groups (deleted asynchronously, so the sweep
-polls to convergence), EventBridge Scheduler schedules, RDS event subscriptions, RDS
-DB parameter groups, KMS aliases, portal SSM parameters under `/shifter/<env>/portal`,
-and AWS Budgets.
+Detection always runs first and is read-only. It reports state-absent ECR repositories, Network Firewall rule groups, EventBridge schedules, RDS event subscriptions/parameter groups, KMS aliases, and AWS Budgets. It also checks portal SSM parameters under `/shifter/<env>/portal`. Network Firewall deletion is asynchronous, so the sweep waits for completion.
 
 Safety model:
 - **Live-tenant refusal.** If a running tenant still occupies the environment (a portal
@@ -398,9 +385,7 @@ Safety model:
   reports the failure and refuses to sweep rather than certify a partial picture. Deletes
   are idempotent, so a partial or retried run is safe.
 
-The following fresh-apply blockers are NOT yet automated and remain in the manual sweep
-in `docs/dev/aws-teardown-runbook.md`: RDS DB subnet groups, the ElastiCache subnet
-group, EC2 key pairs, and security groups.
+RDS DB subnet groups, the ElastiCache subnet group, EC2 key pairs, and security groups still require reviewed manual cleanup. See `docs/dev/aws-teardown-runbook.md`.
 
 ### Bootstrap Only
 ```bash

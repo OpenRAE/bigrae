@@ -30,6 +30,8 @@ Do not retry by deleting database rows, state, or locks.
 
 Changing to an unrelated scenario does not resolve the original operation.
 
+<a id="cant-launch-range---already-have-active-range"></a>
+
 ### Cannot launch range: already have active range {#cant-launch-range-already-have-active-range}
 
 Open **Ranges** and inspect the existing range.
@@ -98,30 +100,39 @@ Ask an authorized content administrator to retire an incorrect upload.
 The Linux smoke tutorial does not install an endpoint agent or promise an alert.
 Do not introduce malware or external targets to compensate for missing telemetry.
 
-## NGFW issues
+## NGFW Issues
 
-### NGFW stuck provisioning
+Use the [NGFW setup and recovery guide](ngfw-demo.md#troubleshooting) for provider investigation and cleanup.
+The checks below do not authorize a second provisioning operation.
 
-Use the operator-owned [NGFW setup guide](ngfw-demo.md) and [operations runbooks](../runbooks/index.md).
-Check the operation result before any deprovisioning decision.
+### NGFW Stuck Provisioning
 
-### Cannot associate device in SCM {#cant-associate-device-in-scm}
+Record the request id, NGFW id, status, and last bounded error.
+Check the cloud operation, capacity, licensing, and credential metadata before retrying.
+The earlier 15–30 minute estimate and 45-minute escalation point are not proof of failure.
+Do not deprovision an active operation solely because an estimate elapsed.
 
-Ask the SCM owner to verify the serial number, registration destination, PIN validity, and current authority.
-Keep the PIN value and authcode private.
+### Cannot Associate Device in SCM { #cant-associate-device-in-scm }
 
-### NGFW-enabled range cannot launch {#ngfw-enabled-range-wont-launch}
+Confirm the serial number and folder authority with the SCM owner.
+Check PIN metadata without exposing its value.
+A successful external association does not prove application readiness.
 
-Confirm backend capability before retrying.
-The GCE range-cell path does not support the retained firewall attachment contract.
-A ready standalone firewall cannot supply that missing capability.
+### NGFW-Enabled Range Will not Launch { #ngfw-enabled-range-wont-launch }
+
+Confirm the NGFW is ready and the selected scenario is installed and admitted.
+The GCE range-cell path does not support the retained NGFW attachment contract.
+A ready standalone firewall cannot supply that capability.
 See [NGFW scenario limits](../scenarios/ngfw-range.md).
+Check the owning range operation before another launch.
+Use [RB001](../runbooks/rb001-range-provisioning-failed.md) for a failed provisioning operation.
 
-### No network alerts in XDR/XSIAM
+### No Network Alerts in XDR/XSIAM
 
-Have the operator verify supported routing, log forwarding, and the approved test.
-Use only exercise-authorized network destinations.
-A successful range launch does not prove telemetry delivery or detection.
+Check firewall log generation, forwarding, SCM ingestion, and XDR/XSIAM ingestion separately.
+Use an approved synthetic sample with the security owner.
+HTTP traffic and ICMP exercise different paths.
+An endpoint alert alone does not prove network-log delivery.
 
 ## Account issues
 

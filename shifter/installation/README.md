@@ -1,8 +1,15 @@
 # installation
 
-This package validates the root Shifter installation config, `shifter.yaml`.
+This reference describes the BigRAE installation parser and its contributor commands.
+For operator installation, use [Install on Google Cloud](../../docs/getting-started/install-gcp.md).
+Published AWS installation support is planned.
 
-`shifter.yaml` is a user-authored file at the repository root. It selects one
+`bigrae-config` and `bigrae.yaml` are the current names.
+`shifter-config` and `shifter.yaml` remain compatibility aliases.
+Conflicting root configuration files are rejected.
+The `.shifter.yaml` operations policy is a separate file.
+
+`bigrae.yaml` is a user-authored file at the repository root. It selects one
 backend bundle and provides deployment-level settings. The installation package
 is the authoritative parser for that file.
 
@@ -12,7 +19,7 @@ The canonical AWS platform package is the shared Helm chart on EKS. After
 validating `backend: aws`, deploy through the typed bundle entrypoint:
 
 ```console
-./scripts/bootstrap/deploy.py eks-deploy --config shifter.yaml \
+./scripts/bootstrap/deploy.py eks-deploy --config bigrae.yaml \
   --images .shifter/images.json --profile operator
 ```
 
@@ -20,7 +27,7 @@ The images JSON contains attested `repository@sha256:<digest>` identities, not
 tags. Teardown is explicit and scoped to the isolated EKS root:
 
 ```console
-./scripts/bootstrap/deploy.py eks-teardown --config shifter.yaml --profile operator
+./scripts/bootstrap/deploy.py eks-teardown --config bigrae.yaml --profile operator
 ```
 
 ## Supported Backends
@@ -57,8 +64,7 @@ The GCP `django_secret_key` reference must be a Google Secret Manager resource n
 (`projects/<project>/secrets/<name>/versions/<version>`), a GitHub Actions secret name, an
 environment variable, or the literal `prompt`.
 
-`range_egress` is the shared, cross-backend egress policy (see [Render](#render)); it is
-validated the same way for every backend and is not part of a backend's own settings model.
+`range_egress` is the shared cross-backend egress policy (see [Render](#render)). Validation is the same for every backend. It is separate from backend-specific settings.
 `model_access` is also cross-backend. Its catalog is checked against the generated
 canonical v1 schema and bundled canonical semantic validator, then normalized before
 rendering. It remains disabled until its runtime consumers are deployed.
@@ -79,25 +85,25 @@ live qualification milestones must land before enablement.
 Start from one of the checked examples:
 
 ```bash
-cp shifter/installation/examples/aws.yaml shifter.yaml
-uv run --project shifter/installation shifter-config validate shifter.yaml
+cp shifter/installation/examples/aws.yaml bigrae.yaml
+uv run --project shifter/installation bigrae-config validate bigrae.yaml
 ```
 
 Use `examples/gcp.yaml` for GCP.
 
 ## Init
 
-`shifter-config init` scaffolds a starting `shifter.yaml` from the checked example
+`bigrae-config init` scaffolds a starting `bigrae.yaml` from the checked example
 for a backend, so you begin from a valid, backend-shaped config instead of a blank
 file. It is local-only: it copies committed example text, authenticates to nothing,
 writes no secrets, and touches no cloud API.
 
 ```bash
 # List the backends that ship an example.
-uv run --project shifter/installation shifter-config init
+uv run --project shifter/installation bigrae-config init
 
-# Scaffold ./shifter.yaml for a backend (add --force to overwrite an existing file).
-uv run --project shifter/installation shifter-config init --backend aws
+# Scaffold ./bigrae.yaml for a backend (add --force to overwrite an existing file).
+uv run --project shifter/installation bigrae-config init --backend aws
 ```
 
 Edit the scaffolded file, then run `doctor` to validate it.
@@ -129,7 +135,7 @@ the value must be supplied during deployment.
 Run validation from the repository root:
 
 ```bash
-uv run --project shifter/installation shifter-config validate shifter.yaml
+uv run --project shifter/installation bigrae-config validate bigrae.yaml
 ```
 
 The command exits `0` when the config is valid. It exits `1` and prints all
@@ -156,8 +162,8 @@ Validation messages are path-based and do not echo rejected input values.
 
 ## Doctor
 
-`shifter-config doctor` validates the selected backend before infrastructure is
-applied. Where `validate` checks only the shape of `shifter.yaml`, `doctor` runs the
+`bigrae-config doctor` validates the selected backend before infrastructure is
+applied. Where `validate` checks only the shape of `bigrae.yaml`, `doctor` runs the
 checks the selected backend bundle *declares* (required tools on PATH, secret
 references, generated-output classification, owned repository paths, and the bundle's
 credential-free validation checks) and, opt-in, read-only health probes. It adds no
@@ -167,13 +173,13 @@ metadata.
 ```bash
 # Local-only checks (default): config, tools, secret references, and the backend's
 # non-mutating validation checks. No network, no cloud calls.
-uv run --project shifter/installation shifter-config doctor shifter.yaml
+uv run --project shifter/installation bigrae-config doctor bigrae.yaml
 
 # Also run read-only health probes of the deployment endpoint.
-uv run --project shifter/installation shifter-config doctor shifter.yaml --checks cloud
+uv run --project shifter/installation bigrae-config doctor bigrae.yaml --checks cloud
 
 # Machine-readable report.
-uv run --project shifter/installation shifter-config doctor shifter.yaml --json
+uv run --project shifter/installation bigrae-config doctor bigrae.yaml --json
 ```
 
 Each check is labelled by side-effect tier:
@@ -193,25 +199,22 @@ runtime health gates.
 
 ## Render
 
-`shifter-config render` turns the validated `settings.range_egress` policy into
-the provider-specific Terraform bridge variables for the config's backend, so
-the deployed firewall rules are generated from `shifter.yaml` rather than
-hand-copied into a second allowlist (ADR-017-R4, issue #958).
+`bigrae-config render` projects validated `settings.range_egress` into the selected backend's Terraform bridge variables. Firewall rules come from `bigrae.yaml`, without a second hand-copied allowlist (ADR-017-R4, issue #958).
 
 ```bash
 # AWS: emits `victim_allowed_cidrs = [...]`
-uv run --project shifter/installation shifter-config render shifter.yaml \
+uv run --project shifter/installation bigrae-config render bigrae.yaml \
   --output platform/terraform/environments/<env>/range/victim_allowed_cidrs.auto.tfvars
 
 # GCP: emits `range_egress_mode` + `range_egress_allowed_cidrs`
-uv run --project shifter/installation shifter-config render shifter.yaml \
+uv run --project shifter/installation bigrae-config render bigrae.yaml \
   --output /private/staging/range_egress.auto.tfvars
 ```
 
 The GCP deploy command runs this render itself into its private var files, so a
 GCP deploy needs no manual render.
 
-The backend is read from `shifter.yaml`; the renderer emits the matching bridge
+The backend is read from `bigrae.yaml`; the renderer emits the matching bridge
 variables. Without `--output` the rendered tfvars is written to stdout. The
 command exits `1` and prints the same sanitized issues as `validate` when the
 config is invalid. See
@@ -229,10 +232,10 @@ Render the catalog body to its protected mounted artifact separately from the
 runtime environment:
 
 ```bash
-uv run --project shifter/installation shifter-config render-model-access-catalog \
-  shifter.yaml --output /protected/staging/catalog.json
-uv run --project shifter/installation shifter-config render-model-access-env \
-  shifter.yaml --output /protected/staging/model-access.env
+uv run --project shifter/installation bigrae-config render-model-access-catalog \
+  bigrae.yaml --output /protected/staging/catalog.json
+uv run --project shifter/installation bigrae-config render-model-access-env \
+  bigrae.yaml --output /protected/staging/model-access.env
 ```
 
 The environment output carries only activation, the fixed runtime mount path
@@ -247,23 +250,15 @@ live under `docs/architecture/model-access/`.
 Check the checked-in runtime-env inventory from the repository root:
 
 ```bash
-uv run --project shifter/installation shifter-config runtime-inventory --check
+uv run --project shifter/installation bigrae-config runtime-inventory --check
 ```
 
 The runtime-inventory check compares file paths and env-key names only. It
-does not print values. Today it guards the committed GCP chart values files,
-rejects a committed value for a renderer-owned runtime key, records the
-generated renderer key contract, and documents the boundary between the public
-`shifter.yaml` installation config, the checked-in `.shifter.yaml` MCP ops
-policy, and gitignored local `.env` files.
+does not print values. It checks committed GCP chart values and rejects committed values for renderer-owned runtime keys. It records the generated renderer key contract. It distinguishes public `bigrae.yaml` installation inputs, the checked-in `.shifter.yaml` operations policy, and gitignored local `.env` files.
 
 ## GCP Release Manifest
 
-`shifter-config gcp-release-manifest` writes the `bigrae.gcp-release.v1`
-manifest of one built revision to standard output: the version, the full source
-revision, the Helm chart version, and the exact `repository@sha256` identity of
-each control-plane image (`portal`, `provisioner`, `guacd`, `guacamole-client`,
-and `openvpn`). The release workflow and the CI deploy write it; the GCP deploy
+`bigrae-config gcp-release-manifest` writes one built revision's `bigrae.gcp-release.v1` manifest to standard output. It includes the version, source revision, chart version, and exact `repository@sha256` image identities. Images are `portal`, `provisioner`, `guacd`, `guacamole-client`, and `openvpn`. The release workflow and the CI deploy write it; the GCP deploy
 command reads it. The command opens no output file. Use a shell redirect to
 write the manifest to a file.
 
@@ -275,7 +270,7 @@ published guest images and verifies their build provenance before it writes the
 manifest (#2668).
 
 ```bash
-uv run --project shifter/installation shifter-config gcp-release-manifest \
+uv run --project shifter/installation bigrae-config gcp-release-manifest \
   --version 1.2.3 --source-revision <40-hex revision> --chart-version <chart version> \
   --image portal=<registry>/portal@sha256:<digest> \
   --image provisioner=<registry>/provisioner@sha256:<digest> \
@@ -313,17 +308,15 @@ internal whitespace.
 
 ## Published Contract
 
-The contract is published as a committed, versioned JSON artifact under
-`published_contract/` so downstream backend-bundle authors and tooling can build
-against it without reading Shifter internals (issue #1323). `publication.py`
+The versioned JSON contract is committed under `published_contract/`. Backend-bundle authors and tools can use it without reading Shifter internals (issue #1323). `publication.py`
 generates the artifact from `contract.py` and `registry.py`; it is never hand-edited.
 
 ```bash
 # Regenerate the committed artifact from the code.
-uv run --project shifter/installation shifter-config contract export
+uv run --project shifter/installation bigrae-config contract export
 
 # Fail on drift, unversioned breaking changes, or non-conformant backends.
-uv run --project shifter/installation shifter-config contract check
+uv run --project shifter/installation bigrae-config contract check
 ```
 
 The `installation` test lane enforces the same three gates: drift (committed artifact
@@ -356,9 +349,9 @@ express), so a bundle it accepts is one the internal contract accepts too.
 | `runtime_inventory.py` | Runtime config surface inventory and env-key drift checker. |
 | `runtime_inventory_aws.py` | AWS backend runtime-env key inventories (required, renderer-owned, provisioner-forwarded). |
 | `runtime_inventory_gcp.py` | GCP backend runtime-env key inventories. |
-| `cli.py` | `shifter-config init`, `validate`, `doctor`, `render`, `runtime-inventory`, `contract`, and `gcp-release-manifest`. |
+| `cli.py` | `bigrae-config init`, `validate`, `doctor`, `render`, `runtime-inventory`, `contract`, and `gcp-release-manifest`. |
 | `doctor.py` | Backend-aware `doctor` executor: tier-classified checks over the selected bundle. |
-| `scaffold.py` | `init` scaffolding: copy a checked example to a starting `shifter.yaml`. |
+| `scaffold.py` | `init` scaffolding: copy a checked example to a starting `bigrae.yaml`. |
 | `render.py` | Render `settings.range_egress` into provider Terraform bridge tfvars. |
 | `errors.py` | Sanitized validation issue model. |
 | `published_contract/` | Committed contract artifact, frozen per-version snapshots, and migration notes. |

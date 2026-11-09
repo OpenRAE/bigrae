@@ -13,8 +13,8 @@ The management command retains a separate legacy path.
 
 You need:
 
-- Current `installation.prepare_content` authority and a matching native credential ceiling.
-  Staff status and the historical Threat Research group alone do not supply that authority.
+- A current native credential with `installation.prepare_content` authority on installation scope.
+  Django staff flags and group names do not grant this authority.
 - The authored image `source` name and version from the scenario or package, and
   the concrete provider image reference to map it to (a GCE `source_image` or
   image family URL, or an AWS AMI id).
@@ -25,8 +25,9 @@ Registering is idempotent: it creates the mapping, or updates the existing one
 for the same `(provider, source_name, source_version)`. A blank version is the
 any-version fallback for that source name.
 
-Use the SPA or authenticated API for current installation-scoped mappings.
-The retained management command writes legacy unscoped rows and is not equivalent.
+Use the SPA or authenticated API for native installation image administration.
+The retained management command writes legacy unscoped rows without native credential input.
+It does not create the same owned installation inventory and is not an equivalent administration path.
 
 ### SPA (Author area)
 
@@ -112,5 +113,5 @@ single image with `source: {name: alpine, version: "3.19"}`. Before running the
 RAES backend validation, register a `gce` mapping for `source_name=alpine`,
 `source_version=3.19` pointing at a concrete Alpine-compatible GCE image or
 image family. See
-[scenario verification](../technical/shifter_platform/scenario-verification.md) for
-the full validation evidence contract.
+[scenario verification](../technical/shifter_platform/scenario-verification.md) for admission checks.
+The [architecture registry](https://github.com/OpenRAE/bigrae/blob/dev/docs/adr/index.yaml) records the validation evidence contract.

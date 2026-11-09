@@ -61,3 +61,5 @@ These retain their stated design authority and are not historical preflights:
 - [User documentation boundary (#2805)](user-documentation-boundary-2805.md)
 - [User guide reader routes and data flows](user-guide-entry-paths-2805.md)
 - [Parallel trial dispatch design](parallel-trial-dispatch-design-2743.md): worker trials, native operations, data flow, and controls.
+
+- [Interface documentation boundary (#2807)](interface-documentation-design-2807.md)

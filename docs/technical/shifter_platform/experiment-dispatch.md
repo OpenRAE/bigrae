@@ -1,7 +1,9 @@
 # Experiment dispatch
 
+Reference for dispatch, trial control, collection, and cleanup contracts.
+
 `cms.services` runs a retained batch on disposable workers.
-The [design](../../architecture/parallel-trial-dispatch-design-2743.md) records the boundaries and controls.
+The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/parallel-trial-dispatch-design-2743.md) records the boundaries and controls.
 
 ## Services
 

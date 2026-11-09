@@ -3,6 +3,8 @@
 Applicability: GCP primary; AWS optional. Operator: platform on-call. Verified:
 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 An operator needs a rapid health assessment before or during an incident,
@@ -21,9 +23,7 @@ Collect each independent signal; do not collapse them into one green status.
    heartbeats.
 5. Release: exact running image digests, runtime-config checksum, latest
    deployment readback, migration result, and post-deploy smoke.
-6. Range plane: provider quota, subnet/NAT capacity, active/stuck operations,
-   cleanup verification, residual inventory, application/model budgets, billing
-   budget alerts, and approved event-capacity limits.
+6. Range plane: provider quota, subnet/NAT capacity, and active or stuck operations. Check cleanup verification, residual inventory, application/model budgets, billing alerts, and approved event-capacity limits.
 
 Read-only command:
 
@@ -37,10 +37,7 @@ kubectl -n "$NAMESPACE" get events --sort-by=.lastTimestamp
 ## Resolution
 
 Open the narrow runbook for the failed signal. Restore the owning dependency or
-redeploy an exact verified release through the protected workflow. A healthy
-process, HTTP response, Terraform apply, or smoke check proves only its own
-boundary; keep the incident open until the failed user/operator path and
-independent cleanup or containment evidence recover.
+redeploy an exact verified release through the protected workflow. A healthy process, HTTP response, Terraform apply, or smoke check proves only its own boundary. Keep the incident open until the failed task works and independent cleanup or containment evidence confirms recovery.
 
 ## Prevention
 

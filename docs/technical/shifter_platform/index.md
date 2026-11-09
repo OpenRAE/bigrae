@@ -3,7 +3,8 @@
 - [Experiment admission](experiment-admission.md) - Immutable inputs and fenced operational claims
 - [Experiment dispatch](experiment-dispatch.md) - Worker trials, staging, collection and cleanup
 
-Django application architecture for the BigRAE cyber range platform.
+Find reference and explanation for BigRAE platform services.
+Start with [supported interfaces](../../reference/interfaces.md) for exact API, SDK, CLI, and schema sources.
 
 - [Unified access credentials](access-credentials.md)—admission, lifecycle and renewable client setup.
 - [Content, range and continuing access authority](content-range-authority.md)—scoped service operations, durable authority and native session termination.
@@ -15,11 +16,9 @@ Django application architecture for the BigRAE cyber range platform.
 The [current-state handbook](../architecture.md) owns the package/dependency,
 trust, deployment and command/result/event views. The canonical layer
 classification and per-symbol service allowances live in
-[layer_imports.yaml](https://github.com/Brad-Edwards/bigrae/blob/dev/scripts/check_layer_imports/layer_imports.yaml).
+[layer_imports.yaml](https://github.com/OpenRAE/bigrae/blob/dev/scripts/check_layer_imports/layer_imports.yaml).
 
-CMS owns content and desired lifecycle; Engine owns realized state and operation
-application; CTF owns event/participant behavior; Management owns identity;
-Workspaces owns customer ancestry; shared owns contracts and durable audit.
+CMS owns content and desired lifecycle. Engine owns realized state and operation application. CTF owns event/participant behavior; Management owns identity; Workspaces owns customer ancestry. Shared owns contracts and durable audit.
 Mission Control is presentation and config is the composition root. Public
 service facades carry validated scalar identities across domain boundaries.
 
@@ -48,13 +47,12 @@ runner. Core ships no scenario adapters or answer material.
 
 ## Organization/workspace admin console
 
-The `/administer` SPA hosts a staff-only console shell over the workspace
-tenancy layer, backed by a read-only current-principal context endpoint. It adds
+The `/administer` SPA uses native account context and current action hints. It adds
 routing, a workspace context/switcher, and capability-aware navigation without a
 new authority model or feature flag.
 
 - [Organization/workspace admin console](org-workspace-admin-console.md): the
-  `/api/v1/workspaces/context/` projection, staff-session boundary, and SPA
+  `/api/v1/accounts/context/` projection, native policy boundary, and SPA
   shell/routing/selection.
 - [User lifecycle administration](user-lifecycle-administration.md): the
   `management.lifecycle` transition service and `UserProfile.suspended_at`
@@ -62,9 +60,7 @@ new authority model or feature flag.
   password-reset dispatcher, and the bounded ownership-transfer command
   (ADR-046-R13).
 - [Range-to-workspace scoping administration](range-workspace-scoping-administration.md):
-  the CMS list and expected-source compare-and-set rebind seams, the owner/admin
-  workspace scope operations, the Engine compare-and-set facade, and the
-  fail-closed handling of domain-owned aggregates (ADR-046-R14).
+  CMS queries, current source/destination policy, Engine compare-and-set, and domain-aggregate refusals (ADR-046-R14).
 
 ## Retry-safe range operations
 
@@ -75,19 +71,18 @@ new authority model or feature flag.
 
 ## Artifact preparation
 
-The [artifact preparation design](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/raes-in-tenant-artifact-preparation-design-1583.md)
+The [artifact preparation design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/raes-in-tenant-artifact-preparation-design-1583.md)
 defines adapter ownership, private registration, worker isolation, independent
 verification and inventory admission before ordinary range launch.
 
 ## Audit logging
 
 The shared platform layer owns the durable audit store and writer. Audit rows
-are visible through Django admin and the staff-session-only `/api/v1/audit/`
-read API.
+are visible through authorized Django admin and the native-policy `/api/v1/audit/` read API.
 
-- [Audit system architecture](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/audit-system-architecture.md)
+- [Audit system architecture](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/audit-system-architecture.md)
 - [Administrator audit and activity history](admin-audit-activity.md): the
-  hardened `/api/v1/audit/` read API, its typed filters, and the staff-facing
+  hardened `/api/v1/audit/` read API, its typed filters, and the administrator
   `/administer/audit` SPA surface.
 
 ## Scoped communications

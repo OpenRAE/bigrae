@@ -90,9 +90,7 @@ owned targets expected to be unreachable; they prove egress is denied. Configure
 least one canary so the `internet_egress` boundary can be evaluated; without one
 that check records a skip and the verdict fails closed. Under `allowlist` mode,
 also set `allowed_canaries` to operator-owned, known-live targets that the
-sanctioned lane should reach; these are expected to be reachable. The
-`allowed_cidrs` list is the declared policy allowlist and is not probed directly,
-because a policy range is not proof that any host inside it is live.
+sanctioned lane should reach; these are expected to be reachable. The `allowed_cidrs` list declares the policy allowlist. Probes do not test it directly: a policy range does not prove a live host exists.
 
 ## Run against one range
 
@@ -146,8 +144,7 @@ closed":
 - Every run includes a positive control (the participant reaching a known-live
   target). If the control does not pass, the probe environment is untrustworthy
   and the whole run fails closed rather than reporting a false pass.
-- A missing tool or a probe that cannot run is recorded as an error and fails the
-  gate; it is never counted as a secure block.
+- A missing tool or unavailable probe produces an error and fails the gate. It never counts as a secure block.
 - A silent drop (timeout) is the only secure result for a should-be-unreachable
   boundary. A connection reset means the network path reached the host, so it
   fails the boundary even though the port was closed.
@@ -163,10 +160,7 @@ verify it separately; the suite does not currently assert it.
 
 ## Catch a misconfigured firewall before deploy
 
-The static plan-leak checker
-(`shifter/engine/provisioner/gcp_range_cell_escape_checks.py`) inspects a rendered
-range-cell plan for a cross-range or over-broad allow rule and reports the exact
-leaked boundary without any cloud call. It runs in the provisioner test suite and
+The static checker (`shifter/engine/provisioner/gcp_range_cell_escape_checks.py`) inspects rendered range-cell plans for cross-range or over-broad allow rules. It reports the exact exposed boundary without cloud calls. It runs in the provisioner test suite and
 catches an intentionally misconfigured cross-range allow rule in a fixture.
 
 ## Continuous monitoring seam (#2087)
@@ -179,9 +173,9 @@ containment sink through
 range and request attribution, verdict, per-status boundary counts, and the
 failed boundary codes) that Cloud Logging ingests without a SIEM. #2087 implements
 `ContainmentSignalSink` to drive continuous monitoring and containment response
-and injects it at the call site. The emit is fail-safe: a sink error is logged and
-swallowed so a broken or slow monitor never breaks validation, and that logged
-failure is the signal #2087 alerts on for collector loss.
+and injects it at the call site.
+
+A sink error is logged and caught. A failed or slow monitor cannot break validation. The logged failure triggers the #2087 collector-loss alert.
 
 ## Related
 

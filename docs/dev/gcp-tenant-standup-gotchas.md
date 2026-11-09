@@ -2,14 +2,13 @@
 
 Part of the BigRAE deploy and operations docs; start at the [documentation home](../index.md).
 
-A running log of operator gotchas hit while standing up or re-pointing a GCP
-BigRAE tenant that are **not** fixed in code, only in operator procedure. Fixes
+Use these how-to notes for GCP setup conditions that need operator action. Keep historical observations separate from current release qualification. Fixes
 that belong in the scripts, workflows, or Terraform go into the code, not here.
 Use this alongside the authoritative runbooks:
 [`deploy-secrets.md`](deploy-secrets.md),
 [`gcp-range-cell-deploy.md`](gcp-range-cell-deploy.md),
 [`setup.md`](../technical/dev/setup.md),
-[`gcp-guest-images.md`](../architecture/gcp-guest-images.md),
+[`gcp-guest-images.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md),
 the [GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md),
 [RB023](../runbooks/rb023-gcp-deployment.md), and
 [`scripts/bootstrap/README.md`](https://github.com/Brad-Edwards/bigrae/blob/dev/scripts/bootstrap/README.md).
@@ -144,8 +143,10 @@ release and store. Image readback and the release checks still apply.
 The deployer image holds every deploy tool at the release version. Without it,
 `gcp-deploy` requires `gcloud`, `gke-gcloud-auth-plugin`, `terraform`, `kubectl`,
 `helm`, `oras`, and `trivy` on `PATH`. It stops before any change when one is
-missing. Use Helm 3: the deployer image and the CI deploy job use `v3.22.1`, and
-Helm 4 is a separate major release that the chart is not exercised against.
+missing.
+
+Use Helm 3. The deployer image and retained CI adapter pin `v3.22.1`. Helm 4 is a separate major release without chart qualification here.
+
 `kubectl`, `helm`, and `oras` install as static binaries into a `PATH` directory
 without root.
 
@@ -167,34 +168,37 @@ cp ./x/usr/lib/google-cloud-sdk/bin/gke-gcloud-auth-plugin ~/.local/bin/
 
 The GCE range precondition gate stops the deploy when a required range input is
 missing. It requires `settings.range_cells.zone`, the `linux` role in
-`range-images.json`, and the Terraform output `range_host_service_account_email`.
-The `dc` role is optional, because a content pack supplies its own domain
+`range-images.json`, and the Terraform output `range_host_service_account_email`. The `dc` role is optional, because a content pack supplies its own domain
 controller.
+
 Each image in `range-images.json` must exist in the range project. A release
 that pins base images supplies them; for an older release, import the images
 with `gcp-images --store` before the first deploy. For a deliberate
-platform-first bring-up, pass `--allow-missing-range-images`. Do not set the
+platform-first bring-up, pass `--allow-missing-range-images`.
+
+Do not set the
 range host identity; the command reads it from the Terraform output.
 
 ## GCE stockout on the provisioner node pool
 
-The regional cluster places one provisioner node per zone. A zone can return
-`GCE_STOCKOUT` for the configured `provisioner_machine_type` and leave the node
-pool in `RUNNING_WITH_ERROR`, failing the apply after the roughly 35-minute
-node-pool timeout, while every other pool comes up. The stockout is
-machine-type and zone specific. Confirm an alternative type has capacity in all
+The regional cluster places one provisioner node per zone. A zone stockout for `provisioner_machine_type` can leave a pool `RUNNING_WITH_ERROR`. The apply fails after the roughly 35-minute node-pool timeout, even when other pools succeed. The stockout is
+machine-type and zone specific.
+
+Confirm an alternative type has capacity in all
 of the cluster's zones (the `access` pool already proves `e2-standard-8`
 availability), then set `provisioner_machine_type` to that type of the same
 size class (`e2-standard-8` is the same 8 vCPU / 32 GB shape as
 `n2-standard-8`). The pool runs only the provisioner launcher and the
 Terraform provisioner Jobs, so a smaller E2 type, for example `e2-standard-4`,
 also works. After a stockout, the pool stays `RUNNING_WITH_ERROR` and the apply
-fails at the node-pool timeout. Publish the new type in the bundle and run the
+fails at the node-pool timeout.
+
+Publish the new type in the bundle and run the
 deploy again; Terraform replaces the pool. Set it in the bundle's Terraform values (`terraform.tfvars`
 or `terraform.tfvars.json`). A CI deployment sets it in its committed
-`environments/<environment>/terraform.tfvars`. Do not try to pin the GKE node
-zones: there is no tfvar for it, so that would be a module change, not an
-operator override.
+`environments/<environment>/terraform.tfvars`.
+
+There is no node-zone tfvar. Pinning GKE node zones requires a reviewed module change, not an operator override.
 
 ## Use Connect Gateway credentials for your own cluster checks
 
@@ -215,18 +219,21 @@ KUBECONFIG=/tmp/tenant-check kubectl -n shifter-platform get pods
 The public hostname needs a DNS-only (unproxied) A record at the ingress IP
 before the Google-managed certificate leaves `Provisioning`. The ingress IP is
 the `shifter-<environment>-platform-ip` global address (the deploy command also
-prints it as the ingress address). On a Cloudflare-managed zone, watch for a stale
-record left by a prior tenant: a hostname reused from a torn-down environment can
-still hold a CNAME to a dead load balancer, which blocks creating the A record
-until you convert it. Keep the record unproxied so the load balancer can serve
+prints it as the ingress address). In a Cloudflare-managed zone, check for stale records from a prior deployment. A retained CNAME to a removed load balancer blocks the new A record.
+
+Keep the record unproxied so the load balancer can serve
 the certificate challenge. Run the first deploy with `--first-install`; it
 finishes when the certificate covers the hostname, before the certificate is
-`ACTIVE`. First issuance can take longer than one deploy run. After the
+`ACTIVE`. First issuance can take longer than one deploy run.
+
+After the
 certificate is `ACTIVE`, run `gcp-deploy` again without `--first-install`; a
 normal deploy waits up to 60 minutes for an `ACTIVE` certificate. The domain
 status can show `FailedNotVisible` for a while after the A record resolves,
 because Google checks the record again on its own schedule. In one standup it
-changed to `ACTIVE` about 45 minutes after the record resolved. No action is
+changed to `ACTIVE` about 45 minutes after the record resolved.
+
+No action is
 needed while the hostname resolves to the ingress address and the load balancer
 answers on port 80.
 
@@ -240,9 +247,7 @@ run prints before you run the deploy again.
 ## Pin the gcloud account for a long run
 
 The commands use the active gcloud account to impersonate the purpose
-identities. If another shell changes the active account during a run, the next
-gcloud call in the run fails, for example the lock release at the end of a
-destroy. Pin the account for the run instead of relying on the global setting:
+identities. Changing the active account in another shell can break the next gcloud call. One example is deployment-lock release after destruction. Pin the account for the run instead of relying on the global setting:
 
 ```bash
 CLOUDSDK_CORE_ACCOUNT=<operator> uv run --project scripts/bootstrap scripts/bootstrap/deploy.py gcp-deploy --store gs://<bucket>

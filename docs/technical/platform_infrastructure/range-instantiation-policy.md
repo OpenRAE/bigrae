@@ -3,10 +3,7 @@
 Which range backend may realize a range, for which kind of launch.
 
 Normal BigRAE scenarios are live-fire: participants and agents run arbitrary
-commands, exploit services, pivot, and attempt escape. ADR-030 decides that a
-live-fire range must be contained by an approved boundary outside the Kubernetes
-management plane, and that the retained Kubernetes/GDC plumbing may serve only
-explicitly declared non-user modes. This policy is the control that enforces
+commands, exploit services, pivot, and attempt escape. ADR-030 requires live-fire containment outside the Kubernetes management plane. Retained Kubernetes/GDC components may serve only explicitly declared non-user purposes. This policy is the control that enforces
 that decision.
 
 The policy lives in one Django-free module,
@@ -75,9 +72,7 @@ and enumerates the purposes it may serve.
 | `gce` | `gcp` | `live_fire`, `non_user_demo`, `operator_validation`, `non_user_validation` |
 | `gdc` | `gcp` | `non_user_demo`, `operator_validation`, `non_user_validation` |
 
-Registration is **default-deny**. A backend admits only the purposes its entry
-lists, enumerated one by one—never derived from every enum member, which would
-silently admit every future purpose. A backend registered with an empty set can
+Registration is **default-deny**. A backend admits only individually listed purposes. Deriving permissions from every enum member would silently admit future purposes and is forbidden. A backend registered with an empty set can
 launch nothing. The selector parser derives its valid values from this same
 mapping, so an unregistered slug is unparseable and therefore unselectable.
 
@@ -89,11 +84,9 @@ Four layers, each independent:
 
 1. **CMS service boundary**—`cms.services._range_backend_admission.assert_backend_admitted()`
    runs before the active-range reservation, Engine persistence, launch-intent
-   creation, subnet allocation, secret access, or any cloud mutation. Both the
-   cyberscript (`create_range`) and RAES (`create_raes_native_range`) create
-   paths call it, so every product entry point funnels through one check. A CTF
-   launch is additionally refused any non-live-fire purpose outright, and the
-   operator gate on `create_non_user_range` runs before a purpose exists at all.
+   creation, subnet allocation, secret access, or any cloud mutation. Current RAES creation (`create_raes_native_range`) uses this boundary.
+   Historical `create_range` naming does not establish a second scenario-authoring contract.
+   `cyberscript` is retired. CTF rejects every non-live-fire purpose. `create_non_user_range` checks operator authority before deriving any purpose.
 2. **Engine persistence**—`engine.services._range_backend_binding` re-evaluates
    the admitted pair before writing it to the write-once `Range.range_backend` /
    `Range.instantiation_purpose` columns. `BackendAdmission` is a constructible
@@ -108,10 +101,7 @@ Four layers, each independent:
    provisioning realizes GCE range cells only, so an RAES launch on any other
    admitted backend fails with `unsupported-capability` before dispatch.
 
-Teardown is deliberately **not** gated by new-provision policy. An existing GDC
-range is destroyed from its persisted ownership binding even though new
-live-fire provisioning on that backend is forbidden; refusing cleanup would
-strand billable resources.
+Teardown is deliberately **not** gated by new-provision policy. Existing GDC ranges are destroyed through persisted ownership bindings, even though new live-fire provisioning is forbidden. Denying cleanup would strand billable resources.
 
 ## Failure codes
 
@@ -159,7 +149,7 @@ realization.
 
 ## Related docs
 
-- [GDC Provisioning](gdc-provisioning) - the retained non-user substrate
-- [GCP Infrastructure](gcp-infrastructure) - GKE, Helm, and GCP services
+- [GDC Provisioning](gdc-provisioning.md) - the retained non-user substrate
+- [GCP Infrastructure](gcp-infrastructure.md) - GKE, Helm, and GCP services
 - `docs/architecture/range-instantiation-policy-control-preflight-1354.md` - design rationale
 - `docs/architecture/range-isolation-model.md` - containment model

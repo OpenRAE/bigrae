@@ -73,9 +73,7 @@ rollout and removes the provider `cloudsqlsuperuser` role from the login (#2626)
 
 The BigRAE client image keeps the JSON-auth and JDBC PostgreSQL upstream
 extensions, plus the native authority extension built from this repository.
-It removes every other upstream extension, their activation links,
-and the MySQL and SQL Server drivers, because they bundle vulnerable
-dependencies that BigRAE does not use. Guacamole 1.6.0 bundles guava, jackson,
+Other upstream extensions, their activation links, and MySQL/SQL Server drivers are removed. They contain vulnerable dependencies that BigRAE does not use. Guacamole 1.6.0 bundles guava, jackson,
 and an old PostgreSQL JDBC driver with fixable HIGH findings. The image build
 swaps those bundled jars for fixed, hash-verified copies
 (`shifter/engine/guacamole/patch_bundled_jars.py`, #2610). Enabling another
@@ -97,10 +95,7 @@ dependencies.
 
 ## Request flow
 
-The Portal never returns the token URL directly from the launch request. Building
-a Guacamole session requires a blocking server-to-server call to
-`guacamole-client` `/api/tokens`, so that work runs asynchronously in a bounded
-worker pool and the browser polls for the result.
+The Portal never returns the token URL directly from the launch request. Session creation calls `guacamole-client` `/api/tokens` synchronously on the server. A bounded worker pool performs that work asynchronously while the browser polls.
 
 ```mermaid
 sequenceDiagram
@@ -167,8 +162,7 @@ The broker implements the Guacamole JSON-auth extension protocol.
    - `signed = signature || json_bytes`, PKCS7-padded to the AES block size,
    - `AES-CBC(key, IV = 0x00 * 16, signed)`, then Base64.
 
-   The signature is prepended to the plaintext and the whole thing is encrypted;
-   the guacamole-client JSON-auth extension reverses this with the shared key.
+   The signature precedes the plaintext, then both are encrypted. The guacamole-client JSON-auth extension reverses this with the shared key.
 3. **Exchange for a token.** `JsonAuthGuacamoleClient` posts
    `data=<encrypted>` (form-encoded) to
    `{api_base_url}/api/tokens` and returns `authToken` from the JSON response.
@@ -177,11 +171,7 @@ The broker implements the Guacamole JSON-auth extension protocol.
    governed by `GUACAMOLE_TOKEN_RETRY_ATTEMPTS` and
    `GUACAMOLE_TOKEN_RETRY_BASE_DELAY_MS`; malformed responses are fatal. The
    retry exists for first-click reliability (issue #395).
-4. **Build the client URL.** The `GuacamoleClient` port's `create_rdp_url` and
-   `create_ssh_url` methods assemble the connection map, sign/encrypt, exchange
-   for `authToken`, and return
-   `{public_base_url}/#/client/{connection_id}?token={authToken}` using the
-   **public** base URL for the browser.
+4. **Build the client URL.** `GuacamoleClient.create_rdp_url` and `create_ssh_url` assemble, sign, and encrypt the connection map. They exchange it for `authToken`. The returned browser URL is `{public_base_url}/#/client/{connection_id}?token={authToken}`, using the public base URL.
 
 The public/internal split matters: `GUACAMOLE_API_BASE_URL` is the
 server-to-server address used to mint the token, while `GUACAMOLE_BASE_URL` is the
@@ -301,9 +291,7 @@ The SPA hook `useGuacamoleSession` in
 `frontend/src/features/mission-control/guacamole.ts` drives every launch. It
 POSTs to the launch endpoint to queue the bootstrap and gets a `request_id`. It
 then polls the bootstrap status endpoint once per second (up to 60 attempts)
-until the response carries `url` or `error`. It opens the URL in a new tab with
-`noopener,noreferrer` and stops polling on the first delivered URL, so
-single-use delivery is transparent to the happy path.
+until the response carries `url` or `error`. It opens the URL in a new tab with `noopener,noreferrer`. Polling stops after the first delivered URL. Single-use delivery requires no extra user action.
 
 The Mission Control instance, terminal and NGFW pages and the CTF participant
 range page all use this hook. All launches pass through the same status
@@ -361,9 +349,7 @@ version. Image build, scan and native session-closure checks run in CI.
 - `JSON_SECRET_KEY` and DB credentials reach the client via the
   `guacamole-runtime` Kubernetes Secret. `gcp-deploy` creates that Secret
   **out of band** (`kubectl apply` from GCP Secret Manager, before the Helm
-  release). The Helm chart never carries the secret values; it references
-  the Secret by name only (`envFrom.secretRef`), so credentials never enter
-  chart values or Helm release history. `scripts/gcp/render_runtime_env.py` sets
+  release). Helm references the Secret by name through `envFrom.secretRef`. Secret values never enter chart values or Helm release history. `scripts/gcp/render_runtime_env.py` sets
   `GUACAMOLE_SECRET_ID`, `GUACAMOLE_BASE_URL`, and the in-cluster
   `GUACAMOLE_API_BASE_URL`.
 - NetworkPolicies restrict `guacamole-client` to `guacd` on TCP 4822 and admit

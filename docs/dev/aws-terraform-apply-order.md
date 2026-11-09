@@ -2,11 +2,7 @@
 
 Part of the BigRAE deploy and operations docs; start at the [documentation home](../index.md).
 
-This is the authoritative order for applying the AWS Terraform stacks on a fresh
-account, the backend state key each stack uses, and the values you must override
-before the first apply. Follow it top to bottom. The CI Deploy workflow applies
-the same stacks in the same order; this doc lets an operator reproduce a first
-apply by hand and understand what CI does.
+Use this how-to guide to apply AWS contributor infrastructure in dependency order. It lists state keys and required first-apply overrides. Follow it top to bottom. The CI orchestrator coordinates the same infrastructure dependencies. Use the documented inputs and authorized lifecycle rather than a second installation path.
 
 For the secrets and repository variables that back these values, see
 [`deploy-secrets.md`](deploy-secrets.md). For range AMIs, see
@@ -17,10 +13,7 @@ down, see [`aws-teardown-runbook.md`](aws-teardown-runbook.md).
 
 Before any stack applies, these must already exist:
 
-1. **Bootstrap has run** for the environment
-   (`scripts/bootstrap/deploy.py bootstrap --env <env> --profile <profile>`),
-   creating the S3 state bucket, the GitHub OIDC provider, the deploy IAM role,
-   and the per-instance backend config files under `~/.shifter/<env>-<bucket>/`.
+1. **Bootstrap has run** with `scripts/bootstrap/deploy.py bootstrap --env <env> --profile <profile>`. It creates S3 state storage, GitHub OIDC, and the deploy role. Private backend files are under `~/.shifter/<env>-<bucket>/`.
 2. **Self-hosted runners are provisioned and registered** if you deploy through
    CI (all AWS deploy jobs use `runs-on: self-hosted`). Run
    `scripts/bootstrap/deploy.py runners --env <env> --profile <profile>` to
@@ -57,12 +50,10 @@ state (`shifter/<env>/terraform.tfstate`) and the Range state
 (`<env>/range/terraform.tfstate`) as remote-state data sources, so these keys
 must match exactly.
 
-There is no separate Engine Terraform stack.
-The provisioner image is built before the control-plane release.
-Provisioner workloads run as Kubernetes Jobs on EKS.
-The isolated `environments/<env>/eks` root owns cluster infrastructure.
-The shared Helm chart owns application workloads.
-Follow the [AWS EKS bundle](../technical/platform_infrastructure/aws-eks-bundle.md) after preparing the data-plane stacks.
+There is no separate Engine Terraform stack. The provisioner image is built before the control-plane release. Provisioner workloads run as Kubernetes Jobs on EKS.
+
+The isolated `environments/<env>/eks` root owns cluster infrastructure. The shared Helm chart owns application workloads. Follow the [AWS EKS bundle](../technical/platform_infrastructure/aws-eks-bundle.md) after preparing the data-plane stacks.
+
 The retained production roots have owner @Brad-Edwards and a local `terraform`/`full` bootstrap caller.
 
 ## Per-stack first-apply overrides
@@ -88,11 +79,11 @@ into `local.auto.tfvars` (see [`deploy-secrets.md`](deploy-secrets.md)).
   `victim_allowed_cidrs.auto.tfvars` from the deployment's `bigrae.yaml`
   (`settings.range_egress`) by `bigrae-config render`. Keep it out of the
   whole-file range secret. See
-  [`../architecture/range-egress-ip-allowlist.md`](../architecture/range-egress-ip-allowlist.md).
+  [`../architecture/range-egress-ip-allowlist.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/range-egress-ip-allowlist.md).
 
 ### Portal (`environments/<env>/portal/`)
 
-- `domain_name`, `ses_domain`, `ctfd_domain`, `ctf_from_email`: real DNS and
+- `domain_name`, `ses_domain`, `ctf_from_email`: real DNS and
   mail identities (baseline is `example.com`).
 - `alarm_email`: real operations address.
 - `allowed_email_domains`: sign-up allow-list. Empty in the baseline, which
@@ -100,8 +91,6 @@ into `local.auto.tfvars` (see [`deploy-secrets.md`](deploy-secrets.md)).
 - `cognito_domain_prefix`: must be globally unique across AWS Cognito.
 - `user_storage_bucket`: account-suffixed bucket name (baseline placeholder
   `shifter-<env>-user-storage-REPLACE_WITH_ACCOUNT_ID`).
-- `ctfd_ssh_public_key`, `ctfd_ssh_allowed_cidrs`: empty in the baseline, which
-  leaves CTFd SSH ingress closed. Set both to enable it.
 - `enable_portal_inspection`: `false` in the baseline. Set `true` to route ALB
   and portal traffic through the inspection firewall (the apply then asserts the
   routed path is healthy).

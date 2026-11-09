@@ -16,6 +16,8 @@ from memory:
 - [GCP tenant standup gotchas](../../../docs/dev/gcp-tenant-standup-gotchas.md):
   operator procedure that is not in code.
 - [Design](../../../docs/architecture/github-less-gcp-deployment-design-2571.md).
+- [Deployment compatibility](../../../docs/technical/platform_infrastructure/deployment-compatibility.md):
+  source support, published release availability, and qualification limits.
 
 Use the `gcp-release` skill to publish the release that you deploy.
 
@@ -40,7 +42,8 @@ Use the `gcp-release` skill to publish the release that you deploy.
 
 ## Run the commands
 
-1. Use the deployer image of the release when Docker is available.
+1. Verify that the selected release contains the required lifecycle interface.
+   Use its deployer image when Docker is available.
 2. Without Docker, use a clean worktree of the release revision and the tool
    versions that `platform/deployer/gcp/Dockerfile` pins. Run each command as
    `uv run --project scripts/bootstrap scripts/bootstrap/deploy.py <command>`.
@@ -48,18 +51,18 @@ Use the `gcp-release` skill to publish the release that you deploy.
    manifest without Docker") and pass it with `--release-manifest`.
 3. Run a deploy or a destroy in the background with its output in a log file.
    Report the stage lines: `Infrastructure:`, `Rollout:`, `✓`, `✗`, and `⚠`.
-   A first install takes about 40 minutes; GKE is the slowest part.
-4. When a command stops on a lock that you know is stale, run the next command
-   with `--break-lock`.
+   Installation time varies with provider capacity and image availability.
+4. Before using `--break-lock`, prove that the holder has stopped.
+   Confirm the deployment, lock evidence, and absence of another active operator.
 
 ## Lifecycle
 
 | Step | Command | Check |
 | --- | --- | --- |
 | First install | `gcp-install --inputs <bundle directory>` | The foundation, the operator password secret, the bundle, the base images, the OpenFGA credentials and model, the first administrator, and the catalog. Report the printed ingress address and the password read command. The user points the DNS A record at it, unproxied. |
-| Certificate and smoke | `gcp-deploy --store gs://<bucket>` | The certificate becomes `ACTIVE` and the post-deploy smoke passes. The smoke creates and destroys a range. |
+| Certificate and smoke | `gcp-deploy --store gs://<bucket>` | The certificate becomes `ACTIVE`. A configured smoke creates a billable range and requests its destruction. Verify provider cleanup and temporary Job/Secret removal. An empty smoke email skips the smoke. |
 | Update | `gcp-deploy` with the manifest of the newer release | `Running workload images match the approved release` and the smoke pass. |
-| Teardown | `gcp-destroy --store gs://<bucket> --confirm <name>` | Only the foundation, the KMS key rings, the operator and OpenFGA secrets, and range images stay. |
+| Teardown | `gcp-destroy --store gs://<bucket> --confirm <name>` | Verify application and infrastructure removal. Foundation, state, bundle/evidence storage, permanent KMS resources, unmanaged secrets, and imported images can remain billable. Use the handbook's retained-resource inventory. |
 | Reinstall | `gcp-install --inputs <bundle directory>` | The ingress address can change; check the DNS record. |
 
 ## Diagnose by stage
@@ -75,3 +78,7 @@ Use the `gcp-release` skill to publish the release that you deploy.
 | Rollout | After an atomic Helm rollback the pods are gone; read the container logs in Cloud Logging (RB023). For a denied Job create, read the GKE audit log for `jobs.create` in the jobs namespace. Check a policy change with `kubectl apply --dry-run=server`. |
 | Smoke | The `worker-provisioner-launcher` logs and the provisioner Job pods in the jobs namespace. |
 | Certificate | RB023 and the gotchas: `FailedNotVisible` can last about 45 minutes after the record resolves. |
+
+Deployment exit status 3 means that rollout completed but the advisory smoke failed.
+An atomic Helm rollback does not reverse database, identity, policy, or Terraform changes.
+Use RB023 to assess those stages before retrying or selecting a previous release.

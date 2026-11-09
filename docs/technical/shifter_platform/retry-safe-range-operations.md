@@ -1,5 +1,7 @@
 # Retry-safe range operations
 
+Explanation of retry identity, immutable intent, and verified cleanup.
+
 Architecture for the retry-safe public range-operation surface and truthful
 cleanup outcomes. Decision of record: **ADR-063**; design guidance:
 `docs/architecture/public-range-operations-preflight-2086.md` (issue #2086).
@@ -11,13 +13,8 @@ The public retry identity is `(deployment_scope, actor_key, action, caller_key)`
 - **deployment_scope** is server-owned, resolved by
   `shared.deployment.resolve_deployment_scope()` from the deployment's cloud
   project (else a configured deployment name)—never a hostname, `ENVIRONMENT`
-  label, workspace UUID, or catalog id. One deployment is one customer boundary
-  backed by one PostgreSQL database (ADR-054), so the scope is recorded on each
-  binding to detect a database restored or cloned into a different deployment.
-- **actor_key** is the active actor id resolved via
-  `shared.api.principals.active_actor_user`, so a session and a user-owned token
-  for the same actor share identity while each credential still passes its own
-  live checks.
+  label, workspace UUID, or catalog id. One deployment is one customer boundary backed by PostgreSQL (ADR-054). Each binding records deployment scope to detect a database restored or cloned into another deployment.
+- **actor_key** identifies the native initiating principal. Session and personal credentials for that principal share retry identity. Each credential must still pass its current checks.
 - **action** is `<resource>:<operation>` (a launch is `raes-range:provision`).
 - **caller_key** is the bounded, caller-supplied key.
 
@@ -35,10 +32,7 @@ digest.
   even after package/registry/default-configuration changes.
 - The **compiled intent** (the full `OperationInput`—compiled plan plus
   artifact/configuration/delivery/participant-access bindings) is enforced by the
-  engine: `engine.launch_intents.enqueue_provisioner_launch` now compares a
-  re-enqueue's composed intent against the stored immutable `OperationInput` and
-  fails closed on a mismatch, so an internal replay with different bound intent
-  conflicts before effects.
+  engine: `engine.launch_intents.enqueue_provisioner_launch` compares the composed intent with stored immutable `OperationInput`. A changed internal replay conflicts before effects.
 
 ## Binding persistence and concurrency
 
@@ -51,10 +45,7 @@ concurrent first use.
 
 `engine.retry_binding.bind_public_operation` recovers an existing binding, else
 runs a caller-supplied `mint` inside the binding transaction and inserts the
-binding. When two callers race the same key, the unique insert fails for the
-loser with `IntegrityError`; the loser's whole transaction (including everything
-`mint` reserved) rolls back, and the committed winner is read outside the failed
-savepoint and recovered (or conflicts). Same-key contenders therefore converge on
+binding. Concurrent first use has one winner. The loser's unique insert raises `IntegrityError`, rolling back its complete transaction and reservations. Outside the failed savepoint, it reads the committed winner and recovers or conflicts. Same-key contenders therefore converge on
 one binding and one set of effects; the real-PostgreSQL proofs live in
 `tests/engine/test_retry_binding_postgres.py`.
 
@@ -74,19 +65,9 @@ another actor's operation, and a revoked actor cannot authenticate.
 ## Provider inventory/readback evidence
 
 Verified terminal cleanup requires an **independent inventory/readback** of the
-owned provider resources, not a logical lifecycle status (ADR-063-R4). After the
-RAES destroy delete loop, the provisioner (`raes_gcp_inventory.inventory_raes_range_cell`)
-GETs every resource the plan owns (instances, addresses, routers, firewalls,
-subnets, network) on the same enumeration it deleted: NotFound is gone, a returned
-resource is a residual, and a provider error is `INCOMPLETE` (unknown, never an
-empty success). The result rides the terminal destroy result payload
-(`cleanup_inventory`, bounded and validated in `shared.operation_result_payloads`),
-and the Engine applier records it as durable `RangeCleanupVerification` evidence
-(scope + observation time) in the same transaction as the DESTROYED transition.
+owned provider resources, not a logical lifecycle status (ADR-063-R4). After deletion, the provisioner (`raes_gcp_inventory.inventory_raes_range_cell`) independently reads every owned instance, address, router, firewall, subnet, and network. NotFound means absent; a returned resource is a residual. A provider error means `INCOMPLETE`, never empty success. The terminal destroy payload carries bounded `cleanup_inventory`, validated by `shared.operation_result_payloads`. Engine records durable `RangeCleanupVerification` scope and observation time in the same transaction as the DESTROYED transition.
 
-The pinned immutable `OperationInput` plan makes the destroy upgrade-safe for
-resource identity across producer/pack changes; the inventory readback is the
-residual safety net that catches anything a drifted configuration missed.
+Immutable `OperationInput` preserves resource identity across producer and pack upgrades. Independent inventory detects residuals despite configuration drift.
 
 ## Truthful teardown and retention
 
@@ -98,13 +79,6 @@ All three cleanup consumers gate on the latest `RangeCleanupVerification` being
   `DESTROYED` range with no evidence is `pending` with a
   `provider_inventory_unconfirmed` obligation, and `RESIDUALS_FOUND`/`INCOMPLETE`
   are `unknown` with residual obligations.
-- **CTF capacity/linkage release.** `ctf.services.range.lifecycle` dispatches the
-  destroy and marks the range `destroying` while **retaining** the
-  participant/range/reservation linkage; capacity is released and the linkage
-  cleared only when `ctf.signals.sync_ctf_participant_range_status` receives a
-  DESTROYED transition carrying `cleanup_verified=True` (computed by the CMS range-
-  event handler from the inventory evidence). Revalidates #1919 (ADR-063-R5).
+- **CTF capacity/linkage release.** `ctf.services.range.lifecycle` dispatches destroy and retains participant/range/reservation linkage while `destroying`. Capacity release and linkage removal require `ctf.signals.sync_ctf_participant_range_status` to receive DESTROYED with `cleanup_verified=True`. The CMS event handler derives that flag from inventory evidence. Revalidates #1919 (ADR-063-R5).
 - **Retention pruning.** `engine.retry_binding.prune_expired_retry_bindings`
-  (wired via the `prune_retry_bindings` management command) deletes an expired
-  binding only when its operation cleanup is verified absent, so pruning never
-  deletes the sole recovery/residual evidence of an unresolved operation.
+  deletes an expired binding only after verified cleanup absence. The `prune_retry_bindings` command uses this function. Unresolved recovery and residual evidence remain retained.

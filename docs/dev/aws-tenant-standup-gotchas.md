@@ -2,8 +2,7 @@
 
 Part of the BigRAE deploy and operations docs; start at the [documentation home](../index.md).
 
-A running log of operator gotchas hit while standing up or re-pointing an AWS
-BigRAE tenant that are **not** fixed in code, only in operator procedure. Fixes
+This how-to guide records AWS setup conditions that need operator action. It distinguishes historical workarounds from current supported deployment interfaces. Fixes
 that belong in the scripts, workflows, or Terraform go into the code, not here.
 Use this alongside the authoritative runbooks:
 [`deploy-secrets.md`](deploy-secrets.md),
@@ -41,9 +40,7 @@ account:
   (`shifter-<env>-range-range-instance`) but must exist in the new account after
   the range apply.
 
-Tell the moved account apart from a fresh one by comparing a known variable
-(for example `PACKER_BUILD_VPC_ID_<ENV>`) against the target account's actual VPC
-IDs; a mismatch means the value still points at the old account.
+Compare a known variable, such as `PACKER_BUILD_VPC_ID_<ENV>`, with actual target-account VPC IDs. A mismatch indicates an old account's value.
 
 ## Non-TTY / headless bootstrap needs `--yes`
 
@@ -63,10 +60,7 @@ or pass the bootstrap bucket name`. (The `full` path threads it automatically.)
 
 ## First-deploy AMI ordering (Core → Range → seed AMIs → Portal)
 
-A single `deploy.yml` dispatch runs the full chain, but Portal reads
-`/shifter/ami/*` as data sources and the packer fresh-boot verify gate
-(`PACKER_VERIFY_*`) needs the range instance profile + a range-VPC subnet/SG,
-which only exist after the Range stack applies. So a fresh account cannot
+A dispatch coordinates the full chain, but Portal reads `/shifter/ami/*` as data sources. Packer verification needs `PACKER_VERIFY_*` values for a range profile, subnet, and security group. Apply Range before image verification. So a fresh account cannot
 complete Portal on the first dispatch. The order is: dispatch once (Core + Range
 apply; Portal fails on missing AMIs), set `PACKER_VERIFY_*` from the applied
 range, seed `/shifter/ami/*` via `packer.yml`, then dispatch again to complete
@@ -82,10 +76,7 @@ After the Range stack applies, set the fresh-boot verify-gate variables from it:
   any range-VPC subnet; the ssm/ssmmessages/ec2messages interface endpoints have
   private DNS and are reached VPC-locally, and the endpoint SG allows 443 from the
   whole VPC CIDR).
-- `PACKER_VERIFY_SG_<ENV>` = a **no-inbound, egress-all** security group. The
-  range stack does **not** provide one and locks the VPC default SG down to no
-  egress, so create a dedicated SG in the range VPC (tag it
-  `Project=shifter,Purpose=packer-verify`). This is operational AMI-pipeline
+- `PACKER_VERIFY_SG_<ENV>` = a **no-inbound, egress-all** security group. The range stack supplies no dedicated verifier security group. Its default security group has no egress. Create a reviewed verifier group tagged `Project=shifter,Purpose=packer-verify` in the range VPC. This is operational AMI-pipeline
   infra, not range Terraform, so it does not appear in the range plan.
 
 ## No AWS pre-promoted DC bake (`/shifter/ami/dc`)
@@ -94,32 +85,27 @@ After the Range stack applies, set the fresh-boot verify-gate variables from it:
 `_should_promote_dc_at_runtime()` is hard-disabled, so runtime promotion never
 happens. AWS `dc.pkr.hcl` builds only a *generalized* Windows image (AD DS
 installed, not promoted) and runs `sysprep` (which is incompatible with a
-promoted DC), and the runbook forbids publishing it as `/shifter/ami/dc`. The
-pre-promoted bake (`a2_setup.ps1`) exists only on the GCP side; the AWS DC AMIs
-in `shifter/packer/dc-amis.json` were created manually and are account-scoped, so
-they are not usable in a moved/new account. A new account therefore has no valid
-DC AMI. Real fix: implement a pre-promoted DC bake for AWS (port GCP's
+promoted DC), and the runbook forbids publishing it as `/shifter/ami/dc`. The promoted bake `a2_setup.ps1` is GCP-only.
+
+AWS entries in `shifter/packer/dc-amis.json` refer to manually created, account-scoped images. They cannot be reused in another account. A new account therefore has no valid
+DC AMI.
+
+Real fix: implement a pre-promoted DC bake for AWS (port GCP's
 `a2_setup` promotion, drop sysprep) or manually promote+capture one, then update
-`dc-amis.json` / seed `/shifter/ami/dc`. To unblock a base-range standup (which
-never launches a DC) meanwhile, seed `/shifter/ami/dc` with a placeholder AMI so
-the Portal plan's data source resolves; repoint it once a real DC is baked.
+`dc-amis.json` / seed `/shifter/ami/dc`. A missing valid DC image blocks the complete Portal plan. Do not seed `/shifter/ami/dc` with a placeholder to bypass that prerequisite.
+
+Prepare a correct account-owned DC image first.
 
 ## Debugging apply time Terraform bugs
 
 The deploy workflow re-runs the ~25-min Quality gate on every dispatch, so
-iterating apply time Terraform errors through CI is slow. For the debug/converge
-phase, run the identical `terraform apply` locally against the same S3 backend
-and rendered overlays (what `_range.yml` / `deploy.py terraform` run), fix each
-error, then validate the full chain with one CI `deploy.yml` dispatch.
+iterating apply time Terraform errors through CI is slow. For convergence, select the original S3 backend and rendered overlays. Review the same saved plan and apply through the authorized contributor procedure. Fix the reported cause, then validate the full chain with one approved CI dispatch.
 
 ## The active AWS portal runtime is EKS, not ECS/EC2
 
 The legacy ECS/EC2 portal container rollout is retired: in `_shifter-platform.yml`
 the `deploy` job is gated `environment == '__legacy-disabled__'` (never runs) and
-`post-deploy-smoke` `needs: eks-deploy`. So on a fresh account the ECS/EC2 portal
-Terraform applies (RDS/Cognito/SQS/SNS/S3/ALB) but the portal ALB just returns HTTP 502 (no
-container rollout, no DB migration) and the range smoke never runs unless EKS is
-enabled. To stand up a working tenant, enable EKS:
+`post-deploy-smoke` `needs: eks-deploy`. The earlier portal EC2/ASG application lane is retired. Applying portal data services alone does not deploy EKS workloads, migrate the application, or qualify range smoke. To stand up a working tenant, enable EKS:
 
 - Repository variable `AWS_EKS_<ENV>_ENABLED = true` (drives `deploy.yml`'s
   `eks_enabled`, which gates `eks-deploy` and thus `post-deploy-smoke`).
@@ -158,10 +144,7 @@ There is no example file; construct it from the applied ECS/EC2 portal stack and
 - `domain_name` = the public hostname.
 - `edge_client_cidrs` / `provider_api_cidrs`: each requires >=1 CIDR.
   `edge_client_cidrs` is the public HTTPS-ingress source allowlist (the portal is
-  Cognito-gated). `provider_api_cidrs` is the pod-egress NetworkPolicy allowlist to
-  AWS APIs; the correct value is the AWS region's public API ranges, but that is a
-  large, drift-prone list, so a dev tenant may start with a broad CIDR and tighten
-  later (a real hardening follow-up, not a permanent value).
+  Cognito-gated). `provider_api_cidrs` contains pod-egress CIDRs for AWS APIs. Use approved regional API ranges and check their currency. Broader CIDRs need explicit security-owner review before deployment; they are not a default recovery shortcut.
 
 Validate the whole thing before a CI cycle with a local
 `terraform plan -var-file=<eks.tfvars.json>` (add `deployment_role_arn`) against

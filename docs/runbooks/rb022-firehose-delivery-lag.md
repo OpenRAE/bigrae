@@ -3,6 +3,8 @@
 Applicability: AWS only. GCP uses Cloud Logging and this runbook does not apply.
 Operator: AWS platform/security owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 The Firehose `DeliveryToS3.DataFreshness` alarm fires or CloudWatch log records
@@ -36,6 +38,4 @@ Alert on freshness, delivery failure, error-prefix growth, throttling, and
 downstream oldest-message age. Test KMS/IAM changes before rollout and retain
 buffer/capacity headroom.
 
-Escalate when source records may be lost, encryption or bucket policy fails, a
-replay could duplicate security events, or downstream ingestion remains stale
-after S3 delivery recovers.
+Escalate possible record loss, encryption or bucket-policy failure, or replay that could duplicate security events. Also escalate stale downstream ingestion after S3 delivery recovers.

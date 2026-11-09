@@ -1,7 +1,7 @@
 # GitHub Runner Health Alerts Runbook
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/292>
-Design note: [`docs/architecture/github-runner-health-alerting-preflight-292.md`](../architecture/github-runner-health-alerting-preflight-292.md)
+Design note: [`docs/architecture/github-runner-health-alerting-preflight-292.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/github-runner-health-alerting-preflight-292.md)
 Region: `us-east-2`
 
 This runbook is the operator procedure for responding to CloudWatch alarms on the
@@ -24,9 +24,7 @@ notify.
 | `cpu-high` | `AWS/EC2 CPUUtilization` | average CPU above `cpu_alarm_threshold` (default 95%) for two 5-minute periods | none (notify) |
 | `service-inactive` | `Shifter/RunnerHealth RunnerServiceActive` | `actions.runner.*` service inactive **or the host stops reporting** for two 60-second periods | none (notify) |
 
-The `service-inactive` alarm treats missing data as **breaching**: a hung host
-cannot run the host monitor, so the absence of the heartbeat is itself the
-hung-host signal. This is the alarm that catches the original incident class. All
+The `service-inactive` alarm treats missing data as **breaching**. An unresponsive host cannot run its monitor. The missing heartbeat signals that failure. This is the alarm that catches the original incident class. All
 alarms fire within the 10-minute acceptance window.
 
 ## How the runner-service signal works
@@ -34,9 +32,7 @@ alarms fire within the 10-minute acceptance window.
 A systemd timer (`shifter-runner-health.timer`, every 60 seconds) runs
 `/usr/local/bin/shifter-runner-health.sh`, which reports
 `systemctl is-active 'actions.runner.*'` as the `RunnerServiceActive` custom
-metric (1 = active, 0 = inactive), dimensioned by `RunnerName`. The monitor holds
-no GitHub token and does not poll the GitHub API; it only reads local service
-state and calls `cloudwatch:PutMetricData` under a namespace-scoped IAM grant.
+metric (1 = active, 0 = inactive), dimensioned by `RunnerName`. The monitor has no GitHub token and does not poll the GitHub API. It reads local service state. It calls `cloudwatch:PutMetricData` under a namespace-scoped IAM grant.
 
 > A freshly applied runner host reports `RunnerServiceActive = 0` until the runner
 > is registered (`./config.sh` + `svc.sh install/start`, see the root README).
@@ -87,23 +83,20 @@ applying.
 
 4. **Verify GitHub's view.** Run `REPO="$(gh repo set-default --view)"`.
    Confirm the runner shows online at
-   `https://github.com/$REPO/settings/actions/runners`. An active
-   local service with the runner showing offline on GitHub points at network or
-   registration, not the host; re-register per the root README if needed.
+   `https://github.com/$REPO/settings/actions/runners`. If the service is active but GitHub reports the runner offline, investigate networking or registration. Re-register through the root README procedure if required.
 
 5. **Safe reboot / stop-start criteria.** A hung host (SSM unreachable, instance
    status check failing, no heartbeat) needs a power cycle:
    - **System status check failing:** if `enable_system_auto_recovery` is set,
      EC2 auto-recovery already moved the instance to healthy hardware (id, EBS,
      IP preserved); confirm and wait. Otherwise trigger a manual recover.
-   - **Instance status check failing or host frozen:** stop/start (not just
-     reboot, which keeps it on the same wedged host):
+   - **Instance status check failing or host frozen:** stop, then start the instance.
+     A reboot keeps it on the same failed host:
      ```sh
      aws ec2 stop-instances --instance-ids <instance-id> --region us-east-2
      aws ec2 start-instances --instance-ids <instance-id> --region us-east-2
      ```
-     A new boot re-runs user_data and re-installs the health monitor; the runner
-     service auto-starts if it was installed as a service.
+     A new boot reruns user_data and reinstalls the health monitor. A runner installed as a service starts automatically.
    - Do **not** reflexively reboot on `cpu-high` alone; a long build can saturate
      CPU legitimately. Inspect first.
 
