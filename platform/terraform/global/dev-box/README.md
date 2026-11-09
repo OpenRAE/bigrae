@@ -70,7 +70,7 @@ For better performance with a local RDP client:
 
 ### Option 3: Direct RDP (If Configured)
 
-If you've added your IP to `allowed_rdp_cidrs`:
+If you have added your IP to `allowed_rdp_cidrs`:
 
 1. Update `terraform.tfvars`:
    ```hcl
@@ -85,7 +85,7 @@ If you've added your IP to `allowed_rdp_cidrs`:
 
 > **Note:** state backend is partial; the first `terraform init` requires
 > `-backend-config=dev.s3.tfbackend` to supply the bucket name. Subsequent
-> commands don't need the flag (the local `.terraform/` cache remembers it).
+> commands do not need the flag (the local `.terraform/` cache remembers it).
 
 ## Accessing the Portal Database
 
@@ -129,7 +129,7 @@ For direct database access without port forwarding, deploy the dev-box in the po
 
 4. Connect directly from the dev-box to RDS using the endpoint.
 
-**Note:** When using portal VPC, the dev-box won't have a public IP. Use SSM Fleet Manager or port forwarding to access it.
+**Note:** When using portal VPC, the dev-box will not have a public IP. Use SSM Fleet Manager or port forwarding to access it.
 
 ## Pre-installed Tools
 
@@ -146,7 +146,7 @@ The dev box comes with:
 ## Cost Management
 
 - Uses spot instances for ~70% cost savings
-- Automatic shutdown at 11pm Pacific daily
+- Automatic shutdown at 11 PM Pacific daily
 - Root volume persists across spot interruptions
 
 ## Terraform Outputs

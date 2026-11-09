@@ -27,12 +27,7 @@ end-to-end (issue #1433):
 ./scripts/bootstrap/deploy.py runners --env dev --profile aws-dev
 ```
 
-It provisions a dedicated, ADR-004-R20-compliant runner VPC by default
-(`create_runner_network`), applies the runner root, mints a single-use token per
-runner, registers each over SSM (token delivered inside one JSON `--parameters`
-body so the operator-log redactor masks it; never written to Terraform state,
-user data, a secret store, or logs), and verifies each runner online via the
-GitHub API. Flags:
+It provisions a dedicated runner VPC by default (ADR-004-R20, `create_runner_network`) and applies the runner root. It creates one single-use token per runner, registers over SSM, and verifies the fleet online. The operator log redacts the JSON `--parameters` payload. Tokens do not enter Terraform state, user data, or a secret store. The current SSM transport still exposes the token in AWS CLI arguments and retained Run Command input; see the limitation below. Flags:
 
 - `--use-existing-network`: place the runners in an existing compliant network
   supplied as `vpc_id`/`subnet_id` instead of the managed runner VPC (see step 1
@@ -74,9 +69,9 @@ outbound egress for GitHub, ECR, SSM, and AWS APIs.
 
 `allow_default_vpc` is a narrow exception, not a placement option. It requires a
 documented risk acceptance in `docs/adr/exceptions.yaml` with owner, scope,
-reason, and expiry. No tracked environment sets it, and it's never a recovery
+reason, and expiry. No tracked environment sets it, and it is never a recovery
 fallback for a failed managed-network apply. See the placement preflight:
-[`docs/architecture/github-runner-placement-preflight-1437.md`](../architecture/github-runner-placement-preflight-1437.md).
+[`docs/architecture/github-runner-placement-preflight-1437.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/github-runner-placement-preflight-1437.md).
 
 ## 2. Terraform inputs
 
@@ -159,15 +154,11 @@ changes, so Terraform **replaces every runner instance**, and each environment
 gains one NAT gateway, an Elastic IP, and flow-log storage. Treat the apply as a
 migration:
 
-1. Drain active self-hosted jobs, and don't dispatch deploys during the move.
-   Don't run the apply from a job on the fleet it replaces.
+1. Drain active self-hosted jobs, and do not dispatch deploys during the move.
+   do not run the apply from a job on the fleet it replaces.
 2. Keep the current state and tfvars for rollback. Check NAT gateway and
    Elastic IP quotas in the target region.
-   Re-registration mints real registration tokens. The current SSM transport
-   carries the token in AWS CLI argv and retained Run Command input; see the
-   secret-transport gap in the
-   [placement preflight](../architecture/github-runner-placement-preflight-1437.md)
-   before running the move.
+   Re-registration mints real registration tokens. The current SSM transport exposes the token in AWS CLI arguments and retained Run Command input. Review the [documented transport limitation](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/github-runner-placement-preflight-1437.md) before a move.
 3. Apply and re-register from outside the fleet:
    `./scripts/bootstrap/deploy.py runners --env <env> --profile <profile>`.
    Replacement runners register with `--replace`, which takes over stale
@@ -175,8 +166,8 @@ migration:
 4. Verify each runner's effective placement and readiness separately. Check
    that each instance's subnet is the managed runner subnet, that GitHub shows
    the runner `online`, and that the `Shifter/RunnerHealth` alarms clear. Then
-   run an ordinary deploy. A running service alone doesn't prove DNS, egress, or
+   run an ordinary deploy. A running service alone does not prove DNS, egress, or
    job readiness.
 
 The managed network is single-AZ. A NAT gateway or AZ failure stops the fleet
-until a re-apply restores it; that's recovery work, not high availability.
+until a re-apply restores it; that is recovery work, not high availability.

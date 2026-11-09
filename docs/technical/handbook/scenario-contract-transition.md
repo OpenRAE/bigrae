@@ -90,6 +90,11 @@ it cannot establish that condition. Rollback is an operator-controlled restore
 of the preceding release and matching pre-cutover database backup, with workers
 stopped. There is no in-process mixed-schema rollback flag.
 
+Before restoration, obtain data-owner approval and record the exact source, image digests, backup, and retained range inventory.
+Keep old and new writers stopped during reconciliation.
+Verify identity, policy, object references, cleanup authority, and provider resources before reopening admission.
+Do not infer rollback safety from an atomic Helm upgrade or a source-only test.
+
 The [hard-cut decision](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/raes-migration-adr.md)
 and [ADR registry](https://github.com/OpenRAE/bigrae/blob/dev/docs/adr/index.yaml)
 retain the detailed migration and realization constraints. Earlier preflights

@@ -19,11 +19,11 @@ existing-secret payload and lifecycle permissions remain prefix-conditioned.
 No per-customer project or database is required.
 
 Optional `settings.openfga` contains `store_id`, `model_id`, and
-`runtime_secret_ref`, `admin_secret_ref`, `ca_secret_ref`. Leave it unset for a
-generated install: the deploy creates `shifter-<environment>-openfga-runtime`,
-`-admin`, and `-ca` in Secret Manager with a new CA, separate server
-certificates, and separate preshared keys, and never overwrites an existing
-secret. To use your own bundles, set all three references. References use
+`runtime_secret_ref`, `admin_secret_ref`, `ca_secret_ref`. Leave it unset for a generated installation. Deployment creates `shifter-<environment>-openfga-runtime`, `-admin`, and `-ca` in Secret Manager.
+
+It generates a new CA, separate server certificates, and separate preshared keys. It never overwrites an existing secret. To use your own bundles, set all three references.
+
+References use
 `projects/synthetic-project/secrets/synthetic-name`; the three references must
 be distinct. Policy enablement requires native SQL. Store/model IDs are either
 both blank for initial publication or both valid published ULIDs.
@@ -33,9 +33,7 @@ The runtime and admin Secret Manager JSON bundles each contain only
 key sets and TLS private keys. The client token must belong to its own server
 key set; authentication keys must have at least 32 characters. The CA bundle
 contains only `ca.crt`. Certificates must cover the respective private service
-names and chain to this CA. Provision these through the established operator
-secret workflow; never place values in installation settings, Helm values,
-Terraform outputs, command arguments or public evidence.
+names and chain to this CA. Provision these through the established operator secret workflow. Keep values out of installation settings, Helm values, Terraform outputs, command arguments, and public evidence.
 
 Deployment reads these named secrets under its existing operator authority and
 publishes separate Kubernetes Secrets through stdin using server-side apply.
@@ -48,13 +46,17 @@ provider-secret reads for policy keys.
 Before upgrading a retained database, use the old release to drain legacy spare
 ranges and settle their retained rows. Migration `ctf.0071` refuses to remove
 `owner_user` while any legacy spare row remains, including consumed or
-soft-deleted rows. It preserves those rows on refusal. A new database has no
-legacy spare rows and can proceed.
-Migration `ctf.0076` also blocks unfinished legacy event staff or ownership
-transitions. Finish them on the previous release before upgrading. The new
+soft-deleted rows. It preserves those rows on refusal.
+
+A new database has no
+legacy spare rows and can proceed. Migration `ctf.0076` also blocks unfinished legacy event staff or ownership
+transitions. Finish them on the previous release before upgrading.
+
+The new
 release requires exact versioned effect plans and cannot reconstruct an
-unfinished legacy declaration safely. Confirmed history is preserved.
-Unsupported legacy workspace administrator roles also block cutover. They need
+unfinished legacy declaration safely. Confirmed history is preserved. Unsupported legacy workspace administrator roles also block cutover.
+
+They need
 a reviewed policy disposition; the new direct administrator role would add
 owner-transfer permission. Cutover inventories memberships in already-bound
 organizations as well as organizations that still need conversion.
@@ -102,56 +104,67 @@ After activation, sign in and issue the credential through the ordinary service.
 This does not change the normal prohibition on self-grants or the requirement
 that a grantor hold each delegated action.
 
-Catalog initialization follows verified activation and application readiness.
-When the configured operator is the bootstrap administrator that the cutover
-recorded, the catalog Job issues a credential for that administrator with only
-the installation content actions, a 15-minute lifetime, and a revocation after
-the registration (#2679). Otherwise supply `--catalog-credential-file` with a
-current native bearer proof in an owner-only file. It is separate from the
-identity facts and deployment bundle.
-The catalog Job uses explicit installation scope and checks content registration,
+Catalog initialization follows verified activation and application readiness. When the configured operator matches the recorded bootstrap administrator, the catalog Job issues that administrator a credential (#2679). It permits only installation content actions, lasts 15 minutes, and is revoked after registration. Otherwise supply `--catalog-credential-file` with a
+current native bearer proof in an owner-only file.
+
+It is separate from the
+identity facts and deployment bundle. The catalog Job uses explicit installation scope and checks content registration,
 conformance and publication authority. It does not create or grant a deployment
-actor. Workload IAM alone cannot authorize these application operations.
+actor.
+
+Workload IAM alone cannot authorize these application operations.
 
 Without either proof, the command warns that catalog setup is incomplete while
-leaving the activated application available. Complete DNS and certificate setup, sign in
-as the explicitly granted administrator, issue an ordinary native credential,
-then rerun the same deployment command with its private file. A service proof
+leaving the activated application available. Complete DNS and certificate setup. Sign in as the explicitly granted administrator and issue an ordinary native credential.
+
+Rerun the same deployment command with its private file. A service proof
 works only for an already bound and admitted service principal. Pre-cutover
-personal proofs cannot be reused because activation revokes them. Credential
+personal proofs cannot be reused because activation revokes them.
+
+Credential
 expiry or revocation during setup leaves native pending or unpublished content
 for an exact retry; it does not weaken the runtime gate.
 
 The identity status probe installs namespace, service-account, configuration,
-secret and DNS, metadata-server, Google API and native SQL network prerequisites.
-The complete set is required on a fresh namespace before proxy authentication
+secret and DNS, metadata-server, Google API and native SQL network prerequisites. The complete set is required on a fresh namespace before proxy authentication
 and SQL connection establishment. The probe does not stop application
-workloads. When the probe requires cutover, maintenance validates all workload
+workloads.
+
+When the probe requires cutover, maintenance validates all workload
 inventories before effects. It removes autoscalers, suspends scheduled work,
 stops application workloads and waits for their pods to become terminal or
-absent. Only then does it apply the stopped release and run migration. Policy
+absent. Only then does it apply the stopped release and run migration.
+
+Policy
 services remain available. When model access is disabled, broker retirement
-precedes restoration of broader default egress policy.
-An incomplete probe, database failure, or unknown status aborts deployment
-before workload changes. An absent legacy cutover table is a known
-pre-cutover state. An activated result must also pass the runtime binding check.
-The command must not restart policy workloads to turn an inconclusive probe
-into a successful one. If a credential rotation makes the incumbent runtime
+precedes restoration of broader default egress policy. An incomplete probe, database failure, or unknown status aborts deployment
+before workload changes.
+
+An absent legacy cutover table is a known
+pre-cutover state. An activated result must also pass the runtime binding check. The command must not restart policy workloads to turn an inconclusive probe
+into a successful one.
+
+If a credential rotation makes the incumbent runtime
 unverifiable, the probe stops before any workload restart. Restore a verifiable
 policy binding before retrying the deployment.
 
-For interrupted application publication, restore the policy service first.
-Run `python manage.py reconcile_hierarchy_publications --limit 100` to resume
+For interrupted application publication, restore the policy service first. Run `python manage.py reconcile_hierarchy_publications --limit 100` to resume
 pending account, organization and workspace edges. For a pending event, run
-`python manage.py resume_ctf_event_initialization <event-uuid>`. A trusted operator
+`python manage.py resume_ctf_event_initialization <event-uuid>`.
+
+A trusted operator
 may add `--credential-reference '<current-reference-json>'` when the original
 credential has expired. Supply only the non-secret reference schema; the command
 resolves and checks the current proof and permissions. Add `--abort` to remove
-an unusable pending declaration under current parent authority. Aborting refuses
+an unusable pending declaration under current parent authority.
+
+Aborting refuses
 any event with participant or spare allocation. Default event recovery
 revalidates the original credential and pinned content. Explicit recovery checks
 the supplied current credential and permissions instead of replaying a revoked
-proof. Changed content remains blocked. Neither command substitutes a new owner
+proof.
+
+Changed content remains blocked. Neither command substitutes a new owner
 or grants administrator authority.
 
 The event's **Event staff** card shows an interrupted staff or ownership change.
@@ -166,16 +179,13 @@ cannot be queued, the records remain available for retry.
 Use synthetic fixtures and retain deployment-specific evidence privately.
 Check all of the following before activation:
 
-1. Sustain real cloud/application calls and establish fresh SQL connections
-   beyond proof expiry using the actual attached identity and native clients.
+1. Sustain real cloud and application calls beyond proof expiry. Establish fresh SQL connections using the actual attached identity and native clients.
    Unavailable renewal must fail closed without disclosing provider errors.
 2. Prove intended cloud operations under an explicitly granted operator
    identity and application operations under its separate application grant.
    Inspect inherited IAM/groups, WIF subjects, token minting, `actAs`, and
    cluster-wide namespace/KSA reuse; project-wide pools are not cluster isolation.
-3. Prove unrelated workloads, plugins and guests cannot obtain or impersonate
-   operator identities, read named policy secrets, reach the admin listener,
-   or query application/policy tables outside their SQL duties. Include
+3. Test unrelated workloads, plugins, and guests. Prove denied operator identity access and impersonation, policy-secret reads, admin-listener access, and queries outside their SQL duties. Include
    Kubernetes workload/SA/ConfigMap mutation, exec, bind/escalate and token-request
    authority; absence of Secret `get` alone is insufficient.
 4. Pair runtime tuple/check success with denied store creation, model publication,

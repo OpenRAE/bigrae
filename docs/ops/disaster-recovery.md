@@ -1,7 +1,7 @@
 # Disaster Recovery Runbook—AWS Portal Stack
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/160>
-Design note: [`docs/architecture/aws-disaster-recovery-preflight-160.md`](../architecture/aws-disaster-recovery-preflight-160.md)
+Design note: [`docs/architecture/aws-disaster-recovery-preflight-160.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/aws-disaster-recovery-preflight-160.md)
 Region: `us-east-2` (all portal resources)
 
 This runbook is the operator procedure for recovering portal data and
@@ -11,6 +11,13 @@ the portal upload bucket, Cognito, Terraform state and engine/Pulumi state.
 AWS runtime recovery uses the shared chart on EKS.
 See [EKS operations](portal-eks-operations.md) for cluster and workload recovery.
 GCP disaster recovery remains outside this runbook.
+For GCP, use [RB014](../runbooks/rb014-database-backup-restore.md) and its stated recovery limits.
+
+Before changes, obtain data-owner and platform-owner approval for the recovery point, maintenance window, and cost.
+Use the selected deployment's region, identities, private network, and original Terraform state.
+Restores create billable resources.
+Keep admission and conflicting writers stopped until domain state and provider inventory agree.
+Source checks in #2806 do not requalify the historical recovery exercise.
 
 ## How to read this runbook
 
@@ -38,7 +45,7 @@ object versions.
 | Component | Data class | Owner surface | RTO | RPO | Restore primitive | Alert source | Region policy |
 |---|---|---|---|---|---|---|---|
 | Portal RDS (PostgreSQL) | Authoritative | `modules/portal/rds`, env `db_*` vars | ≤ 2 h (drill: ~53 min) | ~5–10 min (PITR log lag) | PITR or snapshot restore to new instance | RDS event subscription (`backup`/`failure`/`low storage`) → backup-alerts SNS | Same-region; Multi-AZ in prod. Cross-region copy deferred (see [Deferred](#deferred-enhancements)) |
-| Guacamole RDS (PostgreSQL) | Authoritative (session/connection metadata) | `modules/portal/eks`, Guacamole secret and database settings | ≤ 2 h | ~5–10 min (PITR log lag) | PITR or snapshot restore to new instance | RDS event subscription → backup-alerts SNS | Same-region; Multi-AZ in prod |
+| Guacamole database on shared portal RDS | Authoritative (session/connection metadata) | `modules/portal/eks`, Guacamole secret and database settings | ≤ 2 h | ~5–10 min (PITR log lag) | PITR or snapshot restore to new instance | RDS event subscription → backup-alerts SNS | Same-region; Multi-AZ in prod |
 | Portal uploads (S3) | Ephemeral | `modules/portal/s3` | n/a | Accepted loss | None—rebuild on re-upload | n/a | Same-region. Versioning/CRR intentionally off (see [S3 uploads](#portal-uploads-s3)) |
 | Platform workloads | Generated | `platform/charts/shifter`, EKS root | Requalify after restore | n/a (stateless) | Restore prerequisites, then atomic Helm deployment | Kubernetes readiness and rollout checks | Same-region EKS |
 | Cognito user pool | Identity-provider | `modules/portal/cognito` | ≤ 4 h | Best-effort (export cadence) | Terraform recreate pool + reseed users; Django users restore via RDS | Pool deletion protection (prod) | Same-region; managed service |
@@ -48,13 +55,11 @@ object versions.
 | Redis (channel layer) | Generated | `modules/portal/redis` | ≤ 30 min | n/a (ephemeral) | Recreate replication group; clients reconnect | Existing Redis alarms | Same-region |
 | Range compute/state | Generated | engine provisioner, Pulumi state | ≤ 1 h per range | n/a | Re-provision from scenario template + engine/Pulumi state | Range launch-failure alarm | Same-region |
 
-RTO/RPO are **targets**, not guarantees. The portal-RDS row is backed by a real
-PITR drill (see [Tested recovery exercise](#tested-recovery-exercise)—2026-06-24:
-~53 min RTO, ~7 min RPO on dev); the RPO is bounded by RDS transaction-log
-shipping, so confirm the instance's *latest restorable time* during an incident
-rather than assuming it. The other rows are design targets whose evidence log is
-still to be filled—a target is only fully credible once that component's drill
-has run.
+RTO and RPO are targets, not guarantees.
+The 2026-06-24 portal-RDS drill recorded about 53 minutes RTO and 7 minutes RPO on dev.
+It checked infrastructure recovery, not application rows, authorization, or current EKS cutover.
+Confirm the instance's latest restorable time during an incident; RDS transaction-log shipping bounds the recovery point.
+Other rows remain design targets without recorded drills.
 
 ## Per-component recovery procedures
 
@@ -68,8 +73,8 @@ where `db_skip_final_snapshot = true` (dev).
 
 RDS restores never overwrite the source instance—they create a **new**
 instance. Recovery is therefore: restore to a new identifier, validate, then
-repoint the application by updating the DB host (Secrets Manager + SSM) or by
-renaming.
+cut over the managed endpoint through a reviewed infrastructure and EKS deployment plan.
+Current RDS IAM logins, TLS hostname verification, and Terraform ownership must remain valid.
 
 **Point-in-time recovery (preferred—bounded RPO):**
 
@@ -97,40 +102,37 @@ aws --region us-east-2 rds wait db-instance-available \
 `restore-db-instance-from-db-snapshot` with the latest automated or the final
 snapshot (`<name_prefix>-db-final`). Same new-instance-then-cutover flow.
 
-**Cutover:** the application reads the DB host from the
-`shifter-<name_prefix>-db-credentials` Secrets Manager secret. After validating
-the restored instance, update that secret's `host` to the restored endpoint and
-redeploy (SSM) so workers reconnect, OR delete the corrupted instance and rename
-the restored one to the original identifier. Prefer the secret-update path in
-prod so you keep the corrupted instance for forensics.
+**Cutover:** confirm the restored data, migration level, native SQL users, and effective database duties first. Reconcile the restored database with OpenFGA state, object references, pending operations, queues, and live range inventory. Use a reviewed plan to bind the managed endpoint and deploy the exact approved release.
+
+The EKS renderer obtains endpoint metadata and uses per-workload RDS IAM identities. Changing a legacy secret's `host` alone is not a current EKS cutover. Do not use the retired SSM portal deployment or delete the source instance to force a cutover.
+
+Retain the source for investigation until the data owner approves cleanup. If verification fails, keep traffic and writers stopped and use the approved recovery plan.
 
 ### Guacamole RDS (PostgreSQL)
 
-Same primitives and flow as portal RDS, against `<name_prefix>-guacamole-db` and
-the `shifter-<name_prefix>-guacamole-db` secret. Guacamole stores connection
-definitions and session/recording metadata—authoritative for Guacamole, but
-distinct from the portal DB. A portal DB recovery does **not** recover Guacamole;
-run both if both were affected.
+Current EKS uses the portal RDS host with a separate Guacamole database and login.
+The EKS renderer reads its endpoint from Terraform outputs.
+An instance restore therefore recovers both databases at that recovery point.
+Validate each database, its duties, and its consumers separately before cutover.
+The earlier standalone Guacamole RDS and secret names apply only to retained historical deployments.
+Use their exact source revision and state rather than current EKS assumptions.
 
 ### Portal uploads (S3)
 
 Classified **ephemeral** by design—authoritative state lives in RDS, so the
 upload bucket has versioning and cross-region replication intentionally disabled
-(see [`docs/architecture/s3-bucket-hardening-preflight.md`](../architecture/s3-bucket-hardening-preflight.md)
+(see [`docs/architecture/s3-bucket-hardening-preflight.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/s3-bucket-hardening-preflight.md)
 and #143/#219). There is no restore primitive: lost upload objects are
-re-uploaded by users/agents. Do **not** silently flip this bucket to durable to
-make a generic checklist pass—that changes delete/retention semantics for
-every consumer (agent uploads, experiment scripts, CTF attachments) and requires
-revisiting lifecycle, KMS, and ADR exceptions as its own design decision.
+re-uploaded by users/agents. Do not change this bucket to durable storage to satisfy a generic checklist.
+That change affects deletion and retention for agent uploads, experiment scripts, and CTF attachments.
+It requires a separate lifecycle, KMS, and ADR decision.
 
 ### Platform workloads on EKS
 
-Application state lives in managed databases and object stores.
-Recreate failed cluster infrastructure through the isolated EKS root.
-Restore data and secret references before deploying workloads.
-Use attested image digests with the normal `eks-deploy` lifecycle.
-Verify migrations, readiness, workers and authenticated remote access after recovery.
-Do not use retired EC2 portal scripts for workload recovery.
+Application state lives in managed databases and object stores. Recreate failed cluster infrastructure through the isolated EKS root. Restore data and secret references before deploying workloads.
+
+Use attested image digests with the normal `eks-deploy` lifecycle. Verify migrations, readiness, workers and authenticated remote access after recovery. Do not use retired EC2 portal scripts for workload recovery.
+
 Follow [EKS operations](portal-eks-operations.md) for deployment checks and rollback limits.
 
 ### Cognito
@@ -143,10 +145,11 @@ membership are not in RDS**. Pool deletion protection is on in prod.
   configuration (clients, domain, triggers).
 - If user *identities* are lost: there is no point-in-time restore. Reseed from
   the last user export (see cadence in [Deferred](#deferred-enhancements)) or
-  re-invite. Django `auth_user`/`UserProfile`/groups are restored from RDS and
-  are re-synchronized from verified provider claims at next login—so the RDS
-  restore covers app-side authorization; the Cognito reseed covers
-  authentication identity. Treat these as two separate restores.
+  re-invite. RDS restoration recovers application records.
+  Cognito reseeding recovers authentication identities.
+  Current native authority also requires matching provider bindings, principals, and OpenFGA state.
+  Django flags or restored groups alone do not establish authorization.
+  Reconcile these records before enabling sign-in or new range admission.
 
 ### Terraform state (S3 backend)
 
@@ -162,9 +165,8 @@ versioning enabled.
   means no separate DynamoDB lock to reconcile.
 - **Region/bucket loss:** copy the versioned state bucket to a recovery bucket
   (`aws s3 sync` or cross-region `copy-object`) and re-`init` with a
-  `-backend-config` pointing at the recovery bucket. Do not commit live backend
-  bucket/key names into the repo—keep rendered backend configs in `~/.shifter`
-  or CI temp space as the bootstrap script already does.
+  `-backend-config` pointing at the recovery bucket. Keep live backend bucket/key names out of the repository.
+  Keep rendered backend files in private `~/.shifter` storage or CI temporary storage.
 
 State may contain generated secret material; treat recovered state files with
 the same handling as secrets (no world-readable copies, no CI artifacts).
@@ -187,14 +189,15 @@ CMK.
 
 ### Secrets Manager
 
-DB and app credentials are generated by Terraform (`random_password`) and stored
-in Secrets Manager under the portal CMK. The portal DB credentials secret uses
-`recovery_window_in_days = 0` (immediate deletion on destroy, to avoid
-name-collision on recreate); Guacamole uses `guacamole_secrets_recovery_window_days`
-(7 in prod, 0 in dev). Implication: **there is no recovery window to restore a
-deleted secret**—instead `terraform apply` regenerates the secret, after which
-consumers must pick up the new value (SSM redeploy / restart). Never print secret
-values into logs, argv, state exports, or CI artifacts during recovery.
+Current EKS runtime database duties use RDS IAM.
+Password-backed migration, Guacamole, and application secrets remain separate duties.
+The portal data-plane secrets use immediate deletion; EKS-owned Guacamole and OpenFGA secrets use a 30-day recovery window.
+Check the exact resource in the selected source revision and state before recovery.
+
+A secret deleted without a recovery window cannot be restored.
+Terraform can regenerate it, but database values and consumers must remain consistent.
+Refresh affected consumers through the normal EKS deployment.
+Never print secret values into logs, argv, state exports, or CI artifacts during recovery.
 
 ### Redis (channel layer)
 
@@ -226,6 +229,13 @@ instance (PITR always restores to a *new* instance).
 
 **Evidence log:**
 
+The following table and quotation preserve the 2026-06-24 record.
+Revision `5954ab137` retains this record from the original drill change, `c5e4c7579`.
+It is historical evidence, not current recovery instructions.
+<!-- Exact historical evidence; maintained context remains checked. -->
+<!-- vale off -->
+<!-- ste-disable -->
+
 | Date | Operator | Component | Restore primitive | Observed RTO | Observed RPO | Result | Artifact |
 |---|---|---|---|---|---|---|---|
 | 2026-06-24 | Platform operator (dev account) | Portal RDS (dev) `dev-portal-db` | PITR (`--use-latest-restorable-time`) → new `dev-portal-db-drill` (db.t3.medium, single-AZ) | ~53 min to `available` (endpoint live ~3 min in; remainder is the post-restore initial automated backup) | ~7 min (source latest-restorable `02:15:17Z` vs restore decision `02:22:07Z`) | PASS—restored instance reached `available`, engine 16.13 / 100 GB / encrypted matching source, with its own restorable window. Validated at infrastructure level; in-DB row-count validation not performed (private endpoint, no in-VPC session wired for the drill). Drill instance deleted (`--skip-final-snapshot --delete-automated-backups`). | AWS RDS event history for `dev-portal-db-drill`; issue #160 thread |
@@ -241,6 +251,9 @@ instance (PITR always restores to a *new* instance).
 > The drill requires AWS access and creates a temporary billable instance. Re-run
 > it periodically (and after major schema/engine changes) and append a new row.
 
+<!-- ste-enable -->
+<!-- vale on -->
+
 ## Backup-failure monitoring
 
 Backup and snapshot failures surface as **RDS events**, not CloudWatch metrics,
@@ -250,10 +263,8 @@ creates:
 
 - a dedicated customer-managed KMS key whose policy grants the
   `events.rds.amazonaws.com` service principal `kms:GenerateDataKey*` +
-  `kms:Decrypt` (account-scoped). This is required because the shared
-  `aws_sns_topic.alerts` topic is encrypted with the AWS-managed `alias/aws/sns`
-  key, whose policy cannot grant that principal—RDS delivery to it would
-  silently fail.
+  `kms:Decrypt` (account-scoped). The shared `aws_sns_topic.alerts` uses AWS-managed `alias/aws/sns`.
+  That key cannot grant this principal, so RDS delivery to the shared topic would fail.
 - a CMK-encrypted SNS topic `<name_prefix>-db-backup-alerts` with a topic policy
   allowing the RDS event service to publish, and an email subscription gated on
   `alarm_email`.
@@ -293,7 +304,7 @@ the decision is explicit rather than an unexamined gap.
 
 ## References
 
-- Design note: [`docs/architecture/aws-disaster-recovery-preflight-160.md`](../architecture/aws-disaster-recovery-preflight-160.md)
-- S3 hardening decision: [`docs/architecture/s3-bucket-hardening-preflight.md`](../architecture/s3-bucket-hardening-preflight.md)
+- Design note: [`docs/architecture/aws-disaster-recovery-preflight-160.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/aws-disaster-recovery-preflight-160.md)
+- S3 hardening decision: [`docs/architecture/s3-bucket-hardening-preflight.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/s3-bucket-hardening-preflight.md)
 - AWS—encrypted SNS for service events: <https://docs.aws.amazon.com/sns/latest/dg/sns-key-management.html>
 - AWS—RDS event subscriptions: <https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Events.Subscribing.html>

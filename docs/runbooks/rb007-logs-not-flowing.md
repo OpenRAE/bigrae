@@ -3,6 +3,8 @@
 Applicability: GCP Cloud Logging primary; AWS log aggregation optional.
 Operator: security and platform owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 Application, audit, or range-containment records stop arriving at the expected
@@ -19,9 +21,7 @@ controlled log destination, or an external collector reports a gap.
 3. Check logging exclusions, quotas, sink/collector status, IAM, and recent
    configuration changes. Object arrival in GCS does not prove downstream SIEM
    ingestion.
-4. The first GCP release provides structured Cloud Logging containment signals;
-   it does not provide continuous guest host sensors or a repository-owned XDR
-   export sink. Treat those as capability gaps, not failed components.
+4. The current GCP source provides structured Cloud Logging containment signals. Continuous guest host sensors and a repository-owned XDR export sink are absent. Treat those as capability gaps, not failed components.
 5. On AWS, follow the Terraform-owned CloudWatch subscription, Firehose,
    encrypted S3, and notification queue independently from application
    lifecycle queues.

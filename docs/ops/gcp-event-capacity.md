@@ -98,9 +98,7 @@ request increases ahead of the event:
      --vpn-pool <vpn-instance-group>
    ```
 
-   Pass `--vpn-pool` with the `openvpn_pool.instance_group` Terraform output when
-   participant OpenVPN is enabled; the check then compares the pool's machine
-   type, minimum and maximum servers, and CPU target. Without it the pool fields
+   When participant OpenVPN is enabled, pass `--vpn-pool` with Terraform output `openvpn_pool.instance_group`. The check compares machine type, minimum and maximum server counts, and CPU target. Without it the pool fields
    are skipped. Exit 0 and `capacity drift: none` are required. Exit 1 is real drift. Exit 2
    means evidence was missing or malformed and is also a stop condition.
 
@@ -140,13 +138,11 @@ After the client hold completes, the command waits the catalog-authored 240
 seconds for the slowest required Cloud Monitoring series to become visible.
 This wait is part of the gate; do not cancel it and substitute dashboard values.
 
-The run passes only when all 30 real logins bootstrap a versioned Guacamole RDP
-session, reach display synchronization, and hold continuously for at least 120
-seconds. The report must also show p50/p95/p99 bootstrap latency and pass every
-authored threshold: zero tunnel drops, relevant pod restarts, Redis evictions
-and rejects, Cloud SQL failed connections, load-balancer 5xx/504/no-response
-requests, and unhealthy backends; plus bounded guacd CPU, SQL/Redis connection
-utilization, and load-balancer p95. Missing telemetry fails the gate.
+All 30 real logins must create versioned Guacamole RDP sessions. Each session must reach display synchronization and hold continuously for at least 120 seconds. The report must show p50/p95/p99 bootstrap latency and pass every authored threshold.
+
+Zero limits cover tunnel drops, relevant pod restarts, Redis evictions/rejects, and Cloud SQL failed connections. They also cover load-balancer 5xx/504/no-response requests and unhealthy backends. Bounded limits cover guacd CPU, SQL/Redis connection utilization, and load-balancer p95.
+
+Missing telemetry fails the gate.
 
 ## Scale down
 
@@ -160,8 +156,7 @@ Scale-down is deliberately separate from event qualification.
    window to complete. HPA scale-down stabilization is 900 seconds.
 4. Re-render desired state and rerun the drift checker. A clean lower-profile
    drift result is the completion signal. Cloud SQL storage is a non-shrinking
-   floor: a disk retained from a larger profile is accepted when it is at least
-   the selected profile's minimum; an undersized disk still reports drift.
+   floor: a larger retained disk is accepted when it meets the selected profile's minimum. An undersized disk still reports drift.
 
 If scale-up or the gate fails, keep the current profile while investigating.
 Rollback means selecting the last known-good profile and deploying it through

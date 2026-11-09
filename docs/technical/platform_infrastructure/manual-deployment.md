@@ -61,7 +61,7 @@ Run `scripts/bootstrap/deploy.py bootstrap --env <env>` first so the shared S3 s
 ./scripts/bootstrap/deploy.py runners --env dev --profile <dev account profile>
 ```
 
-This provisions the runner network and instances, mints a single-use registration token per runner, registers each runner over SSM, and verifies each one online through the GitHub API.
+This provisions runner networking and instances. It creates one single-use token per runner, registers over SSM, and verifies each runner online through GitHub.
 
 **Reference:**
 
