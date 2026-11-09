@@ -132,8 +132,8 @@ read fallback, customer-specific deployment requirement, feature-flagged
 policy fork, rollback to the personal-workspace model, or partial production
 cutover. S8 is the activation point after all mappings and constraints pass.
 
-The [S8 integration preflight](../architecture/integrated-identity-cutover-preflight-2321.md)
-and [cutover proposal](../design/identity-cutover-2321-proposal.md) define the
+The [S8 integration preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/integrated-identity-cutover-preflight-2321.md)
+and [cutover proposal](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/identity-cutover-2321-proposal.md) define the
 single-authority activation, retained-data dispositions, first-grant bootstrap,
 credential/session invalidation, complete effect-surface inventory and the
 durable journaled boundary between SQL and OpenFGA. A fresh installation starts
@@ -193,7 +193,7 @@ defaults. Supported single-project deployment supersedes ADR-008-R7's mandatory
 distinct dynamic-secret project and migration-only equality rule for S7. The
 explicit project seam and named/prefix-conditioned access controls remain;
 parent-scoped create-only access is not a prefix or separate-project boundary.
-[The GCP integration preflight](../architecture/gcp-native-identity-authority-preflight-2320.md)
+[The GCP integration preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-native-identity-authority-preflight-2320.md)
 records the native renewal, SQL-duty, configuration/admission and OpenFGA trust
 limits. Preshared client authentication and runtime method allowlisting do not
 claim server-enforced per-client model/store privileges. Enforcement must be
@@ -202,7 +202,7 @@ clarification does not approve custom source or move S8 activation.
 
 ### AWS conformance boundary (#2313)
 
-The [AWS conformance preflight](../architecture/aws-identity-conformance-preflight-2313.md)
+The [AWS conformance preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/aws-identity-conformance-preflight-2313.md)
 maps the merged S8 contracts to the existing AWS authentication, installation,
 IAM and runtime boundaries. AWS retains this Account/Principal model and the
 same OpenFGA application authorization semantics. Native cloud authority and
@@ -210,7 +210,7 @@ application admission remain separate explicit grants. #2308 closed as
 complete on 2026-10-29.
 
 The owner approved these AWS bindings and deviations on 2026-10-29. The
-[AWS integration design](../design/aws-native-identity-integration-2313.md)
+[AWS integration design](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/aws-native-identity-integration-2313.md)
 records them:
 
 - Service principals prove identity with an AWS STS `GetWebIdentityToken`
@@ -266,8 +266,8 @@ These changes do not grant a service principal a Django admin session, make
 cloud IAM an application grant, or alter historical audit evidence. Before S8,
 the established gates remain the sole production authority.
 
-The #2317 [preflight](../architecture/account-administration-preflight-2317.md)
-and [coverage inventory](../architecture/account-administration-coverage-2317.md)
+The #2317 [preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/account-administration-preflight-2317.md)
+and [coverage inventory](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/account-administration-coverage-2317.md)
 clarify the integration boundary: human-user lifecycle is not customer Account
 lifecycle, deployment-wide settings are not customer policy, and invitation
 acceptance is not identity resolution by email. Prepared adapters and catalog
@@ -284,7 +284,7 @@ Profile reads must not become authorization for pack, adapter, model-source or
 workspace writes that previously borrowed the legacy org-admin helper. Those
 effects use their own registered actions. Browser discovery distinguishes read
 from edit authority and requires no staff flag or workspace membership.
-The [PLAT-232 activation guidance](../architecture/integrated-identity-cutover-preflight-2321.md#plat-232-organization-profile-activation)
+The [PLAT-232 activation guidance](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/integrated-identity-cutover-preflight-2321.md#plat-232-organization-profile-activation)
 records the prepared credential/commit, evaluator-error, route, client and
 cross-domain integration gaps; preparation alone is not activation evidence.
 
@@ -298,7 +298,7 @@ archive/restore no-ops, strict audit and model-access invalidation without
 deleting or rehoming bound ranges. Creation also needs confirmed SQL-owned
 parent projection through the incumbent authorization boundary; structural
 parent relations are not grants, and SQL/OpenFGA writes are not atomic.
-The [workspace activation guidance](../architecture/workspace-lifecycle-preflight-1940.md#s8-activation-boundary-2321)
+The [workspace activation guidance](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/workspace-lifecycle-preflight-1940.md#s8-activation-boundary-2321)
 records the shared credential/commit, ancestry, error, parsing and live-route
 gaps; the historical S1 role/session rules are not additional S8 vetoes.
 
@@ -354,7 +354,7 @@ dependent job finishes, including first enablement on an existing deployment.
 
 S6 extends the existing CMS/Engine/Mission Control service, durable-operation
 and channel contracts; its integration boundaries are recorded in
-[the content and range authority preflight](../architecture/content-range-authority-preflight-2319.md).
+[the content and range authority preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/content-range-authority-preflight-2319.md).
 Customer content, credentials, installations and preparation use explicit
 resolved account scope. Operator-shared catalog access never implies access to
 customer-private assets or executable installation authority. Account-level
@@ -388,7 +388,7 @@ Credentials expire within 35 minutes, never leave the process, and are revoked
 on every handled exit; expiry bounds proof abandoned by uncatchable process death.
 Durable cleanup continues through the existing exact-generation system authority
 after proof expires or is revoked; it must not borrow or renew that proof.
-The [worker boundary note](../architecture/disposable-trial-workers-boundary-2741.md)
+The [worker boundary note](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/disposable-trial-workers-boundary-2741.md)
 records target-resolution, input-file and failure-output constraints.
 Issuance and revocation use strict native audit. Personal-token
 eligibility, current application policy, SQL scope and original ceilings remain
@@ -605,7 +605,7 @@ delegation checks.
 
 S3's credential integration is documented in
 [the credential boundary and client contract](../technical/shifter_platform/access-credentials.md)
-and [its preflight](../architecture/unified-credential-auth-preflight-2316.md).
+and [its preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/unified-credential-auth-preflight-2316.md).
 It uses Knox and Google/Firebase public SDKs, immutable SQL credential metadata,
 live personal-token eligibility and shared HTTP/Channels session validation.
 Personal credentials retain an immutable exact target in their shared action

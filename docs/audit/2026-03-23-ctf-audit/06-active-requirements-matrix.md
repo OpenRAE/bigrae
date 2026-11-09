@@ -1,5 +1,13 @@
 # ACTIVE Requirements Matrix
 
+> **Applicability** Dated audit reference, 2026-03-23. The audit names no exact source revision.
+> Its original worktree cannot be reconstructed from this record alone.
+> Findings and test counts below are historical evidence, not a current defect or delivery assessment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Status values:
 
 - `Implemented`
@@ -51,3 +59,5 @@ If the goal is to move the active requirement set toward real implementation com
 2. `CTF-009` / `CTF-901` / `CTF-906`: fix CTF range identifier contracts and event scoping.
 3. `CTF-010` / `CTF-1001` / `CTF-1002` / `CTF-1006`: finish the scheduler path end-to-end.
 4. `CTF-401` / `CTF-407` / `CTF-013`: make reporting surfaces match the service layer and requirement text.
+
+<!-- vale on -->

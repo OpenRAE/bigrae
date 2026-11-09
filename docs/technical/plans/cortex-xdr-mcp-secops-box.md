@@ -1,5 +1,13 @@
 # Cortex XDR MCP Server - SecOps Box Integration Plan
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Overview
 
 This plan describes how to integrate a **SecOps Box** (blue team workstation) into Shifter ranges, running the **Palo Alto Networks Cortex MCP Server** to enable AI-powered security analysis against the user's XSIAM/XDR tenant.
@@ -438,3 +446,5 @@ Add to ECS task definition:
 - [Model Context Protocol](https://modelcontextprotocol.io/) - MCP Specification
 - [Cortex XDR API Overview](https://cortex-panw.stoplight.io/docs/cortex-xdr/axpm6b98x4p18-cortex-xdr-api-overview) - API Reference
 - [cortex-xdr-client PyPI](https://pypi.org/project/cortex-xdr-client/) - Python client for direct API access
+
+<!-- vale on -->

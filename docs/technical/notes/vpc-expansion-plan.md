@@ -1,5 +1,13 @@
 # VPC Expansion Plan: Support 1,000+ Concurrent Ranges
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Problem
 Current Range VPC capacity: 255 concurrent ranges (10.1.0.0/16 with /24 subnets)
 Required capacity: 1,000+ concurrent ranges for day 1
@@ -194,3 +202,5 @@ Create `terraform/modules/range/provisioner/lambda/tests/test_create_subnet.py`:
 - Update `CLAUDE.md` with new capacity (16,384 ranges)
 - Update `CHANGELOG.md` with VPC expansion feature
 - Document secondary CIDR blocks and /28 subnet strategy
+
+<!-- vale on -->

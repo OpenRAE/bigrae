@@ -1,5 +1,13 @@
 # CTF Challenge Timing, Completion Rates, and Difficulty Calibration Research
 
+> **Applicability** Dated research reference, compiled 2026-03-18.
+> The original citations, quantities, estimates, and qualifications remain unchanged.
+> This documentation review did not reproduce the studies or establish current product behavior.
+> See the [current architecture](../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 **Date**: 2026-03-18
 **Purpose**: Data-driven reference for calibrating Shifter CTF challenge difficulty, timing, and event design.
 
@@ -357,3 +365,5 @@ If AI assistance is expected or allowed:
 - Nmap Performance: https://nmap.org/book/man-performance.html
 - Penetration Testing Phases: https://www.strikegraph.com/blog/pen-testing-phases-steps
 - PentestGPT v2 / CheckMate: https://arxiv.org/html/2602.17622v1
+
+<!-- vale on -->

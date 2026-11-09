@@ -21,13 +21,16 @@ the contract downstream consumers code against. The single-page application
 types in `frontend/src/api/schema.d.ts` are a generated projection of the
 committed artifact, never a second hand-written schema.
 
-Regenerate the artifact and the derived types after any API change:
+Regenerate the artifact and derived types after an API change.
+Run either command group from the repository root.
 
 ```bash
 # Backend artifact (also validates and fails on any warning).
 cd shifter/shifter_platform
 uv run python manage.py api_contract
+```
 
+```bash
 # Artifact plus the SPA TypeScript projection.
 cd shifter/shifter_platform/frontend
 npm run gen:api
@@ -59,8 +62,8 @@ These break an existing consumer and are prohibited in `v1`:
   field, component, or security scheme;
 - making an input required, narrowing accepted input, or changing a parameter's
   location or serialization;
-- widening a response type, making a response field optional or nullable, adding
-  a value to a closed response union, or changing a field's meaning or units;
+- widening a response type or making a response field optional or nullable;
+- adding a value to a closed response union or changing a field's meaning or units;
 - changing success or error status codes, media types, pagination shape, the
   error-envelope shape, stable error codes, or operation identifiers;
 - changing an operation from public to authenticated, removing an authentication
@@ -69,14 +72,12 @@ These break an existing consumer and are prohibited in `v1`:
 
 A breaking change normally ships as a parallel `/api/v2/` surface with aligned
 version metadata and a migration note. The existing `/api/v1/` stays available
-through its documented migration window. A separately accepted ADR may remove
-a complete product surface without retaining that product in another major; an
-exact retirement manifest projects only those paths and response properties
-from the trusted baseline before the compatibility comparison. Correcting an
-inaccurate published schema is still a compatibility change for clients that
-coded against it; resolve
-generator inaccuracies before the first publication rather than treating a later
-correction as routine drift.
+through its documented migration window. A separately accepted ADR may remove a complete product surface without retaining that product in another major.
+Before comparison, an exact retirement manifest projects only those paths and response properties from the trusted baseline.
+
+Correcting an inaccurate published schema is still a compatibility change for clients that coded against it.
+Resolve generator inaccuracies before the first publication.
+A later correction is not routine drift.
 
 A narrowly justified exception belongs in `docs/adr/exceptions.yaml` with an
 owner, an expiry, the affected surface, and migration evidence. A pull-request
@@ -95,20 +96,17 @@ runs on every pull request that touches the platform:
 - **Single-page-application types gate.** Regenerating `schema.d.ts` from the
   committed artifact must produce no change, so the published contract and the
   shipped types cannot diverge.
-- **Breaking-change gate.** A pinned, checksum-verified OpenAPI-aware checker
-  (`oasdiff`) compares the committed artifact against the base branch's already
-  published artifact, resolved from the trusted base commit that the same pull
-  request cannot rewrite. A consumer-breaking change to `v1` fails the build
+- **Breaking-change gate.** A pinned, checksum-verified OpenAPI checker (`oasdiff`) compares the committed artifact with the base branch's published artifact.
+  The trusted base commit supplies that artifact. The same pull request cannot rewrite it. A consumer-breaking change to `v1` fails the build
   unless its exact removed elements are covered by accepted whole-feature
   retirement metadata.
 
 ## Scope of the current contract
 
-The committed `v1` artifact covers the surface consumed by the single-page
-application: bootstrap, dashboard, CMS catalog and scenario editor, Mission
-Control, and CTF. Endpoints without a single-page-application
-consumer are excluded from generation until their consumer lands, at which point
-their routes are added to the contract additively. The CTF surface is excluded
-until its workspace ([#1372](https://github.com/Brad-Edwards/bigrae/issues/1372))
-is built. Exclusion affects only schema generation; runtime routing and behavior
-are unchanged.
+The committed `v1` artifact includes bootstrap, dashboard, CMS, Mission Control, and CTF operations.
+CTF routes are mounted in `config/api_urls.py` and appear in `openapi/v1.json` under `shifter/shifter_platform/`.
+The earlier CTF exclusion pending [#1372](https://github.com/Brad-Edwards/bigrae/issues/1372) no longer describes the generated artifact.
+
+Schema generation filters the mounted runtime surface.
+The artifact therefore does not establish a complete runtime route inventory.
+Exclusion from generation does not remove a runtime route or change its behavior.

@@ -66,7 +66,7 @@ other workspace operation. Organization and workspace authority revisions are
 retained in sponsored grants. Source registration does not itself confer source-use or spending
 authority. Provider/authentication selection is independent of compute hosting;
 live edits require revision checks, grant fencing and retained accounting under
-ADR-060. The [source-management preflight](../architecture/model-access/source-management-preflight-2243.md)
+ADR-060. The [source-management preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/source-management-preflight-2243.md)
 records the incumbent validators and integration gaps. This clarifies intended
 architecture; current packaging restrictions remain until implementation and
 qualification, and no provider parity is asserted.
@@ -113,7 +113,7 @@ is not parity evidence. Delivery and proof owners are listed in the
 Registry checks validate documentation structure and existing import rules.
 They do not prove this proposed runtime boundary.
 
-The [M05 broker preflight](../architecture/model-access/broker-preflight-2122.md)
+The [M05 broker preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/broker-preflight-2122.md)
 applies this boundary to the existing listeners, shared contracts, Engine
 credentials/accounting and deployment validators. It records gaps in bounded
 stream cleanup, credential abuse controls, workload-identity claim binding,
@@ -121,7 +121,7 @@ safe startup diagnostics and drain/readiness evidence. It introduces no new
 authority or implementation claim; ADR-064's direct posture is not a fallback
 for a range requiring broker enforcement.
 
-The [M05 runtime](../architecture/model-access/broker-runtime.md) applies these
+The [M05 runtime](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/broker-runtime.md) applies these
 findings through bounded headers/bodies, closed control replies, immutable GCP
 subject IDs, locked credential rotation budgets, isolated synchronous control
 capacity and database waits, immediate upstream cancellation and signal drain.
@@ -130,7 +130,7 @@ never serialize rejected configuration. Real local TLS and PostgreSQL tests
 exercise the boundary alongside import enforcement. These are local proofs, not
 the live IAM/network/load evidence required to adopt this ADR's support claims.
 
-The [M06 GCP packaging preflight](../architecture/model-access/gcp-packaging-preflight-2123.md)
+The [M06 GCP packaging preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/gcp-packaging-preflight-2123.md)
 records the repository integration gates for broker-only runtime inventory,
 effective NetworkPolicy isolation, exact-target IAM, explicit range egress
 and the real deployment/provenance path. These apply this decision without
@@ -152,7 +152,7 @@ the application runtime and mount that catalog in runtime consumers before
 enabling access. Direct cluster patches or a render-only check are not
 qualification evidence.
 
-The [AWS packaging contract](../architecture/model-access/aws-packaging.md)
+The [AWS packaging contract](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/aws-packaging.md)
 applies the same broker boundary to EKS: exact-subject IRSA, separate regional
 invocation roles, direct range peering, private DNS and TLS passthrough with
 preserved client IPs, and exact private STS/Bedrock endpoint egress. The shared
@@ -189,7 +189,7 @@ The provider egress proxy has no workload identity or platform configuration.
 It admits fixed HTTPS provider/identity origins, pins public DNS answers, and
 permits only exact configured AWS private endpoint CIDRs as exceptions. Broker
 and proxy remain excluded from additive generic private-service policies.
-See [source management](../architecture/model-access/source-management.md) for
+See [source management](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/source-management.md) for
 implementation and qualification limits.
 
 The workload IAM guard accepts model-source credential reads only for the control

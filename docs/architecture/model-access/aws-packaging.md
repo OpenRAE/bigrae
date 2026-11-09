@@ -1,5 +1,14 @@
 # AWS model broker deployment
 
+> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+> These retained contracts do not authorize broker activation or establish live qualification.
+> Independently supported native source and range controls retain their own boundaries.
+> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 The EKS installer accepts closed `settings.model_broker` intent and a separate
 `settings.model_broker_runtime` provider/accounting binding. Transport and IAM
 metadata enter Terraform; public CA trust and versioned Kubernetes Secret
@@ -78,3 +87,5 @@ explicitly disable that protection before destroying the load balancer. It uses
 TCP passthrough for guest TLS, so AWS NLB access logging is unavailable (AWS only
 logs TLS listeners); broker request metadata and VPC flow logs remain the audit
 surfaces. See the narrowly scoped ADR-004-R11 scanner exception.
+
+<!-- vale on -->

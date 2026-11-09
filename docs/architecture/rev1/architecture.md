@@ -1,5 +1,13 @@
 # REV1 Architecture And Roadmap Review
 
+> **Applicability** Dated review reference, 2026-07-11. The recorded baseline is `cb3668ea66de45bdab66933c675f944357e60943`.
+> Findings and test results below apply to that review, not the current system.
+> This documentation review did not repeat the original verification.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## What is sound
 
 The project has made several correct architectural choices:
@@ -147,3 +155,5 @@ With 417 open issues, milestone membership is not prioritization by itself. The
 REV1 program issue should identify the small set of blockers above, explicitly
 defer non-blocking enhancements, and close or rescope stale issues whose premise
 has already changed (for example #530).
+
+<!-- vale on -->

@@ -73,7 +73,7 @@ provider revocation latency is asserted here.
 
 ## M06 deployment enforcement
 
-The [GCP package](../architecture/model-access/gcp-packaging.md) supplies
+The [GCP package](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/gcp-packaging.md) supplies
 disabled Helm resources and chart-derived Actions artifacts, digest-bound
 release verification, drain settings and versioned TLS references. The GCP
 script quality lane installs the same pinned Helm binary to test the actual

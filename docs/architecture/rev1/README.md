@@ -1,5 +1,13 @@
 # Shifter Platform Review 1
 
+> **Applicability** Dated review reference, 2026-07-11. The recorded baseline is `cb3668ea66de45bdab66933c675f944357e60943`.
+> Findings and test results below apply to that review, not the current system.
+> This documentation review did not repeat the original verification.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Review baseline
 
 - Repository: `Brad-Edwards/bigrae`
@@ -112,3 +120,5 @@ this review.
 The review did not perform live AWS/GCP/Kubernetes authorization simulation,
 DAST, authenticated browser testing, event load testing, or destructive range
 validation. These limits are material and are reflected in the proposed work.
+
+<!-- vale on -->
