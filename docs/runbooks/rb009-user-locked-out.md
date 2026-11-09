@@ -4,6 +4,8 @@ Applicability: Identity Platform primary; Cognito/OIDC and local accounts where
 configured. Operator: authorized organization administrator. Verified:
 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A user cannot authenticate, an account is suspended, MFA or provider recovery

@@ -8,7 +8,7 @@ contract. Return to the [current-state handbook](../architecture.md).
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
 `raes==11.0.1` and `raes-env-packs==7.2.3` in its
-[package manifest](../../../shifter/shifter_platform/pyproject.toml)
+[package manifest](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
 parser added for #2090, do not change these pins.
@@ -62,7 +62,7 @@ retired CyberScript or ACES path.
 The target stays one released RAES contract, with backend capabilities advertised
 only when their admitted shapes have real guest effects and readback evidence.
 The current
-[backend manifest](../../../shifter/shifter_platform/shared/raes/backend-manifest.json)
+[backend manifest](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/shared/raes/backend-manifest.json)
 and realization envelope bound claims. Parsing a field, retaining a projection,
 or passing unit conformance is not proof of live scenario support. Private packs
 and executable adapters remain separately owned and authorized.
@@ -88,6 +88,11 @@ Cutover waits until retired provisioning work is terminal and fails closed when
 it cannot establish that condition. Rollback is an operator-controlled restore
 of the preceding release and matching pre-cutover database backup, with workers
 stopped. There is no in-process mixed-schema rollback flag.
+
+Before restoration, obtain data-owner approval and record the exact source, image digests, backup, and retained range inventory.
+Keep old and new writers stopped during reconciliation.
+Verify identity, policy, object references, cleanup authority, and provider resources before reopening admission.
+Do not infer rollback safety from an atomic Helm upgrade or a source-only test.
 
 The [hard-cut decision](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/raes-migration-adr.md)
 and [ADR registry](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/adr/index.yaml)
@@ -115,4 +120,4 @@ live tenant qualification require explicit user approval.
 The 11.0.1 update (#2834) uses the released fix for bounded verification of
 large secret plans. It retains the existing verification rules and adds
 10.7.2 to the cleanup-only producer list. See the
-[adoption design](../../architecture/large-plan-release-adoption-2834.md).
+[adoption design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/large-plan-release-adoption-2834.md).

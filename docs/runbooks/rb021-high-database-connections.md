@@ -3,6 +3,8 @@
 Applicability: Cloud SQL primary; RDS optional. Operator: data and platform
 owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 Database connection utilization is high, clients are refused, or connection
@@ -18,9 +20,7 @@ pool exhaustion degrades portal and worker operations.
 3. Compare Kubernetes replica counts and restart loops with database sessions.
    Django uses `CONN_MAX_AGE=0`; unexpected persistence or growth needs root
    cause analysis.
-4. Check blocked/long transactions, migration activity, leaked clients, proxy
-   reconnect storms, and provider limit changes without exposing query text or
-   user data in incident records.
+4. Check blocked or long transactions, migration activity, leaked clients, proxy reconnect storms, and provider limit changes. Keep query text and user data out of incident records.
 
 ## Resolution
 

@@ -56,33 +56,26 @@ The environment setting is an operator/backend-policy input for new
 provisioning, not scenario metadata or ownership evidence for teardown. The
 closed range-instantiation policy decides which launches may use each backend;
 see
-`docs/technical/platform_infrastructure/range-instantiation-policy.md`. Once a
-request has been admitted to the GCP VM range-cell contract, the
-provisioner refuses to route it to GDC, GKE, or the legacy Terraform path; an
-operator must not treat `gdc` as a per-request fallback for a contract-tagged
-live-fire user range.
+`docs/technical/platform_infrastructure/range-instantiation-policy.md`. An admitted GCP VM cell request cannot fall back to GDC, GKE, or legacy Terraform. Do not use `gdc` to recover a failed live-fire cell.
 
 ## Scenario-to-cell contract
+
+This reference describes the retained Shifter cell and compatibility boundary.
+Current authored scenarios use the pinned RAES contract through `shared.raes`.
+`raes_gcp_apply.py` realizes the serialized RAES plan.
+Retained `RangeSpec` readers do not establish another supported authoring language.
 
 The boundary is the closed, versioned `shifter.gcp-vm-range-cell` contract in
 `shifter/shifter_platform/shared/range_cells.py`. Its responsibilities are:
 
-- The scenario producer owns VM count and roles, containers or nested
-  Kubernetes, topology and connectivity, ports and DNS, fixed addresses,
-  images, startup/bootstrap behavior, services, and validation. The existing
+- The scenario producer owns VM roles/count, container or nested-Kubernetes intent, topology, connectivity, ports/DNS, and fixed addresses. It also owns images, startup/bootstrap behavior, services, and validation. The existing
   wrapped `RangeSpec` is validated by its canonical Pydantic contract before the
   Engine persists it as an immutable SHA-256-bound artifact. The standalone
   provisioner verifies that producer-minted digest without loading the scenario
   schema graph; the platform does not copy scenario fields into a universal
   placement model.
-- The platform owns admission to the approved GCP/GCE live-fire capability,
-  operation and cell identity, allocated network bindings, isolation, resource
-  membership and ownership, lifecycle/recovery state, logical access, and
-  cleanup. Allocated CIDRs are bindings and are not written back into the
-  scenario artifact. A later destroy rehydrates those bindings from the
-  platform allocation table when available and otherwise uses the validated
-  authored membership and deterministic resource identity; it never requires a
-  blank CIDR to pass request validation.
+- The platform owns admission, operation/cell identity, network allocations, isolation, resource membership/ownership, lifecycle/recovery state, logical access, and cleanup. Allocated CIDRs are bindings and are not written back into the
+  scenario artifact. Destroy restores bindings from platform allocations when available. Otherwise it uses validated authored membership and deterministic resource identity. Request validation never requires a blank CIDR.
 - The outer request and result reject unknown fields and versions. A digest or
   backend mismatch, malformed/duplicate membership, or missing/foreign network
   binding fails before any Compute Engine or Secret Manager mutation. Results
@@ -94,7 +87,7 @@ The boundary is the closed, versioned `shifter.gcp-vm-range-cell` contract in
   setup keys, and host/bootstrap credential references never enter the closed
   access result.
 
-`gcp_range_cell_scenario.py` is the compatibility adapter for the current
+`gcp_range_cell_scenario.py` is the compatibility adapter for the retained
 legacy `RangeSpec`; it owns role/image/host-access interpretation. A future
 scenario artifact can use a new discriminator/version adapter while retaining
 the same cell lifecycle contract. See
@@ -110,48 +103,44 @@ Secret Manager, or bootstrap mutation. Their stable failure classes are:
   capability, currently NGFW range attachment or a configured image profile
   whose `bootstrap_capability` has no GCE realizer. Fix the implementation; do
   not retry on GDC or pods.
-- `prerequisite`: the approved route is valid but a required input is absent,
-  including a missing exact image mapping or a domain-intent DC whose
-  pre-promoted image metadata does not exactly match the authored DNS and
-  NetBIOS identity. Fix configuration or the scenario artifact, then launch a
+- `prerequisite`: the approved route lacks a required input. Examples include an absent exact image mapping or a promoted DC image whose DNS/NetBIOS metadata differs from authored intent. Fix configuration or the scenario artifact, then launch a
   new range.
 - `identity-or-policy`: the persisted backend/purpose pair is not admitted for
   a normal live-fire range, notably `gdc` with `live_fire`.
 
 The current built-in support/evidence projection is in
-[`docs/scenarios/index.md`](../scenarios/index.md#gcp-vm-range-cell-support).
-It is documentation only; do not reproduce it as a scenario-ID branch or CMS
+[`docs/scenarios/index.md`](../scenarios/index.md#gcp-vm-range-cell-support). It is documentation only; do not reproduce it as a scenario-ID branch or CMS
 allowlist. Destroy renders with image and provision-capability checks disabled,
 so a newly unsupported composition can still be cleaned up deterministically.
+
 That recovery also tolerates a missing CIDR binding when
 provision failed before allocation: deletion uses deterministic owned-resource
-names and remains idempotent. If the launcher reports the canonical command
-grammar denial, verify that the base and Helm `restrict-provisioner-jobs`
-policies accept the optional UUID-validated `--operation-id` suffix; do not
-disable admission or remove the suffix.
+names and remains idempotent. For a command-grammar denial, check `restrict-provisioner-jobs` in the base and Helm policies. Both must accept the optional UUID-validated `--operation-id` suffix.
+
+Do not disable admission or remove the suffix.
 
 ## Required configuration
 
 Set the GCE range-cell inputs in the deployment input bundle:
 `settings.range_cells` in `bigrae.yaml` and the image roles in
 `range-images.json`
-([GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md#author-and-publish-the-deployment-input-bundle)).
-A CI deployment sets the matching variables in `docs/dev/deploy-secrets.md`
-("GCE range-cell backend variables"). The deploy precondition gate requires
-`settings.range_cells.zone` and the `linux` and `dc` images. Add the other guest
-image profiles that the authored topology requires.
-By default, range guests receive a keyless, least-privilege model-access
-identity (ADR-064): the range host service account carries a predict-only Vertex
-role and the provisioner attaches it to guests through Workload Identity, with no
-key material minted or delivered. Guests stay identity-less only when the broker
+([GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md#author-and-publish-the-deployment-input-bundle)). A CI deployment sets the matching variables in `docs/dev/deploy-secrets.md`
+("GCE range-cell backend variables"). The GCE deploy precondition requires `settings.range_cells.zone` and the `linux` image role.
+Add other roles when the selected scenario needs them.
+
+Add the other guest
+image profiles that the authored topology requires. Guests receive a keyless, least-privilege model identity by default (ADR-064). The range host account has predict-only Vertex authority. Workload Identity attaches it without generating or delivering key material. Guests stay identity-less only when the broker
 is the guest model path (`MODEL_BROKER_GUEST_VIP` set), which is optional
-(ADR-067). Plugin installation and compatibility are separate from range
+(ADR-067).
+
+Plugin installation and compatibility are separate from range
 readiness; see the
-[external runtime boundary](../architecture/external-scenario-runtime-design.md).
+[external runtime boundary](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/external-scenario-runtime-design.md).
 
 The deployment `bigrae.yaml` must also set
 `settings.dynamic_secret_project_id` to the pre-existing, deployment-only
-range-secret project. This is distinct from the guest compute project. Broker
+range-secret project. It may equal the platform project in the supported single-project topology.
+A separate project is an operator-selected boundary, not a mandatory second project. Broker
 model invocation may use that project, the platform project, or another
 administrator-selected project while retaining separate least-privilege
 identities. New guest, RAES/GDC, VM-Series
@@ -167,7 +156,7 @@ When GDC access/image inputs are enabled, declare the
 full versionless refs under `settings.provisioner_static_secret_refs`. Do not add
 a broad Secret Manager role to compensate for a missing entry. The migration,
 permission-probe, quota, audit-cost, and revocation procedure is documented in
-[`platform/terraform/gcp/README.md`](../../platform/terraform/gcp/README.md#deployment-scoped-range-secret-project).
+[`platform/terraform/gcp/README.md`](https://github.com/OpenRAE/bigrae/blob/dev/platform/terraform/gcp/README.md#deployment-scoped-range-secret-project).
 
 When `settings.range_cells.project_id` is empty, the runtime renderer sets
 `GCP_RANGE_CELL_PROJECT_ID` to the project parsed from the range VPC self-link.
@@ -192,37 +181,32 @@ The range backend then targets the real range project.
 
 ### Shared-VPC NAT capacity and event egress
 
+Provider limits were checked on 2026-11-09; confirm actual quota and address headroom before an event.
+
 Non-zero-egress range subnets are enrolled explicitly in a provisioner-owned
 regional Cloud Router/NAT. The provisioner serializes Router changes and removes
 each subnet from NAT before deleting it. This Router is separate from the
 Terraform-owned migration-bridge NAT; do not configure both to cover the same
-subnet. A `none` range is never enrolled, and a conflicting all-subnet NAT
-causes admission to fail rather than relying on a firewall-only deny.
-An existing range whose already-created subnets are still explicitly listed on
+subnet.
+
+A `none` range is never enrolled, and a conflicting all-subnet NAT
+causes admission to fail rather than relying on a firewall-only deny. An existing range whose already-created subnets are still explicitly listed on
 the Terraform bridge can replay without duplicate NAT enrollment. Before
 destroying such a range, remove those subnet links from the Terraform bridge
 through that environment's deploy; destroy refuses while the bridge
-still owns them. New subnets are never admitted onto the bridge.
+still owns them.
 
-Cloud NAT currently allows [50 explicit subnet ranges per gateway and 50
-gateways per Router](https://docs.cloud.google.com/nat/quota); a VPC can have up
-to five Cloud Routers per region. The provisioner uses one regional Router and
-shards explicit subnets across its gateways, so plan against *subnets per
-range*, including recovery spares, not only participant count. Its 2,500
-explicit-subnet theoretical ceiling is not a guaranteed event size: NAT
-[port/IP allocation](https://docs.cloud.google.com/nat/docs/ports-and-addresses),
-subnet/IP space, VMs, addresses, image launch rates, and the event capacity
-assessment can bind first. Review provider quota and NAT utilization before a
-large event; shared NAT is a regional failure domain. A capacity or conflicting
-scope refusal must be corrected at the source/configuration boundary, not by
-adding an all-subnet gateway or a one-off range firewall rule.
+New subnets are never admitted onto the bridge.
 
-For CTF participant and managed-spare launches, the event workspace supplies
-the egress policy while each range remains owned by its participant or spare
-account and bound to that account's authorized workspace. Workspace policy
-changes are audited and affect subsequent range reservations only. Already
-launched ranges retain their pinned mode; a recovery spare whose mode no longer
-matches the event is refused before the old participant range is torn down.
+[Cloud NAT limits](https://docs.cloud.google.com/nat/quota) allow 50 explicit subnet ranges per gateway and 50 gateways per Router. A VPC permits five Cloud Routers per region. The provisioner uses one regional Router and distributes explicit subnets across its gateways.
+
+Count subnets per range, including recovery spares, rather than participants alone. The theoretical ceiling is 2,500 explicit subnets, not a guaranteed event size. [NAT ports/IPs](https://docs.cloud.google.com/nat/docs/ports-and-addresses), subnet space, VMs, addresses, image launch rates, and event capacity may limit it first.
+
+Review provider quota and NAT utilization before a
+large event; shared NAT is a regional failure domain. Correct capacity or scope failures at the source/configuration boundary. Do not add all-subnet NAT or a one-off firewall rule.
+
+The CTF event workspace supplies egress policy for participant and managed-spare launches. Each range retains its participant/spare account ownership and authorized workspace binding. Workspace policy
+changes are audited and affect subsequent range reservations only. Launched ranges retain their pinned mode. A recovery spare with a different event mode is refused before participant-range teardown.
 
 ### Range audit telemetry
 
@@ -251,14 +235,16 @@ Instances without an `ami_key` continue to use those four defaults. An instance
 with an `ami_key` requires an exact entry in
 `GCP_RANGE_IMAGE_KEY_PROFILES_JSON` (`settings.range_cells.image_key_profiles`)
 under its derived profile class. Each entry
-is complete. Normal image profiles declare image, machine type, disk size, disk
+is complete.
+
+Normal image profiles declare image, machine type, disk size, disk
 type, and typed bootstrap capability. Exact machine-image profiles declare the
 machine image, machine type, host-management login, participant
 container/account, participant-readiness contract, and the immutable image's
 readiness-manifest digest. Pre-promoted domain profiles also declare their baked
-DNS and NetBIOS identity. Unknown keys and keys placed under the wrong class
-fail before any Compute or secret client is created; they never fall back to
-the default role image. The adapter routes host access and bootstrap from this
+DNS and NetBIOS identity.
+
+Unknown keys or keys in the wrong class fail before Compute or secret-client creation. They never fall back to a default role image. The adapter routes host access and bootstrap from this
 trusted profile metadata, never from a scenario or image-name literal.
 
 Profiles resolved for either legacy `RangeSpec` instances or RAES nodes that
@@ -339,21 +325,16 @@ readiness. After installing the participant credential, the provisioner runs
 `/usr/local/libexec/shifter-participant-readiness --contract participant-readiness/v1 --manifest-sha256 <digest>`
 
 inside the configured container as the configured participant user. The image
-owns that fixed executable and manifest. It must exercise the real browser
-launcher with disposable state, validate browser trust/start state/clean home
-and projected material, emit no sensitive output, and return nonzero on any
-mismatch. BigRAE discards its output and exposes only bounded pass/failure
-codes. Do not qualify a fresh profile for participant use from the marker
-alone; the immutable image, participant canary, content-readback, egress, and
-shared-service evidence required by
-`docs/architecture/nested-ctf-participant-readiness-preflight-1910.md` must also
-pass before the range is handed off.
+owns that fixed executable and manifest. It must exercise the real browser launcher with disposable state.
 
-The participant-qualification record must bind the exact machine-image resource,
-profile key/fingerprint, canary contract and manifest digest; content-readback
-and participant-canary reason codes; the exact opt-in web rule and regional NAT
-(plus a non-opt-in negative); and the generation-bound model grant, broker
-destination, broker-only invocation identity, and post-destroy revocation. Keep
+Check browser trust, startup state, clean home, and projected material. Emit no sensitive output. Return nonzero on mismatch.
+
+BigRAE discards its output and exposes only bounded pass/failure
+codes. The marker alone cannot qualify a fresh participant profile. Require immutable-image, participant-canary, content-readback, egress, and shared-service evidence before handoff.
+
+See `docs/architecture/nested-ctf-participant-readiness-preflight-1910.md`.
+
+Bind qualification to the exact machine image, profile key/fingerprint, canary contract, and manifest digest. Include content-readback and participant-canary reason codes. Record opt-in web rules, regional NAT, and a non-opt-in negative. For historical broker qualification, include generation-bound model grants, broker destination/invocation identity, and post-destroy revocation. Keep
 URLs, CA material, mission content, model bodies, receipt bytes, guest output,
 IAM policy dumps, and provider response bodies out of that evidence. The current
 boot marker alone is not a release qualification record.
@@ -365,9 +346,7 @@ DNS dot).
 The provisioner records a bounded key/profile fingerprint on each new VM and
 in existing provider metadata. Reconciliation rejects a keyed same-name VM if
 that binding differs from the current plan. Destroy remains independent of the
-mapping. Configure the keyed map and validate both keyed and unkeyed launches
-before returning the default Kali/DC variables from a temporary single-scenario
-workaround to their generic families. Cross-project image families require the
+mapping. Configure the keyed map and test keyed and unkeyed launches. Then restore generic default Kali/DC families after any temporary scenario-specific override. Cross-project image families require the
 narrow image-project grant for the provisioner GSA; do not broaden portal or
 launcher identities.
 
@@ -380,19 +359,14 @@ import.
 ## Service accounts
 
 By default, range guests receive a keyless, least-privilege model-access
-identity (ADR-064). On GCP the range host service account carries a predict-only
-Vertex custom role (`aiplatform.endpoints.predict`) in the platform project,
-attached to guests through Workload Identity; it is least privilege and never
-grants cloud management, project storage, secrets, another range, or the portal
-API. Exact preconfigured machine-image profiles use the bounded range-host
+identity (ADR-064). The range host account has `aiplatform.endpoints.predict` in the platform project. Guests obtain it through Workload Identity. It grants no cloud management, storage, secrets, peer-range, or portal authority. Exact preconfigured machine-image profiles use the bounded range-host
 identity pool selected by the range allocation slot.
 
-The keyless-direct identity and the ADR-059 broker are mutually exclusive per
-range: when the broker is the guest model path (`MODEL_BROKER_GUEST_VIP` set) the
-provisioner leaves guests identity-less; the keyless identity is attached only
-when no broker guest path is configured. Enforcement is optional (ADR-067): no
-deployment must run the broker to give ranges model access, and keyless-direct is
-the default for all ranges, including CTF ranges. No provider service-account
+Historical broker and keyless-direct modes are mutually exclusive per range. With `MODEL_BROKER_GUEST_VIP`, the provisioner leaves guests without an attached identity. Otherwise it attaches the keyless identity.
+
+ADR-068 parks the broker; do not enable it from this retained compatibility description. ADR-067 does not require broker enforcement. Keyless-direct is the default for all ranges, including CTF; ADR-068 keeps broker operation unsupported.
+
+No provider service-account
 keys or shared model keys are minted into guests; legacy key revocation remains
 part of teardown.
 
@@ -413,10 +387,7 @@ Every participant connects to one shared OpenVPN server pool per deployment
 - One external passthrough load balancer on a reserved address is the only
   listener: UDP 1194, mutual TLS with tls-crypt. Every profile names that
   address. Client-IP affinity keeps a client on one server.
-- Before a server admits a client, it asks the portal. The portal admits the
-  certificate only while its range is `READY` for the same owner and generation
-  before the access deadline, keeps one active session per range (a newer
-  connection replaces the older one), and returns the target address and ports.
+- Before a server admits a client, it asks the portal. The portal admits the certificate only for a `READY` range with matching owner and generation before the access deadline. One session is active per range; a new connection replaces the old one. Admission returns the target address and ports.
   The server then allows that client to reach only that address and those ports
   and pushes only that route.
 - Clients ping every 5 seconds and reconnect after 30 seconds of silence, so an
@@ -441,9 +412,7 @@ Enable it per deployment:
    pool, its PKI, and its release record. It renders the pool wiring into the
    runtime environment. See step 6 of the GCP deployment in
    [`docs/technical/dev/setup.md`](../technical/dev/setup.md).
-3. Size the pool through `settings.shared_service_capacity_profile`. Each profile
-   plans 25 participants per `e2-standard-2` server, keeps one spare server above
-   the planned count, scales out at 30% CPU, and allows twice the minimum. Check
+3. Size the pool through `settings.shared_service_capacity_profile`. Each profile plans 25 participants per `e2-standard-2` server and one spare server. It scales out at 30% CPU and permits twice the minimum server count. Check
    the live values with `scripts/gcp/check_event_capacity_drift.py --vpn-pool`.
 
 Each deploy scans the pool image of its release and records its digest. A CI
@@ -456,12 +425,12 @@ deploy also creates the tenant CA once and renews the pool server certificate
 30 days before it expires; private keys never enter Terraform state.
 
 Warm-pool generations carry no VPN; a claim mints the claimant's profile. A CTF
-spare uses the event owner's principal without a fabricated login identity.
-That principal can authenticate, including when it is human. The spare stays
-outside participant VPN delivery until recovery binds the exact participant;
-recovery must replace and revoke any earlier profile before delivering the new
-binding. A range whose owner could have downloaded a live profile never changes
-owner in place without that revocation boundary. EC2 is tracked
+spare uses the event owner's principal without a fabricated login identity. That principal can authenticate, including when it is human.
+
+A spare receives no participant VPN delivery until recovery binds the exact participant. Replace and revoke any previous profile before delivering its new binding. A range whose owner could have downloaded a live profile never changes
+owner in place without that revocation boundary.
+
+EC2 is tracked
 by #2481.
 
 ## Baking a new pre-promoted DC image
@@ -483,9 +452,7 @@ by nothing:
   silently promoting.
 - **Runtime bootstrap/rename**: `_should_run_dc_bootstrap_plan` always returns
   `False` (no provider default, no `DC_BOOTSTRAP_VIA_SETUP_PLAN` env escape
-  hatch). The DC `BootstrapPlan` renames the guest, which would mutate a
-  pre-promoted DC's AD identity; the provisioner instead gets SSH to the DC from
-  the guest metadata startup script (host key + `administrators_authorized_keys`).
+  hatch). A DC `BootstrapPlan` rename would change a promoted DC's AD identity. Instead, the provisioner establishes SSH through guest startup metadata for host keys and `administrators_authorized_keys`.
 
 The generic template requires an explicitly selected profile containing the DNS
 name, NetBIOS name, image purpose and content seed path. The checked-in example

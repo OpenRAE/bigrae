@@ -78,9 +78,7 @@ should be disabled (`export AWS_PAGER=""`) or `aws` calls will block on
 
 The tracked tfvars select the managed runner network, so a new account needs
 no network input. To use an existing network instead, it must be one that range
-provisioning cannot deploy into, such as the portal VPC private tier. The
-runner subnet needs outbound egress for GitHub, ECR, SSM, and AWS APIs through
-NAT, an approved proxy, or VPC endpoints plus internet egress for GitHub. For
+provisioning cannot deploy into, such as the portal VPC private tier. The runner subnet needs egress to GitHub, ECR, SSM, and AWS APIs. Use NAT, an approved proxy, or service endpoints with separate GitHub internet access. For
 the portal VPC option, use the portal Terraform outputs as the source for
 `vpc_id` and `subnet_id`:
 
@@ -99,19 +97,13 @@ overrides `*.auto.tfvars`. See
 [`docs/architecture/github-runner-placement-preflight-1437.md`](../../../../docs/architecture/github-runner-placement-preflight-1437.md).
 
 Moving an existing runner fleet onto the managed network replaces every runner
-instance, because the instance subnet changes. Treat it as a migration: drain
-active jobs, keep a recovery path that does not depend on the fleet being
-replaced, and re-register the replacement runners. See the runbook:
+instance, because the instance subnet changes. Drain active jobs before migration. Retain a recovery path outside the fleet being replaced, then register replacement runners. See the runbook:
 [`docs/dev/aws-runner-provisioning-runbook.md`](../../../../docs/dev/aws-runner-provisioning-runbook.md).
 
 ## Health monitoring
 
 Each runner has CloudWatch alarms for EC2 instance/system status checks,
-sustained CPU (hang proxy), and runner-service liveness. A systemd timer
-(`shifter-runner-health.timer`, installed by `user_data`) publishes the
-`actions.runner.*` service state as the `Shifter/RunnerHealth:RunnerServiceActive`
-metric; its alarm treats missing data as breaching so a hung host that stops
-reporting alarms instead of going silent. Alarms notify the
+sustained CPU (hang proxy), and runner-service liveness. The `shifter-runner-health.timer` systemd timer is installed by user data. It publishes service state as `Shifter/RunnerHealth:RunnerServiceActive`. Missing data is breaching, so an unresponsive host cannot fail silently. Alarms notify the
 `shifter-github-runner-alerts` SNS topic
 (`terraform output runner_alerts_topic_arn`); set `alarm_email` to subscribe an
 inbox, or subscribe Slack/Teams to the topic. The system-status alarm can
@@ -142,11 +134,7 @@ re-registering, or replacing a runner.
 ### Automated (recommended)
 
 The bootstrap `runners` subcommand applies this root and registers every runner
-end-to-end (issue #1433). It provisions the dedicated runner VPC by default,
-mints a single-use token **per runner**, delivers it inside one JSON SSM
-`--parameters` body (so the operator log redactor masks the whole blob and no
-token lands in Terraform state, user data, SSM Parameter Store, Secrets Manager,
-or logs), and verifies each runner online via the GitHub API:
+end-to-end (issue #1433). It provisions the dedicated runner VPC, creates a single-use token per runner, and registers through JSON SSM `--parameters`. The operator log redacts that payload. Tokens avoid Terraform state, user data, and secret stores, but remain in AWS CLI arguments and retained SSM input. Review this transport exposure before use. GitHub readback must report every runner online:
 
 ```bash
 ./scripts/bootstrap/deploy.py runners --env dev --profile aws-dev
@@ -190,7 +178,7 @@ gh api "repos/$REPO/actions/runners" --jq '.runners[] | {name, status}'
 
 ## Gotchas
 
-### `./bin/installdependencies.sh` doesn't recognise Amazon Linux 2023
+### `./bin/installdependencies.sh` does not recognise Amazon Linux 2023 { #bininstalldependenciessh-doesnt-recognise-amazon-linux-2023 }
 
 The bundled dependency installer matches on `/etc/os-release`'s `ID`
 and aborts with `Can't detect current OS type` because AL2023 reports

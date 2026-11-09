@@ -3,6 +3,8 @@
 Applicability: GCP Artifact Registry primary; AWS ECR optional. Operator:
 release/platform owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 Registry storage cost or image count grows, cleanup policy fails, or old images
@@ -12,9 +14,7 @@ appear eligible for deletion.
 
 1. Inventory repositories, digests, tags, creation/download time, size, and
    retention policy. Work only from digests; tags are mutable references.
-2. Build a protected set from running portal/worker/provisioner/Guacamole
-   workloads, current and rollback releases, release evidence, provisioner
-   inputs, and image-promotion channels.
+2. Protect images used by running portal, worker, provisioner, and Guacamole workloads. Include current and rollback releases, release evidence, provisioner inputs, and image-promotion channels.
 3. On AWS, Terraform lifecycle policy retains the configured recent image set.
    Confirm policy status and exclusions before manual action.
 4. GCP Artifact Registry currently has no repository-owned cleanup policy. A

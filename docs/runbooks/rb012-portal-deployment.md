@@ -1,7 +1,9 @@
 # RB012: Portal installation or deployment
 
-Applicability: protected GCP tenant environments and AWS dev where configured.
+Applicability: GitHub-less GCP releases and configured AWS contributor deployments.
 Operator: release/platform owner. Verified: 2026-10-23.
+
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
 
 ## Symptom
 
@@ -10,17 +12,16 @@ portal revision does not match the approved release.
 
 ## Investigation
 
-1. Record the intended Git revision, exact image digests, selected protected
-   environment, approved configuration revision, Terraform plan/run, and last
-   successful deployment. Confirm that the selected environment is one of the
-   workflow's closed choices.
-2. Validate `shifter.yaml` without exposing referenced secrets:
+1. Record the intended Git revision, image digests, and approved configuration revision.
+   Record the deployment target, Terraform plan/run, and last successful deployment.
+   For a contributor deployment, confirm a permitted workflow target.
+2. For a source-based contributor deployment, validate `bigrae.yaml` without reading secret values:
 
    Read-only command:
 
    ```bash
-   uv run --project shifter/installation shifter-config validate shifter.yaml
-   uv run --project shifter/installation shifter-config doctor shifter.yaml
+   uv run --project shifter/installation bigrae-config validate bigrae.yaml
+   uv run --project shifter/installation bigrae-config doctor bigrae.yaml
    ```
 
 3. Inspect the latest `Deploy` workflow gates: quality, provider validation,
@@ -38,18 +39,22 @@ portal revision does not match the approved release.
 
 ## Resolution
 
-Dispatch `.github/workflows/deploy.yml` from the approved revision and select
-the approved protected environment. For first bootstrap, follow the published
-GCP installation path and its certificate/DNS gate. For rollback, deploy an
-exact previously verified revision and digest through the same workflow; do not
-retag images or apply local Helm/Terraform. Verify rollout, running digests,
-managed certificate, `/health/`, worker heartbeats, and post-deploy smoke.
+For installation, follow [Install on Google Cloud](../getting-started/install-gcp.md).
+Use a verified release that contains the deployer image.
+Releases through v4.1.1 do not contain that image.
+
+For a configured AWS contributor deployment, dispatch `.github/workflows/deploy.yml` from the approved revision.
+Select its permitted `aws-dev` target and protected environment.
+Do not retag images or apply local Helm or Terraform for incident recovery.
+Verify rollout, running digests, managed certificate, `/health/`, worker heartbeats, and post-deploy smoke.
 
 For a GCP deployment without GitHub, run `gcp-deploy` from the deployer image
 of the approved release
 ([GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md)). Use
 `--first-install` until DNS points at the ingress address. To roll back, run
-the deployer image of an earlier verified release.
+the deployer image of an earlier verified release only when its schema is compatible.
+An atomic Helm rollback does not restore database, identity, policy, or infrastructure state.
+Use [RB015](rb015-database-migrations.md) before a rollback that affects data.
 
 ## Prevention
 
@@ -59,6 +64,4 @@ and rollback against a clean owned environment. See [Install on Google
 Cloud](../getting-started/install-gcp.md) and the
 [GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md).
 
-Escalate when the target is absent from the closed workflow choices, the exact
-artifact identity is unavailable, a gate is bypassed, or rollback would require
-a data downgrade.
+Escalate if the target is unavailable, the artifact identity is unknown, or a gate is bypassed. Also escalate rollback that requires a data downgrade.
