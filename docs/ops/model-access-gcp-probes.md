@@ -9,7 +9,7 @@ admission/enrollment path are available in the attested release image.
 ## Project and identity onboarding
 
 A model project may be the platform project, the dynamic-secret project, or a
-dedicated project ([#2243 source-management boundary](../architecture/model-access/source-management-preflight-2243.md)).
+dedicated project ([#2243 source-management boundary](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/source-management-preflight-2243.md)).
 Broker and invocation identities stay distinct when projects coincide.
 
 Each model project needs billing enabled and the `shifter-deployment` label
@@ -35,15 +35,17 @@ uv run --project scripts/gcp python scripts/gcp/probe_model_broker.py \
 ```
 
 The probe checks ownership, billing, APIs, live invocation identity, absence
-of user-managed keys, exact-target token permission and invocation permission.
-It requires conclusive denials for management/key/actAs and representative
+of user-managed keys, exact-target token permission and invocation permission. It requires conclusive denials for management/key/actAs and representative
 compute, secret, storage and endpoint-administration permissions. Unknown or
-conditional Policy Troubleshooter results fail qualification. The operator
-needs permission to inspect effective policy, including inherited policy.
-Project-level negatives do not prove absence of resource-specific grants:
+conditional Policy Troubleshooter results fail qualification.
+
+The operator
+needs permission to inspect effective policy, including inherited policy. Project-level negatives do not prove absence of resource-specific grants:
 M10 must also inventory applicable resource policies and test actual denied
 resources. A successful probe never proves regional model availability or
-absence of every possible permission. Retain only its bounded result and
+absence of every possible permission.
+
+Retain only its bounded result and
 reviewed policy inventory, not credentials or raw provider responses.
 
 ## Private transport and source preservation
@@ -115,17 +117,19 @@ through Terraform or ordinary chart values. Renew before expiry and alert on
 renewal failures. Change root Secret references to roll replicas; do not assume
 that updating mounted bytes reloads the server TLS context.
 
-For CA replacement, distribute overlapping trust first, roll both servers and
-guests, verify new certificates and active streams, then remove old trust
-only after old connections and pods drain. Probes must remain independent of
+For CA replacement, distribute overlapping trust first. Roll servers and guests, then verify new certificates and active streams. Remove old trust only after old connections and pods drain.
+
+Probes must remain independent of
 paid providers. Measure bounded drain and revocation with a synthetic stream;
 150 seconds of pod grace includes endpoint withdrawal and the design's
 120-second request maximum. Missing renewal, source evidence or authorization
-service means admission stays disabled. Rollback drains/disables model access
+service means admission stays disabled.
+
+Rollback drains/disables model access
 and never restores guest provider credentials.
 
 Attach project/IAM onboarding, safe transport case results, TLS rotation,
 revocation/stream evidence and exact release identity to #2127. Operator
 approval of those results precedes cohort enablement. See the
-[deployment package](../architecture/model-access/gcp-packaging.md) and
+[deployment package](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/gcp-packaging.md) and
 [operating design](model-access.md) for ownership and migration boundaries.

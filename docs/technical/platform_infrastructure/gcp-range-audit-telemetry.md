@@ -1,11 +1,9 @@
 # GCP range audit telemetry contract
 
-Issue #2535 makes three provider logging controls default-on for GCP ranges:
-VPC Flow Logs on range subnets, Cloud NAT logging on range egress, and Vertex AI
-Data Access audit logs. For operator settings, log locations, limits, and cost,
+Issue #2535 enables three controls by default: range-subnet VPC Flow Logs, range-egress Cloud NAT logs, and Vertex AI Data Access audit logs. For operator settings, log locations, limits, and cost,
 see the [operator guide](../../ops/gcp-range-audit-telemetry.md). For the design
 guardrails, see the
-[architecture preflight](../../architecture/gcp-range-audit-telemetry-preflight-2535.md).
+[architecture preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-range-audit-telemetry-preflight-2535.md).
 
 ## One policy, two projections
 
@@ -85,14 +83,17 @@ VPC (`shifter-range-<id>`). Ownership decides the result:
   with the deployed runtime policy converges it.
 
 A failed readback in either project is `FAIL`, never an empty deployment. The
-script never prints provider payloads, IAM members, or command output.
-`gcp_deploy_stages.verify_range_telemetry` runs it in the infrastructure stage
-of `gcp-deploy`, after Terraform apply. It uses `settings.range_cells.project_id`
+script never prints provider payloads, IAM members, or command output. `gcp_deploy_stages.verify_range_telemetry` runs it in the infrastructure stage
+of `gcp-deploy`, after Terraform apply.
+
+It uses `settings.range_cells.project_id`
 as the range-cell project, or the deployment project when that setting is
 empty. The `prepare` job in `_gcp-dev.yml` runs the same stage; its CI adapter
 maps `vars.GCP_RANGE_CELL_PROJECT_ID` onto that setting. The deploy identity
 reads the platform project through `roles/resourcemanager.projectIamAdmin` and
-`roles/compute.networkAdmin`. A separate range-cell project must grant the
+`roles/compute.networkAdmin`.
+
+A separate range-cell project must grant the
 deploy identity Compute read access; otherwise the readback fails.
 
 ## Tests

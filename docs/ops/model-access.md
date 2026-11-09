@@ -2,11 +2,7 @@
 
 Current support: [ADR-068](../adr/068-model-access-broker-parked.md) parks the
 broker; keyless-direct is the supported guest model path. These broker procedures
-are historical implementation guidance and do not authorize activation. The
-[#2274 replacement evaluation](../architecture/model-access/gateway-replacement-evaluation-2274.md)
-defines qualification for the selected LiteLLM OSS gateway, including
-deployment-owned key rotation, automatic private TLS renewal and fresh bootstrap;
-it is not an installed service.
+are historical implementation guidance and do not authorize activation. The [#2274 evaluation](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/gateway-replacement-evaluation-2274.md) defines qualification for the selected LiteLLM OSS gateway. It covers deployment-owned key rotation, automatic private TLS renewal, and fresh bootstrap. The gateway is not installed.
 
 ADR-066's identity cutover closes the retained sharing API and its composition
 entry points before membership reads or publication effects. They remain
@@ -71,11 +67,9 @@ These are initial release acceptance targets to measure, not current SLOs:
 | Request bounds | Default total 120 s, connect 5 s, stream idle 30 s, control timeout 2 s and continuation checks at most 5 s apart. A profile may tighten these; larger bounds require measured qualification and revised maximum charge. |
 | Payload and process bounds | Initial 1 MiB decompressed JSON request, 32 KiB headers, 1 MiB maximum SSE event and 256 KiB streaming buffer per connection; reject excess. Pin depth/field-count/response limits in the adapter contract and test the selected client's useful context. |
 | Reconciliation | Expired dispatch/settlement leases discovered within 60 s; unknown charges remain reserved or conservatively spent, never automatically refunded. |
-| Recovery | Restore exercise target: accounting RPO at most 5 min and admission recovery within 60 min after database availability, with mandatory fencing and reconciliation. Older restored state cannot simply regain remaining budget. |
+| Recovery | Restore exercise target: accounting RPO at most 5 min and admission recovery within 60 min after database availability, with mandatory fencing and reconciliation. Older restored state cannot regain remaining budget. |
 
-Sizing inputs are measured active ranges, concurrent requests per range,
-request arrival rate, output rate, mean/p95 duration, token upper bounds,
-provider pool limits, broker CPU/memory and Engine/DB request latency. For
+Sizing inputs include active ranges, concurrent requests per range, arrival/output rates, and mean/p95 duration. Also measure token bounds, provider pool limits, broker CPU/memory, and Engine/DB latency. For
 `N` active ranges with at most `C` connections each, test at least `N*C`
 broker transports and the corresponding reserve/settle plus continuation
 traffic (up to `N*C/5` continuation checks per second at full utilization).
@@ -92,16 +86,12 @@ reassessment; do not qualify only fixed event-sized snapshots.
 
 Use bounded tests at the declared cohort and a controlled overload case.
 Report the maximum sustainable cohort from evidence. The design makes no
-200-desktop guarantee. HPA may respond to active streams and resource usage
-within operator limits; scale-down drains connections for the request bound
-and then terminates them with retained accounting. There is no transparent
+200-desktop guarantee. HPA may respond to active streams and resource usage within operator limits. Scale-down drains connections for the request bound, then terminates them with accounting retained. There is no transparent
 stream migration or post-crash replay.
 
 ## Scenario model needs and required-access admission (M02, #2119)
 
-A scenario declares its logical model need through a BigRAE-owned, staff-authored
-overlay (`ScenarioModelNeeds`), not by editing the RAES pack and not through the
-deploy-time mounted catalog. Author it per registered scenario pack:
+A BigRAE-owned, staff-authored `ScenarioModelNeeds` overlay declares logical model needs. Neither the RAES pack nor the deploy-time mounted catalog supplies that declaration. Author it per registered scenario pack:
 
 - Key it by `scenario_id` and set `authored_package_digest` to the exact pack
   content digest the need is authored against. Map each `workload_role` to a
@@ -119,15 +109,12 @@ expected concurrency and per-participant request/input/output demand plus the
 allowed strategy. This is capacity/sizing input constrained by the scenario
 need; it cannot name a provider, account, region, shard, credential, or price.
 
-Required-access failure is deliberate and visible. A launch of a scenario with a
-required model need is refused before any range is dispatched, across every
-launch family (participant, spare, wave, standalone, recovery-rebuild, and
-warm-claim activation), when: model access is unconfigured, the referenced
-profile is absent, the pack digest is stale, a required capability is
-unavailable, the profile intersection is empty, the sharing overlap conflicts,
-or the range posture is zero-egress (`deny-all`/`none`) for required external
-model use. An unavailable sharing authority yields an indeterminate outcome that
-also refuses the launch (fail closed) rather than proceeding. Optional model
+Required-access failure is deliberate and visible. Every launch family checks required model needs before range dispatch. This includes participant, spare, wave, standalone, recovery-rebuild, and warm-claim activation.
+
+Denials include unconfigured model access, absent profiles, stale pack digests, unavailable capabilities, empty profile intersections, and conflicting sharing overlaps. Required external model use also rejects zero-egress (`deny-all`/`none`) ranges. An unavailable sharing authority yields an indeterminate outcome that
+also refuses the launch (fail closed) rather than proceeding.
+
+Optional model
 access that cannot be satisfied is admitted as an explicit visible absence and
 does not block. The refusal carries a bounded reason code and no raw figures or
 rejected values. The admitted private-broker exception for a zero-egress range
@@ -152,12 +139,10 @@ capacity while draining. Expect fail-closed load shedding when worker/rotation
 budgets are exhausted, and preserve unknown holds after interrupted transport.
 Use authored error codes and accounting state for diagnosis, not SDK wire DEBUG
 logging, request dumps or captured prompts. The exact runtime bounds and local
-test posture are recorded in the [broker contract](../architecture/model-access/broker-runtime.md).
+test posture are recorded in the [broker contract](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/broker-runtime.md).
 No live provider, source-preservation, load or restore qualification is claimed.
 
-Before an event, inventory provider model enablement, supported regions,
-quota-pool dimensions, observed usage/freshness, expected input/output rates,
-shard weights, capacity reservations and reviewed price validity. Test one
+Before an event, inventory model enablement, regions, quota-pool dimensions, and observed usage/freshness. Record expected input/output rates, shard weights, capacity reservations, and reviewed price validity. Test one
 approved call per configured alias/project. Distinguish published limits,
 observed limits, deployment caps and unobservable/dynamic capacity. Quota
 values and model access are deployment prerequisites, not universal defaults;
@@ -170,9 +155,7 @@ alerts are useful independent detection, not hard admission. Enable provider
 billing alerts at operator-chosen thresholds and reconcile bounded aggregate
 usage against local accounting without exporting prompt bodies.
 
-Budget for two broker replicas, internal load balancing, DNS/TLS, metrics/log
-retention, PostgreSQL I/O/storage, network/NAT egress, token issuance, optional
-provider committed throughput and inference/tool charges. Avoid quoting a
+Budget for two broker replicas, internal load balancing, DNS/TLS, metrics/log retention, and PostgreSQL I/O/storage. Include network/NAT egress, token issuance, optional provider committed throughput, and inference/tool charges. Avoid quoting a
 fixed monthly price without deployment quantities and current tariffs.
 Cross-project sharding has IAM and quota administration cost; separate keys
 do not buy additional quota. Reuse the existing deployment's infrastructure
@@ -180,20 +163,14 @@ until measured load requires a reviewed change.
 
 ### Request accounting and reconciliation (M04)
 
-Engine reserves a conservative upper charge against every applicable spend,
-rate and concurrency account before a request can dispatch, and settles the
-proven usage once against the request's immutable price snapshot. A timeout,
+Before dispatch, Engine reserves a conservative upper charge against every applicable spend, rate, and concurrency account. It settles proven usage once against the request's immutable price snapshot. A timeout,
 disconnect, missing usage or crash after possible provider work leaves the
-request `unknown` and retains the conservative hold; the request never replays.
-The request-accounting reconciliation pass rides the existing Engine reconciler
-(no separate daemon): at each obligation's deadline it moves an unknown hold
-from reserved to conservatively spent at the same value and closes expired
-revocation fences. It never refunds a hold on a timer, invokes a provider, or
+request `unknown` and retains the conservative hold; the request never replays. Request accounting uses the existing Engine reconciler, without a separate daemon. At each obligation's deadline, it converts unknown reserved holds into conservatively spent amounts without changing their value. It also closes expired revocation fences.
+
+It never refunds a hold on a timer, invokes a provider, or
 replays a request. Later authoritative provider evidence adjusts a charge once
-as an append-only correction. Revoking a grant fences in-flight dispatch leases:
-their transport status stays `revoking` until the lease expires or is
-acknowledged, then becomes `revoked`; settlement of the original liability
-remains charged to its original account set and is never transferred.
+as an append-only correction. Grant revocation fences in-flight dispatch leases. Transport status stays `revoking` until lease expiry or acknowledgement, then becomes `revoked`. Original liability remains charged to its original accounts; settlement never transfers it.
+
 Operators recover a stuck backlog by confirming the reconciler is scheduled and
 inspecting reconciliation-obligation counts, never by clearing holds manually.
 
@@ -231,43 +208,33 @@ for the selector and allocation rules.
 
 ## Observability and retention
 
-Expose bounded metrics for admissions/denials by reason, active transports,
-reserved/spent units, unknown charges, lease age, revocation latency,
-allocation skew, provider throttles, price/observation age, refresh failures,
-control latency, audit backlog and cleanup residuals. Use bounded catalog
+Expose bounded admission/denial metrics by reason, active transports, reserved/spent units, unknown charges, and lease age. Include revocation latency, allocation skew, provider throttles, and price/observation age. Also expose refresh failures, control latency, audit backlog, and cleanup residuals. Use bounded catalog
 IDs for metric labels; range/subject/request IDs belong in access-controlled
 audit/search records, not high-cardinality metrics. Prompts, responses, tool
 arguments, tokens and raw provider errors are forbidden in all telemetry.
 
 Engine commits decision and accounting audit intent before dispatch. If that
-durable write fails, deny the call. External audit archival failure may
-continue only while the existing durable outbox is healthy and within its
-operator-set backlog bound; alert on lag and stop new model admission when
-that bound is exceeded. Do not create a broker-local best-effort audit store.
+durable write fails, deny the call. External audit archival failure may continue only with a healthy durable outbox within its operator-set backlog bound. Alert on lag. Stop new model admission when the bound is exceeded. Do not create a broker-local best-effort audit store.
 
-Initial deployment defaults: retain credential hashes only until expiry plus
-24 hours for bounded abuse investigation; keyed retry fingerprints/request
-detail for 24 hours after settlement; body-free accounting/audit and evidence
-for 90 days unless the deployment's approved policy requires otherwise.
+Initial retention defaults are credential hashes until expiry plus 24 hours, and keyed retry fingerprints/request detail until 24 hours after settlement. Body-free accounting, audit, and evidence stay for 90 days unless approved deployment policy requires otherwise. Credential-hash retention supports bounded abuse investigation.
+
 Never expire unresolved charges, cleanup references or obligations merely
 because the normal retention period elapsed. Aggregate retained costs before
 deleting individual detail. Restrict exports to authorized operators; log
-their access. Document and test backup retention and deletion separately.
+their access.
+
+Document and test backup retention and deletion separately.
 
 ## Rollout and legacy migration
 
-1. **Inventory:** identify all live range generations, stored full Vertex
-   secret/key references, shared-key source consumers, AWS role consumers,
-   model projects and effective IAM. Inventory metadata/references only;
+1. **Inventory:** identify live range generations and stored full Vertex secret/key references. Inventory shared-key source consumers, AWS role consumers, model projects, and effective IAM. Inventory metadata/references only;
    do not copy credential values into reports. Reconcile #1446 with the
    selected scenario so a new guest-key path is not introduced in parallel.
 2. **Expand disabled:** ship additive Engine schema, policy catalog, broker,
    identity/egress and operation projection behind deployment configuration.
    Existing ranges continue their recorded path. No new model grant is issued
    until the broker prerequisites and strict admission checks pass.
-3. **Validate:** run synthetic transport/accounting tests, effective IAM and
-   root-context network negatives, token rotation/revoke and no-body leakage
-   tests on disposable ranges. #2083's secret creation boundary must be
+3. **Validate:** run synthetic transport/accounting tests and effective IAM/root-context network negatives. Test token rotation/revocation and absence of body leakage on disposable ranges. #2083's secret creation boundary must be
    proven for any remaining bootstrap/legacy-secret operations.
 4. **Canary:** create a fresh GCE range from the selected released image and
    scenario. Bootstrap broker-only client access, prove useful tool/model
@@ -278,9 +245,7 @@ their access. Document and test backup retention and deletion separately.
    observations, exercise overload and failure, and publish sanitized evidence.
 6. **Drain legacy:** move participants through fresh admitted generations;
    do not silently replace credentials in running guests. Coordinate shared
-   GSA revocation across every consumer. Remove dynamic Vertex key creation
-   and host secret-reader grants from the broker path; preserve original
-   reference deletion until every old generation is retired.
+   GSA revocation across every consumer. Remove dynamic Vertex key creation and host secret-reader grants from the broker path. Preserve original reference deletion until every old generation is retired.
 7. **Contract:** after no live legacy references and no effective legacy
    invocation, remove obsolete config and grants under the migration issue.
    #681's GCP readiness cannot rely on a disabled secret with a still-working
@@ -326,7 +291,7 @@ uses the new admission epoch; old guest tokens cannot regain authority.
 
 ### Allocation evidence
 
-The M03 [allocation boundary](../architecture/model-access/allocations.md)
+The M03 [allocation boundary](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/allocations.md)
 persists quota commitments and pending grants before dispatch. Operators can
 use `model-access-policy/v2` to declare explicit provider-pool shard membership;
 v1 remains readable without changing existing snapshot digests. A provider-pool
@@ -347,25 +312,15 @@ absence rather than reusing its old catalog. Local development launches drain
 the production-shaped outbox after commit, so a rollback must produce neither a
 launch row nor a subprocess.
 
-An initial optional launch while policy is unavailable is also durable: the
-operation records a catalog-free absence and cannot gain access on replay after
-policy is enabled. Routine Range status updates refresh selector evidence but do
+An optional launch without available policy records a durable catalog-free absence. Replay cannot add access after policy is enabled. Routine Range status updates refresh selector evidence but do
 not revoke generation-stable launch authority. Owner, workspace, destroy and
 delete mutations remain revoking events and require fresh preparation.
 
 ### Release evidence
 
-The release bundle records repository/image/pack/client/SDK/chart digests,
-configuration and policy/price revisions, provider/project/region references
-under protected access, measured cohort/limits, effective IAM/network probe
-results, allocation/rate/spend contention results, first/last stream timestamps
-around revoke, cancellation/unknown-cost disposition, cleanup inventory and
-restore results. It contains no credential or prompt payload.
+The release bundle records repository, image, pack, client, SDK, and chart digests. It records configuration, policy/price revisions, protected provider/project/region references, and measured cohorts/limits. Evidence includes effective IAM/network probes and allocation/rate/spend contention. It also records first/last stream timestamps around revocation, cancellation/unknown-cost decisions, cleanup inventory, and restore results. It contains no credential or prompt payload.
 
-Prove useful participant model/tool use, multiple GCP projects and aliases,
-budget exhaustion, stale generation, wrong subject, expired grant, token
-refresh, worker loss, denied management/peer/metadata access, unavailable
-dependencies, price expiry, event stop and full teardown. Positive controls
+Prove useful participant model/tool use, multiple GCP projects/aliases, budget exhaustion, stale generations, wrong subjects, and expired grants. Test token refresh, worker loss, and denied management/peer/metadata access. Include dependency loss, price expiry, event stop, and full teardown. Positive controls
 must show that allowed operations worked before negative results are credited.
 Independent provider readback is required; a script's success exit or a mock
 is not cloud evidence. Feed the qualified GCP slice to #2091 and keep each
@@ -391,7 +346,7 @@ from applied Terraform identities. Provider credentials are obtained by workload
 identity and never supplied in this configuration.
 
 Activation requires an enabled v3 catalog with input/output prices and a zero-cost
-`request` component for token counting. The [v3 example](../architecture/model-access/example-policy.v3.json)
+`request` component for token counting. The [v3 example](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/example-policy.v3.json)
 is synthetic and disabled: replace its model, quota, price and identity values
 with approved deployment data before use. Infrastructure can remain installed
 with model access disabled; both executable Deployments then have zero replicas.
@@ -418,7 +373,7 @@ existing broker Vertex path into a qualified invocation and usage adapter.
 [ADR-059](../adr/059-range-model-access-broker.md),
 [ADR-060](../adr/060-model-access-allocation-accounting.md),
 [ADR-061](../adr/061-model-access-operations-qualification.md)
-and the [Vertex adapter preflight](../architecture/model-access/vertex-adapter-preflight-2124.md)
+and the [Vertex adapter preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/vertex-adapter-preflight-2124.md)
 retain their authority. Live qualification evidence is owned by
 [#2334](https://github.com/Brad-Edwards/bigrae/issues/2334); local rendering,
 transport tests and a successful count are not live invocation proof.
@@ -427,12 +382,7 @@ transport tests and a successful count are not live invocation proof.
 
 - **Count-based pre-dispatch charge bound.** A paid request against a counting
   provider is admitted on a free count bound (rate and concurrency are held, zero
-  spend) so a completed retry deduplicates before the provider is counted. After
-  the provider-proven count, the broker commits the input reservation to that
-  proven count and the output reservation to the request's `max_tokens`, then
-  dispatches the paid call. Routine small prompts are no longer denied because the
-  reservation assumed the entire context window; hard spend, input and output
-  ceilings and the immutable price schedule still apply. A provider with no free
+  spend) so a completed retry deduplicates before the provider is counted. After the provider proves the input count, the broker commits that count as the input reservation. It reserves output at `max_tokens`, then dispatches the paid call. Routine small prompts avoid reservations for the entire context window. Hard spend, input/output ceilings, and the immutable price schedule still apply. A provider with no free
   count endpoint keeps the conservative full-context reservation.
 - **Bounded token reuse.** Impersonated Vertex access tokens are cached only in
   broker memory, keyed by the complete approved target (authentication, principal,
@@ -445,32 +395,21 @@ transport tests and a successful count are not live invocation proof.
   client-visible, and authentication or server failures surface as unavailable.
   The broker performs no provider retry, redirect or fallback, and an ambiguous
   dispatch retains a conservative liability rather than replaying a billable call.
-  Upstream connect, write, pool and stream-idle limits are bounded separately
-  under the absolute request/grant deadline so a useful streamed response is not
-  cut at a short read while an idle upstream still cannot stall a worker slot.
+  Connect, write, pool, and stream-idle limits have separate bounds within the absolute request/grant deadline. Useful streams avoid a short-read cutoff. Idle upstream connections cannot retain worker slots indefinitely.
 
 ### Enablement prerequisites per target
 
-Before enabling a Vertex target, record and validate: an enabled v3 catalog with
-input and output prices plus a zero-cost `request` component for counting; the
-approved project, inference region, explicit token-count geography (never
-`global`), pinned publisher model and version, and an invocation principal that
-belongs to the approved project; the real quota-pool identity, shared by every
-model version or service account that draws on the same provider pool (identity
-never multiplies capacity); and the current price, geography and retention
-prerequisites. Provider credentials are obtained by keyless workload
+Before enabling a Vertex target, validate an enabled v3 catalog with input/output prices and a zero-cost `request` component for counting. Record the approved project, inference region, and explicit token-count geography; never use `global`. Pin the publisher model/version and an invocation principal in the approved project.
+
+Record the real quota-pool identity shared by all versions and service accounts using that pool. Identity never multiplies capacity. Validate current price, geography, and retention prerequisites.
+
+Provider credentials are obtained by keyless workload
 impersonation and never supplied in configuration.
 
 ### Installed client-settings contract
 
-The pinned released client's installed configuration is the default that must let
-a provisioned range work with no participant-side repair: it emits only the
-qualified Anthropic Messages subset the broker admits (pinned `anthropic-version`,
-no unqualified `anthropic-beta` or other cost-changing default features). An
-unsupported cost-changing feature fails before a billable effect rather than being
-silently stripped; a feature is admitted only when its protocol, provider
-behavior, billing bound and usage settlement are all qualified. The exact client
-version, installed settings and the sanitized real wire corpus that prove this
-default are captured under [#2334](https://github.com/Brad-Edwards/bigrae/issues/2334);
-[#2125](https://github.com/Brad-Edwards/bigrae/issues/2125) installs the same
-pin and settings into guests without introducing a second compatibility target.
+The pinned client's installed defaults must support a provisioned range without participant repair. They emit only the qualified Anthropic Messages subset admitted by the broker. This includes pinned `anthropic-version` and excludes unqualified `anthropic-beta` or other cost-changing defaults.
+
+Unsupported cost-changing features fail before a billable effect. Admission requires qualified protocol, provider behavior, billing bounds, and usage settlement; features are never silently stripped. [#2334](https://github.com/Brad-Edwards/bigrae/issues/2334) captures the exact client version, installed settings, and sanitized real wire corpus for this default.
+
+[#2125](https://github.com/Brad-Edwards/bigrae/issues/2125) installs that pin and configuration into guests without a second compatibility target.

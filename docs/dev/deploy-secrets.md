@@ -39,9 +39,7 @@ environment at any time without making changes:
 
 For GCP, the local preflight checks the tools and validates the deployment
 input bundle. The CI preflight checks the GitHub values. The **Required**
-column in the tables below marks the secrets the CI preflight enforces. The first Identity Platform operator credentials are required unless
-`SHIFTER_SKIP_OPERATOR_BOOTSTRAP=true` is set (locally) or the matching
-repository variable is set (CI); the skip is logged, never silent.
+column in the tables below marks the secrets the CI preflight enforces. The retained CI preflight requires first-operator credentials unless its explicit skip setting is enabled. The skip is logged. Release-driven deployment uses `settings.operator_bootstrap` instead.
 
 ## Secrets required to stand up an AWS environment
 
@@ -52,9 +50,7 @@ environments. `.github/workflows/deploy.yml` forwards all of these to the
 reusable deploy workflows. The GCP (`gcp-dev`) secrets are separate and listed
 under [GCP (gcp-dev)](#gcp-gcp-dev).
 
-The **Required** column marks the secrets the deploy preflight
-(`scripts/bootstrap/preflight.py`) enforces before any Terraform apply; a
-missing required secret fails the deploy up front rather than mid-run.
+The **Required** column identifies prerequisites enforced by `scripts/bootstrap/preflight.py`. Missing required inputs stop the selected deploy before Terraform apply.
 
 | Secret | Populated by | Required | Notes |
 |---|---|---|---|
@@ -95,14 +91,14 @@ the scanner; the values are public, so they are safe on the command line while
 exclusions, suppressions, coverage report paths) is shared analysis configuration
 and stays committed in `sonar-project.properties`.
 
-The scan is gated on `github.repository`, deliberately **not** on these variables
-being set. A missing or renamed variable therefore fails the scanner and the job,
+The scan is gated on immutable `github.repository_id` and `github.repository_owner_id` from `docs/adr/repository-identity.json`.
+It is not gated on scanner-variable presence. A missing or renamed variable therefore fails the scanner and the job,
 rather than skipping the scan and quietly removing the SonarCloud quality gate
 from `PR Gate`.
 
 Two cases skip the scan on purpose:
 
-- **Runs under any other repository slug.** SonarCloud is this project's tooling
+- **Runs outside the recorded upstream repository identity.** SonarCloud is this project's tooling
   choice, not a dependency imposed on anyone who cloned the repository and ran
   the workflow as-is. Their runs skip it; to analyse their own fork they set
   these two variables plus a `SONAR_TOKEN` of their own.
@@ -118,10 +114,7 @@ The `TF_VARS_<ENV>_PORTAL` / `_RANGE` / `_CORE` and `SHIFTER_CONFIG_<ENV>_RANGE`
 entries are whole-file payloads. Operators keep the
 same values as gitignored `local.auto.tfvars` overlays (also used for local
 `terraform` and symlinked into worktrees by `scripts/setup-worktree.sh`) and a
-deployment `bigrae.yaml`. `scripts/sync-deploy-secrets.sh` pushes those local
-files into the matching GitHub secrets with `gh secret set`, so the secret and
-the local overlay stay in step instead of the secret being hand-edited in the
-GitHub UI:
+deployment `bigrae.yaml`. `scripts/sync-deploy-secrets.sh` pushes local files to the corresponding GitHub secrets with `gh secret set`. This keeps approved overlays and CI payloads aligned:
 
 ```sh
 # Preview what would be set (no writes):
@@ -145,10 +138,7 @@ per-env tfvars/config payloads. Run it after editing an overlay (for example,
 after changing the ASG capacity in a portal overlay) so the next deploy picks up
 the new values rather than a stale secret.
 
-Both bootstrap-owned secret names are env-suffixed for every non-prod
-environment and unsuffixed only for prod, matching what the deploy workflows
-read: prod uses `AWS_ROLE_ARN` / `TF_INFRA_STATE_BUCKET`, while dev uses
-`AWS_ROLE_ARN_DEV` / `TF_INFRA_STATE_BUCKET_DEV`. A fresh non-prod bootstrap
+Bootstrap uses suffixed names outside production. Dev reads `AWS_ROLE_ARN_DEV` and `TF_INFRA_STATE_BUCKET_DEV`. Production reads unsuffixed `AWS_ROLE_ARN` and `TF_INFRA_STATE_BUCKET`. A fresh non-prod bootstrap
 sets the suffixed names automatically; do not set the unsuffixed
 `TF_INFRA_STATE_BUCKET` for a dev standup.
 
@@ -172,14 +162,13 @@ The full procedure is in the
 
 ### Initial secrets
 
-The platform Terraform creates and fills these Secret Manager secrets: the
-Django key and field encryption key, the database credentials, the Guacamole
-keys, the Redis credentials, and the domain controller password. Do not create
+Platform Terraform generates the Django key, field-encryption key, database credentials, Guacamole keys, Redis credentials, and domain-controller password in Secret Manager. Do not create
 them by hand.
 
-Create only these secrets:
+For normal installation, `gcp-install` creates the first operator password when needed.
+For an explicitly managed setup, create only these operator-owned inputs:
 
-1. The first operator password. Create a secret in the deployment project and
+1. An optional first operator password. Create a secret in the deployment project and
    add the password as its first version. Set
    `settings.operator_bootstrap.admin_password_secret_ref` to
    `projects/<project>/secrets/<secret>`. The deploy identity reads the secret.
@@ -213,7 +202,7 @@ in `SHIFTER_CONFIG_GCP_DEV` stops the render, so each input keeps one meaning.
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | secret | yes | Workload identity provider resource id. |
 | `GCP_BOOTSTRAP_ADMIN_EMAIL` | secret | yes | Optional Identity Platform account seed; this does not grant application permission. Must match `GCP_IDENTITY_ALLOWED_EMAIL_DOMAIN`. Projected onto `settings.operator_bootstrap.admin_email`. Required unless `SHIFTER_SKIP_OPERATOR_BOOTSTRAP=true` is set to deliberately skip operator creation (the skip is logged; it sets `operator_bootstrap.enabled: false`). |
 | `GCP_BOOTSTRAP_ADMIN_PASSWORD` | secret | yes | Initial password for the provider account seed; native application access still requires immutable bootstrap facts. The infrastructure stage reads it from this variable (`--operator-password-env`); it is never written to the bundle. Required unless `SHIFTER_SKIP_OPERATOR_BOOTSTRAP=true`. |
-| `GCP_CTF_CONTENT_BUCKET` | variable | with content refs | GCS bucket holding digest-pinned native CTF content bundles; projected onto `settings.ctf_content_bucket`, rendered into the `ctf_content_bucket_name` tfvar, and surfaced to the runtime as `SHIFTER_CTF_CONTENT_BUCKET`. **Required whenever the app secret bundle carries `ctf_content_references`:** `config/_ctf_content_settings.py` fails closed when references are configured without a bucket, so leaving this unset renders a ConfigMap with no binding and crashloops the portal. The reference catalog itself stays in the app secret, never here. |
+| `GCP_CTF_CONTENT_BUCKET` | variable | with content refs | GCS bucket holding digest-pinned native CTF content bundles; projected onto `settings.ctf_content_bucket`, rendered into the `ctf_content_bucket_name` tfvar, and surfaced to the runtime as `SHIFTER_CTF_CONTENT_BUCKET`. **Required when the app bundle has `ctf_content_references`:** `config/_ctf_content_settings.py` rejects references without a bucket. Missing binding prevents portal startup. The reference catalog itself stays in the app secret, never here. |
 | `PLATFORM_BOOTSTRAP_STAFF_EMAILS` | secret | no | Legacy staff-email input; Django flags do not grant native application authority. Projected onto `settings.operator_bootstrap.staff_emails`. |
 | `PLATFORM_BOOTSTRAP_SUPERUSER_EMAILS` | secret | no | Legacy superuser-email input; Django flags do not grant native application authority. Projected onto `settings.operator_bootstrap.superuser_emails`. |
 | `SMOKE_TEST_USER_EMAIL` | secret | no | Post-deploy smoke user for the advisory `post-deploy-smoke` job. Projected onto `settings.post_deploy_smoke.user_email`. The CI smoke step fails and opens the smoke issue when it is empty. Same contract as AWS dev smoke; see [Post-deploy smoke secrets](#post-deploy-smoke-secrets-dev). |
@@ -254,10 +243,8 @@ settings:
 ```
 
 Omit unused keys. Values are secret references, never payloads, and must identify
-existing resources before Terraform applies. The renderer uses this closed map
-for both exact provisioner IAM and runtime publication; do not duplicate the
-same references in `local.auto.tfvars` or an ad-hoc runtime overlay. See the
-[range-secret project rollout](../../platform/terraform/gcp/README.md#expand-cut-over-drain-contract).
+existing resources before Terraform applies. This closed map supplies exact provisioner IAM and runtime publication. Do not duplicate references in `local.auto.tfvars` or an ad hoc runtime overlay. See the
+[range-secret project rollout](https://github.com/OpenRAE/bigrae/blob/dev/platform/terraform/gcp/README.md#expand-cut-over-drain-contract).
 
 Native CTF scenario-content references live in the existing application secret,
 not in GitHub variables or the generated ConfigMap. Configure the private
@@ -268,10 +255,11 @@ The foundational identity root also creates `<project>-release-evidence` with
 public access prevention, uniform access, versioning, and an intentionally
 locked 90-day retention policy. Locking is irreversible; confirm the project
 and retention period in the reviewed Terraform plan before applying. Objects
-age out after 365 days. IAM conditions separate every evidence class by object
-prefix: build creates `packer-builds/` source-binding records; validation reads
-only those build records and creates `packer-validation/` records;
-release-scan creates `release-scans/`; and deploy creates `deployments/`. The
+age out after 365 days.
+
+IAM conditions separate evidence by prefix. Build creates `packer-builds/` source bindings. Validation reads those bindings and creates `packer-validation/` evidence.
+
+Release scan writes `release-scans/`; deployment writes `deployments/`. The
 scan and deployment verdicts
 (`verdict.json`, with an opaque locator and the evidence digest) are stored next
 to their raw evidence; CI uploads no deploy verdict artifact. The image
@@ -304,9 +292,7 @@ to its pairwise-disjoint purpose subjects, never to a repository-wide
    `github_subject_format = "immutable"`. A repository that still uses the old
    subject shape must select `github_subject_format = "default"`. Do not change
    GitHub customization or admit both formats to fit a stale policy.
-2. **Run the foundation bootstrap.** `deploy.py gcp-foundation` checks the project
-   number and the repository IDs, compares the saved plan with the trust that the
-   inputs authorize, and stops before the apply on any difference. For build
+2. **Run the foundation bootstrap.** `deploy.py gcp-foundation` checks project and repository identities, then compares the saved plan with the authorized input trust. Any difference stops before apply. For build
    contexts it then writes the `gcp-image-build` and `gcp-image-validate`
    Environments with their protected branches, secrets, and variables.
 3. **Read back.** Confirm the exact `attributeCondition` with `gcloud iam
@@ -314,18 +300,12 @@ to its pairwise-disjoint purpose subjects, never to a repository-wide
    `get-iam-policy` that it holds only its purpose subject. Run one protected
    build and confirm that a feature ref fails before cloud authentication.
 
-The `check-tf-gcp-wif-trust` guard reconciles the provider union with the
-purpose map, rejects overlapping subjects and broad validate or deploy/destroy
-image and evidence grants, rejects project-wide release-scan grants, and
-inventories the purpose callers. Deploy and destroy compute access uses the
-network and security administration roles; their storage custom roles are
-condition-bound to the deterministic platform assets, audit-log, and GDC-image
-buckets rather than granted project-wide Storage Admin. The state bucket is
-included automatically. Any non-empty `raes_package_bucket_name` or
-`ctf_content_bucket_name` must also be passed to the foundational identity root
-through `platform_external_bucket_names`; it grants bucket-level IAM
-administration to each exact resource so platform-core can maintain its
-workload bindings.
+The `check-tf-gcp-wif-trust` guard reconciles provider subjects with the purpose map and inventories callers. It rejects overlapping subjects, broad validate/deploy/destroy image/evidence grants, and project-wide release-scan grants. Deploy/destroy use network and security administration roles for compute.
+
+Their storage roles are conditioned on deterministic platform assets, audit-log, and GDC-image buckets. They do not receive project-wide Storage Admin. The state bucket is
+included automatically.
+
+Pass each non-empty `raes_package_bucket_name` or `ctf_content_bucket_name` to foundation input `platform_external_bucket_names`. Foundation grants IAM administration on those exact buckets. Platform-core can then maintain their workload bindings.
 
 ## GCP guest image builds (developer build project)
 
@@ -363,23 +343,18 @@ workflow generates a throwaway `winrm_bootstrap_password` for each run, and the
 pre-promoted `dc-prebaked` build also generates a DSRM password
 (`PKR_VAR_dc_dsrm_password`). Nothing is committed.
 
-Validation first reads the immutable build record at the exact numeric image ID
-and rejects any mismatch in repository, protected ref, source revision, name, ID,
-family, image type, or Environment. It collects the guest SBOM on a separate
-credentialless Ubuntu scanner from a candidate-derived disk attached read-only and
-mounted `ro,nosuid,nodev,noexec`; the candidate never runs the scanner or writes
-its output. Raw validation evidence and the SBOM stay in the private evidence
+Validation reads the immutable build record for the exact numeric image ID. It checks repository, protected ref, source revision, name, ID, family, image type, and Environment. Any mismatch is rejected.
+
+A separate credentialless Ubuntu scanner collects the SBOM from a candidate-derived disk. The disk is attached read-only and mounted `ro,nosuid,nodev,noexec`. The candidate cannot run the scanner or write its output.
+
+Raw validation evidence and the SBOM stay in the private evidence
 bucket; only a redacted verdict is uploaded.
 
 ## AWS portal (`dev` / `prod`)
 
 Consumed by `.github/workflows/_shifter-platform.yml`. The committed
 `platform/terraform/environments/<env>/portal/terraform.tfvars` is an
-`example.com` baseline. The workflow's `Render local.auto.tfvars from
-deployment secret` step, present in both the `plan` and `apply` jobs,
-writes the real per-deployment values into a gitignored
-`local.auto.tfvars` before Terraform runs, so deploys never plan or apply
-against the baseline. The step picks the secret by environment and fails
+`example.com` baseline. The workflow renders real deployment values into gitignored `local.auto.tfvars` before Terraform. The active apply job rejects an empty payload instead of using placeholders. The step picks the secret by environment and fails
 loud (`::error::`) when the active environment's secret is empty.
 
 | Name | Kind | Required | Notes |
@@ -392,12 +367,10 @@ The `TF_VARS_<ENV>_PORTAL` secret holds plain Terraform HCL, the same
 content you would put in a `local.auto.tfvars`. At minimum it must set the
 values the `example.com` baseline deliberately leaves non-operational:
 
-- `domain_name`, `ses_domain`, `ctfd_domain`, `ctf_from_email`
+- `domain_name`, `ses_domain`, and the current root's declared mail settings
 - `alarm_email`
 - `allowed_email_domains` (deliberately empty in the baseline, fails
   closed)
-- `ctfd_ssh_public_key`, `ctfd_ssh_allowed_cidrs` (empty in baseline,
-  CTFd SSH ingress closed)
 - `user_storage_bucket` and any other AWS-account-suffixed bucket names
   that vary per environment
 
@@ -407,10 +380,7 @@ For native scenario-provided CTF challenges, the same overlay may also set
 application secret, not in the tfvars payload. See the
 [native CTF scenario-content runbook](ctf-scenario-content.md).
 
-For AWS local deploys, write the same HCL to a gitignored
-`local.auto.tfvars` next to the environment's `terraform.tfvars` and run
-`terraform apply` from a workstation that has the target role (see
-**Local development** below).
+For an authorized local AWS deployment, put reviewed HCL in gitignored `local.auto.tfvars` beside the selected root. Review its saved plan before apply. See **Local development** below.
 
 ## AWS core (`dev` / `prod`)
 
@@ -442,48 +412,31 @@ Standup runbooks for the phases referenced below:
 For a new AWS account, bootstrap the backend and CI identity before trying
 run an AWS dev deploy (`gh workflow run deploy.yml --ref <branch> -f environment=aws-dev`):
 
-If the account was **re-used** (a prior BigRAE tenant was torn down here), first run
-`./scripts/bootstrap/deploy.py account-recovery --env dev --profile <profile>` to detect
-orphaned control-plane leftovers that would otherwise fail `terraform apply` one
-collision at a time, and add `--sweep` to delete the owned ones. It refuses on a live
+For a reused account, run `./scripts/bootstrap/deploy.py account-recovery --env dev --profile <profile>` first. It detects orphaned control-plane resources before apply. Review its inventory before authorizing `--sweep`.
+
+It refuses on a live
 tenant and never touches data-bearing resources. See `scripts/bootstrap/README.md` and
-`aws-teardown-runbook.md`. Off a TTY (CI or an automation wrapper), pass `--yes` on the
-bootstrap commands below so their confirmation prompts proceed without a terminal;
-`--yes` does not authorize the recovery sweep, which always needs `--sweep`.
+`aws-teardown-runbook.md`. Without a terminal, `--yes` accepts routine bootstrap prompts.
+
+A recovery sweep still requires separate `--sweep` authorization.
 
 1. Run `./scripts/bootstrap/deploy.py bootstrap --env dev --profile <profile>`.
-   This creates the shared S3 state bucket, creates the GitHub OIDC role,
-   sets `AWS_ROLE_ARN_DEV` and `TF_INFRA_STATE_BUCKET_DEV` (the env-suffixed
-   names the dev deploy workflows read), and writes per-instance Terraform
-   backend configs under `~/.shifter/<env>-<bucket>/`.
+   This creates shared S3 state and GitHub OIDC. It sets `AWS_ROLE_ARN_DEV` and `TF_INFRA_STATE_BUCKET_DEV`. Private backend files are written under `~/.shifter/<env>-<bucket>/`.
 2. Run `./scripts/bootstrap/deploy.py runners --env dev --profile <profile>` to
    provision **and** auto-register the self-hosted runners (issue #1433). It
    provisions a dedicated, ADR-004-R20-compliant runner VPC by default, applies
    the runner root, and registers each runner over SSM (per-runner single-use
    token, never persisted). The dedicated runner VPC is the standard placement
-   (ADR-004-R20, #1437), selected by the tracked runner tfvars. Pass
-   `--use-existing-network` only to place runners in an existing compliant
-   network, such as the portal VPC private tier, whose `vpc_id`/`subnet_id` you
-   keep in a gitignored `local.auto.tfvars`. Never commit live VPC/subnet IDs.
-   The account default VPC isn't a supported placement: `allow_default_vpc` is a
+   (ADR-004-R20, #1437), selected by the tracked runner tfvars. Use `--use-existing-network` only for a compliant existing network. Keep `vpc_id` and `subnet_id` in gitignored `local.auto.tfvars`. Never commit live VPC/subnet IDs.
+   The account default VPC is not a supported placement: `allow_default_vpc` is a
    documented exception only. AWS deploy workflows use `runs-on: self-hosted`.
 3. Ensure `/shifter/ami/{kali,ubuntu,windows,dc}` exists in SSM Parameter
-   Store before portal Terraform plans/applies. The Packer workflow updates
-   these parameters after AMI builds; in a moved account, set the builder-network
-   repository variables `PACKER_BUILD_{VPC,SUBNET}_ID_<ENV>` (and the
-   `PACKER_VERIFY_*` fresh-boot gate variables) first, since the committed
-   `dev.pkrvars.hcl` ships only placeholders. The Kali build also requires
+   Store before portal Terraform plans/applies. Packer publishes these SSM parameters after validation. Before building in another account, set `PACKER_BUILD_{VPC,SUBNET}_ID_<ENV>` and `PACKER_VERIFY_*`. Committed `dev.pkrvars.hcl` contains placeholders. The Kali build also requires
    the target account to accept the free AWS Marketplace terms for product
    code `7lgvy7mt78lgoi4lant0znp5h`. See the
    [AWS AMI seeding runbook](aws-ami-seeding-runbook.md).
 4. Review `TF_VARS_DEV_PORTAL` for account-specific values such as domain
-   names, alarm email, SSH allowlists, and bucket names. Review
-   `TF_VARS_DEV_RANGE` for range deployment values such as the agent S3 bucket
-   and the regional PAN-OS VM-Series AMI, and set `SHIFTER_CONFIG_DEV_RANGE` to
-   the deployment's `bigrae.yaml` (its `settings.range_egress` is rendered into
-   the range egress allowlist). Bootstrap configures the AWS role secret and
-   backend files; the deploy workflows fail loud when the active portal or range
-   tfvars secret, or the range `bigrae.yaml`, is missing.
+   names, alarm email, SSH allowlists, and bucket names. Review `TF_VARS_DEV_RANGE`, including the agent bucket and regional PAN-OS VM-Series AMI. Set `SHIFTER_CONFIG_DEV_RANGE` to deployment `bigrae.yaml`. Its `settings.range_egress` renders the egress allowlist. Bootstrap configures role secrets and backend files. Deployment rejects missing active portal/range tfvars payloads or range `bigrae.yaml`.
 5. For the first deploy in a moved or fresh account, run the `Deploy` workflow
    with `gh workflow run deploy.yml --ref <branch> -f environment=aws-dev`
    (add `-f aws_first_deploy=true` for the first-ever engine deploy, before the
@@ -499,8 +452,8 @@ certificates for the portal domains and SES identities for the configured
 mail domain. Publish these records in the authoritative DNS zone while the
 apply is running; Terraform will continue once AWS observes the ACM records.
 
-- ACM portal and Guacamole URL validation records are exposed by the root
-  Terraform output `acm_validation_records`. They are CNAME records.
+- Current EKS certificate records are CNAMEs in `bundle_outputs.ingress_certificate_dns_records`.
+  The removed portal output `acm_validation_records` is historical.
 - SES domain verification uses a TXT record named `_amazonses.<ses_domain>`.
   Fetch the value with:
   `aws ses get-identity-verification-attributes --identities <ses_domain> --region <region>`.
@@ -513,64 +466,34 @@ apply is running; Terraform will continue once AWS observes the ACM records.
 
 ### First-run DNS routing
 
-After the first platform apply creates the portal ALB and CTFd instance,
-publish the runtime DNS records:
+For current EKS, read `platform-external` ingress after the normal lifecycle creates it.
+Point the approved hostname at that exact load-balancer target and verify ACM and HTTPS health.
+The EKS bundle supplies certificate DNS records through `bundle_outputs.ingress_certificate_dns_records`.
+Do not use the retired portal-root `alb_dns_name` output.
 
-- `domain_name` and `chat.<domain_name>` point to the Terraform output
-  `alb_dns_name` as CNAME records. In Cloudflare, keep them DNS-only unless
-  the deployment explicitly validates proxied Cloudflare behavior.
-- `ctfd_domain` points to the Terraform output `ctfd_elastic_ip` as an A
-  record. In Cloudflare, publish the record as DNS-only until the CTFd host
-  has completed certbot and `https://<ctfd_domain>/login` works against the
-  origin. After that validation, the CTFd `A` record may be switched to
-  proxied with SSL/TLS mode `Full (strict)`. The DNS target is the bare
-  Elastic IP address, never an `http://` or `https://` URL. Cloudflare
-  challenge actions must be disabled or explicitly skipped for the CTFd
-  hostname before event smoke testing; the CTFd sync scripts and automated
-  checks expect the CTFd app to answer directly instead of a Cloudflare
-  `cf-mitigated: challenge` page.
-
-ALB access logs use a dedicated S3 bucket with SSE-S3 because Elastic Load
-Balancing does not support SSE-KMS for Application Load Balancer access-log
-delivery. Central Firehose log archives continue to use the log-aggregation
-customer-managed KMS key.
+Current portal roots contain no CTFd instance, `ctfd_elastic_ip`, or `ctfd_domain` setting.
+Earlier CTFd and EC2 portal routing belongs to source revision `b174cdea8371c8ce4624c73ce5c5a04d446a8c41`.
+Use that source and original private state for historical recovery only.
+Do not recreate its Cloudflare or CTFd path as part of a current EKS deployment.
 
 ### First-run private AWS API reachability
 
-The portal VPC creates private AWS service endpoints for the runtime services
-that must be reachable before application containers can start: ECR, S3,
-CloudWatch Logs, Secrets Manager, SSM, STS/KMS, ECS/EC2/ELB, SNS, SQS, and
-DynamoDB. These endpoints are part of the expected fresh-account platform
-shape. They keep EC2 user_data, Docker image pulls, ECS secret resolution, and
-awslogs setup from depending on the portal inspection firewall/NAT egress path
-during first deploy. The portal EC2 user_data also retries the AL2023 package
-metadata/install step so a transient repository timeout does not permanently
-strand cloud-init.
+The portal VPC supplies private endpoints needed by EKS workloads and retained infrastructure. These include ECR, S3, CloudWatch Logs, Secrets Manager, SSM, STS/KMS, ECS/EC2/ELB, SNS, SQS, and DynamoDB. These endpoints are part of the expected fresh-account platform
+shape. The earlier EC2/ECS bootstrap used these endpoints for user data, image pulls, secret resolution, and logs. Current EKS credentials and networking remain separately scoped. The retired EC2 user-data retry behavior is historical; it does not initialize current EKS workloads.
 
 Range status propagation depends on the portal worker containers consuming the
 encrypted portal messaging SQS queues. If range provisioner tasks exit 0 but
-CMS or CTF rows remain `pending`, check `docker logs worker-cms` on the portal
-EC2 instance. `KMS.AccessDeniedException` on the portal messaging CMK means the
-portal EC2 role is missing the SQS KMS decrypt/data-key grant; the
-retained portal services must receive `module.messaging.kms_key_arn` and attach its
-`sqs-kms-access` policy.
+CMS or CTF rows remain `pending`, inspect `worker-cms` through the approved Kubernetes log path. `KMS.AccessDeniedException` on the messaging CMK indicates missing workload KMS permissions. Check the exact EKS worker role and the deployed messaging key. Do not replace it with a privileged legacy EC2 role.
 
-When portal inspection is enabled, ALB health checks and user traffic route
-through the inspection boundary before reaching the private portal and
-Guacamole targets. The targets therefore allow ingress both from the ALB
-security group and from the portal public subnet CIDRs; the CIDR rule is still
-VPC-local and is required for the routed middlebox path.
+The following inspected-EC2 topology describes the earlier portal path.
+Current EKS ingress and pod networking are described in [the EKS reference](../technical/platform_infrastructure/aws-eks-bundle.md).
+In that retained topology, portal and Guacamole traffic crosses the inspection boundary. Current EKS routes use their own ingress and pod policies. The earlier inspected targets admitted the ALB security group and portal public subnet CIDRs. These VPC-local rules described the routed middlebox path.
 
 `enable_portal_inspection` defaults to `false` in the committed
 `platform/terraform/environments/<env>/portal/terraform.tfvars` (#932). A deploy
 that wants inspection sets `enable_portal_inspection = true` in its
 `TF_VARS_<ENV>_PORTAL` secret payload (rendered as `local.auto.tfvars`, which
-overrides the committed baseline). Enabling it removes the direct private → NAT
-default route, so the portal apply job runs
-`scripts/assert_portal_inspection/assert_portal_inspection.py` after
-`terraform apply`: it fails the deploy if the live route tables do not point at
-healthy per-AZ Network Firewall endpoints, instead of silently blackholing
-egress. The assertion is a no-op when inspection is off.
+overrides the committed baseline). Enabling inspection removes the direct private-to-NAT default route. After apply, `scripts/assert_portal_inspection/assert_portal_inspection.py` checks live routes and healthy per-AZ endpoints. A mismatch fails deployment instead of leaving silent egress loss. The assertion is a no-op when inspection is off.
 
 ### Post-deploy smoke secrets (dev)
 
@@ -580,10 +503,7 @@ verifies guest connectivity, and tears it down. It runs only for dev applies and
 is `continue-on-error`, so a smoke failure does not fail the deploy; instead the
 job opens a `[smoke-test]` bug issue (labels `bug`, `smoke-test`).
 
-The smoke validates the **platform**, not scenario content: its ranges are built
-entirely from base range AMIs (`smoke_linux` = Kali + Ubuntu, `smoke_windows` =
-Kali + plain Windows, all `xdr_agent: false`), so it requires **no XDR agent and
-no `SMOKE_*_AGENT_ID` secrets** (#1422). XDR/agent install is scenario content
+The smoke checks platform provisioning and connectivity using base images. `smoke_linux` uses Kali/Ubuntu; `smoke_windows` uses Kali/Windows, all with `xdr_agent: false`. It needs no XDR agent or `SMOKE_*_AGENT_ID` secrets (#1422). XDR/agent install is scenario content
 and is exercised by real scenarios, not the smoke. Only one secret is needed,
 set manually (not written by bootstrap or `sync-deploy-secrets.sh`):
 
@@ -595,11 +515,7 @@ set manually (not written by bootstrap or `sync-deploy-secrets.sh`):
 
 Consumed by `.github/workflows/_range.yml`. The committed
 `platform/terraform/environments/<env>/range/terraform.tfvars` is an
-account-neutral baseline. The workflow's `Render local.auto.tfvars from
-deployment secret` step is present in both the `plan` and `apply` jobs; it
-selects the active environment strictly from `inputs.is_dev`, writes the
-matching whole-file secret into `local.auto.tfvars`, and fails loud
-(`::error::`) when the active secret is empty.
+account-neutral baseline. The reusable range workflow renders the active whole-file payload into `local.auto.tfvars`. It selects the environment from its explicit input and rejects an empty active secret.
 
 | Name | Kind | Required | Notes |
 |---|---|---|---|
@@ -615,10 +531,7 @@ values stripped from the committed baseline:
 
 - `agent_s3_bucket`: the account-specific user-storage bucket read by range
   instance roles
-- `vm_series_ami_id`: the regional PAN-OS Marketplace AMI to use. This is
-  deployment configuration, not a credential; keep it in the overlay so the
-  shared repo does not prescribe a marketplace version/region for every
-  deployment.
+- `vm_series_ami_id`: the regional PAN-OS Marketplace AMI to use. This is deployment configuration, not a credential. Keep it in the overlay; the shared repository does not choose every deployment's Marketplace version or region.
 
 The range egress allowlist (`victim_allowed_cidrs`) is **not** part of
 `TF_VARS_<ENV>_RANGE`. The workflow's `Render range egress allowlist from
@@ -630,16 +543,11 @@ and the deployed firewall cannot drift (#958 / #1015). Putting
 out of the whole-file secret.
 
 Local operators use the same model: write those values to a gitignored
-`local.auto.tfvars` alongside the range `terraform.tfvars`. In this repo's
-worktree workflow, `scripts/setup-worktree.sh` symlinks existing
-`local.auto.tfvars` overlays from the main checkout into worktrees so local
-plans do not lose the per-account values when branches change.
+`local.auto.tfvars` alongside the range `terraform.tfvars`. `scripts/setup-worktree.sh` can link existing local overlays into a worktree. This documentation task uses only its invocation checkout; creating another worktree requires separate authority.
 
 The committed `terraform.tfvars` also ships an empty `victim_allowed_cidrs`
 baseline so the repo never carries a deployment's allowlist (PLAT-220 / #775).
-This completes the `_core.yml` / `_range.yml` deploy-tfvars audit from #784:
-the AWS core tfvars remain generic repository-name defaults, while account-bound
-and deployment-specific range values are supplied by secret or local overlay.
+This completes the #784 Core/Range tfvars audit. Core defaults remain account-neutral; account-bound range values come from protected CI payloads or private local overlays.
 
 For the PLAT-220 range egress allowlist:
 
@@ -685,9 +593,7 @@ private var file that loads after the operator's values.
   `docs/architecture/range-egress-ip-allowlist.md` (run `bigrae-config render`
   by hand, then `terraform apply`).
 
-`bigrae.yaml` holds secret *references*, not values, but it is the
-deployment's authoritative config; carry it as a GitHub secret so CI does not
-read a second, drift-prone copy of the allowlist. Do **not** also set
+`bigrae.yaml` contains secret references, not values. It remains the authoritative deployment configuration. Store it as the protected CI payload rather than maintaining a second allowlist. Do **not** also set
 `range_egress_mode` / `range_egress_allowed_cidrs` in the Terraform values;
 that re-introduces the drift this flow removes.
 
@@ -716,23 +622,18 @@ image outside that flow.
 | `RANGE_NETWORK_ZONE` | yes | Compute Engine zone for range guests, for example `us-central1-a`. |
 | `GCP_RANGE_LINUX_IMAGE` | yes | Full image or family URL for the default unkeyed Linux/host profile. |
 | `GCP_RANGE_DC_IMAGE` | DC scenarios | Default unkeyed Windows domain-controller image, pre-promoted at bake time. Baked per-domain from `dc-prebaked.pkr.hcl` into family `shifter-<purpose>-dc` (see "Baking a new pre-promoted DC image" in `docs/dev/gcp-range-cell-deploy.md`). |
-| `DC_DOMAIN_PASSWORD` | DC scenarios | **Sensitive.** Domain Administrator password the provisioner sets on the pre-promoted DC (`set_admin_password`). Must match the password baked into the DC image by `a2_setup.ps1` at bake time (its `-AdminPassword` default). Provide via the GCP deploy config secret so it is rendered into the runtime env and forwarded to the provisioner job (`_GCP_PROVISIONER_ENV_KEYS`); if unset, DC setup fails setting the admin password. |
+| `DC_DOMAIN_PASSWORD` | DC scenarios | **Sensitive.** Domain Administrator password the provisioner sets on the pre-promoted DC (`set_admin_password`). Must match the password baked into the DC image by `a2_setup.ps1` at bake time (its `-AdminPassword` default). Supply the GCP deployment config reference. The renderer forwards it to the provisioner Job through `_GCP_PROVISIONER_ENV_KEYS`. Missing configuration prevents DC password setup. |
 | `GCP_RANGE_KALI_IMAGE` | scenario | Default unkeyed Kali image. Keyed guests use the structured map below. |
 | `GCP_RANGE_WINDOWS_IMAGE` | scenario | Generic Windows guest image. |
 | `GCP_RANGE_IMAGE_KEY_PROFILES_JSON` | keyed scenarios | Optional compact JSON map from exact `(linux|kali|windows|dc, ami_key)` to a complete GCE profile. Normal images use `source_image`, sizing, disk policy, and a typed capability. Preconfigured hosts use an exact `source_machine_image`, machine type, host login, participant container/account, the closed `participant-readiness/v1` contract, and a lowercase SHA-256 readiness-manifest digest. Any profile may opt into public TCP 80/443 with `allow_public_web_egress` (default false). Maximum 32,768 bytes and 64 entries. Unknown keys, unsupported capabilities, and malformed profiles fail before cloud mutation. Use an Actions environment secret when resource names or logical selectors are confidential; the deploy workflow prefers that secret over the repository variable. The value is runtime configuration, not a credential, and is emitted into the private platform ConfigMap. See `docs/dev/gcp-range-cell-deploy.md`. |
-| `GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL` | not read | Keyless range host identity attached to range guests for default-on model access (ADR-064): a predict-only Vertex role plus host telemetry, delivered via Workload Identity with no key material. The deploy takes it from the Terraform output `range_host_service_account_email`; set no variable. When the model broker is the guest path (`MODEL_BROKER_GUEST_VIP` set) guests stay identity-less instead. |
+| `GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL` | not read | Keyless guest identity provides default-on direct Vertex access (ADR-064). It combines a predict-only role with host telemetry and uses Workload Identity without key material. The deploy takes it from the Terraform output `range_host_service_account_email`; set no variable. When the model broker is the guest path (`MODEL_BROKER_GUEST_VIP` set) guests stay identity-less instead. |
 | `GCP_RANGE_HOST_IDENTITY_POOL_SIZE` | machine-image hosts | Number of Terraform-created `sh-range-host-<slot>` identities. Must equal `range_host_identity_pool_size`; zero disables preconfigured machine-image hosts. |
 | `GCP_RANGE_PRIVATE_GOOGLE_ACCESS` | no | Set `true` so no-external-IP guests reach approved Google APIs (including Vertex for default-on model access) over Private Google Access. Leave it `false` when the model broker is enabled: broker-enrolled ranges refuse to provision with Private Google Access on. |
 | `RANGE_OPENVPN_ENABLED` | no | Set `true` to give participants an OpenVPN profile for their range's single participant-access target (ADR-039-R10). Projected onto `settings.participant_openvpn.enabled`. It also deploys the shared OpenVPN server pool (#2480): Terraform `openvpn_pool_enabled` follows this setting, and `gcp-deploy` creates the pool PKI and release record. Apply `global/cicd-oidc` first so the deploy identity holds the conditioned pool role. Defaults to `false`. See "Participant OpenVPN access" in `docs/dev/gcp-range-cell-deploy.md`. |
 
-By default (ADR-064) range guests hold a keyless, predict-only Vertex identity via
-Workload Identity so they can reach models directly; enabling a specific model in
-the provider console is the only manual step. When the ADR-059 broker is enabled
+By default, guests use keyless, predict-only Vertex identities (ADR-064). Operators must enable each required model in its region and satisfy effective IAM and quota prerequisites. When the ADR-059 broker is enabled
 it becomes the guest model path and guests stay identity-less, with an admitted
-allocation and trusted one-use enrollment. The legacy invocation service account,
-its provisioner key-admin grants and per-range keys stay removed on Terraform
-apply; revoke externally managed shared keys through their owning deployment
-before declaring migration complete.
+allocation and trusted one-use enrollment. Terraform retains removal of the legacy invocation identity, key-admin grants, and per-range keys. Revoke externally managed shared keys through their owner before declaring migration complete.
 
 ## Local development
 
@@ -744,7 +645,6 @@ account:
 cat > platform/terraform/environments/dev/portal/local.auto.tfvars <<EOF
 domain_name           = "shifter.your-domain.example"
 ses_domain            = "your-domain.example"
-ctfd_domain           = "ctf.shifter.your-domain.example"
 alarm_email           = "your-team-alerts@your-domain.example"
 allowed_email_domains = ["your-domain.example"]
 user_storage_bucket   = "shifter-dev-user-storage-<your-account-id>"
@@ -770,68 +670,12 @@ terraform init -backend-config=dev.s3.tfbackend
 terraform plan
 ```
 
-For event-sized AWS dev runs, put the full capacity overlay in
-`TF_VARS_DEV_PORTAL`. The deploy workflow reads `terraform output -json` from
-the applied portal state and derives its single-instance vs. ASG path from the
-Terraform `enable_autoscaling` output; there is no separate GitHub variable to
-keep in sync. The committed `terraform.tfvars` is a modest OSS default, while
-the secret payload below is the event-sized overlay for ASG, warm pool, Redis
-channel layer, and larger Guacamole/Postgres capacity:
-
-```hcl
-enable_autoscaling     = true
-asg_min_size           = 2
-asg_max_size           = 8
-asg_desired_capacity   = 2
-asg_warm_pool_min_size = 2
-asg_warm_pool_state    = "Stopped"
-enable_redis           = true
-
-db_instance_class        = "db.m6i.xlarge"
-db_allocated_storage     = 100
-db_max_allocated_storage = 500
-db_backup_retention_days = 7
-
-redis_node_type = "cache.m6g.xlarge"
-
-guacd_cpu                      = 2048
-guacd_memory                   = 4096
-guacamole_client_cpu           = 2048
-guacamole_client_memory        = 4096
-guacd_desired_count            = 6
-guacamole_client_desired_count = 4
-
-guacamole_db_instance_class        = "db.m6i.xlarge"
-guacamole_db_allocated_storage     = 100
-guacamole_db_max_allocated_storage = 500
-guacamole_db_multi_az              = true
-
-guacamole_enable_autoscaling       = true
-guacamole_autoscaling_min_capacity = 4
-guacamole_autoscaling_max_capacity = 10
-guacamole_autoscaling_cpu_target   = 60
-```
-
-> **Keep the dev overlay minimal unless an event needs it.**
-> `TF_VARS_DEV_PORTAL` is the *only* place the running dev fleet size is set:
-> the committed `terraform.tfvars` is a fail-loud baseline that this secret
-> always overrides. Nothing reconciles it automatically; edit your local
-> overlay and push it with `scripts/sync-deploy-secrets.sh` (see [Populating
-> and syncing the secrets](#populating-and-syncing-the-secrets)). The overlay
-> above is *event-sized*. Left in place between events it makes every
-> deploy run a full multi-instance ASG instance refresh (desired + warm pool ≈
-> a dozen instances, roughly an hour) and holds prod-class RDS/Redis/Guacamole
-> capacity. For ordinary dev, keep the ASG at a single instance with a minimal
-> warm pool and shrink the DB/Redis/Guacamole lines to match:
->
-> ```hcl
-> asg_min_size           = 1
-> asg_max_size           = 2
-> asg_desired_capacity   = 1
-> asg_warm_pool_min_size = 1
-> ```
->
-> Apply the event-sized overlay only for the duration of an event, then revert.
+For event-sized EKS capacity, configure node bounds in protected `TF_VARS_DEV_EKS` and replicas/resources in the selected chart values.
+Obtain capacity and cost approval, deploy through the normal lifecycle, and verify observed headroom.
+Restore ordinary development limits after the event and verify the new readback.
+The earlier ASG/warm-pool and separate Guacamole ECS capacity overlay is retired.
+Its fields do not configure the current EKS fleet.
+Use [EKS scaling operations](../ops/portal-eks-operations.md#3-scaling-operations) instead.
 
 ```sh
 # GCP: keep the values in an operator-owned directory outside the repository

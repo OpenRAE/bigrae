@@ -2,18 +2,21 @@
 
 Part of the BigRAE deploy and operations docs; start at the [documentation home](../index.md).
 
-This is the runbook for tearing an AWS environment down to zero: the Terraform
-stacks, the resources that block `terraform destroy`, the bootstrap-created
-identity and state backend, and the local operator config. It is the reverse of
-[`aws-terraform-apply-order.md`](aws-terraform-apply-order.md).
+Use this how-to guide to retire one authorized AWS contributor deployment.
+It covers Terraform layers, owned residuals, and separately approved control-plane cleanup.
+It reverses [the AWS apply order](aws-terraform-apply-order.md).
 
-The repeatable AWS teardown workflow is `.github/workflows/aws-env-destroy.yml`
-(#1287). It runs on GitHub-hosted
-compute and delegates to `scripts/bootstrap/aws_env_destroy.py`, which encodes
-the ordered sequence in this runbook. Live-fire validation against a real
-environment is tracked in #2044; until then this runbook is both the
-architecture contract the workflow implements and the manual fallback for a
-hand teardown.
+The `aws-env-destroy.yml` workflow invokes `scripts/bootstrap/aws_env_destroy.py` on GitHub-hosted compute.
+Its current target is `dev`; it retains the bootstrap state bucket, GitHub Environment, and deployment secrets.
+Source tests do not establish live teardown qualification.
+The historical qualification work is tracked in #2044.
+
+Before teardown, approve the deployment, backups, data loss, downtime, costs, and cleanup boundary.
+Stop new admission and conflicting work, then drain or destroy ranges through their owning lifecycle.
+For an active EKS application, run its normal `eks-teardown` lifecycle first.
+That lifecycle removes Helm resources before destroying the isolated EKS root.
+The environment script orders non-empty EKS state first, but does not invoke the Helm uninstall lifecycle itself.
+Do not assume direct cluster destruction cleans up controller-created load balancers.
 
 > **Destroys real infrastructure.** Run only against the intended environment.
 > Confirm the active AWS profile and account id before every destructive step:
@@ -27,30 +30,15 @@ provider-specific resource semantics, so it is not an AWS teardown contract.
 
 ### Contract conflicts to resolve before implementation
 
-The issue's proposed layer order cannot be copied literally into the current
-repository:
+The source implements EKS, Portal, Range, Core, runner, then IAM order.
+Empty state is skipped; unknown state or failed queries do not establish absence.
+EKS precedes the data services and range networking it consumes.
+Portal precedes Range and Core because it reads their state and owns cross-stack resources.
+The runner root precedes IAM because teardown runs outside that runner fleet.
+IAM remains last so earlier operations retain their authentication path.
 
-- Portal reads both Core and Range through `terraform_remote_state` and owns
-  resources in the Range VPC. Destroying Range first leaves Portal unable to
-  evaluate those outputs or remove the cross-stack routes and IAM policy. The
-  current dependency order is Portal before Range before Core, as documented
-  below.
-- `platform/terraform/environments/<env>/eks` is a separate, deployable state
-  root. An environment with non-empty EKS state cannot be certified torn down
-  while that root is omitted. The workflow must either receive an amended
-  contract that includes EKS before its Portal/Range producers, or fail before
-  mutation when EKS state is present; silently ignoring it is not acceptable.
-- The `global/github-runner` root and the `global/iam` root are distinct. A
-  GitHub-hosted teardown job does not need the target runner to survive, so the
-  runner can be removed before the deploy identity. Do not make post-destroy
-  work rely on a role or OIDC provider that Terraform has already deleted, or
-  on a single STS session remaining valid through a multi-hour teardown. If the
-  issue continues to require IAM before runner, that ordering needs explicit,
-  live proof and an authentication-lifetime contract before it is automated.
-
-These are source-of-truth conflicts, not implementation details. Resolve them
-in the issue acceptance criteria rather than hiding a different order in shell
-logic.
+Do not reuse earlier issue proposals that placed IAM before runners or omitted EKS.
+Do not depend on one STS session remaining valid throughout a long teardown.
 
 ### Security and configuration boundaries
 
@@ -64,9 +52,7 @@ logic.
   that binding is how the job selects the environment's OIDC deploy role and
   secrets. The teardown reuses the existing `github-actions-shifter-<env>`
   deploy role (the same principal `deploy.yml` assumes), so it adds no new IAM
-  trust surface. ADR-004-R23 governs the dedicated packer image-pipeline role,
-  not this deploy role; hardening the shared deploy role's `repo:...:*` OIDC
-  subject is separate work tracked in #1697 and applies equally to `deploy.yml`.
+  trust surface. ADR-004-R23 governs the separate Packer image role. The shared deploy role uses its own trust policy; review its current protected subjects before teardown.
 - Run on GitHub-hosted compute outside the target account. Checkout the event
   commit (`github.sha`) with `persist-credentials: false`; keep job permissions
   to `contents: read` and `id-token: write`; pin every external action to a full
@@ -126,25 +112,16 @@ logic.
   all KMS resources. Remove only the exact state address implicated by a known
   destroy failure, record that exception visibly, and still require its alias to
   be absent. A pending-deletion key is distinct from a live alias.
-- Reuse `scripts/bootstrap/account_recovery.py`'s safety semantics: an API error
-  is unknown/failure, never "absent"; ownership requires name plus tags where
-  available; AWS commands are argv lists rather than `shell=True`; reports omit
-  values and raw API bodies. Do not weaken that command's structural ban on
+- Reuse `scripts/bootstrap/account_recovery.py`'s safety semantics: an API error means unknown/failure, not absence. Ownership requires name and tags where available. AWS commands use argv lists without `shell=True`. Reports omit secret values and raw API bodies. Do not weaken that command's structural ban on
   deleting data-bearing resources. If teardown needs adjacent tested sweep
   support, share only the read-only query/ownership/reporting primitives and
   keep the stronger destructive authorization explicit to this teardown.
-- Paginate every inventory, wait boundedly for asynchronous deletion and
-  eventual consistency, and make the final result fail closed when any required
-  service could not be queried. The final evidence must distinguish absent,
-  deleted, blocked ownership, and failed query/delete outcomes; use `::error::`
-  plus a non-zero exit, with safe resource class/count/name information only.
+- Paginate every inventory. Wait within defined limits for deletion and consistency. Fail final verification when any required service could not be queried. Distinguish absent, deleted, blocked ownership, and failed query/delete results. Emit `::error::` and a nonzero exit on failure. Report only safe resource classes, counts, and names.
 
 The bootstrap-created, versioned Terraform state bucket is not tagged with the
 environment and is not owned by any Terraform root. Issue #1287 does not
 currently say to delete it or the corresponding GitHub secrets/Environment.
-Exclude the exact resolved backend bucket from generic S3 sweeping and preserve
-it unless the contract is explicitly expanded to the bootstrap control plane;
-if expanded, it is emptied and deleted only after the last state operation.
+Exclude the resolved state bucket from generic S3 cleanup. The workflow retains it. A separately approved final retirement may remove it only after every state operation finishes.
 
 The extensibility seam is the single closed AWS environment binding (public
 choice, Terraform environment, GitHub Environment, role secret, state-bucket
@@ -155,8 +132,9 @@ second set of state keys.
 
 ## Manual destroy order
 
-Destroy stacks in reverse dependency order: **Portal, then Range, then Core.**
-The Portal stack reads Core and Range remote state, so it must go first. Each
+Remove active EKS application resources through `eks-teardown` first.
+The remaining environment order is EKS state, Portal, Range, Core, runner, then IAM.
+Portal must precede Range and Core because it reads their remote state. Each
 stack initializes with its own `-backend-config=<env>.s3.tfbackend`.
 
 ## 1. Lift deletion protection (prod, and any env that enabled it)
@@ -207,7 +185,8 @@ in step 3, after the Portal (and Range) destroys, right before the Core destroy.
 
 ## 3. Destroy the stacks
 
-Destroy Portal first, then Range. The Portal stack requires the
+Before these retained manual commands, complete the authorized EKS lifecycle teardown.
+Then destroy Portal before Range. The Portal stack requires the
 `terraform_state_bucket` variable (normally in the CI-rendered remote-state
 tfvars); pass it explicitly if you do not have that file locally. Init each
 stack against the real state bucket:
@@ -238,19 +217,18 @@ terraform init -reconfigure -backend-config=<env>.s3.tfbackend -backend-config="
 terraform destroy -auto-approve
 ```
 
-If a destroy fails on an unremovable resource (for example a KMS key with
-`prevent_destroy`), remove it from state with `terraform state rm` and let the
-account-level cleanup handle it, mirroring the KMS handling in
-`deploy.py gcp-destroy`.
+A KMS or deletion-protection failure requires investigation of the exact owned resource and state address.
+AWS keys normally use scheduled deletion; do not copy GCP key-retention behavior to AWS.
+Do not remove state merely to report success.
+Any exceptional state removal needs an approved cleanup plan, exact address, retained recovery evidence, and independent provider readback.
 
 ### Known destroy stalls and fixes
 
-These recur on a full portal destroy and are safe to resolve directly:
+These are historical failure patterns that may affect retained resources.
+Confirm current ownership and stopped writers before a direct cleanup action.
+They do not authorize broad deletion or changes to another deployment:
 
-- **Redis rotation Lambda ENI blocks the SG and private subnet.** The portal
-  destroy can hang for 20+ minutes on `module.redis.aws_security_group.rotation`
-  and `module.vpc.aws_subnet.private[*]` because the redis auth-rotation Lambda's
-  VPC ENI is slow to release after the function is deleted. Once the ENI shows
+- **Redis rotation Lambda ENI blocks the SG and private subnet.** A retained Redis rotation Lambda can delay security-group and private-subnet deletion for over 20 minutes. Its VPC ENI may remain after function deletion. Confirm exact ownership and `Status=available` before reviewed cleanup. Once the ENI shows
   `Status=available` it is safe to delete manually, which unblocks Terraform's
   next retry:
   ```bash
@@ -259,10 +237,7 @@ These recur on a full portal destroy and are safe to resolve directly:
     --query 'NetworkInterfaces[?Status==`available`].NetworkInterfaceId' --output text
   aws ec2 delete-network-interface --network-interface-id <eni-id>
   ```
-- **Log buckets refill during the destroy.** The ALB access-log and
-  log-aggregation buckets keep receiving objects until their writers are
-  destroyed, so a bucket you emptied at the start can be non-empty by the time
-  Terraform deletes it (`BucketNotEmpty`, HTTP 409). Re-empty those two buckets
+- **Log buckets refill during the destroy.** Log writers can refill buckets after the first emptying. Terraform can then return `BucketNotEmpty` or HTTP 409. Stop the owners and recheck before bucket deletion. Re-empty those two buckets
   after the writers are gone and re-run the destroy; it then deletes them.
 - **`data "aws_ecr_image"` fails when ECR is already empty.** Covered in step 2:
   do not empty the guacamole ECR repos before the Portal destroy. If you already
@@ -270,11 +245,7 @@ These recur on a full portal destroy and are safe to resolve directly:
   `shifter-<env>-guacd` and `shifter-<env>-guacamole-client` so the data sources
   resolve, then destroy.
 - **CloudWatch log groups survive the range destroy and block a fresh apply.**
-  The range flow-log, Network Firewall, and Route53-resolver log groups
-  (`/vpc/<env>-range-flow-logs`, `/aws/network-firewall/<env>-range`,
-  `/aws/route53/resolver/<env>-range`) can be recreated by an in-flight log
-  delivery that races `terraform destroy`, so they persist after the range
-  destroy reports success. Nothing has `skip_destroy`; the fix is a post-destroy
+  In-flight log delivery can recreate range flow-log, Network Firewall, or Route53-resolver log groups during destroy. Examples are `/vpc/<env>-range-flow-logs`, `/aws/network-firewall/<env>-range`, and `/aws/route53/resolver/<env>-range`. Successful stack destruction alone does not prove these groups are absent. Nothing has `skip_destroy`; the fix is a post-destroy
   sweep. A later fresh apply otherwise fails with
   `ResourceAlreadyExistsException`. Delete any that remain:
   ```bash
@@ -296,26 +267,20 @@ running the class-by-class `aws` commands below by hand:
 ./scripts/bootstrap/deploy.py account-recovery --env "$ENV" --profile <profile> --sweep
 ```
 
-It refuses to run against a live tenant, acts only on resources whose name and
-`Project=shifter` / `Environment=<env>` ownership tags both match, never touches
-data-bearing resources, and polls asynchronous Network Firewall deletes to
-convergence. It covers: AWS Budgets, RDS DB parameter groups, RDS event subscriptions,
-EventBridge Scheduler schedules, portal SSM parameters under `/shifter/<env>/portal`,
-ECR repositories, KMS aliases, and Network Firewall rule groups. See
+It refuses live tenants and requires matching names plus `Project=shifter` and `Environment=<env>` tags. It excludes data-bearing resources. Asynchronous Network Firewall deletes are checked until completion. It covers AWS Budgets, RDS parameter groups/event subscriptions, EventBridge schedules, portal `/shifter/<env>/portal` SSM parameters, ECR repositories, KMS aliases, and Network Firewall rule groups. See
 `scripts/bootstrap/README.md` for the full safety model.
 
-The classes `account-recovery` does NOT yet automate stay manual below and are marked
-_(manual)_: RDS DB subnet groups, the ElastiCache subnet group, EC2 key pairs, and
-security groups. Run those after `account-recovery` reports clean.
+RDS DB subnet groups, the ElastiCache subnet group, EC2 key pairs, and security groups remain manual. Their sections below are marked _(manual)_. Run those after `account-recovery` reports clean.
 
 The env stacks manage every resource below, so a clean `terraform destroy`
-removes them. They survive only when a stack destroy is abandoned partway (see
-the stalls above) or the `{uuid}` state bucket is deleted before a complete
-destroy, which orphans the live resource. A later fresh bootstrap starts from
+removes them. They can remain after an incomplete destroy. Deleting the state bucket first also orphans resources by removing their managed ownership record. A later fresh bootstrap starts from
 empty state and collides (`AlreadyExists` / `ResourceAlreadyExistsException`).
+
 This is the #1472 leftover set. Run this sweep after the Portal/Range/Core
 destroys report success. Discovery is read-only; delete only what the discovery
-lists. Set the environment and account first:
+lists.
+
+Set the environment and account first:
 
 ```bash
 ENV=<env>                                                   # dev | prod
@@ -453,14 +418,10 @@ secrets (`AWS_ROLE_ARN`, `TF_INFRA_STATE_BUCKET`, `TF_VARS_PROD_PORTAL`,
 
 ## 8. Verify the account is empty
 
-Confirm no residual EC2, ASG, RDS, ALB, Network Firewall, ECR, IAM
-`github-actions-shifter-*` roles, `shifter-<env>-*` policies, OIDC provider,
-`<env>-range` / `/vpc/` CloudWatch log groups, or `{uuid}` state bucket remain
-before a fresh bootstrap. Also confirm the §3 broader leftover set is gone: the
-`shifter-<env>-s3-cost-alert` budget, `<env>-portal*` RDS DB parameter and subnet
-groups, the `<env>-portal-redis` ElastiCache subnet group, `<env>-portal*`
-EventBridge Scheduler schedules, `/shifter/<env>/portal` SSM parameters,
-`<env>-portal*` EC2 key pairs, the `<env>-portal-db-backup-events` RDS event
-subscription, and `<env>-portal*` security groups. If any remain, re-run the §3
+Before fresh bootstrap, independently inventory EC2, ASG, RDS, ALB, Network Firewall, ECR, IAM, CloudWatch log groups, and state storage. Confirm selected `github-actions-shifter-*` roles and `shifter-<env>-*` policies match the approved retirement boundary. Retained workflow state is not an empty account.
+
+Check the broader residual set too: cost-alert budget, RDS parameter/subnet groups, ElastiCache subnet group, schedules, SSM parameters, EC2 key pairs, and security groups. Include the portal backup event subscription. Use exact state and ownership evidence, not a wildcard deletion rule.
+
+If any remain, re-run the §3
 broader leftover sweep. Preserve only what you intend to reuse (for example range
 AMIs and their `/shifter/ami/*` SSM parameters).

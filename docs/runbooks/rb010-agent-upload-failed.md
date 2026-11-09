@@ -3,6 +3,8 @@
 Applicability: GCS primary; S3 optional through the shared object-storage
 contract. Operator: CMS/application owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 An agent upload cannot start or finalize, remains pending, fails validation, or

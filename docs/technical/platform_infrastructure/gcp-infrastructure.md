@@ -1,6 +1,8 @@
 # GCP Infrastructure
 
-GKE-based deployment of the BigRAE platform on Google Cloud.
+This reference describes GCP infrastructure and its source owners.
+For installation, use [Install on Google Cloud](../../getting-started/install-gcp.md).
+Check [deployment compatibility](deployment-compatibility.md) before selecting a release.
 
 ## Directory Structure
 
@@ -9,7 +11,6 @@ platform/
 ├── terraform/gcp/
 │   ├── modules/platform-core/       # All GCP platform infrastructure
 │   ├── environments/platform/       # Shared platform root for every deployment
-│   ├── environments/<deployment>/   # Committed values of the CI-deployed tenants
 │   └── global/                      # cicd-oidc and github-runner roots
 ├── charts/shifter/                  # Helm chart: the only GCP Kubernetes renderer
 └── deployer/gcp/                    # Deployer image of one published release
@@ -29,13 +30,13 @@ Single module provisions the entire GCP control plane.
 | Resource | Service | Purpose |
 |----------|---------|---------|
 | **VPC Networks** (×2) | VPC | `platform` (GKE, shared services) and `range` (guest isolation) |
-| **GKE Cluster** | GKE | Private nodes, VPC-native, Workload Identity enabled, Binary Authorization enforced via project singleton policy, public control-plane endpoint restricted by authorized CIDRs |
-| **Node Pools** (×3) | GKE | `web` (portal, Guacamole), `workers` (domain workers), `provisioner` (range provisioning jobs) |
+| **GKE Cluster** | GKE | Private nodes, VPC-native, Workload Identity enabled, Binary Authorization enforced via project singleton policy, private control-plane endpoint; operator access through Connect Gateway |
+| **Node Pools** | GKE | Separate access, web, worker, provisioner, and other configured workload pools |
 | **Cloud SQL** | Cloud SQL | PostgreSQL. Hosts platform DB and Guacamole DB. Private IP only. |
 | **Memorystore** | Memorystore | Redis. Channel layer and worker coordination. |
 | **Pub/Sub** | Pub/Sub | Event topic with per-domain subscriptions (cms, engine, mc). |
 | **Artifact Registry** | Artifact Registry | Container repositories (portal, guacd, guacamole-client, pulumi-provisioner). |
-| **Secret Manager** | Secret Manager | Runtime secret bundles (app, db, guacamole-db, oidc, guacamole-json-auth). |
+| **Secret Manager** | Secret Manager | Runtime secret bundles (app, db, guacamole-db, guacamole-json-auth, and separate policy bundles). |
 | **Cloud DNS** | Cloud DNS | Optional. Public hostname with Google-managed TLS certificate. |
 | **Cloud Armor** | Cloud Armor | Baseline WAF policy attached to the public portal and Guacamole GKE backends. |
 | **GCS Buckets** | Cloud Storage | Assets/artifacts and Terraform state. Each Terraform-owned bucket uses its own customer-managed Cloud KMS key ([Bucket encryption keys](../handbook/gcp-github-less-deployment.md#bucket-encryption-keys)). |
@@ -57,9 +58,11 @@ Private nodes with no public node IPs. Cloud NAT provides outbound connectivity.
 
 | Pool | Role | Notes |
 |------|------|-------|
-| `web` | Portal and Guacamole | Handles user-facing traffic |
+| `access` | Portal and guacd | Exclusive placement and dedicated access pod range |
+| `web` | Other web-facing platform workloads | Separate from the access pool |
 | `workers` | CMS, Engine, MC background workers | Queue consumers |
 | `provisioner` | Range provisioning jobs | Runs K8s Jobs for range lifecycle |
+| `runtime_plugins` | Isolated executable adapters | Dedicated plugin pool |
 
 Machine types and node counts are configurable per environment.
 
@@ -93,7 +96,7 @@ Managed via Helm with the chart defaults, the profile values, and the values tha
 
 ## Networking
 
-Dual-network design, same pattern as AWS (see [Networking](networking)).
+Dual-network design, same pattern as AWS (see [Networking](networking.md)).
 
 | Network | Purpose |
 |---------|---------|
@@ -107,15 +110,16 @@ Live-fire ranges use GCE range cells (per-range subnets with tag firewall isolat
 ## Deployment Path
 
 One command stands up and updates a GCP deployment:
-`scripts/bootstrap/deploy.py gcp-deploy` (ADR-070). The first install and each
-update use the same command and the same Helm renderer. There are two ways to
+`scripts/bootstrap/deploy.py gcp-deploy` (ADR-070). `gcp-install` orchestrates initial setup, including the first `gcp-deploy`.
+Updates use `gcp-deploy` and the same Helm renderer. There are two ways to
 run it:
 
 - **Without GitHub:** an operator runs the deployer image of a published
   release. The command reads the deployment input bundle from the deployment
   config bucket and impersonates the purpose identities. See the
   [GitHub-less GCP deployment guide](../handbook/gcp-github-less-deployment.md).
-- **Through GitHub CI:** a manual `deploy.yml` dispatch calls `_gcp-dev.yml`.
+- **Retained GitHub CI adapter:** `_gcp-dev.yml` supplies the same commands.
+  No GCP target is currently selectable in `deploy.yml`.
   Each job renders the deployment input bundle from the GitHub secrets and
   variables, then runs the same command as its federated purpose identity.
 
@@ -158,7 +162,7 @@ Email is optional. With `email_backend` unset (the default), the portal uses Dja
 
 2. Apply Terraform. This creates an **unseeded** Secret Manager secret `${project_prefix}-email` for the ESP API key. The key is never stored in Terraform state, tfvars, Helm values, or this repo.
 
-3. Populate the secret with the API key as a JSON bundle, reading the key from a silent prompt so it never reaches shell history:
+3. Read the API key with a silent prompt. Populate the secret as a JSON bundle without putting the key in shell history:
 
    ```bash
    read -rs -p "ESP API key: " ESP_API_KEY && echo
@@ -183,8 +187,8 @@ Public operator egress IPs must not be added to
 
 ## Related Docs
 
-- [Cloud Adapters](../dev/cloud-adapters) - Protocol-based cloud abstraction
-- [Networking](networking) - VPC/network architecture (AWS section)
-- [Secrets](../dev/secrets) - Secret management across clouds
-- [CI/CD](../dev/ci-cd) - Full CI/CD documentation including GCP workflows
-- [Terraform](../dev/terraform) - Terraform conventions and GCP module patterns
+- [Cloud Adapters](../dev/cloud-adapters.md) - Protocol-based cloud abstraction
+- [Networking](networking.md) - VPC/network architecture (AWS section)
+- [Secrets](../dev/secrets.md) - Secret management across clouds
+- [CI/CD](../dev/ci-cd.md) - Full CI/CD documentation including GCP workflows
+- [Terraform](../dev/terraform.md) - Terraform conventions and GCP module patterns

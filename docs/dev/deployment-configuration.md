@@ -14,7 +14,8 @@ A later file wins, so the values that `bigrae.yaml` owns win over a conflicting 
 The command uses a private `TF_DATA_DIR` for each run.
 
 A deployment without GitHub keeps its bundle in its deployment config bucket, not in this repository.
-A CI deployment keeps its values in `environments/<environment>/terraform.tfvars`.
+The retained CI adapter expects values under `environments/<environment>/terraform.tfvars`.
+Current source retains no selectable GCP CI deployment or environment value directory.
 The CI adapter copies that file into the bundle and adds the GitHub secret values in `terraform.tfvars.json`.
 
 The state location remains the existing bucket and `shifter/<environment>/platform-core` prefix.
@@ -22,7 +23,8 @@ Module names, resource addresses, provider locks and outputs are unchanged.
 Changing the source directory requires no resource import or `terraform state mv`.
 Foundation identity and runner state remain separate.
 
-For manual operations on a CI deployment, select values and metadata before initialization:
+The following is retained contributor state-selection syntax, not a current selectable CI deployment.
+Restore the authorized value source and private overrides before using it:
 
 ```bash
 environment=gcp-dev
@@ -68,10 +70,9 @@ and the EKS deployment lifecycle.
 AWS production is not a workflow deployment choice.
 Use the [AWS EKS bundle](../technical/platform_infrastructure/aws-eks-bundle.md) for application deployment.
 
-The optional portal CTFd module has the same owner.
-The portal root calls it through `module.ctfd` when enabled.
-Complete setup through upstream CTFd administration.
-The removed standalone workshop is separate from this retained module.
+The current portal roots contain no CTFd module or CTFd routing outputs.
+Use the exact earlier source and private state for recovery of historical CTFd resources.
+Current source deletion does not remove those resources.
 
 ## Earlier cleanup and recovery
 

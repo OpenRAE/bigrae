@@ -10,6 +10,8 @@ This runbook covers a failed `gcp-deploy`, `gcp-release-scan`, `gcp-smoke`,
 `gcp-foundation`. A CI deployment runs the same commands. Its job log shows the
 same messages.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A lifecycle command stops with a status other than 0:
@@ -196,9 +198,7 @@ release. Use the guide for each step that changes the deployment.
   A failed Terraform apply does not roll back. Fix the cause in the Terraform
   values, publish them, and deploy again
   ([Update and roll back](../technical/handbook/gcp-github-less-deployment.md#update-and-roll-back)).
-  Do not remove a Terraform state lock while an apply can still run. When you
-  know that the apply stopped, run `terraform force-unlock` with the generation
-  number of the lock object as the lock ID, not the ID in the lock info:
+  Do not remove a Terraform state lock while an apply can still run. After confirming the apply has stopped, use `terraform force-unlock`. Its lock ID is the lock-object generation number. The ID inside the lock information is different:
   `gcloud storage objects describe gs://<project>-terraform-state/shifter/<environment>/platform-core/default.tflock --format='value(generation)'`.
   A node pool that stays `RUNNING_WITH_ERROR` after a zone stockout fails the
   apply; follow the stockout entry in
@@ -253,27 +253,24 @@ release. Use the guide for each step that changes the deployment.
   ([Upgrade a deployment to bucket keys](../technical/handbook/gcp-github-less-deployment.md#upgrade-a-deployment-to-bucket-keys)).
   For a missing grant or a disabled key version, follow
   [Repair key access](../technical/handbook/gcp-github-less-deployment.md#repair-key-access).
-  For live objects that stay unmigrated, find the writer that sets its own
-  key or the identity that can not rewrite objects, fix it, and run the
-  command again. A second run rewrites only the objects that remain. Do not
+  For unmigrated live objects, identify the writer that selects its own key or the identity without rewrite permission. Fix that cause, then retry. A second run rewrites only the objects that remain. Do not
   remove a bucket default key to restore access.
 - **Teardown:** Pass the exact deployment name to `--confirm`. Use the deployer
   image of the release that the deployment runs. After a failed destroy, run
   `gcp-destroy` again
   ([Tear down](../technical/handbook/gcp-github-less-deployment.md#tear-down)).
 
-To roll back, deploy the deployer image of an earlier verified release.
+To roll back application code, deploy an earlier verified release only when its schema remains compatible.
+Helm rollback does not reverse database, identity, policy, or Terraform changes.
+Use [RB015](rb015-database-migrations.md) before a rollback that affects data.
 
 ## Prevention
 
 Deploy only verified releases by digest. Keep the bundle in the config bucket,
 not in a repository. Keep the evidence bucket retention lock. Do not disable or
-destroy a bucket key version while data uses it. After an upgrade, run
-`gcp-foundation` before `gcp-deploy`. Run the preflight
+destroy a bucket key version while data uses it.
+
+For a foundation change, run `gcp-foundation` before `gcp-deploy`. Run the preflight
 before each change. Run one lifecycle command at a time for each deployment.
 
-Escalate when a release fails its provenance check, when the scan finds a
-HIGH or CRITICAL finding with no fixed release, when the state of a lock holder
-is unknown, when a Terraform state lock remains after a stopped run, or when a
-teardown would remove a resource outside the selected deployment, or when a
-bucket key version is destroyed or scheduled for destruction.
+Escalate a failed provenance check or a HIGH or CRITICAL finding without a fixed release. Escalate unknown lock ownership or a Terraform lock after a stopped run. Also escalate teardown outside the selected deployment or a key version that is destroyed or scheduled for destruction.
