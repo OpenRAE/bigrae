@@ -1,7 +1,8 @@
 # Platform API Development
 
-BigRAE's non-public HTTP/JSON API is a Django REST Framework surface mounted
-under `/api/v1/`. New API endpoints should join that surface instead of adding
+This how-to guide describes adding endpoints to the authenticated HTTP/JSON API.
+The API uses Django REST Framework under `/api/v1/`.
+See [supported interfaces](../../reference/interfaces.md) for contract sources and coverage. New API endpoints should join that surface instead of adding
 ad-hoc `JsonResponse` function views.
 
 ## Endpoint Shape
@@ -81,7 +82,9 @@ expiry, `Retry-After` and worker-capacity handling.
 
 ## Errors
 
-DRF exceptions use the platform envelope:
+DRF exceptions use the platform envelope below.
+Some retained endpoints declare a separate legacy error body.
+Use each operation's generated response definition rather than assuming one shape for all explicit responses:
 
 ```json
 {
@@ -113,8 +116,7 @@ adapter's fixed-field projection with enumerated states and no private labels.
 ## Schema And Docs
 
 OpenAPI is served from `/api/v1/schema/`; Swagger UI is served from
-`/api/v1/docs/`. These endpoints use the same platform authentication posture
-as the non-public API: a current native session or verified bearer credential
+`/api/v1/docs/`. These endpoints use the platform authentication boundary: a current native session or verified bearer credential
 can read the contract. Swagger UI assets are served from the pinned local
 `drf-spectacular-sidecar` package, not from a third-party CDN.
 

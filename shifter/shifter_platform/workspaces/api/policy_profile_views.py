@@ -38,7 +38,7 @@ class AccountPrincipalContextSerializer(serializers.Serializer):
 
 
 class AccountPrincipalContextView(_AccountAPIView):
-    """Prepared replacement for workspace-only or staff-only presentation assumptions."""
+    """Return native principal context and current action hints."""
 
     @extend_schema(parameters=[AccountPageQuerySerializer], responses=AccountPrincipalContextSerializer)
     def get(self, request: Request) -> Response:
