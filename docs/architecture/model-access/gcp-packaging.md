@@ -1,5 +1,14 @@
 # GCP model broker deployment package
 
+> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+> These retained contracts do not authorize broker activation or establish live qualification.
+> Independently supported native source and range controls retain their own boundaries.
+> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 M06 / #2123 supplies disabled deployment infrastructure for PLAT-202. M05
 owns the executable broker and private Engine control server, M07 the Vertex
 adapter, M08 admission/enrollment projection, and M10 independent deployed
@@ -201,3 +210,5 @@ The realizer rejects missing or non-private VIPs, creates only TCP 443 to that
 exact /32, and retains the fixed firewall name for teardown and residual
 inventory even after broker configuration is disabled. The provisioner Job
 environment allowlists carry this non-secret value through both GCP renderers.
+
+<!-- vale on -->

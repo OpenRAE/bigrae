@@ -1,5 +1,13 @@
 # VPC Expansion Implementation Checklist
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 **Goal**: Expand from 255 to 16,384 concurrent ranges (10.1-4.0.0/16, /28 subnets)
 
 ## Phase 1: Terraform VPC Changes
@@ -322,3 +330,5 @@
 - 7 Terraform files
 - 1 Lambda Python file
 - 1 New unit test file
+
+<!-- vale on -->

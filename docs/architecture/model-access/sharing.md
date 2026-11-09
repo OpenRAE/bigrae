@@ -1,5 +1,14 @@
 # Configurable sharing across ranges
 
+> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+> These retained contracts do not authorize broker activation or establish live qualification.
+> Independently supported native source and range controls retain their own boundaries.
+> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 This clarification to [#681](index.md) is part of the first model-access
 delivery, including GCP qualification. Operators must be able to share some
 or all configured model-access resources across a chosen collection of
@@ -298,3 +307,5 @@ expiry and cleanup. Include a user with ranges in two CTF events and a
 non-CTF range, a user group spanning authorized events, selected range sets
 and a deployment-wide policy. Prove one range can be revoked while its
 neighbors continue on the same provider identity and pool.
+
+<!-- vale on -->

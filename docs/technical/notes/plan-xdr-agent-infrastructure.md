@@ -1,5 +1,13 @@
 # XDR Agent Deployment on Shifter Infrastructure EC2
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Summary
 
 Deploy XDR agents on Portal EC2 instances at boot time, using a dedicated S3 path for the infrastructure agent installer.
@@ -188,3 +196,5 @@ ls -la /opt/traps/
 - Installation failures log errors but don't prevent instance boot
 - Existing EC2 role already has S3 access to the user storage bucket
 - No network/egress changes needed - Portal VPC allows all outbound traffic
+
+<!-- vale on -->
