@@ -1,81 +1,55 @@
-# Workspace Membership
+# Workspace membership
 
-Workspaces group people around a shared tenancy scope while each range keeps its
-individual owner. Membership does not let one member open, change, or destroy
-another member's range.
-
-The account hierarchy introduced in ADR-066 will let individual accounts own
-resources directly and let team and enterprise accounts own organizations and
-workspaces. This page describes the current workspace membership flow, which
-continues until the S8 cutover.
+Manage membership in a workspace that you are authorized to administer.
+Membership records who belongs to a scope.
+Policies separately authorize application actions.
 
 ## Roles
 
-Each workspace membership has one of three roles:
-
-| Role | Membership permissions |
-|------|------------------------|
-| Owner | View the roster; add, remove, and change members; grant or revoke owner |
-| Admin | View the roster; add, remove, and change admins or members |
-| Member | View their own membership and leave the workspace |
-
-A workspace must always keep at least one owner. Only an owner can grant or
-revoke the owner role. Personal workspaces are compatibility spaces for
-individual users: their owner cannot leave or be removed or demoted, and
-collaborators cannot be added.
+The mounted account interface uses human and service principal memberships.
+The historical owner/admin/member table is not its current permission contract.
+Owners are recorded separately, and ownership alone grants no permission.
+A workspace must retain an owner.
+See [policies and groups](authorization-policies-and-groups.md).
 
 ## Manage membership with the API
 
-Workspace membership is available under `/api/v1/workspaces/{workspace_uuid}/`.
-The API accepts the workspace's public UUID, never its internal database ID.
+Use the [account administration reference](../technical/shifter_platform/account-administration.md) for exact routes and request fields.
+The current member form accepts a public principal UUID rather than an internal database identifier or email.
+Browser writes use the existing session and CSRF protection.
+A native credential must also permit the requested action and scope.
 
-- `GET membership/` returns your own membership.
-- `GET memberships/` returns the roster to an owner or admin.
-- `POST memberships/` adds an existing active BigRAE account by email.
-- `POST memberships/{user_id}/role/` changes a member's role.
-- `POST memberships/{user_id}/remove/` removes another member.
-- `POST memberships/leave/` removes your own membership.
+To use the portal:
 
-Session requests use the normal BigRAE login and CSRF protection. API tokens
-need `workspaces:membership:read` for reads and
-`workspaces:membership:write` for changes. Token scopes do not replace role
-checks: the token's active owner must also hold the required workspace role.
+1. Open **Administer > Accounts**.
+2. Select the workspace or a directly permitted workspace entry.
+3. Open **Workspace members**.
+4. Enter **Member principal UUID**.
+5. Select **Add member**.
+6. Check that the membership appears.
 
-Adding a member does not send an invitation or create an account. The target
-must already have an active BigRAE account. Exact duplicate additions are
-safe to retry; adding the same account with a different role returns a
-conflict, and the role-change endpoint must be used instead.
-
-Membership and role changes are transactional and recorded in the audit log.
-Removing membership immediately revokes access to that workspace's bound range
-surfaces, including lifecycle, lease, VPN, terminal, SSH, and RDP operations.
-This applies to subsequent platform requests, downloads, and new sessions. It
-does not terminate an already established terminal or Guacamole session or
-invalidate a VPN profile that was already downloaded; range expiry and
-system-owned cleanup continue even after membership removal.
+To remove membership, select the principal and then **Confirm removal**.
+Removal does not delete the principal.
+Required cleanup and range expiry retain their own authority.
+For ongoing access and revocation, see [continuing access](content-range-authority.md).
 
 ## Invite a new member
 
-The staff administration console provides invitation management at
-`/administer/organization/workspaces/{workspace_uuid}/invitations`. A workspace
-owner or admin can issue, list, resend, and revoke invitations when their current
-role permits the matching operation. Owner invitations remain owner-only.
+1. Open **Invitations** for the selected workspace.
+2. Enter the recipient's email.
+3. Select **Send invitation**.
+4. Read the invitation and delivery status.
 
-Invitation endpoints live under
-`/api/v1/workspaces/{workspace_uuid}/invitations/` and accept browser sessions
-only; platform API tokens cannot administer them. The issued credential is sent
-by email and is never returned by the API. Acceptance requires a fresh,
-provider-verified login using the invited email. Resending rotates the signed
-credential, revocation invalidates it, and acceptance creates exactly one
-membership without silently changing an existing role.
+The recipient must accept through their freshly verified provider identity.
+The signed invitation is delivered through email, not returned in the list.
+Resending rotates the credential; revocation invalidates it.
+Acceptance adds membership without silently changing an existing membership or assigning permissions.
+See the [invitation reference](../technical/shifter_platform/workspace-member-invitations.md).
 
 ## Launch a range in a workspace
 
-A range launch accepts an optional `workspace_uuid` naming the workspace the new
-range belongs to. Omitting it launches into your personal workspace, so nothing
-changes for a single-user install. When you supply it, you must be a member of
-that workspace with a role that permits launching; an unknown or non-member
-workspace is refused rather than quietly launched somewhere else. The launched
-range still belongs to you individually—putting it in a shared workspace does
-not let other members open, change, or destroy it. Only the workspace's public
-UUID is accepted, never an internal identifier.
+Select the authorized workspace before choosing a scenario in **Launch a range**.
+The scenario and installer choices refresh for that scope.
+An unavailable workspace is refused rather than replaced silently.
+Workspace membership alone does not let you open, change, or destroy another principal's range.
+See [range operations](ranges.md).

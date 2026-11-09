@@ -1,9 +1,9 @@
 # CTF Organizer Guide
 
-How to run a capture-the-flag event end to end. The organizer surface lives under the
-**CTF Admin** area of the portal (`/ctf/admin/`) and is restricted to users with CTF
-permission for the requested event actions. Account membership and resource
-ownership alone do not grant those permissions.
+Use this guide to prepare and run a capture-the-flag event.
+Open the **CTF Admin** area at `/ctf/admin/`.
+You need current permission for each requested event action.
+Account membership and resource ownership alone do not grant those permissions.
 
 ## Staff changes and recovery
 
@@ -27,6 +27,9 @@ stateDiagram-v2
     Live --> Ended: Event end
     Ended --> [*]: Cleanup
 ```
+
+Text alternative: create a draft, open registration, start the event, end it, and perform configured cleanup.
+The event controls also support other transitions; consult the event state before each action.
 
 ## 1. Create the Event
 
@@ -75,7 +78,7 @@ closes the public route without changing the stored switch.
 Under an event, **Challenges → Create**. For each challenge set its name, category,
 description, points, difficulty, and the flag. A static flag is stored as plaintext
 without its wrapper, and participants may submit it as `FLAG{value}`, `{value}`, or
-just `value` (the `FLAG` prefix is case-insensitive).
+`value` (the `FLAG` prefix is case-insensitive).
 
 Additional controls:
 
@@ -125,22 +128,19 @@ image only while they can see the content that contains it.
 
 ## 3. Participant Briefing
 
-Give participants event-specific orientation: what environment they are in, how their
-range is reached, and where to start. This is the guidance a shared help page cannot
-carry—for example, that they are a red-team operator on a Kali workstation inside a
-target network, reached from that box, with the public website, DNS server, and domain
-controller as useful first objectives.
+Give participants event-specific orientation.
+State the environment, permitted access, authorized objectives, and starting point.
+For example, identify a synthetic lab workstation and the exercise tasks reached through it.
+Keep scenario answers and private operational details outside shared help.
 
-Author it from the event's admin page in the **Participant briefing** editor. It is
-Markdown: headings, lists, code, and links render; raw HTML, scripts, and images do
-not, and unsafe link schemes (such as `javascript:` and `data:`) are stripped when the
-briefing is shown. Editing updates the published briefing in place; removing it
+Open the event admin page and use **Participant briefing**.
+The Markdown renderer supports headings, lists, code, and safe links.
+It omits raw HTML, scripts, images, and unsafe link schemes such as `javascript:` and `data:`. Editing updates the published briefing in place; removing it
 restores the generic help.
 
-The briefing is stored and shown verbatim in the language you write it—the platform
-does not translate it, so you own its wording. Because it is visible to every
-participant, never put flags, passwords, invitation or reset links, range credentials,
-or any other secret in it.
+The platform stores and displays your briefing in its original language without translation.
+Every participant can read it.
+Do not include flags, passwords, invitation links, reset links, range credentials, or other secrets.
 
 When a briefing exists, participants get a **Briefing** entry on their event home and a
 dedicated briefing page. An event with no briefing shows the standard help unchanged,
@@ -158,10 +158,9 @@ Select **Make team captain**. This action requires permission to manage teams.
 It changes captaincy without changing membership or scores.
 
 Requests from the optional public page appear separately at the top of this screen.
-**Reject** closes a request without side effects. **Approve** sends the request
-through the same participant-admission path as a manual add: current capacity and
-duplicate-email policy are rechecked, then the isolated account, participant seat,
-and normal provisioning wake-up are created. A public submission itself never sends
+Select **Reject** to close a request without creating an account or range.
+Select **Approve** to use the same admission checks as a manual add.
+The service rechecks capacity and duplicate-email policy before creating the account, seat, and provisioning wake-up. A public submission itself never sends
 mail, creates credentials, reserves capacity, or provisions a range.
 
 Every new participant with a delivery email gets a registration confirmation by
@@ -176,10 +175,9 @@ Participants use isolated temporary accounts on the dedicated CTF login page.
 Generate accounts before an event and hand out each generated username and initial
 password manually, or attach an optional delivery email for non-secret login
 information. By default, every new account receives its own strong generated
-password. If an event explicitly needs one shared initial password, set it on the
-event form; leaving that field blank while editing preserves the existing policy,
-and **Disable the event shared participant password** returns new accounts to unique
-generated passwords.
+password. If the event requires a shared initial password, set it on the event form.
+A blank field during editing preserves the current policy.
+Select **Disable the event shared participant password** to restore unique generated passwords for new accounts.
 
 Use **Manage password** on the participant list or detail page to generate a new
 password or set a policy-compliant one. The result is displayed once and cannot be
@@ -198,32 +196,29 @@ The **Ranges** page shows the provisioning state of every participant's range. T
 platform provisions ranges automatically around the spin-up window and, when auto
 cleanup is enabled, tears them down after the event. The CTF scheduler drives batch
 provisioning; see the technical
-[CTF documentation](../technical/shifter_platform/ctf) for how it runs.
+[CTF documentation](../technical/shifter_platform/ctf.md) for how it runs.
 
 ### Recovering a destroyed range
 
-Live-fire scenarios can leave a participant's range unrecoverable in place (the
-participant or their agent may encrypt, wipe, or corrupt it). From the **Ranges** page
-you can recover a single participant's range without editing any records by hand:
+An exercise can damage a participant range beyond recovery in place.
+Open the event **Ranges** page to recover it through the supported controls:
 
 - **Rebuild** provisions a fresh range for the same event and scenario.
 - **Reassign spare** hands the participant a prewarmed spare range from the event's spare
   pool, when one is available.
 
-The old range is always destroyed so it can no longer receive the
-participant's traffic, and the participant keeps their scoreboard identity,
-submissions, awards, team and bracket membership, and registration. Recovery is safe
+Recovery destroys the old generation before replacement access is established.
+It preserves scoreboard identity, submissions, awards, team, bracket membership, and registration. Recovery is safe
 to retry after a partial failure. The current recovery phase and any failure reason are
 shown on the Ranges page. A participant cannot recover their own range; recovery is
 organizer-only.
 
 ### Setting the spare pool
 
-The **Spare pool** panel on the Ranges page controls how many prewarmed ranges are
-kept ready for **Reassign spare** recovery. Set the target pool size and update it;
-the platform provisions any shortfall under managed system accounts (never
-counted as participants) and shows the current target, available, provisioning,
-and failed counts. The pool only grows on request; it does not shrink automatically.
+Use **Spare pool** on the Ranges page to set the number of prepared recovery spares.
+Set the target and submit the update.
+The platform provisions any shortfall under managed system accounts, which are not participants.
+The page shows target, available, provisioning, and failed counts. The pool only grows on request; it does not shrink automatically.
 Unconsumed spares are torn down along with the rest of the event's ranges during
 event cleanup.
 
@@ -231,20 +226,22 @@ event cleanup.
 
 The event **recovery-spare** pool described here is distinct from the
 deployment-level **warm pool** for faster *initial* launches (see
-[Ranges](ranges.md)). Recovery spares replace a participant range that **fails
-mid-event** via **Reassign spare**; the warm pool speeds up the *first* launch by
-handing out a pre-provisioned range. They are configured separately (recovery
-spares per event here; the warm pool in `bigrae.yaml`), accounted separately
-against capacity, and never share generations; a recovery spare is never claimed
-as an initial-launch warm range, and vice versa.
+[Ranges](ranges.md)). Use **Reassign spare** to replace a participant range that fails during the event.
+The warm pool accelerates the first launch with a prepared range.
+Configure recovery spares per event and the warm pool in `bigrae.yaml`.
+They use separate capacity accounting and never share generations.
+A recovery spare cannot become an initial-launch warm range, or the reverse.
 
 ## 6. Notifications
 
-Use **Notifications** to send announcements during the event.
+Use **Notifications** to open [scoped communications](ctf-communications.md#multi-event-console).
+Preview the recipients before sending an event announcement.
 
 The event sends reminder emails before the start, at the hour offsets in
-**Reminder hours before start**. New events use 24 and 1. Clear the field to turn
-reminders off. A change replaces the reminders that are not sent yet. Each email shows the start time in the participant's time zone.
+**Reminder hours before start**. New events use 24 and 1. Clear the field to turn reminders off.
+A change replaces unsent reminders.
+
+Each email shows the start time in the participant's time zone.
 When a participant has not set a time zone, the email uses the event time zone.
 Reminder emails need a configured mail provider.
 
@@ -273,8 +270,8 @@ position notices stop while the scoreboard is hidden or frozen.
 
 ## See Also
 
-- [CTF](ctf): the participant experience.
-- [CTF technical documentation](../technical/shifter_platform/ctf): models, services,
+- [CTF](ctf.md): the participant experience.
+- [CTF technical documentation](../technical/shifter_platform/ctf.md): models, services,
   scheduling, and range provisioning.
-- [Native CTF scenario content](../dev/ctf-scenario-content): publish and bind
+- [Native CTF scenario content](../dev/ctf-scenario-content.md): publish and bind
   private, digest-pinned event content.

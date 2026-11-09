@@ -43,9 +43,9 @@ The SCM credential enables automatic device registration.
 
 ### Where to Get These Values
 
-**SCM Folder**: In SCM, go to Configuration > NGFW and Prisma Access > Folders
-**PIN ID**: In SCM, go to Configuration > Device Associations > Get PIN
-**SLS Region**: Check your SCM dashboard or account settings
+- **SCM Folder**: In SCM, go to Configuration > NGFW and Prisma Access > Folders.
+- **PIN ID**: In SCM, go to Configuration > Device Associations > Get PIN.
+- **SLS Region**: Check your SCM dashboard or account settings.
 
 ## Step 3: Provision the NGFW
 
@@ -94,28 +94,27 @@ When provisioning reaches "Action Required":
 3. Wait for final configuration (up to 15 minutes)
 4. Success message appears when ready
 
-## Step 7: Access NGFW Management (Optional)
+## Step 7: Access NGFW management {#step-7-access-ngfw-management-optional}
 
-Once your NGFW is ready, you can access the management interface:
+Use the [NGFW CLI procedure](../features/ngfw.md#accessing-ngfw-management) for the ready firewall.
+The current detail page provides **Open CLI**.
+It does not establish a local SSH tunnel or a general GUI session.
+Ask the operator for any separate management-network procedure.
 
-1. Go to **Assets > NGFWs**
-2. Click on your NGFW to view details
-3. Under **Management Access**:
-   - Click **Open CLI** for command-line access
-   - View **GUI Access** instructions for web interface
+## Step 8: Launch an NGFW-enabled range
 
-This is useful for:
-- Verifying configuration changes
-- Troubleshooting connectivity
-- Checking security policies
-- Reviewing logs directly on the firewall
+Confirm the installed pack and backend support before launch.
+The GCE range-cell path does not support the retained NGFW attachment contract.
+A standalone ready firewall does not supply that missing capability.
 
-## Step 8: Launch NGFW-Enabled Range
+1. Open **Ranges > Launch a range**.
+2. Select the approved workspace and compatible installed scenario.
+3. Select the required installer.
+4. Select **Launch range**.
+5. Inspect the operation result before connecting.
+6. Follow [range cleanup](../features/ranges.md#destroy-a-range) after the exercise.
 
-1. Go to **Ranges**
-2. Select **Basic Range with NGFW** or **Cortex BYOT**
-3. Select your agent
-4. Click **Launch Range**
+The operator owns firewall setup, routing verification, and persistent-firewall cleanup.
 
 ## Verifying the Setup
 
@@ -145,17 +144,17 @@ This is useful for:
 - Ensure SCM credentials are correct
 - Try deprovisioning and starting over
 
-**Device won't associate in SCM?**
+**Device will not associate in SCM?**
 - Verify the serial number matches
 - Check that the SCM folder allows new devices
-- Ensure PIN hasn't expired
+- Ensure PIN has not expired
 
 **No network alerts in XDR/XSIAM?**
 - Verify NGFW shows as connected in XDR/XSIAM settings
 - Check log forwarding is configured in SCM
 - Use **Open CLI** to verify traffic is passing through: `show traffic`
-- Generate obvious traffic (not just ICMP)
+- Generate approved traffic that the test expects to log
 
 **Range launch fails with NGFW?**
 - Ensure NGFW status is "Ready" before launching
-- Check that NGFW wasn't deprovisioned
+- Check that NGFW was not deprovisioned

@@ -4,6 +4,9 @@ Dispatch runs each trial of an [admitted batch](admit-pack-experiments.md) on it
 An installed apparatus adapter runs the trial on the worker.
 BigRAE collects the sealed run and then retires the worker.
 
+Run the commands in an operator-prepared application environment.
+Use the installed revision and approved credential files.
+
 ## Prepare the deployment
 
 1. Admit the batch. The requested concurrency sets how many trials run at the same time.
@@ -58,6 +61,7 @@ A restart loses nothing: each run reads the stored state.
 A failed collection keeps the worker and its hold. The entry stays not collected.
 Fix the cause, then run `collect` or `reconcile`.
 A failed worker operation leads to `collect-requested`; collection never starts a trial again.
+
 An overdue run leads to `recovery-requested`: BigRAE stops it and collects what it sealed.
 `not-sealed` and `start-failed` need operator review; the worker and its hold stay.
 `stop` persists a batch stop. No new entry is claimed or started after it.

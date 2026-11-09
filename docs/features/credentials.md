@@ -1,59 +1,63 @@
 # Credentials
 
-Manage authentication credentials for NGFW integration.
+Store an SCM registration credential or software NGFW deployment profile.
+These integration credentials are separate from [platform access credentials](access-credentials.md).
+You need current content-management authority for the destination scope.
 
-## When You Need Credentials
+## When you need credentials
 
-Credentials are only required for NGFW scenarios. If you're using Basic Range or AD Attack Lab without NGFW, skip this section.
+Use these credentials only when an approved integration or scenario requires them.
+The Linux smoke tutorial does not require an NGFW credential.
+Ask the operator to confirm backend compatibility before preparing firewall resources.
 
-## Credential Types
+## Credential types
 
-### SCM Credentials
+### SCM credentials
 
-For Strata Cloud Manager device association.
+The current **SCM Registration** form uses these fields:
 
-| Field | Description |
-|-------|-------------|
-| Folder Name | Folder in SCM where device will be registered |
-| PIN ID | Registration PIN identifier |
-| PIN Value | Secret PIN value (encrypted at rest) |
-| License Region | Strata Logging Service region |
+| Field | Purpose |
+| --- | --- |
+| Folder name | SCM device registration destination |
+| PIN id | Registration PIN identifier |
+| PIN value | Secret registration value |
+| Licensing region | Americas, Europe, Japan, or Asia Pacific |
 
-### Deployment Profiles
+### Deployment profiles
 
-For software NGFW deployment.
+The **Deployment Profile** form takes the secret **VM-Series authcode**.
+Use an approved licensing source.
+Keep authcodes and PIN values out of logs, URLs, screenshots, and public issues.
 
-| Field | Description |
-|-------|-------------|
-| Authcode | License authorization code |
+## Add credentials
 
-## Add Credentials
+1. Open **Assets > Credentials**.
+2. Select **Credential type**.
+3. Enter a **Display name**.
+4. Enter the type-specific values.
+5. Enter **Expiration date** when applicable.
+6. Select **Save credential**.
+7. Record the returned identifier in the approved operational record.
 
-1. Go to **Assets > Credentials**
-2. Click **Add Credential**
-3. Select credential type
-4. Fill in required fields
-5. Save
+The NGFW setup form needs that identifier.
+The confirmation does not reveal the secret again.
+Correct any validation error before another submission.
 
 ## Expiration
 
-Credentials track expiration dates:
+The credential accepts an optional expiration date.
+Confirm renewal requirements with the licensing or SCM owner.
+The current page does not provide a list with expiration badges.
 
-- **Valid**: Credential is current
-- **Expires Soon**: Within 30 days of expiration
-- **Expired**: No longer valid, needs renewal
+## Manage credentials
 
-## Manage Credentials
+The SPA currently creates credentials but does not list existing ones.
+Immediately after creation, **Delete this credential** removes that created credential after confirmation.
+For another stored credential, use the operator's supported administration procedure.
+Deletion cannot be undone.
 
-From the Credentials page:
+## Where to get these values
 
-- View all credentials with type badges
-- Filter by type (All, SCM, Deployment Profiles)
-- See expiration status
-- Delete credentials
-
-## Where to Get These Values
-
-**SCM Credentials**: From your Strata Cloud Manager console under device onboarding.
-
-**Deployment Profiles**: From your PANW license portal or account team.
+Obtain SCM registration values from your authorized SCM administrator.
+Obtain the deployment profile authcode from your approved licensing portal or account contact.
+Use the [operator NGFW guide](../how-to/ngfw-demo.md) for provisioning and association.

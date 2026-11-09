@@ -2,5 +2,5 @@
 
 Quick answers and support information.
 
-- [FAQ](faq) - Common questions
-- [Support](support) - Getting help
+- [FAQ](faq.md) - Common questions
+- [Support](support.md) - Getting help

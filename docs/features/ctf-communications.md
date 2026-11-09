@@ -1,68 +1,9 @@
 # Scoped CTF communications
 
-The communication API lets an organizer author a message for participants in one
-or more events with one account, organization or workspace parent. You need
+Use this guide to send participant notices and manage inbox receipts.
+A campaign can target events under one account, organization, or workspace parent. You need
 current permission to manage communications on **every** target event.
 Membership and administrator flags alone do not grant that permission.
-
-## Author and release
-
-Use `/api/v1/ctf/communications/` with an authenticated browser session or an API
-token. The native credential ceiling and current policy must permit
-`event.manage_communications` for every target. Recipient details also require
-`event.manage_participants` on the selected event. Event participation does not
-grant communication administration.
-
-Create a campaign with exactly one parent UUID (`account`, `organization` or
-`workspace`), `title`,
-`target_event_ids`, `audience_spec`, `trigger_spec`, `channels`, `subject`, and
-`body`. `acknowledgement_policy` defaults to `none`; `read` and `explicit` are
-also supported. The generated OpenAPI contract describes closed selector and
-trigger variants. Unknown fields and duplicate JSON keys are rejected.
-
-| Operation | Route relative to `/api/v1/ctf/` |
-| --- | --- |
-| Create a draft | `POST communications/` |
-| List campaigns | `GET communications/?workspace=<uuid>&limit=25&offset=0` |
-| Read summary | `GET communications/<campaign_id>/` |
-| Append draft content revision | `POST communications/<campaign_id>/revisions/` |
-| Release or schedule | `POST communications/<campaign_id>/release/` |
-| Cancel unclaimed work | `POST communications/<campaign_id>/cancel/` |
-| List events and parents you can message | `GET communications/target-options/?workspace=<uuid>` |
-| Read the workspace compatibility projection | `GET communications/targets/?workspace_id=<uuid>` |
-| Preview a revision | `GET communications/<campaign_id>/preview/?revision_id=<uuid>` |
-| Read delivery state | `GET communications/<campaign_id>/delivery/` |
-| Read recipient state for one event | `GET communications/<campaign_id>/recipients/?intent_id=<uuid>&event_id=<uuid>` |
-| Read the activity history | `GET communications/<campaign_id>/activity/` |
-
-Each route requires current native authority and a live credential.
-Browser sessions send the CSRF token on every POST.
-GET routes change no state.
-
-Release requires an `occurrence_key`; reuse the same key when retrying the same
-request. A future absolute-time trigger creates a scheduled declaration. The
-scheduler rechecks the original actor and token before releasing it. Revoking a
-token or changing its owner prevents subsequent admission, including replay.
-
-HTTP 202 means the ledger accepted the declaration. It does not mean an email
-was delivered, a socket received a message, or a participant read it. The in-app
-channel is available. The email channel is available only when the deployment
-configures a mail provider. A console, file, or dummy backend makes email
-unavailable. A release that selects an unavailable channel returns
-dependency-unavailable and creates no queued work. Cancellation cannot recall an
-accepted message.
-
-The worker sends each email once per attempt and retries transient failures with
-backoff. It stops at the attempt and elapsed-time limits. **Accepted** means the
-mail provider took the message. It does not prove mailbox delivery. A worker
-crash after the provider accepts a message can send a duplicate.
-
-Collections default to 25 campaigns and are capped at 100 per request. Campaigns
-are visible only when the actor may access every target. Visibility is applied
-before pagination; `next_offset` advances through authorized campaigns only.
-The organizer page can load subsequent pages to inspect or cancel older work.
-Bodies are limited to 65,536 UTF-8 bytes, targets to 100, and explicit audience
-lists to 5,000 references. Authoring and release share admission rate budgets.
 
 ## Multi-event console
 
@@ -183,13 +124,15 @@ The API is session-only. It is scoped to the parent event:
 POST an empty object. Browser writes need CSRF. A repeated action keeps the
 first timestamp. No action changes another action's timestamp. Each item shows
 `action_required` while its pinned policy needs a read or an acknowledgement.
+
 Responses are private and the browser does not store them. An invalid request
 returns a generic error that does not repeat the input.
 
 Banned or removed participants cannot read messages or change receipts. A
 disqualified participant who can view the event can manage their own receipts.
-Temporary accounts must satisfy their live participation and password-change
-requirements. Email-only declarations do not appear in the inbox. A message is
+Temporary accounts must satisfy their live participation and password-change requirements.
+
+Email-only declarations do not appear in the inbox. A message is
 not available after the retention window, also before the purge job deletes it.
 
 Retained legacy notification bodies are not replayed through the CTF
@@ -237,3 +180,66 @@ who stops being the owner or a co-organizer loses the alerts at once. Pending
 email to that person stops.
 
 Submissions close at the exact event end time.
+
+## Author and release
+
+Use `/api/v1/ctf/communications/` with an authenticated browser session or an API
+token. The native credential ceiling and current policy must permit
+`event.manage_communications` for every target. Recipient details also require
+`event.manage_participants` on the selected event. Event participation does not
+grant communication administration.
+
+Create a campaign with exactly one parent UUID (`account`, `organization` or
+`workspace`), `title`,
+`target_event_ids`, `audience_spec`, `trigger_spec`, `channels`, `subject`, and
+`body`. `acknowledgement_policy` defaults to `none`; `read` and `explicit` are
+also supported. The generated OpenAPI contract describes closed selector and
+trigger variants. Unknown fields and duplicate JSON keys are rejected.
+
+| Operation | Route relative to `/api/v1/ctf/` |
+| --- | --- |
+| Create a draft | `POST communications/` |
+| List campaigns | `GET communications/?workspace=<uuid>&limit=25&offset=0` |
+| Read summary | `GET communications/<campaign_id>/` |
+| Append draft content revision | `POST communications/<campaign_id>/revisions/` |
+| Release or schedule | `POST communications/<campaign_id>/release/` |
+| Cancel unclaimed work | `POST communications/<campaign_id>/cancel/` |
+| List events and parents you can message | `GET communications/target-options/?workspace=<uuid>` |
+| Read the workspace compatibility projection | `GET communications/targets/?workspace_id=<uuid>` |
+| Preview a revision | `GET communications/<campaign_id>/preview/?revision_id=<uuid>` |
+| Read delivery state | `GET communications/<campaign_id>/delivery/` |
+| Read recipient state for one event | `GET communications/<campaign_id>/recipients/?intent_id=<uuid>&event_id=<uuid>` |
+| Read the activity history | `GET communications/<campaign_id>/activity/` |
+
+Each route requires current native authority and a live credential.
+Browser sessions send the CSRF token on every POST.
+GET routes change no state.
+
+Release requires an `occurrence_key`; reuse the same key when retrying the same
+request. A future absolute-time trigger creates a scheduled declaration. The
+scheduler rechecks the original actor and token before releasing it. Revoking a
+token or changing its owner prevents subsequent admission, including replay.
+
+HTTP 202 means the ledger accepted the declaration. It does not mean an email
+was delivered, a socket received a message, or a participant read it. The in-app
+channel is available. The email channel is available only when the deployment
+configures a mail provider. A console, file, or dummy backend makes email
+unavailable.
+
+A release that selects an unavailable channel returns
+dependency-unavailable and creates no queued work. Cancellation cannot recall an
+accepted message.
+
+The worker sends each email once per attempt and retries transient failures with
+backoff. It stops at the attempt and elapsed-time limits. **Accepted** means the
+mail provider took the message. It does not prove mailbox delivery. A worker
+crash after the provider accepts a message can send a duplicate.
+
+Collections default to 25 campaigns and are capped at 100 per request. Campaigns
+are visible only when the actor may access every target. Visibility is applied
+before pagination; `next_offset` advances through authorized campaigns only.
+The organizer page can load subsequent pages to inspect or cancel older work.
+Bodies are limited to 65,536 UTF-8 bytes, targets to 100, and explicit audience
+lists to 5,000 references. Authoring and release share admission rate budgets.
+
+See the [communication reference](../technical/shifter_platform/ctf-communications.md) for service and cutover contracts.
