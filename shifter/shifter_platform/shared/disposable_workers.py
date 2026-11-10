@@ -11,7 +11,7 @@ from shared.raes.worker_host import worker_host_shape
 from shared.runtime_plugin_binding import PluginTargetBindings, RuntimeTargetImageProfile
 
 # A predefined machine type states its vCPU count, for example c4a-standard-4.
-_PREDEFINED_MACHINE = re.compile(r"^[a-z][a-z0-9]*-(?:standard|highcpu|highmem)-([1-9][0-9]{0,2})$")
+_PREDEFINED_MACHINE = re.compile(r"^[a-z][a-z0-9]*-(?:standard|highcpu|highmem)-([1-9]\d{0,2})$")
 
 
 class WorkerSoftwareBinding(ClosedModel):
