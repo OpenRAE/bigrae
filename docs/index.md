@@ -37,6 +37,7 @@ Use [pack installation](scenarios/index.md#install-a-content-pack) for administr
 | [Deployment configuration and recovery](dev/deployment-configuration.md) | You need how the deploy renders its Terraform inputs and recovers state. |
 | [Native CTF scenario content](dev/ctf-scenario-content.md) | You are publishing and binding private, digest-pinned native challenges to a scenario. |
 | [GCP event capacity profiles](ops/gcp-event-capacity.md) | You are scaling a GCP tenant for an event, running the p30 public-path gate, checking drift, or scaling down. |
+| [GCP operator credential](ops/gcp-operator-credential.md) | You need an operator credential file and no portal session can issue one. |
 | [GCP native identity](ops/gcp-native-identity.md) | You are enabling native SQL, separating policy administration or qualifying live renewal and authority. |
 | [GCP range audit telemetry](ops/gcp-range-audit-telemetry.md) | You are changing GCP range flow, NAT, or Vertex AI audit logging, or reading the deploy readback. |
 | [Operations runbooks](runbooks/index.md) | You are diagnosing or recovering a deployed BigRAE environment. |

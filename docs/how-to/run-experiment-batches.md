@@ -24,6 +24,7 @@ No model key goes to a worker.
 ## Run the batch
 
 Each command takes a native credential file, the organization, and the batch.
+Without a portal session, issue the file from the cluster: see [GCP operator credential](../ops/gcp-operator-credential.md).
 `start`, `collect` and `reconcile` also take the worker scope.
 
 ```bash
