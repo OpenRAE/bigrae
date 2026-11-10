@@ -30,6 +30,11 @@ Use a publication that clears machine and Docker identities before capture.
 Older publications need a rebuild through the protected guest-image workflow.
 See [Linux identity at capture](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md#linux-identity-at-capture).
 
+To use an ARM64 worker, set the image profile `machine_type` to a predefined C4A type with the plan's vCPU count.
+Set `disk_type` to `hyperdisk-balanced`, `nic_type` to `GVNIC`, and `disk_interface` to `NVME`.
+Set `enable_secure_boot` to `false` only when the trial loads an unsigned kernel module.
+The image must be an ARM64 image.
+
 Reserve capacity through the existing Engine assessment service and deployment catalog.
 The profile names that reservation scope and its approved capacity partition.
 The partition must match the deployment project, region, and GCE backend.
@@ -57,6 +62,8 @@ The catalog initializer's credential remains unchanged.
 
 The command prints its worker UUIDs before creation.
 It starts two workers in parallel, checks private SSH access, and verifies distinct VM, machine, and Docker daemon identities.
+It also verifies that each realized VM has the machine type, Secure Boot state, interfaces, and image of the profile.
+
 It then requests retirement through Engine and waits for verified provider absence.
 Success requires `independent_workers: 2` and `cleanup_verified: true`.
 A failed probe, timeout, uncertain cleanup, or failed credential revocation fails the smoke.

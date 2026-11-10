@@ -9,6 +9,7 @@ The portable RAES plan does not grant boot-policy or provider authority.
 `nic_type` is empty, `GVNIC`, or `VIRTIO_NET`.
 `disk_interface` is empty, `NVME`, or `SCSI`.
 `enable_secure_boot` is a strict boolean and defaults to `true`.
+
 Empty interface choices preserve provider defaults.
 AWS rejects non-default GCP choices.
 Machine images reject these overrides because their captured settings own that configuration.
@@ -18,6 +19,10 @@ The GCE renderer applies them to the network interface, boot disk, and Shielded 
 vTPM and integrity monitoring remain enabled.
 An administrator can select unsigned-module research workloads with Secure Boot disabled on their selected guest.
 This choice does not change cluster nodes or other ranges.
+
+A disposable worker host profile uses the same image profile fields.
+Its operation input carries the non-default choices to the same renderer and readback.
+Worker qualification records the realized settings, as described in [disposable workers](../technical/shifter_platform/disposable-workers.md).
 
 Existing profile fingerprints omit the new fields when they retain their defaults.
 A non-default choice changes the profile fingerprint and the retained operation identity.

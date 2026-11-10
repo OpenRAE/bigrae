@@ -11,7 +11,7 @@ from shared.runtime_plugin_binding import RuntimeTargetImageProfile
 from config import GCERangeImageProfile, gce_image_profile_fingerprint
 from gcp_range_cell_host_binding import GCEInstanceBindingError, assert_runtime_hardware_binding
 from gcp_range_cell_resources import instance_resource
-from raes_gce_image import resolve_gce_image_from_runtime_profile
+from raes_gce_image import resolve_gce_image, resolve_gce_image_from_runtime_profile
 from raes_plan import RaesPlanNode
 from tests.test_gcp_range_cell_resources import _config, _instance, _plan
 
@@ -22,17 +22,29 @@ def _runtime(**overrides):
     )
 
 
-def test_selected_arm_hardware_survives_snapshot_and_rendering():
-    selected = _runtime(
-        machine_type="c4a-standard-2",
-        disk_type="hyperdisk-balanced",
-        nic_type="GVNIC",
-        disk_interface="NVME",
-        enable_secure_boot=False,
-    )
-    retained = RuntimeTargetImageProfile.model_validate_json(selected.model_dump_json())
+_ARM = {
+    "machine_type": "c4a-standard-2",
+    "disk_type": "hyperdisk-balanced",
+    "nic_type": "GVNIC",
+    "disk_interface": "NVME",
+    "enable_secure_boot": False,
+}
+
+
+def _from_runtime_profile(node):
+    retained = RuntimeTargetImageProfile.model_validate_json(_runtime(**_ARM).model_dump_json())
+    return resolve_gce_image_from_runtime_profile(node, retained)
+
+
+def _from_worker_candidate(node):
+    candidate = {"source_version": "", "image_ref": "projects/example/global/images/arm-guest-v1", **_ARM}
+    return resolve_gce_image(node, [candidate])
+
+
+@pytest.mark.parametrize("resolve", [_from_runtime_profile, _from_worker_candidate])
+def test_selected_arm_hardware_survives_snapshot_and_rendering(resolve):
     node = RaesPlanNode(address="node.guest", name="guest", os_family="linux", count=1, network_addresses=())
-    profile = resolve_gce_image_from_runtime_profile(node, retained)
+    profile = resolve(node)
     instance = _instance(os_type="linux")
     instance["profile"] = profile
     instance["image_profile_fingerprint"] = gce_image_profile_fingerprint(profile)

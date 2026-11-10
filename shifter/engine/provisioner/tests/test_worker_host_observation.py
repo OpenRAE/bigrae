@@ -24,13 +24,31 @@ def peers(monkeypatch):
         gcp_host_public_key=key.export_public_key().decode(),
     )
     reads = []
-    numeric = SimpleNamespace(name="synthetic-vm", id=12345)
+    numeric = SimpleNamespace(
+        name="synthetic-vm",
+        id=12345,
+        machine_type="https://compute.googleapis.com/compute/v1/projects/synthetic-project/zones/us-central1-a/machineTypes/c4a-standard-2",
+        shielded_instance_config=SimpleNamespace(enable_secure_boot=False),
+        network_interfaces=[SimpleNamespace(nic_type="GVNIC")],
+        disks=[
+            SimpleNamespace(
+                boot=True,
+                interface="NVME",
+                source="https://www.googleapis.com/compute/v1/projects/synthetic-project/zones/us-central1-a/disks/synthetic-vm",
+            )
+        ],
+    )
 
     def get(**kwargs):
         reads.append(kwargs)
         return numeric
 
-    monkeypatch.setattr(subject, "_build_clients", lambda: SimpleNamespace(instances=SimpleNamespace(get=get)))
+    def disk(**kwargs):
+        reads.append(kwargs)
+        return SimpleNamespace(source_image_id=1234567890123456789)
+
+    clients = SimpleNamespace(instances=SimpleNamespace(get=get), disks=SimpleNamespace(get=disk))
+    monkeypatch.setattr(subject, "_build_clients", lambda: clients)
     secrets = []
 
     def secret(ref):
@@ -77,7 +95,17 @@ def test_provisioner_returns_only_bounded_host_facts(peers):
     fragment = subject.worker_observations_fragment(peers.result, ("provision.node.host",))
     safe = fragment["worker_observations"]["provision.node.host#0"]
     assert safe["daemon_count"] == 1 and safe["docker_version"] == "29.1.3"
-    assert peers.reads == [{"project": "synthetic-project", "zone": "us-central1-a", "instance": "synthetic-vm"}]
+    assert peers.reads == [
+        {"project": "synthetic-project", "zone": "us-central1-a", "instance": "synthetic-vm"},
+        {"project": "synthetic-project", "zone": "us-central1-a", "disk": "synthetic-vm"},
+    ]
+    assert safe["hardware"] == {
+        "machine_type": "c4a-standard-2",
+        "enable_secure_boot": False,
+        "nic_type": "GVNIC",
+        "disk_interface": "NVME",
+        "image_id": "1234567890123456789",
+    }
     assert peers.secrets and peers.seen == [subject._PROBE]
     assert "unix:///var/run/docker.sock" in peers.seen[0]
     assert all(safe[field].startswith("sha256:") for field in ("vm_identity", "machine_identity", "daemon_identity"))
@@ -130,6 +158,14 @@ def test_invalid_host_is_refused_before_secret_read(peers, change):
 )
 def test_invalid_guest_facts_cannot_produce_success(peers, change):
     peers.payload.update(change)
+    with pytest.raises(ValueError):
+        subject.worker_observations_fragment(peers.result, ("provision.node.host",))
+
+
+@pytest.mark.parametrize("attribute", ["network_interfaces", "disks", "shielded_instance_config", "machine_type"])
+def test_unreadable_hardware_cannot_produce_success(peers, attribute):
+    value = getattr(peers.numeric, attribute)
+    setattr(peers.numeric, attribute, value * 2 if isinstance(value, list) else None)
     with pytest.raises(ValueError):
         subject.worker_observations_fragment(peers.result, ("provision.node.host",))
 

@@ -27,6 +27,7 @@ class WorkerQualification:
     vm_identity: str
     machine_identity: str
     daemon_identity: str
+    hardware: dict[str, Any]
     profile_digest: str
     observed_at: str
     operation_id: str
@@ -54,10 +55,13 @@ def _qualification(worker: DisposableWorker) -> WorkerQualification:
     require_fresh_observation(observed, timezone.now())
     if observed["docker_version"] != profile.docker_version:
         raise ValueError("Worker runtime version differs from the retained profile")
+    if any(observed["hardware"][key] != value for key, value in profile.hardware.items()):
+        raise ValueError("Worker hardware differs from the retained profile")
     return WorkerQualification(
         observed["vm_identity"],
         observed["machine_identity"],
         observed["daemon_identity"],
+        observed["hardware"],
         profile.digest,
         observed["observed_at"],
         str(runtime.provisioner_operation_id),

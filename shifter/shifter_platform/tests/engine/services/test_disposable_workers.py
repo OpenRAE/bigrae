@@ -7,7 +7,7 @@ import pytest
 from django.utils import timezone
 
 from tests.cms.test_runtime_plugins import tenant
-from tests.engine.services.test_disposable_worker_profile import profile_data
+from tests.engine.services.test_disposable_worker_profile import arm_profile_data, profile_data
 
 __all__ = ["tenant"]
 pytestmark = [pytest.mark.django_db, pytest.mark.postgres]
@@ -97,7 +97,32 @@ def test_create_commits_native_launch_and_durable_custody(apparatus):
     assert payload["plan"] == apparatus.profile["plan"]
     candidate = next(iter(payload["image_candidates"].values()))[0]
     assert candidate["image_id"] == apparatus.profile["image_id"]
+    assert not {"nic_type", "disk_interface", "enable_secure_boot"}.intersection(candidate)
     assert intent.payload["resource"] == "raes-range"
+
+
+def test_dispatch_carries_selected_worker_hardware(apparatus):
+    from engine.models import OperationInput, ProvisionerLaunchIntent, WorkerPolicyRecord
+    from engine.services import configure_worker_policy
+    from shared.raes.operation_input import parse_raes_operation_input
+
+    policy = WorkerPolicyRecord.objects.get().configuration
+    policy["profile"] = arm_profile_data() | {
+        key: policy["profile"][key] for key in ("capacity_scope_ref", "capacity_partition")
+    }
+    configure_worker_policy(apparatus.credential, policy)
+    create(apparatus)
+    intent = ProvisionerLaunchIntent.objects.get()
+    payload = OperationInput.objects.get(operation_id=intent.operation_id).envelope["payload"]
+    key, rows = next(iter(payload["image_candidates"].items()))
+    assert {name: rows[0][name] for name in ("machine_type", "nic_type", "disk_interface", "enable_secure_boot")} == {
+        "machine_type": "c4a-standard-2",
+        "nic_type": "GVNIC",
+        "disk_interface": "NVME",
+        "enable_secure_boot": False,
+    }
+    provider, source = key.split(":")
+    assert parse_raes_operation_input(payload).image_candidates_for(provider, source) == rows
 
 
 def test_idempotent_replay_rejects_changed_experiment_and_trial(apparatus):

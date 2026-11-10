@@ -13,6 +13,7 @@ def worker_cloud(apparatus, monkeypatch):
 
     from engine.models import DisposableWorker, ProvisionerLaunchIntent
     from shared.operation_results import ResultStep
+    from tests.engine.services.test_disposable_worker_profile import observed_hardware
     from tests.engine.services.test_native_warm_retirement import _apply_result, _ready_payload
 
     def provider_progress(_seconds):
@@ -43,6 +44,7 @@ def worker_cloud(apparatus, monkeypatch):
                                 "daemon_identity": canonical_digest(f"daemon-{runtime.pk}"),
                                 "docker_version": apparatus.profile["docker_version"],
                                 "daemon_count": 1,
+                                "hardware": observed_hardware(),
                                 "observed_at": timezone.now().isoformat(),
                             }
                         },
