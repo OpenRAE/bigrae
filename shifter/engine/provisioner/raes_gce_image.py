@@ -123,17 +123,14 @@ def resolve_gce_image_from_runtime_profile(
             participant_username=profile.participant_username,
             participant_readiness_contract=profile.participant_readiness_contract,
             participant_readiness_manifest_sha256=profile.participant_readiness_manifest_sha256,
+            nic_type=profile.nic_type,
+            disk_interface=profile.disk_interface,
+            enable_secure_boot=profile.enable_secure_boot,
         ),
         domain_dns_name=profile.domain_dns_name,
         domain_netbios_name=profile.domain_netbios_name,
     )
-    return replace(
-        resolved,
-        allow_public_web_egress=profile.allow_public_web_egress,
-        nic_type=profile.nic_type,
-        disk_interface=profile.disk_interface,
-        enable_secure_boot=profile.enable_secure_boot,
-    )
+    return replace(resolved, allow_public_web_egress=profile.allow_public_web_egress)
 
 
 def registry_image_resolver(operation_input: RaesOperationInput) -> Callable[[RaesPlanNode], GCERangeImageProfile]:
@@ -209,6 +206,9 @@ def _profile(
         participant_readiness_manifest_sha256=image.participant_readiness_manifest_sha256,
         domain_dns_name=domain_dns_name,
         domain_netbios_name=domain_netbios_name,
+        nic_type=image.nic_type,
+        disk_interface=image.disk_interface,
+        enable_secure_boot=image.enable_secure_boot,
     )
 
 

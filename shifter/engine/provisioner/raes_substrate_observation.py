@@ -6,7 +6,7 @@ import re
 from typing import Protocol, cast
 
 from gcp_range_cell_clients import GCEClients
-from gcp_range_cell_host_binding import assert_runtime_hardware_binding
+from gcp_range_cell_host_binding import assert_runtime_hardware_binding, realized_hardware
 from gcp_range_cell_types import InstancePlan, RangeCellPlan
 
 _GCE_RESOURCE_NAME = re.compile(r"[a-z][a-z0-9-]{0,62}")
@@ -77,6 +77,12 @@ def observe_gce_substrates(plan: RangeCellPlan, clients: GCEClients) -> list[dic
 
 def _verify_boot_image(plan: RangeCellPlan, guest: _GuestInstance, clients: GCEClients, expected: str) -> None:
     """An image name can be recreated; its actual boot disk must retain the admitted ID."""
+    if _boot_image_id(plan["project_id"], plan["zone"], guest, clients) != expected:
+        raise ValueError("prepared image provider identity changed")
+
+
+def _boot_image_id(project: str, zone: str, guest: _GuestInstance, clients: GCEClients) -> str:
+    """Read the source image ID of the guest's actual boot disk."""
     boot = [disk for disk in guest.disks if disk.boot]
     if len(boot) != 1:
         raise ValueError("prepared image boot disk is ambiguous")
@@ -85,19 +91,20 @@ def _verify_boot_image(plan: RangeCellPlan, guest: _GuestInstance, clients: GCEC
         .source.removeprefix("https://www.googleapis.com/compute/v1/")
         .removeprefix("https://compute.googleapis.com/compute/v1/")
     )
-    prefix = f"projects/{plan['project_id']}/zones/{plan['zone']}/disks/"
+    prefix = f"projects/{project}/zones/{zone}/disks/"
     name = source.removeprefix(prefix)
     if not source.startswith(prefix) or not _GCE_RESOURCE_NAME.fullmatch(name):
         raise ValueError("prepared image boot disk is outside the range scope")
     if clients.disks is None:
         raise ValueError("prepared image boot disk observation is unavailable")
-    disk = cast(_Disk, clients.disks.get(project=plan["project_id"], zone=plan["zone"], disk=name))
-    if str(disk.source_image_id) != expected:
-        raise ValueError("prepared image provider identity changed")
+    disk = cast(_Disk, clients.disks.get(project=project, zone=zone, disk=name))
+    return str(disk.source_image_id)
 
 
-def observe_gce_worker_identity(instance: dict[str, object], clients: GCEClients) -> dict[str, str]:
-    """Read immutable numeric VM identity under the existing provisioner authority."""
+def observe_gce_worker_identity(
+    instance: dict[str, object], clients: GCEClients
+) -> tuple[dict[str, str], dict[str, object]]:
+    """Read immutable numeric VM identity and realized hardware under the existing provisioner authority."""
     scope = {}
     for key in ("gcp_project_id", "gcp_zone", "gcp_instance_name"):
         value = instance.get(key)
@@ -115,4 +122,7 @@ def observe_gce_worker_identity(instance: dict[str, object], clients: GCEClients
     identity = str(actual.id)
     if actual.name != scope["gcp_instance_name"] or not re.fullmatch(r"[1-9]\d{0,19}", identity, flags=re.ASCII):
         raise ValueError("Worker provider identity is unavailable")
-    return {"project": scope["gcp_project_id"], "zone": scope["gcp_zone"], "instance_id": identity}
+    hardware = realized_hardware(actual) | {
+        "image_id": _boot_image_id(scope["gcp_project_id"], scope["gcp_zone"], actual, clients)
+    }
+    return {"project": scope["gcp_project_id"], "zone": scope["gcp_zone"], "instance_id": identity}, hardware

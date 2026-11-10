@@ -467,6 +467,8 @@ def _worker_image_candidates(target: Range, plan: dict[str, object]) -> dict[str
                 "disk_type": image.disk_type,
                 "management_ssh_port": image.management_ssh_port,
                 "management_ssh_username": image.management_ssh_username,
+                # Non-default hardware choices only, so default profiles keep their input.
+                **image.model_dump(include={"nic_type", "disk_interface", "enable_secure_boot"}),
             }
         ]
     }
