@@ -43,6 +43,30 @@ def profile_data():
     }
 
 
+def observed_hardware():
+    """Provider settings that GCE reports for the default synthetic worker."""
+    return {
+        "machine_type": "e2-custom-2-8192",
+        "enable_secure_boot": True,
+        "nic_type": "",
+        "disk_interface": "SCSI",
+        "image_id": "1234567890123456789",
+    }
+
+
+def arm_profile_data():
+    """A C4A worker that selects the ARM64 hardware and boot choices."""
+    data = profile_data()
+    data["image"] |= {
+        "machine_type": "c4a-standard-2",
+        "disk_type": "hyperdisk-balanced",
+        "nic_type": "GVNIC",
+        "disk_interface": "NVME",
+        "enable_secure_boot": False,
+    }
+    return data
+
+
 def test_valid_profile_retains_exact_plan_image_and_runtime():
     from shared.disposable_workers import WorkerHostProfile
 
@@ -58,6 +82,55 @@ def test_machine_override_cannot_understate_capacity_demand():
 
     data = profile_data()
     data["image"]["machine_type"] = "e2-standard-64"
+    with pytest.raises(ValueError):
+        WorkerHostProfile.model_validate(data)
+
+
+def test_arm_worker_selects_predefined_shape_and_boot_choices():
+    from shared.disposable_workers import WorkerHostProfile
+
+    profile = WorkerHostProfile.model_validate(arm_profile_data())
+    assert profile.hardware == {
+        "machine_type": "c4a-standard-2",
+        "enable_secure_boot": False,
+        "image_id": "1234567890123456789",
+        "nic_type": "GVNIC",
+        "disk_interface": "NVME",
+    }
+
+
+def test_default_hardware_choices_keep_the_existing_profile_identity():
+    from shared.disposable_workers import WorkerHostProfile
+
+    data = profile_data()
+    legacy = WorkerHostProfile.model_validate(data)
+    data["image"] |= {"nic_type": "", "disk_interface": "", "enable_secure_boot": True}
+    explicit = WorkerHostProfile.model_validate(data)
+    assert explicit.digest == legacy.digest
+    assert legacy.hardware == {
+        "machine_type": "e2-custom-2-8192",
+        "enable_secure_boot": True,
+        "image_id": "1234567890123456789",
+    }
+    assert WorkerHostProfile.model_validate(arm_profile_data()).digest != legacy.digest
+
+
+@pytest.mark.parametrize("machine_type", ["c4a-standard-4", "e2-medium", "e2-custom-2-8192", "c4a-standard-2-lssd"])
+def test_explicit_machine_type_must_state_the_plan_cpu_count(machine_type):
+    from shared.disposable_workers import WorkerHostProfile
+
+    data = arm_profile_data()
+    data["image"]["machine_type"] = machine_type
+    with pytest.raises(ValueError):
+        WorkerHostProfile.model_validate(data)
+
+
+@pytest.mark.parametrize("value", ["false", 0, None])
+def test_secure_boot_choice_requires_a_boolean(value):
+    from shared.disposable_workers import WorkerHostProfile
+
+    data = arm_profile_data()
+    data["image"]["enable_secure_boot"] = value
     with pytest.raises(ValueError):
         WorkerHostProfile.model_validate(data)
 

@@ -9,6 +9,19 @@ from pydantic import AwareDatetime, BaseModel, ConfigDict, Field
 Fingerprint = Annotated[str, Field(pattern=r"^sha256:[0-9a-f]{64}$")]
 
 
+class WorkerHardware(BaseModel):
+    """Provider-reported settings of the realized host, recorded exactly as read."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+
+    machine_type: Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{1,62}$")]
+    enable_secure_boot: bool
+    # Empty means the provider reports no explicit interface type.
+    nic_type: Annotated[str, Field(pattern=r"^[A-Z_]{0,32}$")]
+    disk_interface: Annotated[str, Field(pattern=r"^[A-Z_]{0,32}$")]
+    image_id: Annotated[str, Field(pattern=r"^[1-9]\d{0,19}$")]
+
+
 class WorkerHostObservation(BaseModel):
     """One fixed probe's safe facts, without raw provider or guest identities."""
 
@@ -19,6 +32,7 @@ class WorkerHostObservation(BaseModel):
     daemon_identity: Fingerprint
     docker_version: Annotated[str, Field(pattern=r"^[0-9][A-Za-z0-9.+-]{0,63}$")]
     daemon_count: Annotated[int, Field(strict=True, ge=1, le=1)]
+    hardware: WorkerHardware
     observed_at: AwareDatetime
 
 
