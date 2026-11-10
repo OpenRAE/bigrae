@@ -6,7 +6,6 @@ Producing a plan never constitutes evidence that a guest is configured or ready.
 
 from __future__ import annotations
 
-
 import hashlib
 import json
 from pathlib import Path
