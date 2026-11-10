@@ -5268,6 +5268,16 @@
             "title": "Ctf Content Bucket",
             "type": "string"
           },
+          "deployment_tier": {
+            "default": "production",
+            "description": "Deployment tier (#2689). Only a test deployment accepts gcp-deploy --allow-unreleased-tooling. The default is production.",
+            "enum": [
+              "production",
+              "test"
+            ],
+            "title": "Deployment Tier",
+            "type": "string"
+          },
           "dynamic_secret_project_id": {
             "description": "Pre-existing deployment-scoped GCP project for provisioner-created range secrets. It may equal project_id for the supported single-project topology.",
             "maxLength": 30,

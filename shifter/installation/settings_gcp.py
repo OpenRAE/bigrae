@@ -237,6 +237,13 @@ class GcpBackendSettings(BaseModel):
         default=None,
         description="Repository identity that signs release provenance. The deploy command requires it.",
     )
+    deployment_tier: Literal["production", "test"] = Field(
+        default="production",
+        description=(
+            "Deployment tier (#2689). Only a test deployment accepts gcp-deploy --allow-unreleased-tooling. "
+            "The default is production."
+        ),
+    )
 
     @model_validator(mode="after")
     def validate_capacity_profile(self) -> GcpBackendSettings:

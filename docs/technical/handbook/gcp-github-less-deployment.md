@@ -177,6 +177,20 @@ The deployer image sets `BIGRAE_RELEASE_MANIFEST` and
 checks that its own revision equals the manifest revision. A checkout must be a
 clean checkout of that revision; otherwise the command stops.
 
+A test deployment can run deploy tooling that is not the release revision
+(#2689). Use this to test a deploy-script change without a new release build.
+
+1. Set `deployment_tier: test` in the `settings` block of `bigrae.yaml`.
+2. Commit the change to the tooling. The command refuses local changes.
+3. Run `gcp-deploy` from that checkout with `--allow-unreleased-tooling`.
+
+The command refuses the flag for a production deployment and for a CI run
+(`--identity ambient`). Before any change, it stores `tooling-override.json`
+in the release-evidence bucket, under
+`deployments/<release-revision>/<run-id>/<attempt>/`. The record holds the
+release revision and the tooling revision. The release images still get the
+same provenance check and scan.
+
 `gcp-deploy` verifies the provenance of the five control-plane images before
 the rollout. That check binds each image to the repository ID, the owner ID,
 and the revision in `settings.release_trust` and the manifest. It then copies
@@ -404,6 +418,7 @@ Other inputs that refer to secrets:
    | `cloud_sql_iam_auth` | Native SQL login. It defaults to `true`, which the current source requires. |
    | `post_deploy_smoke.user_email` | The portal account that owns the smoke range. The smoke creates the account when it does not exist. An empty value skips the smoke. |
    | `release_trust` | The numeric repository ID and owner ID of the repository that publishes the release. |
+   | `deployment_tier` | `production` (the default) or `test`. Only a `test` deployment accepts `gcp-deploy --allow-unreleased-tooling`. |
 
    The operator email must use the domain in `identity_allowed_email_domain`.
    For a release from `OpenRAE/bigrae`, the release trust IDs are
