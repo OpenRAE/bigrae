@@ -1,6 +1,9 @@
 # [PROJECT NAME] Development Guidelines
 
-Auto-generated from all feature plans. Last updated: [DATE]
+Generated from feature plans. Last updated: [DATE]
+
+This reference summarizes the selected plans.
+It does not override AGENTS.md, accepted ADRs, or the user's instructions.
 
 ## Active Technologies
 

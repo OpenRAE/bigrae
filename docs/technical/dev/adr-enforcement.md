@@ -1,20 +1,16 @@
 # ADR Enforcement
 
-Architecture rules in this repo are enforced by tooling, not only prose.
+This reference describes the repository's architecture checks, policy owners, and failure contracts.
+The Local Usage and How To Add A Rule sections are how-to guides.
+The checked-in registry, checker implementations, hook configuration, and workflows determine current enforcement.
 
 ## What Exists
 
-The [model-access design for #681](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/index.md)
-adds proposed ADR-059 through ADR-061 and documentation coverage for the
-planned feature. Registry/import validation applies now. Runtime enforcement
-of broker authorization, atomic budgets, revocation and provider isolation
-must land with the owning implementation issues and their behavioral/cloud
-tests; a passing documentation check is not evidence of those guarantees.
-ADR-060-R3 also requires independently configurable sharing, explicit overlap
-and membership rules, deduplicated pool accounting and separately revocable
-range grants. The [sharing contract](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/sharing.md)
-is consumed by #2139/#2140 and the downstream implementation/evidence issues;
-it adds no waiver or claim of existing runtime enforcement.
+The retained [model-access design for #681](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/index.md) describes the earlier broker architecture.
+ADR-068 governs its current applicability and replacement boundary.
+Registry and import validation do not prove live broker authorization, budgets, revocation, or provider isolation.
+The retained ADR-060-R3 sharing contract requires independent configuration, explicit overlap and membership, deduplicated accounting, and separately revocable range grants.
+Its historical implementation links do not override superseding decisions.
 
 The current enforcement stack has six parts:
 
@@ -22,33 +18,22 @@ The current enforcement stack has six parts:
    Machine-readable ADR registry. Each accepted ADR lists the rules and the checks that enforce them.
 
 2. `docs/adr/exceptions.yaml`
-   Explicit exceptions. If a rule needs a temporary waiver, record it here with an owner and expiry instead of leaving the exception implicit.
+   Explicit exceptions. If a rule needs a temporary waiver, record it here with an owner and expiry. Do not leave the exception implicit.
 
 3. `scripts/adr_guard/` (the `adr_guard` tool)
    Repo-native policy runner and the entrypoint for ADR conformance checks.
    `adr_guard.py` is the executable CLI entry point and compatibility facade; it
-   bootstraps `sys.path` once and re-exports the internal `_guard` package. The
-   check logic lives in one module per concern family under `_guard/checks/` (for
-   example `_guard/checks/k8s_security.py`, `_guard/checks/secret_hygiene.py`,
-   `_guard/checks/deploy_workflow.py`; `_guard/checks/cloud_identifiers.py` holds
-   the AWS-shaped `no-live-cloud-identifiers` scan and
-   `_guard/checks/gcp_deploy_identity.py` its GCP chart-values complement,
-   `no-live-gcp-deploy-identity`) on top of the shared kernels
-   `_guard/_common.py` (the `Violation` model, repo/git helpers, exception
-   filtering) and `_guard/_workflow_model.py` (the `_dw_*` workflow-as-data
-   model), with `_guard/_registry.py` holding the deterministic `CHECKS` /
-   `CHECK_LEVELS` registry and `_guard/_cli.py` the argument parsing. The
+   bootstraps `sys.path` once and re-exports the internal `_guard` package. Each concern family has a module under `_guard/checks/`. Examples include `k8s_security.py`, `secret_hygiene.py`, and `deploy_workflow.py`. `cloud_identifiers.py` owns the AWS-shaped `no-live-cloud-identifiers` scan. `gcp_deploy_identity.py` owns its GCP chart-values complement, `no-live-gcp-deploy-identity`. Shared kernels are `_guard/_common.py` and `_guard/_workflow_model.py`. The former supplies `Violation`, repository/Git helpers, and exception filtering. The latter supplies the `_dw_*` workflow-as-data model.
+
+ `_guard/_registry.py` owns `CHECKS` and `CHECK_LEVELS`; `_guard/_cli.py` owns argument parsing. The
    deploy-environment evaluator does not execute workflow shell. It removes
    comments, requires the exact reviewed router program, and models its outputs
    as data. Its branch-reference inputs remain compatibility-only parameters.
-   The
-   `_guard` package uses package-relative imports internally, so it is importable
-   on its own; the facade re-exports its full public surface, so
-   `python3 scripts/adr_guard/adr_guard.py` and tests that load it by path keep
-   working unchanged. The package is in the SonarCloud analysis scope
-   (`sonar.sources` in `sonar-project.properties`); the `adr-guard-tests` CI job
-   runs the suite under `coverage` and uploads `scripts/adr_guard/coverage.xml`
-   for the SonarCloud new-code coverage gate.
+
+
+The `_guard` package uses relative imports and can be imported independently. The facade re-exports its public surface. `python3 scripts/adr_guard/adr_guard.py` and tests that load it by path remain supported.
+
+`sonar.sources` in `sonar-project.properties` includes the package. The `adr-guard-tests` CI job runs it under `coverage` and uploads `scripts/adr_guard/coverage.xml` for changed-code analysis.
 
 4. `.pre-commit-config.yaml`
    Fast local hygiene and secrets checks. Full architecture checks run in CI;
@@ -66,9 +51,7 @@ The current enforcement stack has six parts:
    The source roots, exclusions, Ruff rules and 100% threshold are one fixed
    policy in `scripts/adr_guard/changed_python_quality.py`. The wrapper accepts
    no external arguments: attempts to change refs, linter flags or scope fail
-   before any subprocess. Its Git and quality commands use the literal
-   `origin/dev` reference and argument vectors, with explicit Git option/path
-   boundaries; no CLI text is forwarded into either command.
+   before any subprocess. Its Git and quality commands use literal `origin/dev`, argument vectors, and explicit option/path boundaries. No CLI text is forwarded into either command.
    The wrapper's regression tests use standard-library `unittest`, as required
    by the Python 3.11 ADR test lane; they need no pytest dependency.
 
@@ -78,11 +61,7 @@ The current enforcement stack has six parts:
 6. Existing ecosystem tooling
    - `import-linter` for Python package contracts
    - `actionlint` for GitHub Actions workflows
-   - `TFLint` for Terraform linting (including the `tflint-ruleset-google` plugin for GCP resources)
-     The CI initialization step supplies the job-scoped `github.token` as
-     `GITHUB_TOKEN`, so provider-plugin release lookups use the authenticated
-     GitHub API allowance instead of the shared runner IP's unauthenticated
-     rate limit.
+   - `TFLint` for Terraform linting, including GCP resources through `tflint-ruleset-google`. CI initialization supplies the job-scoped `github.token` as `GITHUB_TOKEN`. Plugin release lookups use the authenticated GitHub API allowance instead of the shared runner IP's unauthenticated limit.
    - `gitleaks` for new secret leakage detection
    - `helm lint` for Helm chart validation where files are templates rather than plain YAML
    - `kubeconform` for Kubernetes manifest schema validation
@@ -95,7 +74,7 @@ There is also agent-specific wiring:
 - `.claude/skills/adr-check/SKILL.md` provides a default workflow for ADR conformance work.
 - `.claude/skills/architecture-review/SKILL.md` provides a repo-specific architecture review checklist.
 - `AGENTS.md` gives Codex a repo-local policy file, including Ground Control project context for the `/implement` workflow. The GC project pointer (and matching `.ground-control.yaml` `project:` field) names the `shifter` project (id `df4e718f-1f67-46f8-a375-3ba53fabc9c4`) with `CTF-*`, `PLAT-*`, `GEN-*` UID prefixes by subsystem; an earlier draft incorrectly pointed both at `aphelion` (a separate, unrelated project).
-- `.ground-control.yaml` is validated as a whole by the Ground Control context reader, so an unrecognized key fails the entire file closed rather than being ignored: the reader returns `invalid_ground_control_yaml`, and `/implement` loses the project, SonarCloud, and plan-rules context along with the offending block. The `routing:` block accepts only `enabled`, `default_provider`, and `stages`. Routing is advisory under ADR-036, annotating a stage's capability tier for telemetry without selecting an executor, so a stale routing key is worth deleting rather than reinterpreting.
+- `.ground-control.yaml` is validated as a whole by the Ground Control context reader, so an unrecognized key fails the entire file closed rather than being ignored: the reader returns `invalid_ground_control_yaml`, and `/implement` loses the project, SonarCloud, and plan-rules context along with the offending block. The `routing:` block accepts only `enabled`, `default_provider`, and `stages`. Routing is advisory under ADR-036. It records a stage capability tier for telemetry without selecting an executor. Remove stale routing keys instead of reinterpreting them.
 
 Review controls:
 
@@ -105,10 +84,14 @@ The integration branch's Bandit jobs also cover these tools and the three
 inspection scripts. ShellCheck covers smoke and container scripts.
 MCP lint jobs reject security warnings, and the shared package has a test-matrix
 entry. The existing kube-linter job supplies blocking Kubernetes security policy.
+
+
 Checkov's separate Kubernetes checks are a blocking gate under ADR-004-R11 (#2558).
 Helm lint and rendered kube-linter checks run together, including when optional
 tests are skipped. BuildKit and Trivy validate container build inputs. The hosted
 guacd job proves non-root execution, drive permissions and listener readiness.
+
+
 The unused root branding assets have been removed after a consumer search.
 The user also retired the two unused vendor CloudFormation installers.
 Their quality owner and identifier exception have been removed.
@@ -129,7 +112,10 @@ The BigRAE rename (#2555) preserves the existing gates. After the same-owner
 repository cutover, the Sonar condition permitted only `Brad-Edwards/bigrae` with
 the same immutable repository and owner IDs. The repository then moved to
 `OpenRAE/bigrae` (#2660). The repository ID stayed, and the condition now
-permits the `OpenRAE` owner ID. Its expression-model tests deny the
+permits the `OpenRAE` owner ID.
+
+
+Its expression-model tests deny the
 old slug, a recreated slug, another owner and fork-origin PRs. Future GCP deployments use
 one exact configured repository identity with the same purpose, Environment,
 ref and workflow restrictions. Under the user's no-deployments decision,
@@ -142,12 +128,16 @@ format from their explicit identity inputs. Canonical defaults use the observed
 IDs. Other repositories supply their own IDs. The explicit legacy format selects
 only the old subject shape; a policy never accepts both shapes as a fallback.
 Existing audience, purpose, branch and Environment restrictions retain their scope.
-The image-role guard requires exactly the `dev` and `main` subjects. It checks
-the selected prefix expression when the policy uses a shared prefix, and rejects
-wildcards, extra subjects and changes to the owner or repository ID fields.
+
+
+The image-role guard requires exactly the `dev` and `main` subjects. It checks the selected prefix expression when a policy uses a shared prefix. It rejects wildcards, extra subjects, and changed owner or repository ID fields.
+
+
 The pinned Checkov action loads a version-bound compatibility adapter for the
 immutable repository subject syntax. The adapter changes only the repository
-parser; CKV_GCP_125 and the native WIF guard remain blocking. CI parity checks
+parser; CKV_GCP_125 and the native WIF guard remain blocking.
+
+CI parity checks
 require the adapter path, and tests reject unsupported versions and parser changes.
 
 Plugin admission accepts exactly one invocation key, `BIGRAE_PLUGIN_INPUT` or
@@ -162,17 +152,9 @@ prove a live repository, publisher or workload-identity cutover.
 - `.github/pull_request_template.md` requires an ADR impact section on PRs.
 - `.github/copilot-instructions.md` now points GitHub Copilot toward the same ADR enforcement model.
 - `.ground-control.yaml` binds synchronized `/implement` runs to the root
-  `make test` completion boundary. The companion `make policy` target runs the
-  full ADR guard, import-linter contracts, diff whitespace validation, and Vale
-  against Markdown changed from `origin/dev`; `tools/install-vale.sh` supplies
-  the pinned local Vale binary when it is not already installed. The installer
+  `make test` completion boundary. `make policy` runs ADR guard, import-linter, whitespace validation, and Vale against Markdown committed since `origin/dev`. Its documentation setup installs the pinned Vale binary and shared package through `tools/install-vale.sh`. The installer
   verifies the release archive SHA-256 before extraction.
-- Local commits run file hygiene, secret scanning, changed-file cloud identifier
-  checks, commit-message policy, Ruff, ShellCheck, actionlint, and Terraform
-  formatting, plus the changed-line Ruff/Sonar rule check above. Full tests and
-  coverage, type checks, Django checks, import and ADR
-  checks, package-wide JavaScript/CSS lint, Checkov, Bandit, Terraform validation
-  and TFLint, and Kubernetes/chart validation run in CI. These checks are removed
+- Local commits run file hygiene, secret scanning, cloud identifier checks, commit-message policy, Ruff, ShellCheck, actionlint, and Terraform formatting. They also run changed-line Python quality checks and the configured fast architecture and security guards. CI runs full tests, coverage, type checks, Django checks, import checks, and ADR checks. It also owns package-wide JavaScript/CSS lint, Checkov, Bandit, Terraform validation, TFLint, and Kubernetes/chart validation. These checks are removed
   from the commit hook, not moved to push hooks. This supersedes older references
   to local hooks for those checks; their policies and CI gates remain in force.
   `workflow.precommit_command` remains `pre-commit run` for staged-file hygiene.
@@ -186,23 +168,12 @@ prove a live repository, publisher or workload-identity cutover.
 - The `shifter_platform` pytest worker cap (`--maxprocesses` in
   `shifter/shifter_platform/pyproject.toml` `addopts`) is 8. Because `-n auto`
   already limits workers to the host core count, this cap only takes effect on
-  hosts with more cores than the cap: CI runners (`ubuntu-latest`, ≤4 cores) are
-  unaffected and keep running at core-count workers, while multi-core dev/CI
-  machines get the added parallelism for explicitly invoked local test runs. The cap also
-  bounds peak memory (each worker loads the Django app), so it is raised only
-  with headroom in mind given the suite's documented OOM history at high worker
-  counts.
+  hosts with more cores than the cap: CI runners with at most four cores retain core-count workers. Larger development and CI hosts can use the additional parallelism during explicitly requested runs. The cap also bounds peak memory because each worker loads Django. Increase it only with measured memory headroom, given the documented exhaustion history.
 - CI runs the broad platform suite once against PostgreSQL, split into six
   `shifter-platform-tests` shards. Each shard publishes coverage data and its
-  PostgreSQL marker evidence. `shifter-platform-coverage` requires all shards,
-  rejects missing or duplicate shard evidence and skipped PostgreSQL-marked
-  tests, and requires at least one PostgreSQL-marked test to have run across
-  the shards. It combines the data, enforces the unchanged 87% package floor,
+  PostgreSQL marker evidence. `shifter-platform-coverage` requires all shards and rejects missing or duplicate evidence and skipped PostgreSQL-marked tests. At least one PostgreSQL-marked test must run across the shards. It combines the data, enforces the unchanged 87% package floor,
   and publishes `coverage.xml` for SonarCloud. Redis integration and adapter SDK
-  packaging retain their own blocking jobs. Released OpenFGA/PostgreSQL tests
-  still run in the dedicated mandatory job and contribute
-  `coverage-openfga.xml`; native browser and built-image smoke gates retain
-  their real service and image entrypoints. Sharding changes execution cost,
+  packaging retain their own blocking jobs. Released OpenFGA/PostgreSQL tests run in their mandatory job and contribute `coverage-openfga.xml`. Native browser and built-image smoke gates retain real service and image entrypoints. Sharding changes execution cost,
   not the required evidence or coverage thresholds. Full suites and image
   smoke run in CI; local development uses focused regressions.
 - `.github/workflows/_gcp-dev.yml` is a thin wrapper over the GCP deploy
@@ -217,9 +188,7 @@ Deploy-time enforcement (ADR-035):
   and runs the same checks locally (the deploy CLI runs it at the start of
   `bootstrap`/`terraform`/`full`, and `deploy.py preflight` runs it on demand) and
   in CI (each reusable deploy workflow runs `python -m preflight` before any
-  Terraform apply). It reports every missing prerequisite up front instead of
-  failing lazily mid-run, and skips are always explicit and logged
-  (`SHIFTER_SKIP_OPERATOR_BOOTSTRAP`), never a silent conditional step skip. This
+  Terraform apply). It reports all missing prerequisites before execution. Skips are explicit and logged through `SHIFTER_SKIP_OPERATOR_BOOTSTRAP`, never silent conditional omissions. This
   is a runtime gate rather than an `adr_guard` static check; `docs/dev/deploy-secrets.md`
   and the spec are kept in step by the parity test in
   `scripts/bootstrap/tests/test_preflight.py`. For GCP, `deploy.py preflight
@@ -258,17 +227,7 @@ The first slice intentionally stays small:
 - `adr-registry`
   Validates the ADR registry and exception files. It also validates the closed
   typed interface contracts required by ADR-032, ADR-039, ADR-051, ADR-054, and
-  ADR-055. The `raes-plan-accessor-boundary/v1` contract pins the RAES-free
-  standalone consumer, ownership and validation boundaries, reject-before-
-  mutation posture, full canonical address fallback, exact-pin compatibility
-  evidence, and decision-only scope of #1937. The
-  `dedicated-customer-authority/v1` contract makes removal or weakening of
-  ADR-054's customer boundary, authority separation, event-migration gate,
-  infrastructure ownership, outage behavior, or evidence classes fail locally
-  and in CI. The `accessibility-enforcement/v1` contract likewise pins the
-  WCAG target, one axe/Playwright toolchain, every-PR/nightly/deployed cadence,
-  fail-closed surface inventory, exact finding ratchet, manual-audit evidence,
-  central waiver policy, and security boundary. This is structural enforcement
+  ADR-055. The `raes-plan-accessor-boundary/v1` contract pins the RAES-free standalone consumer, ownership, and validation boundaries. It requires rejection before mutation, full canonical address fallback, exact-pin compatibility evidence, and decision-only scope for #1937. The `dedicated-customer-authority/v1` contract protects ADR-054's customer boundary and authority separation. It also protects the event-migration gate, infrastructure ownership, outage behavior, and evidence classes. Removal or weakening fails locally and in CI. The `accessibility-enforcement/v1` contract pins the WCAG target, one axe/Playwright toolchain, and every-PR/nightly/deployed cadence. It also pins surface reconciliation, exact finding reduction, manual evidence, central waivers, and the security boundary. This is structural enforcement
   of accepted decisions, not a substitute for their runtime, migration, IAM,
   network, browser, or manual-audit tests.
 
@@ -280,9 +239,7 @@ The first slice intentionally stays small:
   The registry check keeps contract support, specialized ADR contracts, and
   dispatch in separate modules. This preserves the closed contract surface
   while keeping each validator independently reviewable and within the static
-  analysis limits enforced for guardrail code. Validator helpers carry concise
-  docstrings, and the documentation check remains below the enforced file-size
-  limit so SonarCloud can keep analyzing guardrail changes on every pull request.
+  analysis limits enforced for guardrail code. Validator helpers have concise docstrings. The documentation check stays below the enforced file-size limit so SonarCloud can analyze guardrail changes on every PR.
 
 - `layer-imports`
   Enforces the existing cross-layer import policy from `scripts/check_layer_imports/layer_imports.yaml`.
@@ -294,22 +251,11 @@ The first slice intentionally stays small:
   `workspaces.services` and carry a scalar `workspace_id` rather than a
   cross-layer ForeignKey. Service-package imports may use only the public facade (for
   example `cms.services`); private split-package submodules such as
-  `cms.services._range_pause` are not cross-layer seams. This covers both the
-  dotted form (`import cms.services._range_pause`) and the
-  `from cms.services import _range_pause` form, the latter detected via an AST
-  pass since the regex scan only sees the facade module path. The rule is
-  mirrored in `scripts/adr_guard/adr_guard.py`, the standalone
-  `scripts/check_layer_imports/check_layer_imports.py`, and
-  `management check_model_fks`; the hard-coded package lists are held to
-  set-equality with the canonical classification by tests, and `.importlinter`
-  adds a coarser package-level net. `shared` remains the freely importable
+  `cms.services._range_pause` are not cross-layer seams. This covers `import cms.services._range_pause` and `from cms.services import _range_pause`. An AST pass detects the latter because the regex scan sees only the facade path. The rule exists in ADR guard, `scripts/check_layer_imports/check_layer_imports.py`, and `management check_model_fks`. Tests require their package lists to equal the canonical classification. `.importlinter` adds package-level enforcement. `shared` remains the freely importable
   contracts layer.
 
 - `installed-apps-classified`
-  Fails closed when a first-party Django app is added to `INSTALLED_APPS`
-  without a classification in `layer_imports.yaml`, when a classification entry
-  is stale (no local `AppConfig`), or when an `INSTALLED_APPS` entry is a
-  dynamic expression the checker cannot statically resolve (ADR-001-R3, #1523).
+  Fails closed when an installed first-party Django app lacks classification in `layer_imports.yaml`. It also rejects stale classifications without a local `AppConfig` and dynamic `INSTALLED_APPS` expressions that cannot be statically resolved. This enforces ADR-001-R3 (#1523).
   The retired `documentation` package (ADR-038) has no `AppConfig` and is not
   classified.
 
@@ -330,13 +276,7 @@ The first slice intentionally stays small:
   Fails on direct cross-layer model imports inside service layers. The current tree already satisfies this rule, so it is part of the default guard.
 
 - `python-complexity-gate`
-  Enforces ADR-012-R1: every canonical Python package `pyproject.toml`
-  must enable Ruff's `C901` rule in `[tool.ruff.lint].select`, set
-  `[tool.ruff.lint.mccabe].max-complexity` to the repo-wide threshold
-  (`PYTHON_COMPLEXITY_THRESHOLD` in `scripts/adr_guard/_guard/checks/complexity.py`,
-  currently `15`, matching SonarCloud's default cognitive-complexity
-  threshold), AND must not silently disable the rule by listing it in
-  `ignore`, `extend-ignore`, or `per-file-ignores`. The check also
+  Enforces ADR-012-R1: each canonical Python `pyproject.toml` must enable Ruff `C901` in `[tool.ruff.lint].select`. `[tool.ruff.lint.mccabe].max-complexity` must match `PYTHON_COMPLEXITY_THRESHOLD` in `scripts/adr_guard/_guard/checks/complexity.py`. The current threshold is `15`, matching SonarCloud's default cognitive-complexity threshold. `ignore`, `extend-ignore`, and `per-file-ignores` must not silently disable the rule. The check also
   cross-verifies that `PYTHON_COMPLEXITY_GATE_PYPROJECTS` matches the
   `id: ruff` hook working directories in `.pre-commit-config.yaml`, so
   a new lint surface cannot be added in one place without the other.
@@ -355,10 +295,7 @@ The first slice intentionally stays small:
   updates `PYTHON_COMPLEXITY_THRESHOLD`, every canonical
   `pyproject.toml`, and the backlog rows in a single PR. Runs in both
   `fast` and `ci` levels.
-  Test coverage in `scripts/adr_guard/tests/test_adr_guard.py` drives
-  the silent-bypass and prefix-selector cases through `subTest()` loops
-  so adding a new bypass shape (for example, `extend-select`-side variants) is
-  one row in the cases tuple, not a new test method.
+  `scripts/adr_guard/tests/test_adr_guard.py` exercises silent bypass and prefix-selector cases through `subTest()` loops. A new bypass shape, such as an `extend-select` variant, adds a row to the case tuple instead of another test method.
   The `uat/event-load-harness` UAT load harness (#926) is a registered
   package under this gate, with matching `Lint`/`SAST`/`Tests
   (event-load-harness)` jobs in `.github/workflows/_quality.yml`.
@@ -370,25 +307,14 @@ The first slice intentionally stays small:
   tracked test files for `patch()` / mock `.patch()` string targets and
   statically resolvable `patch.object(imported_module_or_class, ...)`
   calls, then compares `(test file, target)` counts against
-  `scripts/adr_guard/boundary_mock_baseline.json`. The baseline records
-  current legacy topology-coupled tests so adoption does not require
-  rewriting the whole suite in one PR; the allowed counts may shrink but
-  must not grow. The check also compares the baseline file against the
-  branch reference so raising an allowance is a policy violation unless it
-  has a dated ADR exception. Prefer behavioral assertions, in-memory fakes
-  at service boundaries, or real framework test clients over patching
-  first-party service functions, views, render/logging/transaction aliases,
-  or model helpers. Issue #202 removed the expired bootstrap exception by
-  adding explicit CLI, Terraform, and GDC operation ports and reducing the
-  repository baseline from 618 to 465 internal patches; no replacement
-  exception was recorded.
+  `scripts/adr_guard/boundary_mock_baseline.json`. The baseline records legacy internal patches without requiring a complete test rewrite. Allowed counts may shrink but must not grow. The check compares the baseline with the branch reference. Increased allowances violate policy unless covered by a dated ADR exception. Prefer behavioral assertions, in-memory fakes at service boundaries, and real framework clients. Do not patch first-party service functions, views, rendering/logging/transaction aliases, or model helpers. Issue #202 removed the expired bootstrap exception through explicit CLI, Terraform, and GDC ports. The repository baseline decreased from 618 to 465 internal patches. No replacement exception was recorded.
 
 - `documentation-coverage`
   Enforces ADR-022-R1 (GEN-001): every major platform feature listed in
   `docs/adr/documentation-coverage.yaml` must declare at least one user doc and
   at least one technical doc. The check validates the whole manifest on every
   run (it ignores the changed-file list, like `adr-registry`): each referenced
-  doc must exist under the in-app docs tree (`docs_root`), must not live under a
+  doc must exist under the configured documentation tree (`docs_root`), must not live under a
   `_deprecated`/hidden path, and must be reachable from an `index.md`. This
   keeps the GEN-001 contract from silently regressing (for example, when a
   feature's doc is removed but its index link is left dangling). Adding a major
@@ -399,35 +325,25 @@ The first slice intentionally stays small:
   snapshots (`shifter/installation/published_contract/backend-bundle-contract.v<N>.json`)
   are append-only. Each snapshot records the frozen shape of a published contract
   version; a contract change ships a *new* version snapshot instead of editing an
-  existing one. The check compares every snapshot present at the base-branch merge
-  base against the working tree and fails when one was modified or deleted, so the
-  breaking-change gate's compatibility oracle cannot be silently rebased. Like
+  existing one. The check compares snapshots at the base-branch merge base with the working tree. Modifying or deleting an existing snapshot fails. This prevents silently replacing the compatibility oracle. Like
   `boundary-mock-policy` it resolves the base ref from `GITHUB_BASE_REF` /
   `ADR_GUARD_BASE_REF` (falling back to `origin/dev`/`origin/main`). It fails **open**
   locally (a shallow clone with no base history cannot compare, so dev is not blocked)
-  and fails **closed** when `ADR_GUARD_SNAPSHOT_ENFORCE` is set: the `adr-conformance`
-  CI job checks out with `fetch-depth: 0` and sets that variable, so an inability to
-  resolve or read the base becomes an enforcement failure rather than a silent pass. A
+  and fails **closed** when `ADR_GUARD_SNAPSHOT_ENFORCE` is set: `adr-conformance` fetches complete base history with `fetch-depth: 0` and sets that variable. Failure to resolve or read the base then fails enforcement. A
   genuinely absent directory at the base (a real first publication) is distinguished
   from an unreadable tree and still passes.
 
 - `accessibility-baseline`
   Enforces ADR-055-R4/R6: the browser-accessibility exact-finding baseline
   (`shifter/shifter_platform/frontend/e2e/a11y/baseline.json`) may only shrink.
-  The committed fingerprint set must be a subset of the trusted base-branch
-  baseline; new fingerprints (baseline growth) fail unless covered by an
-  exact-fingerprint waiver in `docs/adr/exceptions.yaml` naming ADR-055 (an
-  optional `fingerprints:` list on the exception, validated by the central
-  exception schema, never overloading `paths`/`checks`). Each fingerprint is the
+  The committed fingerprints must be a subset of the trusted base baseline. New fingerprints require an exact-fingerprint ADR-055 waiver in `docs/adr/exceptions.yaml`. The central exception schema validates the optional `fingerprints:` list. Do not overload `paths` or `checks` for fingerprints. Each fingerprint is the
   pipe-joined `surface|project|rule|wcag|target` key emitted by the a11y spec
   (project is `chromium:<viewport>:<theme>`), so a waiver must quote that exact
   string. Resolved findings (removed entries) always pass. Like `published-contract-snapshots-immutable` it
   resolves the base ref from `GITHUB_BASE_REF` / `ADR_GUARD_BASE_REF` (falling
   back to `origin/dev`/`origin/main`), fails **open** locally and **closed** under
   `ADR_GUARD_SNAPSHOT_ENFORCE`, and treats an absent base baseline as a valid
-  first enrollment. A committed baseline that is not a JSON array of fingerprint
-  strings is rejected outright, and a base baseline that cannot be parsed is
-  treated as unverifiable (failing open or closed as above). The per-surface
+  first enrollment. The committed baseline must be a JSON array of fingerprint strings. An unparsable base baseline is unverifiable and follows the open/closed behavior above. The per-surface
   exact-set comparison against the live scan and
   the fail-closed surface reconciliation are enforced in the Playwright a11y specs
   (`frontend/e2e/a11y/`), not this check.
@@ -436,25 +352,15 @@ The first slice intentionally stays small:
   Adds package-level forbidden-import contracts across the main Django app layers.
 
 - `makemigrations --check --dry-run`
-  Fails when a model or field-choices change ships without its migration. Runs
-  as the `missing-migrations-shifter-platform` pre-commit hook as well as in the
-  Quality workflow. Adding a `TextChoices` member alters the field, so enum
-  additions need a migration too. The hook exists because the CI check sits
-  behind the test gate, which is skipped when an earlier job fails -- so a
-  missing migration could reach review unnoticed (#680).
+  Fails when a model or field-choices change ships without its migration. Runs in the Quality workflow. The old `missing-migrations-shifter-platform` hook is no longer configured. Adding a `TextChoices` member alters the field, so enum
+  additions need a migration too. The former local migration hook addressed skipped CI tests (#680). The current hook configuration no longer contains that hook; CI owns the migration check.
 
 - `actionlint`
   Lints GitHub Actions workflows beyond plain YAML validation.
   This includes the GCP deploy workflow's Terraform state-backend hardening
   (`_gcp-dev.yml`) so retention and IAM policy bootstrap logic remains valid.
 
-- Django i18n/static artifact tests
-  Enforce ADR-016-R3 in
-  `shifter/shifter_platform/tests/config/test_i18n_configuration.py` and
-  `shifter/shifter_platform/tests/platform/test_portal_dockerfile.py` by
-  requiring portal image builds to run `compilemessages` before
-  `collectstatic`, and requiring `entrypoint.sh` to stay free of runtime
-  static-artifact rebuilds.
+- Django i18n/static artifact tests enforce ADR-016-R3. The owners are `tests/config/test_i18n_configuration.py` and `tests/platform/test_portal_dockerfile.py` under `shifter/shifter_platform/`. They require image builds to run `compilemessages` before `collectstatic`. They also prohibit runtime static-artifact rebuilding in `entrypoint.sh`.
 
 - `deploy-workflow-plan-scope`
   Enforces ADR-003-R2 for the AWS deploy workflows. The `shifter_platform`
@@ -462,36 +368,18 @@ The first slice intentionally stays small:
   Terraform-consumed platform files. Quality routing is separate and runs by
   exclusion: `.github/workflows/deploy.yml` must expose a `quality_relevant`
   output that runs Quality unless the diff is ordinary docs-only. That output
-  also fails closed on an empty or undetermined changed-file set: an
-  `any_changed` classifier is false when the GitHub PR-files API returns zero
-  files (its eventual consistency can do this for a freshly created PR), and
-  `quality_relevant` ORs in `any_changed != 'true'` so an unclassifiable diff
-  runs Quality instead of silently bypassing it (#2024). Guardrail
+  also fails closed on an empty or undetermined changed-file set: `any_changed` is false when the PR-files API temporarily returns zero files. `quality_relevant` includes `any_changed != 'true'`, so an unclassifiable diff runs Quality instead of bypassing it (#2024). Guardrail
   docs, including `.github/pull_request_template.md`,
   `.github/copilot-instructions.md`, `docs/adr/**`, and this ADR enforcement
   page, are explicitly quality-relevant so ADR guard validates them. PR Gate
   must reject a skipped Quality job unless `quality_relevant` is false.
   Commit-message or label-based test skips are not accepted. Portal application
   changes must also keep
-  reaching the portal image build/deploy path (#913): the check requires a
-  `portal_image` filter covering `shifter/shifter_platform/**`, exposed as a
-  `changes`-job output, included in the `shifter_platform` job's trigger
-  condition, and consumed by the platform `build` job through the
-  `portal_image_changes` input so an app-only deploy dispatch builds and
-  converges the portal image without running Terraform. The check
-  also requires `.github/workflows/deploy.yml` to pass `skip_tests: false`
-  literally into `_quality.yml` (no commit-message parsing or dynamic outputs)
-  and requires lint, architecture, and security jobs in `_quality.yml` to stay
-  independent of `inputs.skip_tests` so the flag can only skip unit-test jobs
-  when a caller opts in; the deploy router never opts in (#760). Negative
+  reaching the portal image build/deploy path (#913): the check requires a `portal_image` filter covering `shifter/shifter_platform/**` and exposed by the `changes` job. The `shifter_platform` job condition must include it. The build job consumes it through `portal_image_changes`, so an application-only dispatch converges the image without Terraform. `deploy.yml` must pass literal `skip_tests: false` to `_quality.yml`. Commit-message parsing and dynamic outputs cannot select that value. Lint, architecture, and security jobs must remain independent of `inputs.skip_tests`. Other callers may skip unit tests explicitly; the deploy router never does (#760). Negative
   fixtures in `scripts/adr_guard/tests/test_adr_guard.py` include a minimal
   `_quality.yml` stub so plan-scope tests isolate one violation at a time. The check
   requires deploy concurrency to queue dispatch deploys (keyed per environment)
-  rather than cancel in-flight applies; PR cancellation may remain enabled. It also requires every
-  core, range, and platform `terraform plan` / saved-plan `terraform apply`
-  command to include `-lock-timeout=5m`, and requires each apply job to create
-  and execute a local saved `tfplan` instead of uploading raw binary plans as
-  artifacts or running a fresh unplanned apply. The platform Service Discovery
+  rather than cancel in-flight applies; PR cancellation may remain enabled. Core, range, and platform plan and saved-plan apply commands must include `-lock-timeout=5m`. Each apply job must create and execute its local saved `tfplan`. It must not upload raw binary plans or run a fresh unplanned apply. The platform Service Discovery
   replacement check must inspect that same saved plan. Non-deploy support/test
   surfaces that are not under `shifter/**` or `mcp/**` must use the
   `quality_only` filter/output rather than being hidden in a deploy bucket:
@@ -504,23 +392,13 @@ The first slice intentionally stays small:
   `quality_only` and not in `portal_image`. Neither filter may route the whole
   collection. The `guardrail_docs` filter must include
   `shifter/environment-packs/**`, because pack Markdown is digest-covered
-  content. On apply workflows,
-  `_shifter-platform.yml` still pushes the Guacamole ECR images before the
-  platform Terraform plan because the Guacamole module resolves current image
-  digests with `aws_ecr_image` data sources during plan. This ordering is
+  content. On apply workflows, `_shifter-platform.yml` pushes Guacamole ECR images before the platform plan. The Guacamole module resolves image digests through `aws_ecr_image` data sources during that plan. This ordering is
   required for fresh AWS accounts where the repositories exist but the tags have
   not been published yet.
 
-  The deploy workflow model tests in
-  `scripts/adr_guard/tests/test_deploy_workflow.py` also assert the engine
-  reusable workflow carries its own hosted provisioner pytest gate and that
-  `_shifter-engine.yml` image validation, image build, and deploy jobs all need
-  that gate. This keeps a deploy dispatch's Quality skip from bypassing
+  `test_deploy_workflow.py` requires a hosted provisioner pytest gate in the Engine reusable workflow. Its image validation, build, and deployment jobs must depend on that gate. This keeps a deploy dispatch's Quality skip from bypassing
   provisioner tests on the image that is pushed and deployed. The same suite pins the engine
-  `validate` image-shape job's runner placement (#1474): it runs on the trusted
-  self-hosted deploy runner class rather than `ubuntu-latest`, so a
-  GitHub-hosted runner-acquisition stall can no longer cancel it before steps
-  start and skip the whole Platform stage. Because it is self-hosted it is
+  `validate` image-shape job's runner placement (#1474): it uses the trusted self-hosted deploy runner class instead of `ubuntu-latest`. This prevents a hosted-runner acquisition stall from cancelling it before steps start and skipping the Platform stage. Because it is self-hosted it is
   fail-closed on `pull_request` under the `deploy-workflow-runner-exposure`
   (ADR-003-R5) invariant, keeps `contents: read` only, and carries a
   `timeout-minutes` backstop (#1220).
@@ -534,11 +412,7 @@ The first slice intentionally stays small:
   credentials would make the workload apply time out after successful
   Terraform and image-build stages (#1850).
 
-  The manual-deploy invariant (`TestManualDeployDispatch`, #730) asserts that
-  environment deploys are a `workflow_dispatch` naming the `environment` input
-  (a closed `choice` that has only `aws-dev` after #2668), that the `Set
-  environment` step keys on that input rather than a branch-name `case` router,
-  and that `push` / `pull_request` run validation only (no run/apply flags).
+  `TestManualDeployDispatch` (#730) requires `workflow_dispatch` with a closed `environment` choice. Only `aws-dev` remains selectable after #2668. The environment step must use that input instead of a branch-name router. Push and pull-request events validate only, without run/apply flags.
 
   The optional `gcp_reconcile_foundation_image_network` dispatch input is
   forwarded only to the selected tenant's reusable GCP deploy workflow. Its
@@ -569,22 +443,14 @@ The first slice intentionally stays small:
   revision. The publish job checks that the validated image ID equals
   `BUILT_IMAGE_ID`, and the export object name uses `BUILT_IMAGE_ID`. The
   retired GDC qcow2 `shifter-vm-*` publish contract is gone.
-  `test_gcp_guest_publication_needs_the_validation_of_the_same_run` asserts
-  that the publish job needs the build and validate jobs, that the validate job
-  calls the local validation workflow without secrets, and that no promotion
-  workflow exists (#2668). `gcp-deploy` and `deploy.py gcp-images` import the
+  `test_gcp_guest_publication_needs_the_validation_of_the_same_run` requires publication to depend on build and validation. Validation must call the local validation workflow without secrets. No promotion workflow may exist (#2668). `gcp-deploy` and `deploy.py gcp-images` import the
   guest images of the release manifest as native GCE images after they verify
   their build provenance (`scripts/bootstrap/gcp_base_images.py`, issues #2309,
   #2571, #2679, and #2668).
 
 - `portal-deploy-mode-source-of-truth`
   Enforces ADR-003-R4 for the AWS portal deploy path. `_shifter-platform.yml`
-  must call `scripts/portal_deploy/portal_deploy.py resolve-topology` instead
-  of reading `AWS_PORTAL_ENABLE_AUTOSCALING`; both AWS portal roots must export
-  `enable_autoscaling`; the helper must reject single-instance deploys unless
-  exactly one running tagged instance matches Terraform state; and the ASG path
-  must call `verify-asg-image` after instance refresh so every in-service
-  instance is checked for the new portal image tag.
+  must call `scripts/portal_deploy/portal_deploy.py resolve-topology` instead of reading `AWS_PORTAL_ENABLE_AUTOSCALING`. Both AWS portal roots must export `enable_autoscaling`. Single-instance deployment requires exactly one running tagged instance matching Terraform state. After ASG instance refresh, `verify-asg-image` must check every in-service instance for the new portal image tag.
 
 - `deploy-verification-fail-loud`
   Enforces ADR-003-R3: required verification failures fail deployment.
@@ -695,10 +561,10 @@ The first slice intentionally stays small:
   the Checkov policy ID, `expires_on`, `paths`).
 
   Making the Trivy configuration scan blocking is tracked separately in #2566;
-  the [#2558 architecture preflight](../../architecture/blocking-config-security-preflight-2558.md)
+  the [#2558 architecture preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/blocking-config-security-preflight-2558.md)
   records the cross-repository contracts for that follow-up.
 
-  ADR-008-R5's [#2564 CMEK design](../../architecture/gcp-gcs-cmek-design-2564.md)
+  ADR-008-R5's [#2564 CMEK design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-gcs-cmek-design-2564.md)
   puts every Terraform-owned GCS bucket on a customer-managed key. A
   `trivy config` scan of `platform/terraform/gcp` reports no GCP-0066 finding,
   with no exception. #2566 makes that scan a CI gate. The `terraform test` contracts of `modules/gcs-cmek`,
@@ -756,31 +622,16 @@ The first slice intentionally stays small:
   `platform/charts/shifter/` changes. Not in the `fast` level, so
   unrelated `--level fast` invocations and the system-Python
   `adr-guard-fast` hook do not pull in the YAML or helm dependencies.
-  **Runtime dependencies:** PyYAML (`pyyaml>=6.0`) and Helm
-  (`v3.15.4`). The `adr-conformance` job in
-  `.github/workflows/_quality.yml` bootstraps pip via the stdlib
-  `ensurepip` module (the self-hosted Amazon Linux runner's system
-  Python ships without pip; `actions/setup-python` cannot fetch
-  Python 3.12 for the runner's architecture), then installs PyYAML
-  via `python3 -m pip install --no-deps --target
-  ${RUNNER_TEMP}/py-deps` with `PYTHONPATH=${RUNNER_TEMP}/py-deps`
-  on the run step, and Helm via the official `get.helm.sh` release
-  tarball extracted to `${RUNNER_TEMP}/helm-bin/` and added to
-  `$GITHUB_PATH`. The `--user` site PyPI install of pip itself is
-  job-scoped on the self-hosted runner; PyYAML lands under
-  `${RUNNER_TEMP}/py-deps` which is ephemeral. The `adr-guard-tests`
-  job uses the same ensurepip + PyYAML pattern; the chart-rendering
-  test uses a fake helm shim, so CI tests don't need real helm. The `adr-guard-k8s` pre-commit hook
-  uses `language: python` with `additional_dependencies:
-  pyyaml>=6.0` so PyYAML is provisioned in an isolated pre-commit
-  virtualenv; helm is a developer prerequisite shared with the
-  existing `helm-lint-shifter-chart` hook. Complements existing
-  kube-linter checks (`run-as-non-root`, `no-read-only-root-fs`,
-  `privilege-escalation-container`) which cover the subset
-  PSS-restricted enforces directly; this check fills the gaps for
-  `seccompProfile`, `capabilities.drop`/`add`, container-level
-  seccomp overrides, `privileged: true`, pod-level inheritance, and
-  initContainer coverage. Implementation note: the validator is
+  **Runtime dependencies:** PyYAML (`pyyaml>=6.0`) and Helm (`v3.15.4`).
+  CI's `adr-conformance` job runs on `ubuntu-latest` with uv-managed Python 3.11 and `pyyaml==6.0.2`.
+  It verifies the pinned Helm archive digest before extracting it into `${RUNNER_TEMP}/helm-bin/`.
+  That directory is added to `$GITHUB_PATH`.
+  The test job uses the same Python and PyYAML versions under coverage.
+  Chart-rendering unit tests use a Helm shim instead of the real executable.
+
+  The local `adr-guard-k8s` hook uses `language: python` with `additional_dependencies: pyyaml>=6.0`.
+  Helm remains a developer prerequisite when a changed chart selects this check.
+  Complements kube-linter's `run-as-non-root`, `no-read-only-root-fs`, and `privilege-escalation-container` checks. It adds `seccompProfile`, capability drop/add, container seccomp overrides, privileged-mode, pod inheritance, and initContainer coverage. Implementation note: the validator is
   decomposed into focused helpers (`_check_container_basic_fields`,
   `_check_container_capabilities`, `_check_container_seccomp`,
   `_check_container_identity`, `_resolve_pod_spec`,
@@ -799,20 +650,13 @@ The first slice intentionally stays small:
   explicit GCLB, Google API, private service, and in-cluster service
   ranges. The one exception (#2090) is the boundary policy of a
   designated egress proxy (`content-egress`, `model-provider-egress`).
-  It must select only that component, admit ingress only from named
-  pods, allow only TCP 443, and exclude every private, shared,
-  loopback, link-local, multicast, and reserved IPv4 range
-  (`REQUIRED_PUBLIC_EGRESS_EXCEPT`). Runs in the `ci` level and shares
+  It must select only that component, admit only named pods, and allow only TCP 443. It must exclude private, shared, loopback, link-local, multicast, and reserved IPv4 ranges through `REQUIRED_PUBLIC_EGRESS_EXCEPT`. Runs in the `ci` level and shares
   the Helm-rendered validation boundary with
   `k8s-deployment-security-context`.
 
 - `eks-cross-stack-sourcing`
   Enforces ADR-044-R6 against the AWS EKS Terraform roots under
-  `platform/terraform/environments/*/eks/`. The EKS control plane
-  composes over the existing portal and range data plane and must
-  source cross-stack values (control-plane database, secrets KMS key,
-  agent bucket, range VPC/subnets/AMIs/instance roles) through native
-  AWS data sources and SSM Parameter Store. The check fails closed on
+  `platform/terraform/environments/*/eks/`. The EKS control plane composes over existing portal and range data planes. It must get cross-stack values through native AWS data sources and SSM Parameter Store. Values include control-plane database, secrets KMS key, agent bucket, and range VPC/subnets/AMIs/instance roles. The check fails closed on
   any `terraform_remote_state` data source in those roots, which would
   couple the consumer to another stack's whole state file. Runs in both
   the `fast` and `ci` levels. The AWS/GCP provisioner-env contract
@@ -821,10 +665,7 @@ The first slice intentionally stays small:
   structural guard.
 
 - `no-plaintext-secrets-in-tfvars`
-  Architecture check that scans `*.tfvars` files committed under
-  `platform/terraform/environments/` and `platform/terraform/global/`
-  and flags any line that assigns a quoted string literal to a variable
-  whose name ends in a secret-bearing term: `password`, `passwords`,
+  Architecture check for committed `*.tfvars` under `platform/terraform/environments/` and `platform/terraform/global/`. It flags quoted string assignments to variables whose names end with a secret-bearing term: `password`, `passwords`,
   `secret`, `secrets`, `token`, `tokens`, `key`, `keys`, `credential`,
   `credentials`, `authcode`, `authcodes`, `pin_value`, or `pin_values`.
   Bare `authcode` and `pin_value` names are also blocked. Heredoc string literals
@@ -832,21 +673,9 @@ The first slice intentionally stays small:
   assignments to a secret-bearing variable are walked forward to the
   matching brace/bracket and flagged when any string literal appears
   inside (so `db_credentials = { password = "..." }` is caught while
-  `db_credentials = { password = var.x }` is allowed). Function-wrapped
-  string literals (`db_password = trimspace("...")`,
-  `api_token = sensitive("...")`,
-  `db_credentials = jsonencode({ password = "..." })`) are caught via
-  a same-line RHS scan; multi-line wrapper expressions (jsonencode
-  spanning lines, nested function calls across lines) are walked via
-  balanced-delimiter matching of `()`/`[]`/`{}` until the expression
-  closes, and any inner string literal flags the assignment.
+  `db_credentials = { password = var.x }` is allowed). A same-line RHS scan catches function-wrapped literals such as `trimspace`, `sensitive`, and `jsonencode` calls. Multi-line wrappers use balanced `()`, `[]`, and `{}` traversal. Any inner string literal flags the assignment.
   Var/local/data references and empty strings
-  are allowed. Variables whose name ENDS WITH a public-material suffix
-  (`public_key`, `public_keys`, `public_cert`, `pub_key`, `pubkey`,
-  `authorized_keys`, etc.) are exempted because that material is
-  share-only by design; the match is suffix-based so a name like
-  `public_key_password` (which has the public-key fragment AND a
-  secret suffix) stays flagged. `*.tfvars.example` files are skipped. Both `#` and `//` line comments and `/* ... */`
+  are allowed. Variables ending in public-material suffixes are exempt because the material is shareable. Suffixes include `public_key`, `public_keys`, `public_cert`, `pub_key`, `pubkey`, and `authorized_keys`. A name such as `public_key_password` still has a secret suffix and remains flagged. `*.tfvars.example` files are skipped. Both `#` and `//` line comments and `/* ... */`
   block comments are stripped before matching, matching Terraform's
   HCL grammar. A file that the check cannot read or decode as UTF-8
   fails closed: the check reports it as a violation. Enforces ADR-004-R7.
@@ -865,11 +694,7 @@ The first slice intentionally stays small:
   Architecture check that fails the build when any file under
   `mcp/ops/` (`.js`, `.mjs`, `.cjs`, excluding `node_modules/`)
   re-introduces `rejectUnauthorized: false` (or `0` / `null`) on a
-  TLS configuration. `mcp/ops` connects to RDS Postgres through an
-  SSM port forward; `mcp/ops/lib.js::buildPoolConfig` is the single
-  call site that builds the pool's TLS config and now preserves
-  verification by setting `ssl.servername` to the captured RDS
-  endpoint. Comments and string literals are flattened to whitespace
+  TLS configuration. `mcp/ops` connects to RDS PostgreSQL through an SSM forward. `mcp/ops/lib.js::buildPoolConfig` builds TLS configuration and preserves verification by setting `ssl.servername` to the captured RDS endpoint. Comments and string literals are flattened to whitespace
   before matching (mirroring `mcp-no-shell-exec`'s approach) so a
   descriptive doc-string about the prior `rejectUnauthorized: false`
   workaround does not trip the check. Backstops the `buildPoolConfig`
@@ -911,13 +736,7 @@ The first slice intentionally stays small:
   flagged. The bracket allowlist is an explicit fixed set rather
   than a `<...>` pattern so a committer cannot hide a real credential
   inside angle brackets (for example, `DB_PASSWORD=<attacker-known-password>`).
-  The parser splits on the first `=` so non-identifier key shapes
-  (`db.password=...`, `api-token=...`, `export DB_PASSWORD=...`) are
-  still subject to the value check; inline `# ...` is **not**
-  honored as a comment (the env-file format treats `#` as a
-  comment only when it is the first non-whitespace character on a
-  line); non-comment, non-blank lines without `=` are flagged as
-  malformed. Containment uses `git ls-files` so gitignored local-dev
+  The parser splits on the first `=`. Non-identifier keys such as `db.password`, `api-token`, and `export DB_PASSWORD` still receive the value check. Inline `#` does not start a comment. Only a first non-whitespace `#` marks a comment line. A non-comment, nonblank line without `=` is malformed. Containment uses `git ls-files` so gitignored local-dev
   files (for example, `platform-runtime-secrets.local.env`) are intentionally
   not scanned; a synthetic-tree test-mode fallback walks the
   filesystem for unit tests. The roots and the synthetic-placeholder
@@ -969,16 +788,11 @@ The first slice intentionally stays small:
   maintenance window. Implementation: `scripts/check_rds_pending_modifications/`,
   with its own uv-managed dev environment, dedicated CI lint+test jobs
   (`check-rds-pending-modifications-lint` / `-tests` in `_quality.yml`),
-  and matching pre-commit hooks (ruff + pytest). Same pattern as
+  and the applicable Ruff commit hooks. The package test suite runs in CI. Same pattern as
   `scripts/check_layer_imports/`.
 
 - `check-tf-kms-secrets-grant`
-  Pre-commit hook AND CI step (`.github/workflows/_quality.yml`'s
-  `terraform-lint` job) that fails when an IAM role whose attached
-  `aws_iam_role_policy` grants `secretsmanager:GetSecretValue` (or
-  any wildcard covering it, such as `secretsmanager:*`,
-  `secretsmanager:Get*`, or `*`) lacks an attached IAM Statement
-  granting `kms:Decrypt` on the portal Secrets Manager CMK. The grant
+  Pre-commit and CI enforce the portal Secrets Manager CMK grant through `terraform-lint`. A role granting `secretsmanager:GetSecretValue` must also grant `kms:Decrypt` on that CMK. Covering wildcards include `secretsmanager:*`, `secretsmanager:Get*`, and `*`. The grant
   must satisfy all three predicates in the SAME Statement: Action
   covers `kms:Decrypt` (action wildcard matching is done with
   `fnmatch`, so `kms:*` and `kms:De*` also satisfy); Resource is
@@ -1010,25 +824,10 @@ The first slice intentionally stays small:
   `scripts/check_tf_kms_secrets_grant/check_tf_kms_secrets_grant.py`
   and tested in
   `scripts/check_tf_kms_secrets_grant/test_check_tf_kms_secrets_grant.py`
-  with stdlib `unittest` (mirrors `check_tf_iam_ec2_scope`). The
-  test suite itself is run by the `check-tf-checker-tests` pre-commit
-  hook and a matching CI step so a parser regression cannot land
-  merely because the current live `.tf` files remain in the
-  happy-path shape. Enforces ADR-004-R10. Backstops the failure mode
-  resolved by #52 where a fresh Secrets Manager CMK rotation left
-  several roles without `kms:Decrypt` and ECS task secrets injection
-  aborted at startup with `AccessDeniedException: Access to KMS is
-  not allowed` (which in turn was silently masked at the portal
-  entrypoint by an `export VAR=$(fetch_runtime_secret …)` pattern
-  that swallowed the fetch failure; see
-  `shifter/shifter_platform/entrypoint-lib.sh` and
-  `shifter/shifter_platform/tests/test_entrypoint_lib.sh`).
+  with stdlib `unittest` (mirrors `check_tf_iam_ec2_scope`). The checker tests run in CI. The former `check-tf-checker-tests` pre-commit hook is absent from the current configuration. Parser regressions must be checked even when current Terraform files remain valid. Enforces ADR-004-R10. This backstops the CMK-rotation failure in #52, where missing `kms:Decrypt` caused ECS secret injection to fail. The error was `AccessDeniedException: Access to KMS is not allowed`. An entrypoint `export VAR=$(fetch_runtime_secret …)` pattern had also hidden the fetch failure. See `entrypoint-lib.sh` and `tests/test_entrypoint_lib.sh` under `shifter/shifter_platform/`.
 
 - `check-portal-target-sg-sources`
-  Pre-commit hook AND CI step enforcing that portal target-service SG
-  ingress (Django:8000, Guacamole client:8080) sources only from a
-  security-group reference or `module.vpc.alb_ingress_subnet_cidrs`,
-  never the whole public tier where standalone public workloads live.
+  Pre-commit and CI require narrow portal target-service ingress for Django:8000 and Guacamole client:8080. Sources must be security-group references or `module.vpc.alb_ingress_subnet_cidrs`. The whole public tier is forbidden because standalone public workloads also use it.
   Scoped to the retained `dev` and `prod` portal roots. Enforces ADR-004-R11.
 
 - `check-tf-iam-ec2-scope`
@@ -1036,20 +835,11 @@ The first slice intentionally stays small:
   actions (`TerminateInstances`, `StopInstances`, `StartInstances`,
   `ModifyInstanceAttribute`, `ModifyInstanceMetadataOptions`) on a
   wildcard resource, and requiring the BigRAE ownership resource-tag
-  conditions. Previously it ran in pre-commit and as a unit test in CI,
-  but never against the live Terraform, unlike its `check-tf-iam-elb-scope`
-  and `check-tf-iam-ssm-scope` siblings; a commit that bypassed pre-commit
-  could land the regression (#1846). The live CI invocation was added to
+  conditions. The original gap was missing live-Terraform CI enforcement (#1846). Local hooks and a CI unit test alone could miss a regression after bypassed hooks. The live CI invocation closed that gap. The live CI invocation was added to
   close that gap.
 
 - `global-iam-drift-check`
-  ADR guard check (fast + CI, registered in `_registry.py`) pinning the
-  out-of-band `platform/terraform/global/iam` drift-check workflow
-  (`.github/workflows/iam-drift-check.yml`). global/iam owns the GitHub Actions
-  OIDC deploy role and is applied out-of-band, so a merged `github-oidc.tf`
-  change can go un-applied and the live role drifts behind committed config -
-  the recurring "new resource, then next deploy fails with HTTP 403" churn
-  (#247). The check
+  The `global-iam-drift-check` ADR guard runs at fast and CI levels through `_registry.py`. It pins `.github/workflows/iam-drift-check.yml` for the out-of-band `platform/terraform/global/iam` root. That root owns the Actions OIDC deploy role. A merged configuration edit can remain unapplied, leaving the live role behind committed configuration (#247). The check
   binds the workflow's contract on one designated plan job: a push-only trigger
   (no `pull_request`/`pull_request_target`, per ADR-003-R5), a `{dev, main}`
   branch allowlist, a `global/iam` path filter, and a real, global/iam-scoped,
@@ -1059,6 +849,9 @@ The first slice intentionally stays small:
   deploy role lacks. Enforces ADR-004-R26.
 
 ## Local Usage
+
+During development, select the changed files and their narrowest checks first.
+The full CI profile below is the required architecture-completion check, not a request to run full test suites.
 
 Run the fast profile on the full repo:
 
@@ -1140,6 +933,7 @@ The report uses Vale `--no-exit` and STE `--fail-over -1`.
 Those options report legacy findings while preserving configuration and execution errors.
 The corpus log retains Vale's native summary line and the STE summary.
 It does not repeat retained source excerpts.
+
 Later rewrites add full pages to `.ste-required.txt` after both checks pass.
 No baseline or second inventory is introduced.
 
@@ -1147,9 +941,20 @@ The narrow file exclusions preserve generated root and provisioner changelogs, r
 `.vale.ini` records their reasons. `make docs-report` uses the same exclusions.
 Preserve exact quotations and evidence with supported inline checker directives when needed.
 Document the reason beside each directive.
+
 `CONTRIBUTING.md` retains its upstream policy block verbatim under GEN-2003.
 Inline directives exclude only that block; the maintained project addenda remain checked.
 A whole architecture folder or all hidden files cannot be excluded as records.
+
+Contributor guidance is reconciled under #2809.
+`CONTRIBUTING.md` owns setup and explicit-path prose commands; other guidance links to it.
+Local staging uses `pre-commit run`, while full suites and corpus reports remain in CI.
+`.claude/skills/ship/SKILL.md` reads repository and SonarCloud identity from `.ground-control.yaml`.
+The user retains feature-PR merge approval. The separately invoked release skill retains its bounded release-script exception.
+
+
+Legacy Spec Kit and scenario-editor records have direct-link applicability notes and current task routes.
+Their preserved bodies do not authorize current deployment, SQL mutations, or removed workflow paths.
 
 Structured records, source docstrings, command help, and generator inputs also need reader-purpose and meaning review.
 The Markdown checker does not establish coverage for those formats.
@@ -1164,13 +969,7 @@ Prose-check coverage does not change the published set.
 ## How To Add A Rule
 
 1. Add or update the ADR entry in `docs/adr/index.yaml`.
-2. Implement the `check_<name>(repo_root, files) -> list[Violation]` function in
-   the appropriate `scripts/adr_guard/_guard/checks/<family>.py` module (add a
-   new family module if none fits), reusing the shared kernels in
-   `_guard/_common.py` / `_guard/_workflow_model.py` rather than duplicating
-   helpers, and register it in `scripts/adr_guard/_guard/_registry.py` (`CHECKS`
-   plus the relevant `CHECK_LEVELS`
-   profiles).
+2. Implement `check_<name>(repo_root, files) -> list[Violation]` in the appropriate `_guard/checks/<family>.py` module. Add a family module only when none fits. Reuse `_guard/_common.py` and `_guard/_workflow_model.py` helpers. Register the check in `_guard/_registry.py` under `CHECKS` and the relevant `CHECK_LEVELS` profiles.
 3. Decide where it belongs:
    - fast local gate
    - CI gate
@@ -1204,17 +1003,11 @@ every production path to the blocking lint, security, and test jobs in
 one parser for it. The `_quality.yml` path-detection job runs
 `scripts/quality_ownership/classify_paths.py`, which validates the contract and
 rejects any unclassified changed path before it emits job selection (the
-fail-closed boundary). The `quality-path-ownership` check (ADR-004-R24)
-reconciles the contract against the whole repository for estate completeness,
-per-path ownership completeness across lint, security, and test, and routing
-reachability against the real workflow.
+fail-closed boundary). The `quality-path-ownership` check enforces ADR-004-R24 against the complete repository. It checks estate completeness, per-path lint/security/test ownership, and reachability through the real workflow.
 
-The repository-wide closure in #202 assigns blocking owners to the prior gap
-set: ADR tooling and stack-smoke helpers have Ruff/Bandit lanes (plus
-ShellCheck for shell harnesses), the three standalone deployment utilities
-share a blocking Bandit lane, MCP security rules are errors and the shared
-package has its own test matrix member, and Kubernetes and Helm inputs use
-kube-linter. Container inputs use BuildKit checks/ShellCheck/Trivy; the root
+Issue #202 assigned blocking owners to the identified gaps. ADR tooling and stack-smoke helpers have Ruff/Bandit lanes; shell harnesses also have ShellCheck. Three standalone deployment utilities share a blocking Bandit lane. MCP security rules are errors, and its shared package has a test-matrix entry. Kubernetes and Helm inputs use kube-linter.
+
+Container inputs use BuildKit checks/ShellCheck/Trivy; the root
 Docker context is separately routed through the portal build and stack smoke.
 Unused root branding assets were removed after the consumer search in #2555.
 A new production input needs an explicit quality owner.
@@ -1228,17 +1021,11 @@ To add a production path:
 
 1. Add a quality unit to `quality_units` with its `paths` and the real
    `_quality.yml` jobs under `responsibilities.lint`,
-   `responsibilities.security`, and `responsibilities.test`. Use a
-   `{job, matrix}` entry where one job serves several packages, and set
-   `packages` to the matching first-party package identifiers so they reconcile
-   against `scripts/check_layer_imports/layer_imports.yaml`.
+   `responsibilities.security`, and `responsibilities.test`. Use a `{job, matrix}` entry when one job serves several packages. Set `packages` to first-party identifiers matching `scripts/check_layer_imports/layer_imports.yaml`.
 2. If the path is not production source, add a typed `exclusions` entry instead
    (`docs`, `test`, `generated`, `vendor`, `metadata`, or `config`) with a
    reason. Exclusions never route jobs.
-3. If a unit genuinely has no blocking job for a responsibility, record a
-   time-bounded `docs/adr/exceptions.yaml` entry for rule `ADR-004-R24` whose
-   `paths` names the
-   `.github/quality-path-filters.yaml#<unit>:<responsibility>` anchor. There is
+3. A responsibility without a blocking job needs a time-bounded ADR-004-R24 exception in `docs/adr/exceptions.yaml`. Its `paths` must name the `.github/quality-path-filters.yaml#<unit>:<responsibility>` anchor. There is
    no in-contract escape hatch for an owned production path.
 
 ## Repository identity (ADR-069)
@@ -1265,11 +1052,7 @@ deployment configuration only.
 
 The check is split for reuse: `scripts/adr_guard/_guard/_repository_identity.py`
 loads and validates the declaration, and
-`scripts/adr_guard/_guard/checks/repository_identity.py` runs the scan. The
-GCP WIF trust module keeps a repository-name default so the mandatory
-CKV_GCP_125 check resolves the trust subject; the identity-literals check does
-not flag it, because it matches the `owner/repo` pair and the IDs, not a bare
-org or repo string. `scripts/check_tf_gcp_wif_trust` rejects a default on the
+`scripts/adr_guard/_guard/checks/repository_identity.py` runs the scan. The GCP WIF module retains a repository-name default so CKV_GCP_125 can resolve its trust subject. The identity-literals check matches owner/repository pairs and IDs, not isolated organization or repository strings. `scripts/check_tf_gcp_wif_trust` rejects a default on the
 immutable IDs and on `purpose_contexts` (ADR-069-R3, ADR-070).
 
 ## Design Constraints
@@ -1282,6 +1065,10 @@ immutable IDs and on `purpose_contexts` (ADR-069-R3, ADR-070).
 
 ## Guardrail maintenance log
 
+- **MCP policy contract comments (#2809)**: `.shifter.yaml` and `mcp/ops/policy.js` now describe the shipped plan/execute wrapper.
+  Configuration values and JavaScript statements remain unchanged.
+  The [operations security reference](https://github.com/OpenRAE/bigrae/blob/dev/mcp/ops/SECURITY.md) describes the current class-wide contract.
+  The #777 preflight keeps its original body beneath a current applicability note.
 - **agent-attribution matcher (`scripts/adr_guard/agent_attribution.py`)**: the
   attribution-detection regexes were simplified from `\s*.*` to `.*` to remove
   super-linear backtracking (SonarCloud `python:S8786`, ReDoS). Match behavior is
@@ -1324,7 +1111,7 @@ immutable IDs and on `purpose_contexts` (ADR-069-R3, ADR-070).
   OpenFGA argument. The invariant does not change: every workload has an
   expected image.
 
-# Private scenario boundary
+## Private scenario boundary
 
 `AGENTS.md`, `.github/copilot-instructions.md`, and `.gc/plan-rules.md` require
 private scenario content and adapters to remain in their owning repositories.
@@ -1379,9 +1166,7 @@ port before worker dispatch. Engine cannot import CMS.
 The rendered runtime-plugin admission policy permits only the invocation's
 immutable file Secret, projected with explicit bounded keys and a fixed read-only
 mount. The object-count quota allows three Secrets per reserved Job without
-increasing the 16-pod execution cap. Synthetic tests evaluate the rendered CEL
-with actual builder manifests and reject wrong Secrets, writable or extra mounts,
-path traversal, unsafe modes and oversized key sets. CMS tests cover replacement,
+increasing the 16-pod execution cap. Synthetic tests evaluate rendered CEL with actual builder manifests. They reject wrong Secrets, writable or extra mounts, path traversal, unsafe modes, and oversized key sets. CMS tests cover replacement,
 retention, quota cleanup, original-proof revocation and digest tampering; these
 checks require no deployment or live qualification.
 
@@ -1400,10 +1185,9 @@ migration complete.
 ### Independent SDK publication (ADR-041, ADR-042)
 
 `adapter-sdk-release.yml` publishes BigRAE's own adapter contract package,
-independently versioned from the platform. It accepts only the protected `main`
-ref and a version matching the source, tests and builds without an OIDC release
-identity, then publishes the exact build artifact from the `adapter-sdk-pypi`
-environment. The publishing job has no checkout/build step and no token fallback.
+independently versioned from the platform. It accepts only protected `main` and a version matching source. Tests and builds use no OIDC release identity. Publication uses the exact build artifact from the `adapter-sdk-pypi` environment.
+
+The publishing job has no checkout/build step and no token fallback.
 The release boundary is covered by `test_adapter_sdk_release.py`; normal SDK
 lint, security, tests and wheel builds remain in the Quality matrix. This is a
 software release surface and does not publish or curate external packs.
@@ -1415,20 +1199,33 @@ Runtime plugin jobs require `runtimeClassName: gvisor` and nodes labeled
 prefix prevents kubelets from attracting work by assigning themselves this label.
 Both the host task profile and static/Helm admission enforce this boundary. CEL tests exercise rejection
 of absent/default runtimes and platform-node placement using real rendered jobs.
+
+
 The GCP node pool enables Sandbox on `COS_CONTAINERD`, with an exclusive taint
 and bounded autoscaling. This follows the [GKE Sandbox deployment contract](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/sandbox-pods).
+
+
 The AWS pool uses AL2023 and a checksum-pinned gVisor point release, including its
 sidecar binaries. Its MIME bootstrap installs the verified archive and configures
 the runtime through [nodeadm's merge interface](https://awslabs.github.io/amazon-eks-ami/nodeadm/doc/api/).
+
+
 The chart owns the EKS RuntimeClass; GKE owns its managed class. Both pools retain
-one warm node and cap autoscaling at three. An absent runtime or failed bootstrap
+one warm node and cap autoscaling at three.
+
+An absent runtime or failed bootstrap
 blocks plugin startup, with no ordinary-container fallback. Release maintenance
 must follow the [gVisor installation layout](https://gvisor.dev/docs/user_guide/install/)
 and [containerd configuration](https://gvisor.dev/docs/user_guide/containerd/configuration/).
-The checked-in SHA-512 was verified against the complete release archive locally. Live tests must establish actual sandbox execution and deny-all
+The checked-in SHA-512 was verified against the complete release archive locally.
+
+Live tests must establish actual sandbox execution and deny-all
 network enforcement independently of anything the plugin reports.
 
 ### Broker process and guest authority (ADR-059, ADR-060)
+
+This section describes retained broker checks. ADR-068 governs the parked implementation and any replacement qualification.
+The checks do not authorize activating the retired broker service.
 
 The `model_broker` process has a mandatory import-linter contract forbidding
 application domains, Django, PostgreSQL and Redis dependencies. Its only Engine
@@ -1454,6 +1251,9 @@ not qualify effective cloud IAM, networking, guest delivery or model availabilit
 
 ## AWS model broker packaging
 
+These retained packaging checks describe the earlier broker implementation.
+ADR-068 governs its applicability; passing them does not authorize activation.
+
 ADR-059's EKS packaging checks live in
 `platform/terraform/modules/portal/eks-model-broker/tests/boundary.tftest.hcl`,
 `shifter/installation/tests/test_aws_model_broker.py`, and the broker chart tests.
@@ -1475,10 +1275,9 @@ the explanation stays accurate. New interfaces extend the existing manifest.
 run. Local changed-path checks enforce pairing for their supplied scope. The always-run Quality path classifier also executes the same coverage and
 drift check against the complete diff before emitting job selections, including
 deleted sources. A source-only change cannot skip enforcement through the ADR
-job filter; production ownership classification still excludes deleted files. The
-full CI check compares the working tree/PR against the fetched base, including
-deleted and renamed sources, and keeps base-revision associations binding when
-mappings change. CI's existing `ADR_GUARD_SNAPSHOT_ENFORCE=1` refuses unavailable
+job filter; production ownership classification still excludes deleted files.
+
+The full CI check compares the working tree and PR with the fetched base, including deleted and renamed sources. Base-revision associations remain binding when mappings change. CI's existing `ADR_GUARD_SNAPSHOT_ENFORCE=1` refuses unavailable
 comparison history. Local full checks use available integration history and
 fall back to working-tree changes when history is absent.
 
@@ -1499,11 +1298,7 @@ one set of rule identifiers and diagnostics when their implementation is split.
 ### Operations runbook catalog
 
 The public operations handoff under `docs/runbooks/` retains the stable
-`RB001` through `RB024` incident identifiers. The existing ADR-guard unittest
-discovery runs `test_operations_runbooks.py`, which checks that all 24 pages are
-present and indexed, carry the required Symptom, Investigation, Resolution and
-Prevention sections in order, state an escalation boundary, and mark fenced
-shell examples as read-only. The same test rejects command examples that read
+`RB001` through `RB024` incident identifiers. `test_operations_runbooks.py` runs through existing ADR-guard unittest discovery. It checks all 24 pages, index routes, escalation boundaries, and read-only shell examples. Required sections are Symptom, Investigation, Resolution, and Prevention in that order. The same test rejects command examples that read
 secret values or directly mutate Kubernetes, cloud resources, Terraform, or
 Helm. This is focused GEN-001 evidence within the existing test estate, not a
 new documentation schema, manifest, or adr_guard runtime check.
@@ -1557,9 +1352,12 @@ payload leaves and bounded responses. Core evaluates the original RAES domains,
 recursive constraints and all overlapping authority before accepting any value.
 Migration 0119 makes accepted preparation and its pin/parent identities immutable
 through SQL. Acceptance and cancellation share the Range lock; accepted mapping
-and planned invocation become visible atomically. A destroy input retains that
+and planned invocation become visible atomically.
+
+A destroy input retains that
 mapping, or explicitly records that the mandatory pre-effect gate never opened.
 The latter is a scoped proof of no effects, not an inference from a missing Job.
+
 Core checks the complete future destroy envelope before accepting a preparation.
 Prepared cleanup uses the original input; unprepared cleanup reads no mutable
 image registry or guest material. Oversized encrypted snapshots are refused
@@ -1569,7 +1367,7 @@ Accepted preparation continues through normal provider inventory/readback.
 Targeted SDK, Engine PostgreSQL, provisioner and admission-policy tests cover
 confidential output, exact-value rejection, retention, tampering, replay and late
 acceptance. The chart allows only one input key and an optional result key from
-the same invocation Secret. See [the design](../../architecture/adapter-pre-provisioning-2718.md).
+the same invocation Secret. See [the design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/adapter-pre-provisioning-2718.md).
 
 ### Registered GCP range projects (ADR-032-R11)
 
@@ -1587,5 +1385,5 @@ Registration uses the existing native operation input, recorded initiating proof
 and append-only result inbox. Installation policy and the exact live credential
 are checked before dispatch. No cloud I/O belongs in the portal or adapter worker.
 These checks establish custody; they do not claim live provider realization or
-deployment qualification. The [design](../../architecture/registered-gcp-range-projects-2716.md)
+deployment qualification. The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/registered-gcp-range-projects-2716.md)
 describes the remaining provider preflight, execution and readback boundaries.

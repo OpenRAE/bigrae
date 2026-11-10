@@ -1,5 +1,20 @@
 # UAT Plan: Scenario Editor
 
+
+This is historical reference from source revision `6ddf8d086bc2f223ed57f37d5c3ab93e14928bbe`, dated 2026-02-21.
+The preserved body is a proposal and checklist, not proof of successful execution.
+Its SQL mutations, endpoint paths, schema, and staff-role assumptions predate current native pack ingestion and authorization.
+Do not execute it as a current tenant procedure.
+
+Use [current QA guidance](../docs/qa/index.md), [CMS reference](../docs/technical/shifter_platform/cms.md), and [scenario authoring](../docs/dev/ctf-scenario-content.md).
+The [UAT entry](README.md) explains the preservation boundary.
+
+Historical live results are unverified; no run is reproduced by this rewrite.
+
+<!-- Preserve the original historical plan, SQL, examples, and evidence fields. Only this body is excluded. -->
+<!-- vale off -->
+<!-- ste-disable -->
+
 **Version:** 1.0
 **Target Environment:** Dev
 **Created:** 2026-02-21
@@ -1486,3 +1501,6 @@ curl -X POST https://dev.shifter.example.com/api/range/launch/ \
 ---
 
 **End of UAT Plan**
+
+<!-- ste-enable -->
+<!-- vale on -->

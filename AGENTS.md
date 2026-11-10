@@ -153,8 +153,8 @@ request; there is no requirement database or link API.
 Private and third-party packs own their scenario content, adapters, image recipes,
 guest scripts, answer material, operational evidence, and cloud-specific pack
 configuration. Keep those assets in the owner's repository. Core changes must use
-the public adapter SDK, typed runtime capabilities, and synthetic fixtures; never
-branch on pack names, image aliases, container names, domains, or private identities.
+the public adapter SDK, typed runtime capabilities, and synthetic fixtures.
+Never branch on pack names, image aliases, container names, domains, or private identities.
 
 Do not copy private pack names, details, logs, repository links, or acceptance
 evidence into public issues, pull requests, comments, commit metadata, or release

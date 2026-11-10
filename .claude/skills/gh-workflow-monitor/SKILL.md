@@ -1,19 +1,21 @@
 ---
 name: gh-workflow-monitor
-description: Monitor GitHub workflows, propose fixes for failures, and report status
+description: Monitor the current revision's GitHub workflows and report actionable failures.
 disable-model-invocation: true
 ---
 
-# GitHub Workflow Monitor
+# GitHub workflow monitor
 
-Use the `gh` for GitHub operations.
+Use this how-to guide to inspect validation results.
+Use the canonical `github_repo` in `.ground-control.yaml` for every `gh` operation.
 
-## Step 1: Check current branch.
+1. Read the current branch and full head revision.
+2. Find all workflow runs for that exact revision in the canonical repository.
+3. Watch applicable runs with `gh run watch <run-id> --repo <owner>/<repo>`.
+4. Read failed steps with `gh run view <run-id> --log-failed --repo <owner>/<repo>`.
+5. Report the cause and proposed repair, or continue an already authorized repair workflow.
+6. Report success only after all applicable runs for that revision pass.
 
-## Step 2: If the branch is not green, find the GitHub Actions workflow run associated with the current branch. Use the gh cli.
-
-## Step 3: Monitor the workflow run for failures.
-
-## Step 4: If the workflow run fails, propose a fix.
-
-## Step 5: If the workflow run succeeds, exit plan mode and report the status.
+Do not treat an older run or one successful workflow as proof for the complete candidate.
+Keep raw sensitive logs out of public comments.
+Do not deploy, publish, or merge through this monitoring task.

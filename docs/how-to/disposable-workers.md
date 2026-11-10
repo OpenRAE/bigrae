@@ -24,10 +24,11 @@ Pin one Linux host plan, an exact GCE image name and numeric image ID, its prove
 Use the existing image preparation and publication procedure for those facts.
 The host plan is apparatus configuration, separate from experiment SDL.
 No participant container or experiment runtime is required.
+
 The existing Ubuntu range image can supply Docker and the standard host bootstrap.
 Use a publication that clears machine and Docker identities before capture.
 Older publications need a rebuild through the protected guest-image workflow.
-See [Linux identity at capture](../architecture/gcp-guest-images.md#linux-identity-at-capture).
+See [Linux identity at capture](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md#linux-identity-at-capture).
 
 Reserve capacity through the existing Engine assessment service and deployment catalog.
 The profile names that reservation scope and its approved capacity partition.

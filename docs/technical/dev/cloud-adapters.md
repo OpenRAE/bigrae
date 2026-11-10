@@ -1,80 +1,88 @@
 # Cloud Adapters
 
-Protocol-based abstractions that isolate cloud-specific code. The same Django application runs on AWS or GCP without conditional logic in business code.
+This reference describes the cloud interfaces and their ownership.
+Use the [architecture handbook](../architecture.md) for system context and deployment support limits.
+A conforming adapter does not by itself qualify a live backend.
 
 ## How It Works
 
-`CLOUD_PROVIDER` environment variable (`aws` or `gcp`) selects the active provider. Factory functions lazy-import the matching implementation. Unrecognized providers raise `CloudProviderNotImplementedError`.
+The installation registry defines supported backends and their declared capabilities.
+The platform composition root validates `CLOUD_PROVIDER` once through `config._cloud.resolve_cloud_provider`.
+Factories consume the validated Django setting and check the required capability before constructing an adapter.
+They do not independently choose an AWS fallback.
+An unsupported capability raises `CloudProviderNotImplementedError`.
 
-Two independent adapter sets exist: one for the platform (Django), one for the provisioner (standalone process).
+The provisioner resolves its backend through its own configuration root and the same installation registry.
+It has no Django dependency.
+Keep platform and provisioner protocols separate because their process responsibilities differ.
 
 ## Platform Adapters
 
-Defined in `shifter_platform/shared/cloud/types.py`. Obtained via factory functions in `shifter_platform/shared/cloud/__init__.py`.
+Source: `shifter/shifter_platform/shared/cloud/types.py`.
+Factories: `shifter/shifter_platform/shared/cloud/__init__.py`.
 
 | Protocol | Methods | AWS | GCP |
-|----------|---------|-----|-----|
-| **ObjectStorage** | `upload_file`, `delete_object`, `head_object`, `generate_presigned_upload_url`, `generate_presigned_download_url`, `tag_object` | S3 | GCS |
-| **TaskRunner** | `run_task`, `get_task_status` | EKS Kubernetes Job | GKE Kubernetes Job |
-| **QueueConsumer** | `receive_messages`, `delete_message` | SQS | Pub/Sub |
-| **QueuePublisher** | `send_message` | SQS | Pub/Sub |
-| **SecretsStore** | `get_secret` | Secrets Manager | Secret Manager |
+| --- | --- | --- | --- |
+| `ObjectStorage` | `upload_file`, `delete_object`, `copy_object`, `copy_object_conditional`, `object_exists`, `head_object`, `read_object_header`, `download_object`, `generate_presigned_upload_url`, `generate_presigned_download_url`, `tag_object` | S3 | GCS |
+| `TaskRunner` | `run_task`, `get_task_status`, `delete_completed_task`, `interrupt_task` | EKS Kubernetes Job | GKE Kubernetes Job |
+| `QueueConsumer` | `receive_messages`, `delete_message` | SQS | Pub/Sub |
+| `QueuePublisher` | `send_message` | SQS | Pub/Sub |
+| `SecretsStore` | `get_secret`, `create_owned_secret`, `retire_owned_secret` | Secrets Manager | Secret Manager |
+| `EventBus` | `publish` | SNS | Pub/Sub |
+| `CapacityInventory` | `observe` | AWS capacity observations | GCP capacity observations |
 
-Factory functions: `get_object_storage()`, `get_task_runner()`, `get_queue_consumer()`, `get_queue_publisher()`, `get_secrets_store()`.
+Factories include `get_object_storage`, `get_task_runner`, `get_queue_consumer`, `get_queue_publisher`, and `get_secrets_store`.
+`get_event_bus` and `get_capacity_inventory` expose the additional platform protocols.
+GCE preparation also has the tenant-bound `get_preparation_task` and `get_preparation_readback` factories.
+
+Storage preconditions bind reads and conditional copies to the observed object identity.
+Bounded downloads reject oversized or replaced objects.
+Task interruption reports control disposition; it does not report range-lifecycle success.
+Capacity observation is read-only and reports unavailable observations with a reason code.
+Use the source protocol signatures for exact arguments and failure contracts.
 
 ## Provisioner Adapters
 
-Defined in `engine/provisioner/cloud/types.py`. Obtained via factory functions in `engine/provisioner/cloud/__init__.py`.
+Source: `shifter/engine/provisioner/cloud/types.py`.
+Factories: `shifter/engine/provisioner/cloud/__init__.py`.
 
 | Protocol | Methods | AWS | GCP |
-|----------|---------|-----|-----|
-| **EventBus** | `publish` | SNS | Pub/Sub |
-| **ConfigStore** | `get_parameter` | SSM Parameter Store | Secret Manager |
-| **DBAuth** | `generate_auth_token` | RDS IAM auth | Cloud SQL IAM auth |
-| **SecretsStore** | `get_secret` | Secrets Manager | Secret Manager |
-| **ObjectStorage** | `generate_presigned_download_url`, `object_exists`, `delete_object` | S3 | GCS |
-| **NetworkInventory** | `list_subnet_cidrs`, `publish_subnet_exhaustion_alarm` | EC2 VPC API | GDC/GKE API |
+| --- | --- | --- | --- |
+| `EventBus` | `publish` | SNS | Pub/Sub |
+| `ConfigStore` | `get_parameter` | SSM Parameter Store | Secret Manager |
+| `DBAuth` | `generate_auth_token` | RDS IAM authentication | Cloud SQL IAM authentication |
+| `SecretsStore` | `get_secret` | Secrets Manager | Secret Manager |
+| `ObjectStorage` | `generate_presigned_download_url`, `object_exists`, `upload_new_object`, `delete_object`, `head_object`, `download_object` | S3 | GCS |
+| `NetworkInventory` | `list_subnet_cidrs`, `publish_subnet_exhaustion_alarm` | EC2 VPC API | GCE Compute or GDC Kubernetes API |
 
-Factory functions: `get_event_bus()`, `get_config_store()`, `get_db_auth()`, `get_secrets_store()`, `get_object_storage()`, `get_network_inventory()`.
+Factories are `get_event_bus`, `get_config_store`, `get_db_auth`, `get_secrets_store`, `get_object_storage`, and `get_network_inventory`.
+An explicit object version binds a signed download URL to that immutable version.
+`upload_new_object` refuses replacement of an existing object.
+The protocol defines bounded download and identity-precondition failures.
 
 ## Adding a New Provider
 
-1. Create implementation module in `shared/cloud/{provider}/` (platform) or `provisioner/cloud/{provider}/` (provisioner)
-2. Implement all protocols from `types.py`
-3. Add the provider branch to each factory function in `__init__.py`
+This how-to section describes the code boundary, not permission to add a backend.
+Use the authorized design and current installation contracts first.
+
+1. Register the backend and its actual capabilities in the installation registry.
+2. Implement the required protocols in the owning platform or provisioner provider module.
+3. Add explicit factory branches for those declared capabilities.
+4. Keep cloud-specific conditions inside the adapter and composition boundaries.
+5. Add behavioral tests for capability refusal, configuration failure, and the provider's external boundary.
+6. Run targeted tests, import checks, and ADR checks for the changed paths.
+
+Do not make business code select behavior by cloud, pack name, or private scenario identity.
+Do not report deployment qualification from protocol conformance alone.
 
 ## File Locations
 
-```
-shifter_platform/shared/cloud/
-├── __init__.py          # Platform factory functions
-├── types.py             # Platform protocol definitions
-├── aws/                 # AWS implementations
-│   ├── storage.py       # S3
-│   ├── task_runner.py   # EKS Kubernetes Job
-│   ├── queue.py         # SQS
-│   └── secrets.py       # Secrets Manager
-└── gcp/                 # GCP implementations
-    ├── storage.py       # GCS
-    ├── task_runner.py   # Kubernetes Job
-    ├── queue.py         # Pub/Sub
-    └── secrets.py       # Secret Manager
+| Owner | Location |
+| --- | --- |
+| Platform protocols and factories | `shifter/shifter_platform/shared/cloud/` |
+| Platform implementations | `shared/cloud/aws/`, `shared/cloud/gcp/` within the platform package |
+| Provisioner protocols and factories | `shifter/engine/provisioner/cloud/` |
+| Provisioner implementations | `cloud/aws/`, `cloud/gcp/` within the provisioner package |
+| Backend registry and capability contract | The `installation.registry` and `installation.contract` modules under `shifter/installation/` |
 
-engine/provisioner/cloud/
-├── __init__.py          # Provisioner factory functions
-├── types.py             # Provisioner protocol definitions
-├── aws/                 # AWS implementations
-│   ├── event_bus.py     # SNS
-│   ├── config_store.py  # SSM Parameter Store
-│   ├── db_auth.py       # RDS IAM
-│   ├── storage.py       # S3
-│   ├── secrets.py       # Secrets Manager
-│   └── network.py       # EC2 VPC
-└── gcp/                 # GCP implementations
-    ├── event_bus.py     # Pub/Sub
-    ├── config_store.py  # Secret Manager
-    ├── db_auth.py       # Cloud SQL IAM
-    ├── storage.py       # GCS
-    ├── secrets.py       # Secret Manager
-    └── network.py       # GDC/GKE
-```
+The [API conventions](api.md) and [installation configuration](installation-config.md) describe adjacent interfaces.
