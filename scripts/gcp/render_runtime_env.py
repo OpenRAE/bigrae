@@ -381,8 +381,12 @@ def _capacity_planning_runtime_values(project_id: str, region: str) -> dict[str,
     """Declare this deployment's GCE worker partition; reservations admit its demand.
 
     Worker creation requires capacity planning and a partition for this exact
-    project, region and backend. The budgets are enforcing database reservations.
+    project, region and backend. The budgets are enforcing database reservations;
+    each worker draws one instance and ``GCP_WORKER_VCPU`` vCPUs.
     """
+    raw_vcpu = os.environ.get("GCP_WORKER_VCPU", "8").strip()
+    if not raw_vcpu.isdecimal() or not 1 <= int(raw_vcpu) <= 360:
+        raise ValueError("GCP_WORKER_VCPU must be an integer from 1 to 360")
     metrics = [
         {
             "name": name,
@@ -392,8 +396,9 @@ def _capacity_planning_runtime_values(project_id: str, region: str) -> dict[str,
             "source": "db_reservation",
             "freshness_seconds": 900,
             "enforcement": "enforcing",
+            "per_range_cost": cost,
         }
-        for name in ("instances", "vcpu")
+        for name, cost in (("instances", 1), ("vcpu", int(raw_vcpu)))
     ]
     partition = {
         "name": WORKER_CAPACITY_PARTITION,

@@ -410,7 +410,7 @@ Other inputs that refer to secrets:
 
    | Setting | Meaning |
    | --- | --- |
-   | `range_cells` | `backend` (`gce` or `gdc`), `zone`, `zones`, `project_id`, `host_identity_pool_size`, `private_google_access`, and `image_key_profiles`. A GCE range needs `zone`. |
+   | `range_cells` | `backend` (`gce` or `gdc`), `zone`, `zones`, `project_id`, `host_identity_pool_size`, `private_google_access`, `image_key_profiles`, and `worker_vcpu`. A GCE range needs `zone`. `worker_vcpu` (default 8) is the vCPU draw of one disposable worker. |
    | `participant_openvpn.enabled` | Deploys the shared participant OpenVPN pool. The default is `false`. |
    | `ctf_content_bucket` | The private CTF content bucket, when the app secret carries CTF content references. |
    | `operator_bootstrap` | The first operator and the first administrator. `gcp-deploy` requires this block. `enabled` defaults to `true` and then requires `admin_email`. `admin_password_secret_ref` defaults to the secret that `gcp-install` creates. |

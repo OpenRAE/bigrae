@@ -4997,6 +4997,14 @@
                 "title": "Project Id",
                 "type": "string"
               },
+              "worker_vcpu": {
+                "default": 8,
+                "description": "vCPUs that one disposable worker draws from the gce-workers budget (GCP_WORKER_VCPU).",
+                "maximum": 360,
+                "minimum": 1,
+                "title": "Worker Vcpu",
+                "type": "integer"
+              },
               "zone": {
                 "default": "",
                 "description": "Primary range zone (RANGE_NETWORK_ZONE). The GCE backend requires it to launch a range.",

@@ -412,6 +412,18 @@ def test_render_env_declares_the_worker_capacity_partition_for_this_deployment()
     assert {(metric["partition"], metric["enforcement"]) for metric in catalog["metrics"]} == {
         ("gce-workers", "enforcing")
     }
+    assert {metric["name"]: metric["per_range_cost"] for metric in catalog["metrics"]} == {"instances": 1, "vcpu": 8}
+
+
+def test_render_env_draws_the_configured_worker_vcpu_and_rejects_an_invalid_value(monkeypatch):
+    module = _load_module("render_runtime_env.py", "render_runtime_env")
+    monkeypatch.setenv("GCP_WORKER_VCPU", "16")
+    lines = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST).splitlines()
+    catalog = json.loads(dict(line.split("=", 1) for line in lines)["CAPACITY_PLANNING_CATALOG"])
+    assert {metric["name"]: metric["per_range_cost"] for metric in catalog["metrics"]}["vcpu"] == 16
+    monkeypatch.setenv("GCP_WORKER_VCPU", "0")
+    with pytest.raises(ValueError, match="GCP_WORKER_VCPU"):
+        module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST)
 
 
 def test_render_env_defaults_model_access_to_disabled_without_catalog_body():
