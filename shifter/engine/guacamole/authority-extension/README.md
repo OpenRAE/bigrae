@@ -39,6 +39,9 @@ Google's SDK into the extension, with its namespace relocated to avoid Guacamole
 library conflicts. Third-party licenses and notices remain in the jar. Apache's
 entrypoint hook installs the jar after runtime-home generation.
 
+The parent image uses HTTPS for the existing official Ubuntu archives and retains the security-package upgrade.
+Native qualification checks the built image's archive configuration before the session tests.
+
 CI treats Java warnings as errors and runs JUnit plus native local SSH/SFTP/RDP qualification. SpotBugs/Find Security Bugs checks bytecode. JaCoCo coverage feeds the existing Sonar gate. The narrow SSRF scanner
 disposition documents the immutable administrator-configured origin; it does
 not exempt caller-controlled URLs or weaken redirect refusal.

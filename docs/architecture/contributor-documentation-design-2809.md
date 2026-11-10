@@ -61,6 +61,13 @@ No new ADR or policy exception is needed because the rules remain unchanged.
 Update the existing enforcement reference when maintained agent guidance changes.
 The workflow YAML and quality ownership contract remain the executable architecture model.
 
+Two hosted qualification builds failed while fetching Ubuntu packages over HTTP.
+The same package is available over HTTPS from the existing official archive.
+Use HTTPS for the pinned Guacamole image's existing Ubuntu archive URLs.
+Retain the archive hosts, package signatures, certificate verification, security upgrades, and native qualification gates.
+Verify the built image's archive configuration through the existing native test module and Docker helper.
+This repair changes build transport, not application behavior or a capability policy.
+
 Policy descriptions in `.shifter.yaml` and `mcp/ops/policy.js` are maintained source prose.
 Correct their comments against the current wrapper without changing configuration values or JavaScript statements.
 Preserve the #777 preflight body as historical evidence; add a current note that routes readers to the implemented contract.
@@ -111,6 +118,7 @@ flowchart LR
     Render -->|reader journeys and links| Reader[Local browser]
     Author -->|reviewed changes and sanitized evidence| PR[Existing GitHub pull request]
     PR -->|changed paths| CI[Existing CI checks]
+    Archive[Existing Ubuntu archives] -->|signed public packages over HTTPS| CI
     CI -->|check results| Maintainer[Maintainer]
 ```
 
@@ -118,6 +126,7 @@ Text alternative: local tools read checkout files and return findings.
 MkDocs writes local HTML for browser review.
 Only reviewed changes and sanitized evidence reach the existing GitHub repository.
 CI reports results to the maintainer. This flow does not deploy or publish a site.
+Existing CI downloads signed public packages from the configured Ubuntu archives over HTTPS.
 
 The release service supplies tools through the existing verified installer, as described in the #2804 design.
 No prose is sent to that service.
@@ -144,7 +153,9 @@ Use existing targeted documentation-consumer tests, the strict MkDocs build, and
 Inspect rendered headings, links, diagram alternatives, and keyboard routes.
 Repeat the first-use, recovery, interface, architecture, and contribution journeys after integration.
 Do not run full local suites, corpus checks, or cloud operations to verify prose.
-There is no changed executable behavior for mutation testing.
+
+Documentation has no executable mutation target.
+For the image-build repair, prove that the archive test rejects the original HTTP configuration and accepts the HTTPS configuration.
 
 Existing negative writing samples test checker enforcement; they do not prove complete STE conformance.
 
@@ -177,7 +188,9 @@ Resolve conflicts through current repository authority rather than duplicated pr
 
 ## Non-goals and anti-patterns
 
-This issue changes no runtime behavior, authorization, API, configuration, error envelope, logging, persistence, deployment, or release policy.
+This issue changes no application behavior, authorization, API, error envelope, logging, persistence, deployment, or release policy.
+The related CI repair changes only the existing Ubuntu archive transport in the Guacamole image build.
+
 It does not activate a requirement or prove a live environment.
 It does not authorize a custom tool, skill, registry, classifier, content score, or dictionary pipeline.
 It does not authorize external text processing, new hosting, live UAT, cloud operations, publication, or protected-branch merges.
@@ -194,6 +207,7 @@ It does not rewrite legal, vendor, generated, fixture, or historical content for
 | [Diataxis application](https://diataxis.fr/how-to-use-diataxis/) | Current, small improvements | Preserve routes; avoid a directory migration |
 | [Official STE source](https://www.asd-ste100.org/about.html) | Writing rules, vocabulary, technical names and verbs | Review meaning and consistent terminology |
 | [MkDocs configuration](https://www.mkdocs.org/user-guide/configuration/) | MkDocs 1.6, validation and excluded documents | Preserve publication scope and inspect informational link findings |
+| [Ubuntu APT HTTPS transport](https://manpages.ubuntu.com/manpages/noble/man1/apt-transport-https.1.html) | APT 2.8.3, HTTPS support and certificate verification | Use native HTTPS with the existing archives and default certificate checks |
 
 The official STE page was read directly after the browser retrieval returned HTTP 403.
 No specification or dictionary was copied into the repository.
