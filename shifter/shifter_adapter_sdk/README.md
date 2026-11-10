@@ -133,7 +133,7 @@ representations, and are bounded by the provider byte limit and the existing
 preparation-output budget. This selection grants no cloud API or key-issuance
 authority to an adapter.
 
-SDK 0.2.0 accepts at most 2048 secret payload selections in one preparation response.
+SDK 0.3.0 accepts at most 2048 secret payload selections in one preparation response.
 The complete clear response must still fit 512 KiB.
 Each value must fit 65536 UTF-8 bytes, and version references must be unique.
 The existing invocation, phase, and host authority checks apply to every selection.
@@ -256,12 +256,13 @@ Its configure phase installs one executable at `/usr/local/libexec/bigrae/trial-
 BigRAE then uses that executable to run one trial on the worker.
 `bigrae_adapter_sdk.trial` defines the paths, verbs, and closed models.
 
-Before `start`, the host stages two files in `/var/lib/bigrae/trial/input`:
+Before `start`, the host stages three files in `/var/lib/bigrae/trial/input`:
 
 | File | Content |
 | --- | --- |
 | `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 of `scenario.sdl` |
 | `scenario.sdl` | The complete concrete trial SDL |
+| `plan.json` | The admitted `admitted-trial-plan/v1`; its `plan_digest` identifies it |
 
 The worker image supplies the trial runtime and its environment pack.
 
@@ -278,4 +279,9 @@ Validate every staged file against `trial.json` before `start` uses it.
 Use the supplied run and attempt IDs without change.
 Keep output within 64 KiB; the host refuses larger or ambiguous output.
 `sealed` in `TrialStatus` is an adapter claim; BigRAE validates the exported archive itself.
+
+An apparatus that does not use LilRAE records the trial as an RAES `experiment-run/v1` record in `manifest.json`.
+The record retains `plan.json` and is `partial`, because BigRAE performs and records cleanup after the trial.
+Seal the archive with a `TrialSeal` in `seal.json`.
+The seal inventory names every member except `seal.json` and the optional `checksums.sha256`.
 The executable must not upload data or create cloud resources.

@@ -28,6 +28,7 @@ from shared.exceptions import CMSError
 from shared.raes.experiment_admission import experiment_archive_identity
 from shared.raes.experiment_dispatch_inputs import (
     entry_attempt_timeout,
+    trial_plan_bytes,
     trial_scenario_bytes,
     trial_scenario_sha256,
     worker_absence_cleanup_receipt,
@@ -147,7 +148,7 @@ def _stage_object(storage: ObjectStorage, key: str, data: bytes) -> StagedObject
 def stage_trial(
     credential: CredentialContext, organization_uuid: UUID, inputs: dict[str, Any], row: ExperimentEntry
 ) -> tuple[dict[str, StagedObject], datetime]:
-    """Stage the retained trial SDL and ``trial.json``; the worker image holds the runtime.
+    """Stage the retained trial SDL, the admitted plan and ``trial.json``; the worker image holds the runtime.
 
     The attempt's deadline is persisted first, so every stager produces the same bytes.
     """
@@ -166,7 +167,11 @@ def stage_trial(
         "scenario_sha256": scenario.sha256,
     }
     encoded = json.dumps(trial, sort_keys=True, separators=(",", ":")).encode()
-    return {"scenario.sdl": scenario, "trial.json": _stage_object(storage, prefix + "trial.json", encoded)}, deadline
+    return {
+        "scenario.sdl": scenario,
+        "plan.json": _stage_object(storage, prefix + "plan.json", trial_plan_bytes(inputs)),
+        "trial.json": _stage_object(storage, prefix + "trial.json", encoded),
+    }, deadline
 
 
 def _hold_evidence(credential: CredentialContext, worker_id: UUID) -> None:

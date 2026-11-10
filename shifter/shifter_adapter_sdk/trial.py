@@ -9,6 +9,10 @@ adapter owns what the verbs do. Verb output is untrusted guest data.
 ``start`` runs the trial in the foreground until it ends. The host detaches it.
 ``status`` and ``stop`` return at once. ``export`` writes one sealed archive
 under ``TRIAL_EXPORT_DIRECTORY`` and reports its identity.
+
+An apparatus that records the trial as an RAES ``experiment-run/v1`` record
+seals the archive with ``TrialSeal``. The record is ``partial``: the worker
+cannot know the cleanup that BigRAE performs after the trial.
 """
 
 from __future__ import annotations
@@ -26,6 +30,8 @@ TRIAL_ROOT: Final = "/var/lib/bigrae/trial"
 TRIAL_INPUT_DIRECTORY: Final = TRIAL_ROOT + "/input"
 TRIAL_INPUT_FILE: Final = "trial.json"
 TRIAL_SCENARIO_FILE: Final = "scenario.sdl"
+TRIAL_PLAN_FILE: Final = "plan.json"
+TRIAL_SEAL_FILE: Final = "seal.json"
 TRIAL_EXPORT_DIRECTORY: Final = TRIAL_ROOT + "/export"
 TRIAL_VERBS: Final = ("start", "status", "stop", "export")
 MAX_TRIAL_OUTPUT_BYTES: Final = 65_536
@@ -83,6 +89,52 @@ class TrialExport(ClosedModel):
     size_bytes: Annotated[int, Field(strict=True, ge=1, le=MAX_TRIAL_ARCHIVE_BYTES)]
 
 
+class SealedChecksum(ClosedModel):
+    algorithm: Literal["sha256"] = "sha256"
+    value: Sha256
+
+
+class SealedMember(ClosedModel):
+    """One archive member and its exact bytes."""
+
+    path: Annotated[str, Field(min_length=1, max_length=512)]
+    size_bytes: Annotated[int, Field(strict=True, ge=0)]
+    checksum: SealedChecksum
+    media_type: Annotated[str, Field(min_length=1, max_length=128)]
+    role: Annotated[str, Field(min_length=1, max_length=128)]
+
+
+class SealedCompleteness(ClosedModel):
+    complete: bool
+    limitations: list[Annotated[str, Field(min_length=1, max_length=1024)]]
+
+    @model_validator(mode="after")
+    def complete_without_limitations(self) -> Self:
+        if self.complete == bool(self.limitations):
+            raise ValueError("a complete archive has no limitations")
+        return self
+
+
+class TrialSeal(ClosedModel):
+    """``seal.json`` of an archive whose ``manifest.json`` is an RAES experiment-run record.
+
+    The inventory names every archive member except this seal and the optional
+    ``checksums.sha256``. The run fields repeat the record so that intake can
+    refuse a seal that contradicts it.
+    """
+
+    schema_version: Literal["bigrae.trial-seal/v1"] = "bigrae.trial-seal/v1"
+    seal_state: Literal["sealed"] = "sealed"
+    sealed_contract_versions: tuple[Literal["experiment-run/v1"]] = ("experiment-run/v1",)
+    run_id: TrialIdentifier
+    run_version: TrialIdentifier
+    run_status: Annotated[str, Field(min_length=1, max_length=32)]
+    outcome_status: Annotated[str, Field(min_length=1, max_length=32)]
+    run_record_digest: Annotated[str, Field(pattern=r"^sha256:[a-f0-9]{64}$")]
+    completeness: SealedCompleteness
+    inventory: list[SealedMember] = Field(min_length=1, max_length=20_000)
+
+
 def parse_trial_output[ModelT: ClosedModel](raw: bytes, model: type[ModelT]) -> ModelT:
     """Validate one bounded, unambiguous JSON object from untrusted verb output."""
     return model.model_validate(decode_message(raw.strip(), limit=MAX_TRIAL_OUTPUT_BYTES))
@@ -96,11 +148,14 @@ __all__ = [
     "TRIAL_EXPORT_DIRECTORY",
     "TRIAL_INPUT_DIRECTORY",
     "TRIAL_INPUT_FILE",
+    "TRIAL_PLAN_FILE",
     "TRIAL_ROOT",
     "TRIAL_SCENARIO_FILE",
+    "TRIAL_SEAL_FILE",
     "TRIAL_VERBS",
     "TrialExport",
     "TrialInput",
+    "TrialSeal",
     "TrialStatus",
     "TrialVerb",
     "parse_trial_output",
