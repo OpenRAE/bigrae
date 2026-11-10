@@ -43,6 +43,7 @@ The deadline is the staging time plus the entry's admitted attempt timeout.
 It is persisted on the entry before upload, so every stager writes identical bytes.
 An existing object with different bytes is refused.
 The worker image supplies the trial runtime and its environment pack.
+The installed adapter that controls trials can also validate participant owners at admission.
 The provisioner copies the objects to the worker's fixed trial input directory.
 
 ## Provisioner operations

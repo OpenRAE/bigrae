@@ -21,7 +21,6 @@ from shared.cloud.exceptions import CloudStorageError
 from shared.credentials import CredentialContext
 from shared.exceptions import CMSError, ValidationError
 from shared.identity_scope import ResourceScope
-from shared.raes.participant_owner_replay import OwnerValidation
 from shared.raes.experiment_admission import (
     ExperimentInputError,
     compile_pack_experiment,
@@ -33,6 +32,7 @@ from shared.raes.experiment_admission import (
 from shared.raes.experiment_pack_snapshot import stage_local_experiment_pack
 from shared.raes.object_source import stage_object_pack
 from shared.raes.package_loader import RaesPackageError, resolve_pack_root
+from shared.raes.participant_owner_replay import OwnerValidation
 
 from ._content_authority import content_scope, fence_content_scope, require_content_scope
 from ._experiment_authority import _UNAVAILABLE, _audit, _authorize, _fence

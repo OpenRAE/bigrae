@@ -12,7 +12,8 @@ from collections.abc import Callable, Sequence
 from typing import Any
 
 from raes_contracts.canonical import canonical_contract_digest, canonical_json_digest
-from raes_contracts.contracts import ParticipantConfigurationModel
+from raes_contracts.contracts import ParticipantConfigurationModel, ParticipantImplementationManifestModel
+from raes_contracts.contracts.experiment_bindings import ParticipantControlContextConfigurationSelectionModel
 from raes_env_packs import PackExperiment
 
 #: ``(owner, family digest, requests) -> results``; each result has ``input_digest``,
@@ -20,7 +21,9 @@ from raes_env_packs import PackExperiment
 OwnerValidation = Callable[[str, str, list[dict[str, Any]]], Sequence[Any]]
 
 
-def validation_requests(experiment: PackExperiment, address: str, manifest: Any) -> list[dict[str, Any]]:
+def validation_requests(
+    experiment: PackExperiment, address: str, manifest: ParticipantImplementationManifestModel
+) -> list[dict[str, Any]]:
     """Return one request per distinct override set the experiment binds for a participant."""
     descriptors = experiment.experiment.binding_descriptors
     overrides: dict[str, list[dict[str, Any]]] = {}
@@ -30,10 +33,11 @@ def validation_requests(experiment: PackExperiment, address: str, manifest: Any)
             overrides.setdefault(item.source_condition_id, []).append(
                 {"target_id": target.target_id, "value": item.value.model_dump(mode="json")}
             )
-    distinct = {canonical_json_digest(sorted(o, key=lambda v: v["target_id"])): o for o in overrides.values()}
+    ordered = [sorted(o, key=lambda v: v["target_id"]) for o in overrides.values()]
+    distinct = {canonical_json_digest(o): o for o in ordered}
     payload = manifest.model_dump(mode="json")
     return [
-        {"participant_address": address, "participant_manifest": payload, "overrides": sorted(o, key=lambda v: v["target_id"])}
+        {"participant_address": address, "participant_manifest": payload, "overrides": o}
         for _, o in sorted(distinct.items())
     ]
 
@@ -48,9 +52,11 @@ class ReplayedConfigurationValidator:
 
     @classmethod
     def from_results(cls, requests: list[dict[str, Any]], results: Sequence[Any]) -> ReplayedConfigurationValidator:
+        """Bind each owner result to its request; a count mismatch refuses."""
         if len(results) != len(requests):
             raise ValueError("Participant owner results do not match the requests")
-        normalized, contexts = {}, set()
+        normalized: dict[str, ParticipantConfigurationModel] = {}
+        contexts: set[tuple[str, str]] = set()
         for request, result in zip(requests, results, strict=True):
             normalized[result.input_digest] = ParticipantConfigurationModel.model_validate(result.normalized)
             contexts.update((request["participant_address"], canonical_json_digest(item)) for item in result.contexts)
@@ -61,12 +67,16 @@ class ReplayedConfigurationValidator:
         return self
 
     def validate_and_normalize(self, configuration: ParticipantConfigurationModel) -> ParticipantConfigurationModel:
+        """Return the owner's normalized configuration, or refuse an unvalidated one."""
         normalized = self._normalized.get(canonical_contract_digest(configuration))
         if normalized is None:
             raise ValueError("Participant configuration was not validated by its owner")
         return normalized.model_copy(deep=True)
 
-    def validate_control_context_reference(self, participant_address: str, selection: Any) -> None:
+    def validate_control_context_reference(
+        self, participant_address: str, selection: ParticipantControlContextConfigurationSelectionModel
+    ) -> None:
+        """Accept only a selection that the owner accepted for this participant."""
         key = (participant_address, canonical_json_digest(selection.model_dump(mode="json")))
         if key not in self._contexts:
             raise ValueError("Control-context selection was not validated by its owner")

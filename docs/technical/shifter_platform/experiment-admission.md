@@ -58,6 +58,8 @@ Receipt presence does not declare scientific success or resource cleanup.
 
 The released SDL owner (`participant-config` version 1) runs in the admission process.
 Each other owner runs in the organization's installed adapter that declares it (`participant.validate`).
+That installation must be ready and use `bigrae.runtime-plugin/v2`.
+
 CMS sends that adapter the family digest and the experiment's configuration requests.
 It admits only the configurations and context selections that the owner returns.
 CMS replays those results in the compiler and never imports owner code.

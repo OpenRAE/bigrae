@@ -8,13 +8,21 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
 from shifter_adapter_sdk.runtime import PluginManifest
-from shifter_adapter_sdk.validation import ParticipantValidation, ValidationInput, ValidationResult
+from shifter_adapter_sdk.validation import (
+    ParticipantValidation,
+    ParticipantValidationRequest,
+    ValidationInput,
+    ValidationResult,
+)
 
 from shared.cloud.runtime_plugins import interrupt_plugin, launch_plugin, observe_plugin
+
+if TYPE_CHECKING:
+    from engine.models import RuntimePluginInstallation
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +30,7 @@ VALIDATION_TIMEOUT_SECONDS = 180
 _POLL_SECONDS = 2.0
 
 
-def _installation(organization_uuid: UUID, owner: str) -> Any:
+def _installation(organization_uuid: UUID, owner: str) -> RuntimePluginInstallation:
     """Return the organization's one ready installation that declares the owner."""
     from engine.models import RuntimePluginInstallation
 
@@ -49,13 +57,13 @@ def validate_participant_configurations(
     if manifest.digest != row.manifest_digest:
         raise ValueError("Stored plugin identity mismatch")
     request = ValidationInput(
-        protocol=manifest.protocol,
+        protocol="bigrae.runtime-plugin/v2",
         invocation_id=uuid4(),
         phase="validate",
         manifest=manifest,
         owner=owner,
         family_digest=family_digest,
-        requests=requests,
+        requests=[ParticipantValidationRequest.model_validate(item) for item in requests],
     )
     secret_name = f"runtime-plugin-pull-{request.invocation_id.hex}" if row.registry_credentials else ""
     launch_plugin(request, image_pull_secret=secret_name)

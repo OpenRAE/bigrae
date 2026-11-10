@@ -644,11 +644,12 @@ Admission checks the combined baseline and planned resource counts before provid
 
 CMS retains immutable experiment inputs through released env-packs and RAES contracts.
 A native management command admits an installed tenant pack without dispatch.
-A backend participant owner runs in the organization's installed adapter (`participant.validate`).
-CMS replays its returned configurations and never imports owner code.
 Operational claims and worker observations remain separate from scientific inputs.
 The current compiler permits serial execution; configured concurrency grants no provider capacity.
 See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).
+
+A backend participant owner runs in the organization's installed adapter (`participant.validate`).
+CMS replays its returned configurations and never imports owner code.
 
 Native task observation reads the normal Job resource, including its status.
 It uses the existing Job permission.

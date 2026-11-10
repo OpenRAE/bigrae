@@ -28,8 +28,8 @@ from shared.exceptions import CMSError
 from shared.raes.experiment_admission import experiment_archive_identity
 from shared.raes.experiment_dispatch_inputs import (
     entry_attempt_timeout,
-    trial_unit_bytes,
     trial_scenario_sha256,
+    trial_unit_bytes,
     worker_absence_cleanup_receipt,
 )
 from shared.worker_trial import MAX_ARCHIVE_BYTES, TRIAL_INPUT_PREFIX, StagedObject

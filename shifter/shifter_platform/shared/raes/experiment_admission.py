@@ -188,9 +188,11 @@ def _context(
                 owned.setdefault(owner, []).extend(
                     _validation_requests(experiment, binding.participant_address, manifest)
                 )
-    for owner, requests in owned.items():
-        results = owner_validation(f"{owner[0]}@{owner[1]}", canonical_sdl_digest(experiment.family).value, requests)
-        validators[owner] = ReplayedConfigurationValidator.from_results(requests, results)
+    if owner_validation is not None:
+        family_digest = canonical_sdl_digest(experiment.family).value
+        for owner, requests in owned.items():
+            results = owner_validation(f"{owner[0]}@{owner[1]}", family_digest, requests)
+            validators[owner] = ReplayedConfigurationValidator.from_results(requests, results)
     apparatus = AdmittedApparatusBindingModel(
         manifest_refs=references,
         participant_manifest_refs=participant_refs,
