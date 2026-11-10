@@ -59,22 +59,28 @@ From the repository root:
 uv sync --project shifter/shifter_platform
 uv sync --project shifter/installation
 npm ci --prefix shifter/shifter_platform/frontend
-pre-commit install
+pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
 
 Use [local development setup](docs/technical/dev/local-setup.md) and
 [contribution guidance](CONTRIBUTING.md) for the development workflow.
 To deploy a development environment from your own fork with GitHub Actions,
-on AWS or GCP, see [developer environment setup](docs/technical/dev/setup.md).
+use the selectable `aws-dev` target in [developer environment setup](docs/technical/dev/setup.md).
 
 ## Test and document
 
-Run tests for the packages you change, for example:
+Use targeted tests for changed behavior during development, for example:
 
 ```shell
-make test-platform
-make test-provisioner
-make policy
+(cd shifter/shifter_platform && TEST_DB_BACKEND=sqlite uv run pytest tests/config/test_dev_auth.py -n0 --no-cov)
+```
+
+Full-package commands such as `make test-platform` and `make test-provisioner` are recorded in the command matrix for CI reproduction.
+They are not the normal local editing checklist.
+`make policy` runs the repository policy checks; it is not a full test suite.
+Build the documentation locally without publishing:
+
+```shell
 uv run --with-requirements docs/requirements.txt mkdocs build --strict
 ```
 

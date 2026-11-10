@@ -1,14 +1,12 @@
 # Event Load Harness (#926)
 
-A scripted, repeatable load harness that drives a **deployed** Shifter portal
-over its real HTTP and websocket contracts, measures client-side latency, error,
-and websocket close-code evidence, and renders a sanitized concurrency-envelope
-report.
+This reference describes the harness configuration, traffic profiles, safety controls, and evidence limits.
+Its how-to sections cover installation and an authorized run.
+The harness drives a deployed BigRAE portal through real HTTP and WebSocket contracts.
+It measures client latency, errors, and WebSocket close codes, then renders a sanitized concurrency-envelope report.
 
-It exists to replace the *analytical* capacity envelope in
-`docs/architecture/terminal-websocket-capacity-847.md` with *measured* numbers,
-and to produce the evidence #846 needs to establish the event baseline and #910
-needs to size the portal. Design constraints are recorded in
+It supplies measured evidence for the analytical capacity envelope in `docs/architecture/terminal-websocket-capacity-847.md`.
+Issue #846 uses that evidence for the event baseline; #910 uses it for portal sizing. Design constraints are recorded in
 `docs/architecture/event-load-harness-preflight-926.md`.
 
 A sample of the output is committed at
@@ -18,8 +16,8 @@ placeholder numbers, not a real run).
 ## Design
 
 The load-generation core is platform-agnostic: it targets the application's
-HTTP/websocket endpoints, which are identical whether the portal runs on AWS
-EC2, OpenShift, or GKE. Provider-metrics collection is an optional, swappable
+HTTP/WebSocket endpoints independently of its cloud provider.
+That independence does not qualify a deployment backend. Provider-metrics collection is an optional, swappable
 adapter behind `event_load_harness.metrics.base.MetricsAdapter`, so a platform
 change replaces one adapter rather than the harness.
 
@@ -50,6 +48,9 @@ uv sync --extra gcp    # add Google Cloud Monitoring for the GCP event gate
 
 ## Run
 
+Obtain operator authority for the exact target, workload, and test actors before generating load.
+Confirm the target revision and recovery plan. Keep private evidence in its owning location.
+
 One command produces the report. Provide config via flags or a TOML file (flags
 override the file):
 
@@ -65,10 +66,8 @@ uv run event-load-harness \
   --report-path out/envelope.md
 ```
 
-`--confirm-host` must match the target URL host. It is a deliberate per-run
-acknowledgment of exactly which host you are about to load, so an unintended
-target (a mislabeled production host, a copy-pasted URL) is refused rather than
-hit by accident. Use `--allow-production` instead for an intended production
+`--confirm-host` must match the target URL host. It acknowledges the exact host for this run.
+A mismatched host is refused before load generation. Use `--allow-production` instead for an intended production
 target, or `--allow-insecure-localhost` for an `http://localhost` tunnel.
 
 Equivalent `run.toml`:
@@ -91,6 +90,9 @@ confirm_host = "<deployed-dev-host>"
 uv run event-load-harness --config run.toml
 uv run event-load-harness --list-profiles    # list traffic profiles
 ```
+
+Stop the run if tenant health degrades. Investigate before increasing concurrency.
+Use the owning operations runbook for recovery and keep diagnostic evidence private.
 
 ## Profiles and routes
 
@@ -170,25 +172,20 @@ session. Three sources:
 
   For #853, the AWS adapter records RDS `DatabaseConnections` average and peak
   values, plus a lower-bound connection churn proxy derived from
-  sample-to-sample active-connection deltas. CloudWatch does not expose exact
-  opens/closes per second; short-lived open/close cycles between samples remain
-  invisible, so the report labels the value as a proxy.
+  sample-to-sample active-connection deltas. CloudWatch does not expose exact opens or closes per second.
+  Short-lived cycles between samples remain invisible. The report labels this value as a proxy.
 
-- `gcp`: the strict event-capacity adapter. It reads GKE restart/CPU metrics,
-  Cloud SQL and Redis connection/health metrics, external HTTPS load-balancer
-  latency and response classes, effective guacd readiness, and backend-service
-  health. Missing data is a named gap and fails the strict gate.
+- `gcp`: the strict event-capacity adapter. It reads GKE restart and CPU metrics, plus Cloud SQL and Redis connection and health metrics.
+  It also reads HTTPS load-balancer latency and response classes, effective guacd readiness, and backend-service health. Missing data is a named gap and fails the strict gate.
 
 ## GCP event gate (#1816, #2502)
 
 The `guacamole-event-gate` profile is a qualification gate for a GCP
 shared-service capacity profile, not a synthetic portal-core approximation. It
 runs the selected profile's authored budget at that profile's participant count:
-`--capacity-profile-id gcp-shared-v1-p300` requires `--concurrency 300`. It
-requires one distinct mode-0600 manifest entry per participant with `email`,
-`password`, `totp_secret`, and `api_key`, then drives the real Identity Platform/TOTP, product session, range
-target, versioned Guacamole bootstrap, WebSocket tunnel, display sync, and
-120-second continuous hold for every participant.
+`--capacity-profile-id gcp-shared-v1-p300` requires `--concurrency 300`. It requires one distinct mode-0600 manifest entry per participant with `email`, `password`, `totp_secret`, and `api_key`.
+Each participant completes Identity Platform/TOTP login, product session exchange, range selection, and versioned Guacamole bootstrap.
+The WebSocket tunnel then completes display synchronization and a 120-second continuous hold.
 
 The complete scale-up, drift, invocation, thresholds, and scale-down procedure
 is documented in
@@ -198,11 +195,8 @@ is documented in
 
 The report includes a `Database connection posture (#853)` section. It keeps
 the current deployed Django posture visible (`CONN_MAX_AGE=0`) and compares it
-with same-window RDS metrics and client tail latency. The recommendation is
-evidence-based: keep the current posture when connection churn is not moving
-with RDS CPU or portal p95/p99 latency; treat DB connection lifecycle as a
-candidate contributor only when churn, RDS pressure, and user-visible latency
-move together during stepped-concurrency runs.
+with same-window RDS metrics and client tail latency. Keep the current posture when connection churn does not move with RDS CPU or portal p95/p99 latency.
+Consider the DB connection lifecycle only when churn, RDS pressure, and user-visible latency move together during stepped-concurrency runs.
 
 Do not use the harness output alone to turn on persistent connections. First
 check the capacity math for the target runtime:
@@ -237,21 +231,18 @@ cannot scale out.
      --aws-asg <portal-asg> --aws-name-prefix <env>-portal
    ```
 
-3. Confirm in the report and the `<env>-portal-portal-capacity` CloudWatch
-   dashboard that `RequestCountPerTarget` / `TargetResponseTime` (and the
-   `WorkerBusyRatio` gauge) rise and the ASG adds capacity *before* `AWS/EC2`
-   `CPUUtilization` reaches the guardrail threshold. The target-tracking policies
+3. Inspect the report and `<env>-portal-portal-capacity` CloudWatch dashboard.
+4. Confirm `RequestCountPerTarget`, `TargetResponseTime`, and `WorkerBusyRatio` rise.
+5. Confirm the ASG adds capacity before `AWS/EC2` `CPUUtilization` reaches the guardrail threshold. The target-tracking policies
    own scale-out and scale-in; the worker-busy-ratio alarm adds an app-saturation
    scale-out. Any unconfigured target is reported as a named gap, never a guess.
 
 ## Output
 
-The envelope report covers the preflight Evidence Bar: target environment and
-run parameters, deployment shape, per-route request/error counts and p50/p95/p99
-latency, websocket open/drop/close-code counts and reconnects, same-window
-provider metrics (or named gaps), DB connection posture, first-mover
-attribution, and a supported-concurrency conclusion with limiting factor and a
-#910 sizing implication. Unknown fields render as `unknown` rather than a
+The envelope report records the target, run parameters, and deployment shape.
+It includes per-route requests, errors, p50/p95/p99 latency, and WebSocket opens, drops, close codes, and reconnects.
+It includes same-window provider metrics or named gaps, DB connection posture, and first-mover attribution.
+Its supported-concurrency conclusion identifies the limiting factor and a sizing implication for #910. Unknown fields render as `unknown` rather than a
 guess.
 
 The conclusion is a heuristic first pass from a single run. Bounding the true
@@ -260,14 +251,14 @@ ceiling and margin needs a stepped-concurrency sweep; re-run at increasing
 
 ## Tests
 
+Use targeted modules for the changed behavior, for example:
+
 ```sh
-uv run pytest
+uv run pytest tests/test_config.py tests/test_auth.py tests/test_report.py -q
 ```
 
-Tests cover the harness's own deterministic logic: config validation, percentile
-and aggregation math, report rendering and sanitization, close-code mirror
-fidelity, profile and route-catalog integrity, manifest permission handling, and
-the runner's ramp/concurrency/aggregation via an injected fake executor. The
-live HTTP/websocket driving is validated by operator runs against a deployed
-environment, not in CI, because the harness must drive the real path rather than
-a mock.
+CI owns the complete suite.
+Tests cover configuration, statistics, report sanitization, close codes, profiles, routes, manifest permissions, and runner scheduling.
+The runner uses an injected executor at its external boundary.
+Operator runs establish live HTTP/WebSocket evidence against the selected deployment.
+A deterministic source test does not qualify a live tenant.

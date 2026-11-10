@@ -28,7 +28,7 @@ No participant container or experiment runtime is required.
 The existing Ubuntu range image can supply Docker and the standard host bootstrap.
 Use a publication that clears machine and Docker identities before capture.
 Older publications need a rebuild through the protected guest-image workflow.
-See [Linux identity at capture](../architecture/gcp-guest-images.md#linux-identity-at-capture).
+See [Linux identity at capture](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md#linux-identity-at-capture).
 
 To use an ARM64 worker, set the image profile `machine_type` to a predefined C4A type with the plan's vCPU count.
 Set `disk_type` to `hyperdisk-balanced`, `nic_type` to `GVNIC`, and `disk_interface` to `NVME`.

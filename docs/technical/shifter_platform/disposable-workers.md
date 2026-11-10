@@ -47,7 +47,7 @@ The image profile can select a predefined machine type, for example the ARM64 ty
 That type must state the vCPU count of the host plan.
 
 This keeps physical CPU allocation consistent with capacity demand.
-The image profile accepts the NIC, disk-interface, and Secure Boot choices of [GCE guest hardware profiles](../../architecture/gce-guest-hardware-profiles.md).
+The image profile accepts the NIC, disk-interface, and Secure Boot choices of [GCE guest hardware profiles](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gce-guest-hardware-profiles.md).
 Secure Boot stays enabled by default.
 Default choices do not change the profile digest or the operation input.
 The operation input carries only non-default choices to the GCE renderer.

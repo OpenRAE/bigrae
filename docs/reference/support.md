@@ -1,24 +1,26 @@
 # Support
 
-Shifter is community maintained, as-is and best effort. There is no guaranteed
-response time, managed operations service or vendor support entitlement.
-For deployment/account access, contact your deployment operator.
+Use this how-to guide to request help.
+BigRAE is community maintained. Assistance is best effort.
+There is no guaranteed response time, managed operations service, or vendor support entitlement.
 
-Start with the [handbook](../technical/architecture.md),
-[Install on Google Cloud](../getting-started/install-gcp.md) and
-[FAQ](faq.md). Confirm the exact release, backend and scenario qualification
-before reporting unexpected behavior. Inspect unknown cleanup before retrying;
-do not delete recovery evidence to clear a failed range.
+## Find help
 
-Report non-sensitive defects and feature requests in
-[the canonical repository](https://github.com/Brad-Edwards/bigrae/issues).
-Include expected/actual behavior, release or commit, selected backend and a
-synthetic reproduction. Exclude credentials, private scenario identities,
-customer data, signed URLs and operational evidence.
+1. Read the [handbook](../technical/architecture.md) and [FAQ](faq.md).
+2. Use [Install on Google Cloud](../getting-started/install-gcp.md) for installation.
+3. Contact your deployment operator for deployment accounts and access.
+4. Follow the [security policy](https://github.com/OpenRAE/bigrae/blob/dev/SECURITY.md) for suspected vulnerabilities.
 
-Report suspected vulnerabilities privately to
-[Brad Edwards](mailto:j.bradley.edwards@gmail.com), the contact published on the
-[maintainer's profile](https://github.com/Brad-Edwards).
-Read the [security policy](https://github.com/Brad-Edwards/bigrae/blob/dev/SECURITY.md)
-before sending sensitive material. Private GitHub advisory reporting is currently
-disabled; security response has no guaranteed deadline.
+The security policy owns the private reporting channels and disclosure process.
+Do not send sensitive evidence through an ordinary public issue.
+
+## Report an ordinary defect
+
+1. Confirm the exact release, backend, and scenario qualification.
+2. Open a non-sensitive report in the [canonical issue tracker](https://github.com/OpenRAE/bigrae/issues).
+3. Include expected behavior, actual behavior, and a synthetic reproduction.
+4. Remove credentials, private scenario identities, customer data, signed URLs, and operational evidence.
+
+Inspect unknown cleanup before retrying a failed range.
+Do not delete recovery evidence to clear the failure.
+The [repository support guide](https://github.com/OpenRAE/bigrae/blob/dev/SUPPORT.md) gives the same reporting route.

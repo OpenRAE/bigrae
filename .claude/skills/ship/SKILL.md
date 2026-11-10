@@ -1,87 +1,80 @@
 ---
 name: ship
-description: Ship current branch — CI, SonarCloud, code review, security review, fix all issues, merge. Assumes code is already committed and pushed.
+description: Verify a pushed branch, fix authorized failures, and prepare its PR for user review.
 disable-model-invocation: true
 ---
 
-# Ship Current Branch
+# Prepare the current branch for review
 
-Assumes code is already committed and pushed. Handles: PR creation, CI monitoring, SonarCloud, code review, security review, fixing all issues, and merging.
+Use this how-to guide after the intended changes are committed and pushed.
+The user must authorize publication. Do not infer authority to merge.
+During an implement run, use that skill's canonical publication, review, and monitoring gates instead of this duplicate workflow.
 
-**IMPORTANT:** NEVER include Co-Authored-By trailers, agent marketing footers, or any Claude/AI branding in commit messages, PR descriptions, or any other artifacts.
+Do not include agent attribution in branch, commit, issue, or PR metadata.
+Required Ground Control review records retain their narrow attribution exception.
 
 ## Phase 1: Create PR
 
-1. Determine the current branch: `git branch --show-current`
-2. Check if a PR already exists: `gh pr list --head <branch> --json number,url`
-3. If no PR exists, create one:
-   ```
-   gh pr create --base dev --title "<concise title>" --body "<description>"
-   ```
-4. Note the PR number.
+1. Read `github_repo` from `.ground-control.yaml`.
+2. Confirm the branch with `git branch --show-current`.
+3. Check for its PR in that exact repository.
+4. Create a PR against `dev` only if the authorized branch has no PR.
+5. Use a Conventional Commit title and the repository's PR template.
+6. Record the PR number, URL, and head revision.
+
+Pass the repository explicitly to every GitHub command.
+Use a body file for multiline PR text.
 
 ## Phase 2: CI Monitor
 
-1. Find the latest workflow run: `gh run list --branch <branch> --limit 1 --json status,conclusion,databaseId`
-2. If the run is in progress, watch it: `gh run watch <id>`
-3. If it failed:
-   - Get failed logs: `gh run view <id> --log-failed`
-   - Diagnose and fix the issue.
-   - `git add`, `git commit`, `git push`.
-   - Go back to step 1.
-4. If it succeeded, proceed.
+Find the workflows for the exact PR head revision.
+Watch every applicable run to its terminal result.
+A green run from an older revision does not verify the candidate.
+
+For an authorized fix:
+
+1. Read the failed step and bounded diagnostic evidence.
+2. Fix its cause and run targeted regression checks.
+3. Commit and push through the active workflow.
+4. Watch the new revision's checks.
+
+Keep full local suites out of this loop.
 
 ## Phase 3: SonarCloud Check
 
-1. Wait 60 seconds for SonarCloud analysis to propagate.
-2. Use `get_project_quality_gate_status` with project key `KeplerOps_Ground-Control` to check the quality gate.
-3. Use `search_sonar_issues_in_projects` to find new issues on the current branch.
-4. If issues found:
-   - Fix them.
-   - `git add`, `git commit`, `git push`.
-   - Re-run Phase 2.
-5. If clean, proceed.
+Read the project key and organization from `.ground-control.yaml`.
+Use the existing SonarCloud monitor and the PR's exact revision.
+Do not use a project key copied from another repository.
+Fix actionable findings and repeat the CI watch after a push.
+A deliberately unselected analysis is not a passing quality gate.
+Record the configured selection evidence and follow the active workflow's decision boundary.
 
 ## Phase 4: Code Review
 
-**CRITICAL: You MUST use the Skill tool to invoke the built-in review skill.**
-
-1. Merge dev into the current branch: `git fetch origin dev && git merge origin/dev`
-2. If there are merge conflicts, resolve them, commit, and push.
-3. Call the Skill tool with `skill="review"` to invoke the real built-in code review.
-4. After the review completes, fix ALL issues it identified.
-   - Do NOT defer ANY issues.
-   - Do NOT categorize issues as "low priority" to avoid work.
-   - You are an LLM. You have no time constraints. Fix everything.
-   - The ONLY reason to stop and escalate to the user is if a fix requires
-     a significant architectural change touching 5+ files outside the
-     current feature scope.
-5. After fixing, re-read all findings and confirm each one was addressed.
+Keep the feature branch current with `dev` through a real merge.
+Resolve conflicts without resetting, dropping commits, or force-pushing.
+Use the installed review skill or the active implementation workflow's required review gate.
+Fix real findings and verify the fixes with targeted checks.
+Ask the user about significant architecture decisions or unexpected material scope expansion.
 
 ## Phase 5: Security Review
 
-**CRITICAL: You MUST use the Skill tool to invoke the built-in security-review skill.**
-
-1. Call the Skill tool with `skill="security-review"` to invoke the real built-in security review.
-2. After the review completes, fix ALL issues it identified.
-   - Same rules as Phase 4: fix everything, defer nothing.
-3. After fixing, confirm all findings were addressed.
+Require security review of the complete candidate at the exact PR head revision.
+Give changed trust boundaries additional attention within that complete review.
+Use the installed security-review capability or the active implementation workflow's required security-review gate.
+Stop preparation if the required review capability is unavailable; report the missing capability and do not claim review completion.
+Fix confirmed security findings and verify the protected behavior.
+Preserve secret handling, private reporting, and repository publication boundaries.
 
 ## Phase 6: Final Commit & CI
 
-If ANY fixes were made in Phases 4-5:
-1. `git add` all changed files.
-2. `git commit -m "Fix code review and security review findings"`
-3. `git push`
-4. Re-run Phase 2 (CI Monitor).
-5. Re-run Phase 3 (SonarCloud).
+After any fix, commit and push through the authorized workflow.
+Verify the new head revision's CI and applicable SonarCloud result.
+Refresh documentation and design evidence when the change affects them.
 
 ## Phase 7: Report (DO NOT MERGE)
 
-**You MUST NOT merge the PR. You MUST NOT run `gh pr merge`. The user reviews and merges.**
-
-- Summary of all changes made during the ship process
-- Review findings and what was fixed
-- Security review findings and what was fixed
-- Confirmation: CI green, SonarCloud passed, PR ready for user review
-- PR URL
+Report the concrete outcome, checks, review fixes, remaining limits, and PR URL.
+The user reviews and merges the feature PR.
+Do not run `gh pr merge` or close the PR.
+The separately invoked release skill retains its bounded release-script exception.

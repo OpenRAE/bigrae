@@ -1,126 +1,130 @@
 # Development and release workflow
 
-This document describes the branch model, the pull-request flow, and the
-release model for BigRAE. It is the reference cited by `CONTRIBUTING.md`,
-`CHANGELOG.md`, and `.gc/plan-rules.md`.
+Use this how-to guide to submit a change or promote a release.
+The reference sections describe branch roles and release effects.
+The root Makefile and release workflows implement the commands.
 
 ## Branch model
 
-- `dev` is the integration branch. All feature and fix work targets `dev`.
-- `main` is the stable release line. It receives only `dev` to `main` promotion
-  PRs and the release-please release PR; it never receives feature PRs or
-  automated dependency bumps directly.
+| Branch | Role |
+| --- | --- |
+| `dev` | Integration branch for feature and fix PRs |
+| `main` | Stable release line; accepts promotion, release-please, and their approved release changes |
+
+Feature PRs and automated dependency bumps target `dev`.
+A push to either branch runs validation; it does not authorize a tenant deployment.
+See [CI/CD](technical/dev/ci-cd.md#trigger-rules) for deployment triggers.
 
 ## Pull-request flow
 
-1. Branch off `dev`.
-2. Give the PR a Conventional Commit title (`<type>(<optional-scope>): <subject>`
-   with a lowercase subject). The `pr-title-lint` workflow enforces the shape on
-   every PR that targets `dev`.
-3. Squash-merge the PR into `dev`. The squash makes the validated PR title the
-   single commit subject that release-please reads once the change reaches
-   `main`, so the title, not the individual work-in-progress commits, is the
-   release signal.
+1. Start a feature branch from `dev`.
+2. Follow the [contribution guide](https://github.com/OpenRAE/bigrae/blob/dev/CONTRIBUTING.md).
+3. Run targeted checks for the changed behavior.
+4. Open the PR against `dev`.
+5. Use a Conventional Commit title: `<type>(<optional-scope>): <subject>`.
+6. Use a lowercase subject.
+7. Fix failed CI checks and review findings.
+8. Leave the feature-PR merge decision to the user or authorized maintainer.
 
-Do not hand-edit `CHANGELOG.md` and do not add changelog fragments. release-please
-owns both the changelog and the version (see below).
+The `pr-title-lint` workflow validates titles on PRs to `dev` and `main`.
+The maintainer squash-merges feature PRs into `dev`.
+The validated title becomes the commit subject that release-please reads after promotion to `main`.
+
+Do not hand-edit `CHANGELOG.md` or add changelog fragments.
+Release-please owns the changelog and product version.
 
 ## Promoting dev to main
 
-Open the promotion PR with `make devmain`. The target runs one `gh pr create`
-against the clone's `gh` default repository (`gh repo set-default --view`). It
-uses `dev` as the head branch, `main` as the base, a Conventional Commit title,
-and a body that restates the merge strategy. It passes the repository
-explicitly because a clone can have an upstream remote. Then an unpinned
-`gh pr create` resolves the base repository to the fork parent and opens the
-promotion PR against the upstream project. When no default is set, the target
-stops. Run `gh repo set-default <owner>/<repo>` once in the clone, or set
-`DEVMAIN_REPO=<owner>/<repo>`.
+This procedure requires authority to create the promotion PR.
+Merging into `main` requires the user's synchronous approval.
+Agents must not infer release authority from an implementation request.
+When the user invokes the release skill, use its release script for the three checked release merges.
+Do not perform those merges by another route.
 
-Merge the promotion PR with a merge commit. Never squash it. A squash collapses
-every Conventional Commit subject in the promotion into one, so release-please
-reads a single subject on `main` instead of the individual feature titles, and
-the release PR loses the correct version bump along with the changelog entries
-for that release.
+1. Confirm the clone's default repository with `gh repo set-default --view`.
+2. Compare it with `github_repo` in `.ground-control.yaml`.
+3. If no default exists, set it with `gh repo set-default <owner>/<repo>`.
+4. Open the promotion PR:
 
-`pr-title-lint` runs on the promotion PR, because `Lint PR title` is a required
-status check on `main` as well as on `dev`. The title `make devmain` sends
-satisfies it. The lint is not a release signal here, since the promotion
-preserves the feature commits rather than collapsing them into one: it runs so
-that the required context reports, which a workflow scoped away from `main`
-cannot do.
+   ```bash
+   make devmain
+   ```
 
-No check constrains how the promotion PR is merged. The target carries the
-title; the maintainer carries the merge method.
+5. Review the PR destination, source revisions, and check results.
+6. Obtain the required approval before merging into `main`.
+7. Merge the promotion PR with a merge commit. Never squash it.
+
+`make devmain` opens one PR with head `dev`, base `main`, and title `chore(main): promote dev`.
+It supplies the clone's default repository explicitly.
+`DEVMAIN_REPO=<owner>/<repo>` overrides that default for an authorized repository.
+The target stops when neither source supplies a repository.
+It does not merge the PR.
+
+An unqualified `gh pr create` can select a fork's parent repository.
+The explicit repository prevents that destination error.
+A promotion squash would collapse the feature commit subjects and lose their separate release signals.
+The maintainer must select the merge method; no check enforces it.
+
+The promotion title satisfies the required `Lint PR title` context on `main`.
+The promotion preserves feature subjects, so its own title is not the release signal.
 
 ## Release model
 
-Releases are coordinated by [release-please](https://github.com/googleapis/release-please)
-on `main`, configured by `release-please-config.json` and
-`.release-please-manifest.json` at the repository root (ADR-042). BigRAE uses a
-single umbrella version: one root package (`release-type: simple`), one
-`vX.Y.Z` tag, and one `CHANGELOG.md`. The root `version.txt` is the committed
-mirror of the current version; it is repository metadata, not an application
-runtime setting. The component `pyproject.toml`, `package.json`, and
-`Chart.yaml` versions keep their own meanings and are not swept into the
-umbrella bump.
+This section explains the release mechanism.
+[Release-please](https://github.com/googleapis/release-please) runs on `main` under ADR-042.
+`release-please-config.json` and `.release-please-manifest.json` configure it.
 
-On each push to `main`, release-please maintains a release PR
-(`chore(main): release X.Y.Z`) that bumps `version.txt` and prepends a new
-`CHANGELOG.md` section generated from the Conventional Commit history since the
-last release. Merging that release PR creates the `vX.Y.Z` tag and the GitHub
-Release, and the `sync-dev` job opens a `main` to `dev` back-merge PR so `dev`
-picks up the version bump and changelog. That back-merge PR is merged by a
-maintainer; automation never force-updates `main` or `dev`.
+BigRAE has one root package with `release-type: simple`, one `vX.Y.Z` tag, and one root `CHANGELOG.md`.
+`version.txt` mirrors the product version as repository metadata.
+It is not an application runtime setting.
+Component `pyproject.toml`, `package.json`, and `Chart.yaml` versions retain their independent meanings.
+
+After pushes to `main`, release-please maintains a PR named `chore(main): release X.Y.Z`.
+That PR updates `version.txt` and prepends changelog entries from commits since the last release.
+Merging it creates the tag and GitHub Release.
+The `sync-dev` job opens a `main` to `dev` back-merge PR for the version and changelog.
+A maintainer merges that PR. Automation never force-updates `main` or `dev`.
 
 ### What bumps the version
 
-| Commit subject on `main` | Effect |
-| --- | --- |
-| `feat:` | minor bump |
-| `fix:` or `perf:` | patch bump |
-| `feat!:`, `fix!:`, or a `BREAKING CHANGE:` footer | major bump |
-| `docs`, `chore`, `refactor`, `test`, `ci`, `build`, `revert` | no bump |
-| retained Keep-a-Changelog types (`security`, `added`, `changed`, `deprecated`, `removed`, `fixed`) | no bump |
+This table is reference for commit subjects on `main`.
 
-The retained Keep-a-Changelog types are accepted as valid PR titles for
-continuity, but they do not cut a release. Use `feat`, `fix`, or `perf`, or a
-breaking marker, when a change should produce a new version.
+| Commit subject | Effect |
+| --- | --- |
+| `feat:` | Minor bump |
+| `fix:` or `perf:` | Patch bump |
+| `feat!:`, `fix!:`, or a `BREAKING CHANGE:` footer | Major bump |
+| `docs`, `chore`, `refactor`, `test`, `ci`, `build`, `revert` | No bump |
+| Retained types: `security`, `added`, `changed`, `deprecated`, `removed`, `fixed` | No bump |
+
+The retained types remain valid PR titles for continuity.
+Use `feat`, `fix`, `perf`, or a breaking marker when a change should produce a release.
 
 ### What a release is, and is not
 
-A release is a source and provenance coordinate: a `vX.Y.Z` tag plus a GitHub
-Release bound to one `main` commit. It is not a deployment, a package
-publication, or a container-image coordinate. Deployment identity remains the
-exact source revision and the verified OCI image digest (ADR-037); a SemVer tag
-is never a deploy trigger or an image selector.
+A release identifies a source revision through a `vX.Y.Z` tag and GitHub Release bound to one `main` commit.
+It does not identify a deployment, package publication, or container image.
+Deployment uses the exact source revision and verified OCI image digest under ADR-037.
+A SemVer tag is never a deployment trigger or image selector.
 
-The release tag and GitHub Release are created by the release-please action
-using the workflow's ephemeral `GITHUB_TOKEN`, mirroring the sibling RAES
-repositories. The release PR is opened by that token, so branch-protection
-required checks do not run on it automatically; a maintainer merges it (admin).
+The workflow's ephemeral `GITHUB_TOKEN` creates the release PR, tag, and GitHub Release.
+Required checks do not automatically run on a release PR opened with that token.
+An authorized maintainer handles its protected-branch merge.
 
 ## Towncrier to release-please transition (#1776)
 
-Before this cutover, the changelog was managed with towncrier fragments under
-`changelog.d/`. The transition consumed every pending fragment into a final
-`## [3.103.0]` changelog section (preserving all content), then removed
-`towncrier.toml`, `changelog.d/`, its template, and the `CHANGELOG.md merge=union`
-attribute. release-please is now the sole changelog writer.
+This section is historical explanation. Do not repeat its activation procedure for routine releases.
+The cutover collected pending towncrier fragments into `## [3.103.0]` without changing their content.
+It removed `towncrier.toml`, the consumed fragment directory and template, and the `CHANGELOG.md merge=union` attribute.
+Retained fragments elsewhere in Git history or the checkout are historical records, not a current authoring route.
 
 ### One-time activation runbook (maintainer, on `main`)
 
-The dev-side cutover (config, workflow, final changelog, tooling reconciliation)
-lands through the normal `dev` PR. Activating release-please then requires two
-maintainer actions on `main`, because `main` is protected:
+The historical activation required two protected-branch actions after the dev-side cutover:
 
-1. Promote `dev` to `main` through the usual `dev` to `main` PR, preserving the
-   feature commits.
-2. On `main`, create the baseline tag `v3.103.0` at the promotion commit and a
-   matching GitHub Release. `.release-please-manifest.json` already records
-   `3.103.0`, so release-please treats this as the last released version and
-   scans only commits after it.
+1. Promote `dev` to `main` with a merge commit that preserves feature subjects.
+2. Create baseline tag `v3.103.0` and its matching GitHub Release at the promotion commit.
 
-From the next push to `main` onward, release-please opens the release PR for
-`3.104.0` and later automatically; no further manual tagging is required for
-routine releases.
+The manifest recorded `3.103.0` as the baseline.
+Subsequent pushes let release-please prepare `3.104.0` and later releases from newer commits.
+Routine releases require no repeated baseline tag.
