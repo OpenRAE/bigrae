@@ -57,6 +57,7 @@ class Command(BaseCommand):
             with self._active_heartbeat():
                 from engine.services import (
                     reconcile_feature_artifact_acquisitions,
+                    reconcile_participant_validations,
                     reconcile_runtime_plugin_operations,
                     reconcile_runtime_plugins,
                 )
@@ -65,6 +66,7 @@ class Command(BaseCommand):
                 retry_due_failed_cleanup_tasks(limit=3)
                 reconcile_runtime_plugins(limit=3)
                 reconcile_runtime_plugin_operations(limit=6)
+                reconcile_participant_validations(limit=3)
                 reconcile_feature_artifact_acquisitions(limit=3)
                 from engine.services._vpn_profiles import reconcile_vpn_profiles
 
