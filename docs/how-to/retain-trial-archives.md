@@ -4,6 +4,9 @@ Central archive custody keeps original trial evidence after a worker is removed.
 A collection receipt confirms verified storage of the declared archive bytes.
 It does not confirm scientific success or cloud resource cleanup.
 
+Run the commands in an operator-prepared application environment.
+Use the installed revision and approved credential files.
+
 ## Configure an approved destination
 
 Use an existing approved bucket on the installation's configured cloud provider.
@@ -42,6 +45,7 @@ Export the existing sealed archive with its full inventory.
 Include the admitted plan and all declared evidence records and chunks.
 Keep original hydrated SDL, provenance, prompts, authorized content, and traces in that inventory.
 Retain security exports, native realization evidence, usage, capture-loss, and cleanup records too.
+
 Exclude credentials under the producer's redaction policy before sealing.
 Keep each JSON document within 4 MiB.
 Use declared chunks, JSON Lines, or binary streams for larger traces.
@@ -87,6 +91,7 @@ Increase `--offset` to read the next page.
 Pending transfers and validation failures remain visible without a disposal authorization.
 `invalid-archive` indicates an inventory, structure, record, or credential rejection.
 Validate the original export at its producer to locate the specific defect.
+
 `transfer-unverified` indicates an unverified transfer or publication failure.
 Retry with the same original archive and expected identities.
 An identical committed delivery returns the same receipt.

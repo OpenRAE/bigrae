@@ -1,10 +1,14 @@
 # Networking
 
-Dual-network architecture on both clouds: a platform network for the application and a range network for guest isolation, connected via peering.
+This explanation describes application and range network boundaries.
+Use the [AWS EKS reference](aws-eks-bundle.md) for current AWS control-plane networking.
+Use the [GCP reference](gcp-infrastructure.md) for the current GCP layout.
 
 ## Common Pattern
 
-Both AWS and GCP follow the same topology:
+Both clouds separate application services from range guests.
+AWS EKS adds a separate control-plane VPC with explicit data-plane and range peering.
+The retained two-VPC EC2 topology below is historical context.
 
 1. **Platform network** - Hosts the application (web, database, cache, workers)
 2. **Range network** - Hosts ephemeral guest instances, isolated per range
@@ -14,7 +18,12 @@ Both AWS and GCP follow the same topology:
 
 ## AWS
 
-Two VPCs per environment, connected via VPC peering.
+Current EKS uses a separate VPC peered to portal services and range resources.
+`modules/portal/eks/portal_network.tf` and `range_network.tf` own those connections.
+RDS and Redis admit the configured EKS network; workload policy and identities supply additional controls.
+
+The following diagram, portal inspection details, and EC2 security-group examples describe the retained earlier topology.
+They do not describe the current EKS ingress or pod path.
 
 ```mermaid
 graph TB
@@ -50,6 +59,10 @@ graph TB
     UserSubnets --> FirewallSubnet --> NATSubnet --> Internet
 ```
 
+The diagram shows the earlier public ALB, portal EC2 services, and separate range VPC.
+Portal and range traffic used peering; guest egress traversed Network Firewall and NAT.
+Current EKS placement and ingress are described in the linked EKS reference.
+
 ### Portal VPC
 
 | Subnet Type | Components |
@@ -78,12 +91,7 @@ private services tier:
 - **Path**: ALB → firewall endpoint → Django EC2 (and the return path).
   The VPC has per-AZ public, private, and firewall route tables, plus
   one Network Firewall endpoint per AZ via the firewall's
-  `subnet_mapping`. Each AZ's public RT keeps its IGW default and adds
-  a more-specific route to every private subnet CIDR via that AZ's
-  firewall endpoint; each AZ's private RT routes every public subnet
-  CIDR via that AZ's firewall endpoint and redirects its 0/0 default
-  through that endpoint; each AZ's firewall RT default sends onward
-  Internet-bound traffic to the shared NAT gateway. The full route
+  `subnet_mapping`. Each AZ's public route table retains its IGW default. More-specific routes reach every private subnet through that AZ's firewall endpoint. Private tables route every public subnet and the 0/0 default through the same endpoint. Firewall tables send internet traffic to the shared NAT gateway. The full route
   matrix ensures cross-AZ flows (created by ALB cross-zone load
   balancing and by the single shared NAT) cannot fall back to the
   implicit local VPC route and bypass inspection.
@@ -91,10 +99,7 @@ private services tier:
   (the platform cannot turn it off), and the portal runs a single
   shared NAT. With per-AZ firewall endpoints, cross-AZ flows are
   inspected by different endpoints on the forward and return legs
-  (asymmetric stateful). This is compatible with the visibility-first
-  v1 policy because rules fire per packet on whichever endpoint
-  observes them and FLOW logs from both endpoints reconstruct the
-  flow. A stateful drop-by-default posture would require a centralized
+  (asymmetric stateful). The visibility-first v1 policy evaluates packets at whichever endpoint observes them. FLOW logs from both endpoints reconstruct asymmetric flows. A stateful drop-by-default posture would require a centralized
   inspection topology (Transit Gateway with single endpoint, GWLB
   with consistent hashing, or single-AZ appliance mode); all of those
   are deferred beyond this issue.
@@ -117,28 +122,13 @@ private services tier:
   wrong-AZ, unhealthy, or missing firewall endpoint silently blackholes
   egress while `terraform apply` still reports success. The committed
   dev / prod tfvars therefore set `enable_portal_inspection = false`; a
-  deploy opts in through the `TF_VARS_*_PORTAL` secret. When inspection
-  is on, the portal apply job runs
-  `scripts/assert_portal_inspection/assert_portal_inspection.py`, which
-  reads the typed `portal_inspection_assertion` Terraform output and
-  proves, against live AWS state, that the firewall config is `IN_SYNC`,
-  every per-AZ endpoint attachment is `READY` and matches the
-  Terraform-declared `firewall_status.sync_states` endpoint, every
-  firewall-targeted public / private route points at the same-AZ
-  endpoint, each private RT has a `0.0.0.0/0` default via the firewall
-  endpoint with **no** direct NAT bypass, and each firewall RT sends
-  `0.0.0.0/0` onward to the shared NAT. Any mismatch fails the deploy
+  deploy opts in through the `TF_VARS_*_PORTAL` secret. With inspection enabled, the portal apply job runs `scripts/assert_portal_inspection/assert_portal_inspection.py`. It reads typed `portal_inspection_assertion` output and checks live AWS state. Firewall configuration must be `IN_SYNC`. Every AZ attachment must be `READY` and match the Terraform endpoint. Firewall-targeted public/private routes must use the same-AZ endpoint. Each private table must route `0.0.0.0/0` through the firewall, without direct NAT bypass; firewall tables must forward it to shared NAT. Any mismatch fails the deploy
   instead of shipping a blackhole. The check is a no-op when inspection
   is disabled.
 - **Enforce vs alert (decision)**: the firewall stays visibility-first—
   stateful default pass with ALERT-only east-west rules—for this
   issue. The assertion proves the inline path is wired and healthy; it
-  does **not** convert alert-only inspection into traffic enforcement. A
-  drop-by-default posture remains deferred (see the stateful trade-off
-  and v1 deferrals below) because the per-AZ endpoint topology has
-  asymmetric cross-AZ stateful flows; flipping to enforce is a later
-  architecture change with its own policy parameter, not an overload of
-  `enable_portal_inspection`.
+  does **not** convert alert-only inspection into traffic enforcement. Drop-by-default enforcement remains deferred because cross-AZ flows use asymmetric firewall paths. Enabling it requires a separate architecture change and policy parameter. `enable_portal_inspection` must retain its existing meaning.
 
 ##### v1 deferrals
 
@@ -201,11 +191,7 @@ GKE uses VPC-native networking with secondary IP ranges for pods and services.
 The control-plane endpoint is private; `gke_master_authorized_cidrs` is normally
 empty and accepts only connected RFC1918 networks when direct private access is required.
 
-Control-plane east-west isolation is layered defense-in-depth: Dataplane V2
-default-deny NetworkPolicy limits pod reachability, Workload Identity
-authenticates workloads to Google APIs, the provisioner-Job admission policy
-constrains admitted Jobs, and application-layer authentication (Identity Platform
-sessions, API tokens, Kubernetes RBAC) governs permitted calls. Cryptographic
+Dataplane V2 default-deny NetworkPolicy limits pod reachability. Workload Identity authenticates Google API calls. Provisioner admission constrains Jobs. Identity Platform sessions, API tokens, and Kubernetes RBAC govern application and cluster calls. Cryptographic
 peer authentication on an allowed pod-to-pod connection (mTLS) is the deferred
 service-mesh capability (ADR-057).
 
@@ -220,15 +206,15 @@ The public application edge is separate from operator access:
 
 Hosts guest subnets for range instances. Cloud Router + NAT for egress.
 
-Live-fire range containment is the GCE range cell: a per-range subnet with unique
-target tags, default-deny egress fenced to a denied-network inventory, and
-range-owned NAT rather than a shared blanket NAT. This is the approved participant
-containment boundary per ADR-030, ADR-039, and ADR-056; the model and its
-verification are recorded in the GCE range-cell containment threat model under
-`docs/architecture/`. The GDC custom L2 networks (VXLAN-based) with per-range
-Kubernetes namespaces and Network Attachment Definitions are a dev and
-operator-validation path only, not a live-fire containment boundary. See
-[GDC Provisioning](gdc-provisioning).
+A GCE range cell supplies live-fire containment through a per-range subnet and unique target tags.
+Default-deny egress uses a denied-network inventory and explicit NAT enrollment.
+Shared-VPC cells use provisioner-owned regional Router/NAT with admitted subnet lists.
+VPC-per-range cells retain range-owned Router/NAT.
+
+ADRs 030, 039, and 056 define the approved participant containment boundary. Its threat model and verification are recorded under `docs/architecture/`. GDC custom VXLAN L2 networks, per-range namespaces, and Network Attachment Definitions support development and operator validation.
+
+They are not an approved live-fire containment boundary. See
+[GDC Provisioning](gdc-provisioning.md).
 
 ### Network Peering
 
@@ -240,6 +226,6 @@ Both clouds use configurable CIDR ranges defined in environment tfvars. The spec
 
 ## Related Docs
 
-- [GCP Infrastructure](gcp-infrastructure) - GKE cluster and platform services
-- [GDC Provisioning](gdc-provisioning) - GDC guest networking details
-- [Guacamole](guacamole) - Browser-based terminal access (uses the peering connection)
+- [GCP Infrastructure](gcp-infrastructure.md) - GKE cluster and platform services
+- [GDC Provisioning](gdc-provisioning.md) - GDC guest networking details
+- [Guacamole](guacamole.md) - Browser-based terminal access (uses the peering connection)

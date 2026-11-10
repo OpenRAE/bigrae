@@ -4,6 +4,9 @@ Admission retains an installed pack's trial plan and exact scientific inputs.
 It creates no VM and makes no model call.
 [Dispatch](run-experiment-batches.md) is a separate operation.
 
+Run the commands in an operator-prepared application environment.
+Use the installed revision and approved credential files.
+
 ## Prepare the inputs
 
 1. Install the pack for the owning organization through the existing pack installation service.
@@ -15,10 +18,12 @@ It creates no VM and makes no model call.
 The apparatus authority document contains `schema_version`, `backend`, `processor`, `participants`, `realization_envelope`, and `execution_authority`.
 Its schema version is `bigrae.experiment-admission-authority/v1`.
 Each participant contains `participant_address` and its owner-supplied `manifest`.
+
 The optional `max_concurrency` field defaults to 200.
 Its supported configuration range is 1 through 10000.
 Installation authority approves these documents for this admission.
 The pack cannot approve apparatus or load executable validators.
+
 Selected prompt assets must include their actual bytes in the installed pack's verified artifact inventory.
 Their absolute `raes-environment-pack:` locators and complete descriptors must match that inventory.
 Admission refuses missing, changed, or unavailable selected content.
@@ -62,6 +67,7 @@ A configured ceiling of 200 grants no cloud capacity or provider quota.
 The released compiler bounds coordinates, domain values, and product outputs at 10000 each.
 The plan limit is 32 MiB.
 The complete retained record limit is 64 MiB.
+
 Original documents and referenced local artifacts each have a 16 MiB aggregate limit.
 The authority document limit is 4 MiB.
 Oversized studies fail without partial admission.
@@ -92,12 +98,16 @@ members, counts, collection completeness, and missing or incomplete data.
 Missing archive versions remain visible even when an earlier version of the
 same attempt was collected.
 The indexes include every expected entry and the known run versions and attempts.
+
 Read collection status, capture completeness and scientific outcome separately.
 A failed trial can have a completely collected archive. An assigned worker does
-not establish a start or scientific outcome. Unknown values remain null in JSON
+not establish a start or scientific outcome.
+
+Unknown values remain null in JSON
 and empty in CSV; nested CSV fields contain JSON. CSV text that can start a
-spreadsheet formula is prefixed with an apostrophe. Original archive bytes remain
-unchanged. Repeating the command with unchanged inputs produces the same file
+spreadsheet formula is prefixed with an apostrophe. Original archive bytes remain unchanged.
+
+Repeating the command with unchanged inputs produces the same file
 content. Repeat it after new archives arrive to update the inventory.
 
 Exports are limited to 10000 expected entries, 10000 experiment archive inventory

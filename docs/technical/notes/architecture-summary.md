@@ -1,5 +1,13 @@
 # Architecture Summary: Shifter Cyber Range Platform
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Infrastructure (AWS `us-east-2`)
 
 **VPCs: 2 main VPCs**
@@ -103,3 +111,5 @@
 | **Packer** | 989 |
 
 **Total**: ~48k LOC (code + tests)
+
+<!-- vale on -->

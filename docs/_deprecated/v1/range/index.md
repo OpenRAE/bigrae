@@ -1,5 +1,13 @@
 # Range Infrastructure
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Stable VPC with ephemeral per-user subnets for XDR/XSIAM demo environments.
 
 ## Architecture
@@ -173,3 +181,5 @@ Future: `modules/range/user-subnet/` for ephemeral per-user resources.
 State: `s3://shifter-infra-xxx/prod/range/terraform.tfstate`
 
 Variables: `TF_VARS_PROD_RANGE` GitHub secret.
+
+<!-- vale on -->

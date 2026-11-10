@@ -1,4 +1,4 @@
-"""Public dormant account administration routing surface."""
+"""Mounted native account, hierarchy, membership, and policy administration routes."""
 
 from django.urls import URLPattern, path
 

@@ -45,8 +45,8 @@ current native policy. Organizer alerts use the in-app organizer inbox, and
 email when the deployment has email delivery. Organizer rows never enter the
 participant inbox, the communications console or campaign reports. Only the
 system origin can select organizer recipients. The
-[design](../architecture/ctf-organizer-alerts-design-528.md) and the
-[preflight](../architecture/ctf-organizer-alerts-preflight-528.md) give the
+[design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-organizer-alerts-design-528.md) and the
+[preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-organizer-alerts-preflight-528.md) give the
 details. ADR-071 provides the email transport.
 
 Revision R5, 2026-10-31, issue #664. The maintainer chose these rules for
@@ -57,7 +57,7 @@ stable identity. Every seat-creation path declares a registration confirmation
 for a seat with a delivery email. These declarations skip the shared system
 authoring rate budget, as organizer alerts do. Seat creation and range status
 bound their number. Release-time admission backpressure still applies. The
-[design](../architecture/ctf-participant-notices-design-664.md) gives the details.
+[design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-participant-notices-design-664.md) gives the details.
 
 Revision R6, 2026-10-31, issue #662. The maintainer chose a durable
 cancellation notice on this ledger. The cancel transaction declares one
@@ -70,8 +70,8 @@ cancelled target event. Only the system campaign factory can set that kind, and
 only for a cancelled event. Campaign and intent cancellation, recipient
 revocation, tenancy and retention still apply. A notice failure does not block
 cancellation or range cleanup. The
-[design](../architecture/ctf-cancellation-notice-design-662.md) and the
-[preflight](../design/ctf-event-cancellation-preflight-706.md) give the
+[design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-cancellation-notice-design-662.md) and the
+[preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-event-cancellation-preflight-706.md) give the
 details.
 
 The API compatibility checker supports exact absent write-method retirements so

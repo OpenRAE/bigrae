@@ -9,9 +9,7 @@ cloud roles.
 ## Admission and ownership
 
 `shared.credentials.CredentialContext` carries an immutable principal, credential
-kind, safe identifier and exact action ceiling. One bearer-first DRF authenticator
-dispatches to public Knox or the provider's native service proof verifier: Google
-ID tokens on GCP and AWS STS web identity tokens on AWS (#2313). Invalid bearer proof raises
+kind, safe identifier and exact action ceiling. One bearer-first DRF authenticator selects public Knox or the native service proof verifier. GCP uses Google ID tokens; AWS uses STS web identity tokens (#2313). Invalid bearer proof raises
 401 even beside a valid session. Legacy human-only consumers reject services;
 they never impersonate the service's creator. OpenFGA administration consumes the
 neutral context directly.
@@ -23,9 +21,7 @@ on both SQLite and PostgreSQL. Credential operations and strict audit records co
 together. No network policy/provider call occurs under their database row locks.
 
 User saves idempotently reconcile the profile and human principal in one transaction.
-If creation ran in autocommit and identity/audit persistence failed after the user
-insert, authentication remains denied until a later user save repairs the missing
-rows. Retry that save after restoring audit persistence; reconciliation emits one
+In autocommit, identity or audit persistence can fail after the user insert. Authentication then remains denied until a later user save repairs the missing rows. Retry that save after restoring audit persistence; reconciliation emits one
 principal-creation audit record and grants no authority.
 
 Authorized credential administration and service participation record the caller
@@ -33,7 +29,7 @@ in the canonical `actor_principal_uuid` audit field, including nested principal
 and provider-binding creation. Workspace authorization request context and its
 durable mutation journal carry the same UUID through confirmation/reconciliation.
 Audit canonicalization v2 hashes that field; historical v1 records are preserved
-unchanged. See [audit architecture](../../architecture/audit-system-architecture.md)
+unchanged. See [audit architecture](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/audit-system-architecture.md)
 for the append-profile migration and the prohibition on mixed-version writers.
 
 Knox owns all personal-token generation, hashing and verification. Metadata retains
@@ -45,9 +41,10 @@ unrevoked historical rows. Orphaned rows remain unusable; no email-based repair 
 Issuance requires a human session with CSRF, a live token-use grant and a live policy
 check for every requested action under SQL-resolved target ancestry. Canonical new
 scopes are `authorization:<action-code>`. Legacy HTTP scope aliases cannot be newly
-issued through the management API. The exact target type/UUID is persisted and
-SQL-immutable, reconstructed into the credential ceiling, and checked by every
-`AuthorizationRequest`; even another resource the owner can access is denied.
+issued through the management API.
+
+The persisted target type/UUID is SQL-immutable and reconstructed into the credential ceiling. Every `AuthorizationRequest` checks it. Another resource remains denied even when the owner can access it.
+
 At use time credential ceilings restrict actions and targets;
 live application policy and domain lifecycle remain independently required.
 
@@ -184,9 +181,7 @@ credential objects, token responses or secrets.
 
 ## Verification and enforcement
 
-Focused tests cover real Knox storage/verification, live grant loss, owner revocation,
-MFA assurance and substitution, service independence, native refresh across expiry,
-session/logout checks, SQL immutability and PostgreSQL concurrent rotation. The UI's
+Focused tests cover real Knox storage/verification, live grant loss, owner revocation, MFA assurance and substitution, and service independence. They also cover native refresh across expiry, session/logout checks, SQL immutability, and PostgreSQL concurrent rotation. The UI's
 one-time response bypasses query/mutation caches. The client package belongs to the
 platform quality unit; its tests run in the platform environment without importing
 Django. Config's sanctioned workspace edge adds only `hierarchy_target_scope`, a
@@ -239,6 +234,4 @@ Paths below are relative to `shifter/shifter_platform/` except the standalone cl
   interfaces own proof generation/verification/refresh; no custom protocol or
   renewal daemon is added.
 
-PLAT-102/106 and CTF-006 retain active contracts with reconciled traceability;
-PLAT-101/CTF-608 retain their historical statements marked deprecated, documenting
-the already-retired magic-link flow rather than claiming a new implementation.
+PLAT-102/106 and CTF-006 retain active contracts with reconciled traceability. PLAT-101/CTF-608 retain their historical statements marked deprecated. Those statements document the retired magic-link flow; they claim no new implementation.

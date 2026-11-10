@@ -3,23 +3,26 @@
 Part of the BigRAE deploy and operations docs; start at the [documentation home](../index.md).
 
 Operator procedures for the mechanisms defined in
-[`../architecture/secrets-rotation-strategy.md`](../architecture/secrets-rotation-strategy.md).
-This file grows as each mechanism ships; it currently covers RDS IAM database
-authentication, Django `SECRET_KEY` rotation (issue #159, PR2), automatic Redis
-AUTH token rotation (PR3), and Cognito client-secret rotation plus API-token
-cadence (PR4).
+[`../architecture/secrets-rotation-strategy.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/secrets-rotation-strategy.md).
+This guide covers RDS IAM, Django `SECRET_KEY`, and Cognito client-secret rotation with API-token cadence. It also describes the retained ASG-based Redis rotation mechanism and its current disabled status.
 
 Apply the architecture guardrails in
-[`../architecture/secrets-rotation-strategy-preflight-159.md`](../architecture/secrets-rotation-strategy-preflight-159.md)
+[`../architecture/secrets-rotation-strategy-preflight-159.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/secrets-rotation-strategy-preflight-159.md)
 before changing production rotation behavior. Never put a secret value in
 argv, an SSM command body, a workflow log, a Terraform output, or an issue
 comment.
 
 ## RDS database credentials: IAM authentication
 
-The running portal (web and workers) authenticates to PostgreSQL with a
-short-lived RDS IAM token instead of a stored password, so there is no
-database password to rotate for the runtime. The credential is the instance
+For current EKS deployments, use the [AWS native identity procedure](../ops/aws-native-identity.md).
+The renderer selects `DB_AUTH_MODE=rds-iam`, exact workload logins, and regional RDS CA verification. TLS uses `verify-full`. The dedicated migration Job retains owner credentials; runtime workloads do not read them.
+Repair IAM or SQL grants through the normal deployment lifecycle.
+Do not switch an EKS runtime workload to the master password identity.
+
+The components, configuration, cutover, and rollback below describe the retained EC2 compatibility interface.
+They are historical deployment context, not the current EKS recovery procedure.
+
+The legacy portal runtime uses short-lived RDS IAM tokens instead of a stored password. Its runtime database credential therefore has no password rotation. The credential is the instance
 IAM role plus a dedicated `rds_iam` database user.
 
 Components:
@@ -55,10 +58,7 @@ The cutover is one deploy. Order matters because the IAM policy and the
 
 1. Confirm the RDS instance has `iam_database_authentication_enabled = true`
    (already set for the portal instance).
-2. Deploy the change. In a single deploy: `terraform apply` attaches the
-   `rds-db:connect` policy, then the new container runs migrations as the
-   master user (creating `portal_runtime` and its grants), then switches the
-   runtime connection to IAM auth.
+2. Deploy the change. In a single deploy: `terraform apply` attaches `rds-db:connect`. The new container migrates as master, creates `portal_runtime` and its grants, then switches the runtime to IAM authentication.
 3. Verify: the portal answers `GET /health/`, and the database connection log
    shows the runtime connecting as `portal_runtime`. Confirm no password is
    present in the running process environment
@@ -111,8 +111,11 @@ event only, never the key value.
 
 ## Redis AUTH token: automatic rotation
 
-The ElastiCache replication-group AUTH token that backs the Django Channels
-layer rotates automatically. No routine operator action is required.
+The retained Redis module implements automatic AUTH token rotation with ASG refresh.
+Current portal roots leave `enable_auth_rotation` disabled because the portal ASG was retired.
+The existing function does not refresh EKS workloads.
+Do not enable its schedule until consumer refresh is qualified.
+Use a reviewed manual rotation and normal EKS deployment to refresh consumers.
 
 Components (`platform/terraform/modules/portal/redis`):
 
@@ -120,10 +123,7 @@ Components (`platform/terraform/modules/portal/redis`):
   (`lambda/redis_rotation.py`), an `aws_secretsmanager_secret_rotation` schedule
   (`redis_auth_rotation_days`, default 90), a VPC security group for the Lambda,
   and scoped IAM.
-- The Lambda drives the four-step rotation: generate a new token, apply it to
-  ElastiCache with the `ROTATE` strategy (previous token stays valid), verify it
-  authenticates over TLS, promote it to `AWSCURRENT`, then trigger a portal ASG
-  instance refresh so containers rehydrate `REDIS_PASSWORD`.
+- The Lambda drives the four-step rotation: generate a new token and apply ElastiCache `ROTATE`, keeping the previous token valid. Verify TLS authentication and promote `AWSCURRENT`. Trigger an ASG refresh so legacy consumers rehydrate `REDIS_PASSWORD`.
 - `auth_token` and the secret's `secret_string` are `ignore_changes` in
   Terraform: Terraform bootstraps the initial token; the Lambda owns it
   thereafter. A later `terraform apply` does not revert the rotated token.
@@ -132,7 +132,7 @@ Components (`platform/terraform/modules/portal/redis`):
 
 | Variable | Default | Meaning |
 | --- | --- | --- |
-| `enable_auth_rotation` | `false` | Enables the rotation Lambda + schedule. The root sets it to `enable_autoscaling`: automatic rotation runs only where the portal is on a refreshable ASG, because ElastiCache `ROTATE` keeps only the two newest tokens, so a consumer that never rehydrates would lose auth at the next rotation. Single-instance deployments use manual rotation instead (below). |
+| `enable_auth_rotation` | `false` | Enables the rotation Lambda + schedule. The retained module requires a refreshable portal ASG. Current portal roots do not enable this path. ElastiCache `ROTATE` retains only two tokens, so unrefreshed consumers eventually lose authentication. Single-instance deployments use manual rotation instead (below). |
 | `redis_auth_rotation_days` | `90` | Rotation interval. |
 | `portal_asg_name` | `""` | Portal ASG the Lambda refreshes (`StartInstanceRefresh`) after promoting the new token. The root wires it to `module.ec2.asg_name` whenever `enable_auth_rotation` is on. |
 
@@ -145,16 +145,12 @@ the secret value never appears in the logs.
 
 ### Failure handling
 
-Secrets Manager retries a failed rotation and surfaces it on the secret. If the
-Lambda cannot reach Redis (the `testSecret` step) or the ElastiCache modify
-fails, the new token is not promoted and the previous token remains in use, so
-the Channels layer keeps working. Investigate the Lambda log group, then let
+Secrets Manager retries a failed rotation and surfaces it on the secret. If `testSecret` cannot reach Redis or ElastiCache modification fails, the new token is not promoted. The previous token remains usable by Channels. Investigate the Lambda log group, then let
 the next scheduled attempt proceed or force one with `rotate-secret`.
 
 ## Cognito client secret: operator-triggered rotation
 
-Cognito has no API to rotate an app client's secret in place, so rotation is a
-blue/green client replacement run on demand by an operator. It is **not**
+Cognito cannot rotate an existing app-client secret in place. An operator creates a replacement client and performs a controlled cutover. It is **not**
 scheduled: a scheduled EventBridge reminder emails the admin when rotation is
 due (default 180 days, `cognito_rotation_reminder_days`, published to the portal
 alerts SNS topic).
@@ -163,9 +159,7 @@ Components (`platform/terraform/modules/portal/cognito`):
 
 - `rotation.tf` provisions an on-demand rotation Lambda (`lambda/cognito_rotation.py`)
   with scoped IAM, plus the EventBridge Scheduler reminder + its SNS-publish role.
-- The Lambda describes the current app client, creates a new one copying its
-  config, writes the new `client_id` / `client_secret` into the OIDC bundle,
-  and refreshes the portal ASG so containers rehydrate the new client. The
+- The Lambda copies the current client configuration into a new client. It writes `client_id` and `client_secret` into the OIDC bundle. A configured legacy ASG refreshes; current EKS consumers need the normal deployment rollout. The
   previous client is left in place.
 - The OIDC secret bundle's `secret_string` is `ignore_changes` in Terraform:
   Terraform bootstraps the initial client; the Lambda owns the bundle after.
@@ -175,8 +169,9 @@ Components (`platform/terraform/modules/portal/cognito`):
 1. Run the rotation: `aws lambda invoke --function-name <name_prefix>-cognito-rotation /dev/stdout`.
    The response reports `new_client_id` and `previous_client_id`; the secret
    value never appears in the output or logs.
-2. The Lambda triggers an ASG instance refresh; wait for it to complete so all
-   portal instances are serving with the new client.
+2. For a retained ASG consumer, wait for its triggered instance refresh.
+   Current EKS deployments have no portal ASG.
+   Redeploy through the normal EKS lifecycle so its copied secret and every consumer use the new client.
 3. Confirm login works against the new client. The previous client stays valid
    during this window, so in-flight sessions are unaffected.
 4. After the refresh has drained in, retire the previous client:

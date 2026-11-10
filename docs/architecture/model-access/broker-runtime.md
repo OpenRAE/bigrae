@@ -1,5 +1,14 @@
 # Private model broker runtime (M05)
 
+> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+> These retained contracts do not authorize broker activation or establish live qualification.
+> Independently supported native source and range controls retain their own boundaries.
+> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 Issue [#2122](https://github.com/Brad-Edwards/bigrae/issues/2122) completes the
 existing standalone broker and Engine control boundary. This is a local runtime
 contract, not a cloud, load, restore or full PLAT-202 qualification record.
@@ -82,3 +91,5 @@ test service reachable there. Do not relax production subnet verification to
 accommodate host NAT. These tests prove neither a cloud load balancer's source
 preservation nor effective IAM, provider invoices, supported cohort size or live
 revocation. Record that evidence through the existing qualification procedures.
+
+<!-- vale on -->

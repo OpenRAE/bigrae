@@ -1,6 +1,6 @@
 # BigRAE Management
 
-Platform administration.
+Reference for principal identity, user profiles, and lifecycle services.
 
 ## Account principals introduced by ADR-066
 
@@ -36,7 +36,7 @@ retired participant magic-link authentication is not restored.
 | `log_activity(action, user, **metadata)` | Audit logging |
 | `get_user_profile(user)` | Get or create user profile |
 | `mark_user_deleted(user)` | Soft delete user |
-| `update_cognito_sub(user, cognito_sub)` | Update Cognito sub on profile |
+| `bind_provider_identity(user, issuer, subject)` | Bind an immutable provider identity; conflicts fail closed |
 
 ## Management commands
 

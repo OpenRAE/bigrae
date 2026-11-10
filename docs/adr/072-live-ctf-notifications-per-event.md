@@ -6,7 +6,7 @@ Accepted 2026-10-31. Specializes ADR-051-R6 for CTF live notifications (CTF-802)
 Supersedes the disabled-by-default deployment posture that issue #941 set for
 `WEBSOCKET_NOTIFICATIONS_ENABLED`. Issue
 [#665](https://github.com/Brad-Edwards/bigrae/issues/665) records the work. The
-[design](../architecture/ctf-live-notifications-design-665.md) records the
+[design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-live-notifications-design-665.md) records the
 architecture, the data flows, and the security controls.
 
 ## Context

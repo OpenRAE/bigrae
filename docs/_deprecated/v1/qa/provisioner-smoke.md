@@ -1,5 +1,13 @@
 # Provisioner Smoke Test
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Setup
 
 ```bash
@@ -55,3 +63,5 @@ aws ec2 describe-subnets --profile $AWS_PROFILE --region us-east-2 \
   --filters "Name=tag:range_id,Values=$RANGE_ID" \
   --query 'Subnets[].SubnetId' --output text
 ```
+
+<!-- vale on -->

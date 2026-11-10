@@ -8,7 +8,7 @@ Where secrets live and how to manage them.
 2. **GitHub Secrets for CI/CD** - OIDC role ARNs plus the per-environment deploy payloads (`TF_VARS_*` and `SHIFTER_CONFIG_*`) rendered at deploy time; see [deploy-secrets.md](../../dev/deploy-secrets.md). A GCP deployment that runs without GitHub keeps no deploy input in GitHub. Its deployment config bucket holds the inputs, and Secret Manager holds the secret values (ADR-070)
 3. **Cloud secret manager for runtime** - AWS Secrets Manager today, GCP Secret Manager for `gcp-dev`
 4. **Explicit, not default** - No silent fallbacks; fail if secret missing
-5. **Committed tfvars are non-sensitive baselines** - The repo `terraform.tfvars` are fail-loud `example.com` placeholders; real per-environment values live in the `TF_VARS_*` GitHub secrets and render into a gitignored `local.auto.tfvars` at deploy time (since #1250)
+5. **Committed tfvars are non-sensitive baselines** - They contain `example.com` placeholders. Actual values use protected CI payloads or private local overlays, rendered before deployment (#1250).
 
 ## GitHub Secrets
 
@@ -107,7 +107,7 @@ Current rollout behavior:
   - Identity Platform must be provisioned successfully
   - the public DNS record must point at the GKE ingress IP so the managed certificate can become active
 
-## What's NOT a Secret
+## What is NOT a Secret { #whats-not-a-secret }
 
 These are configuration, not credentials:
 
@@ -119,13 +119,9 @@ These are configuration, not credentials:
 - Domain names
 - Feature flags
 
-They do not grant access or authenticate. Since #1250, though, their real
-per-environment values are not committed either: the repo `terraform.tfvars` are
-`example.com` baselines, and the live values (including domains, bucket names,
-and CIDRs) ship in the `TF_VARS_*` secrets rendered to a gitignored
-`local.auto.tfvars` at deploy time (see [deploy-secrets.md](../../dev/deploy-secrets.md)).
+They do not grant access or authenticate. Actual deployment values remain outside committed source (#1250). Protected `TF_VARS_*` payloads include domains, bucket names, and CIDRs. CI renders them into gitignored `local.auto.tfvars`; see [deploy secrets](../../dev/deploy-secrets.md).
 
-**Rule**: If it doesn't grant access or authenticate, it's config, not a secret.
+**Rule**: If it does not grant access or authenticate, it is config, not a secret.
 
 ## Adding a New Secret
 
@@ -149,7 +145,7 @@ resource "aws_secretsmanager_secret" "my_secret" {
 ```bash
 aws secretsmanager create-secret \
   --name "shifter-dev-my-secret" \
-  --secret-string '{"key": "value"}' \
+  --secret-string file://<private-json-file> \
   --profile $PANW_SHIFTER_DEV_PROFILE
 ```
 
@@ -165,10 +161,11 @@ rotation behavior, apply the architecture guardrails in
 `docs/architecture/secrets-rotation-strategy-preflight-159.md`.
 
 ### Database Password
-The current portal reads `DB_PASSWORD` at container startup. Rotating the
-database password must keep the actual RDS password and the Secret Manager JSON
-bundle consistent, then restart/drain portal processes so they hydrate the new
-value. Updating only one side is not a completed rotation.
+Current AWS runtime workloads use RDS IAM; GCP runtime workloads use native Cloud SQL authentication. Their runtime identities have no stored database password to rotate. Migration owners and Guacamole retain separate password duties.
+
+For those duties, the process reads `DB_PASSWORD` at startup. Keep the actual database password and secret JSON consistent. Refresh affected password-duty consumers through the authorized deployment and verify their connections.
+
+Updating only one side is not a completed rotation.
 
 ### Django SECRET_KEY
 Updating `django_secret_key` in the app secret and restarting the portal
@@ -203,7 +200,7 @@ channel). See `docs/architecture/vm-guest-credential-preflight-762.md`.
 2. **Store**: the value is persisted in the cloud's secret manager:
    - AWS: `arn:aws:secretsmanager:<region>:<account>:secret:shifter/<env>/range/<range_id>/<role>-<uuid8>-rdp-password`
    - GCP: `projects/<project>/secrets/shifter-<env>-range-<range_id>-<role>-<token>-rdp-password`
-3. **Reference, don't render**: the secret ARN / resource path flows
+3. **Reference, do not render**: the secret ARN / resource path flows
    into `engine_instance.state.rdp_password_secret_arn` and
    `Range.provisioned_instances[].rdp_password_secret_arn`. The
    *value* never lands in EC2 user_data, GDC VM Runtime
@@ -223,10 +220,7 @@ channel). See `docs/architecture/vm-guest-credential-preflight-762.md`.
    `engine.services._resolve_non_dc_rdp_password` reads the per-
    instance secret reference from `Range.provisioned_instances` and
    fetches the value via `engine.secrets.get_rdp_password` →
-   `shared.cloud.get_secrets_store().get_secret()`. If the fetch fails
-   (deleted secret, IAM regression), the portal raises a
-   non-sensitive `ValueError` that the Mission Control RDP view maps
-   to HTTP 400, the same envelope as a missing reference.
+   `shared.cloud.get_secrets_store().get_secret()`. A failed secret fetch raises a non-sensitive `ValueError`. The Mission Control RDP view maps it to HTTP 400, as with a missing reference.
 
 #### RAES-authored account credentials
 
@@ -259,18 +253,11 @@ not provide one equivalent, verified mail-routing semantic.
 
 #### DC role
 
-The DC role keeps the deployment-scoped `DC_DOMAIN_PASSWORD` contract
-documented below: a DC host's local Administrator account *is* the
-domain Administrator account, so per-instance rotation is handled
-through DC promotion rather than the per-instance secret.
+The DC retains deployment-scoped `DC_DOMAIN_PASSWORD`. Its local Administrator is the domain Administrator. Rotation therefore follows DC promotion and image coordination, not the per-instance secret procedure.
 
 #### Residual state exposure
 
-The generated `random_password.result` (AWS) and the
-`add_secret_version` payload (GCP) appear in Terraform / provisioner-
-side memory at apply time and in the Terraform state object for the
-AWS path, the same as the existing per-instance SSH-key precedent
-(`tls_private_key.instance` and `aws_secretsmanager_secret_version.ssh_key`).
+Generated AWS `random_password.result` and GCP `add_secret_version` payloads enter process memory during apply. AWS passwords also enter Terraform state, like `tls_private_key.instance` and `aws_secretsmanager_secret_version.ssh_key`. State protection remains required.
 Terraform state lives in the S3 backend with bucket-level encryption
 and least-privilege IAM access; this is the established mitigation.
 Eliminating state exposure entirely would require external secret
@@ -280,53 +267,49 @@ and is a separate workstream.
 #### AWS delivery channel
 
 After bootstrap, the provisioner reads the guest's ed25519 SSH host public key
-over the authenticated SSM control channel. It then pins that key, retrieves the
-per-instance password and management private key from Secrets Manager, and sends
-the password only over the pinned SSH connection's stdin. The non-secret setup
+over the authenticated SSM control channel. It pins the host key, then reads the instance password and management private key from Secrets Manager. Only pinned SSH stdin carries the password. The non-secret setup
 script travels separately. The password therefore does not enter EC2 user data,
 SSM Run Command history, script source, process argv, environment, or metadata.
 The guest instance role has no permission to read the secret store.
 
-Do not replace this with `{{ssm-secure:...}}`: that syntax is a CloudFormation
-dynamic reference and Systems Manager Run Command document parameters do not
-support SecureString Parameter Store references.
+Do not substitute `{{ssm-secure:...}}`. That is a CloudFormation dynamic reference. Run Command document parameters do not support SecureString Parameter Store references.
 
 #### Rotation
 
-Per-instance rotation is achieved by destroying and re-provisioning
-the range; the Terraform `random_password` regenerates, the new value
-replaces the previous secret version, and `SetLocalPasswordPlan` pushes
-it on the next provision. Image rebuilds (Packer) do **not** rotate
+Rotate per-instance credentials by destroying and re-provisioning through the range lifecycle. Terraform regenerates `random_password`, replaces the secret version, and `SetLocalPasswordPlan` installs it during provisioning. Image rebuilds (Packer) do **not** rotate
 live credentials; they only refresh the bootstrap scripts shipped on
 first boot.
 
 ### Domain Controller Administrator Password
 
-The portal Django container reads `DC_DOMAIN_PASSWORD` once at startup
-(`entrypoint.sh`) and caches it in the process environment, so a Secrets
-Manager update does not refresh a running portal. The engine provisioner ECS
-task, by contrast, has the value injected by ECS at each task launch via the
-task definition's `secrets = [...]` block, so range provisions/joins after the
-rotation pick up the new value without a task-definition redeploy.
+The portal and provisioner entrypoints hydrate the referenced password at startup.
+Updating Secret Manager does not refresh a running process.
+Current range provisioning uses Kubernetes Jobs; retired ECS injection and EC2 restart instructions do not apply.
 
-1. Regenerate the value and re-seed the secret with one Terraform apply:
+Before rotation, confirm the selected portal root, secret reference, DC image, and all live range dependencies.
+Obtain the platform and range owners' approval for the maintenance window.
+A prebaked DC image and its runtime secret must use the same domain Administrator password.
+
+1. In the selected portal root, save a private plan that replaces `random_password.dc_domain_password`:
+
    ```bash
-   terraform apply -replace='module.engine_provisioner.random_password.dc_domain_password'
+   umask 077
+   ROTATION_PLAN=/absolute/private/directory/rotation.tfplan
+   terraform plan -replace='random_password.dc_domain_password' -out="$ROTATION_PLAN"
    ```
-   (Terraform regenerates `random_password.dc_domain_password` and updates
-   `aws_secretsmanager_secret_version.dc_domain_password`.)
-2. Restart the portal containers so the new value is loaded:
-   ```bash
-   docker restart portal worker-engine worker-cms worker-mc ctf-scheduler
-   ```
-   (or terminate the portal EC2 and let the ASG relaunch).
-3. Re-provision any ranges whose DC was promoted with the old value so the live
-   domain credential matches the secret again; existing ranges keep the old
-   password until they are re-provisioned. No engine provisioner task-definition
-   redeploy is required; the next ECS task launch reads the rotated value.
+
+2. Review and apply that exact plan through the authorized infrastructure procedure.
+   The plan contains secret values. Restrict its access and remove it after the approved retention period.
+3. Redeploy the application through the EKS lifecycle to refresh long-running consumers.
+4. Rebuild or replace the DC image as required to match the new credential.
+5. Re-provision affected ranges through their lifecycle service and verify domain join and cleanup.
+
+Retain prior secret versions and image identities until recovery is verified.
+Restoring only the secret does not restore a DC that already changed its password.
+Do not print values, restart arbitrary containers, or terminate an EC2 instance to refresh an EKS deployment.
 
 ### GitHub OIDC Role
-Role ARN doesn't change. Trust policy updates are in `platform/terraform/global/iam/`.
+Role ARN does not change. Trust policy updates are in `platform/terraform/global/iam/`.
 
 ### GCP Workload Identity Federation
 The provider resource and target service account stay stable. Rotate or tighten

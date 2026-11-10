@@ -1,21 +1,25 @@
 # GitHub-less GCP deployment
 
 Applicability: GCP deployments that use the GitHub-less deploy path (ADR-070).
-Operator: platform owner. Verified against the repository: 2026-10-29.
+Operator: platform owner. Source reviewed: 2026-11-09 at revision `5954ab137`.
+This review did not execute a live deployment.
 
-This guide stands up, updates, and tears down a GCP deployment from a
-published release. The deployment needs no GitHub access, no GitHub
-Environment, no self-hosted runner, and no repository checkout. The commands
-are in `scripts/bootstrap/deploy.py`, and the deployer image of each release
-holds them. The design is in
-`docs/architecture/github-less-gcp-deployment-design-2571.md`.
+Use these how-to procedures to install, update, and remove a GCP deployment from a verified release.
+Start a new installation with [Install on Google Cloud](../../getting-started/install-gcp.md).
+The deployment needs no GitHub access, GitHub Environment, self-hosted runner, or repository checkout.
+The deployer image contains `scripts/bootstrap/deploy.py` and the release's tools.
+
+Releases through v4.1.1 do not contain the deployer image.
+Use a later approved release that contains it.
+See the [deployment compatibility reference](../platform_infrastructure/deployment-compatibility.md) for source, release, and contributor-path limits.
 
 An operator installs with one bundle and one command, `gcp-install`
 ([Install](#install)), and updates with `gcp-deploy`
 ([Update and roll back](#update-and-roll-back)).
 
-A CI deployment (`deploy.yml` with `_gcp-dev.yml`) runs the same commands. Its
-GitHub inputs are in [deploy-secrets.md](../../dev/deploy-secrets.md#gcp-gcp-dev).
+The retained CI adapter (`_gcp-dev.yml`) uses the same commands.
+`deploy.yml` currently has no selectable GCP target.
+Contributor GitHub inputs are in [deploy-secrets.md](../../dev/deploy-secrets.md#gcp-gcp-dev).
 When a command fails, use [RB023](../../runbooks/rb023-gcp-deployment.md).
 
 ## Terms
@@ -50,8 +54,8 @@ When a command fails, use [RB023](../../runbooks/rb023-gcp-deployment.md).
    impersonate the purpose identities.
 
    ```bash
-   gcloud auth login
-   gcloud auth application-default login
+   gcloud auth login <operator-email> --no-activate
+   gcloud auth application-default login <operator-email>
    ```
 
 6. Use the deployer image of the release
@@ -72,6 +76,12 @@ When a command fails, use [RB023](../../runbooks/rb023-gcp-deployment.md).
 The foundation needs project administration rights. `gcp-images` runs as your
 own identity: it creates Compute Engine images and a temporary transfer bucket
 in the project.
+
+Pin the operator with `CLOUDSDK_CORE_ACCOUNT` in each command or container environment.
+Application Default Credentials replace the host's existing ADC when you sign in.
+Confirm project administration, DNS authority, quota, billing, and the maintenance window before making changes.
+Installation creates billable compute, databases, networking, storage, and images.
+The evidence bucket has locked 90-day retention; its objects cannot be removed before retention ends.
 
 ## Publish a release
 
@@ -117,7 +127,7 @@ A developer builds the guest images in a build project and publishes them to
 names the newest publication of each role whose provenance verifies, and the
 release manifest carries the authorization model that each deploy publishes. A
 release stops when a guest image is missing or does not verify. The
-[guest image design](../../architecture/gcp-guest-images.md) describes the build
+[guest image design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md) describes the build
 project and the pipeline.
 
 ## Get and verify the deployer image
@@ -166,6 +176,20 @@ The deployer image sets `BIGRAE_RELEASE_MANIFEST` and
 `BIGRAE_SOURCE_REVISION`. The command uses that manifest by default. It also
 checks that its own revision equals the manifest revision. A checkout must be a
 clean checkout of that revision; otherwise the command stops.
+
+A test deployment can run deploy tooling that is not the release revision
+(#2689). Use this to test a deploy-script change without a new release build.
+
+1. Set `deployment_tier: test` in the `settings` block of `bigrae.yaml`.
+2. Commit the change to the tooling. The command refuses local changes.
+3. Run `gcp-deploy` from that checkout with `--allow-unreleased-tooling`.
+
+The command refuses the flag for a production deployment and for a CI run
+(`--identity ambient`). Before any change, it stores `tooling-override.json`
+in the release-evidence bucket, under
+`deployments/<release-revision>/<run-id>/<attempt>/`. The record holds the
+release revision and the tooling revision. The release images still get the
+same provenance check and scan.
 
 `gcp-deploy` verifies the provenance of the five control-plane images before
 the rollout. That check binds each image to the repository ID, the owner ID,
@@ -314,9 +338,7 @@ principals can read it.
 
 ## Create the initial secrets
 
-The platform Terraform creates and fills the runtime secrets: the Django key,
-the database credentials, the Guacamole keys, the Redis credentials, and the
-domain controller password. The deploy generates the OpenFGA credentials.
+Platform Terraform creates and fills the Django, database, Guacamole, Redis, and domain-controller runtime secrets. The deploy generates the OpenFGA credentials.
 `gcp-install` creates the first operator password in
 `shifter-<environment>-operator-password` when
 `settings.operator_bootstrap.admin_password_secret_ref` is not set. To supply
@@ -392,10 +414,11 @@ Other inputs that refer to secrets:
    | `participant_openvpn.enabled` | Deploys the shared participant OpenVPN pool. The default is `false`. |
    | `ctf_content_bucket` | The private CTF content bucket, when the app secret carries CTF content references. |
    | `operator_bootstrap` | The first operator and the first administrator. `gcp-deploy` requires this block. `enabled` defaults to `true` and then requires `admin_email`. `admin_password_secret_ref` defaults to the secret that `gcp-install` creates. |
-   | `openfga` | Optional. Leave it unset: the deploy generates the credentials and publishes the release model. To pin your own, set all three `*_secret_ref` values, and optionally `store_id` and `model_id`. |
-   | `cloud_sql_iam_auth` | Native SQL login. It defaults to `true`, which the current release requires. |
+   | `openfga` | Optional override block. The deploy always configures OpenFGA. Leave unset for generated credentials and the release model. For overrides, set all three `*_secret_ref` values; `store_id` and `model_id` are optional. |
+   | `cloud_sql_iam_auth` | Native SQL login. It defaults to `true`, which the current source requires. |
    | `post_deploy_smoke.user_email` | The portal account that owns the smoke range. The smoke creates the account when it does not exist. An empty value skips the smoke. |
    | `release_trust` | The numeric repository ID and owner ID of the repository that publishes the release. |
+   | `deployment_tier` | `production` (the default) or `test`. Only a `test` deployment accepts `gcp-deploy --allow-unreleased-tooling`. |
 
    The operator email must use the domain in `identity_allowed_email_domain`.
    For a release from `OpenRAE/bigrae`, the release trust IDs are
@@ -445,10 +468,7 @@ Other inputs that refer to secrets:
    ```
 
 8. The deploy imports the guest images that the release names when the bundle
-   has no `range-images.json` roles. To import them before the deploy, or to
-   replace the recorded images with the images of a newer release, run the
-   command from the deployer image of the release, or pass
-   `--release-manifest <file>`:
+   has no `range-images.json` roles. To import images before deployment or replace recorded images, select the required release. Run its deployer image, or pass `--release-manifest <file>`:
 
    ```bash
    ./scripts/bootstrap/deploy.py gcp-images --project-id <project> \
@@ -514,10 +534,7 @@ A database with users needs the reviewed legacy conversion facts. Pass them
 with `--identity-cutover-facts` and `--identity-bootstrap-facts`. See
 [native identity operations](../../ops/gcp-native-identity.md).
 
-After activation, the deploy registers the release's in-box catalog as the
-bootstrap administrator: it issues a credential that holds only the
-installation content actions, lasts 15 minutes, and is revoked after the
-registration. When the configured operator is not the bootstrap administrator,
+After activation, the deploy registers the release's in-box catalog as the bootstrap administrator. Its credential permits only installation content actions. It lasts 15 minutes and is revoked after registration. When the configured operator is not the bootstrap administrator,
 or the registration fails, the deploy completes with a warning. Then sign in,
 issue a content credential, and run the deploy again with
 `--catalog-credential-file <private 0600 file>`.
@@ -536,8 +553,10 @@ issue a content credential, and run the deploy again with
    The deploy publishes the release's authorization model, re-binds the
    application to it, and registers new in-box packs.
 
-To roll back, deploy the deployer image of an earlier verified release. Do not
-retag an image.
+To roll back application code, select an earlier verified release only when its schema remains compatible.
+Do not retag an image.
+Atomic Helm rollback does not reverse database, identity, policy, or Terraform changes.
+Use [RB015](../../runbooks/rb015-database-migrations.md) before rollback that needs data recovery.
 
 ## What the deploy does
 
@@ -545,13 +564,13 @@ The command runs these stages in order:
 
 | Stage | Identity | Steps |
 | --- | --- | --- |
-| Inputs | Your identity, then deploy | Load and validate the bundle, check the tooling revision, verify the provenance of the release images, import the release's base range images when the bundle has none, and take the lock. |
-| Infrastructure | Deploy | Initialize Identity Platform, harden the state bucket, remove project bindings to deleted custom roles, apply Terraform, rewrite the live bucket objects with the bucket keys, verify range audit telemetry, and seed the provider account without an application grant. |
+| Inputs | Your identity, then deploy | Load and validate the bundle. Check the tooling revision and release-image provenance. Import release base images when the bundle has none. Take the lock. |
+| Infrastructure | Deploy | Initialize Identity Platform and harden the state bucket. Remove bindings to deleted custom roles. Apply Terraform and rewrite live bucket objects with their keys. Verify range audit telemetry. Seed the provider account without an application grant. |
 | Preconditions | Deploy | Check the GCE range inputs and images. |
 | Images | Deploy | Copy each release image and its attestations into the deployment registry by digest. |
 | Scan | Release scan | Scan each exact digest with Trivy for HIGH and CRITICAL findings. |
 | Verify | Deploy | Verify the provenance of each image. There is no bypass. |
-| Rollout | Deploy | Create the OpenFGA credentials on first use, reconcile the SQL duties, probe and drain when required, migrate storage, publish the release's authorization model, verify native activation, restore the Helm release, wait for readiness, roll out the OpenVPN pool, record the running images, and wait for the ingress and certificate. |
+| Rollout | Deploy | Create initial OpenFGA credentials and reconcile SQL duties. Probe and drain when required. Migrate storage and publish the release model. Verify native activation. Restore Helm and wait for readiness. Roll out OpenVPN, record running images, and wait for ingress and certificate. |
 | Catalog | Bootstrap administrator, or a supplied native credential | Register the in-box catalog after readiness through ordinary registration, conformance and publication. A failure leaves catalog work pending with a warning; the application stays active. |
 | Smoke | Deploy | Run the advisory range smoke. |
 
@@ -578,6 +597,11 @@ Add `--no-smoke` to skip the smoke. Run the smoke alone with:
 ```bash
 ./scripts/bootstrap/deploy.py gcp-smoke --store gs://<bucket>
 ```
+
+The smoke creates billable range resources and requests their teardown.
+An empty smoke email also skips the check.
+A skipped smoke does not qualify the deployment.
+Confirm terminal range state, absent provider resources, and removal of the temporary smoke Job and identity Secret.
 
 ## Evidence
 
@@ -618,10 +642,7 @@ command fails while the lock exists and names the holder.
    ```
 
 The destroy runs as the destroy identity. It first verifies that the tooling
-revision equals the release revision and that the release images verify. It
-then takes the lock, lifts the Cloud SQL deletion protection, removes the
-permanent KMS key rings and keys from the state, and runs `terraform destroy`
-with bounded retries.
+revision equals the release revision and that the release images verify. It then takes the lock and lifts Cloud SQL deletion protection. It removes permanent KMS key rings and keys from state. It runs `terraform destroy` with bounded retries.
 
 These items stay after a teardown:
 
@@ -633,10 +654,15 @@ These items stay after a teardown:
 - the resources that Terraform does not own, for example the operator password
   secret and the imported range guest images.
 
+Generated OpenFGA secrets are also retained outside the platform Terraform state.
+Retained resources can continue to incur costs.
+Teardown does not remove the Google Cloud project or bypass retention locks.
+For failure, use [RB023](../../runbooks/rb023-gcp-deployment.md), then rerun the same release command after correcting the cause.
+
 ## Bucket encryption keys
 
 Each Terraform-owned bucket uses a customer-managed Cloud KMS key. The
-[GCS CMEK design](../../architecture/gcp-gcs-cmek-design-2564.md) gives the
+[GCS CMEK design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-gcs-cmek-design-2564.md) gives the
 architecture.
 
 | Key ring | Location | Keys | Owner |

@@ -3,6 +3,8 @@
 Applicability: every deployed portal; GCP primary. Operator: platform owner with
 the security lead. Verified: 2026-10-27.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A portal page loads, but a script, style, connection, or terminal feature does
@@ -69,6 +71,4 @@ and `make test-platform-a11y` for frontend and template changes. Exercise the
 deployed identity provider, MFA and terminal paths after a release that changes
 them. Keep the policy code-owned in `config/_browser_security.py`.
 
-Escalate when the blocked source is unknown, the violation comes from content a
-participant or author controls, the rollback would last past one release, or the
-identity provider changes its browser origins.
+Escalate unknown sources or violations from participant-controlled or author-controlled content. Also escalate rollback beyond one release or identity-provider browser-origin changes.

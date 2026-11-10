@@ -4,12 +4,15 @@ BigRAE runs authorized cyber-range exercises through one application control
 plane and separately isolated guest workloads. Start here for the current
 architecture; subsystem guides provide detail.
 
+The [supported interface reference](../reference/interfaces.md) maps native routes, SDK exports, commands, and schemas to their maintained sources.
+Its documentation correction preserves the runtime boundaries described here.
+
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
 
-**Reviewed:** 2026-11-04 for native provider account lookup (#2771) and
-registered-project IAM policy requests (#2773), after the one-command GCP
-install (#2679).
+**Source review:** 2026-11-09 at `5954ab13763deaba52a257d4ed8bde5bb1402ea6`.
+This explanation describes source boundaries, not live deployment qualification.
+The 2026-11-04 review covered native provider account lookup (#2771) and registered-project IAM requests (#2773), after one-command GCP installation (#2679).
 
 Portal and deployer images install dependencies during the build and remove
 `pip` and its vendored libraries from the runtime image. The shared deployment
@@ -27,18 +30,29 @@ Deployment inventory, including background workers and optional broker clients.
 BigRAE is the current product name. Public BigRAE config, SDK, client and plugin
 names converge on their existing validation and execution owners; legacy names
 remain compatible. Conflicting old/new configuration fails before use. The
-[identifier ledger](../architecture/bigrae-rename-inventory.md) distinguishes
+[identifier ledger](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/bigrae-rename-inventory.md) distinguishes
 branding from persisted, wire and infrastructure identity, and the
 [cutover procedure](../how-to/bigrae-rename-cutover.md) verifies GitHub repository
-configuration and future-deployment templates. Existing deployments require their own verified trust and workload migration. Plugin jobs
+configuration and future-deployment templates.
+
+Existing deployments require their own verified trust and workload migration.
+Plugin jobs
 remain isolated and receive one Secret-backed invocation input under either
-exact supported name. The source preparation does not change deployed resource
+exact supported name.
+
+The source preparation does not change deployed resource
 names, authorization, internal imports, historical provenance or metric identity.
 The [identity and lifecycle contracts](shifter_platform/identity-lifecycle-contracts.md)
 define the DFDs, state transitions, failure recovery and lock order.
 The S8 proposal records integration corrections and verification limits.
 
 ## System context and trust boundaries
+
+The diagram shows browser, identity, control-plane, worker, guest, and access boundaries.
+Browsers request authorized actions through the application.
+Workers dispatch immutable operations; guests remain untrusted.
+Remote-access services reach only authorized targets.
+
 
 ```mermaid
 flowchart LR
@@ -63,35 +77,44 @@ Cloud IAM grants workload/provider authority, independently of application roles
 `management` owns human/service identity; `workspaces` owns customer ancestry
 and membership. CMS owns content and desired lifecycle; Engine owns realized
 resources and operation state. CTF adds event and participant authority through
-CMS services. Event membership, organization/workspace membership, range
+CMS services.
+
+Event membership, organization/workspace membership, range
 ownership, application administration and cloud administration remain distinct.
 
 Disposable trial workers reuse Engine's native lifecycle and capacity ledger.
-Only the provisioner reads host-management keys and runs the fixed bounded SSH
-probe; the shared result/member parsers validate the closed observation shape.
+Only the provisioner reads host-management keys and runs the fixed bounded SSH probe.
+The shared result/member parsers validate the closed observation shape.
 Engine validates credential-free host observations against the accepted
-operation, generation, membership, apparatus profile and freshness. Numeric VM
+operation, generation, membership, apparatus profile and freshness.
+
+Numeric VM
 identity comes from authenticated provider readback. PostgreSQL prevents reuse of
-VM, machine or Docker identity. The portal's participant-secret grant stays
+VM, machine or Docker identity.
+
+The portal's participant-secret grant stays
 unchanged; no additional identity or Job type is needed. The
 [worker guide](shifter_platform/disposable-workers.md) describes holds, exact
 cleanup and the migration that retires the old management-reference projection.
 
 [ADR-066](../adr/066-account-principal-resource-scope.md) defines Accounts,
 independent Principals and explicit ResourceScope. Issue #2321 implements S8 as
-one coordinated hard cut: referenced credentials and the pinned OpenFGA model
-become mandatory, retained SQL state is converted through owning-domain service
-facades, and runtime admission remains closed until the cutover journal reaches
-its verified terminal state. There is no legacy authorization fallback or mixed
-runtime mode. The one-time converter preserves stable resource identifiers,
-stops on ambiguous ownership/provider facts, verifies relationship readback,
-bootstraps one exact provider-bound administrator, and invalidates pre-cutover
-sessions and API tokens before activation. On an empty database, a preparation
+one coordinated hard cut. Referenced credentials and the pinned OpenFGA model become mandatory.
+Owning-domain service facades convert retained SQL state.
+Runtime admission stays closed until the cutover journal reaches its verified terminal state. There is no legacy authorization fallback or mixed runtime mode.
+
+The one-time converter preserves stable resource identifiers and stops on ambiguous ownership or provider facts.
+It verifies relationship readback and bootstraps one exact provider-bound administrator.
+It invalidates pre-cutover sessions and API tokens before activation.
+
+On an empty database, a preparation
 step before the plan creates that administrator's user, principal, and provider
 binding from the bootstrap facts (#2671). It creates nothing when any user
 already exists. Human login resolves that exact native provider binding before
 legacy profile fields, so the first administrator keeps its original account,
-principal and grants (#2771). Account and principal lifecycle checks still apply.
+principal and grants (#2771).
+Account and principal lifecycle checks still apply.
+
 Repository and clean/legacy fixture evidence alone does not establish live-cloud
 acceptance.
 [Content/range authority](shifter_platform/content-range-authority.md) and
@@ -101,29 +124,36 @@ it is not the current target for all installations.
 
 Workspaces persists each new hierarchy parent edge before policy publication.
 Its bounded recovery command resumes the recorded intent without rebuilding
-objects. Integration discovery uses exact organization or installation actions
+objects.
+
+Integration discovery uses exact organization or installation actions
 and credential ceilings, independently of parent account-read permission.
+
 Management translates principal ownership into the stable user-selector
-references that Engine invalidates when a range moves. CTF keeps new events
+references that Engine invalidates when a range moves.
+
+CTF keeps new events
 unavailable until their recorded model/content initialization commits; recovery
 revalidates the original credential and pinned content before completing it.
 Permanent event deletion commits native cleanup for each retained range before
-removing its aggregate records. Failed cleanup admission preserves those records.
+removing its aggregate records.
+
+Failed cleanup admission preserves those records.
 
 Participant recovery also submits failed old ranges to authorized native cleanup
 (#2783). A failed status does not prove that resources or project reservations
 are absent. Verified native cleanup controls reservation release.
-Owner-handoff recovery can read back its exact admitted revoke after the source
-loses administrative authority; it requires the original live credential and
-does not replay a provider write.
+Owner-handoff recovery can read back its exact admitted revoke after the source loses administrative authority.
+It requires the original live credential and does not replay a provider write.
 
 CMS validates the complete event owner/action/target tuple before reserving a
 launch; non-event sources reject those fields. Engine separates current policy
 admission from local credential, ancestry and generation checks. Prepared first
 dispatch and replay lock ancestry before the native range, then recheck exact
 membership, custody and the retained creation receipt under the final locks.
-The domain authority boundaries remain stable while focused modules own policy reads, durable
-receipts, locked projections and cleanup. See the lifecycle contracts for their
+The domain authority boundaries remain stable.
+Focused modules own policy reads, durable receipts, locked projections, and cleanup.
+See the lifecycle contracts for their
 module responsibilities and recovery invariants.
 
 Private content images follow the same native policy boundary. Staff collection
@@ -136,45 +166,60 @@ protected image responses after permission changes.
 
 | Process or workload | Owner and responsibility |
 | --- | --- |
-| Django ASGI web and React SPA | `config` composes HTTP/WebSocket routes; domain APIs and Mission Control serve the application from one origin. |
-| Domain workers | CMS, Engine and Mission Control consume cloud subscriptions and update their own projections. |
-| Schedulers and reconcilers | CTF scheduling, leases, launch delivery, result application and event-outbox delivery run as separate worker commands. The CTF communication worker delivers ledger messages to participants and to event organizers (ADR-065-R4). |
-| Provisioner Jobs | Independently packaged `shifter/engine/provisioner`; exact image, service account and namespace binding; provider effects and guest readback. |
-| Plugin/preparation Jobs | Explicitly installed, isolated executable images; separate administrator grants and pinned worker/verifier identities. |
-| Guacamole and guacd | Remote-access services; BigRAE authorizes the exact target/session and continuing access. Guacamole has separate database credentials. |
-| Optional access services | Deployment-selected VPN and other integrations have their own identities and support conditions. |
-| Content egress proxy | Credential-less CONNECT proxy; the only platform pod with public HTTPS egress. The CTF scheduler copies organizer images and the portal sends CTF webhooks through it. |
+| Django ASGI web and React SPA | `config` composes HTTP/WebSocket routes; domain APIs and Mission Control serve the application from one origin |
+| Domain workers | CMS, Engine and Mission Control consume cloud subscriptions and update their own projections |
+| Schedulers and reconcilers | CTF scheduling, leases, launch delivery, result application and event-outbox delivery run as separate worker commands. The CTF communication worker delivers ledger messages to participants and to event organizers (ADR-065-R4) |
+| Provisioner Jobs | Independently packaged `shifter/engine/provisioner`; exact image, service account and namespace binding; provider effects and guest readback |
+| Plugin/preparation Jobs | Explicitly installed, isolated executable images; separate administrator grants and pinned worker/verifier identities |
+| Guacamole and guacd | Remote-access services; BigRAE authorizes the exact target/session and continuing access. Guacamole has separate database credentials |
+| Optional access services | Deployment-selected VPN and other integrations have their own identities and support conditions |
+| Content egress proxy | Credential-less CONNECT proxy; the only platform pod with public HTTPS egress. The CTF scheduler copies organizer images and the portal sends CTF webhooks through it |
 
 The canonical control-plane package is the shared Helm chart, hosted on GKE for
 GCP or EKS for AWS. Provisioner Jobs use the selected cluster; CI runner placement
 is a separate concern. Older ECS files do not define the current AWS package.
+
 The AWS bundle owns the Terraform modules and environments under
 `platform/terraform`. Vendor connector templates are not part of the package.
+
 GCP uses one Terraform execution root with separate environment values and state metadata.
+
 See [deployment configuration](../dev/deployment-configuration.md) for selection and recovery.
 A GCP deployment runs from a published release. Operators use the
 `deploy.py gcp-deploy` command, which reads the deployment input bundle from the
-deployment config bucket or a local directory. Secret values stay in Secret
+deployment config bucket or a local directory.
+
+Secret values stay in Secret
 Manager (ADR-070, [GitHub-less GCP deployment guide](handbook/gcp-github-less-deployment.md)).
+
 A release also names one signed guest image for each published range role.
 A developer builds and validates those images in a build project that they
-supply. Each release takes the newest verified publication of each role, and
+supply.
+
+Each release takes the newest verified publication of each role, and
 the deploy imports the release guests after it verifies them
-([GCP guest images](../architecture/gcp-guest-images.md), #2668). Keep platform
-hosting separate from the range guest backend. Each Terraform-owned GCS bucket
+([GCP guest images](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md), #2668). Keep platform hosting separate from the range guest backend.
+
+Each Terraform-owned GCS bucket
 uses a customer-managed key in its location, and the owner command rewrites the
-live objects with that key (ADR-008-R5, [GCS CMEK](../architecture/gcp-gcs-cmek-design-2564.md)).
+live objects with that key (ADR-008-R5, [GCS CMEK](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-gcs-cmek-design-2564.md)).
 `gcp-destroy` keeps the Artifact Registry and platform bucket key rings and keys,
-which GCP can not delete. A later install adopts them with import blocks. The range network peers with the platform network after the
-Service Networking connection, because GCP runs one peering operation for each
-network at a time (#2643). `deploy.py gcp-install` installs a tenant from a
+which GCP cannot delete. A later install adopts them with import blocks.
+
+The range network peers with the platform network after the Service Networking connection.
+GCP runs one peering operation for each network at a time (#2643). `deploy.py gcp-install` installs a tenant from a
 release and one bundle with no checkout (#2679). The release manifest pins the
-base range images and carries the OpenFGA authorization model. The first deploy
+base range images and carries the OpenFGA authorization model.
+
+The first deploy
 generates the OpenFGA credentials, publishes the model, and creates the first
 administrator from the configured operator account. A tenant platform creates no
 image-build infrastructure; only maintainer build environments opt in.
+
 After each rollout, the deploy checks the image of every running platform
-container (#2698). Release containers must run the release images. The OpenFGA
+container (#2698).
+
+Release containers must run the release images. The OpenFGA
 servers and the Cloud SQL proxy sidecars must run the images that the release
 chart pins.
 
@@ -222,15 +267,22 @@ storage first; see the [CSP enforcement design](https://github.com/Brad-Edwards/
 
 ADR-056 defines provider-enforced guest containment. ADR-057 separates GKE
 Dataplane V2 NetworkPolicy reachability, Google Workload Identity, Job admission,
-and application authorization. The Helm chart renders the NetworkPolicies. Each
+and application authorization. The Helm chart renders the NetworkPolicies.
+
+Each
 BigRAE namespace denies traffic by default, and explicit policies allow each
 required path, for example the portal to the in-cluster Guacamole token API.
+
 The session cleanup worker also needs that API to close expired native sessions.
 Its separate ingress and egress rules permit only gateway pods in the same
-namespace on TCP 8080. Other workers gain no gateway access. See the
-[session cleanup network design](../architecture/session-cleanup-network-2837.md).
+namespace on TCP 8080. Other workers gain no gateway access.
+
+See the
+[session cleanup network design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/session-cleanup-network-2837.md).
 These controls do not provide authenticated
-pod-to-pod mTLS; a service mesh remains unadopted. No documentation or unit-test
+pod-to-pod mTLS; a service mesh remains unadopted.
+
+No documentation or unit-test
 result proves complete escape detection or live containment qualification.
 
 On GCP, the external Application Load Balancer reaches the portal and Guacamole
@@ -243,28 +295,38 @@ The portal's WebSocket opening deadline is 30 seconds, including access checks
 and SSH setup. The gateway authority HTTP read deadline is 10 seconds, which
 allows the portal's bounded Google certificate lookup and range authorization.
 The enclosing gateway token exchange has a 30-second HTTP deadline.
+
 These transport deadlines retain the existing identity checks, keepalive and
 authority lease expiry.
+
 Terminal session and range checks have a finite 15-second budget, including
 serialized validation work. Other socket routes keep their five-second budget.
+
 Checks still run before opening, input, and protected output; timeout and denial
-close the socket. See the [terminal authority design](../architecture/terminal-authority-budget-2818.md).
+close the socket. See the [terminal authority design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/terminal-authority-budget-2818.md).
 
 Control-plane workloads run as the non-root runtime identity UID 10001, with a
 read-only root filesystem, dropped capabilities, and the `RuntimeDefault` seccomp
 profile. The admission policies pin that identity for the provisioner,
 preparation, and acquisition Jobs. The Cloud SQL proxy keeps its own 65532
-identity. The provisioner Job policy inlines the platform-runtime values as its
+identity.
+
+The provisioner Job policy inlines the platform-runtime values as its
 parameters, because GKE 1.36 and EKS do not resolve ConfigMap parameters (#2633).
 The repository tests render deployment-owned runtime values into each supported
 policy form, then evaluate the unchanged CEL against valid and tampered Jobs.
-The expected configuration is independent of the submitted Job. The inline map
+The expected configuration is independent of the submitted Job.
+
+The inline map
 must equal the runtime ConfigMap; the optional parameter reference must retain
-its namespace and deny-on-missing behavior. Tests cover both delivery forms,
+its namespace and deny-on-missing behavior.
+
+Tests cover both delivery forms,
 image-pin changes and native database sidecar restrictions. These Python CEL
 checks follow the [Kubernetes parameter and variable contracts](https://kubernetes.io/docs/reference/access-authn-authz/validating-admission-policy/).
-They do not prove that a policy compiles on the Kubernetes API server. Kubernetes Checkov is a blocking gate for the rendered Helm chart of
-each supported values file. A scoped waiver uses a chart template annotation
+They do not prove that a policy compiles on the Kubernetes API server.
+
+Kubernetes Checkov is a blocking gate for the rendered Helm chart of each supported values file. A scoped waiver uses a chart template annotation
 with a matching `docs/adr/exceptions.yaml` entry (ADR-004-R11).
 
 The model-access broker is **parked and unsupported** under
@@ -273,6 +335,11 @@ settings disabled. Keyless-direct is the supported guest model path; a proposed
 gateway does not provide current budget enforcement or proxy guarantees.
 
 ## Commands, results and events
+
+The sequence shows a client request entering CMS, Engine reserving an operation, and a provisioner returning results.
+Engine validates those results before applying state and publishing events.
+Workers expose authorized projections to clients.
+
 
 ```mermaid
 sequenceDiagram
@@ -325,29 +392,32 @@ The AWS EKS root reads the portal Redis posture from SSM Parameter Store. AWS
 turns the capability on only when that posture names a shared Redis host. Each CTF
 event selects its live notification kinds, so an event that selects none does no
 work. The `notification-prune` CronJob deletes expired notification rows in
-bounded batches (ADR-072, [live notifications design](../architecture/ctf-live-notifications-design-665.md)).
+bounded batches (ADR-072, [live notifications design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-live-notifications-design-665.md)).
 
 ## Data ownership and recovery
 
 | Store | Authority, access and recovery owner |
 | --- | --- |
-| Application PostgreSQL | Domain-owned business rows; Engine immutable inputs, append-only results and outbox; `shared.audit` owns durable audit. Domain services/migrations own writes and grants; operators own backups/restores. |
-| Guacamole PostgreSQL | Remote-access service data, independently credentialed; restore must agree with application/access bindings. |
-| Object storage | Validated assets and immutable digest-bound packs/artifacts. Owning content services control admission and access; operators control storage retention. |
-| Redis | Cache, channels and coordination; not durable range or permission truth. |
-| Topics/subscriptions/queues | At-least-once event transport and delivery backlog; workers deduplicate and reconcile against durable state. |
-| Cloud secret stores | Workload-scoped secret material and persisted references; application/runtime owners enforce audience and lifecycle, operators own rotation. Never use guest access as a management credential. |
-| Terraform state | Infrastructure ownership and recovery inputs; privileged operator data, separate from application operation truth. |
+| Application PostgreSQL | Domain-owned business rows; Engine immutable inputs, append-only results and outbox; `shared.audit` owns durable audit; domain services/migrations own writes and grants; operators own backups/restores |
+| Guacamole PostgreSQL | Remote-access service data, independently credentialed; restore must agree with application/access bindings |
+| Object storage | Validated assets and immutable digest-bound packs/artifacts. Owning content services control admission and access; operators control storage retention |
+| Redis | Cache, channels and coordination; not durable range or permission truth |
+| Topics/subscriptions/queues | At-least-once event transport and delivery backlog; workers deduplicate and reconcile against durable state |
+| Cloud secret stores | Workload-scoped secret material and persisted references; application/runtime owners enforce audience and lifecycle, operators own rotation. Never use guest access as a management credential |
+| Terraform state | Infrastructure ownership and recovery inputs; privileged operator data, separate from application operation truth |
 
 Use request/operation/generation identifiers for correlation. The portal keeps a
 client `X-Request-ID` only when it is a token of 64 or fewer safe characters, and
 replaces any other value. Audit attribution trusts only the load balancer's own
 `X-Forwarded-For` hops: one on the AWS ALB and two on the GCP external Application
-Load Balancer (`AUDIT_TRUSTED_PROXY_HOPS`, set by the GCP runtime renderer). Existing structured
+Load Balancer (`AUDIT_TRUSTED_PROXY_HOPS`, set by the GCP runtime renderer).
+
+Existing structured
 logging and sanitized error builders exclude raw provider responses, credentials,
 signed URLs and private scenario material. Audit evidence is not a work queue.
 Engine capacity decisions use the shared capacity-assessment audit vocabulary
 and the same validated, append-only store as other administrative events.
+
 Backup existence is not evidence of a successful restore rehearsal.
 
 ### Disposable VM workers
@@ -355,18 +425,27 @@ Backup existence is not evidence of a successful restore rehearsal.
 Engine owns disposable VM workers through its native range lifecycle.
 Account-scoped worker identities use Engine's SQL ancestry through the composition root.
 Worker and CMS public identities cannot overlap.
+
 Each worker retains one apparatus profile, one experiment reference, and at most one trial reference.
+
 Global count limits and enforcing capacity draws precede durable launch.
 Active worker draws survive capacity-window expiry until exact-generation provider absence.
+
 Ready workers can carry caller-owned evidence holds that fence native destructive admission and dispatch.
 Overdue holds and exhausted cleanup retain tracked custody for explicit operator recovery.
+
 Optional installed software uses the existing isolated adapter machinery with explicit apparatus identity.
+
 The generic management probe requires no experiment runtime.
 Native result validation preserves guest count limits, unique identities, and the separate private management boundary.
+
 Engine's qualification command selects the recorded bootstrap administrator through exact private facts.
+
 Management issues short-lived native credentials for fixed actions and exact targets, then revokes them on exit.
 The command creates no identity or policy grant and preserves ordinary scope, membership and authorization checks.
+
 The apparatus pins the numeric provider image identity and a capacity partition that matches deployment placement.
+
 Linux image capture clears machine and Docker identities before independent workers boot.
 See [disposable workers](shifter_platform/disposable-workers.md) for contracts, data flows, controls, and references.
 
@@ -378,20 +457,20 @@ backed by `.importlinter` and model-boundary checks. The following is its reader
 
 | Package/root | Owns | Supported dependency seam |
 | --- | --- | --- |
-| `mission_control` and `frontend` | Presentation and browser state | Owning public API/services; CMS lifecycle; only allowlisted Engine terminal/access functions. |
-| `cms` | Catalog, assets, authored scenarios, desired lifecycle | `cms.services`; Engine/Management/Workspaces public facades and shared contracts. |
-| `engine` | Realized ranges, dispatch, operation/result application | `engine.services`; shared contracts and allowed Management/Workspaces facades. |
-| `ctf` | Events, participants, challenges, scoring, scheduling | `ctf.services`; CMS lifecycle and allowed identity/tenancy facades. |
-| `management` | Identity, credential and user administration | `management.services`; shared contracts. |
-| `workspaces` | Account/organization/workspace ancestry and membership | `workspaces.services`; shared contracts. |
-| `shared` | Neutral contracts, auth primitives, audit, cloud interfaces | Public contracts; no domain/model imports. Only `shared.raes` imports RAES. |
-| `config` | Settings, provider adapters, root routing, composition | Explicit public composition seams; no domain model imports. |
-| `shifter/engine/provisioner` | Independent provider/guest executor | Versioned immutable inputs/results and standalone plain-data RAES reader; no Django/domain ORM dependency. |
-| `shifter/environment-packs` | BigRAE-owned bootstrap and validation content | Current RAES packs registered through the same CMS validation boundary as external content. |
-| `shifter/installation` | Root config, backend bundles, runtime inventories | Typed bundle validation/rendering; backend selection before mutation. |
-| `shifter/shifter_client` | Native Google service transport | Renewable provider credentials and relative authenticated API calls; no application internals. |
-| `shifter/shifter_adapter_sdk` | Independent adapter ABI | Public verification, runtime and preparation contracts; no application imports. |
-| `mcp/*`, `scripts/*`, `shifter/packer` | Tool clients, operator/build automation and image recipes | Their declared APIs and package dependencies; no alternate business-state owner. |
+| `mission_control` and `frontend` | Presentation and browser state | Owning public API/services; CMS lifecycle; only allowlisted Engine terminal/access functions |
+| `cms` | Catalog, assets, authored scenarios, desired lifecycle | `cms.services`; Engine/Management/Workspaces public facades and shared contracts |
+| `engine` | Realized ranges, dispatch, operation/result application | `engine.services`; shared contracts and allowed Management/Workspaces facades |
+| `ctf` | Events, participants, challenges, scoring, scheduling | `ctf.services`; CMS lifecycle and allowed identity/tenancy facades |
+| `management` | Identity, credential and user administration | `management.services`; shared contracts |
+| `workspaces` | Account/organization/workspace ancestry and membership | `workspaces.services`; shared contracts |
+| `shared` | Neutral contracts, auth primitives, audit, cloud interfaces | Public contracts; no domain/model imports. Only `shared.raes` imports RAES |
+| `config` | Settings, provider adapters, root routing, composition | Explicit public composition seams; no domain model imports |
+| `shifter/engine/provisioner` | Independent provider/guest executor | Versioned immutable inputs/results and standalone plain-data RAES reader; no Django/domain ORM dependency |
+| `shifter/environment-packs` | BigRAE-owned bootstrap and validation content | Current RAES packs registered through the same CMS validation boundary as external content |
+| `shifter/installation` | Root config, backend bundles, runtime inventories | Typed bundle validation/rendering; backend selection before mutation |
+| `shifter/shifter_client` | Native Google service transport | Renewable provider credentials and relative authenticated API calls; no application internals |
+| `shifter/shifter_adapter_sdk` | Independent adapter ABI | Public verification, runtime and preparation contracts; no application imports |
+| `mcp/*`, `scripts/*`, `shifter/packer` | Tool clients, operator/build automation and image recipes | Their declared APIs and package dependencies; no alternate business-state owner |
 
 Cross-domain access uses public service facades and validated scalar identifiers,
 not another app's model or a private split-package module. Concrete per-symbol
@@ -409,7 +488,7 @@ tenancy verification through its own service facade.
 Temporary participants access only their own assigned range through the
 existing event participation permission. Their credentials stay bound to that
 event. Both range owners check live participation, assignment and native custody
-before remote access. See the [participant access design](../architecture/temporary-participant-range-access-2785.md).
+before remote access. See the [participant access design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/temporary-participant-range-access-2785.md).
 
 The versioned application API is `/api/v1/`, composed by `config/api_urls.py`.
 Authenticated `/api/v1/schema/` and `/api/v1/docs/` expose OpenAPI and Swagger;
@@ -427,17 +506,17 @@ a credential failure. Use the API's operation/retry contract where provided.
 
 | Extension | Contract owner and installation boundary |
 | --- | --- |
-| Scenario content | Released RAES environment packs; CMS validates identity, inventory and digest. Authored intent is compiled by `shared.raes`; provisioner consumes the serialized plan without importing RAES. |
-| Runtime adapter | Independent SDK runtime factory, exact distribution/version/entry point and image digest; administrator installation; isolated worker plans actions that the host validates and executes. |
-| Artifact preparation | Independent SDK preparation protocol, separately approved cloud grant and worker/verifier images; independent readback before inventory admission. |
-| Scenario verification | Public verification contracts and explicitly selected installed plugin in a dedicated operator environment; not a portal-startup plugin. |
-| Cloud backend | Installation bundle/runtime inventory and public cloud interfaces; a new backend needs corresponding host support and evidence. |
+| Scenario content | Released RAES environment packs; CMS validates identity, inventory and digest. Authored intent is compiled by `shared.raes`; provisioner consumes the serialized plan without importing RAES |
+| Runtime adapter | Independent SDK runtime factory, exact distribution/version/entry point and image digest; administrator installation; isolated worker plans actions that the host validates and executes |
+| Artifact preparation | Independent SDK preparation protocol, separately approved cloud grant and worker/verifier images; independent readback before inventory admission |
+| Scenario verification | Public verification contracts and explicitly selected installed plugin in a dedicated operator environment; not a portal-startup plugin |
+| Cloud backend | Installation bundle/runtime inventory and public cloud interfaces; a new backend needs corresponding host support and evidence |
 
 See [artifact preparation](../ops/artifact-preparation.md),
 [verification plugins](shifter_platform/scenario-verification.md) and the
 [adapter SDK](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_adapter_sdk/README.md).
 GCE runtime image profiles carry explicit NIC, disk-interface, and Secure Boot choices.
-See [guest hardware profiles](../architecture/gce-guest-hardware-profiles.md).
+See [guest hardware profiles](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gce-guest-hardware-profiles.md).
 Pack content never authorizes executable installation. Private content, adapters,
 image recipes, answers and acceptance evidence stay in their owner's repository.
 A compatibility probe, buildable SDK, or accepted manifest proves neither a
@@ -462,21 +541,24 @@ The worker receives bounded bytes through its own Job-owned immutable Secret,
 mounted read-only at `/run/plugin-inputs`. The aggregate limit is 512 KiB across
 at most 16 inputs. Missing files, revoked authority or changed material prevent
 worker dispatch. File inputs grant no network access or cloud credentials.
-See the [named-file design](../architecture/named-file-assets-2719.md) for the
+See the [named-file design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/named-file-assets-2719.md) for the
 trust boundaries, retention and admission checks.
 
 Adapters declaring `provision.prepare` may propose bounded scalar values and
 literal UTF-8 secret payloads for explicitly declared provisioning concerns.
 SDK 0.2.0 accepts at most 2048 distinct secret payload selections per response.
 Each value is limited to 64 KiB, and the complete clear response remains limited to 512 KiB.
+
 The host checks the original invocation and declared authority before it uses any selection.
+
 Secret payload selection addresses an unbound native version; it cannot replace
 an authored Content reference. Core checks every original RAES
 authority, including overlapping exact constraints, before accepting a result.
+
 The worker encrypts its response with an invocation-specific key; accepted values
 remain encrypted in the existing range binding and invocation projection.
 Provisioning uses an execution-only copy, reports original addresses, and cleanup
-uses the retained selection. See the [pre-provisioning design](../architecture/adapter-pre-provisioning-2718.md)
+uses the retained selection. See the [pre-provisioning design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/adapter-pre-provisioning-2718.md)
 for first-effect, retry and cancellation boundaries.
 
 The 2026-10-28 logging and exception-handling cleanup (#2569) changed only the
@@ -528,22 +610,29 @@ owned by Engine. The portal queues native metadata capture through the existing
 provisioner outbox/input/result boundary; it gains no project IAM client.
 Encrypted baseline metadata stays in the existing private object store, with
 only original bucket/generation and integrity references retained in leases.
+
 PostgreSQL guards enforce exclusive unreleased project use and require current
 applied destroy/restoration evidence before release. The worker lowers admitted
 native cloud declarations to data-only Terraform using the pinned provider.
 State stays encrypted in the existing private bucket under the lease identity.
+
 The GCP IAM module gives only the provisioner prefix-limited baseline creation
 and state object access (#2775). Baseline creation cannot overwrite or delete;
 state access supports replacement and lock removal. Other assets retain their
 existing access rules.
+
 The Terraform validation inventory classifies this runtime root under the
-provisioner's Terraform version with the Google provider family, so CI validates
-its committed provider lock without credentials.
+provisioner's Terraform version with the Google provider family.
+CI validates its committed provider lock without credentials.
+
 Independent inventory and payload readback must match the baseline plus overlay;
-teardown releases custody only after exact baseline restoration. Cloud-only
+teardown releases custody only after exact baseline restoration.
+
+Cloud-only
 nodes retain their native identities without allocating extra guest VMs.
-These routes have local contract and lifecycle checks; live qualification is
-still required. Native provisioning inputs have a 16 MiB transport limit; other
+These routes have local contract and lifecycle checks; live qualification is still required.
+
+Native provisioning inputs have a 16 MiB transport limit; other
 operation inputs retain the existing 256 KiB limit. See the
 [registered-project contract](shifter_platform/registered-gcp-range-projects.md).
 
@@ -559,15 +648,28 @@ Operational claims and worker observations remain separate from scientific input
 The current compiler permits serial execution; configured concurrency grants no provider capacity.
 See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).
 
-Native task observation reads the normal Job resource, which includes its status. It uses the existing Job permission. Completed-task removal retains exact workload identity checks. See [Native Job status reads](../architecture/native-job-status-read-2827.md).
+Native task observation reads the normal Job resource, including its status.
+It uses the existing Job permission.
+Completed-task removal retains exact workload identity checks.
+See [Native Job status reads](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/native-job-status-read-2827.md).
 
-Administrator delegation inventories exclude ranges in the destroying and destroyed states. Engine retains their runtime records and cleanup proofs. Live range ancestry checks and direct binding reads are unchanged. See [Retiring range delegation](../architecture/retiring-range-delegation-2824.md).
+Administrator delegation inventories exclude ranges in the destroying and destroyed states.
+Engine retains their runtime records and cleanup proofs.
+Live range ancestry checks and direct binding reads are unchanged.
+See [Retiring range delegation](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/retiring-range-delegation-2824.md).
 
 A retained cleanup task can be retried after its exact provider workload fails.
 The owning range transaction verifies terminal failure and workload identity, then reserves a fresh operation.
 Unknown or active tasks retain custody. Only verified provider absence releases the target.
-See the [failed cleanup retry design](../architecture/failed-cleanup-retry-2822.md).
+See the [failed cleanup retry design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/failed-cleanup-retry-2822.md).
 
 Ordinary native ranges retain project custody when cleanup inventory is incomplete.
 The existing range reconciler uses the Engine cleanup retry service and its current
-generation checks and delay. See [automatic cleanup verification retry](../architecture/ordinary-cleanup-retry-2841.md).
+generation checks and delay. See [automatic cleanup verification retry](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ordinary-cleanup-retry-2841.md).
+
+## Decisions and historical evidence
+
+The [architecture record guide](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/index.md) separates current designs, accepted decisions, superseded decisions, requirements, and dated evidence.
+Accepted decisions retain authority until amended or superseded.
+A proposal, test result, or `ACTIVE` requirement does not establish delivery or live qualification.
+Historical records retain their original dates, baselines, findings, and limits.

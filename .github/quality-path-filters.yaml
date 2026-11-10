@@ -407,6 +407,8 @@ exclusions:
     paths:
       - Makefile
       - mkdocs.yml
+      # Consumer-owned rewritten-page list; native prose gates run in vale.yml.
+      - .ste-required.txt
       - release-please-config.json
       - .release-please-manifest.json
       - version.txt

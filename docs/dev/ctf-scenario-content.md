@@ -1,5 +1,8 @@
 # Native CTF scenario content
 
+How to publish immutable native CTF content and reconcile an event to its configured revision.
+The contract and failure-code sections supply exact reference.
+
 BigRAE can populate a native CTF event from a private, digest-pinned content
 bundle when the event's scenario is selected. The platform creates the
 challenges, flags, hints, and prerequisite graph in the same database
@@ -112,10 +115,7 @@ The IAM grant is provider identity based. Do not create static storage keys.
 Store the complete reference catalog as the
 `ctf_content_references` object in the existing application secret. The
 entrypoint serializes that field into
-`SHIFTER_CTF_CONTENT_REFERENCES_JSON` at process startup. A deployment may
-instead inject that environment variable from a private secret, but it must
-not put the catalog in a ConfigMap, Terraform output, command argument, or
-checked-in file.
+`SHIFTER_CTF_CONTENT_REFERENCES_JSON` at process startup. A deployment may instead inject that environment variable from a private secret. It must not put the catalog in a ConfigMap, Terraform output, command argument, or checked-in file.
 
 The non-secret runtime settings are:
 
@@ -131,10 +131,7 @@ is malformed or references are configured without a bucket.
 
 ## Create and verify an event
 
-Create an event normally and select the bound scenario. Before the database
-transaction starts, BigRAE reads the object with a provider identity
-precondition, checks its size and declared SHA-256 digest, and validates the
-complete bundle. The event, native challenge graph, and hydration receipt then
+Create an event normally and select the bound scenario. Before the database transaction starts, BigRAE reads the object with a provider identity precondition. It checks size and the declared SHA-256 digest, then validates the complete bundle. The event, native challenge graph, and hydration receipt then
 commit atomically.
 
 Verify:
@@ -194,16 +191,11 @@ It is an explicit, owner-only content operation, never an automatic sync.
   refreshable.
 - Existing submissions and hint usage are never revalidated, rewritten, or
   rescored. A refresh changes only which proof future attempts accept.
-- On success the receipt is updated to the target evidence and returns to
-  `PRISTINE`; an explicit refresh can therefore also restore drifted managed
-  content from its configured bundle. The audit stream records a
+- On success, the receipt records the target evidence and returns to `PRISTINE`. An explicit refresh can also restore drifted managed content from its configured bundle. The audit stream records a
   `ctf_content_refresh` event with the previous and target digests, bounded
   counts, and changed-field categories, never content values.
 
-Every path back to `ACTIVE`, including resuming a paused event, re-enforces
-managed-content hydration readiness under the event lock, so a paused event
-whose configured content has been revised cannot silently resume against stale
-flags: restore or refresh it first.
+Every path back to `ACTIVE`, including resume, checks managed-content hydration readiness under the event lock. A revised configured bundle prevents resume against stale flags. Restore or refresh the content first.
 
 ## Failure codes
 

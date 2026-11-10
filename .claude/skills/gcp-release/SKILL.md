@@ -11,6 +11,10 @@ builds and signs. The setup is in the "Publish a release" section of the
 The release refs and the test-cycle branch are in the "Release from dev or a
 deploy-test branch" section of the
 [gotchas](../../../docs/dev/gcp-tenant-standup-gotchas.md).
+Check [deployment compatibility](../../../docs/technical/platform_infrastructure/deployment-compatibility.md)
+before assuming a published tag contains the current source interfaces.
+Builds from `dev` or `deploy-test` are contributor test artifacts.
+They do not establish production release or live deployment qualification.
 
 ## Rules
 
@@ -40,11 +44,10 @@ deploy-test branch" section of the
    that commit. For `dev` or `deploy-test`, dispatch it:
 
    ```bash
-   gh workflow run release-gcp.yml --ref <release ref>
+   gh workflow run release-gcp.yml --repo OpenRAE/bigrae --ref <release ref>
    ```
 
-3. Wait for the run. The deployer image build is the longest step, about 35
-   minutes.
+3. Wait for the run. Build duration varies with dependency caches and registry availability.
 4. Read the deployer digest from the run log line
    `Attestation created for <registry>/deployer-gcp@sha256:<digest>`.
 5. Read the release manifest from the deployer image (gotchas: "Read the

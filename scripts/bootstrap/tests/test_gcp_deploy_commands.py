@@ -15,6 +15,7 @@ import gcp_deploy
 import gcp_deploy_stages
 import gcp_destroy
 from gcp_deploy import (
+    TOOLING_OVERRIDE_EVIDENCE,
     DeployOptions,
     GcpDeployError,
     ScanOptions,
@@ -306,6 +307,95 @@ class TestRunDeploy:
             )
 
 
+class TestUnreleasedTooling:
+    """#2689: a test deployment may run other committed tooling, and the evidence records each run."""
+
+    TOOLING = "e" * 40
+
+    @staticmethod
+    def _deploy(tmp_path, manifest, monkeypatch, *, tier, **option_overrides):
+        bundle = write_bundle(tmp_path / f"bundle-{tier}", config=root_config(deployment_tier=tier))
+        monkeypatch.setattr(
+            gcp_deploy,
+            "load_deployment_inputs",
+            lambda *args, **kwargs: load_deployment_inputs(str(bundle), Path(args[1]), FakeRunner(), {}),
+        )
+        runner = FakeRunner().on(["gcloud", "storage", "objects", "describe"], ProcessResult(0, "7\n"))
+        options = DeployOptions(
+            source="gs://acme-shifter-deployment-config",
+            release_manifest=str(manifest),
+            run_id="run-1",
+            allow_unreleased_tooling=True,
+            **option_overrides,
+        )
+        return runner, options
+
+    def test_a_test_deployment_records_the_tooling_before_any_change(self, tmp_path, manifest, stages, monkeypatch):
+        monkeypatch.setenv(gcp_deploy.SOURCE_REVISION_ENV, self.TOOLING)
+        runner, options = self._deploy(tmp_path, manifest, monkeypatch, tier="test")
+        records = []
+
+        def copy(command, env, input_text):
+            if command[-1].endswith(TOOLING_OVERRIDE_EVIDENCE):
+                stages.append(("record", os.environ.get(IMPERSONATION_KEY)))
+                records.append((command[-1], json.loads(Path(command[-2]).read_text())))
+            return ProcessResult(0)
+
+        runner.on(["gcloud", "storage", "cp"], copy)
+        assert run_deploy(options, runner=runner) == 0
+        assert [name for name, _ in stages][:3] == ["verify", "record", "infrastructure"]
+        assert dict(stages)["record"] == f"shifteracme-deploy@{PROJECT}.iam.gserviceaccount.com"
+        destination, record = records[0]
+        assert destination == (
+            f"gs://{PROJECT}-release-evidence/deployments/{REVISION}/run-1/1/{TOOLING_OVERRIDE_EVIDENCE}"
+        )
+        assert {key: record[key] for key in ("event", "deployment_tier", "release_revision", "tooling_revision")} == {
+            "event": "unreleased-deploy-tooling",
+            "deployment_tier": "test",
+            "release_revision": REVISION,
+            "tooling_revision": self.TOOLING,
+        }
+
+    def test_release_tooling_with_the_flag_stores_no_record(self, tmp_path, manifest, stages, monkeypatch):
+        runner, options = self._deploy(tmp_path, manifest, monkeypatch, tier="test")
+        assert run_deploy(options, runner=runner) == 0
+        assert not [argv for argv in runner.argvs() if argv[-1].endswith(TOOLING_OVERRIDE_EVIDENCE)]
+
+    @pytest.mark.parametrize(
+        ("tier", "overrides", "message"),
+        [
+            ("production", {}, "production deployment refuses it"),
+            ("test", {"identity_mode": "ambient", "lock": "external"}, "only to an operator run"),
+        ],
+    )
+    def test_the_override_is_refused_before_any_change(
+        self, tmp_path, manifest, stages, monkeypatch, tier, overrides, message
+    ):
+        monkeypatch.setenv(gcp_deploy.SOURCE_REVISION_ENV, self.TOOLING)
+        runner, options = self._deploy(tmp_path, manifest, monkeypatch, tier=tier, **overrides)
+        with pytest.raises(GcpDeployError, match=message):
+            run_deploy(options, runner=runner)
+        assert stages == []
+        assert runner.find("gcloud", "storage", "cp") == []
+
+    def test_the_override_still_refuses_local_changes(self, tmp_path: Path, monkeypatch):
+        monkeypatch.delenv(gcp_deploy.SOURCE_REVISION_ENV, raising=False)
+        repo = tmp_path / "repo"
+        repo.mkdir()
+        git = ["git", "-C", str(repo), "-c", "user.name=t", "-c", "user.email=t@example.com"]
+        subprocess.run([*git[:3], "init", "-q"], check=True)
+        (repo / "a.txt").write_text("1\n")
+        subprocess.run([*git, "add", "a.txt"], check=True)
+        subprocess.run([*git, "commit", "-q", "-m", "init", "--no-gpg-sign"], check=True)
+        head = subprocess.run(
+            ["git", "-C", str(repo), "rev-parse", "HEAD"], capture_output=True, text=True
+        ).stdout.strip()
+        assert check_tooling_revision(REVISION, repo_root=repo, allow_unreleased=True) == head
+        (repo / "a.txt").write_text("2\n")
+        with pytest.raises(GcpDeployError, match="local changes"):
+            check_tooling_revision(REVISION, repo_root=repo, allow_unreleased=True)
+
+
 class TestDeployHelpers:
     def test_run_id_and_evidence_bucket(self):
         run_id = new_run_id()
@@ -592,9 +682,13 @@ class TestCli:
                 "--first-install",
                 "--release-source",
                 "mirror.example/bigrae",
+                "--allow-unreleased-tooling",
             ]
         )
         options = gcp_cli._deploy_options(args)
+        assert options.allow_unreleased_tooling is True
+        default = gcp_cli._deploy_options(parser.parse_args(["gcp-deploy", "--store", "gs://b"]))
+        assert default.allow_unreleased_tooling is False
         assert (options.source, options.stage, options.identity_mode, options.smoke, options.first_install) == (
             "gs://b",
             "rollout",

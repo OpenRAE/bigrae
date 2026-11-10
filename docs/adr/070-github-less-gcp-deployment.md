@@ -113,7 +113,13 @@ tracks the AWS path.
    release-evidence bucket, not to Actions artifacts.
 6. **Release tooling runs one deploy at a time.** In operator mode, `gcp-deploy`
    and `gcp-destroy` run only from tooling whose source revision equals the
-   release revision. Every operator stage needs the release manifest. Before any
+   release revision. Exception (#2689): `gcp-deploy --allow-unreleased-tooling`
+   accepts tooling at another clean commit, only when `settings.deployment_tier`
+   is `test`. A production deployment and a CI run refuse the flag. Each such run
+   stores `tooling-override.json` with the release and tooling revisions under
+   the `deployments/` prefix of the release-evidence bucket, before any change.
+   The flag is never the default, and it does not change the release-image
+   gates. Every operator stage needs the release manifest. Before any
    change, it checks the tooling revision and verifies the release images. A lock object in the deployment config bucket allows one
    deploy or destroy at a time. Generation preconditions create and remove the
    lock. CI keeps its workflow concurrency group and uses `--lock external`.
@@ -139,7 +145,7 @@ tracks the AWS path.
    `refs/heads/dev` or `refs/heads/main`. The import holds the deployment lock,
    reuses an unchanged image, and writes `range-images.json`. A mirror changes
    only the transport. No BigRAE deployment creates image-build resources. The
-   [guest image design](../architecture/gcp-guest-images.md) records the
+   [guest image design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md) records the
    components.
 9. **The release registry is public.** One release serves every deployment.
    A deployment trusts a release only through the provenance policy of

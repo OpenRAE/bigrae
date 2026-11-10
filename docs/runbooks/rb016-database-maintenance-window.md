@@ -3,6 +3,8 @@
 Applicability: Cloud SQL primary; RDS optional. Operator: data and platform
 owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A provider maintenance event is scheduled or active, pending modifications

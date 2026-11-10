@@ -1,15 +1,16 @@
-# Per-range model and tool access design — #681
+# Per-range model and tool access design (#681)
 
-Current status: the broker is parked and unsupported under
-[ADR-068](../../adr/068-model-access-broker-parked.md); ADR-064 keyless-direct is
-the only supported guest model path. The broker design and implementation
-guidance below are historical; they do not authorize activation or extension.
-For the selected LiteLLM OSS replacement, deployment-owned rotation and
-qualification plan, see the
-[#2274 evaluation](gateway-replacement-evaluation-2274.md). For repository
-boundaries, see the
-[#2274 gateway preflight](gateway-preflight-2274.md).
+This reference separates the current model path from retained broker contracts.
+[ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+[ADR-064](../../adr/064-default-range-model-access.md) defines the supported keyless-direct guest model path.
+Retained broker contracts do not authorize activation or extension.
 
+The [replacement evaluation](gateway-replacement-evaluation-2274.md) records the LiteLLM OSS selection, deployment-owned rotation, and proposed qualification.
+The [gateway preflight](gateway-preflight-2274.md) records repository boundaries for that future integration.
+Selection does not establish installation or change the supported guest path.
+
+<!-- Original #681 design baseline, contracts, vectors and issue ledger remain exact source-bound reference. -->
+<!-- vale off -->
 Historical design: 2026-09-06, requirement **PLAT-202**;
 baseline `6fd946352ec22c8bf373a04b52f738f9f6c6a9f4` on `dev`.
 The source issue remains the canonical work tracker:
@@ -121,3 +122,5 @@ startup reparses the mounted artifact with the canonical shared parser. The
 default is disabled with no catalog path; enabling delivery still depends on
 the broker, persistence, infrastructure, and qualification work in
 `delivery.md`.
+
+<!-- vale on -->

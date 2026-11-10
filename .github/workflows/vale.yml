@@ -1,18 +1,17 @@
 name: Vale
 
-# Prose linting for Markdown docs using Vale + the Google developer
-# documentation style (config in .vale.ini). The gate runs at the config's
-# error level and only against the Markdown files a PR actually changes, so new
-# and edited docs must be clean without requiring a one-shot cleanup of the
-# pre-existing backlog across the repo's Markdown corpus. See
-# docs/technical/dev/adr-enforcement.md.
-
+# Google errors gate changed Markdown. Vale and STE gate rewritten pages.
+# CI reports the remaining corpus during migration. See ADR enforcement docs.
 on:
   pull_request:
     paths:
       - "**/*.md"
       - ".vale.ini"
+      - ".ste-required.txt"
+      - "tools/install-vale.sh"
+      - "Makefile"
       - ".github/workflows/vale.yml"
+      - "scripts/adr_guard/tests/test_documentation_tools.py"
 
 permissions:
   contents: read
@@ -26,37 +25,44 @@ jobs:
     name: Docs prose (changed Markdown)
     runs-on: ubuntu-latest
     env:
-      VALE_VERSION: "3.9.1"
-      # SHA-256 of vale_3.9.1_Linux_64-bit.tar.gz from the release checksums file.
-      VALE_SHA256: fbc2eb47d0b8c50220ed1a2c5c611fbe0904ed567d638143d482016a18fd2db0
-      BASE_REF: ${{ github.base_ref }}
+      DOCS_BASE: origin/${{ github.base_ref }}
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
         with:
           fetch-depth: 0
-
-      - name: Install Vale
+          persist-credentials: false
+      - name: Install verified tools and styles
+        run: make docs-tools
+      - name: Lint changed Markdown
+        run: make docs-changed
+      - name: Check rewritten pages
+        run: make docs-required
+      - name: Verify failing and corrected prose samples
         run: |
           set -euo pipefail
-          url="https://github.com/errata-ai/vale/releases/download/v${VALE_VERSION}/vale_${VALE_VERSION}_Linux_64-bit.tar.gz"
-          archive="${RUNNER_TEMP}/vale.tar.gz"
-          curl -sSfL -o "$archive" "$url"
-          echo "${VALE_SHA256}  ${archive}" | sha256sum -c -
-          sudo tar -xzf "$archive" -C /usr/local/bin vale
-          vale --version
+          sample="${RUNNER_TEMP}/doc-tools-sample.md"
+          report="${RUNNER_TEMP}/doc-tools-sample.json"
+          cat > "$sample" <<'EOF'
+          You can't start the lab until you have read all instructions and verified each prerequisite on the host that will run this synthetic exercise on the supported installation today.
 
-      - name: Sync styles
-        run: vale sync
-
-      - name: Lint changed Markdown (error level)
-        run: |
-          set -euo pipefail
-          git fetch --no-tags --depth=1 origin "$BASE_REF"
-          mapfile -t files < <(git diff --name-only --diff-filter=d "origin/${BASE_REF}...HEAD" -- '*.md')
-          if [ "${#files[@]}" -eq 0 ]; then
-            echo "No changed Markdown files; nothing to lint."
-            exit 0
+          The lab has a network. It has a server. It has a client. It has a router. It has a log. It has a clock. It has a disk.
+          EOF
+          if bash .tools/doc-tools/0.1.0/tools/ste-lint.sh --format json "$sample" > "$report"; then
+            echo 'The negative sample must fail.' >&2
+            exit 1
           fi
-          printf 'Linting %d changed Markdown file(s):\n' "${#files[@]}"
-          printf '  %s\n' "${files[@]}"
-          vale "${files[@]}"
+          jq -e '[.findings[].rule_id] | unique == ["STE-4.2", "STE-5.1", "STE-6.6"]' "$report"
+          printf 'Read the instructions. Verify the prerequisites. Then start the lab.\n' > "$sample"
+          bash .tools/doc-tools/0.1.0/tools/ste-lint.sh "$sample"
+          # Preserved policy text must not silence the maintained addendum.
+          cat CONTRIBUTING.md > "$sample"
+          printf '\nYou cannot skip this check.\n' >> "$sample"
+          bash .tools/doc-tools/0.1.0/tools/ste-lint.sh "$sample"
+          printf "\nYou can't skip this check.\n" >> "$sample"
+          if bash .tools/doc-tools/0.1.0/tools/ste-lint.sh --format json "$sample" > "$report"; then
+            echo 'The maintained addendum must remain checked.' >&2
+            exit 1
+          fi
+          jq -e 'any(.findings[]; .rule_id == "STE-4.2")' "$report"
+      - name: Report legacy prose findings
+        run: make docs-report

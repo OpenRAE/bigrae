@@ -1,4 +1,4 @@
-"""Prepared S4 URLConf. S8 alone mounts the coordinated production route swap."""
+"""Native administration routes mounted first by the production API composition."""
 
 from django.urls import include, path
 

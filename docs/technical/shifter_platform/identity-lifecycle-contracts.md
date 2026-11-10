@@ -1,8 +1,10 @@
 # Identity and range lifecycle contracts
 
+Explanation of cross-domain authority, state ownership, and recovery.
+
 This document defines the integration contracts for the ADR-066 identity cutover.
 It covers authority, durable state, external effects and recovery across domains.
-The [proposal](../../design/identity-cutover-2321-proposal.md) records implementation gaps and verification status.
+The [proposal](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/identity-cutover-2321-proposal.md) records implementation gaps and verification status.
 Diagrams describe required behavior. They do not certify implementation or deployment.
 
 ## Ownership and dependency model
@@ -84,10 +86,15 @@ flowchart LR
 ```
 
 F1 carries secrets only to the authenticated edge. Durable intent stores credential references, never bearer tokens.
-The authentication process verifies F2. Provider claims are not verified application identity until that check succeeds.
+The authentication process verifies F2.
+
+Provider claims are not verified application identity until that check succeeds.
 F4 uses SQL ancestry and the credential ceiling. Cloud workload identity cannot replace application authority.
+
 F14 uses separate database duties. The executor cannot declare arbitrary application state or policy grants.
-Guest evidence is untrusted input. Engine validates its contract, generation, ownership and ordering before applying it.
+Guest evidence is untrusted input.
+
+Engine validates its contract, generation, ownership and ordering before applying it.
 The deployment and continuing-access boundaries remain in the [architecture handbook](../architecture.md).
 
 ## DFD 1: launch, result and cleanup
@@ -143,18 +150,24 @@ flowchart TB
 ```
 
 L8 is a prerequisite, not a queue message. CTF must commit its association before runnable dispatch.
-L13 through L15 commit together for an accepted result. Failed application leaves the inbox row retryable.
+L13 through L15 commit together for an accepted result.
+
+Failed application leaves the inbox row retryable.
 L21 must match request, CMS UUID, native resource and current generation.
 Neither a deleted projection nor `DESTROYED` status alone satisfies L21.
+
 Cleanup retains capacity when inventory is unknown or residual resources remain.
 
 ## Admission and policy publication
 
 Admission resolves a current credential, a concrete target and SQL-owned ancestry.
 It obtains current policy before the owning transaction, then rechecks local bindings under the domain lock.
-An admission object is an in-process value. It is neither a durable credential nor a reusable permission grant.
+An admission object is an in-process value.
+
+It is neither a durable credential nor a reusable permission grant.
 Dispatch resolves the recorded credential again and preserves its original ceiling.
 An external policy check and a later SQL commit are not one atomic revocation boundary.
+
 Current readback reduces stale decisions; it does not cancel an effect already admitted elsewhere.
 Local credential fences and continuing-access termination remain separate controls.
 
@@ -190,9 +203,11 @@ sequenceDiagram
 
 `CTFEventAuthorityTransition` allows one pending transition per event.
 New grants require active recipients. Settlement of an admitted staff or ownership plan can use its exact retained inactive recipient.
+
 That exception binds the transition kind, event, subject and effect to the immutable, preflighted plan.
 It cannot authorize a new inactive grant or an inactive actor.
 Deactivation must not strand the event behind a partially published staff assignment.
+
 The original live caller can confirm an admitted effect without replaying a write.
 A replacement administrator must hold current authority for each remaining effect.
 
@@ -210,19 +225,25 @@ stateDiagram-v2
 
 These are composite handoff phases. Persisted CTF states remain `pending` and `confirmed`.
 Workspaces records each effect as requested, unresolved, denied or confirmed.
+
 Intermediate policy effects can coexist before SQL ownership changes. Pending state must block conflicting domain commands.
 Provider unavailability is not a policy denial and must not poison a retry key.
+
 The effect manifest has stable semantic keys, an explicit version and the pinned provider binding.
 Changing a role catalog cannot change an already accepted handoff.
 CTF supplies its retained transition through the registered shared resolver.
+
 Workspaces consumes that typed contract without importing CTF models.
 This runtime callback is part of the dependency model, even though import rules cannot show the call chain.
 
 HTTP adapters must translate pending publication into the same bounded error contract.
 Service tests alone do not prove that the HTTP response preserves recovery.
-The staff-list API exposes a nullable `pending_transition` receipt. The browser can retry that exact command.
+The staff-list API exposes a nullable `pending_transition` receipt.
+
+The browser can retry that exact command.
 The receipt does not disclose raw tuples or credential material.
 Migration `ctf.0076` refuses unfinished legacy transitions without effect plans.
+
 Settle them on the old release first; confirmed history is retained.
 
 ## Deployment and catalog initialization
@@ -440,11 +461,14 @@ Concurrency evidence requires PostgreSQL. SQLite cannot establish row-lock behav
 Workers use bounded batches and indexed pending-state queries.
 Cleanup must cover retained buckets, even when their configuration disappears.
 Large pending sets need deterministic progress; repeatedly selecting the same incomplete rows can starve later obligations.
+
 The deployed `reconcile_warm_pool --loop` worker retains its keyset cursor across passes and wraps after the last page.
 One-shot invocation covers one page only. A restart can repeat work but cannot authorize new effects from cursor state.
+
 Global admission can serialize the short count-and-reserve transaction without serializing provider work.
 Per-generation locks permit unrelated lifecycle commands to proceed independently.
 Warm limits arbitrate workers using the same policy snapshot.
+
 A lower limit does not become installation-wide until workers using the old configuration stop.
 Generation fingerprints bind compatibility; they do not order different deployment policy versions.
 
@@ -491,9 +515,12 @@ The following references inform these choices. They do not certify this implemen
 Normal delegation requires the actor to hold the delegated action and forbids
 self-grants. Administrator roles do not imply personal-token eligibility. For a
 fresh installation, the private cutover facts can explicitly set
-`bootstrap_personal_token_eligibility: true`. The default is false. The plan
+`bootstrap_personal_token_eligibility: true`.
+
+The default is false. The plan
 records this choice and binds it to its digest. Only the existing preactivation
 bootstrap can seed that exact action for the selected first administrator.
+
 It checks provider readback and writes a strict audit record before confirming
 bootstrap. Activation checks the grants again. No deployment step issues a token;
 the operator must authenticate after activation and use ordinary token issuance.
@@ -507,24 +534,24 @@ boundary. Preserve transaction order, credential rechecks and provider readback.
 
 | Owner | Modules and responsibilities | Boundary kept |
 | --- | --- | --- |
-| Workspaces administration | [`_account_policy_reads.py`](../../../shifter/shifter_platform/workspaces/services/_account_policy_reads.py) prepares current authority; [`_account_policy_queries.py`](../../../shifter/shifter_platform/workspaces/services/_account_policy_queries.py) filters projections; [`_account_policy_admin.py`](../../../shifter/shifter_platform/workspaces/services/_account_policy_admin.py), [`_account_policy_lifecycle.py`](../../../shifter/shifter_platform/workspaces/services/_account_policy_lifecycle.py) and [`_policy_memberships.py`](../../../shifter/shifter_platform/workspaces/services/_policy_memberships.py) own commands. | Native proof and explicit scope remain mandatory at the owning command. A directory or membership projection cannot grant permission. |
-| Workspaces policy | [`_authorization_commands.py`](../../../shifter/shifter_platform/workspaces/services/_authorization_commands.py) validates typed intent and exact retained effects; [`_authorization_delegation.py`](../../../shifter/shifter_platform/workspaces/services/_authorization_delegation.py) resolves current targets and delegation; [`_authorization_policy.py`](../../../shifter/shifter_platform/workspaces/services/_authorization_policy.py) evaluates and reconciles; [`_authorization_journal.py`](../../../shifter/shifter_platform/workspaces/services/_authorization_journal.py) persists receipts. | Retained-plan matching does not replace current administrator admission. Provider readback settles only the pinned intent; an outage cannot become a durable denial or permission to rewrite it. |
-| Workspaces cutover | [`_identity_cutover.py`](../../../shifter/shifter_platform/workspaces/services/_identity_cutover.py) classifies, converts and verifies hierarchy and membership facts; [`_identity_cutover_state.py`](../../../shifter/shifter_platform/workspaces/services/_identity_cutover_state.py) owns durable cutover progress. | Conversion keeps its original SQL transaction and row locks. Activation still requires complete membership disposition and exact account ancestry; helper extraction does not infer missing placement. |
-| CTF event authority | [`authority_plan.py`](../../../shifter/shifter_platform/ctf/services/event/authority_plan.py) freezes the full effect plan; [`_staff_policy.py`](../../../shifter/shifter_platform/ctf/services/event/_staff_policy.py) owns effect definitions; [`_staff_transitions.py`](../../../shifter/shifter_platform/ctf/services/event/_staff_transitions.py) owns transition receipts; [`_staff_projection.py`](../../../shifter/shifter_platform/ctf/services/event/_staff_projection.py) reads staff; [`staff.py`](../../../shifter/shifter_platform/ctf/services/event/staff.py) coordinates commands. | Recovery keeps semantic effect keys, provider binding and original intent. An inactive retained subject never becomes an actor; the current actor independently needs full remaining authority. |
-| CTF range commands | [`provision.py`](../../../shifter/shifter_platform/ctf/services/range/provision.py), [`spares.py`](../../../shifter/shifter_platform/ctf/services/range/spares.py) and [`recovery.py`](../../../shifter/shifter_platform/ctf/services/range/recovery.py) prepare claims; [`recovery_steps.py`](../../../shifter/shifter_platform/ctf/services/range/recovery_steps.py) checks exact generations; [`tasks.py`](../../../shifter/shifter_platform/ctf/services/range/tasks.py) coalesces queue work; [`batch.py`](../../../shifter/shifter_platform/ctf/services/range/batch.py) paces it; [`aggregate.py`](../../../shifter/shifter_platform/ctf/services/range/aggregate.py) projects retained custody. | Preserve Event before recovery, participant, spare and launch records. Policy and cleanup-evidence reads keep their existing preflight position. Queue coalescing requires the same native initiating proof. Cancellation and unrelated assignment still forbid attachment. |
-| CMS native launch | [`_scoped_launch_types.py`](../../../shifter/shifter_platform/cms/services/_scoped_launch_types.py) groups explicit inputs; [`_scoped_launch_source.py`](../../../shifter/shifter_platform/cms/services/_scoped_launch_source.py) checks current source eligibility; [`_scoped_launch_reservation.py`](../../../shifter/shifter_platform/cms/services/_scoped_launch_reservation.py) commits reservation and exact replay; [`_scoped_range_launch.py`](../../../shifter/shifter_platform/cms/services/_scoped_range_launch.py) coordinates dispatch. | Typed options carry facts and confer no authority. CTF requires the complete owner/action/target binding; Mission Control accepts none of those fields, including partial bindings, before reservation. Revalidate policy before external work, then fence current proof, immutable source and exact event request under the owning locks. An uncertain event dispatch retains its request UUID and capacity. |
-| CMS uniform registration | [`_pack_registration_types.py`](../../../shifter/shifter_platform/cms/services/_pack_registration_types.py) defines input and admission values; [`_pack_registration_custody.py`](../../../shifter/shifter_platform/cms/services/_pack_registration_custody.py) admits exact references; [`_pack_registration_fences.py`](../../../shifter/shifter_platform/cms/services/_pack_registration_fences.py) checks local commit facts; [`_content_ingestion.py`](../../../shifter/shifter_platform/cms/services/_content_ingestion.py) coordinates registration; [`_pack_feature_acquisition.py`](../../../shifter/shifter_platform/cms/services/_pack_feature_acquisition.py) requests optional artifacts after commit. | Every provenance uses the same native proof, scope and foreign-input validation. Registration remains separate from conformance and publication. Feature acquisition cannot authorize catalog registration or publication. |
-| CMS retained uploads | [`_upload_scope.py`](../../../shifter/shifter_platform/cms/services/_upload_scope.py) defines the exact storage namespace; [`_scoped_uploads.py`](../../../shifter/shifter_platform/cms/services/_scoped_uploads.py) owns upload admission and installation; [`_upload_cleanup.py`](../../../shifter/shifter_platform/cms/services/_upload_cleanup.py) owns retained cleanup. | Storage work uses only recorded exact keys. Budget and upload locks fence settlement. Revoked initiating proof does not prevent accepted cleanup, and an uncertain final copy keeps its keys and budget reserved. |
-| CMS warm claim | [`_warm_claim_types.py`](../../../shifter/shifter_platform/cms/services/_warm_claim_types.py) carries immutable claim facts; [`_warm_claim_custody.py`](../../../shifter/shifter_platform/cms/services/_warm_claim_custody.py) fences CMS custody; [`_warm_pool_claim.py`](../../../shifter/shifter_platform/cms/services/_warm_pool_claim.py) coordinates claim, lease and activation. | Policy preflight stays outside the claim transaction. CMS and Engine custody, lease, model allocation and activation queue commit together; a failed transfer rolls back the claim. Warm generation still precedes native runtime locks. |
-| CMS model preparation | [`_model_preparation_authority.py`](../../../shifter/shifter_platform/cms/services/_model_preparation_authority.py) resolves current native proof and exact retained ownership; [`_model_allocation.py`](../../../shifter/shifter_platform/cms/services/_model_allocation.py) prepares model facts and commits the Engine request. | Source and policy work precede SQL. Current proof and unchanged CMS runtime facts fence the allocation/outbox write. An existing preparation receipt cannot widen a new generation's authority. |
-| CMS range reads | [`_range_history.py`](../../../shifter/shifter_platform/cms/services/_range_history.py) owns history selection; [`_scoped_range_queries.py`](../../../shifter/shifter_platform/cms/services/_scoped_range_queries.py) applies the shared current leaf filter; [`_range_queries.py`](../../../shifter/shifter_platform/cms/services/_range_queries.py) retains the public service facade. | Candidate selection is not admission. Every disclosed native row needs its current leaf decision; provider failure propagates instead of becoming an empty authorized page. |
-| Engine RAES creation | [`_raes_range.py`](../../../shifter/shifter_platform/engine/services/_raes_range.py) retains creation and dispatch; [`_raes_range_bindings.py`](../../../shifter/shifter_platform/engine/services/_raes_range_bindings.py) defines sidecars, replay checks and remote-access capability binding; [`_raes_image.py`](../../../shifter/shifter_platform/engine/services/_raes_image.py) validates image registration values. | Preserve request, receipt and dispatch order inside the existing owning transactions. Replays cannot replace immutable participant access or plugin identity. Validated image metadata does not replace native registry admission. |
-| Engine warm lifecycle | [`_warm_pool.py`](../../../shifter/shifter_platform/engine/services/_warm_pool.py) retains the allocation/claim facade; [`_warm_pool_admission.py`](../../../shifter/shifter_platform/engine/services/_warm_pool_admission.py) owns atomic count and capacity admission; [`_warm_pool_retirement.py`](../../../shifter/shifter_platform/engine/services/_warm_pool_retirement.py) owns retained retirement and settlement; [`_principal_warm_claim.py`](../../../shifter/shifter_platform/engine/services/_principal_warm_claim.py) commits exact customer custody. | Keep the admission mutex across count and reservation, warm ledger before runtime locks, and current local proof and ancestry before custody writes. Realized native capacity needs exact accepted cleanup evidence; an unknown outcome retains its obligation. |
-| Engine cleanup retry | [`_range_cleanup_retry.py`](../../../shifter/shifter_platform/engine/services/_range_cleanup_retry.py) derives retry eligibility from the current accepted destroy and applied terminal observation. | Retain the target-before-intent order, exact resource/binding identity and bounded backoff from result application. Unknown inventory does not expire the cleanup obligation. |
-| Engine native binding | [`_launch_authority.py`](../../../shifter/shifter_platform/engine/services/_launch_authority.py) retains the validation facade; [`_launch_authority_binding.py`](../../../shifter/shifter_platform/engine/services/_launch_authority_binding.py) checks local proof, ancestry and generation; [`_range_custody.py`](../../../shifter/shifter_platform/engine/services/_range_custody.py) projects ownership-transfer and pinned-egress facts. | Preserve the established credential, scope and generation check order. A custody projection supplies facts; it cannot replace the owning command’s current admission or authorize a broader transfer. |
-| Mission Control launch and reads | [`_range_launch.py`](../../../shifter/shifter_platform/mission_control/api/_range_launch.py) owns launch orchestration; [`_retry_launch.py`](../../../shifter/shifter_platform/mission_control/api/_retry_launch.py) retains the immutable caller selection and retry key; [`ranges.py`](../../../shifter/shifter_platform/mission_control/api/ranges.py) owns current-range, lifecycle and catalog projections; [`_device_serializers.py`](../../../shifter/shifter_platform/mission_control/api/_device_serializers.py) defines device wire shapes. | Catalog selection and placement remain explicit. The public route imports retain their service facade; moving a view does not replace owning native admission with a serializer or HTTP check. |
-| Mission Control remote handoff | [`api/guacamole.py`](../../../shifter/shifter_platform/mission_control/api/guacamole.py) checks the current native subscriber; [`guacamole_bootstrap.py`](../../../shifter/shifter_platform/mission_control/guacamole_bootstrap.py) owns one-time URL delivery. | Lock exact CMS and Engine custody before the Guacamole receipt. Current and original narrowed proofs must remain live under the final lock; a user identifier cannot substitute for either proof. |
-| Mission Control continuing access | [`guacamole_authority.py`](../../../shifter/shifter_platform/mission_control/guacamole_authority.py) reuses CMS remote admission; the shared range port asks CTF to validate the owner's retained participation and exact assignment. | A ban, deleted participation or event end denies renewal even when the credential and range policy remain valid. Preserve independent operator access. Retain the encrypted native token until termination is confirmed; gateway lease expiry also closes tunnels during a portal outage. See the [Guacamole DFD and sequence](../platform_infrastructure/guacamole.md#architecture-overview). |
+| Workspaces administration | [`_account_policy_reads.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_account_policy_reads.py) prepares current authority; [`_account_policy_queries.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_account_policy_queries.py) filters projections; [`_account_policy_admin.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_account_policy_admin.py), [`_account_policy_lifecycle.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_account_policy_lifecycle.py) and [`_policy_memberships.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_policy_memberships.py) own commands. | Native proof and explicit scope remain mandatory at the owning command. A directory or membership projection cannot grant permission. |
+| Workspaces policy | [`_authorization_commands.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_authorization_commands.py) validates typed intent and exact retained effects; [`_authorization_delegation.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_authorization_delegation.py) resolves current targets and delegation; [`_authorization_policy.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_authorization_policy.py) evaluates and reconciles; [`_authorization_journal.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_authorization_journal.py) persists receipts. | Retained-plan matching does not replace current administrator admission. Provider readback settles only the pinned intent; an outage cannot become a durable denial or permission to rewrite it. |
+| Workspaces cutover | [`_identity_cutover.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_identity_cutover.py) classifies, converts and verifies hierarchy and membership facts; [`_identity_cutover_state.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/workspaces/services/_identity_cutover_state.py) owns durable cutover progress. | Conversion keeps its original SQL transaction and row locks. Activation still requires complete membership disposition and exact account ancestry; helper extraction does not infer missing placement. |
+| CTF event authority | [`authority_plan.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/event/authority_plan.py) freezes the full effect plan; [`_staff_policy.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/event/_staff_policy.py) owns effect definitions; [`_staff_transitions.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/event/_staff_transitions.py) owns transition receipts; [`_staff_projection.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/event/_staff_projection.py) reads staff; [`staff.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/event/staff.py) coordinates commands. | Recovery keeps semantic effect keys, provider binding and original intent. An inactive retained subject never becomes an actor; the current actor independently needs full remaining authority. |
+| CTF range commands | [`provision.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/range/provision.py), [`spares.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/range/spares.py) and [`recovery.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/range/recovery.py) prepare claims; [`recovery_steps.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/range/recovery_steps.py) checks exact generations; [`tasks.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/range/tasks.py) coalesces queue work; [`batch.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/range/batch.py) paces it; [`aggregate.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/ctf/services/range/aggregate.py) projects retained custody. | Preserve Event before recovery, participant, spare and launch records. Policy and cleanup-evidence reads keep their existing preflight position. Queue coalescing requires the same native initiating proof. Cancellation and unrelated assignment still forbid attachment. |
+| CMS native launch | [`_scoped_launch_types.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_scoped_launch_types.py) groups explicit inputs; [`_scoped_launch_source.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_scoped_launch_source.py) checks current source eligibility; [`_scoped_launch_reservation.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_scoped_launch_reservation.py) commits reservation and exact replay; [`_scoped_range_launch.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_scoped_range_launch.py) coordinates dispatch. | Typed options carry facts and confer no authority. CTF requires the complete owner/action/target binding; Mission Control accepts none of those fields, including partial bindings, before reservation. Revalidate policy before external work, then fence current proof, immutable source and exact event request under the owning locks. An uncertain event dispatch retains its request UUID and capacity. |
+| CMS uniform registration | [`_pack_registration_types.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_pack_registration_types.py) defines input and admission values; [`_pack_registration_custody.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_pack_registration_custody.py) admits exact references; [`_pack_registration_fences.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_pack_registration_fences.py) checks local commit facts; [`_content_ingestion.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_content_ingestion.py) coordinates registration; [`_pack_feature_acquisition.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_pack_feature_acquisition.py) requests optional artifacts after commit. | Every provenance uses the same native proof, scope and foreign-input validation. Registration remains separate from conformance and publication. Feature acquisition cannot authorize catalog registration or publication. |
+| CMS retained uploads | [`_upload_scope.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_upload_scope.py) defines the exact storage namespace; [`_scoped_uploads.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_scoped_uploads.py) owns upload admission and installation; [`_upload_cleanup.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_upload_cleanup.py) owns retained cleanup. | Storage work uses only recorded exact keys. Budget and upload locks fence settlement. Revoked initiating proof does not prevent accepted cleanup, and an uncertain final copy keeps its keys and budget reserved. |
+| CMS warm claim | [`_warm_claim_types.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_warm_claim_types.py) carries immutable claim facts; [`_warm_claim_custody.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_warm_claim_custody.py) fences CMS custody; [`_warm_pool_claim.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_warm_pool_claim.py) coordinates claim, lease and activation. | Policy preflight stays outside the claim transaction. CMS and Engine custody, lease, model allocation and activation queue commit together; a failed transfer rolls back the claim. Warm generation still precedes native runtime locks. |
+| CMS model preparation | [`_model_preparation_authority.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_model_preparation_authority.py) resolves current native proof and exact retained ownership; [`_model_allocation.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_model_allocation.py) prepares model facts and commits the Engine request. | Source and policy work precede SQL. Current proof and unchanged CMS runtime facts fence the allocation/outbox write. An existing preparation receipt cannot widen a new generation's authority. |
+| CMS range reads | [`_range_history.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_range_history.py) owns history selection; [`_scoped_range_queries.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_scoped_range_queries.py) applies the shared current leaf filter; [`_range_queries.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/cms/services/_range_queries.py) retains the public service facade. | Candidate selection is not admission. Every disclosed native row needs its current leaf decision; provider failure propagates instead of becoming an empty authorized page. |
+| Engine RAES creation | [`_raes_range.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_raes_range.py) retains creation and dispatch; [`_raes_range_bindings.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_raes_range_bindings.py) defines sidecars, replay checks and remote-access capability binding; [`_raes_image.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_raes_image.py) validates image registration values. | Preserve request, receipt and dispatch order inside the existing owning transactions. Replays cannot replace immutable participant access or plugin identity. Validated image metadata does not replace native registry admission. |
+| Engine warm lifecycle | [`_warm_pool.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_warm_pool.py) retains the allocation/claim facade; [`_warm_pool_admission.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_warm_pool_admission.py) owns atomic count and capacity admission; [`_warm_pool_retirement.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_warm_pool_retirement.py) owns retained retirement and settlement; [`_principal_warm_claim.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_principal_warm_claim.py) commits exact customer custody. | Keep the admission mutex across count and reservation, warm ledger before runtime locks, and current local proof and ancestry before custody writes. Realized native capacity needs exact accepted cleanup evidence; an unknown outcome retains its obligation. |
+| Engine cleanup retry | [`_range_cleanup_retry.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_range_cleanup_retry.py) derives retry eligibility from the current accepted destroy and applied terminal observation. | Retain the target-before-intent order, exact resource/binding identity and bounded backoff from result application. Unknown inventory does not expire the cleanup obligation. |
+| Engine native binding | [`_launch_authority.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_launch_authority.py) retains the validation facade; [`_launch_authority_binding.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_launch_authority_binding.py) checks local proof, ancestry and generation; [`_range_custody.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/engine/services/_range_custody.py) projects ownership-transfer and pinned-egress facts. | Preserve the established credential, scope and generation check order. A custody projection supplies facts; it cannot replace the owning command’s current admission or authorize a broader transfer. |
+| Mission Control launch and reads | [`_range_launch.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/mission_control/api/_range_launch.py) owns launch orchestration; [`_retry_launch.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/mission_control/api/_retry_launch.py) retains the immutable caller selection and retry key; [`ranges.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/mission_control/api/ranges.py) owns current-range, lifecycle and catalog projections; [`_device_serializers.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/mission_control/api/_device_serializers.py) defines device wire shapes. | Catalog selection and placement remain explicit. The public route imports retain their service facade; moving a view does not replace owning native admission with a serializer or HTTP check. |
+| Mission Control remote handoff | [`api/guacamole.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/mission_control/api/guacamole.py) checks the current native subscriber; [`guacamole_bootstrap.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/mission_control/guacamole_bootstrap.py) owns one-time URL delivery. | Lock exact CMS and Engine custody before the Guacamole receipt. Current and original narrowed proofs must remain live under the final lock; a user identifier cannot substitute for either proof. |
+| Mission Control continuing access | [`guacamole_authority.py`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/mission_control/guacamole_authority.py) reuses CMS remote admission; the shared range port asks CTF to validate the owner's retained participation and exact assignment. | A ban, deleted participation or event end denies renewal even when the credential and range policy remain valid. Preserve independent operator access. Retain the encrypted native token until termination is confirmed; gateway lease expiry also closes tunnels during a portal outage. See the [Guacamole DFD and sequence](../platform_infrastructure/guacamole.md#architecture-overview). |
 
 Use existing typed contracts for these calls. Extract named validation and
 admission steps where a function combines unrelated decisions. Do not move an
@@ -537,9 +564,13 @@ quality gate validate the resulting layout.
 Incoming portal controls use the native boundaries above. Organizer range audit
 retains the original credential, including service principals, and cleanup
 policy preflight stays outside its mutation transaction. Campaign reads,
-release and notification delivery require current native event policy. Staff
+release and notification delivery require current native event policy.
+
+Staff
 assignment accepts principal UUIDs and does not disclose email-directory hits.
 The Engine image registry commits one strict before/after audit under its owning
 lock. The provider-login route mounts the read-only native admin site; legacy
-superuser flags cannot reopen identity or password writes. See the
-[portal auth and audit trust model](../../architecture/portal-auth-audit-trust-model.md).
+superuser flags cannot reopen identity or password writes.
+
+See the
+[portal auth and audit trust model](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/portal-auth-audit-trust-model.md).

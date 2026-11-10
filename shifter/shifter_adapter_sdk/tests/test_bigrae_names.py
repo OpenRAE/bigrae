@@ -1,8 +1,14 @@
 """Both public names expose the same contract classes and isolation boundary."""
 
 import importlib
+from importlib.metadata import version
 
 import pytest
+
+
+@pytest.mark.parametrize("namespace", ["bigrae_adapter_sdk", "shifter_adapter_sdk"])
+def test_public_version_matches_installed_distribution(namespace):
+    assert importlib.import_module(namespace).__version__ == version("bigrae-adapter-sdk")
 
 
 @pytest.mark.parametrize(

@@ -54,10 +54,7 @@ Run `validate` and `doctor` after you edit the generated GCP configuration.
 | `aws` | `prod`, `dev` | `django_secret_key`, `db_password` |
 | `gcp` | `prod`, `dev` | `django_secret_key` |
 
-`validate` checks `settings` against the selected backend. GCP settings are a
-closed model: unknown keys are rejected, and the model broker, model access, range
-egress, warm pool, and Mission Control lease blocks are each validated against
-their own schemas. See "Optional: model access broker" in
+`validate` checks `settings` against the selected backend. GCP settings reject unknown keys. Model broker, model access, range egress, warm pool, and Mission Control lease blocks each use their own schema. See "Optional: model access broker" in
 [`setup.md`](setup.md) for the broker blocks.
 
 The GCP deploy inputs that GitHub variables and secrets held before #2571 are
@@ -71,6 +68,7 @@ closed settings blocks too:
 | `operator_bootstrap` | The first operator (`enabled`, `admin_email`, `admin_password_secret_ref`) and the staff and superuser email lists |
 | `post_deploy_smoke` | The portal account of the post-deploy smoke (`user_email`) |
 | `release_trust` | The immutable repository and owner IDs that sign releases (`github_repository_id`, `github_owner_id`) |
+| `deployment_tier` | `production` (the default) or `test`. Only a test deployment accepts `gcp-deploy --allow-unreleased-tooling` (#2689) |
 
 `operator_bootstrap.admin_password_secret_ref` is a versionless Secret Manager
 reference (`projects/<project>/secrets/<id>`), never the password.

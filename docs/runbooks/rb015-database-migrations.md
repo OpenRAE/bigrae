@@ -3,6 +3,8 @@
 Applicability: GKE and EKS. Operator: release and data owner. Verified:
 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A deployment is blocked on migrations, a migration Job fails, or application
@@ -14,11 +16,7 @@ pods report schema mismatch.
    state, migration Job name, and target database.
 2. Inspect the dedicated migration Job, its events and bounded logs. Long-lived
    web and worker pods set `SKIP_MIGRATIONS=1`; they must not race the migrator.
-3. Confirm the Job uses the dedicated migrator service account/database duty,
-   the same image digest as the release, and the provider renderer selected by
-   the deployment workflow. On GCP, the `gcp-deploy` command renders and runs
-   the migration Job (`platform-migrate`) before the Helm upgrade, for the CI
-   path and for the path without GitHub.
+3. Confirm the dedicated migrator service account and database duty. Check the release image digest and the deployment-selected provider renderer. On GCP, `gcp-deploy` renders and runs `platform-migrate` before the Helm upgrade. The CI adapter uses the same command.
 4. Check database health, locks, available storage, statement runtime, backward
    compatibility, and whether application rollout began.
 

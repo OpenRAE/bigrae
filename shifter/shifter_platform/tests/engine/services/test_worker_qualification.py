@@ -8,6 +8,7 @@ import pytest
 from django.utils import timezone
 from shifter_adapter_sdk.runtime import canonical_digest
 
+from tests.engine.services.test_disposable_worker_profile import observed_hardware
 from tests.engine.services.test_disposable_workers import apparatus, create, tenant
 
 __all__ = ["apparatus", "tenant"]
@@ -29,6 +30,7 @@ def guest(apparatus):
         "daemon_identity": canonical_digest("b" * 36),
         "docker_version": apparatus.profile["docker_version"],
         "daemon_count": 1,
+        "hardware": observed_hardware(),
         "observed_at": timezone.now().isoformat(),
     }
     record = WorkerHostObservation.objects.create(
@@ -55,6 +57,7 @@ def test_qualification_pins_host_identity_and_records_bounded_facts(apparatus, g
     assert result.vm_identity == guest.observed["vm_identity"]
     guest.row.refresh_from_db()
     assert guest.row.qualification["profile_digest"] == guest.row.profile_digest
+    assert guest.row.qualification["hardware"] == observed_hardware()
     assert get_disposable_worker(apparatus.credential, guest.worker.worker_id).qualified
 
 
@@ -68,6 +71,11 @@ def test_qualification_pins_host_identity_and_records_bounded_facts(apparatus, g
         {"observed_at": (timezone.now() + timedelta(days=1)).isoformat()},
         {"machine_identity": "raw-guest-identity"},
         {"ssh_key_secret_ref": "forbidden"},
+        {"hardware": observed_hardware() | {"machine_type": "c4a-standard-2"}},
+        {"hardware": observed_hardware() | {"enable_secure_boot": False}},
+        {"hardware": observed_hardware() | {"image_id": "999"}},
+        {"hardware": observed_hardware() | {"enable_secure_boot": 1}},
+        {"hardware": {key: value for key, value in observed_hardware().items() if key != "image_id"}},
     ],
 )
 def test_untrusted_observation_never_qualifies(apparatus, guest, change):

@@ -1,5 +1,11 @@
 # Content, range and continuing access authority
 
+Explanation of content custody, range authority, and continuing access.
+
+The mounted API uses the native authority paths described here.
+Historical S6 and S8 staging references identify their original integration phases.
+This source contract does not establish a live deployment.
+
 This documents the S6 source integration for #2319. Production authority is
 activated by S8/#2321. Existing human entry points retain their incumbent
 authority for legacy resources until that coordinated cutover; principal-owned
@@ -13,10 +19,13 @@ Business ownership and historical attribution are distinct from the principal
 performing an operation. Owning services resolve account, organization and
 workspace ancestry from persisted facts. CMS and Engine range projections must
 agree on the public CMS range UUID, runtime identity, request, ownership and
-actual event parent. An account-level range has no artificial workspace.
+actual event parent.
+
+An account-level range has no artificial workspace.
 An early failed launch with no native runtime remains visible to authorized
 history/detail readers. CMS validates request custody and event ancestry and
 asks Engine to establish runtime absence by request and public identity.
+
 Only reads admit this unrealized intent; lifecycle and remote effects still
 require a consistent runtime binding.
 
@@ -52,17 +61,20 @@ the same Engine-owned filter; another customer's image cannot satisfy supply.
 Image source names and versions are unique within their scope. Database guards
 prevent changing that custody, including through bulk updates.
 
-The incumbent launch intent, preparation and plugin records hold scalar
+The existing launch intent, preparation and plugin records hold scalar
 initiating principal, credential reference, original action ceiling and exact
 scope. Source records protect immutable authority and executable/input identity
 through database constraints, including updates that bypass model `save()`.
 Policy checks occur before SQL critical sections; generation and persisted-fact
-fences are checked again inside them. The credential owner supplies a local
+fences are checked again inside them.
+
+The credential owner supplies a local
 lifecycle fence for these transactions; it checks logout, expiry, binding and
 current limits without contacting an identity provider. This fence cannot admit
 work: full credential and policy validation still precedes the transaction.
 Personal-token fences likewise reconstruct only SQL-owned token lifecycle and
 limits; the live token-use grant check runs during full admission before locks.
+
 Principal launch intents separately pin
 the installed provisioner namespace, service account, image, command and
 deterministic Job identity. Dispatch refuses profile drift, and native interrupt
@@ -79,14 +91,18 @@ Account-level launches create no workspace or contact user. New principal
 generations retain a lifetime UUID on both VM backends, independently of the
 operation UUID used for dispatch/retry fencing.
 
-Device creation extends the incumbent NGFW hydrator, interpreter and operation
+Device creation extends the existing NGFW hydrator, interpreter and operation
 outbox. CMS resolves same-scope, unexpired encrypted registration credentials
 before hydration. Both owners retain the initiating principal and historical
-human attribution separately. Native request custody is scalar and protected
+human attribution separately.
+
+Native request custody is scalar and protected
 by database guards. A principal may have an active device in each explicit
 customer scope; the reservation remains occupied until accepted native
 destruction is mirrored. Registration secrets in versioned Engine specs use
-the existing field-encryption key. A forward migration encrypts retained native
+the existing field-encryption key.
+
+A forward migration encrypts retained native
 NGFW specs through the same primitive.
 
 The provisioner's raw SQL reader decodes these versioned encrypted registration
@@ -114,7 +130,7 @@ Pause, resume, destroy and cancel stage native admission before the CMS/Engine t
 That in-process service result never becomes a client or worker credential.
 The transaction fences the inspected resource, records the original proof in
 the existing outbox, and commits both status projections and strict audit
-records together. Anonymous incumbent calls cannot change principal-owned
+records together. Anonymous existing calls cannot change principal-owned
 ranges. Native scenario ranges retain their existing pause/resume capability
 restrictions.
 
@@ -129,21 +145,27 @@ Direct destruction during RAES provisioning enters that same interrupt path;
 it cannot queue teardown while the provision worker may still be active.
 Its separate immutable admission record preserves the cancelling principal's
 non-secret credential reference and original ceiling without overwriting the
-provisioning principal. The accepted interrupt, both status projections and
+provisioning principal.
+
+The accepted interrupt, both status projections and
 strict audit commit together. After verified provider task absence, the worker
 uses explicit cleanup authority derived from the original provisioning
 generation. That limited cleanup can finish after either caller is revoked.
-The incumbent interrupt supports native scenario provision generations;
+
+The existing interrupt supports native scenario provision generations;
 unsupported generations are rejected before changing either projection.
 
 Principal scope moves authorize the persisted source and requested destination
 parents independently in CMS and Engine before acquiring range locks. Both
 services fence current ownership, scope and lifecycle. The destination must be
 live, and the business owner must retain explicit account membership there.
+
 CMS request intent and both range projections move in one transaction with
 strict audit. Native ownership reassignment similarly updates all four owner
 projections and preserves historical human attribution. Immutable event
-aggregates and ranges with unretired VPN custody cannot move. Anonymous legacy
+aggregates and ranges with unretired VPN custody cannot move.
+
+Anonymous legacy
 Engine commands cannot rebind principal-owned ranges.
 
 Accepted scope and owner changes retain immutable receipts with the admitted
@@ -156,9 +178,7 @@ Provisioning expiry first records the existing interrupt and waits for verified
 task absence. An expired range can replace a revoked caller's queued teardown
 with a system cleanup generation while preserving the original proof.
 
-Scenario metadata changes resolve the registered source's scope, retain the
-incumbent realizability gate, repeat live authority after assessment, and fence
-source identity before committing the overlay with principal audit. A service
+Scenario metadata changes resolve the registered source scope and retain the existing realizability gate. They repeat live authority after assessment and check source identity before committing the overlay with principal audit. A service
 change records its principal without assigning a historical human updater.
 Scenario list, detail and launchable-list service entry points use the same
 scope-filtered registry as native catalog queries.
@@ -167,11 +187,15 @@ Range scope moves apply the current destination workspace quota and move the
 native reservation with the projections. Returning to a previously released
 workspace slot requires a new capacity decision; a replay cannot bypass a
 changed hard cap. Quota decision and canonical audit records retain the
-principal UUID. Quota policies currently exist only for actual workspaces;
-unconfigured scopes retain the incumbent absence-of-policy behavior.
+principal UUID.
+
+Quota policies currently exist only for actual workspaces;
+unconfigured scopes retain the existing absence-of-policy behavior.
 Transfers acquire the destination account membership mutex before quota
 workspace mutexes, matching launch admission and avoiding a lock-order cycle.
-Service-owned ranges use the live tenant/default lease policy. A human business
+Service-owned ranges use the live tenant/default lease policy.
+
+A human business
 owner continues to receive restrictive policies from their actual Django groups.
 
 Principal runtime status changes enter through the native operation result
@@ -189,7 +213,7 @@ and does not acquire a user grant from a missing actor.
 
 Each source preparation attempt separately pins the native Kubernetes namespace,
 dedicated role service account, deterministic Job identity and approved image.
-These facts come from the installed preparation grant and incumbent worker
+These facts come from the installed preparation grant and existing worker
 profile. Builder, verifier and cleanup identities remain separate from the
 initiating application principal. Database guards protect that attempt identity
 and prevent rewriting a recorded receipt while allowing lease and reconciliation
@@ -197,7 +221,7 @@ state to advance.
 
 ## Remote session termination
 
-Scoped installer uploads use the incumbent HMAC-signed completion token and
+Scoped installer uploads use the existing HMAC-signed completion token and
 provider upload URL. The CMS records the original credential reference, exact
 ceiling, scope, quota reservation and distinct staging/install keys before URL
 issuance. It stores neither returned token nor URL. Source upload URLs last at
@@ -236,15 +260,17 @@ explicit intervals to exercise notification loss, denial and evaluator failure.
 
 Browser terminal admission reconstructs the live Django session credential
 from the Management session backend before principal resource authorization and
-pins that reference for subsequent checks. The incumbent Django backend retains
+pins that reference for subsequent checks. The existing Django backend retains
 legacy workspace admission and cannot authorize principal-owned resources.
 Historical `Range.user` and `Request.user` values cannot authorize a
-principal-owned guest. Legacy-only resources retain their incumbent workspace
+principal-owned guest.
+
+Legacy-only resources retain their existing workspace
 admission. Ownership transfer closes the former owner's established terminal
 and denies another connection even when the historical user fields remain.
-S8 must select `management.session_backend` as Django's `SESSION_ENGINE` with
-the coordinated principal HTTP/socket admission; deploying these source paths does not silently
-replace the incumbent session store or migrate existing browser sessions.
+S8 selects `management.session_backend` as Django's `SESSION_ENGINE` with coordinated principal HTTP/socket admission.
+
+Deploying source paths alone does not replace the existing session store or migrate browser sessions.
 
 Revocation wakes the consumer's disconnect path and cancels pending SSH
 connection work. Native SSH connection and shell setup each have a 15-second
@@ -271,19 +297,20 @@ actual native DELETE acknowledgement and verifies repeated cleanup converges.
 The approved gateway extension additionally uses Apache's supported
 `UserContext` decorator. Principal bootstraps sign `access-<bootstrap UUID>` as
 the JSON-authenticated identity. The gateway sends only this opaque ID to
-`/api/v1/mission-control/guacamole/control/authority/`. Google's SDK supplies
-the gateway's metadata-issued ID token; the portal verifies the configured
-audience, service-account email and immutable subject, then checks the original
-recorded application credential, ceiling, range generation and scope.
+`/api/v1/mission-control/guacamole/control/authority/`. Google's SDK supplies the gateway's metadata-issued ID token. The portal verifies audience, service-account email, and immutable subject. It then checks the original application credential, ceiling, range generation, and scope.
 
 The local monotonic lease is 90 seconds and renewals run every 15 seconds.
 Denial or expiry permanently invalidates that native session. Guacamole's
-one-minute native eviction cadence remains part of the shutdown bound. Local
+one-minute native eviction cadence remains part of the shutdown bound.
+
+Local
 synthetic native SSH/SFTP qualification measured guest closure at 73.02 seconds
 after denial and 120.03 seconds during an unavailable control service. Those
 measurements establish these fixture outcomes; they do not establish a loaded
 production guarantee. Native RDP qualification additionally verified a live
-guest desktop and its socket table before and after renewal failure. That
+guest desktop and its socket table before and after renewal failure.
+
+That
 fixture measured transport closure at 33.80 seconds after denial and 138.89
 seconds during a control outage, within its 85/165-second test bounds.
 
@@ -300,23 +327,29 @@ secret access. The coordinated S8 activation must supply the common
 `OPENFGA_ENABLED`, `GUACAMOLE_CONTROL_URL` (an administrator-controlled HTTPS
 origin), `GUACAMOLE_CONTROL_AUDIENCE`, and the portal's exact
 `GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL` and
-`GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID`. Missing workload configuration
+`GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID`.
+
+Missing workload configuration
 refuses bound sessions. No separate Guacamole policy mode is introduced.
-Activation also requires destination-specific HTTPS egress to the configured
-control origin, alongside the existing metadata-server egress; do not broaden
-gateway egress to arbitrary Internet destinations to make renewal work.
+Activation requires HTTPS egress to the configured control origin and the existing metadata-server egress.
+
+Do not broaden gateway egress to arbitrary Internet destinations for renewal.
 
 The existing bootstrap controller revalidates source sessions. A failed native
 termination keeps the encrypted reference for another attempt. Pruning preserves
-expired undelivered successes until native termination is confirmed. Such
+expired undelivered successes until native termination is confirmed.
+
+Such
 bootstraps stop renewing even if the original credential remains valid; a
 conditional database update protects a handoff that completed before expiry.
 Delivered native sessions continue through their normal live-authority checks.
 Pruning also preserves in-flight source bootstrap work and sessions awaiting
-termination. Issuing or expiring a browser URL does not establish backend teardown.
-After an ambiguous DELETE or a failed local acknowledgement, the pinned native
-session endpoint's specific missing-token response confirms absence and allows
-the retained reference to be cleared. Generic proxy denials, malformed replies
+termination.
+
+Issuing or expiring a browser URL does not establish backend teardown.
+An ambiguous DELETE or failed local acknowledgement retains the reference. The pinned endpoint's specific missing-token response confirms absence and permits the reference to be cleared.
+
+Generic proxy denials, malformed replies
 and timeouts remain uncertain. This follows the upstream
 [session lookup](https://github.com/apache/guacamole-client/blob/1.6.0/guacamole/src/main/java/org/apache/guacamole/rest/session/SessionRESTService.java)
 and [authentication service](https://github.com/apache/guacamole-client/blob/1.6.0/guacamole/src/main/java/org/apache/guacamole/rest/auth/AuthenticationService.java)
@@ -366,10 +399,11 @@ deployment namespace and issuer reference. Cleanup and refresh copy those facts
 from the issuance input, so later configuration changes do not redirect their
 provider operations. Exhausted issuance dispatch and a missing receipt fifteen
 minutes after dispatch retire the pending identity and enter the existing
-interrupt/recovery path. Refresh, revocation and purge also enter bounded native
-interruption when dispatch succeeds without a receipt for fifteen minutes, when
-delivery is exhausted, or when an accepted failure requires retry. Replacement
+interrupt/recovery path.
+
+Refresh, revocation, and purge enter bounded native interruption after fifteen minutes of successful dispatch without a receipt. Exhausted delivery or an accepted failure requiring retry also starts interruption. Replacement
 waits for provider task absence and retains the original issuance/storage proof.
+
 Revocation during an active refresh interrupts that worker before replacing it.
 Native operation failures carry a fixed diagnostic;
 private provider or key-parsing exception text is excluded.
@@ -387,10 +421,7 @@ installation; missing, modified, expired or rolled-back files fail closed.
 Native qualification uses OpenVPN 2.6.20, OpenSSL 3.5.9 and nftables 1.1.3 from
 the locally built pool image. It verifies distinct client identities, verified
 TLS serial/digest delivery, native disconnect, CRL rejection on reconnect and
-an independent unrevoked client. The control-outage fixture exercises the
-default 90-second grace and asserts actual disconnect within 90–100 seconds
-while checking every 250 ms. This fixture bound is distinct from production's
-15-second heartbeat and network/management call delays. The database lease
+an independent unrevoked client. The control-outage fixture uses the default 90-second grace and checks disconnect every 250 ms. It asserts actual disconnect within 90–100 seconds. This fixture bound differs from production's 15-second heartbeat and network/management call delays. The database lease
 alone is not a native tunnel-closure bound.
 
 The isolated forwarding fixture additionally verifies that revocation blocks an
