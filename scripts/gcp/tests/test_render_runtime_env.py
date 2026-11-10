@@ -393,6 +393,27 @@ def test_render_env_turns_on_the_live_notification_capability():
     assert "WEBSOCKET_NOTIFICATIONS_ENABLED=true" in rendered
 
 
+def test_render_env_declares_the_worker_capacity_partition_for_this_deployment():
+    module = _load_module("render_runtime_env.py", "render_runtime_env")
+    lines = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST).splitlines()
+    env = dict(line.split("=", 1) for line in lines)
+    assert env["CAPACITY_PLANNING_ENABLED"] == "true"
+    catalog = json.loads(env["CAPACITY_PLANNING_CATALOG"])
+    assert catalog["partitions"] == [
+        {
+            "name": "gce-workers",
+            "provider": "gcp",
+            "backend": "gce",
+            "account": env["GCP_PROJECT_ID"],
+            "region": env["RANGE_NETWORK_REGION"],
+        }
+    ]
+    assert sorted(metric["name"] for metric in catalog["metrics"]) == ["instances", "vcpu"]
+    assert {(metric["partition"], metric["enforcement"]) for metric in catalog["metrics"]} == {
+        ("gce-workers", "enforcing")
+    }
+
+
 def test_render_env_defaults_model_access_to_disabled_without_catalog_body():
     module = _load_module("render_runtime_env.py", "render_runtime_env")
     rendered = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST)

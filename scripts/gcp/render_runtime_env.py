@@ -373,6 +373,42 @@ def _mission_control_lease_runtime_values() -> dict[str, str]:
     return _policy_json_runtime_values("MISSION_CONTROL_LEASE_POLICY_JSON")
 
 
+#: The capacity partition that disposable experiment workers draw from.
+WORKER_CAPACITY_PARTITION = "gce-workers"
+
+
+def _capacity_planning_runtime_values(project_id: str, region: str) -> dict[str, str]:
+    """Declare this deployment's GCE worker partition; reservations admit its demand.
+
+    Worker creation requires capacity planning and a partition for this exact
+    project, region and backend. The budgets are enforcing database reservations.
+    """
+    metrics = [
+        {
+            "name": name,
+            "dimension": name,
+            "unit": "count",
+            "partition": WORKER_CAPACITY_PARTITION,
+            "source": "db_reservation",
+            "freshness_seconds": 900,
+            "enforcement": "enforcing",
+        }
+        for name in ("instances", "vcpu")
+    ]
+    partition = {
+        "name": WORKER_CAPACITY_PARTITION,
+        "provider": "gcp",
+        "account": project_id,
+        "region": region,
+        "backend": "gce",
+    }
+    catalog = {"partitions": [partition], "metrics": metrics}
+    return {
+        "CAPACITY_PLANNING_ENABLED": "true",
+        "CAPACITY_PLANNING_CATALOG": json.dumps(catalog, sort_keys=True, separators=(",", ":")),
+    }
+
+
 def _range_telemetry_runtime_values() -> dict[str, str]:
     """Pass through the validated GCP range telemetry policy JSON (issue #2535).
 
@@ -656,6 +692,7 @@ def render_env(outputs: dict[str, object], *, engine_image: str) -> str:
     values.update(_openvpn_runtime_values(outputs))
     values.update(_mission_control_lease_runtime_values())
     values.update(_range_telemetry_runtime_values())
+    values.update(_capacity_planning_runtime_values(real_project, range_network_region))
     # These references originate in the same validated shifter.yaml map that
     # drives per-secret Terraform IAM. Apply them last so a process-local env
     # override cannot decouple runtime lookup from its exact IAM grant.

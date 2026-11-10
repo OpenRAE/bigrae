@@ -42,6 +42,9 @@ Use enforcing reservations with per-worker costs that cover the pinned VM.
 Missing, expired, advisory, insufficient, or wrong-partition budgets refuse admission.
 Never insert reservation rows by hand for a live smoke.
 
+Every GCP deployment declares the `gce-workers` partition for its project and range region.
+Its `vcpu` and `instances` budgets are enforcing database reservations.
+
 ## Run qualification
 
 Execute inside the approved application runtime through the existing operator cluster access:
