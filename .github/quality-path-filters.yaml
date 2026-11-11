@@ -71,9 +71,6 @@ quality_units:
       # consume every pack in the collection.
       - shifter/environment-packs/**
       - .importlinter
-      # Generated S8 authority-surface inventory is contract-tested by the
-      # platform suite and participates in the same lint/SAST boundary.
-      - scripts/generate_identity_surface_inventory.py
     packages:
       - engine
       - cms
@@ -444,14 +441,8 @@ exclusions:
       # Root-level helper scripts are enumerated (not a scripts/* wildcard) so a
       # new script package under scripts/ still fails closed as unclassified.
       - scripts/ami.sh
-      - scripts/bump-version.sh
-      - scripts/config-claude.sh
-      - scripts/count-loc.sh
       - scripts/delete-user.sh
       - scripts/dev-box.sh
-      - scripts/find-orphan-instances.py
-      - scripts/fix_resume.py
-      - scripts/get-devbox-password.sh
       - scripts/iam-deploy.sh
       - scripts/runner-deploy.sh
       - scripts/setup-worktree.sh
