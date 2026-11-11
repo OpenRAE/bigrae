@@ -107,8 +107,8 @@ writers). The direct writers named above (`update_range_status`,
 `write_provisioned_state`, `terraform_ops.py`) are reached only by the legacy
 AWS `range` path, which is **not** cancellable in this scope, so no canceled
 generation reaches them here and the inbox fence is sufficient for RAES/GCP.
-Extending cancellation to the AWS `range` path — and applying the same
-`operation_id` fence to those direct writers — is tracked in #1894.
+Extending cancellation to the AWS `range` path—and applying the same
+`operation_id` fence to those direct writers—is tracked in #1894.
 
 Stopping the workload is not cleanup. Terraform or a provider SDK may have
 mutated resources before interruption, and a killed process cannot be trusted

@@ -8,7 +8,7 @@ Status: pre-implementation guidance
 Date: 2026-06-14
 
 Issue: GitHub #922, "test: built-image stack smoke in CI (boot the real
-container, assert health/WS/workers)".
+container, assert health/WS/workers)."
 
 This issue is requirement-free. The GitHub issue title, body, and acceptance
 criteria are the shipping contract. This note is intentionally not an
@@ -196,7 +196,7 @@ Usually out of scope:
 - Do not add a second health endpoint, second channel-layer config, second
   worker heartbeat naming convention, custom exception hierarchy, or duplicate
   validation layer.
-- Do not assert only "container is running". The home-directory regression and
+- Do not assert only "container is running." The home-directory regression and
   ASGI import failures are exactly the class of runtime failures this job must
   catch through real endpoint/heartbeat assertions.
 - Do not print full container logs blindly on success. On failure, bound the log

@@ -4,7 +4,7 @@
 
 
 Issue: GitHub #762, "Shared hardcoded VM passwords are baked into range
-images and reused in portal access flows".
+images and reused in portal access flows."
 
 This note records the architecture boundary for replacing shared Kali,
 Ubuntu, Windows victim, and Windows DC guest passwords. It is intentionally

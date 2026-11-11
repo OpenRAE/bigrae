@@ -57,7 +57,7 @@ replica; the persistence layer must still be the source of truth.
   unless the existing rows cannot express the lease safely.
 - Protect participant assignment in `ctf.services.range.provision_participant_range`
   with `transaction.atomic()` plus `CTFParticipant.objects.select_for_update()`.
-  The lock must cover the "registered user", "already assigned", CMS create call,
+  The lock must cover the "registered user," "already assigned," CMS create call,
   range-instance lookup, and participant write unless the implementation can
   prove a shorter lock still prevents double assignment.
 - Preserve the `ctf.bridges` boundary for CMS interactions. Scheduler and CTF

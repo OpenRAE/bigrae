@@ -177,7 +177,7 @@ Canonical configs and checks that will see the artifact:
   helper behavior in the view layer.
 - Do not catch broad exceptions and return raw `str(exc)` in JSON. Log full
   details server-side and return fixed/classified user-facing text.
-- Do not add first-party internal mocks to view tests to make the refactor easy.
+- Do not add first-party internal mocks to view tests to make the refactor simpler.
   If tests need to drive failure paths, prefer real service behavior or existing
   cloud/framework boundary patches.
 - Do not hand-edit `CHANGELOG.md`; use a fragment when changelog coverage is

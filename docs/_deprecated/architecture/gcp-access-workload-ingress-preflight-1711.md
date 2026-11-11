@@ -33,7 +33,7 @@ current IAM and RBAC purposes.
 - Make the access pool exclusive. The pool needs a dedicated node label and a
   `NoSchedule` taint; portal and `guacd` need matching required placement and
   the narrow toleration. A preferred affinity or node selector alone does not
-  make a firewall source range mean "only access workloads", because unrelated
+  make a firewall source range mean "only access workloads," because unrelated
   unspecialized pods may otherwise schedule onto that pool.
 - Preserve the existing portal and `guacd` pod labels used by the default-deny
   NetworkPolicy. Placement and NetworkPolicy are two independent gates:
@@ -140,7 +140,7 @@ current IAM and RBAC purposes.
 - **Secret surface:** CIDRs, labels, taints, and ports are non-secret. Keep them
   out of Secret Manager/per-Job Secrets so secret classification stays truthful.
   Do not change portal, `guacd`, node, or provisioner IAM to implement a network
-  source identity; existing credential references and just-in-time resolution
+  source identity; existing credential references and on-demand resolution
   remain untouched.
 - **OS/process exposure:** no credential or topology blob is added to process
   argv, shell strings, GCE metadata, startup scripts, workflow output, or Helm

@@ -233,5 +233,5 @@ python3 scripts/adr_guard/adr_guard.py --all --level ci
 ```
 
 Future implementation that touches `shifter/shifter_platform` should also run
-the relevant focused pytest target(s) and stack-native checks required by
+the relevant focused pytest targets and stack-native checks required by
 `AGENTS.md`.

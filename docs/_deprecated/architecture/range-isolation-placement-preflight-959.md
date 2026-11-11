@@ -8,7 +8,7 @@ Status: pre-implementation guidance
 Date: 2026-06-15
 
 Tracking issue: GitHub #959, "network: document range isolation and single-AZ
-placement as ADRs".
+placement as ADRs."
 
 This is a requirement-free preflight. The issue body is the shipping contract:
 record the AWS range isolation model and the single-AZ placement decision as

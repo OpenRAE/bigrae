@@ -1,4 +1,4 @@
-# Sharing membership and authority preflight — #2140 / M20
+# Sharing membership and authority preflight—#2140 / M20
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../../technical/architecture.md) and accepted, superseding ADRs.
 

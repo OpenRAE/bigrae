@@ -159,7 +159,7 @@ Adjacent contracts this preflight respects but does not pre-empt:
 | Stickiness convention | `var.enable_stickiness` on portal ALB target group | Preserve websocket session affinity; reconnect storms are #847's lens. |
 | Cross-cutting auth surface | `config.middleware.HealthCheckMiddleware`, `ALLOWED_HOSTS` posture for health probes | Public health surface stays unauthenticated and coarse; verbose diagnostics go elsewhere. |
 | AWS runtime topology | `platform/terraform/modules/portal/{alb,ec2,redis}`, environment roots | Preserve ALB TLS, WAF/admin blocking, EC2 instance profile boundaries. |
-| GCP runtime topology | `platform/charts/shifter/templates/*`, `platform/k8s/gcp/base/**` | Any portal probe or scaling reshape carries through both providers, not just AWS. |
+| GCP runtime topology | `platform/charts/shifter/templates/*`, `platform/k8s/gcp/base/**` | Any portal probe or scaling reshape carries through both providers, not only AWS. |
 | Enforcement | `.importlinter`, `.tflint.hcl`, `.kube-linter.yaml`, ADR guard | No guardrail weakening to ease alarm or probe changes. |
 
 ## Symptom to Signal Matrix
@@ -184,7 +184,7 @@ Candidate signals, with current availability:
 | ALB `ActiveConnectionCount` / `RejectedConnectionCount` | `AWS/ApplicationELB` | emitted, no alarm | A, B (admission saturation) |
 | ALB `TargetConnectionErrorCount` | `AWS/ApplicationELB` | emitted, no alarm | A, B |
 | ALB target health (`UnHealthyHostCount`) | `AWS/ApplicationELB` | emitted, no alarm | C, D |
-| Daphne / event-loop lag | none | needs emitter (e.g. periodic loop heartbeat or asyncio task latency probe) | A, B |
+| Daphne / event-loop lag | none | needs emitter (for example periodic loop heartbeat or asyncio task latency probe) | A, B |
 | Channels-redis group length / pending | Redis, derivable via INFO/`channel_layer.receive` instrumentation | needs emitter | B |
 | Redis CPU / memory / connections | already alarmed (`modules/portal/redis`) | wired | B (downstream of channel layer load) |
 | SQS queue depth / message age / DLQ | already alarmed (`modules/portal/messaging`) | wired | A, D (deferred work backlog) |
@@ -309,7 +309,7 @@ evidence are rejected by the contract this preflight is establishing.
   Guacamole-side capacity from portal request-path capacity.
 - `TargetTrackingScaling` is already used for the Guacamole ECS
   service; following the same pattern on the portal ASG is
-  straightforward but not pre-committed by this preflight.
+  possible but not pre-committed by this preflight.
 - A new app-side metric emitter (Prometheus, statsd, or
   CloudWatch `PutMetricData`) is a cross-cutting concern; do not adopt
   one without explicit ADR work.

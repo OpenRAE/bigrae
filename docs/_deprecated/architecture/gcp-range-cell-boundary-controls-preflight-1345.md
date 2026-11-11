@@ -60,7 +60,7 @@ legacy network tags and secure tags ad hoc in individual rule renderers.
   ingress allows source only from the same cell CIDRs and approved management
   sources; egress allows only same-cell CIDRs and explicitly approved endpoints
   before a catch-all deny.
-- Platform-network reachability is not "internal". Range VMs must not egress to
+- Platform-network reachability is not "internal." Range VMs must not egress to
   platform, pod, service, node, database, Redis, Secret Manager, GKE, GDC, or
   operator networks unless a named endpoint is intentionally approved.
 - Management paths are ingress-only from the canonical portal/bastion/Guacamole

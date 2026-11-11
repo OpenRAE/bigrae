@@ -87,7 +87,7 @@ Keep these facts separate:
 
 | Layer | Required reuse and satisfaction |
 | --- | --- |
-| Authentication and application authority | `config/_drf_settings.py`, `active_actor_user`/`request_actor`, shared `require_scope`, and exact communication read/write scopes retain bearer-first fail-closed and session-CSRF behavior. Neither scope implies the other; a POST preview needs an explicit read-scope declaration rather than inheriting unsafe-method write scope. `admission.reauthorize` checks the original live user/token pair, workspace membership/archive mutex and notification authority on every target at due time and replay. The superuser event override does not bypass workspace admission. System/origin/early-release privilege is never caller-supplied or inferred from absent identity. |
+| Authentication and application authority | `config/_drf_settings.py`, `active_actor_user`/`request_actor`, shared `require_scope`, and exact communication read/write scopes retain bearer-first fail-closed and session-CSRF behavior. Neither scope implies the other; a POST preview needs an explicit read-scope declaration rather than inheriting unsafe-method write scope. `admission.reauthorize` checks the original live user/token pair, workspace membership/archive mutex and notification authority on every target at due time and replay. The superuser event override does not bypass workspace admission. System/origin/early release privilege is never caller-supplied or inferred from absent identity. |
 | Authority evolution | `ctf/api/operation_policy.py` classifies intrinsic lifecycle tasks, reauthorized communication release and retired notification work. Preserve coverage for every task/operation. At ADR-066 S8 use the shared credential/principal/ResourceScope and owning policy services, retaining the original credential ceiling and resolved ancestry. Do not activate mixed legacy/OpenFGA authority, fabricate a human for a service, or treat missing workspace as installation authority. |
 | Parsing, schemas and content | `CommunicationJSONParser`/`ClosedJSONParser`, `ClosedSerializer`, `validate_query`, `communication_contracts` and communication enums own closed shapes, duplicate rejection, bounds, UUIDs, UTC and content policy for HTTP/internal callers. The 1 MiB envelope, UTF-8 body-byte, reference and target limits are distinct. Preview reuses the pinned profile on `MarkdownContent` under CSP; no raw HTML, remote media, caller-defined link hosts or second renderer. |
 | Persistence and pressure | Reuse event-first primary-key lock order, live actor/token/workspace locks, campaign/revision serialization, database uniqueness and nested-savepoint replay handling. Declaration plus task and release plus snapshots/commands/inbox/strict audit commit at their existing atomic boundaries. `communication/backpressure.py` owns shared rate/backlog/audience budgets and fail-closed outages. Claim tokens fence stale settlement; transport I/O stays outside locks. `full_clean` does not protect bulk writes. |
@@ -119,7 +119,7 @@ tests prove locking; Redis/ASGI tests prove body-free wake-up/replay. Browser te
 must cover keyboard/focus, labelled timezones, loading/error/retry recovery and
 retained draft/occurrence identity. The current hook retains a campaign after a
 release failure but cannot recover a lost create response; do not claim end-to-end
-exactly-once creation or silently resend ambiguous requests.
+exactly once creation or silently resend ambiguous requests.
 
 Run the ADR guard for this architecture change. Subsequent implementation must
 also satisfy affected Ruff/import checks (`.importlinter` and the per-symbol
@@ -134,7 +134,7 @@ Non-goals: implementing #2052 in this preflight; replacing the scheduler or addi
 a second queue, outbox, DTO vocabulary, exception hierarchy, authorization engine
 or persistence layer; recurring scheduling, arbitrary RAES/range ingress, email
 transport #1525, cross-workspace atomic delivery, secret issuance, recipient export,
-external exactly-once delivery/recall, or ADR-066 S8 activation. Range provisioning
+external exactly once delivery/recall, or ADR-066 S8 activation. Range provisioning
 and expiry stay behind `ctf.bridges` and CMS lease/reconciliation services; a
 communication schedule or cleanup-task toggle cannot extend a range lease. Do not
 revive retired `CTFNotification` writers or change historical migration evidence.

@@ -180,7 +180,7 @@ mutex. Under one `transaction.atomic()` boundary, re-read the invitation and
 actor/account evidence, validate the current generation and state, create the
 membership through a factored version of the existing membership insertion
 logic, consume the invitation, and write strict audit. The existing
-`(workspace, user)` unique constraint is the final exactly-one-membership proof.
+`(workspace, user)` unique constraint is the final exactly one-membership proof.
 A raw `IntegrityError`, duplicate role change, or competing direct add is mapped
 to a bounded conflict; acceptance never silently changes an existing
 membership's role.

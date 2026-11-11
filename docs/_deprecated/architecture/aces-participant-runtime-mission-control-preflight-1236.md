@@ -257,7 +257,7 @@ Future implementation must evaluate changes against:
   API permissions, engine terminal services, Guacamole bootstrap, CTF bridges,
   `RangeEventOutbox`, or shared API/error/logging helpers for ACES work.
 - Do not store canonical ACES participant/history/evidence records in existing
-  JSON fields just because they are convenient.
+  JSON fields only because they are convenient.
 - Do not copy rendered command strings, prompt bodies, script contents,
   transcript bodies, terminal streams, provider dumps, presigned URLs,
   Guacamole token URLs, SSH private keys, RDP passwords, CTF flags, or cloud

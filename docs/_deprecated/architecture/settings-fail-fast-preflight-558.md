@@ -4,7 +4,7 @@
 
 
 Issue: GitHub #558, "Architecture review: align settings with fail-fast
-configuration policy and remove duplicate encryption-key initialization".
+configuration policy and remove duplicate encryption-key initialization."
 
 This note records the architecture boundary for tightening Django runtime
 settings. It is not an implementation plan.
@@ -118,7 +118,7 @@ Likely implementation touchpoints:
   delivery. Console fallback is acceptable only for an explicitly unconfigured
   sender path, not for a half-rendered ESP backend.
 - Do not treat missing OIDC endpoints as warnings in production OIDC mode.
-  Warnings are too late and too easy to miss during deploy.
+  Warnings are too late and too likely to be missed during deploy.
 - Do not create duplicate env parsers, Pydantic settings, new exception classes,
   or provider-local copies of the same validation.
 - Do not print secret values while improving diagnostics. Name the missing key

@@ -52,7 +52,7 @@ engine-local once present.
   may add shared-native metadata validators for persistence fields, but not
   duplicate ACES schemas inside CMS, Engine, Mission Control, CTF, or the
   provisioner.
-- Make idempotency a database invariant, not just service-layer branching.
+- Make idempotency a database invariant, not only service-layer branching.
   Replayed writes with the same idempotency key/source event must converge to
   the same row. Replays with the same idempotency key but different sanitized
   payload digest/source timestamp must fail closed as a conflict.

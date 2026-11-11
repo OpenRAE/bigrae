@@ -129,7 +129,7 @@ new process-management pattern into one deploy target.
 - Updating only one deploy path leaves the requirement partially broken:
   compose, AWS fresh boot, AWS SSM redeploy, static GCP manifests, and Helm must
   stay aligned when command or health semantics change.
-- Do not weaken the GCP admission policy just because the scheduler needs to
+- Do not weaken the GCP admission policy only because the scheduler needs to
   create Jobs. It may launch allowed work; it must not inherit provisioner power.
 - Do not create trace links to docs or broad smoke tests that do not assert the
   scheduler startup/recovery contract.

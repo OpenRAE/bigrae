@@ -389,7 +389,7 @@ launch; no-worker reuse; session/token and CLI/service denials; malformed locks,
 mutable references, foreign resources and private-data leakage; install/disable/
 upgrade/retire/cancel races; duplicate dispatch/result conflicts; registry,
 provider, database and audit outages; and orphan cleanup after worker loss.
-Exercise effective denied IAM/network paths, not just matching labels or mocked
+Exercise effective denied IAM/network paths, not only matching labels or mocked
 success. A GCE specimen does not certify AMI support, and design/unit evidence
 does not certify native cloud effects.
 

@@ -19,7 +19,7 @@ account, link it to one event-scoped `CTFParticipant`, mark the participation
 delivery email carries only non-secret login information. It is not identity,
 proof of receipt, or a state transition.
 
-Consequently, the current create-then-immediately-register hop is not a
+Consequently, the current create-then-register-immediately hop is not a
 meaningful lifecycle transition. The implementation must remove that misleading
 state from organizer-provisioned creation and align model/help text, endpoints,
 templates, webhooks, email copy, tests, and CTF-006 wording with the

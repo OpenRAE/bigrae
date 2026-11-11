@@ -444,7 +444,7 @@ Kubernetes Secret manifests, provider responses, or kubeconfig content.
 8. **Kubernetes policy:** every provider render passes Helm lint/template,
    ADR-006 security-context/default-deny checks, kube-linter, strict
    kubeconform, RBAC/admission structural tests, and namespace PSS assertions.
-9. **Supply-chain identity:** every image digest is verified and attested before
+9. **Supply chain identity:** every image digest is verified and attested before
    `helm upgrade --install --atomic --wait`; no tag or first-deploy bypass.
 10. **Runtime env and secret binding:** generated outputs, runtime inventory,
     env manifest, Helm ConfigMap keys, AWS ECS forwarding, and entrypoint

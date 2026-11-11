@@ -8,7 +8,7 @@ Status: pre-design guidance
 Date: 2026-07-18
 
 Issue: GitHub #983, "Design a smoke-test / QA (QAT) system for common range
-infra and a basic scenario".
+infra and a basic scenario."
 
 This issue is requirement-free. Its title, body, and acceptance criteria are
 the contract. This note records repository-wide boundaries that the design
@@ -72,8 +72,8 @@ into one undifferentiated `smoke passed` signal.
   contract.
 - Resolve access through `engine.services._terminal` and the Mission Control
   brokers. They already enforce actor ownership, current membership, `READY`,
-  declared participant channel, target resolution, and just-in-time secret
-  access. Never accept or infer an arbitrary host, port, or protocol in order to
+  declared participant channel, target resolution, and on-demand secret
+  access. Never accept or infer an arbitrary host, port, or protocol to
   bypass those checks.
 - Preserve ADR-041 as the only scenario-behavior extension seam. Core owns the
   versioned verification contracts, deterministic discovery, bounded runner,
@@ -137,7 +137,7 @@ creates a new repository-wide verification contract beyond ADR-041.
 | Domain lifecycle | `cms.services.create_range`, range query/lifecycle helpers, `destroy_range_by_request_id`, Engine dispatch/state | Preserve active-range admission, idempotency/correlation, ownership, audit, state transitions, backend admission, and terminal cleanup. |
 | Backend realization | ADR-039 `provider-neutral-range-substrate.md` and root-selected backend bundles | Observe the selected deployment/backend and public postconditions; do not add provider switches or a third topology/resource schema to QAT. |
 | Terminal access | `engine.services._terminal`, `mission_control.consumers.SSHConsumer`, `mission_control.status_consumers.RangeStatusConsumer`, `config.asgi` | Reuse member/channel/readiness/secret checks, origin validation, session auth, capacity limits, close codes, and the existing JSON message contract. |
-| Guacamole access | `mission_control.api.guacamole`, `mission_control.guacamole_bootstrap`, `mission_control.guacamole`, Guacamole views | Reuse serializer/scope/ownership validation, bounded bootstrap state, one-time URL consumption, just-in-time secret resolution, and signed-token construction. Never persist or disclose the returned URL. |
+| Guacamole access | `mission_control.api.guacamole`, `mission_control.guacamole_bootstrap`, `mission_control.guacamole`, Guacamole views | Reuse serializer/scope/ownership validation, bounded bootstrap state, one-time URL consumption, on-demand secret resolution, and signed-token construction. Never persist or disclose the returned URL. |
 | API authentication and authorization | `shared.api_tokens.authentication`, `shared.api_tokens.scopes`, `mission_control.api.permissions`, Django session/CSRF middleware | Use a dedicated active actor and exact existing scopes. Bearer auth covers HTTP but does not automatically authenticate Channels WebSockets; the design must use the real session/cookie boundary where required. |
 | Scenario behavior verification | ADR-041 `scenario-verification-plugin-seam-adr.md`, `shared.scenario_verification`, `docs/technical/shifter_platform/scenario-verification.md` | Compose with the selected installed plugin and injected runner; do not ship answers/adapters in core or create a second plugin/result/runner contract. |
 | Isolation validation | `shared.range_escape`, `cms.range_escape`, `run_range_escape_validation`, `docs/ops/range-escape-validation.md` | Keep adversarial participant-origin escape evidence as a separate security gate; do not infer isolation from successful happy-path access. |
@@ -199,7 +199,7 @@ table are rooted at `shifter/shifter_platform/`.
   environment/URL, observed backend/provider expectation, scenario and fixture
   references, actor reference, selected protocol/check profile, deadlines,
   cleanup policy, and evidence destination. Secrets are resolved through their
-  existing owning boundary just in time.
+  existing owning boundary at the time of use.
 - If any value must enter deployed process configuration, it passes
   `_env_manifest.py`, generated manifest parity, installation inventory,
   runtime rendering, and any Engine/GKE allowlist or admission shape. Adding an

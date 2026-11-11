@@ -6,7 +6,7 @@ Date: 2026-07-18
 
 Issue: GitHub [#983](https://github.com/Brad-Edwards/bigrae/issues/983),
 "Design a smoke-test / QA (QAT) system for common range infra and a basic
-scenario".
+scenario."
 
 Binding guardrails: [../_deprecated/architecture/smoke-test-qat-design-preflight-983.md](../_deprecated/architecture/smoke-test-qat-design-preflight-983.md).
 
@@ -379,7 +379,7 @@ a generic result hierarchy.
   scenario and fixture reference, actor reference, selected check or protocol
   profile, per-phase and whole-run deadlines, cleanup policy, and evidence
   destination. Deployment and backend selection is a trusted deployment fact,
-  not a client-controlled provider switch. Secrets are resolved just in time
+  not a client-controlled provider switch. Secrets are resolved at the time of use
   through their existing owning boundary, never carried in the profile.
 - **Scenario behavior.** New behavior checks are an ADR-041 installed plugin
   plus its injected runner, selected by exact version, with namespaced

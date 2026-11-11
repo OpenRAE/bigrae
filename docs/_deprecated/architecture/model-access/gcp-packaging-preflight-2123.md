@@ -1,4 +1,4 @@
-# GCP broker packaging preflight — #2123 / M06
+# GCP broker packaging preflight—#2123 / M06
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../../technical/architecture.md) and accepted, superseding ADRs.
 
@@ -55,7 +55,7 @@ requires `iam.serviceAccounts.getAccessToken`; the predefined token-creator
 role also has other authority. Qualify the minimum supported permission set
 on each exact target, and keep broker-to-Engine ID-token issuance separate
 from shard access-token minting. Effective IAM checks must include inherited
-grants, not just this module's resource list.
+grants, not only this module's resource list.
 
 ## Network realization and operational constraints
 
@@ -111,7 +111,7 @@ grants, not just this module's resource list.
   the listener reloads projected key/cert updates or drains on rollout; never
   assume a mount update means a running TLS context reloaded. Avoid `subPath`
   for live-rotated material. CA rotation also requires guest/control trust
-  overlap, not just server certificate replacement. Do not reuse the public
+  overlap, not only server certificate replacement. Do not reuse the public
   portal's managed ingress certificate mechanism for passthrough termination
   or introduce a mandatory mesh/certificate platform.
 - Reuse chart resource/security/anti-affinity helpers and the operations

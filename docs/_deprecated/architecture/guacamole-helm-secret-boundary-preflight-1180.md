@@ -37,7 +37,7 @@ boundaries the implementation must preserve.
   Reuse the existing secret-fetch and `sync_gcp_guacamole_runtime_secret`
   boundary instead of adding another deployment script path.
 - The Helm chart must model `guacamoleRuntimeSecret` as a non-secret reference,
-  preferably just the existing Secret name. Raw `stringData` values are not a
+  preferably only the existing Secret name. Raw `stringData` values are not a
   chart contract. If a future controller owns the object, Helm values should
   pass controller references, not payloads.
 - The `guacamole-client` pod should continue consuming non-secret connection

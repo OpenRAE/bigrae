@@ -1,4 +1,4 @@
-# Scenario and event model-admission preflight — #2119
+# Scenario and event model-admission preflight—#2119
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../../technical/architecture.md) and accepted, superseding ADRs.
 
@@ -21,7 +21,7 @@ qualified field. Do not add a local RAES field or infer access from pack text,
 tool names, images, or a selected cloud backend. Compute placement and model
 routing remain independent.
 
-### Resolved: two lifecycles — where the need binding lives
+### Resolved: two lifecycles—where the need binding lives
 
 This note originally emphasized the mounted `ModelAccessCatalog` for
 model-access configuration. That is correct for **deployment policy** but **not**
@@ -29,7 +29,7 @@ for the per-pack scenario need. Env/scenario packs are **tenant/staff-managed
 runtime data** (registered and removed at runtime via `PackRegisterView` →
 `cms.services.register_pack`, backed by `RaesPackageSource` and the
 `ScenarioMetadata` staff overlay). Storing per-pack needs in the deploy-time
-mounted catalog would make a newly-registered model-requiring pack fail closed
+mounted catalog would make a newly registered model-requiring pack fail closed
 until an operator redeploys the catalog. Split the two lifecycles:
 
 - **Deployment policy (operator, deploy-time):** the mounted `ModelAccessCatalog`

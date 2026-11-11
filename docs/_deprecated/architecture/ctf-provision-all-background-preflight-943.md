@@ -126,7 +126,7 @@ rewriting views, JavaScript, or deployment wiring.
   A worker restart would still orphan process-local state.
 - Do not add Celery/RQ/SQS for this issue; the CTF scheduler already exists and
   is deployed across local, AWS, and GCP paths.
-- Do not call the throttled service from the API view just because it is already
+- Do not call the throttled service from the API view only because it is already
   slower-paced. It still sleeps and still blocks gunicorn.
 - Do not confuse a queued background task with participant range status.
   Overloading `CTFParticipant.range_status` with task states will leak queue

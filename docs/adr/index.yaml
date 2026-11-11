@@ -2270,7 +2270,7 @@
     "title": "Documentation is a single public mkdocs site on GitHub Pages",
     "status": "accepted",
     "scope": "repository",
-    "decision": "Shifter documentation is authored as Markdown under top-level docs/ and published as one public mkdocs (Material) site on GitHub Pages. There is no second docs system: the in-app login-gated Django documentation app is retired and its product/user docs move onto the same site. Internal design notes and machine registries stay in the repository but are kept off the published site. Doc relocations preserve content verbatim.",
+    "decision": "Shifter documentation is authored as Markdown under top-level docs/ and published as one public mkdocs (Material) site on GitHub Pages. There is no second docs system: the in-app login-gated Django documentation app is retired and its product/user docs move onto the same site. Internal design notes and machine registries stay in the repository but are kept off the published site. Doc relocations preserve content verbatim, except for meaning-preserving prose-lint corrections that the changed-Markdown gate requires (#2883).",
     "rules": [
       {
         "id": "ADR-038-R1",
@@ -2284,7 +2284,7 @@
       },
       {
         "id": "ADR-038-R3",
-        "description": "Documentation relocations preserve content verbatim (git mv); doc bodies are not regenerated or rewritten as part of a move.",
+        "description": "Documentation relocations preserve content verbatim (git mv); doc bodies are not regenerated or rewritten as part of a move. Amendment (#2883): a move may include the prose-lint corrections that the changed-Markdown gate requires. These corrections keep the original meaning, facts, identifiers, and evidence.",
         "checks": []
       }
     ],

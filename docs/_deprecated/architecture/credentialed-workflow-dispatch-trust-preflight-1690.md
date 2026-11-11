@@ -240,7 +240,7 @@ because it uses the same cloud or Packer.
 - Do not re-resolve `refs/heads/dev` after dispatch when `github.sha` already
   names the authorized commit; that introduces a branch-movement race.
 - Do not omit `packer-promote.yml`, `packer-gcp.yml`, or
-  `gcp-dev-destroy.yml` from the caller inventory simply because the issue's
+  `gcp-dev-destroy.yml` from the caller inventory only because the issue's
   examples emphasize validate/promote and scenario bake.
 - Do not put GCP trust semantics into `check_tf_iam_role_naming`, duplicate
   environment/subject maps in tests and production, or rely on string-presence

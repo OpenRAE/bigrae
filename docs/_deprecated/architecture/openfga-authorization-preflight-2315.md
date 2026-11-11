@@ -359,7 +359,7 @@ credential method without changing action, scope, policy, or domain contracts.
 - It does not make OpenFGA authoritative for identity, resource lifecycle or
   ancestry, cloud IAM, CTF event participation, model-access authority,
   provider installation, secrets, or deployment administration.
-- It does not add organizational approval, just-in-time access, nested-group
+- It does not add organizational approval, on-demand access, nested-group
   semantics beyond the pinned model, customer-authored executable policy, or a
   public/general policy query language.
 - It does not make UI capability responses an authorization guarantee or expose

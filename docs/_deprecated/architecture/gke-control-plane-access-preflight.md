@@ -22,12 +22,12 @@ network needs direct API access, both validation layers enforce:
    prefixes).
 4. Every entry must be an IPv4 subnet wholly contained in RFC1918 space.
 
-- **Terraform layer** — `gke_master_authorized_cidrs` in
+- **Terraform layer**—`gke_master_authorized_cidrs` in
   `platform/terraform/gcp/modules/platform-core/variables.tf` has no default
   and a `validation` block expressing the contract above. So
   `terraform plan` / `terraform apply` / `terraform test` fail with a clear
-  error otherwise — including a direct apply that does not run bootstrap.
-- **Bootstrap layer** — `scripts/bootstrap/deploy.py`'s
+  error otherwise—including a direct apply that does not run bootstrap.
+- **Bootstrap layer**—`scripts/bootstrap/deploy.py`'s
   `validate_gcp_control_plane_security_inputs` enforces the same four-part
   contract using `ipaddress.ip_network` plus explicit RFC1918 containment
   before it ever reaches `terraform apply`,
@@ -144,6 +144,6 @@ Run the repo-required checks for whatever this area's change touches:
   python3 -m pytest scripts/bootstrap/tests/test_deploy.py -k GcpControlPlaneSecurityInputs
   ```
 
-- Any other touched subsystem also runs its stack-native checks (e.g.
+- Any other touched subsystem also runs its stack-native checks (for example
   `ruff` / `mypy` for `shifter_platform` Python, `kube-linter` / `kubeconform`
   for `platform/k8s/`, `pre-commit run --all-files` for the full set).

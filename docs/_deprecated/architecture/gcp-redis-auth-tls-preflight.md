@@ -4,7 +4,7 @@
 
 
 Issue: GitHub #963, "[MEDIUM] Redis BASIC tier has no auth or encryption in
-transit".
+transit."
 
 This note records the architecture boundary for hardening the GCP Memorystore
 Redis instance. It is not an implementation plan.
@@ -113,7 +113,7 @@ changing queue/storage/task protocols, or duplicating runtime renderers.
 
 ## Gotchas
 
-- Memorystore AUTH/TLS changes are not just mutable flags. Expect replacement,
+- Memorystore AUTH/TLS changes are not only mutable flags. Expect replacement,
   endpoint changes, or rollout downtime risk and make the migration explicit in
   the implementation PR.
 - Terraform state will contain generated secret material when Terraform wires a
@@ -177,12 +177,11 @@ If the implementation changes the runtime renderer, chart, entrypoint, or
 Django settings, also run the focused renderer/bootstrap/settings tests that
 cover Redis env binding and Helm secret placement.
 
-## Outcome — implementation landed 2026-05-11
+## Outcome—implementation landed 2026-05-11
 
 Landed alongside #959, #960, and #962. End-to-end concrete artifacts:
 
-- `platform/terraform/gcp/modules/platform-core/main.tf` —
-  `google_redis_instance.platform` now sets `tier = STANDARD_HA` (via
+- `platform/terraform/gcp/modules/platform-core/main.tf`: `google_redis_instance.platform` now sets `tier = STANDARD_HA` (via
   `var.redis_tier`), `auth_enabled = true`,
   `transit_encryption_mode = "SERVER_AUTHENTICATION"`. The
   `runtime_secrets` map and `runtime_seeded` secret-version map both
@@ -194,27 +193,25 @@ Landed alongside #959, #960, and #962. End-to-end concrete artifacts:
   `google_redis_instance.platform.port` returns the TLS endpoint (6378),
   which flows through `control_plane_cache.port` → `REDIS_PORT` and is
   reflected in `platform/charts/shifter/templates/networkpolicies.yaml`.
-- `platform/terraform/gcp/modules/platform-core/variables.tf` —
-  `redis_tier` default is `STANDARD_HA` as the production
+- `platform/terraform/gcp/modules/platform-core/variables.tf`: `redis_tier` default is `STANDARD_HA` as the production
   high-availability posture. AUTH and TLS are enforced unconditionally
   on the `google_redis_instance` regardless of tier (both features are
   independent of the tier choice in current GCP), so a future
   disposable environment can override to `BASIC` without weakening the
   security contract. The validation block accepts both
   `BASIC` and `STANDARD_HA` to sanity-check the input.
-- `platform/terraform/gcp/modules/platform-core/outputs.tf` —
-  `control_plane_cache` now also carries `tls_enabled = true`. The
+- `platform/terraform/gcp/modules/platform-core/outputs.tf`: `control_plane_cache` now also carries `tls_enabled = true`. The
   Redis secret resource ID flows through the existing
   `runtime_secret_ids` output.
-- `scripts/gcp/render_runtime_env.py` — emits `REDIS_TLS=true` and
+- `scripts/gcp/render_runtime_env.py`: emits `REDIS_TLS=true` and
   `REDIS_SECRET_ID=<runtime_secret_ids["redis"]>` alongside
   `REDIS_HOST` / `REDIS_PORT`. Never emits `REDIS_PASSWORD` or
   `REDIS_URL`; the renderer's structural test asserts the negative.
-- `shifter/shifter_platform/entrypoint.sh` — guarded block that, when
+- `shifter/shifter_platform/entrypoint.sh`: guarded block that, when
   `REDIS_SECRET_ID` is set, hydrates `REDIS_PASSWORD` AND `REDIS_CA_PEM`
   from the Secret Manager payload using the same stdin-fed `python -c`
   shape as the DB password (neither value reaches argv).
-- `shifter/shifter_platform/config/settings.py` — extracted
+- `shifter/shifter_platform/config/settings.py`: extracted
   `_build_channel_layers(env)` helper. Returns `InMemoryChannelLayer`
   with no `REDIS_HOST`; tuple-form for plaintext local dev when TLS is
   off; a `channels_redis` dict-form host (`address` +
@@ -226,19 +223,18 @@ Landed alongside #959, #960, and #962. End-to-end concrete artifacts:
   hydrated CA rather than the system trust store. Raises
   `ImproperlyConfigured` when `REDIS_TLS=true` is set without
   `REDIS_PASSWORD`.
-- `shifter/shifter_platform/tests/config/test_channel_layers.py` —
-  red-green tests for each branch above (including the negative
+- `shifter/shifter_platform/tests/config/test_channel_layers.py`: red-green tests for each branch above (including the negative
   fail-closed branch).
-- `scripts/gcp/tests/test_render_runtime_env.py` — extended `_outputs()`
+- `scripts/gcp/tests/test_render_runtime_env.py`: extended `_outputs()`
   with `tls_enabled` and a `redis` secret id; added the positive test
   for the new env vars and the negative test that the rendered env
   never carries a password.
 
-- `platform/charts/shifter/templates/networkpolicies.yaml` — egress
+- `platform/charts/shifter/templates/networkpolicies.yaml`: egress
   ports for the private-service CIDRs now include 6378 (Memorystore
   TLS endpoint) alongside the existing 6379 (plaintext / AWS path).
   This covers the Helm-based deploy path (`scripts/bootstrap/deploy.py`).
-- `platform/k8s/gcp/base/networkpolicies.yaml` — adds a new
+- `platform/k8s/gcp/base/networkpolicies.yaml`: adds a new
   `allow-platform-private-service-egress` policy covering ports 5432,
   6378, and 6379 against RFC1918 destinations. This covers the
   `kubectl apply -k` deploy path that `.github/workflows/_gcp-dev.yml`
@@ -247,7 +243,7 @@ Landed alongside #959, #960, and #962. End-to-end concrete artifacts:
 
 ADR-008-R6 (`docs/adr/index.yaml`) is the rule of record; this outcome
 section is its implementation evidence. ConfigMap and bootstrap helm
-bridge are intentionally unchanged — the existing `runtimeEnv` /
+bridge are intentionally unchanged—the existing `runtimeEnv` /
 `privateServiceCidrs` flow already carries the new non-secret keys
 (`REDIS_TLS`, `REDIS_SECRET_ID`), and AUTH + CA PEM never leave Secret
 Manager + the pod's env after hydration.

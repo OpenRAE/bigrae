@@ -185,7 +185,7 @@ remain outside PLAT-233 lifecycle activation.
 ## Historical S1 readiness decision
 
 PLAT-233 is architecture-ready under ADR-066, but the current lifecycle paths
-encode the superseded personal-workspace model and cannot simply be extended:
+encode the superseded personal-workspace model and cannot be extended directly:
 
 - `workspaces.services._lifecycle.create_workspace` implicitly grants its
   creator `owner`, while ADR-066 requires hierarchy creation without an inferred

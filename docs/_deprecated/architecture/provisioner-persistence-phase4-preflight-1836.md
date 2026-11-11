@@ -1,4 +1,4 @@
-# Provisioner Persistence Boundary — Phase 4 Preflight (#1836)
+# Provisioner Persistence Boundary—Phase 4 Preflight (#1836)
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../technical/architecture.md) and accepted, superseding ADRs.
 
@@ -194,7 +194,7 @@ catalog and revoke every surviving effective NGFW write capability.
 
 PostgreSQL tests must exercise the migrated schema and the real
 `provisioner_lambda` role. Prove effective table and column privileges, not
-just that a migration function emitted a `REVOKE` string:
+only that a migration function emitted a `REVOKE` string:
 
 - input projection remains readable and inbox append remains allowed;
 - inbox/domain-table read, update, and delete stay denied except for the
@@ -239,7 +239,7 @@ that results are progressing.
 - Do not reuse the result payload as an SNS/SQS/websocket event.
 - Do not swallow authoritative append/audit/outbox failures.
 - Do not revoke table-level grants while earlier cutover families still use
-  them, and do not retain unused grants “just in case.”
+  them, and do not retain unused grants as a precaution.
 
 ## Non-Goals
 

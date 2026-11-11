@@ -250,7 +250,7 @@ must not become application dependencies.
   granularity, scope/provider/environment, currency/unit, source, and
   `as_of`/freshness metadata, with bounded ranges and pagination where needed.
   This keeps a later provider or deployment variation from hardcoding an AWS
-  monthly-cost assumption into React. The seam does not authorize or implement
+  monthly cost assumption into React. The seam does not authorize or implement
   provider adapters in #1373.
 - State seam: loading, initial empty, filtered empty, permission denied,
   validation error, backend error with request id, unavailable API, stale data,

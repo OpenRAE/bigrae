@@ -4,7 +4,7 @@
 
 
 Issue: GitHub #395, "RDP connection fails on first attempt, redirects to
-Guacamole login".
+Guacamole login."
 
 This note records the architecture boundary for fixing first-click Guacamole
 RDP reliability. It is intentionally not an implementation plan. The goal is to

@@ -170,7 +170,7 @@ workflow YAML or cloning the whole orchestration path.
   Apply the owning root with protection disabled before destroy.
 - Destroy success does not prove absence: AWS services can recreate log groups,
   Lambda ENIs can delay subnet/SG removal, and eventual consistency can make a
-  just-deleted global name appear occupied. Verify absence with bounded polling.
+  recently deleted global name appear occupied. Verify absence with bounded polling.
 - Terraform-managed SSM parameters and workflow-written parameters share one
   prefix. Cleaning only the module misses deployment parameters; recursively
   deleting `/shifter/*` destroys shared AMI references and other environments.

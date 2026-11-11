@@ -157,7 +157,7 @@ Likely implementation surfaces:
 
 - Do not run participant containers as Kubernetes pods or attach them to the
   platform pod network. Docker/Compose belongs inside the Linux range host VM.
-- Do not silently replace the current GDC path just because
+- Do not silently replace the current GDC path only because
   `CLOUD_PROVIDER=gcp` is already routed there. The new Compute Engine backend
   needs an explicit substrate/profile gate.
 - Do not copy GDC metadata names (`gdc_namespace`, `gdc_nad_name`,

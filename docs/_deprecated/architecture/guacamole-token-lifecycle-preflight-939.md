@@ -32,7 +32,7 @@ tasks, or platform networking.
 - Treat `result_url` as secret-bearing. It contains the Guacamole auth token
   returned by `/api/tokens`, so a database read can become live RDP/SSH access
   for the remaining token lifetime.
-- `succeeded` must continue to mean "URL is ready to deliver", not "URL was
+- `succeeded` must continue to mean "URL is ready to deliver," not "URL was
   already delivered." The implementation needs an explicit consumed/delivered
   state or equivalent durable marker so the row can keep non-secret lifecycle
   metadata while clearing the token field immediately after the URL is returned

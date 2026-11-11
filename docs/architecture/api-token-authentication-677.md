@@ -1,4 +1,4 @@
-# API Token Authentication — Decision Record (PLAT-102 / #677)
+# API Token Authentication—Decision Record (PLAT-102 / #677)
 
 Historical decision: #2316 supersedes this record's custom token verifier,
 staff-based issuance, and token-as-principal rules. See the

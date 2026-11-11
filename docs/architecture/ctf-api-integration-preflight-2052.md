@@ -35,7 +35,7 @@ composition over the existing domain, not another workflow owner.
   visibility before pagination/counts. An event filter does not narrow campaign
   authority. Parent-scope every revision, team and participant lookup. Requested
   channel/source readiness and capacity also belong in service admission, not
-  just the HTTP controller. Subsequent delivery may partially fail; admission
+  only the HTTP controller. Subsequent delivery may partially fail; admission
   must not partially commit.
 - **Authority facts stay distinct:** the current platform-admin event override
   does not bypass the separate workspace membership/archive gate. Do not create
@@ -65,7 +65,7 @@ composition over the existing domain, not another workflow owner.
   events in different zones. Display the chosen zone, interpreted instant and
   existing `event_timezone`; `datetime-local` plus browser `Date` conversion does
   not resolve event-zone or daylight-saving ambiguity. Reuse the trigger validator,
-  release grace/expiry and session-only early-release policy. Cancellation stops
+  release grace/expiry and session-only early release policy. Cancellation stops
   unclaimed commands; committed claims end the recall guarantee. Pre-I/O
   suppression is additional protection, not recall. Already committed inbox
   availability and accepted external effects remain truthful after cancellation.
@@ -94,7 +94,7 @@ integrity and strict rollback. Do not infer scope for old rows or add another le
 | --- | --- |
 | Authentication and browser boundary | Reuse `config/_drf_settings.py`, platform `ApiTokenAuthentication` and owning credential validation, bearer first with no invalid-bearer session fallback. Current human token calls resolve through `active_actor_user`, not `request.user`. `HasActiveCTFActor` and service policy reject temporary/ineligible organizer actors; CTF path-prefix admission is not authority. Preserve `CTFAccountBoundaryMiddleware`, live profile/password-change gates, session CSRF and session-only participant receipts. |
 | Exact scopes and future policy | Shared `require_scope` enforces/publishes exact `ctf:communication:read/write`, with no broad event/play substitution or write-implies-read. A POST preview must explicitly publish/enforce its read scope while retaining session CSRF; inherited unsafe-method policy otherwise selects write. Register added operations in `ctf/api/operation_policy.py` and its coverage tests. Its prepared `event.manage_communications` mapping is not live enforcement. At S8 reuse `PrincipalRef`/`ResourceScope`, `CredentialContext`/`CredentialCeiling`, `authenticated_credential`, `ctf.services.credential_scope`, `workspaces.services` ancestry and `shared.authorization`; no fabricated User/workspace, null-means-installation shortcut, or logical OR of policy engines. This issue does not activate S8 or claim service-principal support from prepared schemas. |
-| Bytes, query and domain shapes | Reuse `CommunicationJSONParser`/`ClosedJSONParser`, nested `ClosedSerializer` and `validate_query`. Reject duplicate/unknown fields, non-object/deep/nonfinite JSON, malformed Unicode/types, repeated singleton query keys and unsupported media. Keep independent 1 MiB envelope, 65,536 UTF-8 body-byte, 100-target, 5,000 explicit-reference and finite report/page bounds. Domain validators remain authoritative for internal callers; actor/token/origin/system/generation/early-release privilege are server-derived. |
+| Bytes, query and domain shapes | Reuse `CommunicationJSONParser`/`ClosedJSONParser`, nested `ClosedSerializer` and `validate_query`. Reject duplicate/unknown fields, non-object/deep/nonfinite JSON, malformed Unicode/types, repeated singleton query keys and unsupported media. Keep independent 1 MiB envelope, 65,536 UTF-8 body-byte, 100-target, 5,000 explicit-reference and finite report/page bounds. Domain validators remain authoritative for internal callers; actor/token/origin/system/generation/early release privilege are server-derived. |
 | Content and browser execution | Reuse `validate_message_content`, canonical digest and `MarkdownContent`'s pinned communication profile under existing CSP. The generic Markdown profile is broader. Host allowlists are deployment-owned; omitted browser hosts safely disable external links and do not prove preview/delivery parity. No raw HTML/media, template execution, URL fetching, second renderer or CSP relaxation. Navigation policy does not replace SSRF validation if a future feature fetches URLs. |
 | Persistence and concurrency | Reuse live original actor/token checks on release, replay and due execution, workspace archive/membership mutexes, deterministic event-first locks, campaign/revision serialization, database shape/uniqueness constraints and nested-savepoint replay handling. Preserve atomic intent/snapshot/receipt/command/strict-audit writes and no I/O under locks. `full_clean`/`ImmutableFieldsMixin` do not protect every association or bulk/queryset write. Keep `backpressure`, `shared.rate_limit.consume_fixed_window`, fail-closed cache behavior and PostgreSQL backlog serialization; no process-local limiter or missing-actor system fallback. |
 | Secrets, retention and host exposure | `EncryptedStringField`/`shared.field_encryption`, `communication.retention` physical erasure and participant removal/deletion hooks remain owners. Credential issuance stays volatile in `participant.credentials`/`shared.credential_delivery`, never immutable content. No bodies, rosters, coordinates, credentials or provider payloads in task metadata, browser persistence, logs, audit, metrics, argv, shell text, environment dumps, temp/public artifacts or manifests. This extension needs no new secret, worker or external processor. If job env is later touched, `shared.cloud.sensitive_env.split_env` and Kubernetes admission are independent gates; `_API_KEY` is not a sensitive suffix and cannot be assumed safe to forward literally. |
@@ -137,7 +137,7 @@ Registry validity alone proves neither runtime reliability nor completed CTF-012
 Non-goals: implementing this preflight; separate API/service, repository/outbox/job
 framework, cross-workspace broadcast, frozen preview membership, new transports or
 provider SDKs, RAES/range-trigger activation, secret messages, recipient export,
-second schema/error/audit hierarchy, exactly-once/recall guarantees, cloud IAM or
+second schema/error/audit hierarchy, exactly once/recall guarantees, cloud IAM or
 private-pack changes, S8 activation or deployment. Only in-app is registered;
 email remains #1525. Never accept unavailable channels as deliverable, silently
 downgrade, revive retired notification writers or reverse the maintenance fence.

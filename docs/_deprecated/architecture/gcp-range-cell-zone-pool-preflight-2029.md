@@ -23,7 +23,7 @@ reversed for #2029 (authorized during implementation):
    both legacy and RAES apply/destroy bind the config to the stored zone and never
    recompute from the pool. Deciding at creation makes placement a durable property
    of the range from birth, so: teardown is correct even if the pool is later
-   reordered/resized; there is no apply-time race (creation is single and
+   reordered/resized; there is no apply time race (creation is single and
    transactional); and an empty `placement_zone` unambiguously means a pre-#2029 /
    single-zone range (never reinterpreted through the current pool). This reverses
    the "no new placement table/column" non-goal.

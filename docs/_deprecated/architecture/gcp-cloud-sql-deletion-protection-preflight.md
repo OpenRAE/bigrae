@@ -3,7 +3,7 @@
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../technical/architecture.md) and accepted, superseding ADRs.
 
 
-Issue: GitHub #960, "[HIGH] Cloud SQL deletion protection disabled".
+Issue: GitHub #960, "[HIGH] Cloud SQL deletion protection disabled."
 
 This note records the architecture boundary for closing the Cloud SQL
 destruction footgun. It is not an implementation plan; it exists so the
@@ -143,20 +143,18 @@ cd platform/terraform/gcp/environments/gcp-dev && terraform init -backend=false 
 
 If the implementation changes workflows, also run `actionlint`.
 
-## Outcome — implementation landed 2026-05-11
+## Outcome—implementation landed 2026-05-11
 
 Landed alongside #959, #962, and #963. Concrete artifacts:
 
-- `platform/terraform/gcp/modules/platform-core/main.tf` —
-  `deletion_protection = var.cloud_sql_deletion_protection` on
+- `platform/terraform/gcp/modules/platform-core/main.tf`: `deletion_protection = var.cloud_sql_deletion_protection` on
   `google_sql_database_instance.platform`.
-- `platform/terraform/gcp/modules/platform-core/variables.tf` —
-  `cloud_sql_deletion_protection` boolean, default `true`, narrowly
+- `platform/terraform/gcp/modules/platform-core/variables.tf`: `cloud_sql_deletion_protection` boolean, default `true`, narrowly
   scoped to the Cloud SQL instance. This is the extensibility seam
   this preflight described; future disposable environments can opt
   out at the environment-root layer.
 
 Environment-root files (`platform/terraform/gcp/environments/gcp-dev/*`)
-were intentionally not modified — dev inherits the secure default, and
+were intentionally not modified—dev inherits the secure default, and
 the variable exists for the day a genuinely disposable environment
 needs an explicit `false`.

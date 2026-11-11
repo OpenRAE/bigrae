@@ -368,7 +368,7 @@ RAES payloads, provider options, or commands.
 
 External transport delivery is at-least-once across process failure. One stable
 key per `(intent, recipient snapshot, transport)` collapses enqueue and worker
-replay; an attempt number distinguishes retries. Email cannot promise exactly-once delivery
+replay; an attempt number distinguishes retries. Email cannot promise exactly once delivery
 across the crash window after provider acceptance and before the database commit,
 so duplicate mail remains a documented residual risk. A stable message identity
 is supplied where the backend supports it, but status does not overclaim provider
@@ -725,7 +725,7 @@ shipping docs actually describe the feature.
   blobs, metrics labels, task errors, env vars, argv, or test snapshots.
 - Do not rely on soft delete for the retention deadline: a restorable row still
   contains the message body or delivery coordinate and has not been purged.
-- Do not promise exactly-once email, cross-channel ordering, recall after send,
+- Do not promise exactly once email, cross-channel ordering, recall after send,
   or intervention success from communication status.
 
 ## Non-Goals

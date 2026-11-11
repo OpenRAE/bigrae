@@ -57,7 +57,7 @@ mode-restricted `authorized_keys` for a public-key account. `disabled` takes
 precedence and must leave every login mechanism unusable; no usable credential
 may be installed for it. Reconciliation must read-or-create the same secret and
 reapply the same public material rather than rotating credentials on every boot
-or retry. Destroy must reconstruct and delete every per-account secret just as it
+or retry. Destroy must reconstruct and delete every per-account secret in the same way as it
 deletes the per-instance ACES management SSH secret.
 
 `mail` needs one cross-OS meaning. A Windows marker file is not realization, and

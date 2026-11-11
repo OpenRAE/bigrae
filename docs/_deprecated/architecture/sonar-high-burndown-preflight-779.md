@@ -84,7 +84,7 @@ correct without a narrow supporting edit.
   through `shared.schemas` and `shared.schemas.persistence`; CMS and CTF service
   inputs keep their existing validators; provisioner plans keep `SetupPlan` /
   `SetupStep` / `get_context()` contracts. Do not introduce parallel schemas
-  just to lower a function's branch count.
+  only to lower a function's branch count.
 - Secret handling: user-controlled log values use `safe_log_value`; sensitive
   identifiers use `safe_log_id` or `safe_log_fingerprint` when the existing
   call site does so; setup stdout/stderr continues through

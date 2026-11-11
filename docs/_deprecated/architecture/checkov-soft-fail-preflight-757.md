@@ -36,10 +36,10 @@ When a Checkov check fires on a finding that is genuinely wrong to "fix":
    waivers).
 2. Add a matching entry to `docs/adr/exceptions.yaml` with:
    - `rule_id: ADR-004-R11`
-   - `owner` — @-handle of the engineer who owns the exception
-   - `reason` — must include the Checkov policy ID
-   - `expires_on` — ISO 8601 date (`adr_guard.py` rejects expired entries)
-   - `paths` — optional repo-relative list of files/directories in scope
+   - `owner`—@-handle of the engineer who owns the exception
+   - `reason`—must include the Checkov policy ID
+   - `expires_on`—ISO 8601 date (`adr_guard.py` rejects expired entries)
+   - `paths`—optional repo-relative list of files/directories in scope
 
 Expiration forces owner re-review.
 
@@ -53,7 +53,7 @@ Issue [#757](https://github.com/Brad-Edwards/bigrae/issues/757) reduced
 the baseline of 321 first-party Terraform Checkov findings to zero
 unwaived. The work split as follows:
 
-- **141 fixes** — Security group descriptions, EC2 detailed
+- **141 fixes**—Security group descriptions, EC2 detailed
   monitoring / EBS-optimized / IMDSv2 / root-device encryption,
   CloudWatch log retention bumped to 365 days, RDS Postgres force_ssl /
   enhanced monitoring / Performance Insights CMK / query logging /
@@ -63,14 +63,14 @@ unwaived. The work split as follows:
   Manager secrets (env, demo, NGFW), DynamoDB engine-state locks,
   EventBridge Scheduler, GKE node-pool auto_repair / auto_upgrade /
   workload_metadata_config, Artifact Registry CMEK.
-- **15 path-scoped principled exceptions** — Cognito pre-signup
+- **15 path-scoped principled exceptions**—Cognito pre-signup
   synchronous Lambda hardening checks, Redis encryption (consumer-side
   follow-up #295), Guacd ECS read-only root (tmpfs follow-up), demo
   workshop instance public IPs / open ingress, NGFW EIP runtime
   association, log-archive S3 bucket access-logging recursion /
   versioning / cross-region replication, service-account IAM user
   policies, engine-provisioner wildcard IAM by AWS-API design.
-- **3 repo-wide rule waivers** — SSM Parameter SecureString (repo
+- **3 repo-wide rule waivers**—SSM Parameter SecureString (repo
   policy is secrets-in-Secrets-Manager), ECR mutable tags (deploy
   pattern), Lambda `templatefile` false-positive on hard-coded secret.
 
@@ -91,7 +91,7 @@ Repo posture:
   CI so relative `module { source = ... }` paths load module files into
   the scan graph (enforced by `scripts/check_checkov_invocation_parity/`).
 - When a rule must be waived repo-wide or Checkov cannot see the module
-  file, add `skip-check` here and an ADR-004-R11 exception — do not re-enable
+  file, add `skip-check` here and an ADR-004-R11 exception—do not re-enable
   Terraform `--soft-fail`.
 
 ## Anti-patterns

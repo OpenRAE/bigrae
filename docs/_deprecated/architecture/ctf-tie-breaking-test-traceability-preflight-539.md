@@ -114,7 +114,7 @@ fixture-level ranking model.
 
 ## Gotchas And Anti-Patterns
 
-- Do not conflate "earliest last solve wins" with "first solve wins". The
+- Do not conflate "earliest last solve wins" with "first solve wins." The
   tie-breaker is the timestamp of the most recent correct solve that produced the
   participant's solved state.
 - Do not use award `created_at` as a CTF-406 tie-breaker. Awards contribute to

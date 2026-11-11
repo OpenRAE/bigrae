@@ -56,7 +56,7 @@ command after `npm ci`; do not duplicate its flags in workflow YAML.
 ## Cross-cutting layers
 
 - **Package and lock validation:** npm's package/lock consistency check and
-  lockfile integrity fields are the schema and supply-chain gate. `npm ci` must
+  lockfile integrity fields are the schema and supply chain gate. `npm ci` must
   succeed from a clean tree, `npm ls --all` must report a valid graph, and the
   installed tree must contain no broken symlink or local `file:`/`link:`
   resolution. Audit the full graph including `devDependencies`; omitting dev

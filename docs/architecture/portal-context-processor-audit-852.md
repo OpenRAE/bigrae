@@ -17,7 +17,7 @@ contributing processor is DB-bound (no CPU-heavy or network work beyond the
 engine ORM lookup). No empirical wall-time / p95 measurement was run; that was
 deliberately out of scope for this pass. The preflight note proposes a local
 `Client` + `CaptureQueriesContext` measurement harness as the empirical evidence
-bar — see [Decision](#ac3-decision-does-684-cover-this) for how that is routed.
+bar—see [Decision](#ac3decision-684-coverage) for how that is routed.
 
 **Where context processors run.** Django template context processors execute
 **only on HTML template renders**. They do **not** run for:
@@ -30,7 +30,7 @@ So the per-request cost is paid on **full page navigations**, not on the
 high-frequency XHR/WebSocket traffic that dominates an active event session.
 This materially bounds the blast radius and is itself an AC#4 finding.
 
-## AC#1 — Per-render query cost
+## AC#1—Per-render query cost
 
 Custom processors are registered in
 `shifter/shifter_platform/config/settings.py` (`TEMPLATES → OPTIONS →
@@ -39,22 +39,22 @@ context_processors`, the four `mission_control` / `shared` / `ctf` entries).
 | Processor | Queries per authenticated render | Source |
 | --- | --- | --- |
 | `mission_control.active_range` | **1** baseline: latest `RangeInstance` (`filter(user_id).exclude(DESTROYING).order_by("-created_at").first()`). When a range exists: **+1** engine cross-layer (`_resolve_runtime_ips` → `engine.services.get_instance_ips_by_uuid` → `Range.objects.get(id)`), **+1** `instance.agent` FK, **+1** `instance.request` FK (no `select_related`), **+1** `is_ctf_participant_only`, **+1** `get_scenario` (registry, DB-first). → **1 (no range) … ~6 (ready range)** | `cms/services/_range_queries.py:225`, `cms/services/_common.py:227`, `engine/services/_range.py:358` |
-| `mission_control.terminal_cdn_assets` | **0** — returns a settings dict | `mission_control/context_processors.py:18` |
-| `shared.user_permissions` | **1** — `can_edit_cms_authoring` → `user.groups.filter(THREAT_RESEARCH).exists()`; **0** for staff (short-circuits before the query) | `shared/auth.py:60` |
+| `mission_control.terminal_cdn_assets` | **0**—returns a settings dict | `mission_control/context_processors.py:18` |
+| `shared.user_permissions` | **1**: `can_edit_cms_authoring` → `user.groups.filter(THREAT_RESEARCH).exists()`; **0** for staff (short-circuits before the query) | `shared/auth.py:60` |
 | `ctf.ctf_navigation` | `get_user_role`: **2** group `.exists()` + (participant) **1** `get_user_profile` `get_or_create` + **1** `CTFEvent…first()`; **plus** a second `is_ctf_participant_only` (**1**). → **~3 (non-participant) … ~5 (active participant)** | `ctf/bridges.py:29`, `shared/auth.py:38`, `management/services.py:59` |
 
 **Worst case = the live-event participant the issue is about** (CTF participant +
 active range + active event): **~12 queries per page render**. Participant
 without a range: ~7. Staff with a range: ~7.
 
-## AC#2 — Material contributors
+## AC#2—Material contributors
 
-1. **`active_range`** — heaviest. Fans into the **engine layer** on every render
+1. **`active_range`**—heaviest. Fans into the **engine layer** on every render
    where a range exists, and does a 2-query FK **N+1** (`agent`, `request`) that
    a single `select_related("agent", "request")` would erase.
-2. **`ctf_navigation`** — most queries for participants (group ×2 + profile +
+2. **`ctf_navigation`**—most queries for participants (group ×2 + profile +
    event + a redundant `is_ctf_participant_only`).
-3. **Redundant `auth_user_groups` lookups** — `user.groups` is queried **5
+3. **Redundant `auth_user_groups` lookups**—`user.groups` is queried **5
    separate times** per render and never cached:
    `is_ctf_participant_only` (in `active_range`), `can_edit_cms_authoring` (in
    `user_permissions`), two `get_user_role` `.exists()` calls, and a second
@@ -65,7 +65,7 @@ without a range: ~7. Staff with a range: ~7.
    (0 and 1 query); the latter's single query is part of the group-lookup
    redundancy above.
 
-## AC#4 — Where the global behaviour is genuinely required
+## AC#4—Where the global behaviour is genuinely required
 
 | Context | Required on | Not required on |
 | --- | --- | --- |
@@ -73,23 +73,22 @@ without a range: ~7. Staff with a range: ~7.
 | `has_active_range` indicator | Mission Control sidebar / dashboard banner | Anonymous, JSON, and WebSocket paths |
 | `ctf_navigation` role/event flags | Authenticated MC pages that render the CTF sidebar (`ctf/base.html`) | Anonymous, JSON, and WebSocket paths |
 | `user_permissions` (`can_access_threat_research`) | Pages rendering the Threat Research / CMS authoring links | Anonymous, JSON, and WebSocket paths |
-| `terminal_cdn_assets` | Terminal template only | Everywhere else (harmless — settings-only) |
+| `terminal_cdn_assets` | Terminal template only | Everywhere else (harmless—settings-only) |
 
 The architectural lever (deferred to follow-up, not done here): these are
 registered **globally and eagerly**. The full active-range payload is a
-terminal-page concern wrongly paid on every render. Note the preflight caveat —
-a `SimpleLazyObject` is **not** automatically cheaper if a globally-included
-template (e.g. `icon_sidebar.html`, `ctf/base.html`) reads the variable on every
+terminal-page concern wrongly paid on every render. Note the preflight caveat—a `SimpleLazyObject` is **not** automatically cheaper if a globally included
+template (for example `icon_sidebar.html`, `ctf/base.html`) reads the variable on every
 page; the real fix is page-scoped/tiered context (`none` / `nav` / `ctf` /
 `terminal_full`), not blind laziness.
 
-## AC#3 — Decision: does #684 cover this?
+## AC#3—Decision: #684 coverage
 
 **Partially. No, not on its own.**
 
 #684 ("Refactor Mission Control terminal and context god modules") has the
 acceptance criterion *"active_range() context assembly is extracted into a
-focused projection/service path"* — so it owns the **structural decomposition**
+focused projection/service path"*—so it owns the **structural decomposition**
 of `active_range`. But #684 is a god-module refactor, not a per-request cost
 change. It does **not** cover:
 

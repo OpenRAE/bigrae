@@ -158,7 +158,7 @@ audience and issuer, signature/expiry checks, `email_verified is True`, stable
 subject checks, configured service-account binding, and active-principal/local
 revocation checks. A human Firebase token, Google OAuth access token, token for
 another deployment or endpoint, provider subject collision, email-only match,
-or disabled principal denies. There is no just-in-time service-principal
+or disabled principal denies. There is no on-demand service-principal
 creation from claims.
 
 The supported agent transport accepts an audience and an official Google

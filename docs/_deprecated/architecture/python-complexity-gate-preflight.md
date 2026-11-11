@@ -79,7 +79,7 @@ This is a guardrail change, not a new domain abstraction.
 
 ## Extensibility
 
-The required seam is the threshold value. It should be easy to ratchet from an
+The required seam is the threshold value. It should be possible to ratchet from an
 initial passing value toward `15` without reworking workflow logic. If
 package-local configs remain canonical, keep the threshold value consistent and
 searchable across those configs, and list the current exemption backlog in one

@@ -40,7 +40,7 @@ assertion, ALB/WAF boundary, Guacamole token path, or repo guardrails.
   must be an ALB-only subnet contract, not `module.vpc.public_subnet_cidrs`.
   CTFd, NAT, and future public workloads must not share any CIDR used as a
   target-service ingress source.
-- The acceptance criterion is behavioral, not just structural: from the CTFd
+- The acceptance criterion is behavioral, not only structural: from the CTFd
   instance, TCP to portal:8000 and guacamole:8080 must fail closed, while ALB
   health checks and user traffic still reach the targets.
 
@@ -125,7 +125,7 @@ Guacamole ingress. Do not overload `enable_portal_inspection` to mean
 - Do not broaden `scripts/check_tf_sg_cidrs` casually. Its current
   `var.portal_vpc_cidr` allowance is for range-side portal-to-range access and
   is not a portal target-service policy.
-- Do not move CTFd into private service subnets just to satisfy the test unless
+- Do not move CTFd into private service subnets only to satisfy the test unless
   its public HTTP/HTTPS contract is also redesigned. Public CTFd still needs a
   deliberate public-workload placement.
 

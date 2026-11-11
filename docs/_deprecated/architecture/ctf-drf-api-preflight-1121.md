@@ -112,7 +112,7 @@ API token concepts, new score models, and cloud/runtime configuration changes.
 - Domain authorization surface: after scope admission, organizer endpoints still
   prove CTF organizer role and event ownership; participant endpoints still
   prove active, non-disqualified membership in the route's event; mixed
-  organizer/participant surfaces still check the specific object, not just any
+  organizer/participant surfaces still check the specific object, not only any
   CTF role.
 - Payload validation surface: DRF serializers replace raw body parsing for JSON,
   UUID, enum, integer, datetime, list, multipart, and query parameter shapes.

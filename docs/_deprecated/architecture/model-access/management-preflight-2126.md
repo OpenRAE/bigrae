@@ -1,4 +1,4 @@
-# Scoped model-access management preflight — #2126
+# Scoped model-access management preflight—#2126
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../../technical/architecture.md) and accepted, superseding ADRs.
 

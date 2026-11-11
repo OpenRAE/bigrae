@@ -280,7 +280,7 @@ not run on every API read or health request.
    retention is Terraform-owned, explicitly validated, and read back; command-
    local `os.environ` fallbacks are not authoritative.
 7. **OS/container exposure.** Export runs as the existing hardened non-root,
-   read-only-root-filesystem worker pattern with provider workload identity.
+   read-only root filesystem worker pattern with provider workload identity.
    Payload bytes stream through the SDK; they are not shell arguments or
    world-readable local files. Any unavoidable temporary file is bounded,
    mode-restricted, and removed on every outcome.

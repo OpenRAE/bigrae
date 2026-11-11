@@ -210,7 +210,7 @@ Future implementation must evaluate changes against:
 - Do not authorize by checking for a visible UI element, scenario entry, or
   sidecar row. Authorize through session/token gates and product service-layer
   ownership/authoring checks first.
-- Do not expose `AcesOperationRecord.payload` as JSON just because the sidecar
+- Do not expose `AcesOperationRecord.payload` as JSON only because the sidecar
   validator accepted it. The API needs its own public-field allowlist.
 - Do not treat `diagnostic_refs` as safe if a value is a presigned URL, bearer
   URL, command, prompt, transcript, provider dump, or embedded log. Return a

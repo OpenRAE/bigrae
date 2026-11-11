@@ -209,7 +209,7 @@ Extend the existing `tests/workspaces/test_account_hierarchy.py`,
 `tests/cms/test_account_scope_schema.py` patterns. Final migration-state tests
 must reject legacy shapes and conflicting mappings while preserving valid IDs;
 integrated direct-account cases must exercise the actual operation parser and
-SQL/OpenFGA descendant proofs, not just mocked controller responses.
+SQL/OpenFGA descendant proofs, not only mocked controller responses.
 
 ## PLAT-232 organization profile activation
 
@@ -334,7 +334,7 @@ effects retain the owning-domain boundaries already recorded in this note.
   `scripts/gcp/render_migration_job.py`, `render_runtime_env.py`,
   `render_native_identity.py`, `render_overlay_identity.py`, the Helm chart and
   GCP Kustomize overlays/base. The migration Job currently runs DB-oriented
-  commands without policy mounts; it cannot simply inherit a new networked
+  commands without policy mounts; it cannot directly inherit a new networked
   converter. Reconcile prerequisites, migration credentials and egress through
   these incumbents. Stop/drain all workers, schedulers, outbox/result appliers,
   reconcilers, ephemeral provisioner/plugin Jobs and continuing-access gateways;

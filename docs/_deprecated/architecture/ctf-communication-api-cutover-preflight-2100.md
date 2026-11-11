@@ -66,10 +66,10 @@ denial. Admission consumes that owning boundary and exact scope, not a cached
 HTTP result. Revalidate the persisted original owner/token pair on scheduled
 execution and replay; deleting/revoking the token or actor must not turn work into
 `AdmissionActor(system=True)`. `system`, origin, actor/token IDs, generation,
-policy revision and early-release privilege are server-derived, never writable
+policy revision and early release privilege are server-derived, never writable
 serializer fields. Existing RAES/range trigger realization remains closed.
 Opening ordinary token admission must not also open generic scheduler run-now:
-preserve its session-only early-release boundary unless that operation explicitly
+preserve its session-only early release boundary unless that operation explicitly
 enforces communication authority/scopes on every target. Task lists must not leak
 raw `task.error_message` or bypass campaign visibility.
 
@@ -129,7 +129,7 @@ handler. Only one writer may own a migrated occurrence. A database conversion
 does not stop old pods, claimed tasks or process-local email threads: activation
 requires fenced/quiesced old producers and reconciliation of `RUNNING`/`SENDING`
 work before the new writer is admitted. Rolling deployment and rollback must
-preserve that single-writer condition; rollback cannot simply restart legacy
+preserve that single-writer condition; rollback cannot directly restart legacy
 sending against already migrated work.
 
 Use bounded, restart-safe conversion with stable legacy-row/occurrence mapping
@@ -184,5 +184,5 @@ structural evidence only.
 Non-goals: implementing this preflight; redesigning slices 1–2; implementing
 #1525 email transport, new RAES/range ingress, chat/webhook adapters, new UI or rich
 content features; another scheduler, outbox, exception hierarchy or authorization
-system; exactly-once external delivery or recall. Existing owners must be hardened
+system; exactly once external delivery or recall. Existing owners must be hardened
 where API exposure reveals a gap; their policy must not be duplicated in views.

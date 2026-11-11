@@ -1,4 +1,4 @@
-# Request accounting and dispatch lease preflight — #2121 / M04
+# Request accounting and dispatch lease preflight—#2121 / M04
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../../technical/architecture.md) and accepted, superseding ADRs.
 

@@ -8,7 +8,7 @@ Status: pre-implementation guidance
 Date: 2026-06-10
 
 Issue: GitHub #914, "deploy: workflow deploy steps fail loud (guacd
-stabilization + engine task family)".
+stabilization + engine task family)."
 
 This issue is requirement-free. The GitHub issue title, body, and acceptance
 criteria are the shipping contract. This note is intentionally not an
@@ -59,7 +59,7 @@ the existing AWS Terraform contracts that create the resources being verified.
 | --- | --- | --- |
 | Deploy orchestration | `.github/workflows/deploy.yml` job dependency chain and typed `workflow_dispatch` inputs | Add any AWS first-deploy exception at the orchestrator and pass it into reusable workflows explicitly. |
 | AWS engine deploy | `.github/workflows/_shifter-engine.yml` `workflow_call` inputs, ECR login/build, `aws ecs describe-task-definition`, `jq` task-definition rewrite | Keep image swapping in the existing deploy job; fail the existing step instead of adding a parallel deploy path. |
-| Engine task family source of truth | `platform/terraform/modules/engine-provisioner/task_definition.tf`, environment `module.engine_provisioner`, and portal outputs/SSM parameters | Do not duplicate family-name derivation outside the current environment naming contract except for the existing workflow env value. |
+| Engine task family source of truth | `platform/terraform/modules/engine-provisioner/task_definition.tf`, environment `module.engine_provisioner`, and portal outputs/SSM parameters | Do not duplicate family name derivation outside the current environment naming contract except for the existing workflow env value. |
 | AWS platform deploy | `.github/workflows/_shifter-platform.yml` apply job and Guacamole stabilization loop | Make the existing wait loop fail loud; preserve the circuit-breaker failed-state branch. |
 | Guacamole infrastructure | `platform/terraform/modules/guacamole/**` ECS services, task definitions, service discovery, and deployment circuit breaker | Do not compensate for a bad image by weakening ECS deployment health or network/security groups. |
 | Bootstrap precedent | `.github/workflows/deploy.yml` `gcp_require_active_certificate` and `_gcp-dev.yml` `require_active_certificate` | Use explicit manual bootstrap intent for rare first-deploy bypasses; automatic deploys remain strict. |

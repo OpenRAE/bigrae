@@ -3,7 +3,7 @@
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../technical/architecture.md) and accepted, superseding ADRs.
 
 
-Issue: GitHub #959, "[HIGH] No firewall rules defined on GCP VPCs".
+Issue: GitHub #959, "[HIGH] No firewall rules defined on GCP VPCs."
 
 This note records the architecture boundary for adding explicit GCP VPC
 firewall policy. It is intentionally not an implementation plan; the goal is
@@ -172,20 +172,20 @@ cd platform/terraform/gcp/environments/gcp-dev && terraform init -backend=false 
 If the implementation extends bootstrap validation, also run the targeted
 bootstrap tests. If it changes workflows, run `actionlint`.
 
-## Outcome — implementation landed 2026-05-11
+## Outcome—implementation landed 2026-05-11
 
 This preflight was satisfied alongside #960, #962, and #963 in a grouped
 security-hardening PR (branch
 `959-high-no-firewall-rules-defined-on-gcp-vpcs`). Concrete artifacts:
 
-- `platform/terraform/gcp/modules/platform-core/main.tf` — added
+- `platform/terraform/gcp/modules/platform-core/main.tf`—added
   `google_compute_firewall` resources covering range deny-by-default
   ingress, `range-allow-platform-provisioner` sourced from the
   dedicated provisioner pod CIDR (`var.gke_provisioner_pods_cidr`),
   optional range/platform direct break-glass admin SSH allows gated on
   `var.operator_admin_cidrs`, explicit platform-deny-external-SSH/RDP,
   and a tag-scoped platform allow-gke-health-checks rule. The optional
-  admin-SSH allows ride at priority 800 — strictly higher precedence
+  admin-SSH allows ride at priority 800—strictly higher precedence
   than the platform-deny-external-SSH/RDP rule at 900 so an explicit
   operator CIDR is not shadowed by the broader deny. These admin-SSH
   rules use direct source-CIDR matching at the VPC firewall layer and
@@ -201,17 +201,17 @@ security-hardening PR (branch
   available; the provisioner node pool opts into it via
   `network_config.pod_range`. The range firewall rule now sources from
   this narrow CIDR rather than the broader `local.portal_network_cidrs`
-  set — a compromised portal/worker/guacamole pod cannot reach range
+  set—a compromised portal/worker/guacamole pod cannot reach range
   VMs on the admin ports.
-- `platform/terraform/gcp/modules/platform-core/variables.tf` — added
+- `platform/terraform/gcp/modules/platform-core/variables.tf`—added
   `range_provisioner_ports` and `operator_admin_cidrs` with the
   validation contracts described above (reject empty lists, reject
   `0.0.0.0/0` / `::/0`, reject out-of-range ports).
-- `docs/adr/index.yaml` — ADR-008-R4 (added by preflight) remains the
+- `docs/adr/index.yaml`—ADR-008-R4 (added by preflight) remains the
   rule of record; ADR-008 evidence list now includes this preflight
   note.
 
 Range-network outputs (`range_network_id`, `range_network_cidr`,
 `range_network_region`, `portal_network_cidrs`) were intentionally
-left unchanged — the firewall fix did not turn into a runtime contract
+left unchanged—the firewall fix did not turn into a runtime contract
 migration.

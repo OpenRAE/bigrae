@@ -176,7 +176,7 @@ Canonical configs and scripts that will see the artifact:
   event. Envelope parsing and event payload validation are separate concerns.
 - Do not duplicate `ResourceStatus`, event constants, channel group name
   helpers, exception classes, logging sanitizers, or worker retry logic.
-- Do not catch every handler exception just to satisfy a TypedDict narrow.
+- Do not catch every handler exception only to satisfy a TypedDict narrow.
   Transient correctness failures must still reach SQS/Pub/Sub retry and DLQ.
 - Do not add first-party internal mocks only to prove annotations. Prefer
   behavior tests, parser/type-guard tests, and existing cloud/channel boundary

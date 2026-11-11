@@ -50,7 +50,7 @@ it is not an implementation plan.
   enumerate every console-capable current-range instance and show one SSH
   surface. Split shows exactly two independently selected, side-by-side SSH
   surfaces. When at least two targets exist, the two split selections must be
-  distinct; do not create two sockets to the same target just to fill both
+  distinct; do not create two sockets to the same target only to fill both
   slots.
 - Do not eagerly connect every instance. One tabs slot or two split slots are
   the resource budget; replacing a slot or leaving the workspace must execute
@@ -136,7 +136,7 @@ it is not an implementation plan.
   in-memory handoff, localStorage/sessionStorage, URL/query/hash state, logs,
   analytics, screenshots, test snapshots, or error copy.
 - Guacamole token construction and exchange stay in
-  `mission_control.guacamole`; credentials remain just-in-time engine secret
+  `mission_control.guacamole`; credentials remain on-demand engine secret
   reads. The owner-scoped status endpoint atomically consumes and clears the
   parked signed URL once.
 - `config/_browser_security.py` is the single CSP authority under ADR-036. Its

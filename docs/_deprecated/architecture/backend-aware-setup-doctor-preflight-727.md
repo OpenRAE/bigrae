@@ -28,7 +28,7 @@ equivalent commands. Regardless of naming, the boundaries are:
 - `configure` records references and operator-owned local files through existing
   config surfaces. Any write to GitHub secrets, provider secret stores, Terraform
   state, Kubernetes, DNS, or cloud resources is a separate explicit mutating
-  operation, not an implicit side effect of "validation".
+  operation, not an implicit side effect of "validation."
 - `doctor` validates the selected backend from `shifter.yaml`, reports every
   blocking prerequisite it can determine, and tells the user which checks are
   local-only, cloud-read-only, or deployment-mutating. The default posture should

@@ -143,7 +143,7 @@ websocket consumers, health views, or notification/domain services.
 - Do not hard-code GCP's TLS port. AWS ElastiCache and GCP Memorystore may have
   different port behavior; consume the Terraform output/env `REDIS_PORT`.
 - Do not use `REDIS_URL` as a shortcut. Full Redis URLs become secret-bearing
-  as soon as they contain a password and are easy to leak through logs/tests.
+  as soon as they contain a password and are likely to leak through logs/tests.
 - Do not pass `REDIS_PASSWORD` from SSM directly into `docker run`. Use a secret
   reference plus `entrypoint.sh`.
 - Do not broaden Redis security-group ingress while adding TLS/AUTH. The

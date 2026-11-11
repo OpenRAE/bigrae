@@ -100,7 +100,7 @@ Scheduling the declaration and its task must be one recoverable commit; release
 materializes the audience only when due. Define one closed lateness/expiry policy
 with an explicit durable no-work/expired outcome; do not call expiry `FENCED`, and
 do not treat scheduler completion as release or channel delivery. Run-now either
-passes the same communication authority and explicit early-release policy or is
+passes the same communication authority and explicit early release policy or is
 unavailable for communication tasks.
 
 Fix scheduler correctness at `CTFScheduledTask`/`TASK_HANDLERS`: a claim needs a
@@ -192,7 +192,7 @@ recipient/channel remains isolated from unrelated commands.
 External delivery remains at-least-once. A crash after provider acceptance but
 before result persistence is indeterminate and can produce duplicate mail;
 stable backend message identities mitigate this only where supported. Do not
-promise exactly-once external effects or cross-channel ordering. Retry policy
+promise exactly once external effects or cross-channel ordering. Retry policy
 has one owner in the ledger worker: bounded exponential backoff with jitter,
 attempt and elapsed-time ceilings, and an operator-visible terminal outcome.
 Scheduler, broker, and email adapter retries must not multiply that budget.
@@ -245,12 +245,12 @@ pinned content/policy/source references and recoverable timing work together.
 At the eligible occurrence, release resolves and freezes the audience in the
 transaction above. A replay of an existing `SCHEDULED` intent must perform or
 observe that release, not return early as though recipient work already exists.
-Future content must not become inbox-visible just because scheduling succeeded.
+Future content must not become inbox-visible only because scheduling succeeded.
 Validate timezone-aware instants in `ctf.communication_contracts`, normalize to
 UTC, and reject ambiguous naive dates. Keep absolute time, event-derived timing,
 RAES coordinates, retry deadlines, and retention expiry distinct. Event pause or
 reschedule must not silently reinterpret an absolute instant; run-now must use
-an explicitly authorized early-release policy or remain unavailable for that
+an explicitly authorized early release policy or remain unavailable for that
 trigger. Recheck the current schedule/declaration fence at execution, including
 ties, clock jumps, overdue startup, and rescheduling after claim. Changing event
 times does not resend an already released occurrence; intentional new delivery
@@ -293,7 +293,7 @@ The policy seam is a typed, bounded, server-owned configuration: per-scope
 budgets, admission/batch sizes, concurrency, polling, lease duration, transport
 timeout, retry ceilings, and lateness/expiry policy. Validate their relationships
 (for example, transport timeout versus lease/recovery and shutdown windows), not
-just each number. Keep `config/_ctf_communication_settings.py` as the CTF owner;
+only each number. Keep `config/_ctf_communication_settings.py` as the CTF owner;
 reuse `_runtime_env`, `_email`, `_channels`, `_cache_settings`, and `_redis` for
 deployment, provider, Redis AUTH/TLS/CA, and cache posture. No silent local-memory
 limiter/channel fallback in a multiple-process deployment.
@@ -393,7 +393,7 @@ Non-goals: implementation in this preflight; a second outbox/scheduler/Celery/RQ
 stack; a generic repository or per-channel exception hierarchy; portable RAES
 schema/control reimplementation; new guest credentials or an ingress API in this
 engine slice; marketing/contact management; attachments or new rich-content/UI
-features; arbitrary webhooks; exactly-once email or recall after an effect.
+features; arbitrary webhooks; exactly once email or recall after an effect.
 Legacy `CTFNotification` and pending `SEND_NOTIFICATION` work cut over atomically
 or remain explicitly outside the new delivery claim until their owner migrates
 them. No dual sending, invented historical recipient success, or success from

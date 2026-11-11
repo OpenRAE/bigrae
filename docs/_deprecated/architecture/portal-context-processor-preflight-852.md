@@ -111,7 +111,7 @@ Representative rendered pages for evidence:
   non-secret.
 - Validation surface: keep using `RangeContext` / `InstanceContext` Pydantic
   validators, including private-IP normalization, and CMS user validators. Do
-  not add a duplicate schema just to model partial context.
+  not add a duplicate schema only to model partial context.
 - OS/runtime exposure: measurement artifacts should be local test output,
   sanitized logs, or documentation. Do not introduce a public endpoint, shell
   command with secret-bearing argv, or process/environment dump to collect query

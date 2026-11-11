@@ -26,7 +26,7 @@ is serialized data, not Python object identity. A helper on `PlannedResource`
 can make in-process access safer, but using it in the provisioner would require
 reconstructing a RAES object from untrusted serialized data before the
 Shifter-owned transport and shape checks have succeeded. It would therefore add
-a runtime/supply-chain dependency without replacing the cross-process validator.
+a runtime/supply chain dependency without replacing the cross-process validator.
 It would also violate ADR-024 and ADR-031-R1's import boundary.
 
 After Shifter upgrades to a released, pinned RAES version containing the #713

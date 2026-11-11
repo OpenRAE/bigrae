@@ -4,7 +4,7 @@
 
 
 Issue: GitHub #1195, "Security: remove tracked plaintext GCP runtime secret
-env files".
+env files."
 
 This note records the architecture boundary for removing the committed
 `platform-runtime-secrets.env` values from the GCP Kustomize overlay. It is not

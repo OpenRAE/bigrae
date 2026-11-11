@@ -298,7 +298,7 @@ middleware, templates, ALB, GCLB, and SPA code independently.
 - Do not add a CSP meta tag. Report-only, `frame-ancestors`, and reporting
   semantics require HTTP headers, and the SPA meta referrer is not the global
   policy authority.
-- Do not add `unsafe-inline` just to quiet the initial report stream. Report-only
+- Do not add `unsafe-inline` only to quiet the initial report stream. Report-only
   is expected to reveal current debt and provides no active protection.
 - Do not assume a nonce fixes `onclick`, `onchange`, `onsubmit`, `style=`,
   `javascript:` URLs, DOM `.style` writes, or React `style` props. It authorizes

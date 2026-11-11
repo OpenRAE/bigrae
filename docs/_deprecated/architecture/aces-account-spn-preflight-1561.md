@@ -248,7 +248,7 @@ adopted by this issue.
   guest IAM or grant a controller/member access to Secret Manager.
 - The checked-in backend manifest remains generated. The existing local/ECS/GCP
   request-id dispatch and provisioner-job admission grammar remain unchanged.
-- Cleanup keeps the current apply-failure/destroy path and reconstructs secret
+- Cleanup keeps the current apply failure/destroy path and reconstructs secret
   identities from the plan. Reconciliation reads existing secrets and guest/AD
   state rather than rotating credentials or recreating principals.
 
