@@ -1,8 +1,8 @@
 """Dispatch inputs derived from a retained experiment batch.
 
-Dispatch stages each entry's exact trial SDL and the admitted plan, bounds the
-attempt by its admitted timeout, and reports cleanup as met by verified absence
-of the trial's worker VM.
+Dispatch stages each entry's trial unit, exact SDL, and admitted plan.
+The admitted timeout bounds the attempt. Verified absence of the worker VM
+provides cleanup evidence.
 """
 
 from __future__ import annotations
@@ -16,8 +16,15 @@ from raes_contracts.contracts.admitted_trial_plan_ingress import parse_admitted_
 
 
 def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
-    """Return the exact concrete trial SDL bytes that dispatch stages for one entry."""
+    """Return the canonical instantiated snapshot bytes of one entry."""
     return canonical_json_bytes(inputs["snapshots"][entry_id])
+
+
+def trial_unit_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
+    """Return the staged trial unit: the admitted plan, the entry and its instantiated snapshot."""
+    return canonical_json_bytes(
+        {"plan": inputs["plan"], "plan_entry_id": entry_id, "snapshot": inputs["snapshots"][entry_id]}
+    )
 
 
 def trial_plan_bytes(inputs: dict[str, Any]) -> bytes:
@@ -26,7 +33,7 @@ def trial_plan_bytes(inputs: dict[str, Any]) -> bytes:
 
 
 def trial_scenario_sha256(inputs: dict[str, Any], entry_id: str) -> str:
-    """Return the prefixed digest of one entry's staged trial SDL."""
+    """Return the prefixed digest of one entry's instantiated snapshot."""
     return "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, entry_id)).hexdigest()
 
 

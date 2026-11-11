@@ -17,7 +17,7 @@ from shared.exceptions import ValidationError
 
 TRIAL_INPUT_PREFIX = "trial-inputs/"
 TRIAL_EXPORT_PREFIX = "trial-exports/"
-STAGED_FILES = ("trial.json", "scenario.sdl", "plan.json")
+STAGED_FILES = ("trial.json", "trial-unit.json", "scenario.sdl", "plan.json")
 #: A staged file is at most the complete retained admission record bound.
 MAX_STAGED_BYTES = 64 * 1024**2
 MAX_ARCHIVE_BYTES = 8 * 1024**3

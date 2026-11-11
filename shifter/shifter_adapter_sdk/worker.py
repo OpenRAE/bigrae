@@ -20,6 +20,7 @@ from .runtime import (
     parse_input,
     read_file_input,
 )
+from .validation import ParticipantValidation, ValidationInput, ValidationResult
 
 
 def _normalize(name: str) -> str:
@@ -83,6 +84,32 @@ def inspect_invocation(request: InspectionInput) -> InspectionResult:
     )
 
 
+def validate_invocation(request: ValidationInput) -> ValidationResult:
+    """Run the declared configuration owner only inside the isolated worker."""
+    digest = request.digest
+    try:
+        plugin = _load_plugin(request.manifest)
+        results = [ParticipantValidation.model_validate(item) for item in plugin.validate(request)]
+        result = ValidationResult(
+            protocol=request.protocol,
+            invocation_id=request.invocation_id,
+            input_digest=digest,
+            phase="validate",
+            status="validated",
+            results=results,
+        )
+        result.authorize(request)
+        return result
+    except Exception:  # noqa: BLE001  # plugin isolation: the failed status records the failure
+        return ValidationResult(
+            protocol=request.protocol,
+            invocation_id=request.invocation_id,
+            input_digest=digest,
+            phase="validate",
+            status="failed",
+        )
+
+
 def _write_output(output: str) -> None:
     """Complete raw stdout writes, including when Python is unbuffered."""
     remaining = memoryview((output + "\n").encode("utf-8"))
@@ -112,7 +139,12 @@ def main() -> int:
     # A convenience for well-behaved plugins, not an isolation boundary: the
     # host still rejects polluted/malformed output and bounds the log read.
     with open(os.devnull, "w") as sink, contextlib.redirect_stdout(sink), contextlib.redirect_stderr(sink):
-        result = inspect_invocation(request) if isinstance(request, InspectionInput) else plan_invocation(request)
+        if isinstance(request, InspectionInput):
+            result = inspect_invocation(request)
+        elif isinstance(request, ValidationInput):
+            result = validate_invocation(request)
+        else:
+            result = plan_invocation(request)
     if result.phase == "prepare":
         from .runtime_sealing import seal_result
 

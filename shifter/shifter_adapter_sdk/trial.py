@@ -29,6 +29,7 @@ TRIAL_CONTROL_COMMAND: Final = "/usr/local/libexec/bigrae/trial-control"
 TRIAL_ROOT: Final = "/var/lib/bigrae/trial"
 TRIAL_INPUT_DIRECTORY: Final = TRIAL_ROOT + "/input"
 TRIAL_INPUT_FILE: Final = "trial.json"
+TRIAL_UNIT_FILE: Final = "trial-unit.json"
 TRIAL_SCENARIO_FILE: Final = "scenario.sdl"
 TRIAL_PLAN_FILE: Final = "plan.json"
 TRIAL_SEAL_FILE: Final = "seal.json"
@@ -44,12 +45,13 @@ _UTC_TIME = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?Z$")
 
 
 class TrialInput(ClosedModel):
-    """The staged ``trial.json``: identities, the deadline and the trial SDL digest."""
+    """The staged ``trial.json``: identities, the deadline and the scenario and trial unit digests."""
 
     schema_version: Literal["bigrae.trial-input/v1"] = "bigrae.trial-input/v1"
     run_id: TrialIdentifier
     attempt_id: TrialIdentifier
     deadline: Annotated[str, Field(max_length=40)]
+    unit_sha256: Sha256
     scenario_sha256: Sha256
 
     @model_validator(mode="after")
@@ -150,6 +152,7 @@ __all__ = [
     "TRIAL_INPUT_FILE",
     "TRIAL_PLAN_FILE",
     "TRIAL_ROOT",
+    "TRIAL_UNIT_FILE",
     "TRIAL_SCENARIO_FILE",
     "TRIAL_SEAL_FILE",
     "TRIAL_VERBS",

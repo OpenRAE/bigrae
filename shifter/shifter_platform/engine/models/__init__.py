@@ -85,6 +85,7 @@ from ._runtime_plugins import (
     RuntimePluginInvocation,
     RuntimePluginPackBinding,
     RuntimePluginRangeBinding,
+    RuntimePluginValidation,
 )
 from ._sharing import (
     AllocationGroup,
@@ -165,6 +166,7 @@ __all__ = [
     "RuntimePluginInvocation",
     "RuntimePluginPackBinding",
     "RuntimePluginRangeBinding",
+    "RuntimePluginValidation",
     "SharingAuthorityFence",
     "SharingBindingRecord",
     "SharingBindingRevision",

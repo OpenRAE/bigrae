@@ -88,6 +88,7 @@ Containment and inventory validation precede a second streamed scan of declared 
 Oversized JSON documents are rejected, including scientific records and credential-bearing documents.
 
 Large traces can use bounded JSON chunks, JSON Lines, or another declared artifact stream.
+A member with the `evidence-blob` role is a raw capture. It is hashed and retained, but never parsed as a document.
 JSON Lines and NDJSON traces contain one UTF-8 object per line.
 The parser rejects blank lines, credential fields, and foreign run bindings.
 

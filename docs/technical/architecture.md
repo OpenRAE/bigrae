@@ -650,6 +650,9 @@ Operational claims and worker observations remain separate from scientific input
 The current compiler permits serial execution; configured concurrency grants no provider capacity.
 See the [service contract](shifter_platform/experiment-admission.md) and [operator guide](../how-to/admit-pack-experiments.md).
 
+A backend participant owner runs in the organization's installed adapter (`participant.validate`).
+CMS replays its returned configurations and never imports owner code.
+
 Native task observation reads the normal Job resource, including its status.
 It uses the existing Job permission.
 Completed-task removal retains exact workload identity checks.

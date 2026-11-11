@@ -32,6 +32,7 @@ from shared.raes.experiment_admission import (
 from shared.raes.experiment_pack_snapshot import stage_local_experiment_pack
 from shared.raes.object_source import stage_object_pack
 from shared.raes.package_loader import RaesPackageError, resolve_pack_root
+from shared.raes.participant_owner_replay import OwnerValidation
 
 from ._content_authority import content_scope, fence_content_scope, require_content_scope
 from ._experiment_authority import _UNAVAILABLE, _audit, _authorize, _fence
@@ -151,6 +152,15 @@ def _source_unchanged(
     return all(getattr(current, name) == getattr(source, name) for name in fields)
 
 
+def _owner_validation(organization_uuid: UUID) -> OwnerValidation:
+    """Run backend participant owners in the organization's installed adapter."""
+    from engine.services import validate_participant_configurations
+
+    return lambda owner, family_digest, requests: validate_participant_configurations(
+        organization_uuid, owner=owner, family_digest=family_digest, requests=requests
+    )
+
+
 def admit_experiment_batch(
     credential: CredentialContext,
     organization_uuid: UUID,
@@ -178,6 +188,7 @@ def admit_experiment_batch(
                 authority=authority,
                 concurrency=concurrency,
                 experiment_version=experiment_version,
+                owner_validation=_owner_validation(organization_uuid),
             )
     except (
         ValueError,

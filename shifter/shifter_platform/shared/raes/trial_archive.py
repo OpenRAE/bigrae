@@ -361,7 +361,10 @@ def _declared_formats(marker: JsonObject, members: dict[str, tuple[int, str]]) -
         ):
             raise TrialArchiveError("Invalid archive format declaration")
         media_type = media_type.partition(";")[0].strip().lower()
-        if media_type in jsonl_types:
+        if role == "evidence-blob":
+            # Raw captures are kept by checksum; they are not metadata documents.
+            formats[safe_archive_path(row["path"])] = "binary"
+        elif media_type in jsonl_types:
             formats[safe_archive_path(row["path"])] = "jsonl"
         elif media_type == "application/json" or media_type.endswith("+json"):
             formats[safe_archive_path(row["path"])] = "json"

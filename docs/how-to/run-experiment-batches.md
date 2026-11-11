@@ -9,11 +9,11 @@ Use the installed revision and approved credential files.
 
 ## Prepare the deployment
 
-1. Admit the batch. The requested concurrency sets how many trials run at the same time.
-   It cannot exceed the plan's parallel limit, which the scenario's `trial_parallelism` sets.
-2. Install the apparatus adapter as worker software.
+1. Install the apparatus adapter as worker software.
    Its plugin must declare `bigrae.runtime-plugin/v2` and the `trial.control` capability.
    It installs only the trial-control command on each worker.
+2. Admit the batch. The requested concurrency sets how many trials run at the same time.
+   It cannot exceed the plan's parallel limit, which the scenario's `trial_parallelism` sets.
 3. Publish a [worker policy](disposable-workers.md) whose host profile pins the pre-built trial runtime image and selects that installation.
 4. Reserve worker capacity for the batch concurrency.
 5. Apply the deployment infrastructure. The provisioner needs create-only access to `trial-exports/` in the assets bucket.
@@ -24,6 +24,7 @@ No model key goes to a worker.
 ## Run the batch
 
 Each command takes a native credential file, the organization, and the batch.
+Without a portal session, issue the file from the cluster: see [GCP operator credential](../ops/gcp-operator-credential.md).
 `start`, `collect` and `reconcile` also take the worker scope.
 
 ```bash

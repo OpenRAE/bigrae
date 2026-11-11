@@ -256,13 +256,14 @@ Its configure phase installs one executable at `/usr/local/libexec/bigrae/trial-
 BigRAE then uses that executable to run one trial on the worker.
 `bigrae_adapter_sdk.trial` defines the paths, verbs, and closed models.
 
-Before `start`, the host stages three files in `/var/lib/bigrae/trial/input`:
+Before `start`, the host stages four files in `/var/lib/bigrae/trial/input`:
 
 | File | Content |
 | --- | --- |
-| `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 of `scenario.sdl` |
+| `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 digests of `scenario.sdl` and `trial-unit.json` |
 | `scenario.sdl` | The complete concrete trial SDL |
 | `plan.json` | The admitted `admitted-trial-plan/v1`; its `plan_digest` identifies it |
+| `trial-unit.json` | The admitted RAES trial plan, the plan entry ID, and the entry's instantiated snapshot |
 
 The worker image supplies the trial runtime and its environment pack.
 

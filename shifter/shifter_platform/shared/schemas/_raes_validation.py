@@ -52,8 +52,11 @@ _SECRET_KEY_FRAGMENTS = (
     "token",
     "transcript",
 )
+# A bearer credential is a token with a digit or token symbol; prose such as
+# "issue a bearer token" is not a credential.
 _SECRET_VALUE_RE = re.compile(
-    r"(-----BEGIN [A-Z ]*PRIVATE KEY-----|bearer\s+|x-amz-signature=|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})",
+    r"(-----BEGIN [A-Z ]*PRIVATE KEY-----|bearer\s+(?=[A-Za-z0-9._~+/-]*[0-9_~+/-])"
+    r"|x-amz-signature=|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})",
     re.IGNORECASE,
 )
 

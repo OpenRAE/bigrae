@@ -18,6 +18,8 @@ GCP_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
         "MODEL_ENROLLMENT_CA_PEM_B64",
         "ACCESS_NETWORK_CIDRS",
         "APP_SECRET_ID",
+        "CAPACITY_PLANNING_CATALOG",
+        "CAPACITY_PLANNING_ENABLED",
         "AUDIT_DEPLOYMENT_SCOPE",
         # The GCE external Application Load Balancer appends two X-Forwarded-For
         # hops, so the renderer sets the trusted hop count (#2617).

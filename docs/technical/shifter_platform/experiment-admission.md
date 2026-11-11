@@ -54,6 +54,18 @@ Then call `record_experiment_collection` with its committed receipt UUID.
 The service checks all identities, plan and entry digests, receipt state, expiry, and pinned destination.
 Receipt presence does not declare scientific success or resource cleanup.
 
+## Participant configuration owners
+
+The released SDL owner (`participant-config` version 1) runs in the admission process.
+Each other owner runs in the organization's installed adapter that declares it (`participant.validate`).
+That installation must be ready and use `bigrae.runtime-plugin/v2`.
+
+CMS records a request with the family digest and the experiment's configuration requests.
+The plugin launcher runs that adapter's isolated worker and records its result.
+CMS admits only the configurations and context selections that the owner returns.
+CMS replays those results in the compiler and never imports owner code.
+A missing adapter or a refusal prevents admission.
+
 ## Persistence
 
 `ExperimentBatch` stores the complete retained JSON record and its SHA-256 digest.
