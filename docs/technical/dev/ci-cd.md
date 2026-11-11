@@ -50,7 +50,7 @@ Pull requests to `dev` merge through a GitHub merge queue (ADR-003-R9).
 
 The `dev` repository ruleset is in `docs/adr/dev-ruleset.json`.
 GitHub configures a merge queue only through a ruleset.
-The ruleset requires the `CodeQL`, `Lint PR title`, `PR Gate`, and `GitGuardian scan` contexts.
+The ruleset requires the `Lint PR title`, `PR Gate`, and `GitGuardian scan` contexts and CodeQL code scanning results.
 It does not require strict status checks, because the queue tests each pull request against the latest `dev`.
 The queue squash-merges (ADR-042-R4) and can put more than one pull request in a merge group.
 
@@ -66,6 +66,7 @@ On a merge group, the workflows have no pull request payload:
 - `Lint PR title` reads the current titles of the queued pull requests in the merge group.
 - `GitGuardian scan` runs `ggshield` on the merge group commits. The GitGuardian App does not report on a merge group.
 - The SonarQube Cloud scan is a pull request analysis of the queued pull request against the queue base branch.
+- CodeQL gates `dev` through a `code_scanning` ruleset rule. The code scanning check run does not report on a merge group, so it cannot be a required status check.
 
 The composite action `.github/actions/merge-group-prs` reads the queued pull requests from the GraphQL merge queue.
 The `dev-merge-queue` ADR guard fails when a required producer does not run on `merge_group`.

@@ -11,13 +11,15 @@ and the workflows as data and fails when:
   request;
 * the ruleset requires strict status checks, or turns them off without a merge
   queue;
-* a required context has no producer workflow; or
+* a required context has no producer workflow;
+* a required status check comes from the code scanning app, which does not
+  report a check run on a merge group;
+* the ruleset has no ``code_scanning`` rule for CodeQL, or the ``CodeQL``
+  workflow does not run on ``pull_request`` for ``dev`` and on ``merge_group``; or
 * a producer does not run on ``pull_request`` for ``dev`` and on
   ``merge_group``, or its job condition filters events without ``merge_group``.
 
-A producer is a workflow job whose ``name`` equals the context. Code scanning
-reports a context named after the workflow, so a workflow whose ``name``
-equals the context is also a producer.
+A producer is a workflow job whose ``name`` equals the context.
 """
 
 from __future__ import annotations
@@ -36,6 +38,10 @@ _WORKFLOW_DIR = ".github/workflows"
 _Producer = tuple[str, dict[str, object], list[object]]
 _DEV_REF = "refs/heads/dev"
 _MERGE_GROUP_TYPE = "checks_requested"
+# GitHub Advanced Security, which posts the code scanning check runs.
+_CODE_SCANNING_APP_ID = 57789
+_CODEQL_TOOL = "CodeQL"
+_CODEQL_WORKFLOW = "CodeQL"
 
 
 def _violation(path: str, message: str) -> Violation:
@@ -127,6 +133,34 @@ def _required_contexts(rules: dict[str, dict[str, object]]) -> list[str]:
     return [str(item["context"]) for item in checks if isinstance(item, dict) and item.get("context")]
 
 
+def _code_scanning_violations(
+    rules: dict[str, dict[str, object]], workflows: dict[str, dict[str, object]]
+) -> list[Violation]:
+    """CodeQL gates the queue through a code_scanning rule, not a required check run."""
+    violations: list[Violation] = []
+    checks = rules.get("required_status_checks", {}).get("required_status_checks")
+    for item in checks if isinstance(checks, list) else []:
+        if isinstance(item, dict) and item.get("integration_id") == _CODE_SCANNING_APP_ID:
+            violations.append(
+                _violation(
+                    DEV_RULESET_REL,
+                    f"required context '{item.get('context')}' comes from code scanning, which does not report "
+                    "on a merge group; require code scanning results with a code_scanning rule",
+                )
+            )
+    tools = rules.get("code_scanning", {}).get("code_scanning_tools")
+    if not isinstance(tools, list) or not any(
+        isinstance(tool, dict) and tool.get("tool") == _CODEQL_TOOL for tool in tools
+    ):
+        violations.append(_violation(DEV_RULESET_REL, "the dev ruleset must have a code_scanning rule for CodeQL"))
+    codeql = [(rel, wf) for rel, wf in workflows.items() if wf.get("name") == _CODEQL_WORKFLOW]
+    if not codeql:
+        violations.append(_violation(DEV_RULESET_REL, "the code_scanning rule for CodeQL has no CodeQL workflow"))
+    for rel, wf in codeql:
+        violations.extend(_producer_violations(_CODEQL_WORKFLOW, rel, wf, []))
+    return violations
+
+
 def _load_workflows(repo_root: Path) -> dict[str, dict[str, object]]:
     """Load every workflow under .github/workflows keyed by repo-relative path."""
     workflows: dict[str, dict[str, object]] = {}
@@ -146,9 +180,6 @@ def _producers(context: str, workflows: dict[str, dict[str, object]]) -> list[_P
         try:
             jobs = _dw_jobs(wf, rel)
         except _DwShapeError:
-            continue
-        if wf.get("name") == context:
-            found.append((rel, wf, list(jobs.values())))
             continue
         named = [job for job in jobs.values() if isinstance(job, dict) and job.get("name") == context]
         if named:
@@ -233,6 +264,7 @@ def check_dev_merge_queue(repo_root: Path, files: list[str] | None) -> list[Viol
     if not contexts:
         violations.append(_violation(DEV_RULESET_REL, "the dev ruleset must require at least one status check"))
     workflows = _load_workflows(repo_root)
+    violations.extend(_code_scanning_violations(rules, workflows))
     for context in contexts:
         producers = _producers(context, workflows)
         if not producers:

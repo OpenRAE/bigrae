@@ -39,10 +39,6 @@
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           {
-            "context": "CodeQL",
-            "integration_id": 57789
-          },
-          {
             "context": "Lint PR title",
             "integration_id": 15368
           },
@@ -53,6 +49,18 @@
           {
             "context": "GitGuardian scan",
             "integration_id": 15368
+          }
+        ]
+      }
+    },
+    {
+      "type": "code_scanning",
+      "parameters": {
+        "code_scanning_tools": [
+          {
+            "tool": "CodeQL",
+            "alerts_threshold": "errors",
+            "security_alerts_threshold": "high_or_higher"
           }
         ]
       }
