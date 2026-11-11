@@ -109,7 +109,10 @@ def start_worker_trial(
             return _view(existing)
         if worker.retirement_at is not None or worker.terminal_at is not None:
             raise ValueError("Worker is retiring")
-        if worker.range.provisioner_operation != "provision" or worker.range.provisioner_operation_id is None:
+        if (
+            worker.range.provisioner_operation != "raes-range:provision"
+            or worker.range.provisioner_operation_id is None
+        ):
             raise ValueError("Worker provisioning is unavailable")
         if not has_current_qualification(worker):
             raise ValueError("Worker qualification is not current")
