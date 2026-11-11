@@ -1,6 +1,7 @@
 """Tenant custody through real services and synthetic original archive bytes."""
 
 import io
+import json
 from datetime import timedelta
 from uuid import uuid4
 
@@ -728,3 +729,16 @@ def test_single_attempt_capture_outside_interval_remains_a_gap(custody, tmp_path
     target = tmp_path / "capture-interval.tar.gz"
     retrieve_trial_archive(actor.credential, organization.uuid, receipt.id, target)
     assert target.read_bytes() == raw
+
+
+def test_archived_run_read_returns_the_committed_run_record_only(custody):
+    from cms.services._trial_archives import read_archived_run
+    from shared.exceptions import CMSError
+    from tests.shared.raes.test_trial_archive import records
+
+    actor, organization, _ = custody
+    receipt = collect(custody)
+    _plan, run = records()
+    assert read_archived_run(actor.credential, organization.uuid, receipt.id) == json.loads(encoded(run))
+    with pytest.raises(CMSError, match="Archive unavailable"):
+        read_archived_run(actor.credential, organization.uuid, uuid4())
