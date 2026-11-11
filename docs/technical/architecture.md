@@ -313,6 +313,11 @@ profile. The admission policies pin that identity for the provisioner,
 preparation, and acquisition Jobs. The Cloud SQL proxy keeps its own 65532
 identity.
 
+The provisioner Job policy admits only the canonical operation and identifier
+argument grammar. The `worker-trial` family admits `run` and `collect` with UUID
+request, trial, and operation IDs. See
+[provisioner operations](shifter_platform/experiment-dispatch.md#provisioner-operations).
+
 The provisioner Job policy inlines the platform-runtime values as its
 parameters, because GKE 1.36 and EKS do not resolve ConfigMap parameters (#2633).
 The repository tests render deployment-owned runtime values into each supported

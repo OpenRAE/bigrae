@@ -51,6 +51,9 @@ The provisioner copies the objects to the worker's fixed trial input directory.
 
 ## Provisioner operations
 
+The `restrict-provisioner-jobs` admission policy admits only the dispatched `worker-trial` argument form.
+That form is `run` or `collect` with UUID `--request-id`, `--trial-id`, and `--operation-id` values.
+
 The provisioner rebuilds the worker's management target from its original RAES provision input.
 It runs only the SDK verbs at the fixed trial-control path.
 `run` starts the trial with `systemd-run` only when `status` reports `prepared`.
