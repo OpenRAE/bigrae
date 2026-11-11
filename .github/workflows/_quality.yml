@@ -93,11 +93,26 @@ jobs:
 
       - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
 
+      # The SonarCloud job analyzes a merge group as a pull request against the
+      # queue base branch, so its new code includes every queued pull request
+      # in the group. Path selection uses the same base. Otherwise a pull
+      # request in front of this one can add new code whose tests and coverage
+      # do not run, and the quality gate fails on that code.
+      - name: Resolve merge group diff base
+        if: ${{ github.event_name == 'merge_group' }}
+        id: merge_group_base
+        env:
+          BASE_REF: ${{ github.event.merge_group.base_ref }}
+        run: |
+          set -euo pipefail
+          sha="$(git merge-base HEAD "refs/remotes/origin/${BASE_REF#refs/heads/}")"
+          echo "sha=${sha}" >> "${GITHUB_OUTPUT}"
+
       - name: Classify changed paths
         id: detect
         env:
           RUN_FULL_MATRIX: ${{ inputs.run_full_matrix }}
-          DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}
+          DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || steps.merge_group_base.outputs.sha || github.event.before || '' }}
           DIFF_HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -118,7 +133,7 @@ jobs:
       - name: Detect quality-guard changes (independent of the classifier)
         id: selfcheck
         env:
-          DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}
+          DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || steps.merge_group_base.outputs.sha || github.event.before || '' }}
           DIFF_HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail

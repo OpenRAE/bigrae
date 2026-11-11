@@ -61,7 +61,8 @@ When a check fails, the queue removes the pull request, and the pull request doe
 
 On a merge group, the workflows have no pull request payload:
 
-- Change detection and the diff-based gates compare with `merge_group.base_sha`.
+- Quality change detection compares with the queue base branch. The SonarQube Cloud scan uses the same base, so tests and coverage run for all new code in the merge group.
+- The other change detection and the diff-based gates compare with `merge_group.base_sha`.
 - `Lint PR title` reads the current titles of the queued pull requests in the merge group.
 - `GitGuardian scan` runs `ggshield` on the merge group commits. The GitGuardian App does not report on a merge group.
 - The SonarQube Cloud scan is a pull request analysis of the queued pull request against the queue base branch.
