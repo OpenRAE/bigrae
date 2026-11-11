@@ -593,6 +593,11 @@
       "source_file": "config/_guacamole_settings.py"
     },
     {
+      "default": "'480'",
+      "name": "GUACAMOLE_SESSION_TTL_MINUTES",
+      "source_file": "config/_guacamole_settings.py"
+    },
+    {
       "default": "'3'",
       "name": "GUACAMOLE_TOKEN_RETRY_ATTEMPTS",
       "source_file": "config/settings.py"
