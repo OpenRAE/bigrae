@@ -28,7 +28,7 @@ def ready_worker(apparatus, monkeypatch):
     from engine.models import Range
 
     worker = create(apparatus)
-    Range.objects.update(status="ready", provisioner_operation="provision", provisioner_operation_id=uuid4())
+    Range.objects.update(status="ready", provisioner_operation="raes-range:provision", provisioner_operation_id=uuid4())
     qualified = {"current": True}
     monkeypatch.setattr(
         "engine.services._worker_qualification.has_current_qualification", lambda _worker: qualified["current"]

@@ -27,6 +27,7 @@ The worker identity is a UUID derived from the attempt token, so a lost response
 | `collect_worker_trial` | Launches `worker-trial collect`; with `stop`, interrupts a running `run` first |
 | `get_worker_trial` | Returns state, exit code, seal, and archive reference |
 
+`start_worker_trial` requires a worker range with a recorded `raes-range:provision` operation and a current qualification.
 Each operation records `range.manage` authority on the worker's range.
 The launcher rechecks that authority before the provisioner starts.
 
