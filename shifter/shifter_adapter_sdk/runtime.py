@@ -401,7 +401,8 @@ def parse_input(raw: str | bytes) -> RuntimeInput | InspectionInput | Validation
     value = decode_message(raw, limit=MAX_INPUT_BYTES)
     if isinstance(value, dict) and value.get("phase") == "inspect":
         return InspectionInput.model_validate(value)
-    if isinstance(value, dict) and value.get("phase") == "validate":
+    # Range planning also has a validate phase; only participant validation names an owner.
+    if isinstance(value, dict) and value.get("phase") == "validate" and "owner" in value:
         return ValidationInput.model_validate(value)
     return RuntimeInput.model_validate(value)
 
