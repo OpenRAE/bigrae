@@ -735,3 +735,36 @@ def test_registered_project_job_requires_exact_read_only_operation_and_generatio
         assert (
             _semantic_policy_allows(policy, PROVISIONER_LAUNCHER_USERNAME, job, parameter_data=parameters) is admitted
         )
+
+
+@pytest.mark.parametrize("inline_params", [True, False])
+def test_worker_trial_job_admits_exactly_the_launcher_command(inline_params):
+    """Each ``worker-trial`` operation is admitted only in its dispatched form."""
+    from engine.services._worker_trials import _OPERATIONS, validate_worker_trial_command
+
+    parameters = _canonical_admission_parameters()
+    policy = _policy(_load_helm_documents(runtime_env=parameters, inline_params=inline_params))
+    canonical = _canonical_admission_job()
+    request, trial, generation = (
+        "11111111-1111-1111-1111-111111111111",
+        "33333333-3333-3333-3333-333333333333",
+        "22222222-2222-2222-2222-222222222222",
+    )
+
+    def allows(args: list[str]) -> bool:
+        job = copy.deepcopy(canonical)
+        job["spec"]["template"]["spec"]["containers"][0]["args"] = args
+        return _semantic_policy_allows(policy, PROVISIONER_LAUNCHER_USERNAME, job, parameter_data=parameters)
+
+    for operation in _OPERATIONS:
+        command = ["worker-trial", operation, "--request-id", request, "--trial-id", trial]
+        validate_worker_trial_command(command)
+        assert allows([*command, "--operation-id", generation]), operation
+        assert not allows(command), operation
+    for args in (
+        ["worker-trial", "destroy", "--request-id", request, "--trial-id", trial, "--operation-id", generation],
+        ["worker-trial", "run", "--request-id", request, "--range-id", trial, "--operation-id", generation],
+        ["worker-trial", "run", "--request-id", request, "--trial-id", "invalid", "--operation-id", generation],
+        ["worker-trial", "run", "--request-id", request, "--operation-id", generation],
+    ):
+        assert not allows(args), args
