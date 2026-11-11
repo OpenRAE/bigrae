@@ -71,7 +71,7 @@ outbound egress for GitHub, ECR, SSM, and AWS APIs.
 documented risk acceptance in `docs/adr/exceptions.yaml` with owner, scope,
 reason, and expiry. No tracked environment sets it, and it is never a recovery
 fallback for a failed managed-network apply. See the placement preflight:
-[`docs/architecture/github-runner-placement-preflight-1437.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/github-runner-placement-preflight-1437.md).
+[`docs/_deprecated/architecture/github-runner-placement-preflight-1437.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/github-runner-placement-preflight-1437.md).
 
 ## 2. Terraform inputs
 
@@ -158,7 +158,7 @@ migration:
    do not run the apply from a job on the fleet it replaces.
 2. Keep the current state and tfvars for rollback. Check NAT gateway and
    Elastic IP quotas in the target region.
-   Re-registration mints real registration tokens. The current SSM transport exposes the token in AWS CLI arguments and retained Run Command input. Review the [documented transport limitation](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/github-runner-placement-preflight-1437.md) before a move.
+   Re-registration mints real registration tokens. The current SSM transport exposes the token in AWS CLI arguments and retained Run Command input. Review the [documented transport limitation](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/github-runner-placement-preflight-1437.md) before a move.
 3. Apply and re-register from outside the fleet:
    `./scripts/bootstrap/deploy.py runners --env <env> --profile <profile>`.
    Replacement runners register with `--replace`, which takes over stale

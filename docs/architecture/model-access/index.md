@@ -6,7 +6,7 @@ The [removal design](broker-removal-preflight-2909.md) records what was removed 
 [ADR-064](../../adr/064-default-range-model-access.md) defines keyless-direct, the only guest model path.
 
 The [replacement evaluation](gateway-replacement-evaluation-2274.md) records the LiteLLM OSS selection, deployment-owned rotation, and proposed qualification.
-The [gateway preflight](gateway-preflight-2274.md) records repository boundaries for that future integration.
+The [gateway preflight](../../_deprecated/architecture/model-access/gateway-preflight-2274.md) records repository boundaries for that future integration.
 Selection does not establish installation or change the supported guest path.
 
 <!-- Original #681 design baseline, contracts, vectors and issue ledger remain exact source-bound reference. -->
@@ -29,22 +29,22 @@ deployment ranges. Shared resources do not require shared participant tokens.
 | --- | --- |
 | [Broker removal design](broker-removal-preflight-2909.md) | #2909 removal boundary, retained helpers, data handling and security analysis. |
 | [Gateway replacement evaluation](gateway-replacement-evaluation-2274.md) | #2274 comparison, selected LiteLLM OSS integration, deployment-owned rotation and qualification plan. |
-| [Gateway replacement preflight](gateway-preflight-2274.md) | #2274 clarified replacement scope, ADR-068 precedence and repository boundaries for future integration. |
+| [Gateway replacement preflight](../../_deprecated/architecture/model-access/gateway-preflight-2274.md) | #2274 clarified replacement scope, ADR-068 precedence and repository boundaries for future integration. |
 | [Architecture and contracts](architecture.md) | Ownership, configuration, allocation, API, persistence, protocol, lifecycle, and user flows. |
 | [Tenant source management](source-management.md) | Implemented source publication, credentials, provider routing and live range transitions. |
-| [Tenant source-management preflight](source-management-preflight-2243.md) | #2243 tenant authority, provider/hosting separation, write-only credentials, live-edit accounting and whole-repository validation boundaries. |
+| [Tenant source-management preflight](../../_deprecated/architecture/model-access/source-management-preflight-2243.md) | #2243 tenant authority, provider/hosting separation, write-only credentials, live-edit accounting and whole-repository validation boundaries. |
 | [Configurable sharing](sharing.md) | Which ranges share which resources, membership modes, overlapping policies, pooled accounting and management examples. |
-| [Sharing authority preflight](sharing-authority-preflight-2140.md) | M20 owner-resolution, transactional fence, mutation-path, validation and security guardrails. |
-| [Allocation preflight](allocation-preflight-2120.md) | M03 transaction, shared-quota locking, pending-grant, lifecycle and cross-cutting validation guardrails. |
+| [Sharing authority preflight](../../_deprecated/architecture/model-access/sharing-authority-preflight-2140.md) | M20 owner-resolution, transactional fence, mutation-path, validation and security guardrails. |
+| [Allocation preflight](../../_deprecated/architecture/model-access/allocation-preflight-2120.md) | M03 transaction, shared-quota locking, pending-grant, lifecycle and cross-cutting validation guardrails. |
 | [Durable allocations](allocations.md) | M03 quota reservations, v2 provider-pool membership, pending grants and preparation authority. |
-| [Request accounting preflight](request-accounting-preflight-2121.md) | M04 budget-account contract, atomic ledger, dispatch lease, idempotency, reconciliation and cross-cutting security guardrails. |
-| [Private broker preflight](broker-preflight-2122.md) | M05 incumbent listeners, identity and credential boundaries, streaming fences, deployment validators and qualification gaps. |
-| [Scoped management preflight](management-preflight-2126.md) | M09 authority, visibility, revision, lifecycle, API/UI and whole-repository boundaries for operator and organizer management. |
+| [Request accounting preflight](../../_deprecated/architecture/model-access/request-accounting-preflight-2121.md) | M04 budget-account contract, atomic ledger, dispatch lease, idempotency, reconciliation and cross-cutting security guardrails. |
+| [Private broker preflight](../../_deprecated/architecture/model-access/broker-preflight-2122.md) | M05 incumbent listeners, identity and credential boundaries, streaming fences, deployment validators and qualification gaps. |
+| [Scoped management preflight](../../_deprecated/architecture/model-access/management-preflight-2126.md) | M09 authority, visibility, revision, lifecycle, API/UI and whole-repository boundaries for operator and organizer management. |
 | [Private broker runtime](broker-runtime.md) | M05 closed routes, identity/credential enforcement, resource bounds, drain and local HTTP verification. |
 | [Security design](security.md) | Threats, identities, network/IAM boundaries, credential lifecycle, privacy, and negative tests. |
 | [GCP deployment package](gcp-packaging.md) | Disabled M06 identity, TLS, network, runtime and deployment-lane resources. |
-| [GCP packaging preflight](gcp-packaging-preflight-2123.md) | M06 repository integration gates for runtime isolation, IAM, egress, TLS and deployment evidence. |
-| [Vertex adapter preflight](vertex-adapter-preflight-2124.md) | M07 pinned-client compatibility, Vertex transport/identity, count-based accounting, usage/error and whole-repository validation guardrails. |
+| [GCP packaging preflight](../../_deprecated/architecture/model-access/gcp-packaging-preflight-2123.md) | M06 repository integration gates for runtime isolation, IAM, egress, TLS and deployment evidence. |
+| [Vertex adapter preflight](../../_deprecated/architecture/model-access/vertex-adapter-preflight-2124.md) | M07 pinned-client compatibility, Vertex transport/identity, count-based accounting, usage/error and whole-repository validation guardrails. |
 | [Implementation issues and dependencies](delivery.md) | Coding-sized work, milestones, hard blockers, and completion criteria. |
 | [Example v1 policy](example-policy.v1.json) | Complete disabled, non-secret catalog with its canonical digest. |
 | [Canonical JSON vector](canonical-json-v1-vector.json) | Exact UTF-8 canonical bytes and SHA-256 digest vector. |

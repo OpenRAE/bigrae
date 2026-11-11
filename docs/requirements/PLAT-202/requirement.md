@@ -42,17 +42,17 @@ Scenario authors need a provider-neutral way to request model access. The platfo
 - IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/allocations.md`
 
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2121` (M04: atomic request budgets and dispatch leases)
-- IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/request-accounting-preflight-2121.md`
+- IMPLEMENTS → DOCUMENTATION `docs/_deprecated/architecture/model-access/request-accounting-preflight-2121.md`
 
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2243` (Tenant model sources across scenario, range and event flows)
 - IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/source-management.md`
 
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2122` (M05: bounded private broker and authenticated control API)
 - IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/broker-runtime.md`
-- DOCUMENTS → DOCUMENTATION `docs/architecture/model-access/broker-preflight-2122.md`
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/model-access/broker-preflight-2122.md`
 
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2126` (M09: scoped operator and organizer model-access management)
-- IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/management-preflight-2126.md`
+- IMPLEMENTS → DOCUMENTATION `docs/_deprecated/architecture/model-access/management-preflight-2126.md`
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2124` (M07: Vertex invocation and usage adapter)
-- IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/vertex-adapter-preflight-2124.md`
+- IMPLEMENTS → DOCUMENTATION `docs/_deprecated/architecture/model-access/vertex-adapter-preflight-2124.md`
 - DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2411` (Optional model-access controls through a gateway, ADR-068)

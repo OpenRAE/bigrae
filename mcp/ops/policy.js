@@ -18,7 +18,7 @@
 // public API and runtime behavior are unchanged, and every name
 // previously importable from `./policy.js` is re-exported below.
 //
-// See docs/architecture/mcp-ops-privileged-surface-preflight-777.md
+// See docs/_deprecated/architecture/mcp-ops-privileged-surface-preflight-777.md
 // for the threat model and mcp/ops/SECURITY.md for the operational
 // rules.
 

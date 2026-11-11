@@ -41,7 +41,7 @@ document and the policy-versioned tests in the same PR.
 
 Interactive range-box Claude startup is a separate user-terminal concern. It is
 not authorized by this experiment policy and must keep its own boundary; see
-`claude-code-autostart-preflight-180.md`.
+`../_deprecated/architecture/claude-code-autostart-preflight-180.md`.
 
 ## Files and artifacts
 

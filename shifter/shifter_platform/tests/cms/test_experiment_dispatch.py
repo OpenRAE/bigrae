@@ -126,12 +126,19 @@ def run(dispatch, operation="reconcile", **options):
     return reconcile_experiment_dispatch(*args, scope=dispatch.scope, **options)
 
 
-def finish(dispatch, worker_id, entry, *, attempt_id):
+def finish(dispatch, worker_id, entry, *, attempt_id, run_id=None, run_status=None, limitations=()):
     """The worker exported a sealed archive for the expected attempt and trial SDL."""
     from shared.raes.experiment_dispatch_inputs import trial_scenario_bytes
 
-    scenario = "sha256:" + hashlib.sha256(trial_scenario_bytes(dispatch.batch.inputs, entry.plan_entry_id)).hexdigest()
-    raw = trial_record_archive(run_id=entry.run_id, attempt_id=attempt_id, scenario=scenario)
+    inputs = dispatch.batch.inputs
+    scenario = "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, entry.plan_entry_id)).hexdigest()
+    raw = trial_record_archive(
+        run_id=run_id or entry.run_id,
+        attempt_id=attempt_id,
+        scenario=scenario,
+        run_status=run_status,
+        limitations=limitations,
+    )
     key = f"trial-exports/{worker_id}/op/run.tar.gz"
     dispatch.storage.objects[("bigrae-assets", key)] = raw
     trial = dispatch.engine.trials[worker_id]
@@ -198,7 +205,6 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
 
 def test_failed_collection_keeps_the_worker_and_shows_the_attempt_not_collected(dispatch, settings):
     from cms.models import ExperimentEntry
-    from shared.exceptions import CMSError
 
     settings.STORAGE_BUCKET_NAME = "bigrae-assets"
     run(dispatch, "start")
@@ -206,9 +212,9 @@ def test_failed_collection_keeps_the_worker_and_shows_the_attempt_not_collected(
     dispatch.engine.workers[worker_id].status = "ready"
     run(dispatch)
     entry = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
-    finish(dispatch, worker_id, entry, attempt_id="another-attempt")
-    with pytest.raises(CMSError):
-        run(dispatch)
+    finish(dispatch, worker_id, entry, attempt_id=str(entry.token), run_id="another-run")
+    # The refused archive is reported for its entry; the pass still advances the others.
+    assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["error"]
     entry.refresh_from_db()
     assert entry.receipt_id is None
     assert not dispatch.engine.workers[worker_id].retiring
@@ -241,6 +247,13 @@ def test_lost_and_unsealed_runs_are_collected_without_a_new_start(dispatch, sett
     trial.state, trial.exit_code, trial.operation, trial.operation_failed = "exited", 1, "collect", False
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["not-sealed"]
     assert dispatch.engine.collect_requests == [(worker_id, True), (worker_id, False)]
+    # An unsealed trial is a failed attempt with no data: its worker retires and cleanup follows.
+    from cms.models import ExperimentEntry
+
+    assert ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}").state == "failed"
+    assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["retiring"]
+    dispatch.engine.workers[worker_id].retired = True
+    assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["cleanup-recorded"]
 
 
 def test_worker_capacity_refusal_leaves_the_claim_for_reconcile(dispatch, settings):
@@ -250,3 +263,64 @@ def test_worker_capacity_refusal_leaves_the_claim_for_reconcile(dispatch, settin
     dispatch.engine.capacity = 1
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["worker-created"]
     assert len(dispatch.engine.workers) == 1
+
+
+def test_a_trial_with_missing_data_fails_and_gets_one_fresh_trial_on_a_new_worker(dispatch, settings, monkeypatch):
+    from cms.models import ExperimentEntry
+    from cms.services import _experiment_replacement
+
+    settings.STORAGE_BUCKET_NAME = "bigrae-assets"
+    # The admitted plan's replacement policy authorizes one fresh trial for a failed trial.
+    monkeypatch.setattr(_experiment_replacement, "_allowed", lambda _inputs, ordinal: ordinal <= 1)
+    run(dispatch, "start")
+    worker_id = next(iter(dispatch.engine.workers))
+    dispatch.engine.workers[worker_id].status = "ready"
+    run(dispatch)
+    failed = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
+    gap = [{"code": "required-data-missing", "detail": "raw chat of agents.blue is missing"}]
+    finish(dispatch, worker_id, failed, attempt_id=str(failed.token), run_status="completed", limitations=gap)
+    run(dispatch)  # collected
+    failed.refresh_from_db()
+    assert failed.state == "failed"
+    run(dispatch)  # retiring
+    dispatch.engine.workers[worker_id].retired = True
+    run(dispatch)  # cleanup recorded
+
+    actions = {(step.plan_entry_id, step.execution_attempt_id): step.action for step in run(dispatch)}
+    assert actions[(failed.plan_entry_id, str(failed.token))] == "rerun-recorded"
+    fresh = ExperimentEntry.objects.get(replaces=failed)
+    assert (fresh.plan_entry_id, fresh.run_id, fresh.replacement_ordinal) == (failed.plan_entry_id, failed.run_id, 1)
+
+    # The next pass claims the fresh trial and creates a new worker; the failed attempt stays recorded.
+    steps = [step for step in run(dispatch) if step.plan_entry_id == failed.plan_entry_id]
+    assert sorted(step.action for step in steps) == ["replaced", "worker-created"]
+    fresh.refresh_from_db()
+    assert fresh.token != failed.token and len(dispatch.engine.workers) == 2
+
+    # The batch report shows the failed attempt, its archive facts, and the fresh trial that replaces it.
+    from cms.services import list_experiment_entries
+
+    rows = [
+        row
+        for row in list_experiment_entries(dispatch.actor.credential, dispatch.organization.uuid, dispatch.batch.id)
+        if row["plan_entry_id"] == failed.plan_entry_id
+    ]
+    assert [(row["attempt"], row["state"], row["run_status"], row["data_complete"]) for row in rows] == [
+        (0, "failed", "completed", False),
+        (1, "claimed", None, None),
+    ]
+    assert rows[1]["replaces_attempt_id"] == str(failed.token)
+
+    # The policy allows one fresh trial: a second failure of the same entry gets none.
+    fresh.state = "failed"
+    args = (dispatch.actor.credential, dispatch.organization.uuid, dispatch.batch.inputs)
+    assert _experiment_replacement.rerun_failed_entry(*args, fresh) == "none"
+
+
+def test_the_replacement_policy_bounds_fresh_trials_for_a_failed_trial():
+    from cms.services._experiment_replacement import _allowed
+
+    inputs = {"plan": {"replacement_policy": {"max_replacements": 2, "replace_on": ["failed", "invalidated"]}}}
+    assert _allowed(inputs, 1) and _allowed(inputs, 2) and not _allowed(inputs, 3)
+    assert not _allowed({"plan": {"replacement_policy": {"max_replacements": 2, "replace_on": ["invalidated"]}}}, 1)
+    assert not _allowed({"plan": {}}, 1)

@@ -8,7 +8,7 @@ ADR: [ADR-037](../adr/index.yaml)
 
 This is the operator reference for the supply chain provenance controls Shifter
 applies to its build and deployment pipelines. The trust-boundary rationale is in
-[`rev1-build-deployment-provenance-preflight-1519.md`](rev1-build-deployment-provenance-preflight-1519.md);
+[`../_deprecated/architecture/rev1-build-deployment-provenance-preflight-1519.md`](../_deprecated/architecture/rev1-build-deployment-provenance-preflight-1519.md);
 the enforced rules are `ADR-037-R1..R6`.
 
 ## Controls at a glance

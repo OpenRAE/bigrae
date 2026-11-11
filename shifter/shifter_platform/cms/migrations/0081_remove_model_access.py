@@ -6,7 +6,7 @@ from django.db import migrations
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('cms', '0078_experiment_dispatch_state'),
+        ('cms', '0080_experiment_entry_rerun'),
     ]
 
     operations = [

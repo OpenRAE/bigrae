@@ -3,7 +3,7 @@
 Issue #2535 enables three controls by default: range-subnet VPC Flow Logs, range-egress Cloud NAT logs, and Vertex AI Data Access audit logs. For operator settings, log locations, limits, and cost,
 see the [operator guide](../../ops/gcp-range-audit-telemetry.md). For the design
 guardrails, see the
-[architecture preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-range-audit-telemetry-preflight-2535.md).
+[architecture preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/gcp-range-audit-telemetry-preflight-2535.md).
 
 ## One policy, two projections
 

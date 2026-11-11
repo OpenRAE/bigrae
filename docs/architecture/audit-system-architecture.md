@@ -13,7 +13,7 @@ immutable compliance evidence. The legacy S3 export is deterministic and
 create-only, but its destination is not yet a provider-enforced write-once
 checkpoint. The command therefore retains every database row. The full trust
 boundary and future evidence-store seam are documented in
-[`audit-tamper-detection-preflight-327.md`](audit-tamper-detection-preflight-327.md).
+[`../_deprecated/architecture/audit-tamper-detection-preflight-327.md`](../_deprecated/architecture/audit-tamper-detection-preflight-327.md).
 
 ## Ownership
 

@@ -2,7 +2,7 @@
 
 This reference describes range-to-workspace scoping administration (PLAT-237, issue #1944). It covers the scoped range query and the command that changes workspace scope. It is constrained by PLAT-241 (cloud-agnostic, proven components) and the
 architecture preflight at
-`docs/architecture/range-workspace-scoping-administration-preflight-1944.md`.
+`docs/_deprecated/architecture/range-workspace-scoping-administration-preflight-1944.md`.
 
 ## What is administered
 

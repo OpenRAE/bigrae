@@ -1,7 +1,7 @@
 # Workspace member invitations
 
 This reference describes the currently bound workspace invitation adapter.
-The [original PLAT-235 boundary](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/workspace-member-invitations-preflight-1942.md) records the design for issue #1942.
+The [original PLAT-235 boundary](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/workspace-member-invitations-preflight-1942.md) records the design for issue #1942.
 Prepared principal-policy invitation services also exist in the source.
 Their acceptance callback is not the adapter currently registered at app startup.
 

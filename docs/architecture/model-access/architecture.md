@@ -11,7 +11,7 @@ This is proposed behavior for [#681](index.md). Names and JSON shapes below
 are design contracts for implementation, not installed endpoints or RAES
 schema additions. ADR-059 through ADR-061 govern the design.
 
-The [#2243 source-management preflight](source-management-preflight-2243.md)
+The [#2243 source-management preflight](../../_deprecated/architecture/model-access/source-management-preflight-2243.md)
 extends this design to authorized tenant source configuration, including Vertex
 in the platform project. It identifies current runtime restrictions separately
 from the intended provider-neutral management boundary.

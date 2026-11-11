@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reject project-scoped Secret Manager / Cloud Storage grants on GCP workloads.
 
-ADR-008-R7 (docs/architecture/gcp-workload-resource-iam-preflight-1517.md): the
+ADR-008-R7 (docs/_deprecated/architecture/gcp-workload-resource-iam-preflight-1517.md): the
 four GCP application workload identities -- ``portal``, ``workers``,
 ``ctf-scheduler``, and ``provisioner`` -- must not receive project-level Secret
 Manager payload/admin roles or Cloud Storage object-admin roles. Static runtime

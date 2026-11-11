@@ -32,7 +32,7 @@ and Django fell back to `InMemoryChannelLayer` whenever `REDIS_HOST` was absent.
 toned-down dev (`enable_autoscaling = false`) the portal therefore ran on the
 in-memory channel layer even though Redis was provisioned, and the websocket fan-out
 behavior was not representative of an event-shaped deployment. Toggling ASG silently
-changed the channel-layer backend. See `aws-portal-redis-channel-layer-preflight-849.md`.
+changed the channel-layer backend. See `../_deprecated/architecture/aws-portal-redis-channel-layer-preflight-849.md`.
 
 ## Contract
 
@@ -86,7 +86,7 @@ channel-layer posture: backend=redis explicit_backend=redis redis_host_present=T
 ## Out of scope
 
 AWS ElastiCache AUTH/TLS hardening is not part of this ADR-018 contract. For the
-active AWS hardening scope, follow `aws-redis-auth-tls-preflight-938.md`: reuse
+active AWS hardening scope, follow `../_deprecated/architecture/aws-redis-auth-tls-preflight-938.md`: reuse
 the existing `REDIS_TLS` / `REDIS_PASSWORD` / `REDIS_CA_PEM` /
 `REDIS_SECRET_ID` seams, and keep auth material out of SSM String values,
 Docker env literals, logs, and URLs.

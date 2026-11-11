@@ -4,7 +4,8 @@ Each step reuses its owning service. Batch claims bound the concurrency, Engine
 admits worker capacity, holds preserve evidence, archive intake records custody,
 and retirement verifies provider absence. The coordinator keeps no state outside
 those services, so a restart continues from them. It never starts a second
-trial for an entry and never redispatches automatically.
+trial for an entry. A failed entry gets a fresh trial only when the
+experiment's replacement policy authorizes it.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ from __future__ import annotations
 import hashlib
 import io
 import json
+import logging
 import tempfile
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -45,6 +47,7 @@ from ._experiment_batches import (
     record_experiment_worker,
 )
 from ._experiment_dispatch_state import experiment_dispatch_stopped, reserve_trial_deadline, stop_experiment_batch
+from ._experiment_replacement import rerun_failed_entry
 from ._trial_archives import intake_trial_archive
 
 if TYPE_CHECKING:
@@ -52,6 +55,8 @@ if TYPE_CHECKING:
     from shared.cloud.types import ObjectStorage
     from shared.credentials import CredentialContext
     from shared.identity_scope import ResourceScope
+
+logger = logging.getLogger(__name__)
 
 _WORKER_NAMESPACE = uuid5(NAMESPACE_URL, "bigrae:experiment-worker")
 _HOLD_REASON = "evidence"
@@ -251,11 +256,12 @@ def _collect(
         if hashlib.sha256(path.read_bytes()).hexdigest() != archive["sha256"]:
             raise CMSError("The trial archive differs from its export report")
         with path.open("rb") as source:
-            collection = intake_trial_archive(credential, organization_uuid, expected, source)
+            collection = intake_trial_archive(credential, organization_uuid, expected, source, run_record_only=True)
     if not collection.worker_copy_disposable:
         raise CMSError("The trial archive is not yet safe to discard from the worker")
     record_experiment_collection(credential, organization_uuid, token, collection.id, scenario_sha256=scenario)
-    final = "finished" if collection.run_status == "completed" else "failed"
+    # A completed run with a gap in its required trial data is a failed trial.
+    final = "finished" if collection.run_status == "completed" and collection.evidence_complete else "failed"
     observe_experiment_attempt(credential, organization_uuid, token, final)
     return "collected"
 
@@ -328,14 +334,18 @@ def _advance_started(
     worker: WorkerView,
     trial: WorkerTrialView,
 ) -> str:
-    """Collect the started trial, then retire its worker, then record cleanup."""
+    """Collect the started trial, then retire its worker, then record cleanup.
+
+    A trial that ended without a collectable archive is a failed attempt with no data.
+    """
     receipt = row.receipt
-    if receipt is None:
+    if receipt is None and row.state != "failed":
         action = _advance_collection(credential, organization_uuid, inputs, row, worker_id, trial)
     elif not worker.retiring:
         action = _retire(credential, worker_id)
     elif worker.retired and not row.cleanup_receipt_json:
-        action = _record_cleanup(credential, organization_uuid, inputs, row, worker_id, receipt.run_status)
+        run_status = receipt.run_status if receipt is not None else "failed"
+        action = _record_cleanup(credential, organization_uuid, inputs, row, worker_id, run_status)
     else:
         action = "waiting-for-cleanup"
     return action
@@ -360,13 +370,22 @@ def _advance_collection(
             collect_worker_trial(credential, worker_id, stop=True)
             action = "recovery-requested"
     elif trial.state == "prepared":
-        action = "start-failed"
+        action = _fail_uncollected(credential, organization_uuid, row, "start-failed")
     elif trial.state == "exited" and trial.operation == "collect" and not trial.operation_failed:
-        action = "not-sealed"
+        action = _fail_uncollected(credential, organization_uuid, row, "not-sealed")
+    elif trial.overdue and trial.operation == "collect":
+        # Past its deadline and drain, and the recovery collection still found no archive.
+        action = _fail_uncollected(credential, organization_uuid, row, "no-archive")
     else:
         collect_worker_trial(credential, worker_id)
         action = "collect-requested"
     return action
+
+
+def _fail_uncollected(credential: CredentialContext, organization_uuid: UUID, row: ExperimentEntry, cause: str) -> str:
+    """Record a trial that ended without a collectable archive as a failed attempt."""
+    observe_experiment_attempt(credential, organization_uuid, _attempt_token(row), "failed")
+    return cause
 
 
 def _create_and_report(
@@ -394,13 +413,37 @@ def reconcile_experiment_dispatch(
     steps = []
     for row in _entries(organization_uuid, batch_id):
         trial: WorkerTrialView | None = None
-        if row.token is None or row.cleanup_receipt_json:
-            action = "none"
-        else:
-            action, trial = _advance(credential, organization_uuid, inputs, scope, row, collect_only=collect_only)
-            row.refresh_from_db()
+        try:
+            if row.token is None:
+                action = _dispatch_replacement(credential, organization_uuid, scope, row, collect_only=collect_only)
+            elif row.cleanup_receipt_json:
+                action = rerun_failed_entry(credential, organization_uuid, inputs, row)
+            else:
+                action, trial = _advance(credential, organization_uuid, inputs, scope, row, collect_only=collect_only)
+        except (CMSError, ValueError) as exc:
+            # One entry's failure must not stop the other entries' progress.
+            logger.warning("experiment dispatch entry=%s failed reason=%s", row.plan_entry_id, str(exc)[:200])
+            action = "error"
+        row.refresh_from_db()
         steps.append(_step(row, trial, action))
     return steps
+
+
+def _dispatch_replacement(
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    scope: ResourceScope,
+    row: ExperimentEntry,
+    *,
+    collect_only: bool,
+) -> str:
+    """Claim a pending replacement entry and create its worker; original entries wait for ``start``."""
+    if row.replaces_id is None or collect_only or experiment_dispatch_stopped(organization_uuid, row.batch_id):
+        return "none"
+    if claim_experiment_entry(credential, organization_uuid, row.batch_id, row.plan_entry_id) is None:
+        return "waiting-for-capacity"
+    row.refresh_from_db()
+    return _create_and_report(credential, organization_uuid, scope, row)
 
 
 def stop_experiment_dispatch(

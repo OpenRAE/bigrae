@@ -7,7 +7,7 @@ live-fire backend (ADR-030). This runbook covers enabling it in a real
 environment and mapping images.
 
 For the backend design see
-`docs/architecture/gcp-range-cell-backend-preflight-1341.md`. For image builds see
+`docs/_deprecated/architecture/gcp-range-cell-backend-preflight-1341.md`. For image builds see
 `docs/architecture/gcp-guest-images.md`.
 
 ## Backend selection
@@ -91,7 +91,7 @@ The boundary is the closed, versioned `shifter.gcp-vm-range-cell` contract in
 legacy `RangeSpec`; it owns role/image/host-access interpretation. A future
 scenario artifact can use a new discriminator/version adapter while retaining
 the same cell lifecycle contract. See
-`docs/architecture/scenario-gcp-range-cell-contract-preflight-1344.md` for the
+`docs/_deprecated/architecture/scenario-gcp-range-cell-contract-preflight-1344.md` for the
 full boundary analysis.
 
 ### Capability failures and diagnostics
@@ -393,7 +393,7 @@ Check browser trust, startup state, clean home, and projected material. Emit no 
 BigRAE discards its output and exposes only bounded pass/failure
 codes. The marker alone cannot qualify a fresh participant profile. Require immutable-image, participant-canary, content-readback, egress, and shared-service evidence before handoff.
 
-See `docs/architecture/nested-ctf-participant-readiness-preflight-1910.md`.
+See `docs/_deprecated/architecture/nested-ctf-participant-readiness-preflight-1910.md`.
 
 Bind qualification to the exact machine image, profile key/fingerprint, canary contract, and manifest digest. Include content-readback and participant-canary reason codes. Record opt-in web rules, regional NAT, and a non-opt-in negative. For historical broker qualification, include generation-bound model grants, broker destination/invocation identity, and post-destroy revocation. Keep
 URLs, CA material, mission content, model bodies, receipt bytes, guest output,

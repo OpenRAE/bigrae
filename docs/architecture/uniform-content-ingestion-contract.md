@@ -115,7 +115,7 @@ canonical digests without revising CMS registrations. If runtime references do
 change, use the existing fenced registration update and trusted conformance
 process, accounting for old pods and rollback images before removing paths.
 
-See the [environment-pack consolidation preflight](environment-pack-consolidation-preflight-2550.md)
+See the [environment-pack consolidation preflight](../_deprecated/architecture/environment-pack-consolidation-preflight-2550.md)
 for the source/runtime boundary, validation layers and routing constraints.
 
 ## Tenant pack removal (ADR-034-R13, #2520)
@@ -137,7 +137,7 @@ Organization-less packs stay operator-managed.
 - Acquired feature artifacts and adapter installations are shared resources.
   Removal does not delete them.
 
-See the [tenant pack removal preflight](tenant-pack-removal-preflight-2520.md)
+See the [tenant pack removal preflight](../_deprecated/architecture/tenant-pack-removal-preflight-2520.md)
 for the decisions, reference rules and concurrency constraints.
 
 ## Consequences

@@ -20,7 +20,7 @@ from pydantic import ValidationError as SchemaError
 from shifter_adapter_sdk.trial import TrialSeal
 
 from shared.raes.json_ingress import parse_bounded_json_object
-from shared.raes.trial_archive_paths import TrialArchiveError, safe_archive_path
+from shared.raes.trial_archive_paths import RECORD_ERRORS, TrialArchiveError, safe_archive_path
 from shared.schemas._raes_validation import JsonObject, _reject_secret_value
 
 CHUNK_BYTES = 1024 * 1024
@@ -479,7 +479,7 @@ def _validated_archive(
         return VerifiedTrialArchive(len(members), run_digest, *facts), documents, members, marker, formats
     except TrialArchiveError:
         raise
-    except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OSError, EOFError, tarfile.TarError):
+    except RECORD_ERRORS:
         raise TrialArchiveError("Archive structure or record validation failed") from None
 
 

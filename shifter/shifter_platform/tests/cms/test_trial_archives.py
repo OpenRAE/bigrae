@@ -1,6 +1,7 @@
 """Tenant custody through real services and synthetic original archive bytes."""
 
 import io
+import json
 from datetime import timedelta
 from uuid import uuid4
 
@@ -201,7 +202,6 @@ def test_failed_retention_deletion_is_retryable(custody, monkeypatch):
 
 
 def test_command_uses_the_same_intake_service(custody, monkeypatch, tmp_path):
-    import json
 
     from django.core.management import call_command
 
@@ -367,7 +367,6 @@ def test_retention_fences_a_verified_but_unpublished_writer(custody, monkeypatch
     ],
 )
 def test_json_lines_cannot_hide_credentials_foreign_records_or_missing_bytes(custody, record):
-    import json
 
     from cms.models import TrialArchiveReceipt
     from shared.exceptions import CMSError

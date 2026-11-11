@@ -84,7 +84,8 @@ def worker_absence_cleanup_receipt(
             "cleanup_status": "succeeded",
             "obligation_results": results,
             "clean_state_claim": {
-                "disposition": "fresh-range-required",
+                # The destroyed worker leaves no residual state; a later trial gets a new worker.
+                "disposition": "verified-clean",
                 "boundary_refs": list(cleanup.clean_state.boundary_refs),
                 "evidence_refs": [evidence_ref],
             },

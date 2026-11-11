@@ -20,7 +20,7 @@ This replaces the substring-based ``test_deploy_workflow_security.py`` and the
 standalone ``scripts/workflow_gating/`` suite, which proved the same
 runner-exposure/PR-routing invariants by string matching; the model here
 evaluates the if-expression, so a guard broadened with ``|| always()`` is
-caught. See ``docs/architecture/workflow-gating-test-suite-preflight-921.md``.
+caught. See ``docs/_deprecated/architecture/workflow-gating-test-suite-preflight-921.md``.
 """
 
 from __future__ import annotations

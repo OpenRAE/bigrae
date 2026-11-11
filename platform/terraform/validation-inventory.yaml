@@ -10,7 +10,7 @@
 #
 # This is NOT a copy of the AWS apply order, the bootstrap backend registry,
 # or the deploy path filters — each of those owns a narrower concern. See
-# docs/architecture/terraform-root-pr-validation-preflight-1528.md.
+# docs/_deprecated/architecture/terraform-root-pr-validation-preflight-1528.md.
 #
 # Provider version constraints stay canonical in each root's Terraform
 # `required_providers`; resolved versions and checksums stay canonical in each

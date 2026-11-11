@@ -10,12 +10,13 @@ The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/parall
 | Service | Behavior |
 | --- | --- |
 | `start_experiment_dispatch` | Claims entries, creates workers, reconciles |
-| `reconcile_experiment_dispatch` | Advances each claimed entry by at most one step |
+| `reconcile_experiment_dispatch` | Advances each claimed entry by at most one step; claims pending fresh trials |
 | `stop_experiment_dispatch` | Requests a stop for each running trial |
 
 The worker identity is a UUID derived from the attempt token, so a lost response finds the same worker.
 `claim_experiment_entry` bounds active claims to the batch concurrency.
 `create_disposable_worker` bounds live workers to the worker policy and capacity reservations.
+A failure in one entry is reported as `error` for that entry; the pass continues with the other entries.
 
 ## Engine worker trials
 
@@ -56,12 +57,17 @@ That form is `run` or `collect` with UUID `--request-id`, `--trial-id`, and `--o
 The provisioner rebuilds the worker's management target from its original RAES provision input.
 It runs only the SDK verbs at the fixed trial-control path.
 `run` starts the trial with `systemd-run` only when `status` reports `prepared`.
+While the trial runs, it tolerates up to five consecutive failed `status` polls before it fails the operation.
 It stops the trial when the deadline and a 900-second drain have passed.
 The archive returns through a bounded copy, digest verification, and a create-only object under `trial-exports/`.
 
 ## Archive intake
 
-Intake accepts two seals.
+Dispatch intake checks only what dispatch needs: containment, the sealed bytes of every member, the run ID, and the run status.
+It reads the run status from a LilRAE seal, or from the RAES run record of a BigRAE seal.
+It parses no other archive record.
+
+The general intake accepts two seals.
 
 | Seal | Owner | Record |
 | --- | --- | --- |
@@ -85,7 +91,20 @@ A trial seal has no RAES plan, so its plan metadata is empty.
 
 After verified VM absence, the coordinator records a RAES cleanup receipt.
 Each obligation that the outcome triggers reports success, with the worker absence as evidence.
-The clean-state claim is `fresh-range-required`.
+The clean-state claim is `verified-clean`: the destroyed worker leaves no residual state, and a fresh trial gets a new worker.
+
+## Trial replacement
+
+A trial fails when its archive reports a run status other than `completed`, or when its seal lists a gap in the required trial data.
+LilRAE lists each gap as a `required-data-missing` limitation.
+A gap is an abnormal participant end, a missing raw chat, an uncaptured host audit log, or an uncaptured trial-end source.
+A trial also fails when it ends without a collectable archive: its start failed, it exited unsealed, or it passed its deadline and drain.
+Such an attempt has no archive data.
+
+After cleanup, dispatch records a fresh trial for a failed entry when the experiment's RAES `replacement_policy` names `failed`, up to `max_replacements` per entry.
+The fresh trial is a pending entry row that keeps the admitted entry and run identity and names the attempt it replaces.
+The next pass claims it, which gives it a new attempt token and a new worker.
+The failed attempt keeps its archive receipt and cleanup receipt.
 
 ## Dependency tuple
 

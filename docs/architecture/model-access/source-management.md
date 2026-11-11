@@ -10,7 +10,7 @@
 
 PLAT-202 / #2243 extends the existing model broker, allocation and sharing seams.
 See the tenant guide for the user flows and
-[preflight](source-management-preflight-2243.md) for the boundary assessment.
+[preflight](../../_deprecated/architecture/model-access/source-management-preflight-2243.md) for the boundary assessment.
 
 ## Ownership and publication
 

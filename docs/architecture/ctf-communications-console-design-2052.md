@@ -10,7 +10,7 @@ Design for the multi-event communications API additions and console. The
 preflight notes record the boundaries:
 [console boundaries](../design/ctf-communications-console-boundaries-2052.md),
 [API integration](ctf-api-integration-preflight-2052.md), and
-[scheduling](ctf-multi-event-communications-preflight-2052.md). ADR-051 governs.
+[scheduling](../_deprecated/architecture/ctf-multi-event-communications-preflight-2052.md). ADR-051 governs.
 Application paths are relative to `shifter/shifter_platform/`.
 
 ## Scope

@@ -34,7 +34,7 @@ Organization profile management remains useful for shared team and enterprise ac
 ## Traceability
 
 - IMPLEMENTS → ADR `docs/adr/066-account-principal-resource-scope.md` (Typed account hierarchy)
-- DOCUMENTS → DOCUMENTATION `docs/architecture/organization-profile-settings-preflight-1939.md` (Organization settings activation boundary)
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/organization-profile-settings-preflight-1939.md` (Organization settings activation boundary)
 - IMPLEMENTS → GITHUB_ISSUE `2314` (Organization account ancestry and default creation)
 - IMPLEMENTS → CODE_FILE `shifter/shifter_platform/workspaces/models/_organization.py` (Organization account binding and default marker)
 - IMPLEMENTS → CODE_FILE `shifter/shifter_platform/workspaces/services/_account.py` (Organization ancestry and no implicit grant)

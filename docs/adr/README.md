@@ -75,7 +75,7 @@ Existing registry, guardrail and import checks validate structure; they do not
 prove the runtime guarantees. Mechanism implementation and real-boundary
 evidence are required before support is advertised.
 
-The [#1583 preparation preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/raes-in-tenant-artifact-preparation-preflight-1583.md)
+The [#1583 preparation preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/raes-in-tenant-artifact-preparation-preflight-1583.md)
 applies GEN-002 to ADR-034-R9 and the existing ingestion, authority and worker
 boundaries. Its enforcement/evidence matrix distinguishes registry validation
 from runtime proof and records the required local/CI routing. It introduces no
@@ -94,7 +94,7 @@ how the deployed boundaries are exercised.
 The documentation coverage manifest links the operator guide and technical
 design from the feature and platform indexes under GEN-001.
 
-The [#2463 feature-artifact acquisition preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/raes-feature-artifact-acquisition-preflight-2463.md)
+The [#2463 feature-artifact acquisition preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/raes-feature-artifact-acquisition-preflight-2463.md)
 records ADR-034-R11 and ADR-034-R12 (platform-owned recipe acquisition of
 backend-owned feature artifacts, tracked in an Engine-owned inventory, acquired once before ranges
 need them, failing per range) and the matching ADR-034-R4, R6 and R7 and
@@ -137,7 +137,7 @@ authority. Optional two-project support is deferred. Source-guard regression
 tests mutate the real module defaults and outputs to cover all retained role,
 permission and output restrictions.
 
-ADR-062 records the [signed CTF receipt binding preflight for #1906](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-signed-receipt-binding-preflight-1906.md).
+ADR-062 records the [signed CTF receipt binding preflight for #1906](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/ctf-signed-receipt-binding-preflight-1906.md).
 It fixes trusted context, protected signer/key registration, lifecycle fencing
 and atomic replay evidence while preserving existing validator contracts.
 The #1906 source implementation supplies runtime, registration, compatibility,
@@ -145,13 +145,13 @@ replay and provider-conformance evidence. Registry and import checks validate
 design structure; fresh deployed two-generation evidence remains the #1910
 composition gate. This ADR adds no exception.
 
-ADR-011-R9 records the [configurable range lease preflight for #27](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/configurable-range-leases-preflight-27.md).
+ADR-011-R9 records the [configurable range lease preflight for #27](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/configurable-range-leases-preflight-27.md).
 It binds installation/runtime policy ownership, generation snapshots, extension
 admission and reuse of canonical cleanup. Registry checks validate this guidance;
 configuration, migration, concurrency, warm-claim and deployment behavior still
 require implementation evidence. No runtime check or exception is added here.
 
-Issue #2169's [runtime lease-policy preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/runtime-mission-control-lease-policy-preflight-2169.md) adds a CMS-owned tenant/group overlay and deterministic multi-group resolution.
+Issue #2169's [runtime lease-policy preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/runtime-mission-control-lease-policy-preflight-2169.md) adds a CMS-owned tenant/group overlay and deterministic multi-group resolution.
 It retains the per-generation owner extension and separates lease policy from workspace tenancy.
 
 The CMS models and resolver implement the overlay.

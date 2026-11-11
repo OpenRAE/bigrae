@@ -122,7 +122,7 @@ resource "aws_iam_role" "github_actions" {
 #
 # The exact-subject and exact-range-role invariants are enforced by
 # scripts/check_tf_iam_role_naming (ADR-004-R22). Binding design note:
-# docs/architecture/packer-base-build-privilege-boundary-preflight-1656.md.
+# docs/_deprecated/architecture/packer-base-build-privilege-boundary-preflight-1656.md.
 # ------------------------------------------------------------------------------
 resource "aws_iam_role" "github_actions_image" {
   name = "github-actions-shifter-${var.environment}-image"

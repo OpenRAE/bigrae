@@ -85,7 +85,7 @@ See [lifecycle contracts](identity-lifecycle-contracts.md) for the complete resu
 The warm pool keeps system-owned, pre-provisioned range generations that an initial
 launch can atomically claim, reducing cold-start latency without bypassing capacity,
 tenancy, or lifecycle controls. Its architecture is fixed by
-`docs/architecture/range-warm-pool-preflight-28.md` and the optional
+`docs/_deprecated/architecture/range-warm-pool-preflight-28.md` and the optional
 `range-warm-activation/v1` capability in `docs/architecture/provider-neutral-range-substrate.md`.
 
 Key seams:

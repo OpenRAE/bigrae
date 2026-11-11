@@ -79,6 +79,7 @@
         "shifter/shifter_platform/shared/raes/trial_archive_jsonl.py",
         "shifter/shifter_platform/shared/raes/trial_archive_records.py",
         "shifter/shifter_platform/shared/raes/trial_archive_lilrae.py",
+        "shifter/shifter_platform/shared/raes/trial_archive_run_record.py",
         "shifter/shifter_platform/cms/models/trial_archives.py"
       ]
     },

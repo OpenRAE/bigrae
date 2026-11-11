@@ -5,7 +5,7 @@ single-availability-zone placement of the range VPC and all concurrent ranges,
 its blast-radius and capacity rationale, and the explicit decision on whether
 multi-AZ placement is warranted. ADR-021 records the binding decision; this
 document is its rationale and live-model reference. The preflight artifact is
-[range-isolation-placement-preflight-959.md](range-isolation-placement-preflight-959.md).
+[../_deprecated/architecture/range-isolation-placement-preflight-959.md](../_deprecated/architecture/range-isolation-placement-preflight-959.md).
 
 This is documentation of the current posture. It changes no Terraform, IAM, or
 runtime behavior.

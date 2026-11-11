@@ -89,7 +89,7 @@ project storage, secret, or cross-tenant access.
 
 ## Audit telemetry clarification (#2535)
 
-The [GCP range telemetry preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-range-audit-telemetry-preflight-2535.md)
+The [GCP range telemetry preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/gcp-range-audit-telemetry-preflight-2535.md)
 records the intended default-on network and Vertex Data Access logging boundary.
 Provider audit configuration belongs to deployment Terraform in the model target
 project; guest subnet/NAT settings belong to their existing infrastructure owner.

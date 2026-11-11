@@ -10,7 +10,7 @@
 //
 // Split out of policy.js to keep each module under the file-length
 // limit (javascript:S104); behavior is unchanged. See
-// docs/architecture/mcp-ops-privileged-surface-preflight-777.md for
+// docs/_deprecated/architecture/mcp-ops-privileged-surface-preflight-777.md for
 // the threat model and mcp/ops/SECURITY.md for the operational rules.
 
 import { existsSync, readFileSync } from "node:fs";

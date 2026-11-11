@@ -1,7 +1,7 @@
 # Disaster Recovery Runbook—AWS Portal Stack
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/160>
-Design note: [`docs/architecture/aws-disaster-recovery-preflight-160.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/aws-disaster-recovery-preflight-160.md)
+Design note: [`docs/_deprecated/architecture/aws-disaster-recovery-preflight-160.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/aws-disaster-recovery-preflight-160.md)
 Region: `us-east-2` (all portal resources)
 
 This runbook is the operator procedure for recovering portal data and
@@ -121,7 +121,7 @@ Use their exact source revision and state rather than current EKS assumptions.
 
 Classified **ephemeral** by design—authoritative state lives in RDS, so the
 upload bucket has versioning and cross-region replication intentionally disabled
-(see [`docs/architecture/s3-bucket-hardening-preflight.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/s3-bucket-hardening-preflight.md)
+(see [`docs/_deprecated/architecture/s3-bucket-hardening-preflight.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/s3-bucket-hardening-preflight.md)
 and #143/#219). There is no restore primitive: lost upload objects are
 re-uploaded by users/agents. Do not change this bucket to durable storage to satisfy a generic checklist.
 That change affects deletion and retention for agent uploads, experiment scripts, and CTF attachments.
@@ -304,7 +304,7 @@ the decision is explicit rather than an unexamined gap.
 
 ## References
 
-- Design note: [`docs/architecture/aws-disaster-recovery-preflight-160.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/aws-disaster-recovery-preflight-160.md)
-- S3 hardening decision: [`docs/architecture/s3-bucket-hardening-preflight.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/s3-bucket-hardening-preflight.md)
+- Design note: [`docs/_deprecated/architecture/aws-disaster-recovery-preflight-160.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/aws-disaster-recovery-preflight-160.md)
+- S3 hardening decision: [`docs/_deprecated/architecture/s3-bucket-hardening-preflight.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/s3-bucket-hardening-preflight.md)
 - AWS—encrypted SNS for service events: <https://docs.aws.amazon.com/sns/latest/dg/sns-key-management.html>
 - AWS—RDS event subscriptions: <https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/USER_Events.Subscribing.html>

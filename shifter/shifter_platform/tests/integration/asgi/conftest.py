@@ -6,7 +6,7 @@ These tests drive the *real* ``config.asgi.application`` through
 ``AuthMiddlewareStack`` -> ``URLRouter`` stack. The channel layer is never
 mocked; authentication is via a real Django session cookie rather than
 ``scope["user"]`` injection. See
-``docs/architecture/asgi-render-integration-preflight-924.md`` for the
+``docs/_deprecated/architecture/asgi-render-integration-preflight-924.md`` for the
 binding guardrails.
 """
 

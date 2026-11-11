@@ -496,7 +496,7 @@ def render_env(outputs: dict[str, object], *, engine_image: str) -> str:
     # probes (DB / cache / storage). The ingress IP is intentionally not an
     # accepted application host outside that path. localhost / 127.0.0.1 stay
     # for in-pod probes and port-forward debugging. See issue #477 and
-    # `docs/architecture/portal-health-readiness-preflight-477.md`.
+    # `docs/_deprecated/architecture/portal-health-readiness-preflight-477.md`.
     allowed_hosts = ",".join(_unique([public_hostname, "localhost", "127.0.0.1"]))
 
     bootstrap_staff_emails = ",".join(_csv_env("PLATFORM_BOOTSTRAP_STAFF_EMAILS"))

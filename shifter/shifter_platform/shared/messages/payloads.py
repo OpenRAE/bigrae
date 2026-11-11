@@ -9,7 +9,7 @@ They are **static typing only**. Messages still arrive from SQS/Pub-Sub as
 untrusted dictionaries, so the handler-side runtime trust boundary — envelope
 unwrapping (``parse_sns_message``), ``ResourceStatus`` validation, and ownership
 checks — is unchanged. A ``TypedDict`` annotation is not a permission check or a
-data validator. See ``docs/architecture/typed-event-contracts-preflight-296.md``.
+data validator. See ``docs/_deprecated/architecture/typed-event-contracts-preflight-296.md``.
 
 Names carry a ``Payload`` suffix to stay distinct from the Pydantic *producer*
 models in ``cyberscript.messages.events`` (``RangeStatusUpdatedEvent`` etc.).

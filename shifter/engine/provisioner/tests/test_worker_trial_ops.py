@@ -42,7 +42,10 @@ class FakeWorker:
     def run_command_to_file(self, target, script, *, output_path, max_bytes, timeout_seconds, document_name):
         self.commands.append(script)
         if script.endswith(" status"):
-            body = json.dumps({"schema_version": "bigrae.trial-status/v1", **self.statuses.pop(0)}).encode()
+            answer = self.statuses.pop(0)
+            if answer.get("fail"):
+                return 1
+            body = json.dumps({"schema_version": "bigrae.trial-status/v1", **answer}).encode()
         elif script.endswith(" export"):
             body = json.dumps(
                 {
@@ -174,3 +177,20 @@ def test_bounded_ssh_copy_refuses_oversized_output(tmp_path):
     with pytest.raises(Exception, match="byte"):
         invoke_ssh_to_file(["sh", "-c", "head -c 4096 /dev/zero"], path, 16, 30)
     assert invoke_ssh_to_file(["sh", "-c", "printf ok"], path, 16, 30) == 0
+
+
+def test_transient_status_failures_while_running_do_not_end_the_run(storage, monkeypatch):
+    monkeypatch.setattr(worker_trial_ops.time, "sleep", lambda _seconds: None)
+    failed = {"fail": True}
+    worker = FakeWorker(
+        [status("prepared"), failed, status("running"), failed, failed, status("exited", sealed=True, exit_code=0)]
+    )
+    receipt = worker_trial_ops.execute_worker_trial(execution(worker), trial_input(), "run", "op-5")
+    assert receipt.sealed and receipt.archive is not None
+
+
+def test_a_persistent_status_failure_still_ends_the_run(storage, monkeypatch):
+    monkeypatch.setattr(worker_trial_ops.time, "sleep", lambda _seconds: None)
+    worker = FakeWorker([status("prepared"), *[{"fail": True}] * (worker_trial_ops.STATUS_RETRIES + 1)])
+    with pytest.raises(worker_trial_ops.WorkerTrialError):
+        worker_trial_ops.execute_worker_trial(execution(worker), trial_input(), "run", "op-6")
