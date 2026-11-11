@@ -39,7 +39,7 @@ The coordinator stages three objects under `trial-inputs/<attempt>/` in the asse
 | Object | Content |
 | --- | --- |
 | `scenario.sdl` | The retained concrete trial SDL of the entry |
-| `trial-unit.json` | The admitted plan, the plan entry ID, and the entry's instantiated snapshot |
+| `trial-unit.json` | The admitted plan, the plan entry ID, the entry's instantiated snapshot, and the retained family, experiment, task, capture specs, and authority that the RAES engine needs to realize the entry |
 | `trial.json` | Run ID, attempt ID, deadline, and the digests of `scenario.sdl` and `trial-unit.json` |
 
 The deadline is the staging time plus the entry's admitted attempt timeout.
