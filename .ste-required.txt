@@ -26,8 +26,9 @@ docs/dev/ctf-scenario-content.md
 docs/dev/ctf-signed-receipt-validators.md
 docs/dev/deploy-secrets.md
 docs/dev/deployment-configuration.md
+docs/dev/gcp-ci-adapter.md
+docs/dev/gcp-contributor-deploy.md
 docs/dev/gcp-range-cell-deploy.md
-docs/dev/gcp-tenant-standup-gotchas.md
 docs/dev/secrets-rotation-runbook.md
 docs/dev/service-discovery-forcenew.md
 docs/how-to/aws-ecs-to-eks-migration.md

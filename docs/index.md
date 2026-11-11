@@ -30,9 +30,10 @@ Use [pack installation](scenarios/index.md#install-a-content-pack) for administr
 | Doc | Read this when |
 |---|---|
 | [Install on Google Cloud](getting-started/install-gcp.md) | You install a new deployment from a published release. |
-| [GitHub-less GCP deployment guide](technical/handbook/gcp-github-less-deployment.md) | You need the full detail of the release, the bundle, install, update, mirror, and teardown. |
-| [RB023: GCP deployment](runbooks/rb023-gcp-deployment.md) | An install, update, or teardown fails. |
-| [GCP tenant standup gotchas](dev/gcp-tenant-standup-gotchas.md) | You hit a known deploy problem. |
+| [GCP deployment handbook](technical/handbook/gcp-github-less-deployment.md) | You need the lifecycle commands, the bundle, the deploy stages, the lock, the evidence, a mirror, or the retained resources after teardown. |
+| [RB023: GCP deployment](runbooks/rb023-gcp-deployment.md) | An install, update, or teardown fails, or you hit a known deploy problem. |
+| [Contributor GCP releases and test deploys](dev/gcp-contributor-deploy.md) | You publish a release, deploy from a checkout, or test deploy tooling. |
+| [Retained GCP CI deploy adapter](dev/gcp-ci-adapter.md) | You need the GitHub CI inputs of the retained GCP CI adapter. |
 | [GCP range-cell deploy](dev/gcp-range-cell-deploy.md) | You configure the GCE range backend and its images. |
 | [Deployment configuration and recovery](dev/deployment-configuration.md) | You need how the deploy renders its Terraform inputs and recovers state. |
 | [Native CTF scenario content](dev/ctf-scenario-content.md) | You are publishing and binding private, digest-pinned native challenges to a scenario. |

@@ -126,12 +126,15 @@ Resolve an access error or disabled billing before you continue.
 
 1. Open the [releases](https://github.com/OpenRAE/bigrae/releases).
 2. Select the release approved for your installation. Releases v4.1.1 and
-   earlier have no deployer image.
+   earlier have no deployer image. The
+   [deployment compatibility reference](../technical/platform_infrastructure/deployment-compatibility.md)
+   records release availability.
 
 Set the release tag and get its source revision:
 
 ```bash
 RELEASE_TAG='vX.Y.Z'
+RELEASE_REF='refs/heads/main'
 REG=ghcr.io/openrae/bigrae
 RELEASE_REVISION="$(git ls-remote https://github.com/OpenRAE/bigrae \
   "refs/tags/$RELEASE_TAG" "refs/tags/$RELEASE_TAG^{}" | tail -n 1 | cut -f 1)"
@@ -141,6 +144,17 @@ printf '%s\n' "$RELEASE_REVISION"
 The command must print one 40-character revision. If it prints nothing, check
 the release tag. This command reads the tag. It does not clone the repository.
 
+A tagged release builds from `refs/heads/main`. A build from `dev` or
+`deploy-test` is a contributor test artifact. Use one only when the deployment
+owner approves it. To use an approved contributor build, do these steps:
+
+1. Set `RELEASE_REF` to `refs/heads/dev` or `refs/heads/deploy-test`.
+2. Set `RELEASE_REVISION` to the 40-character commit that the release run built.
+3. Do not run the tag command.
+
+[Publish a release](../dev/gcp-contributor-deploy.md#publish-a-release) tells
+how a contributor builds one.
+
 Resolve the deployer image digest and verify its build provenance:
 
 ```bash
@@ -148,13 +162,14 @@ DIGEST="$(oras resolve "$REG/deployer-gcp:$RELEASE_REVISION")"
 DEPLOYER_IMAGE="$REG/deployer-gcp@$DIGEST"
 cosign verify-attestation --type https://slsa.dev/provenance/v1 \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  --certificate-identity "https://github.com/OpenRAE/bigrae/.github/workflows/release-gcp.yml@refs/heads/main" \
+  --certificate-identity "https://github.com/OpenRAE/bigrae/.github/workflows/release-gcp.yml@$RELEASE_REF" \
   --certificate-github-workflow-sha "$RELEASE_REVISION" \
   "$DEPLOYER_IMAGE" > /dev/null
 ```
 
 Continue only if verification succeeds. A failed verification blocks installation.
-The check accepts only a release build from `main` at the selected revision.
+The check accepts only a release build from `RELEASE_REF` at the selected revision.
+
 `DEPLOYER_IMAGE` ends with `@sha256:` and a digest. This address identifies the
 exact container. Do not replace it with a moving image tag.
 See [Get and verify the deployer image](../technical/handbook/gcp-github-less-deployment.md#get-and-verify-the-deployer-image).

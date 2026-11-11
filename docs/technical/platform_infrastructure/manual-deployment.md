@@ -117,40 +117,9 @@ After bootstrap, CI/CD can manage all other infrastructure automatically.
 ## GCP
 
 GCP manual setup is separate from the AWS stacks above. A GCP deployment can
-run without GitHub (ADR-070). The
-[GitHub-less GCP deployment guide](../handbook/gcp-github-less-deployment.md) gives the
-commands for each step:
-
-1. **GCP project setup** - Create the project and configure billing.
-2. **Foundation** - Run `scripts/bootstrap/deploy.py gcp-foundation` in its
-   GitHub-less mode. It creates the state bucket, the purpose identities, the
-   release-evidence bucket, and the deployment config bucket. It grants the
-   named `impersonation_principals` the right to impersonate the deploy,
-   release-scan, and destroy identities. It creates no Workload Identity pool
-   or provider.
-3. **Release access** - The release registry is public. A deployment that
-   cannot reach it fills a mirror and passes `--release-source`.
-4. **Initial secrets** - Store the first operator password in Secret Manager.
-   Name that secret in `settings.operator_bootstrap.admin_password_secret_ref`.
-5. **Deployment inputs** - Write `bigrae.yaml` and the Terraform values. Leave
-   `gke_master_authorized_cidrs = []` for Connect Gateway, or use connected
-   RFC1918 networks only. Publish the inputs with `gcp-config publish`.
-6. **Range images** - Import the guest images that the release selects with
-   `gcp-images --store gs://<deployment config bucket>`.
-7. **First install** - Run `gcp-deploy --store gs://<deployment config bucket>
-   --first-install` from the deployer image of the release.
-8. **DNS** - Point the public hostname at the reserved ingress IP if DNS is
-   managed outside Terraform, then run `gcp-deploy` again without
-   `--first-install`.
-
-The deploy command expects and enforces:
-
-- a managed-TLS public hostname from `deployment.domain`
-- a private GKE control-plane endpoint that it reaches through Connect Gateway
-- Cloud Armor on the public ingress backends
-- Terraform-managed Identity Platform for corporate login, with browser-side Google auth and server-side verified-token exchange
-- a first operator account that it seeds from `settings.operator_bootstrap`
-- the ADR-037 release gates: the exact-digest scan, the provenance check, and the running-image check
-
-`scripts/bootstrap/deploy.py gdc-bootstrap` builds only the legacy GDC VM
-Runtime substrate for the `gdc` range backend.
+run without GitHub (ADR-070). Use
+[Install on Google Cloud](../../getting-started/install-gcp.md) for the
+procedure, and the [GCP deployment handbook](../handbook/gcp-github-less-deployment.md)
+for each command and the manual foundation. The
+[GCP infrastructure page](gcp-infrastructure.md#deployment-path) lists what the
+deploy command enforces.
