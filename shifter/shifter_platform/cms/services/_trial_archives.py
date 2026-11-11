@@ -404,7 +404,7 @@ def read_archived_run(credential: CredentialContext, organization_uuid: UUID, re
     """Return the RAES run record of one committed archive; read no other member."""
     import tarfile
 
-    from raes_contracts.json_ingress import parse_bounded_json_object
+    from shared.raes.json_ingress import parse_bounded_json_object
 
     receipt = TrialArchiveReceipt.objects.select_related("transfer").filter(pk=receipt_id).first()
     if receipt is None:

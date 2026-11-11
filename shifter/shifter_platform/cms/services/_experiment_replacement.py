@@ -12,8 +12,6 @@ import logging
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-from raes_contracts.errors import RaesError
-
 from cms.models import ExperimentEntry, RaesPackageSource
 from cms.scenarios.pack_validation import PackDigestError, verify_pack_digest
 from shared.cloud.exceptions import CloudStorageError
@@ -45,7 +43,8 @@ def replace_experiment_entry(
 ) -> str:
     """Record the next authorized replacement for a finished entry, or report why none applies."""
     ordinal = (row.replacement_ordinal or 0) + 1
-    if row.receipt is None or not replacement_allowed(inputs, row.receipt.run_status, ordinal):
+    token = row.token
+    if token is None or row.receipt is None or not replacement_allowed(inputs, row.receipt.run_status, ordinal):
         return "none"
     if ExperimentEntry.objects.filter(replaces=row).exists():
         return "replaced"
@@ -57,7 +56,7 @@ def replace_experiment_entry(
     try:
         if source is None:
             raise CMSError("The batch's pack is no longer registered")
-        failed_run = read_archived_run(credential, organization_uuid, row.receipt_id)
+        failed_run = read_archived_run(credential, organization_uuid, row.receipt.pk)
         with _pack_snapshot(source) as root:
             if not verify_pack_digest(root, source.package_digest):
                 raise CMSError("The batch's pack changed")
@@ -70,8 +69,8 @@ def replace_experiment_entry(
                 cleanup_receipt=json.loads(row.cleanup_receipt_json),
                 owner_validation=_owner_validation(organization_uuid),
             )
-    except (CMSError, ValueError, RaesError, RaesPackageError, PackDigestError, CloudStorageError, OSError) as exc:
+    except (CMSError, ValueError, RaesPackageError, PackDigestError, CloudStorageError, OSError) as exc:
         logger.warning("experiment replacement refused entry=%s reason=%s", row.plan_entry_id, str(exc)[:200])
         return "replacement-refused"
-    record_experiment_replacement(credential, organization_uuid, row.token, replacement)
+    record_experiment_replacement(credential, organization_uuid, token, replacement)
     return "replacement-recorded"

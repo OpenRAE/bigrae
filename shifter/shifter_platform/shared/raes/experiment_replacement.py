@@ -17,6 +17,7 @@ from raes.canonical import canonical_instantiated_sdl_bytes
 from raes_contracts.canonical import canonical_json_bytes
 from raes_contracts.contracts import ExperimentRunModel, TrialCleanupReceiptModel
 from raes_contracts.contracts.admitted_trial_plan_ingress import parse_admitted_trial_plan_json
+from raes_contracts.errors import RaesError
 from raes_processor.trial_compiler.replacement import TrialReplacementResult, compile_replacement_trial
 from raes_processor.trial_realization import instantiate_admitted_trial_entry
 
@@ -50,7 +51,36 @@ def compile_experiment_replacement(
     cleanup_receipt: dict[str, Any],
     owner_validation: OwnerValidation,
 ) -> dict[str, Any]:
-    """Compile and realize the next replacement for one slot; raise ``ValueError`` on refusal."""
+    """Compile and realize the next replacement for one slot; raise ``ValueError`` on refusal.
+
+    RAES reports its own refusals as ``RaesError``. Callers outside ``shared.raes``
+    handle a refusal as ``ValueError``, so this boundary converts the error.
+    """
+    try:
+        return _compile(
+            root,
+            inputs,
+            root_entry_id=root_entry_id,
+            previous=previous,
+            failed_run=failed_run,
+            cleanup_receipt=cleanup_receipt,
+            owner_validation=owner_validation,
+        )
+    except RaesError as exc:
+        raise ValueError(str(exc)) from exc
+
+
+def _compile(
+    root: Path,
+    inputs: dict[str, Any],
+    *,
+    root_entry_id: str,
+    previous: list[dict[str, Any]],
+    failed_run: dict[str, Any],
+    cleanup_receipt: dict[str, Any],
+    owner_validation: OwnerValidation,
+) -> dict[str, Any]:
+    """Compile and realize the next replacement for one slot."""
     experiment = _select_experiment(root, inputs["experiment"]["spec_id"], inputs["experiment"]["spec_version"])
     authority = ExperimentAuthority.model_validate(inputs["authority"])
     request = experiment.compilation_request(**_context(experiment, authority, owner_validation))
