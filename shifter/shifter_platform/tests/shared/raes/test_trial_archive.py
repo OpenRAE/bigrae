@@ -488,3 +488,21 @@ def test_lilrae_trial_seal_binds_the_expected_attempt(tmp_path):
         path.write_bytes(wrong)
         with pytest.raises(TrialArchiveError):
             validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
+
+
+def test_raw_capture_blobs_are_kept_by_checksum_not_parsed_as_documents():
+    from shared.raes.trial_archive import _declared_formats
+
+    rows = [
+        {"path": "trial/transcripts/agents.red.json", "media_type": "application/json", "role": "evidence-blob"},
+        {"path": "trial/audit/audit.log", "media_type": "application/octet-stream", "role": "evidence-blob"},
+        {"path": "evidence/records/a.json", "media_type": "application/json", "role": "evidence-record"},
+        {"path": "trial/soc/notes.bin", "media_type": "application/octet-stream", "role": "evidence-record"},
+    ]
+    formats = _declared_formats({"inventory": rows}, {row["path"]: (1, "x") for row in rows})
+    assert formats == {
+        "trial/transcripts/agents.red.json": "binary",
+        "trial/audit/audit.log": "binary",
+        "evidence/records/a.json": "json",
+        "trial/soc/notes.bin": "json",
+    }
