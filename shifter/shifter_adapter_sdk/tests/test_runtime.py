@@ -388,3 +388,5 @@ def test_range_validate_planning_is_not_participant_validation(request_input):
 
     planning = request_input.model_copy(update={"phase": "validate"})
     assert parse_input(planning.model_dump_json()) == planning
+    response = parse_result(plan(planning, actions=[]).model_dump_json(), planning)
+    assert (response.status, response.actions) == ("planned", [])

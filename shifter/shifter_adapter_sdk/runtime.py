@@ -421,9 +421,9 @@ def parse_result(
         inspection = InspectionResult.model_validate(value)
         inspection.authorize(request)
         return inspection
-    if request.phase == "validate":
-        from .validation import ValidationResult
+    from .validation import ValidationInput, ValidationResult
 
+    if isinstance(request, ValidationInput):
         validation = ValidationResult.model_validate(value)
         validation.authorize(request)
         return validation
