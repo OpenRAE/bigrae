@@ -306,6 +306,47 @@ def test_service_administrator_opens_real_terminal_service_without_owner_imperso
 
 
 @pytest.mark.postgres
+def test_owned_guest_remains_accessible_when_another_range_reuses_its_identifier(principal_range):
+    from engine.models import Range
+    from engine.models import Request as EngineRequest
+    from engine.services._range_authority import authorized_instance_range
+    from management.services import create_service_principal
+
+    fixture = principal_range
+    owner_uuid = fixture.credential.principal.uuid
+    guest_uuid = str(uuid4())
+    fixture.request.owner_principal_uuid = owner_uuid
+    fixture.request.save(update_fields=["owner_principal_uuid"])
+    fixture.instance.owner_principal_uuid = owner_uuid
+    fixture.instance.save(update_fields=["owner_principal_uuid"])
+    fixture.realized.request.owner_principal_uuid = owner_uuid
+    fixture.realized.request.save(update_fields=["owner_principal_uuid"])
+    fixture.realized.owner_principal_uuid = owner_uuid
+    fixture.realized.provisioned_instances = [{"uuid": guest_uuid}]
+    fixture.realized.save(update_fields=["owner_principal_uuid", "provisioned_instances"])
+
+    other_owner = create_service_principal("Other independent range owner")
+    other_request = EngineRequest.objects.create(
+        request_id=uuid4(),
+        request_type="range",
+        owner_principal_uuid=other_owner.uuid,
+    )
+    Range.objects.create(
+        request=other_request,
+        owner_principal_uuid=other_owner.uuid,
+        cms_range_uuid=uuid4(),
+        resource_generation=uuid4(),
+        range_backend="gce",
+        scope_kind="account",
+        account_id=fixture.account.id,
+        status="ready",
+        provisioned_instances=[{"uuid": guest_uuid}],
+    )
+
+    assert authorized_instance_range(fixture.credential, guest_uuid) == fixture.realized
+
+
+@pytest.mark.postgres
 @pytest.mark.asyncio
 @pytest.mark.django_db(transaction=True)
 async def test_idle_service_terminal_revalidation_closes_transport_and_releases_capacity(principal_range, monkeypatch):

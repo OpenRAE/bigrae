@@ -164,15 +164,20 @@ def authorized_instance_range(
             raise ValueError("Missing guest identifier")
         identifier = instance_uuid
         selected = {"cms_range_uuid": range_uuid} if range_uuid is not None else {}
-        candidates = tuple(
-            Range.objects.select_related("request")
-            .filter(
-                provisioned_instances__contains=[{"uuid": identifier}],
-                status=Range.Status.READY,
-                **selected,
-            )
-            .only("id", "request__request_id")[:2]
+        query = Range.objects.select_related("request").filter(
+            provisioned_instances__contains=[{"uuid": identifier}],
+            status=Range.Status.READY,
+            **selected,
         )
+        candidate_query = (
+            query if range_uuid is not None else query.filter(owner_principal_uuid=credential.principal.uuid)
+        )
+        candidates = tuple(candidate_query.only("id", "request__request_id")[:2])
+        if range_uuid is None and not candidates:
+            # Retain unambiguous administrator access to another principal's
+            # range while keeping repeated authored guest identifiers from
+            # making every participant's own range ambiguous.
+            candidates = tuple(query.only("id", "request__request_id")[:2])
         if len(candidates) != 1 or candidates[0].request is None:
             raise ValueError("Missing guest binding")
         return require_native_range_action(credential, candidates[0].request.request_id, "range.access")
