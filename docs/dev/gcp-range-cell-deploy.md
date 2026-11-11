@@ -124,8 +124,7 @@ Do not disable admission or remove the suffix.
 Set the GCE range-cell inputs in the deployment input bundle:
 `settings.range_cells` in `bigrae.yaml` and the image roles in
 `range-images.json`
-([GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md#author-and-publish-the-deployment-input-bundle)). A CI deployment sets the matching variables in `docs/dev/deploy-secrets.md`
-("GCE range-cell backend variables"). The GCE deploy precondition requires `settings.range_cells.zone` and the `linux` image role.
+([GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md#author-and-publish-the-deployment-input-bundle)). [GCE range-cell settings](#gce-range-cell-settings) lists each setting and its CI variable. The GCE deploy precondition requires `settings.range_cells.zone` and the `linux` image role.
 Add other roles when the selected scenario needs them.
 
 Add the other guest
@@ -161,6 +160,44 @@ permission-probe, quota, audit-cost, and revocation procedure is documented in
 When `settings.range_cells.project_id` is empty, the runtime renderer sets
 `GCP_RANGE_CELL_PROJECT_ID` to the project parsed from the range VPC self-link.
 The range backend then targets the real range project.
+
+### GCE range-cell settings
+
+The GCP range backend is `gce` (GCE range cells). A deployment without GitHub
+sets these non-secret inputs in `bigrae.yaml` (`settings.range_cells` and
+`settings.participant_openvpn`) and in `range-images.json`. A CI deployment
+sets them as GitHub Actions repository or environment **variables** (`vars.*`);
+the CI adapter projects each one onto the same setting. `gcp-deploy` passes them
+to the generated runtime config. Unset values fall back to the code defaults in
+`config.py`. The CI adapter is described in [Retained GCP CI deploy adapter](gcp-ci-adapter.md).
+
+`./scripts/bootstrap/deploy.py gcp-images --project-id <project> --store
+gs://<bucket>` verifies the Kali, Ubuntu, and DC images that the release
+selects, imports or reuses them, and writes their exact references to
+`range-images.json`. Without `--store`, it prints the references; a CI
+deployment sets the `GCP_RANGE_*_IMAGE` variables to them. The command needs no
+`GCP_GCE_BASE_IMAGE_BUCKET`. Set these values by hand only to pin a specific
+image outside that flow.
+
+| Setting | CI variable | Required | Notes |
+|---|---|---|---|
+| `settings.range_cells.backend` | `GCP_RANGE_BACKEND` | no | `gce` (default), the supported native GCE range-cell backend. The legacy `gdc` VM Runtime backend is retired and removed root-and-branch in #2311. |
+| `settings.range_cells.project_id` | `GCP_RANGE_CELL_PROJECT_ID` | no | Project the range cells provision into. Defaults to the project parsed from the range VPC self-link (`range_network_id`), so it is correct even while the control-plane `GCP_PROJECT_ID` is a deploy-overlay placeholder. |
+| `settings.range_cells.zone` | `RANGE_NETWORK_ZONE` | yes | Compute Engine zone for range guests, for example `us-central1-a`. |
+| `linux` role in `range-images.json` | `GCP_RANGE_LINUX_IMAGE` | yes | Full image or family URL for the default unkeyed Linux/host profile. |
+| `dc` role in `range-images.json` | `GCP_RANGE_DC_IMAGE` | DC scenarios | Default unkeyed Windows domain-controller image, pre-promoted at bake time. Baked per-domain from `dc-prebaked.pkr.hcl` into family `shifter-<purpose>-dc` (see "Baking a new pre-promoted DC image" in `docs/dev/gcp-range-cell-deploy.md`). |
+| None | `DC_DOMAIN_PASSWORD` | DC scenarios | **Sensitive.** Domain Administrator password the provisioner sets on the pre-promoted DC (`set_admin_password`). Must match the password baked into the DC image by `a2_setup.ps1` at bake time (its `-AdminPassword` default). Supply the GCP deployment config reference. The renderer forwards it to the provisioner Job through `_GCP_PROVISIONER_ENV_KEYS`. Missing configuration prevents DC password setup. |
+| `kali` role in `range-images.json` | `GCP_RANGE_KALI_IMAGE` | scenario | Default unkeyed Kali image. Keyed guests use the structured map below. |
+| `windows` role in `range-images.json` | `GCP_RANGE_WINDOWS_IMAGE` | scenario | Generic Windows guest image. |
+| `settings.range_cells.image_key_profiles` | `GCP_RANGE_IMAGE_KEY_PROFILES_JSON` | keyed scenarios | Optional compact JSON map from exact `(linux|kali|windows|dc, ami_key)` to a complete GCE profile. Normal images use `source_image`, sizing, disk policy, and a typed capability. Preconfigured hosts use an exact `source_machine_image`, machine type, host login, participant container/account, the closed `participant-readiness/v1` contract, and a lowercase SHA-256 readiness-manifest digest. Any profile may opt into public TCP 80/443 with `allow_public_web_egress` (default false). Maximum 32,768 bytes and 64 entries. Unknown keys, unsupported capabilities, and malformed profiles fail before cloud mutation. Use an Actions environment secret when resource names or logical selectors are confidential; the deploy workflow prefers that secret over the repository variable. The value is runtime configuration, not a credential, and is emitted into the private platform ConfigMap. See `docs/dev/gcp-range-cell-deploy.md`. |
+| None | `GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL` | not read | Keyless guest identity provides default-on direct Vertex access (ADR-064). It combines a predict-only role with host telemetry and uses Workload Identity without key material. The deploy takes it from the Terraform output `range_host_service_account_email`; set no variable. When the model broker is the guest path (`MODEL_BROKER_GUEST_VIP` set) guests stay identity-less instead. |
+| `settings.range_cells.host_identity_pool_size` | `GCP_RANGE_HOST_IDENTITY_POOL_SIZE` | machine-image hosts | Number of Terraform-created `sh-range-host-<slot>` identities. Must equal `range_host_identity_pool_size`; zero disables preconfigured machine-image hosts. |
+| `settings.range_cells.private_google_access` | `GCP_RANGE_PRIVATE_GOOGLE_ACCESS` | no | Set `true` so no-external-IP guests reach approved Google APIs (including Vertex for default-on model access) over Private Google Access. Leave it `false` when the model broker is enabled: broker-enrolled ranges refuse to provision with Private Google Access on. |
+| `settings.participant_openvpn.enabled` | `RANGE_OPENVPN_ENABLED` | no | Set `true` to give participants an OpenVPN profile for their range's single participant-access target (ADR-039-R10). Projected onto `settings.participant_openvpn.enabled`. It also deploys the shared OpenVPN server pool (#2480): Terraform `openvpn_pool_enabled` follows this setting, and `gcp-deploy` creates the pool PKI and release record. Apply `global/cicd-oidc` first so the deploy identity holds the conditioned pool role. Defaults to `false`. See "Participant OpenVPN access" in `docs/dev/gcp-range-cell-deploy.md`. |
+
+By default, guests use keyless, predict-only Vertex identities (ADR-064). Operators must enable each required model in its region and satisfy effective IAM and quota prerequisites. When the ADR-059 broker is enabled
+it becomes the guest model path and guests stay identity-less, with an admitted
+allocation and trusted one-use enrollment. Terraform retains removal of the legacy invocation identity, key-admin grants, and per-range keys. Revoke externally managed shared keys through their owner before declaring migration complete.
 
 ## Network mode
 
@@ -207,6 +244,35 @@ large event; shared NAT is a regional failure domain. Correct capacity or scope 
 
 The CTF event workspace supplies egress policy for participant and managed-spare launches. Each range retains its participant/spare account ownership and authorized workspace binding. Workspace policy
 changes are audited and affect subsequent range reservations only. Launched ranges retain their pinned mode. A recovery spare with a different event mode is refused before participant-range teardown.
+
+### Range egress allowlist
+
+The GCP range network egress allowlist is rendered from the deployment's
+`bigrae.yaml`. `gcp-deploy` writes it into its private `settings.auto.tfvars`,
+separate from the operator's Terraform values. Two Terraform variables expose
+the platform contract:
+
+| Variable                       | Type           | Meaning                                                                          |
+| ------------------------------ | -------------- | -------------------------------------------------------------------------------- |
+| `range_egress_mode`            | `string`       | One of `status-quo` (default), `deny-all`, `allowlist`                           |
+| `range_egress_allowed_cidrs`   | `list(string)` | CIDR allowlist when `range_egress_mode = "allowlist"`                            |
+
+The committed `terraform.tfvars` baseline sets `range_egress_mode =
+"status-quo"`. Deployments that want enforcement set
+`settings.range_egress` in `bigrae.yaml`; the deploy renders it into the
+private var file that loads after the operator's values.
+
+- **CI (`_gcp-dev.yml`)** renders the bundle from `SHIFTER_CONFIG_GCP_DEV`;
+  `gcp-deploy` renders the egress variables.
+- **A deployment without GitHub** keeps `bigrae.yaml` in its config bucket;
+  `gcp-deploy` renders the same variables.
+- **Local `terraform` runs** use the operator workflow in
+  `docs/architecture/range-egress-ip-allowlist.md` (run `bigrae-config render`
+  by hand, then `terraform apply`).
+
+`bigrae.yaml` contains secret references, not values. It remains the authoritative deployment configuration. Store it as the protected CI payload rather than maintaining a second allowlist. Do **not** also set
+`range_egress_mode` / `range_egress_allowed_cidrs` in the Terraform values;
+that re-introduces the drift this flow removes.
 
 ### Range audit telemetry
 
@@ -403,17 +469,35 @@ Every participant connects to one shared OpenVPN server pool per deployment
 Enable it per deployment:
 
 1. Apply `platform/terraform/gcp/global/cicd-oidc` for the deployment's identity
-   profile. The deploy identity needs the conditioned pool role it adds
-   (instance templates, the regional instance group, and the autoscaler, limited
-   to the pool's own VM names).
+   profile from a revision that includes the pool. The apply adds the deploy and
+   destroy roles `<prefix>_deploy_vpn_pool` and `<prefix>_destroy_vpn_pool`.
+   These roles cover the pool's templates, regional instance group, and
+   autoscaler. VM, disk, and template permissions are limited to
+   `shifter-<environment>-vpn-` names. Without these roles the deploy fails when
+   it creates the pool's instance template. Confirm both bindings:
+
+   ```bash
+   gcloud projects get-iam-policy <project> --format=json \
+     | jq -r '.bindings[] | select(.role | test("vpn_pool")) | .role'
+   ```
+
 2. Set `settings.participant_openvpn.enabled: true` in `bigrae.yaml` (default
-   `false`), then run `gcp-deploy`. A CI deployment sets the variable
+   `false`), publish the bundle, then run `gcp-deploy`. A CI deployment sets the variable
    `RANGE_OPENVPN_ENABLED=true` and runs the CI deploy. The deploy creates the
-   pool, its PKI, and its release record. It renders the pool wiring into the
-   runtime environment. See step 6 of the GCP deployment in
-   [`docs/technical/dev/setup.md`](../technical/dev/setup.md).
-3. Size the pool through `settings.shared_service_capacity_profile`. Each profile plans 25 participants per `e2-standard-2` server and one spare server. It scales out at 30% CPU and permits twice the minimum server count. Check
+   pool, the tenant OpenVPN CA, the pool server certificate, and its release
+   record. It records the scanned digest and starts the servers. Every server
+   must become healthy behind the load balancer. It renders the pool wiring into
+   the runtime environment.
+3. Plan quota for the pool: the pool adds `e2-standard-2` VMs with two vCPUs
+   each, up to the profile maximum. It also needs one endpoint address and one
+   NAT address.
+4. Size the pool through `settings.shared_service_capacity_profile`. Each profile plans 25 participants per `e2-standard-2` server and one spare server. It scales out at 30% CPU and permits twice the minimum server count. Check
    the live values with `scripts/gcp/check_event_capacity_drift.py --vpn-pool`.
+
+Do not set `openvpn_pool_enabled` in the Terraform values. The command sets it
+from `settings.participant_openvpn.enabled`. Launches stay safe either way: the
+runtime switch is off unless the deploy renders `RANGE_OPENVPN_ENABLED=true`,
+and that render fails if no pool exists.
 
 Each deploy scans the pool image of its release and records its digest. A CI
 deploy builds that image in the same run. A deployment without GitHub uses the

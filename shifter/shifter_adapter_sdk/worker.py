@@ -91,15 +91,22 @@ def validate_invocation(request: ValidationInput) -> ValidationResult:
         plugin = _load_plugin(request.manifest)
         results = [ParticipantValidation.model_validate(item) for item in plugin.validate(request)]
         result = ValidationResult(
-            protocol=request.protocol, invocation_id=request.invocation_id, input_digest=digest,
-            phase="validate", status="validated", results=results,
+            protocol=request.protocol,
+            invocation_id=request.invocation_id,
+            input_digest=digest,
+            phase="validate",
+            status="validated",
+            results=results,
         )
         result.authorize(request)
         return result
     except Exception:  # noqa: BLE001  # plugin isolation: the failed status records the failure
         return ValidationResult(
-            protocol=request.protocol, invocation_id=request.invocation_id, input_digest=digest,
-            phase="validate", status="failed",
+            protocol=request.protocol,
+            invocation_id=request.invocation_id,
+            input_digest=digest,
+            phase="validate",
+            status="failed",
         )
 
 

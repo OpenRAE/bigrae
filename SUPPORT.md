@@ -1,23 +1,28 @@
 # Support
 
+Use this how-to guide to request help with BigRAE.
+Assistance is best effort. There is no guaranteed response time, availability, managed operations service, or release-support period.
 BigRAE is community maintained and provided as-is under the [MIT license](LICENSE).
-Assistance is best effort, with no guaranteed response time, availability,
-managed operations or release-support period. Product vendors' support contracts
-do not cover BigRAE installation, scenarios or integrations.
+Product vendors' support contracts do not cover BigRAE installations, scenarios, or integrations.
 
-For usage and deployment, start with the
-[current-state handbook](docs/technical/architecture.md),
-[Install on Google Cloud](docs/getting-started/install-gcp.md) and
-[setup guide](docs/technical/dev/setup.md). The selected backend, exact artifacts
-and live qualification determine support; source code or a passing compatibility
-probe does not qualify a scenario.
+## Find the correct route
 
-For non-sensitive bugs and feature requests, use
-[the canonical issue tracker](https://github.com/Brad-Edwards/bigrae/issues).
-Include the release/commit, selected backend, expected and actual behavior and a
-synthetic reproduction. Remove credentials, signed URLs, private pack identities,
-customer configuration and operational evidence before posting. Keep private
-scenario evidence in its owning repository.
+1. Check the [current-state handbook](docs/technical/architecture.md) for support limits.
+2. Use [Install on Google Cloud](docs/getting-started/install-gcp.md) for installation.
+3. Use [local setup](docs/technical/dev/local-setup.md) for source development.
+4. Ask your deployment operator about deployment accounts and access.
+5. Follow [SECURITY.md](SECURITY.md) for suspected vulnerabilities.
 
-Deployment account/access issues go to your deployment operator. Security reports
-follow [SECURITY.md](SECURITY.md); do not disclose them in public issues.
+The selected backend, exact artifacts, and live qualification determine support.
+Source code or a passing compatibility probe does not qualify a scenario.
+
+## Report an ordinary defect
+
+1. Open a non-sensitive report in the [canonical issue tracker](https://github.com/OpenRAE/bigrae/issues).
+2. Include the release or commit, selected backend, expected behavior, and actual behavior.
+3. Include a synthetic reproduction when possible.
+4. Remove credentials, signed URLs, private pack identities, customer configuration, and operational evidence before posting.
+
+Keep private scenario evidence in its owning repository.
+Do not post vulnerability details in public issues or pull requests.
+If the report needs sensitive evidence, arrange a private channel through the security policy first.

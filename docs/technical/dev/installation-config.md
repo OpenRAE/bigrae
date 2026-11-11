@@ -57,17 +57,19 @@ Run `validate` and `doctor` after you edit the generated GCP configuration.
 `validate` checks `settings` against the selected backend. GCP settings reject unknown keys. Model broker, model access, range egress, warm pool, and Mission Control lease blocks each use their own schema. See "Optional: model access broker" in
 [`setup.md`](setup.md) for the broker blocks.
 
-The GCP deploy inputs that GitHub variables and secrets held before #2571 are
-closed settings blocks too:
+The GCP deployment settings are closed blocks too. Before #2571, GitHub
+variables and secrets held most of these inputs.
 
 | Block | Holds |
 | --- | --- |
-| `range_cells` | Range backend, zone and zone pool, range-cell project, host identity pool size, Private Google Access, and keyed guest image profiles |
-| `participant_openvpn` | The participant OpenVPN opt-in (`enabled`) |
-| `ctf_content_bucket` | The optional CTF content bucket name |
-| `operator_bootstrap` | The first operator (`enabled`, `admin_email`, `admin_password_secret_ref`) and the staff and superuser email lists |
-| `post_deploy_smoke` | The portal account of the post-deploy smoke (`user_email`) |
-| `release_trust` | The immutable repository and owner IDs that sign releases (`github_repository_id`, `github_owner_id`) |
+| `range_cells` | `backend` (`gce` or `gdc`), `zone`, `zones`, `project_id`, `host_identity_pool_size`, `private_google_access`, `image_key_profiles`, and `worker_vcpu`. A GCE range needs `zone`. `worker_vcpu` (default 8) is the vCPU draw of one disposable worker. |
+| `participant_openvpn` | The participant OpenVPN opt-in (`enabled`). It deploys the shared participant OpenVPN pool. The default is `false`. |
+| `ctf_content_bucket` | The optional private CTF content bucket name, when the app secret carries CTF content references |
+| `operator_bootstrap` | The first operator and the first administrator (`enabled`, `admin_email`, `admin_password_secret_ref`), and the staff and superuser email lists. `gcp-deploy` requires this block. `enabled` defaults to `true` and then requires `admin_email`. `admin_password_secret_ref` defaults to the secret that `gcp-install` creates. |
+| `openfga` | Optional override block. The deploy always configures OpenFGA. Leave unset for generated credentials and the release model. For overrides, set all three `*_secret_ref` values; `store_id` and `model_id` are optional. |
+| `cloud_sql_iam_auth` | Native SQL login. It defaults to `true`, which the current source requires. |
+| `post_deploy_smoke` | The portal account that owns the smoke range (`user_email`). The smoke creates the account when it does not exist. An empty value skips the smoke. |
+| `release_trust` | The immutable numeric repository and owner IDs of the repository that publishes and signs releases (`github_repository_id`, `github_owner_id`) |
 | `deployment_tier` | `production` (the default) or `test`. Only a test deployment accepts `gcp-deploy --allow-unreleased-tooling` (#2689) |
 
 `operator_bootstrap.admin_password_secret_ref` is a versionless Secret Manager

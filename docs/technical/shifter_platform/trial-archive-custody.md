@@ -53,8 +53,9 @@ The input is an existing sealed tar or gzip-compressed tar export.
 One run directory contains `manifest.json`, `seal.json`, and the sealed inventory members.
 The optional `checksums.sha256` document uses the exporter's standard checksum lines.
 
-The seal uses the existing `aptl.run-seal/v1` format.
+The seal uses the LilRAE `aptl.run-seal/v1` format or the BigRAE `bigrae.trial-seal/v1` format.
 The original manifest uses the released `experiment-run/v1` contract.
+A record under the BigRAE seal must be `partial`.
 The inventory must include the original manifest and every declared evidence byte reference.
 
 Missing declared bytes prevent a receipt.

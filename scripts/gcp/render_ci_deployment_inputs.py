@@ -56,7 +56,7 @@ def _text(env: Mapping[str, str], name: str) -> str:
 def _required(env: Mapping[str, str], name: str) -> str:
     value = _text(env, name)
     if not value:
-        raise CiInputsError(f"required CI input {name} is not set; see docs/dev/deploy-secrets.md")
+        raise CiInputsError(f"required CI input {name} is not set; see docs/dev/gcp-ci-adapter.md")
     return value
 
 

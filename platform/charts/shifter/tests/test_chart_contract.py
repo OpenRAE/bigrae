@@ -70,8 +70,8 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2834/#2837 integration: retain the two session-cleanup
 # gateway rules, maintenance CPU limits, and large-plan result-worker memory.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "8bc6e108a9b64b5e2612c5740837a3a5119afb649249ce94e2a2e9301d3572ee",
-    "gcp-dev": "a2eee1c073007d20c5a5eac3d2466361201f158a3ca2a02df52fc81f2ae10de1",
+    "gcp-prod": "632b54016fa8dc71ab328b8b06886b4f99abad65c6067f93df3fb048aa666ac5",
+    "gcp-dev": "28b88dc0d566284829e7fde624e08b9da43a823b16d787e2f129b14bf18d98e5",
 }
 
 

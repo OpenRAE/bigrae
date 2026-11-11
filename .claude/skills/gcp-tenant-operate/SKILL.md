@@ -9,15 +9,17 @@ This skill is the agent workflow for one GCP deployment. The procedure and
 the facts are in these documents. Read the section that you need; do not work
 from memory:
 
-- [GitHub-less GCP deployment guide](../../../docs/technical/handbook/gcp-github-less-deployment.md):
-  foundation, release, bundle, install, update, destroy.
-- [RB023](../../../docs/runbooks/rb023-gcp-deployment.md): failure symptoms,
-  investigation commands, and resolution by stage.
-- [GCP tenant standup gotchas](../../../docs/dev/gcp-tenant-standup-gotchas.md):
-  operator procedure that is not in code.
-- [Design](../../../docs/architecture/github-less-gcp-deployment-design-2571.md).
-- [Deployment compatibility](../../../docs/technical/platform_infrastructure/deployment-compatibility.md):
-  source support, published release availability, and qualification limits.
+| Need | Document |
+| --- | --- |
+| Install, complete, update, or remove: the procedure, in order, with prerequisites | [Install on Google Cloud](../../../docs/getting-started/install-gcp.md) |
+| Each lifecycle command, its use, and the check after it | [Lifecycle commands](../../../docs/technical/handbook/gcp-github-less-deployment.md#lifecycle-commands) |
+| Bundle files, deploy stages, lock, evidence, keys, identity options, and retained resources | [GCP deployment handbook](../../../docs/technical/handbook/gcp-github-less-deployment.md) |
+| `bigrae.yaml` settings blocks and their defaults | [Installation config](../../../docs/technical/dev/installation-config.md#supported-backends) |
+| Range-cell settings, range egress, and participant OpenVPN | [GCP GCE range-cell deploy runbook](../../../docs/dev/gcp-range-cell-deploy.md) |
+| Failure symptoms, investigation commands, and resolution by stage | [RB023](../../../docs/runbooks/rb023-gcp-deployment.md) |
+| A checkout deploy without Docker, the release manifest without Docker, hand-patches, and test tooling | [Contributor GCP releases and test deploys](../../../docs/dev/gcp-contributor-deploy.md) |
+| Which release or contributor build can install | [Deployment compatibility](../../../docs/technical/platform_infrastructure/deployment-compatibility.md) |
+| The design | [GitHub-less GCP deployment design](../../../docs/architecture/github-less-gcp-deployment-design-2571.md) |
 
 Use the `gcp-release` skill to publish the release that you deploy.
 
@@ -27,14 +29,16 @@ Use the `gcp-release` skill to publish the release that you deploy.
   operator email, release revision or deployer digest, and range image
   location. Keep them out of commits, issues, PRs, and docs. The repository is
   public.
+- Use a contributor build from `dev` or `deploy-test` only with the user's
+  approval for the target deployment.
 - For each failure, first check `origin/dev` and the issue tracker for an
   existing fix or issue. Reuse an existing issue. Then fix the cause, add
   tests, and open a PR to `dev`. Close another issue that your fix resolves.
 - Never merge into `dev` or `main`, and never close a PR. The user does that.
 - Never weaken a gate to pass it: no ignore entries, no skipped scans, no
   bypass flags. Fix the finding.
-- Hand-patch a running test cycle only after the fix is in a PR (gotchas:
-  "Hand-patch a checkout deploy during a test cycle").
+- Hand-patch a running test cycle only after the fix is in a PR
+  ([Hand-patch a checkout deploy during a test cycle](../../../docs/dev/gcp-contributor-deploy.md#hand-patch-a-checkout-deploy-during-a-test-cycle)).
 - Do not change the global gcloud account. Pin it per command with
   `CLOUDSDK_CORE_ACCOUNT`. When gcloud reports `Reauthentication failed`, ask
   the user to run `gcloud auth login` and `gcloud auth application-default
@@ -44,41 +48,13 @@ Use the `gcp-release` skill to publish the release that you deploy.
 
 1. Verify that the selected release contains the required lifecycle interface.
    Use its deployer image when Docker is available.
-2. Without Docker, use a clean worktree of the release revision and the tool
-   versions that `platform/deployer/gcp/Dockerfile` pins. Run each command as
-   `uv run --project scripts/bootstrap scripts/bootstrap/deploy.py <command>`.
-   Read the manifest from the deployer image (gotchas: "Read the release
-   manifest without Docker") and pass it with `--release-manifest`.
+2. Without Docker, follow
+   [Deploy from a checkout](../../../docs/dev/gcp-contributor-deploy.md#deploy-from-a-checkout)
+   and [Read the release manifest without Docker](../../../docs/dev/gcp-contributor-deploy.md#read-the-release-manifest-without-docker).
 3. Run a deploy or a destroy in the background with its output in a log file.
    Report the stage lines: `Infrastructure:`, `Rollout:`, `✓`, `✗`, and `⚠`.
    Installation time varies with provider capacity and image availability.
 4. Before using `--break-lock`, prove that the holder has stopped.
    Confirm the deployment, lock evidence, and absence of another active operator.
-
-## Lifecycle
-
-| Step | Command | Check |
-| --- | --- | --- |
-| First install | `gcp-install --inputs <bundle directory>` | The foundation, the operator password secret, the bundle, the base images, the OpenFGA credentials and model, the first administrator, and the catalog. Report the printed ingress address and the password read command. The user points the DNS A record at it, unproxied. |
-| Certificate and smoke | `gcp-deploy --store gs://<bucket>` | The certificate becomes `ACTIVE`. A configured smoke creates a billable range and requests its destruction. Verify provider cleanup and temporary Job/Secret removal. An empty smoke email skips the smoke. |
-| Update | `gcp-deploy` with the manifest of the newer release | `Running workload images match the approved release` and the smoke pass. |
-| Teardown | `gcp-destroy --store gs://<bucket> --confirm <name>` | Verify application and infrastructure removal. Foundation, state, bundle/evidence storage, permanent KMS resources, unmanaged secrets, and imported images can remain billable. Use the handbook's retained-resource inventory. |
-| Reinstall | `gcp-install --inputs <bundle directory>` | The ingress address can change; check the DNS record. |
-
-## Diagnose by stage
-
-| Stage | Where to look |
-| --- | --- |
-| Inputs, lock, identity | The command output. RB023 Investigation steps 1 to 4. |
-| Terraform | The apply output, which shows each retried error. RB023 for a state lock (force-unlock takes the lock-object generation) and a node-pool stockout. |
-| Scan | `release-scans/<revision>/` in the release-evidence bucket. Fix the vulnerable dependency; then publish a new release. |
-| Identity | The `portal` container log of the `identity-cutover` Job in Cloud Logging. RB023 Identity. |
-| Policy | The `publisher` container log of the `openfga-publish` Job in Cloud Logging. RB023 Policy. |
-| Catalog | The warning in the deploy output. RB023 Catalog. |
-| Rollout | After an atomic Helm rollback the pods are gone; read the container logs in Cloud Logging (RB023). For a denied Job create, read the GKE audit log for `jobs.create` in the jobs namespace. Check a policy change with `kubectl apply --dry-run=server`. |
-| Smoke | The `worker-provisioner-launcher` logs and the provisioner Job pods in the jobs namespace. |
-| Certificate | RB023 and the gotchas: `FailedNotVisible` can last about 45 minutes after the record resolves. |
-
-Deployment exit status 3 means that rollout completed but the advisory smoke failed.
-An atomic Helm rollback does not reverse database, identity, policy, or Terraform changes.
-Use RB023 to assess those stages before retrying or selecting a previous release.
+5. Report success only after every check in the lifecycle table for that
+   command passes.

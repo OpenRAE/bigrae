@@ -70,23 +70,36 @@ merging.
 
 ## BigRAE project specifics
 
-**Base PRs off `dev`, not `main`.** `main` is the stable release line and only
-receives release-PR promotions; `dev` is the integration branch where
-day-to-day work merges. Feature PRs to `dev` must have a Conventional Commit
-title (`<type>(<optional-scope>): <subject>`, lowercase subject); the
-`pr-title-lint` workflow enforces the shape. Squash-merging makes that title the commit release-please reads on `main`.
+Use this how-to guide to prepare a contribution.
+The imported policy above remains verbatim under GEN-2003.
+The steps below apply to this repository.
+
+1. Start a feature branch from `dev`.
+2. Follow [local development setup](docs/technical/dev/local-setup.md).
+3. Install both commit-hook types:
+
+   ```bash
+   pre-commit install --hook-type pre-commit --hook-type commit-msg
+   ```
+4. Make the change and update its documentation.
+5. Select targeted tests from the [testing reference](docs/dev/testing.md).
+6. Run the checks for the changed files. Keep full suites in CI.
+7. Open the PR against `dev` with source and verification evidence.
+8. Fix failed checks and review findings before the maintainer reviews the merge.
+
+Use a Conventional Commit title: `<type>(<optional-scope>): <subject>`.
+Use a lowercase subject. The `pr-title-lint` workflow checks the title.
 Use `feat`, `fix`, or `perf` when the change should produce a release.
-Use a `!` breaking marker for a breaking change.
+Use a `!` marker for a breaking change.
 
-The local development loop is in
-[`docs/technical/dev/local-setup.md`](docs/technical/dev/local-setup.md). Every
-test, lint and policy command, with its CI job, is in the
-[command matrix](docs/dev/testing.md#command-matrix). Before you open a PR:
+Feature PRs merge into `dev` through the merge queue, which squash-merges them.
+Release promotion preserves those subjects on `main`.
+Follow the [development and release workflow](docs/DEVELOPMENT_WORKFLOW.md) for approval and merge methods.
 
-- Install the commit hooks once with `pre-commit install`. They run on each
-  commit.
-- Run `make policy`.
-- Run the matrix lanes for each package that you change.
+`main` is the stable release line. Feature PRs target `dev`.
+CI runs full suites and coverage gates according to the existing quality ownership contract.
+The [command matrix](docs/dev/testing.md#command-matrix) lists commands and their CI owners.
+`make policy` runs the repository policy checks; it is not a full test suite.
 
 ADR enforcement, exceptions, and the registry live under [`docs/adr/`](docs/adr/);
 guardrail file changes (workflows, pre-commit config, `.gitleaks.toml`, etc.)
@@ -104,7 +117,11 @@ SSH keys, etc.) is supplied via gitignored `local.auto.tfvars` files or GitHub
 secrets/repository variables, never hardcoded in the committed tree. The full
 inventory is in [`docs/dev/deploy-secrets.md`](docs/dev/deploy-secrets.md).
 
-Architecture interface changes include review of the [current-state handbook](docs/technical/architecture.md). The documentation coverage manifest maps the affected source paths to their technical pages.
+Review the [current-state handbook](docs/technical/architecture.md) when an architecture interface changes.
+The documentation coverage manifest maps affected source paths to their technical pages.
+
+For account or installation help, follow [SUPPORT.md](SUPPORT.md).
+Report suspected vulnerabilities through [SECURITY.md](SECURITY.md).
 
 
 ## Documentation

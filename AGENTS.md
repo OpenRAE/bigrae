@@ -153,8 +153,8 @@ request; there is no requirement database or link API.
 Private and third-party packs own their scenario content, adapters, image recipes,
 guest scripts, answer material, operational evidence, and cloud-specific pack
 configuration. Keep those assets in the owner's repository. Core changes must use
-the public adapter SDK, typed runtime capabilities, and synthetic fixtures; never
-branch on pack names, image aliases, container names, domains, or private identities.
+the public adapter SDK, typed runtime capabilities, and synthetic fixtures.
+Never branch on pack names, image aliases, container names, domains, or private identities.
 
 Do not copy private pack names, details, logs, repository links, or acceptance
 evidence into public issues, pull requests, comments, commit metadata, or release
@@ -172,8 +172,8 @@ provisioner process. A compatibility probe alone does not qualify a live range.
 To deploy, update, destroy, or debug a GitHub-less GCP deployment, follow
 `.claude/skills/gcp-tenant-operate/SKILL.md`. To publish the release that it
 deploys, follow `.claude/skills/gcp-release/SKILL.md`. These files are the
-agent workflow for Codex and Claude. They link the handbook, RB023, and the
-standup gotchas, which hold the procedure.
+agent workflow for Codex and Claude. They link the install guide, the handbook,
+RB023, and the contributor deploy page, which hold the procedure.
 
 
 ## Documentation authoring

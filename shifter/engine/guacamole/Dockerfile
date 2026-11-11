@@ -126,8 +126,10 @@ COPY --from=bundled-jars /patch/postgresql-42.7.14.jar /opt/guacamole/drivers/po
 # Ubuntu security updates to its OS packages, so the exact-release scan sees no
 # fixable base-OS finding (for example libbrotli1, #2610). The client package
 # version floats so a rebuild gets the current Ubuntu security fixes.
+# Use HTTPS for the existing archives; their HTTP downloads failed in CI.
 # hadolint ignore=DL3008
-RUN apt-get update && apt-get upgrade -y --no-install-recommends \
+RUN sed -i 's|http://archive.ubuntu.com/ubuntu/|https://archive.ubuntu.com/ubuntu/|; s|http://security.ubuntu.com/ubuntu/|https://security.ubuntu.com/ubuntu/|' /etc/apt/sources.list.d/ubuntu.sources \
+    && apt-get update && apt-get upgrade -y --no-install-recommends \
     && apt-get install -y --no-install-recommends postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 

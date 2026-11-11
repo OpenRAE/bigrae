@@ -13,6 +13,7 @@ from tests.gcp_test_support import write_bundle
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 DEPLOY_SECRETS_DOC = REPO_ROOT / "docs" / "dev" / "deploy-secrets.md"
+GCP_CI_ADAPTER_DOC = REPO_ROOT / "docs" / "dev" / "gcp-ci-adapter.md"
 
 # Full set of GCP secrets present in a healthy CI environment.
 GCP_CI_ENV = {
@@ -424,7 +425,7 @@ class TestFacade:
         assert deploy.preflight_gate._facade_original is preflight.preflight_gate
 
 
-# --- Parity with docs/dev/deploy-secrets.md -----------------------------------
+# --- Parity with docs/dev/deploy-secrets.md and docs/dev/gcp-ci-adapter.md ----
 
 
 def _required_secrets_in_section(text: str, heading: str) -> set[str]:
@@ -467,9 +468,9 @@ def _spec_required(cloud: Cloud, environment: str) -> set[str]:
 
 
 class TestDocParity:
-    def test_gcp_spec_matches_deploy_secrets_doc(self):
-        text = DEPLOY_SECRETS_DOC.read_text()
-        doc_required = _required_secrets_in_section(text, "GCP (gcp-dev)")
+    def test_gcp_spec_matches_gcp_ci_adapter_doc(self):
+        text = GCP_CI_ADAPTER_DOC.read_text()
+        doc_required = _required_secrets_in_section(text, "GitHub secrets and variables")
         assert _spec_required(Cloud.GCP, "gcp-dev") == doc_required
 
     def test_aws_spec_matches_deploy_secrets_doc(self):

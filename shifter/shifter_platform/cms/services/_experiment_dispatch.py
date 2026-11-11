@@ -28,6 +28,8 @@ from shared.exceptions import CMSError
 from shared.raes.experiment_admission import experiment_archive_identity
 from shared.raes.experiment_dispatch_inputs import (
     entry_attempt_timeout,
+    trial_plan_bytes,
+    trial_scenario_bytes,
     trial_scenario_sha256,
     trial_unit_bytes,
     worker_absence_cleanup_receipt,
@@ -147,7 +149,7 @@ def _stage_object(storage: ObjectStorage, key: str, data: bytes) -> StagedObject
 def stage_trial(
     credential: CredentialContext, organization_uuid: UUID, inputs: dict[str, Any], row: ExperimentEntry
 ) -> tuple[dict[str, StagedObject], datetime]:
-    """Stage the retained trial unit and ``trial.json``; the worker image holds the runtime.
+    """Stage the trial unit, scenario, plan, and control input for the worker runtime.
 
     The attempt's deadline is persisted first, so every stager produces the same bytes.
     """
@@ -158,15 +160,22 @@ def stage_trial(
     storage = get_object_storage()
     prefix = f"{TRIAL_INPUT_PREFIX}{token}/"
     unit = _stage_object(storage, prefix + "trial-unit.json", trial_unit_bytes(inputs, row.plan_entry_id))
+    scenario = _stage_object(storage, prefix + "scenario.sdl", trial_scenario_bytes(inputs, row.plan_entry_id))
     trial = {
         "schema_version": "bigrae.trial-input/v1",
         "run_id": row.run_id,
         "attempt_id": str(token),
         "deadline": deadline.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         "unit_sha256": unit.sha256,
+        "scenario_sha256": scenario.sha256,
     }
     encoded = json.dumps(trial, sort_keys=True, separators=(",", ":")).encode()
-    return {"trial-unit.json": unit, "trial.json": _stage_object(storage, prefix + "trial.json", encoded)}, deadline
+    return {
+        "trial-unit.json": unit,
+        "scenario.sdl": scenario,
+        "plan.json": _stage_object(storage, prefix + "plan.json", trial_plan_bytes(inputs)),
+        "trial.json": _stage_object(storage, prefix + "trial.json", encoded),
+    }, deadline
 
 
 def _hold_evidence(credential: CredentialContext, worker_id: UUID) -> None:
