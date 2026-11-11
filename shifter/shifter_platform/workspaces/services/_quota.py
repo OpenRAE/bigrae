@@ -2,7 +2,7 @@
 
 Enforcement core behind the ``workspaces.services`` facade, within the boundaries
 fixed by ADR-046-R10 and
-``docs/architecture/workspace-resource-quotas-preflight-1946.md``. The
+``docs/_deprecated/architecture/workspace-resource-quotas-preflight-1946.md``. The
 superuser-only policy authoring and the owner/admin read surface live in
 ``_quota_admin`` (split for the Sonar S104 file-length budget).
 

@@ -8,7 +8,7 @@ title or flag can be corrected without tearing the event down.
 This is not a second hydration schema, a scenario change, or a background sync.
 The organizer supplies only the expected current digest as an optimistic
 concurrency fence; the server-configured ``ResolvedCtfContent`` is the target.
-See ``docs/architecture/ctf-active-content-refresh-preflight-1971.md``.
+See ``docs/_deprecated/architecture/ctf-active-content-refresh-preflight-1971.md``.
 """
 
 from __future__ import annotations

@@ -4,7 +4,7 @@ Explanation of retry identity, immutable intent, and verified cleanup.
 
 Architecture for the retry-safe public range-operation surface and truthful
 cleanup outcomes. Decision of record: **ADR-063**; design guidance:
-`docs/architecture/public-range-operations-preflight-2086.md` (issue #2086).
+`docs/_deprecated/architecture/public-range-operations-preflight-2086.md` (issue #2086).
 
 ## Retry identity
 

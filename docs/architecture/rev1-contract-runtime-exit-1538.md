@@ -6,7 +6,7 @@ Date: 2026-07-28
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/1538>
 
-Design source: `docs/architecture/rev1-contract-runtime-exit-preflight-1538.md`
+Design source: `docs/_deprecated/architecture/rev1-contract-runtime-exit-preflight-1538.md`
 
 Gate baseline: `origin/dev` at `00243876efe4` (the commit this record was authored
 against). The immutable per-revision capture is the routed Quality run at this
@@ -114,7 +114,7 @@ closed. A limitation is never rendered as a pass.
   `test_backend_conformance_gate.py`.
 - **IPv4-only network family.** GCE network address-family admission rejects
   non-IPv4 topology terms fail-closed. Producer: provisioner `raes_plan_domain.py`
-  / network-family admission (see `aces-gce-network-address-family-preflight-1568.md`).
+  / network-family admission (see `../_deprecated/architecture/aces-gce-network-address-family-preflight-1568.md`).
 - **Exact RAES contract version.** Only `raes==2.0.0` / `raes-env-packs==3.0.0`
   are accepted; unknown producer/transport versions are rejected, not coerced.
   Producer: `raes_plan.py` (`SUPPORTED_RAES_VERSION`), `test_plan_provisioner_parity.py`.

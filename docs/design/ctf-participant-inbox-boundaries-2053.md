@@ -141,7 +141,7 @@ none supplies HTML, link policy, a renderer plugin or executable message actions
 
 ## CTF-014 customization boundaries
 
-ADR-051-R11 and the [communications preflight](../architecture/ctf-communications-raes-inject-preflight-2047.md)
+ADR-051-R11 and the [communications preflight](../_deprecated/architecture/ctf-communications-raes-inject-preflight-2047.md)
 already own these distinctions. `ctf.extensions.register_flag_validator` and
 `register_scoring_strategy` support deployment-installed, trusted Django apps.
 Their process-wide callable registrations are neither tenant plugin admission

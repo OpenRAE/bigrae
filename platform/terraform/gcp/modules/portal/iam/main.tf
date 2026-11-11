@@ -117,7 +117,7 @@ locals {
     "roles/stackdriver.resourceMetadata.writer",
   ])
 
-  # ADR-008-R7 (docs/architecture/gcp-workload-resource-iam-preflight-1517.md):
+  # ADR-008-R7 (docs/_deprecated/architecture/gcp-workload-resource-iam-preflight-1517.md):
   # workload identities receive project-level IAM only for APIs whose Google
   # roles are inherently project scoped (Firebase Auth, Pub/Sub, Artifact
   # Registry, Compute). Secret Manager payload access and Cloud Storage object

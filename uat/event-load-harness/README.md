@@ -7,7 +7,7 @@ It measures client latency, errors, and WebSocket close codes, then renders a sa
 
 It supplies measured evidence for the analytical capacity envelope in `docs/architecture/terminal-websocket-capacity-847.md`.
 Issue #846 uses that evidence for the event baseline; #910 uses it for portal sizing. Design constraints are recorded in
-`docs/architecture/event-load-harness-preflight-926.md`.
+`docs/_deprecated/architecture/event-load-harness-preflight-926.md`.
 
 A sample of the output is committed at
 [`sample-envelope-report.md`](sample-envelope-report.md) (illustrative

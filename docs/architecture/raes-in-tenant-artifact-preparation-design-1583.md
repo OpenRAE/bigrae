@@ -8,7 +8,7 @@ The operator procedure is [artifact preparation](../ops/artifact-preparation.md)
 observed tenant evidence is recorded in the
 [qualification record](../../shifter/packer/preparation/QUALIFICATION.md).
 
-The [repository-wide preflight](raes-in-tenant-artifact-preparation-preflight-1583.md)
+The [repository-wide preflight](../_deprecated/architecture/raes-in-tenant-artifact-preparation-preflight-1583.md)
 qualifies this direction against the current code. In particular, deployment
 and internal authority remain distinct (ADR-054), private registration must
 reach runtime capability and Job admission without a platform rebuild, and the

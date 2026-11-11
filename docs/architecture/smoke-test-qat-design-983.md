@@ -8,7 +8,7 @@ Issue: GitHub [#983](https://github.com/Brad-Edwards/bigrae/issues/983),
 "Design a smoke-test / QA (QAT) system for common range infra and a basic
 scenario".
 
-Binding guardrails: [smoke-test-qat-design-preflight-983.md](smoke-test-qat-design-preflight-983.md).
+Binding guardrails: [../_deprecated/architecture/smoke-test-qat-design-preflight-983.md](../_deprecated/architecture/smoke-test-qat-design-preflight-983.md).
 
 This document is the design deliverable for #983. It defines a smoke-test /
 QA-test (QAT) protocol, its proofs and evidence contracts, the fixtures it

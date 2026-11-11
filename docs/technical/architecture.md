@@ -173,7 +173,7 @@ protected image responses after permission changes.
 | Schedulers and reconcilers | CTF scheduling, leases, launch delivery, result application and event-outbox delivery run as separate worker commands. The CTF communication worker delivers ledger messages to participants and to event organizers (ADR-065-R4) |
 | Provisioner Jobs | Independently packaged `shifter/engine/provisioner`; exact image, service account and namespace binding; provider effects and guest readback |
 | Plugin/preparation Jobs | Explicitly installed, isolated executable images; separate administrator grants and pinned worker/verifier identities |
-| Guacamole and guacd | Remote-access services; BigRAE authorizes the exact target/session and continuing access. Guacamole has separate database credentials |
+| Guacamole and guacd | Remote-access services. BigRAE authorizes each target and session. Guacamole has separate database credentials. guacd uses a bounded writable home for FreeRDP and a read-only root filesystem. |
 | Optional access services | Deployment-selected VPN and other integrations have their own identities and support conditions |
 | Content egress proxy | Credential-less CONNECT proxy; the only platform pod with public HTTPS egress. The CTF scheduler copies organizer images and the portal sends CTF webhooks through it |
 
@@ -387,7 +387,7 @@ a client-owned generation. Destroyed status alone is not verified absence:
 cleanup readback, residual obligations and retained recovery records matter.
 See [retry-safe operations](shifter_platform/retry-safe-range-operations.md).
 
-[Range-event delivery](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/range-event-delivery-preflight-476.md)
+[Range-event delivery](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/_deprecated/architecture/range-event-delivery-preflight-476.md)
 is an implementation record. The current input/result definitions are
 [Engine operation models](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/engine/models/_operation_io.py),
 with shared [wire envelopes](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/shared/operation_envelope.py).

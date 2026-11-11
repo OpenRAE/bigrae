@@ -3,7 +3,7 @@
 Quota is tenant-entitlement policy owned by the ``workspaces`` domain, distinct
 from Engine provider-capacity accounting, API throttling, billing, and the
 per-``(user, range_source)`` active-range constraint (ADR-046-R10,
-``docs/architecture/workspace-resource-quotas-preflight-1946.md``). Only
+``docs/_deprecated/architecture/workspace-resource-quotas-preflight-1946.md``). Only
 ``workspaces`` imports these models; every other layer goes through
 ``workspaces.services`` with a scalar ``workspace_id``.
 

@@ -34,12 +34,11 @@ The launcher rechecks that authority before the provisioner starts.
 
 ## Staged inputs
 
-The coordinator stages four objects under `trial-inputs/<attempt>/` in the assets bucket:
+The coordinator stages three objects under `trial-inputs/<attempt>/` in the assets bucket:
 
 | Object | Content |
 | --- | --- |
 | `scenario.sdl` | The retained concrete trial SDL of the entry |
-| `plan.json` | The retained `admitted-trial-plan/v1` of the batch |
 | `trial-unit.json` | The admitted plan, the plan entry ID, and the entry's instantiated snapshot |
 | `trial.json` | Run ID, attempt ID, deadline, and the digests of `scenario.sdl` and `trial-unit.json` |
 
@@ -58,6 +57,7 @@ That form is `run` or `collect` with UUID `--request-id`, `--trial-id`, and `--o
 The provisioner rebuilds the worker's management target from its original RAES provision input.
 It runs only the SDK verbs at the fixed trial-control path.
 `run` starts the trial with `systemd-run` only when `status` reports `prepared`.
+While the trial runs, it tolerates up to five consecutive failed `status` polls before it fails the operation.
 It stops the trial when the deadline and a 900-second drain have passed.
 The archive returns through a bounded copy, digest verification, and a create-only object under `trial-exports/`.
 
@@ -78,7 +78,7 @@ For a LilRAE trial record, the run, attempt and trial SDL digest must equal the 
 The SDL digest is the digest of the retained entry's staged trial SDL.
 
 A BigRAE seal is for an apparatus that does not use LilRAE.
-Its `manifest.json` is an RAES run record that retains the staged `plan.json`.
+Its `manifest.json` is an RAES run record that retains the admitted plan from `trial-unit.json`.
 Intake binds the record to the expected plan, entry, run, and attempt with the released RAES validators.
 The record must be `partial`: the worker cannot attest the cleanup that BigRAE performs after the trial.
 BigRAE records that cleanup in its own cleanup receipt.
@@ -100,7 +100,7 @@ After cleanup, dispatch replaces an entry whose run status the policy names, up 
 
 1. Dispatch reads the failed trial's RAES run record from the stored archive.
 2. It rebuilds the compilation request from the batch's registered pack and retained authority.
-3. RAES `compile_replacement_trial` compiles a one-entry child plan from the original plan, the failed run, the cleanup receipt, and the slot's replacement history.
+3. RAES `compile_replacement_trial` compiles a one-entry child plan. Its inputs are the original plan, the failed run, the cleanup receipt, and the slot's replacement history.
 4. Dispatch commits the child plan and its snapshot as a pending entry that names the entry it replaces.
 5. The next pass claims the child entry and creates its worker.
 

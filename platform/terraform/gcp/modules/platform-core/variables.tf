@@ -94,7 +94,7 @@ variable "gke_master_ipv4_cidr" {
 }
 
 variable "gke_master_authorized_cidrs" {
-  description = "Optional RFC1918 CIDR blocks allowed to reach the private GKE control-plane endpoint from within the VPC / peered networks. The cluster runs with enable_private_endpoint = true and no public control-plane endpoint (ADR-008; docs/architecture/gke-control-plane-access-preflight.md); operator and CI reach the control plane over the IAM-authenticated DNS endpoint, so this list is optional and defaults to empty. Any entries must be RFC1918 (a private endpoint rejects public CIDRs)."
+  description = "Optional RFC1918 CIDR blocks allowed to reach the private GKE control-plane endpoint from within the VPC / peered networks. The cluster runs with enable_private_endpoint = true and no public control-plane endpoint (ADR-008; docs/_deprecated/architecture/gke-control-plane-access-preflight.md); operator and CI reach the control plane over the IAM-authenticated DNS endpoint, so this list is optional and defaults to empty. Any entries must be RFC1918 (a private endpoint rejects public CIDRs)."
   type        = list(string)
   default     = []
 
@@ -123,7 +123,7 @@ variable "gke_master_authorized_cidrs" {
         || (can(regex("^192\\.168\\.", cidr)) && tonumber(regex("/([0-9]+)$", cidr)[0]) >= 16)
       )
     ])
-    error_message = "Every gke_master_authorized_cidrs entry must be a valid RFC1918 IPv4 CIDR with an explicit /N suffix contained within 10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16. The control-plane endpoint is private (enable_private_endpoint = true) and reached over Connect Gateway, so public CIDRs are rejected and the list should normally be empty (see ADR-008 and docs/architecture/gke-control-plane-access-preflight.md)."
+    error_message = "Every gke_master_authorized_cidrs entry must be a valid RFC1918 IPv4 CIDR with an explicit /N suffix contained within 10.0.0.0/8, 172.16.0.0/12, or 192.168.0.0/16. The control-plane endpoint is private (enable_private_endpoint = true) and reached over Connect Gateway, so public CIDRs are rejected and the list should normally be empty (see ADR-008 and docs/_deprecated/architecture/gke-control-plane-access-preflight.md)."
   }
 }
 

@@ -193,7 +193,7 @@ defaults. Supported single-project deployment supersedes ADR-008-R7's mandatory
 distinct dynamic-secret project and migration-only equality rule for S7. The
 explicit project seam and named/prefix-conditioned access controls remain;
 parent-scoped create-only access is not a prefix or separate-project boundary.
-[The GCP integration preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-native-identity-authority-preflight-2320.md)
+[The GCP integration preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/gcp-native-identity-authority-preflight-2320.md)
 records the native renewal, SQL-duty, configuration/admission and OpenFGA trust
 limits. Preshared client authentication and runtime method allowlisting do not
 claim server-enforced per-client model/store privileges. Enforcement must be
@@ -266,7 +266,7 @@ These changes do not grant a service principal a Django admin session, make
 cloud IAM an application grant, or alter historical audit evidence. Before S8,
 the established gates remain the sole production authority.
 
-The #2317 [preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/account-administration-preflight-2317.md)
+The #2317 [preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/account-administration-preflight-2317.md)
 and [coverage inventory](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/account-administration-coverage-2317.md)
 clarify the integration boundary: human-user lifecycle is not customer Account
 lifecycle, deployment-wide settings are not customer policy, and invitation
@@ -298,7 +298,7 @@ archive/restore no-ops, strict audit and model-access invalidation without
 deleting or rehoming bound ranges. Creation also needs confirmed SQL-owned
 parent projection through the incumbent authorization boundary; structural
 parent relations are not grants, and SQL/OpenFGA writes are not atomic.
-The [workspace activation guidance](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/workspace-lifecycle-preflight-1940.md#s8-activation-boundary-2321)
+The [workspace activation guidance](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/workspace-lifecycle-preflight-1940.md#s8-activation-boundary-2321)
 records the shared credential/commit, ancestry, error, parsing and live-route
 gaps; the historical S1 role/session rules are not additional S8 vetoes.
 
@@ -332,7 +332,7 @@ HTTP 200 success contract.
 
 The OpenFGA application-policy boundary, supported SDK operations, durable
 write semantics, deployment contract, and cutover constraints are clarified by
-`docs/architecture/openfga-authorization-preflight-2315.md`. That clarification
+`docs/_deprecated/architecture/openfga-authorization-preflight-2315.md`. That clarification
 does not move the S8 activation point or authorize mixed runtime authority.
 Delegation proofs enumerate a bounded, complete descendant set from the
 SQL-owning domain service boundaries before asking OpenFGA to evaluate it;
@@ -354,7 +354,7 @@ dependent job finishes, including first enablement on an existing deployment.
 
 S6 extends the existing CMS/Engine/Mission Control service, durable-operation
 and channel contracts; its integration boundaries are recorded in
-[the content and range authority preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/content-range-authority-preflight-2319.md).
+[the content and range authority preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/content-range-authority-preflight-2319.md).
 Customer content, credentials, installations and preparation use explicit
 resolved account scope. Operator-shared catalog access never implies access to
 customer-private assets or executable installation authority. Account-level
@@ -605,7 +605,7 @@ delegation checks.
 
 S3's credential integration is documented in
 [the credential boundary and client contract](../technical/shifter_platform/access-credentials.md)
-and [its preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/unified-credential-auth-preflight-2316.md).
+and [its preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/unified-credential-auth-preflight-2316.md).
 It uses Knox and Google/Firebase public SDKs, immutable SQL credential metadata,
 live personal-token eligibility and shared HTTP/Channels session validation.
 Personal credentials retain an immutable exact target in their shared action

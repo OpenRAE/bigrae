@@ -6,7 +6,7 @@ Date: 2026-06-07
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/852>
 
-Companion preflight: [`portal-context-processor-preflight-852.md`](portal-context-processor-preflight-852.md)
+Companion preflight: [`../_deprecated/architecture/portal-context-processor-preflight-852.md`](../_deprecated/architecture/portal-context-processor-preflight-852.md)
 
 ## Method and scope
 

@@ -189,7 +189,7 @@ NAT is a deployment capacity concern to validate for the declared range count.
 Per-workspace resource quotas are tenant-entitlement policy owned by the
 `workspaces` domain, distinct from Engine provider-capacity accounting, API
 throttling, billing, and the per-`(user, range_source)` active-range constraint
-(ADR-046-R10, `docs/architecture/workspace-resource-quotas-preflight-1946.md`).
+(ADR-046-R10, `docs/_deprecated/architecture/workspace-resource-quotas-preflight-1946.md`).
 The initial closed resources are `concurrent_ranges` and `member_seats`. A
 missing policy means unlimited, which preserves prior behavior. Enforcement mode
 reuses the `shared.capacity.EnforcementMode` terms only: `advisory` is a soft cap

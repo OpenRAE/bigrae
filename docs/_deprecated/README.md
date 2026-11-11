@@ -6,6 +6,7 @@ They are not supported operating instructions.
 
 - [Version 1 documentation](v1/index.md) retains the first documentation tree.
 - [Version 2 documentation](v2/index.md) retains the later documentation tree and its proposed features.
+- `architecture/` retains historical issue records, such as preflights, that were moved from `docs/architecture/`.
 - [Current architecture](../technical/architecture.md) describes present ownership and support limits.
 - [Current installation guidance](../getting-started/install-gcp.md) provides the supported GCP entry point.
 

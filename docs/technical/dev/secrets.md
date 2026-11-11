@@ -158,7 +158,7 @@ The bullets below are high-level operator notes, not a full production rotation
 strategy. The production rotation policy per credential class is
 `docs/architecture/secrets-rotation-strategy.md`; before changing production
 rotation behavior, apply the architecture guardrails in
-`docs/architecture/secrets-rotation-strategy-preflight-159.md`.
+`docs/_deprecated/architecture/secrets-rotation-strategy-preflight-159.md`.
 
 ### Database Password
 Current AWS runtime workloads use RDS IAM; GCP runtime workloads use native Cloud SQL authentication. Their runtime identities have no stored database password to rotate. Migration owners and Guacamole retain separate password duties.
@@ -189,7 +189,7 @@ manifests, or the guest's process argv**.
 The lifecycle aligns with the documented best practice for AWS Systems
 Manager Parameter Store + Run Command (and the GCP equivalent: control-
 plane-pushes-after-boot via the per-instance SSH identity-brokered
-channel). See `docs/architecture/vm-guest-credential-preflight-762.md`.
+channel). See `docs/_deprecated/architecture/vm-guest-credential-preflight-762.md`.
 
 #### Lifecycle
 

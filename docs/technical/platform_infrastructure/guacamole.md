@@ -10,9 +10,9 @@ This document is the canonical reference for the subsystem. The point-in-time
 design notes under `docs/architecture/guacamole-*-preflight-*.md` record the
 decisions that produced the current behaviour:
 
-- `docs/architecture/guacamole-first-click-rdp-preflight-395.md` (token-readiness retry)
-- `docs/architecture/guacamole-token-affinity-preflight-928.md` (single client replica)
-- `docs/architecture/guacamole-token-lifecycle-preflight-939.md` (at-rest token lifecycle)
+- `docs/_deprecated/architecture/guacamole-first-click-rdp-preflight-395.md` (token-readiness retry)
+- `docs/_deprecated/architecture/guacamole-token-affinity-preflight-928.md` (single client replica)
+- `docs/_deprecated/architecture/guacamole-token-lifecycle-preflight-939.md` (at-rest token lifecycle)
 
 ## Architecture overview
 
@@ -151,9 +151,10 @@ The broker implements the Guacamole JSON-auth extension protocol.
 
 1. **Build the payload.** `create_guacamole_auth_payload(username, connections,
    expires_minutes=5)` returns `{"username", "expires", "connections"}`, where
-   `expires` is a millisecond Unix timestamp `expires_minutes` in the future. The
-   default JSON admission lifetime is 5 minutes. It does not bound an open
-   tunnel; continuing access uses the authority lifecycle below.
+   `expires` is a millisecond Unix timestamp `expires_minutes` in the future.
+   Range session builders set this from `GUACAMOLE_SESSION_TTL_MINUTES`.
+   JSON-auth expiry bounds the active Guacamole session. It is separate from
+   the short-lived bootstrap request and defaults to an eight-hour lab period.
 2. **Sign and encrypt.** `sign_and_encrypt_payload(payload, secret_key)`:
    - reads `secret_key` as hex; the key must be 16, 24, or 32 bytes (32, 48, or
      64 hex characters), selecting AES-128/192/256. A 64-hex (256-bit) key is the
@@ -308,6 +309,7 @@ knobs live in `config/settings.py`.
 | `GUACAMOLE_JSON_AUTH_SECRET` | `""` | Hex HMAC/AES key; must equal guacamole-client `JSON_SECRET_KEY`. Empty means the feature returns `503`. |
 | `GUACAMOLE_BASE_URL` | `/guacamole` | Public browser base for the `#/client/...` URL. |
 | `GUACAMOLE_API_BASE_URL` | falls back to `GUACAMOLE_BASE_URL` | Internal `/api/tokens` address. |
+| `GUACAMOLE_SESSION_TTL_MINUTES` | `480` | Active JSON-auth session lifetime (minimum 5, maximum 1440). |
 | `GUACAMOLE_BOOTSTRAP_WORKERS` | `4` | Per-process bounded worker/semaphore count. |
 | `GUACAMOLE_BOOTSTRAP_TTL_SECONDS` | `300` | Bootstrap row lifetime (floor 30). |
 | `GUACAMOLE_BOOTSTRAP_INLINE` | `False` | Run the exchange synchronously in-request. |

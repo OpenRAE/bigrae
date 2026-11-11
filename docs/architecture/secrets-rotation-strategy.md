@@ -7,7 +7,7 @@ Issue: GitHub #159, "Security: Secrets rotation strategy"
 This document defines the production rotation strategy for Shifter's
 long-lived credentials. It answers *what* the rotation policy is for each
 credential class; the architecture guardrails live in
-[`secrets-rotation-strategy-preflight-159.md`](secrets-rotation-strategy-preflight-159.md)
+[`../_deprecated/architecture/secrets-rotation-strategy-preflight-159.md`](../_deprecated/architecture/secrets-rotation-strategy-preflight-159.md)
 and the per-mechanism operator runbooks ship with the PR that implements each
 mechanism (see [Delivery](#delivery)). High-level operator notes are in
 [`technical/dev/secrets.md`](../../shifter/shifter_platform/documentation/docs/technical/dev/secrets.md#rotating-secrets).
@@ -175,7 +175,7 @@ behavior is real.
 
 ## References
 
-- [`secrets-rotation-strategy-preflight-159.md`](secrets-rotation-strategy-preflight-159.md):
+- [`../_deprecated/architecture/secrets-rotation-strategy-preflight-159.md`](../_deprecated/architecture/secrets-rotation-strategy-preflight-159.md):
   binding architecture guardrails.
 - [`../dev/secrets-rotation-runbook.md`](../dev/secrets-rotation-runbook.md):
   operator procedures for each shipped mechanism.
@@ -183,7 +183,7 @@ behavior is real.
   secret inventory and high-level operator notes.
 - [`../dev/deploy-secrets.md`](../dev/deploy-secrets.md): deploy-time secret
   configuration.
-- [`secrets-manager-cmk-preflight.md`](secrets-manager-cmk-preflight.md): KMS
+- [`../_deprecated/architecture/secrets-manager-cmk-preflight.md`](../_deprecated/architecture/secrets-manager-cmk-preflight.md): KMS
   CMK and IAM boundary for Secrets Manager.
 - [`api-token-authentication-677.md`](api-token-authentication-677.md):
   platform API-token lifecycle.

@@ -184,7 +184,7 @@ layer:
   `run_manage_command` have a narrower contract: user input must be
   parsed as structured management-command argv and rejected before
   SSM rendering when it contains shell-control syntax. See
-  `docs/architecture/mcp-ops-manage-command-ssm-boundary-preflight-1176.md`.
+  `docs/_deprecated/architecture/mcp-ops-manage-command-ssm-boundary-preflight-1176.md`.
 - Do not add a second AWS command builder. Extend the shared helpers
   in `mcp/shared/aws-helpers.js`.
 - `execSync` import remains forbidden in this package per ADR-010-R1

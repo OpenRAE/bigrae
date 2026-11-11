@@ -6,7 +6,7 @@ This note describes the implementation of user lifecycle administration
 (PLAT-236, issue #1943): account state transitions, administrator-triggered
 password reset, and bounded ownership transfer. It is constrained by PLAT-241
 (cloud-agnostic, proven components) and the architecture preflight at
-`docs/architecture/user-lifecycle-administration-preflight-1943.md`.
+`docs/_deprecated/architecture/user-lifecycle-administration-preflight-1943.md`.
 
 ## Account state model
 

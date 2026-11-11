@@ -102,7 +102,7 @@ Intake still validates every inventory member and checksum.
 ## RAES run records from other apparatus
 
 An apparatus that does not use LilRAE seals a `partial` RAES run record with the BigRAE seal (`bigrae.trial-seal/v1`, #2861).
-Dispatch stages the admitted plan as `plan.json`, so the record can bind to its entry.
+The record binds to its entry through the admitted plan in `trial-unit.json`.
 The worker record carries no cleanup claim. BigRAE records cleanup after verified worker absence.
 
 ## Limits

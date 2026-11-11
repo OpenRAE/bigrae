@@ -169,7 +169,7 @@ Scenario authors need a provider-neutral way to request model access. The platfo
 - IMPLEMENTS → CODE `shifter/shifter_platform/shared/migrations/0021_alter_auditlog_action_alter_auditlog_entity_type.py`
 - IMPLEMENTS → CODE `shifter/shifter_platform/scripts/generate_model_access_schema.py`
 - IMPLEMENTS → CONFIG `shifter/installation/published_contract/model-access-policy.v3.schema.json`
-- IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/request-accounting-preflight-2121.md`
+- IMPLEMENTS → DOCUMENTATION `docs/_deprecated/architecture/model-access/request-accounting-preflight-2121.md`
 - IMPLEMENTS → DOCUMENTATION `docs/ops/model-access.md`
 - TESTS → TEST `shifter/shifter_platform/tests/shared/model_access/test_account_definitions.py`
 - TESTS → TEST `shifter/shifter_platform/tests/engine/test_model_budget_model.py`
@@ -281,7 +281,7 @@ Scenario authors need a provider-neutral way to request model access. The platfo
 
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2122` (M05: bounded private broker and authenticated control API)
 - IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/broker-runtime.md`
-- DOCUMENTS → DOCUMENTATION `docs/architecture/model-access/broker-preflight-2122.md`
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/model-access/broker-preflight-2122.md`
 - IMPLEMENTS → CODE `shifter/shifter_platform/model_broker/__main__.py`
 - IMPLEMENTS → CODE `shifter/shifter_platform/model_broker/execution.py`
 - IMPLEMENTS → CODE `shifter/shifter_platform/model_broker/identity.py`
@@ -310,7 +310,7 @@ Scenario authors need a provider-neutral way to request model access. The platfo
 - TESTS → TEST `shifter/installation/tests/test_model_broker_runtime.py`
 
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2126` (M09: scoped operator and organizer model-access management)
-- IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/management-preflight-2126.md`
+- IMPLEMENTS → DOCUMENTATION `docs/_deprecated/architecture/model-access/management-preflight-2126.md`
 - IMPLEMENTS → CODE `shifter/shifter_platform/shared/api_tokens/scopes.py`
 - IMPLEMENTS → CODE `shifter/shifter_platform/shared/api/model_access.py`
 - IMPLEMENTS → CODE `shifter/shifter_platform/config/api_model_access.py`
@@ -329,7 +329,7 @@ Scenario authors need a provider-neutral way to request model access. The platfo
 - TESTS → TEST `shifter/shifter_platform/frontend/src/features/ctf/ParticipantModelAccessCard.test.tsx`
 - TESTS → TEST `shifter/shifter_platform/frontend/src/features/ctf/admin/EventModelAccessCard.test.tsx`
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2124` (M07: Vertex invocation and usage adapter)
-- IMPLEMENTS → DOCUMENTATION `docs/architecture/model-access/vertex-adapter-preflight-2124.md`
+- IMPLEMENTS → DOCUMENTATION `docs/_deprecated/architecture/model-access/vertex-adapter-preflight-2124.md`
 - TESTS → TEST `shifter/shifter_platform/tests/shared/model_access/test_broker_count_reservation.py`
 - TESTS → TEST `shifter/shifter_platform/tests/shared/model_access/test_vertex_token_cache.py`
 - DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2411` (Optional model-access controls through a gateway, ADR-068)

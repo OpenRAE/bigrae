@@ -6,7 +6,7 @@ Date: 2026-07-21
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/1540>
 
-Design source: `docs/architecture/rev1-release-evidence-integration-preflight-1540.md`
+Design source: `docs/_deprecated/architecture/rev1-release-evidence-integration-preflight-1540.md`
 
 Index baseline: `origin/dev` at `44448536c` (the commit this index was authored
 against; the release SHA is fixed by #1539 at release time).
@@ -73,7 +73,7 @@ immutable final-report record on its issue thread:
 | Live smoke: built-image stack | `_quality.yml` `stack-smoke` | `blocking` | `not-yet-demonstrated` | #1539 must pin the `stack-smoke` run at the release SHA + conclusion. Scope: built-image smoke has no cloud credentials; it is not deployed-environment or live-cloud smoke and does not imply GCP or ACES coverage. |
 | Live smoke: AWS deployed | `_shifter-platform.yml` `post-deploy-smoke` | `advisory` (`continue-on-error`) | `not-yet-demonstrated` | #1539 must record the deploy-workflow `post-deploy-smoke` run + conclusion for the deployed AWS environment. It opens an issue on failure and does not block the deploy; do not infer a blocking smoke gate or GCP coverage from it. |
 | Live smoke: GCP deployed | (no deployed-GCP post-deploy smoke gate) | `not-implemented` | `not-yet-demonstrated` | No deployed-GCP post-deploy smoke gate exists. Open gap for the GCP path; #1539 records it as a residual limitation with an owner. |
-| Cutover authorization | ADR-024; `docs/architecture/aces-migration-parity-inventory.yaml`; `docs/architecture/aces-cutover-archive-plan-preflight-1238.md`; #1310 (open) | `live-manual` | `not-yet-demonstrated` | The reviewed cutover record produced by #1310 is the locator; #1539 records the exact selector/default change, accepted profile/scope, parity bundle, known gaps, rollback window, and release SHA. A design note or an enabled flag is a prerequisite, not authorization. |
+| Cutover authorization | ADR-024; `docs/architecture/aces-migration-parity-inventory.yaml`; `docs/_deprecated/architecture/aces-cutover-archive-plan-preflight-1238.md`; #1310 (open) | `live-manual` | `not-yet-demonstrated` | The reviewed cutover record produced by #1310 is the locator; #1539 records the exact selector/default change, accepted profile/scope, parity bundle, known gaps, rollback window, and release SHA. A design note or an enabled flag is a prerequisite, not authorization. |
 | Rollback | ADR-024 rollback posture; default-off `SHIFTER_ACES_NATIVE_PROVISIONING` binding in `config/_aces_settings.py`; preserved legacy selector/reference path; #1310 (open) | `live-manual` | `not-yet-demonstrated` | The documented rollback rehearsal produced with #1310 is the locator; #1539 records that the release's actual selector restores and validates the named legacy path within the stated window. Toggle existence, `--keep`, cleanup success, or retained legacy files are not rollback proof. |
 
 The three distinct meanings often called "conformance" stay separate: backend

@@ -40,13 +40,16 @@ spec:
           image: {{ include "shifter.guacdImage" . }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           {{- include "shifter.containerSecurityContextGuacd" . | nindent 10 }}
+          env:
+            - name: HOME
+              value: /home/guacd
           volumeMounts:
             - name: tmp
               mountPath: /tmp
-            # FreeRDP persists its server certificate store here. Keep the
-            # root filesystem read-only while making only that store writable.
+            # FreeRDP requires its home directory to be writable and persists
+            # its server certificate store below .config/freerdp.
             - name: freerdp-config
-              mountPath: /home/guacd/.config/freerdp
+              mountPath: /home/guacd
           ports:
             - name: guacd
               containerPort: 4822

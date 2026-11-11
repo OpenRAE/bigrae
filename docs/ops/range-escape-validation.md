@@ -179,6 +179,6 @@ A sink error is logged and caught. A failed or slow monitor cannot break validat
 
 ## Related
 
-- Design and boundary model: `docs/architecture/gcp-range-escape-validation-preflight-1347.md`
-- Boundary controls: `docs/architecture/gcp-range-cell-boundary-controls-preflight-1345.md`
+- Design and boundary model: `docs/_deprecated/architecture/gcp-range-escape-validation-preflight-1347.md`
+- Boundary controls: `docs/_deprecated/architecture/gcp-range-cell-boundary-controls-preflight-1345.md`
 - Egress policy: ADR-017

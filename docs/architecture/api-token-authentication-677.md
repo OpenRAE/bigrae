@@ -2,7 +2,7 @@
 
 Historical decision: #2316 supersedes this record's custom token verifier,
 staff-based issuance, and token-as-principal rules. See the
-[unified credential preflight](unified-credential-auth-preflight-2316.md) and
+[unified credential preflight](../_deprecated/architecture/unified-credential-auth-preflight-2316.md) and
 [current credential contract](../technical/shifter_platform/access-credentials.md).
 Legacy token metadata is retained only for deterministic reissue; it does not
 provide a parallel authentication path.
@@ -12,7 +12,7 @@ Status: implemented (foundation)
 Date: 2026-06-23
 
 Companion to the binding preflight guardrails in
-[`api-token-authentication-preflight-677.md`](api-token-authentication-preflight-677.md).
+[`../_deprecated/architecture/api-token-authentication-preflight-677.md`](../_deprecated/architecture/api-token-authentication-preflight-677.md).
 This record captures the decisions made implementing the PLAT-102 foundation
 and the platform direction (PLAT-106) it serves.
 

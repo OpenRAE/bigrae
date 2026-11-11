@@ -6,7 +6,7 @@ includes ``health_check.Mail`` and the v4 db-heartbeat / storage backends —
 not the legacy ``health_check.db.DatabaseBackend``, ``CacheBackend``, and
 ``DefaultFileStorageHealthCheck`` that the portal's ``INSTALLED_APPS``
 register. Per
-``docs/architecture/portal-health-readiness-preflight-477.md`` the installed
+``docs/_deprecated/architecture/portal-health-readiness-preflight-477.md`` the installed
 ``health_check.db`` / ``health_check.cache`` / ``health_check.storage`` apps
 are the canonical probe set, so this view consults the
 ``plugin_dir._registry`` populated by those apps rather than the v4 default

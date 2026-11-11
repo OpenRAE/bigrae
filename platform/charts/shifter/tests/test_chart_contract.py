@@ -69,9 +69,10 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2793: GCP gateway HTTPS uses the existing content CONNECT proxy.
 # Regenerated for #2834/#2837 integration: retain the two session-cleanup
 # gateway rules, maintenance CPU limits, and large-plan result-worker memory.
+# Regenerated for #2904 after giving guacd a writable FreeRDP home.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "632b54016fa8dc71ab328b8b06886b4f99abad65c6067f93df3fb048aa666ac5",
-    "gcp-dev": "28b88dc0d566284829e7fde624e08b9da43a823b16d787e2f129b14bf18d98e5",
+    "gcp-prod": "1c86d03975f2424c832da1d7ae2894d7978b64d9ca9f4674a8d0657f463744fb",
+    "gcp-dev": "a8658a0458139768e2c7c9e06672fe5614dbb01f1a53d8ad60797039298deb3e",
 }
 
 
@@ -175,6 +176,20 @@ class BackendNeutralChartContractTests(unittest.TestCase):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
             self.assertEqual(ref["name"], "platform-runtime")
             self.assertEqual(ref["key"], name)
+
+    def test_guacd_has_a_writable_freerdp_home(self) -> None:
+        _, documents = _render(VALUES_FILES["gcp-dev"])
+        deployment = next(doc for doc in documents if _identity(doc) == ("Deployment", "guacd"))
+        pod = deployment["spec"]["template"]["spec"]
+        container = pod["containers"][0]
+        env = {value["name"]: value["value"] for value in container["env"]}
+        mounts = {value["name"]: value["mountPath"] for value in container["volumeMounts"]}
+        volumes = {value["name"]: value for value in pod["volumes"]}
+
+        self.assertEqual(env["HOME"], "/home/guacd")
+        self.assertEqual(mounts["freerdp-config"], "/home/guacd")
+        self.assertEqual(volumes["freerdp-config"]["emptyDir"]["sizeLimit"], "16Mi")
+        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
 
     def test_gcp_gateway_reaches_public_control_only_through_the_existing_proxy(self):
         _, documents = _render(VALUES_FILES["gcp-dev"])
