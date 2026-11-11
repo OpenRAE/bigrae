@@ -59,6 +59,12 @@ def _add_context(context: str) -> Callable[[dict], None]:
     return mutate
 
 
+def _require_code_scanning_check(ruleset: dict) -> None:
+    _rule(ruleset, "required_status_checks")["parameters"]["required_status_checks"].append(
+        {"context": "CodeQL", "integration_id": 57789}
+    )
+
+
 class DevMergeQueueTest(unittest.TestCase):
     """The ruleset and the producer workflows hold the ADR-003-R9 contract."""
 
@@ -106,6 +112,8 @@ class DevMergeQueueTest(unittest.TestCase):
             "main targeted": (_include(["refs/heads/dev", "refs/heads/main"]), "must include exactly refs/heads/dev"),
             "no required checks": (_drop_rule("required_status_checks"), "must have a required_status_checks rule"),
             "unknown context": (_add_context("No Such Check"), "'No Such Check' has no producer workflow"),
+            "code scanning check run required": (_require_code_scanning_check, "comes from code scanning"),
+            "no code scanning rule": (_drop_rule("code_scanning"), "must have a code_scanning rule for CodeQL"),
         }
         for label, (mutation, expected) in cases.items():
             with self.subTest(label):
