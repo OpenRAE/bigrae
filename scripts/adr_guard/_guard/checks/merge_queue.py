@@ -32,6 +32,8 @@ _CHECK = "dev-merge-queue"
 _RULE_ID = "ADR-003-R9"
 DEV_RULESET_REL = "docs/adr/dev-ruleset.json"
 _WORKFLOW_DIR = ".github/workflows"
+# (workflow path, workflow, jobs that report the context)
+_Producer = tuple[str, dict[str, object], list[object]]
 _DEV_REF = "refs/heads/dev"
 _MERGE_GROUP_TYPE = "checks_requested"
 
@@ -137,9 +139,9 @@ def _load_workflows(repo_root: Path) -> dict[str, dict[str, object]]:
     return workflows
 
 
-def _producers(context: str, workflows: dict[str, dict[str, object]]) -> list[tuple[str, dict[str, object], list]]:
+def _producers(context: str, workflows: dict[str, dict[str, object]]) -> list[_Producer]:
     """Return (path, workflow, producing jobs) for each workflow that reports ``context``."""
-    found: list[tuple[str, dict[str, object], list]] = []
+    found: list[_Producer] = []
     for rel, wf in workflows.items():
         try:
             jobs = _dw_jobs(wf, rel)
@@ -181,7 +183,7 @@ def _trigger_map(on: object) -> dict[str, object]:
     return {str(event): config for event, config in on.items()} if isinstance(on, dict) else {}
 
 
-def _producer_violations(context: str, rel: str, wf: dict[str, object], jobs: list) -> list[Violation]:
+def _producer_violations(context: str, rel: str, wf: dict[str, object], jobs: list[object]) -> list[Violation]:
     """A producer must run on pull_request for dev and on merge_group."""
     events = _trigger_map(wf.get("on"))
     violations: list[Violation] = []

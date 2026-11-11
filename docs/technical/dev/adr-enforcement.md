@@ -854,6 +854,7 @@ The first slice intentionally stays small:
   `dev` must not require strict status checks, and the check accepts that only with the merge queue.
   Each required context must have a producer workflow that runs on `pull_request` to `dev` and on `merge_group`.
   A producer job condition that filters events must include `merge_group`.
+  A producer is a workflow job whose `name` equals the context. Code scanning reports a context with the workflow name, so a workflow whose `name` equals the context is also a producer.
 
 ## Local Usage
 
