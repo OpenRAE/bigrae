@@ -29,6 +29,7 @@ from shared.raes.experiment_admission import (
     validate_experiment_cleanup,
     validate_retained,
 )
+from shared.raes.experiment_dispatch_inputs import entry_inputs
 from shared.raes.experiment_pack_snapshot import stage_local_experiment_pack
 from shared.raes.object_source import stage_object_pack
 from shared.raes.package_loader import RaesPackageError, resolve_pack_root
@@ -271,9 +272,6 @@ def claim_experiment_entry(
     """Serialize aggregate capacity, then conditionally claim one preallocated entry."""
     admission = _authorize(credential, organization_uuid, "manage_content")
     batch = _load(admission, batch_id)
-    expected = batch.inputs["plan"]["entries"].get(plan_entry_id)
-    if expected is None:
-        raise CMSError(_UNAVAILABLE)
     with transaction.atomic():
         _fence(admission)
         parent = (
@@ -286,11 +284,7 @@ def claim_experiment_entry(
             >= parent.concurrency
         ):
             return None
-        row = ExperimentEntry.objects.filter(
-            batch=parent, organization_uuid=organization_uuid, plan_entry_id=plan_entry_id, run_id=expected["run_id"]
-        ).first()
-        if row is None:
-            raise CMSError(_UNAVAILABLE)
+        row = _planned_entry(batch, organization_uuid, plan_entry_id)
         token = uuid4()
         if not ExperimentEntry.objects.filter(pk=row.pk, state="pending", token__isnull=True).update(
             token=token,
@@ -312,21 +306,52 @@ def recover_experiment_claim(
     """Recover the existing attempt for reconciliation, without authorizing redispatch."""
     admission = _authorize(credential, organization_uuid, "manage_content")
     batch = _load(admission, batch_id)
-    expected = batch.inputs["plan"]["entries"].get(plan_entry_id)
-    if expected is None:
-        raise CMSError(_UNAVAILABLE)
     with transaction.atomic():
         _fence(admission)
-        row = ExperimentEntry.objects.filter(
-            batch_id=batch_id,
-            batch__organization_uuid=organization_uuid,
-            organization_uuid=organization_uuid,
-            plan_entry_id=plan_entry_id,
-            run_id=expected["run_id"],
-        ).first()
-        if row is None:
-            raise CMSError(_UNAVAILABLE)
+        row = _planned_entry(batch, organization_uuid, plan_entry_id)
         return None if row.token is None else _claim(row)
+
+
+def _planned_entry(batch: RetainedExperimentBatch, organization_uuid: UUID, plan_entry_id: str) -> ExperimentEntry:
+    """Resolve an entry whose run identity matches its own admitted or replacement plan."""
+    row = ExperimentEntry.objects.filter(
+        batch_id=batch.id,
+        batch__organization_uuid=organization_uuid,
+        organization_uuid=organization_uuid,
+        plan_entry_id=plan_entry_id,
+    ).first()
+    expected = (
+        None if row is None else entry_inputs(batch.inputs, row.replacement_json)["plan"]["entries"].get(plan_entry_id)
+    )
+    if row is None or expected is None or expected["run_id"] != row.run_id:
+        raise CMSError(_UNAVAILABLE)
+    return row
+
+
+def record_experiment_replacement(
+    credential: CredentialContext, organization_uuid: UUID, token: UUID, replacement: dict[str, Any]
+) -> ExperimentEntry:
+    """Persist one committed RAES replacement as a pending entry before any dispatch."""
+    admission = _authorize(credential, organization_uuid, "manage_content")
+    plan = replacement["plan"]
+    ((entry_id, entry),) = plan["entries"].items()
+    with transaction.atomic():
+        _fence(admission)
+        parent = _attempt(organization_uuid, token, locked=True)
+        existing = ExperimentEntry.objects.filter(replaces=parent).first()
+        if existing is not None:
+            return existing
+        child = ExperimentEntry.objects.create(
+            batch_id=parent.batch_id,
+            organization_uuid=organization_uuid,
+            plan_entry_id=entry_id,
+            run_id=entry["run_id"],
+            replaces=parent,
+            replacement_ordinal=plan["replacement_origin"]["ordinal"],
+            replacement_json=encode_retained(replacement),
+        )
+        _audit(admission, child.id, "experiment-replacement-recorded")
+        return child
 
 
 def _attempt(organization_uuid: UUID, token: UUID, *, locked: bool) -> ExperimentEntry:
@@ -406,7 +431,11 @@ def record_experiment_collection(
     batch = _load(admission, attempt.batch_id)
     try:
         expected = experiment_archive_identity(
-            batch.inputs, attempt.plan_entry_id, str(token), run_version, scenario_sha256=scenario_sha256
+            entry_inputs(batch.inputs, attempt.replacement_json),
+            attempt.plan_entry_id,
+            str(token),
+            run_version,
+            scenario_sha256=scenario_sha256,
         ).as_record()
     except (ValueError, ValidationError):
         raise CMSError("Experiment collection identity is invalid") from None
@@ -465,7 +494,9 @@ def record_experiment_cleanup(
     attempt = _attempt(organization_uuid, token, locked=False)
     batch = _load(admission, attempt.batch_id)
     try:
-        encoded = validate_experiment_cleanup(batch.inputs, attempt.plan_entry_id, str(token), receipt)
+        encoded = validate_experiment_cleanup(
+            entry_inputs(batch.inputs, attempt.replacement_json), attempt.plan_entry_id, str(token), receipt
+        )
     except (ValueError, ValidationError):
         raise CMSError("Experiment cleanup is invalid or unverified") from None
     with transaction.atomic():

@@ -260,7 +260,12 @@ def _publish(
 
 
 def intake_trial_archive(
-    credential: CredentialContext, organization_uuid: UUID, expected: TrialArchiveIdentity, source: BinaryIO
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    expected: TrialArchiveIdentity,
+    source: BinaryIO,
+    *,
+    run_record_only: bool = False,
 ) -> TrialArchiveCollection:
     """Return a receipt only after all original bytes verify at the destination."""
     if not isinstance(expected, TrialArchiveIdentity):
@@ -273,7 +278,7 @@ def intake_trial_archive(
         with tempfile.TemporaryDirectory(prefix="trial-archive-") as temporary:
             source_path, downloaded = Path(temporary) / "source", Path(temporary) / "verified"
             transfer.archive_bytes, transfer.archive_digest = _snapshot(source, source_path)
-            facts = validate_trial_archive(source_path, expected)
+            facts = validate_trial_archive(source_path, expected, run_record_only=run_record_only)
             transfer.plan_metadata = facts.plan_metadata
             transfer.save(update_fields=["archive_bytes", "archive_digest", "plan_metadata", "updated_at"])
             prior = _prior(transfer)
@@ -393,6 +398,26 @@ def retrieve_trial_archive(
             target.hardlink_to(staged)
     except (OSError, CloudStorageError):
         raise CMSError("Archive retrieval unavailable") from None
+
+
+def read_archived_run(credential: CredentialContext, organization_uuid: UUID, receipt_id: UUID) -> dict[str, object]:
+    """Return the RAES run record of one committed archive; read no other member."""
+    import tarfile
+
+    from raes_contracts.json_ingress import parse_bounded_json_object
+
+    receipt = TrialArchiveReceipt.objects.select_related("transfer").filter(pk=receipt_id).first()
+    if receipt is None:
+        raise CMSError("Archive unavailable")
+    run_id = receipt.transfer.expected["run_id"]
+    with tempfile.TemporaryDirectory(prefix="trial-run-") as temporary:
+        target = Path(temporary) / "archive"
+        retrieve_trial_archive(credential, organization_uuid, receipt_id, target)
+        with tarfile.open(target, "r:*") as archive:
+            member = archive.extractfile(f"{run_id}/manifest.json")
+            if member is None:
+                raise CMSError("Archive run record unavailable")
+            return parse_bounded_json_object(member.read(), max_bytes=16 * 1024**2)
 
 
 def purge_trial_archives(credential: CredentialContext, organization_uuid: UUID, *, limit: int = 100) -> int:

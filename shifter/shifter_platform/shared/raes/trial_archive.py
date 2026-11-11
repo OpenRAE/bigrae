@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from shared.raes.trial_archive_jsonl import StructuredTraceReader
 
 from pydantic import ValidationError as SchemaError
+from raes_contracts.errors import RaesError
 from shifter_adapter_sdk.trial import TrialSeal
 
 from shared.raes.json_ingress import parse_bounded_json_object
@@ -479,10 +480,56 @@ def _validated_archive(
         return VerifiedTrialArchive(len(members), run_digest, *facts), documents, members, marker, formats
     except TrialArchiveError:
         raise
-    except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OSError, EOFError, tarfile.TarError):
+    except (
+        ValueError,
+        TypeError,
+        KeyError,
+        AttributeError,
+        RecursionError,
+        OSError,
+        EOFError,
+        tarfile.TarError,
+        RaesError,
+    ):
         raise TrialArchiveError("Archive structure or record validation failed") from None
 
 
-def validate_trial_archive(path: Path, expected: TrialArchiveIdentity) -> VerifiedTrialArchive:
-    """Validate all original bytes without retaining export-only usage metadata."""
+def validate_trial_archive(
+    path: Path, expected: TrialArchiveIdentity, *, run_record_only: bool = False
+) -> VerifiedTrialArchive:
+    """Validate all original bytes without retaining export-only usage metadata.
+
+    ``run_record_only`` keeps containment, byte integrity and the run record, and
+    reads no other record: experiment dispatch needs only the run's status.
+    """
+    if run_record_only:
+        return _run_record_archive(path, expected)
     return _validated_archive(path, expected)[0]
+
+
+def _run_record_archive(path: Path, expected: TrialArchiveIdentity) -> VerifiedTrialArchive:
+    """Verify containment and sealed bytes, then project the RAES run record only."""
+    from raes_contracts.contracts import ExperimentRunModel
+
+    try:
+        if not 0 < path.stat().st_size <= MAX_ARCHIVE_BYTES:
+            raise TrialArchiveError("Archive exceeds its compressed size bound")
+        members, documents, _, _, _ = _scan(path, expected)
+        marker = _json(documents[SEAL_NAME])
+        _inventory(marker, members, documents)
+        run_digest = "sha256:" + members[MANIFEST_NAME][1]
+        if marker.get("run_record_digest") != run_digest:
+            raise TrialArchiveError("Sealed manifest digest does not match")
+        if marker.get("schema_version") == LILRAE_SEAL:
+            # A LilRAE seal states the run's status itself; its manifest is not a RAES run record.
+            run_id, run_status, outcome_status = marker["run_id"], marker["run_status"], marker["outcome_status"]
+        else:
+            run = ExperimentRunModel.model_validate(_json(documents[MANIFEST_NAME]))
+            run_id, run_status, outcome_status = run.run_id, run.run_status, run.outcome_status
+        if run_id != expected.run_id or not isinstance(run_status, str) or not isinstance(outcome_status, str):
+            raise TrialArchiveError("Archive run differs from the expected run")
+        return VerifiedTrialArchive(len(members), run_digest, run_status, outcome_status, False, 0)
+    except TrialArchiveError:
+        raise
+    except (ValueError, TypeError, KeyError, OSError, EOFError, tarfile.TarError, RaesError):
+        raise TrialArchiveError("Archive structure or run record validation failed") from None
