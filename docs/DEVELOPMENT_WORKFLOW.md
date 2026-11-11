@@ -27,8 +27,12 @@ See [CI/CD](technical/dev/ci-cd.md#trigger-rules) for deployment triggers.
 8. Leave the feature-PR merge decision to the user or authorized maintainer.
 
 The `pr-title-lint` workflow validates titles on PRs to `dev` and `main`.
-The maintainer squash-merges feature PRs into `dev`.
+Feature PRs merge into `dev` through the merge queue, which squash-merges them.
 The validated title becomes the commit subject that release-please reads after promotion to `main`.
+
+The `dev` merge queue runs the required checks again on each merge group.
+A PR that fails a check on its merge group leaves the queue and does not merge.
+See [CI/CD](technical/dev/ci-cd.md#merge-queue) for the queue configuration.
 
 Do not hand-edit `CHANGELOG.md` or add changelog fragments.
 Release-please owns the changelog and product version.
