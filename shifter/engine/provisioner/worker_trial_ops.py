@@ -37,7 +37,7 @@ from shifter_adapter_sdk.trial import (
 
 from cloud import get_object_storage
 from config import load_raes_content_delivery_config
-from executors.base import FileOutputCommandExecutor, StreamingCommandExecutor
+from executors.base import ExecutorConnectionError, FileOutputCommandExecutor, StreamingCommandExecutor
 from raes_content_payload import sha256_file
 
 if TYPE_CHECKING:
@@ -50,6 +50,9 @@ POLL_SECONDS = 30
 #: Time after the trial deadline for the adapter to stop participants and seal.
 DRAIN_SECONDS = 900
 _VERB_TIMEOUT_SECONDS = 120
+#: Consecutive failed status polls tolerated while a trial runs. A worker under
+#: end-of-trial load can fail one poll; that must not end the operation.
+STATUS_RETRIES = 5
 _TRANSFER_TIMEOUT_SECONDS = 1800
 _UNIT = "bigrae-trial"
 
@@ -136,8 +139,18 @@ def wait_for_exit(execution: GuestExecutionContext, value: WorkerTrialInput, wor
     """Poll until the trial exits; stop it once the deadline and drain time pass."""
     deadline = datetime.fromisoformat(value.deadline.replace("Z", "+00:00")) + timedelta(seconds=DRAIN_SECONDS)
     stopped = False
+    failures = 0
     while True:
-        status = trial_status(execution, value, workdir)
+        try:
+            status = trial_status(execution, value, workdir)
+        except (WorkerTrialError, ExecutorConnectionError, TimeoutError):
+            failures += 1
+            if failures > STATUS_RETRIES:
+                raise
+            logger.warning("Worker trial status poll failed; retrying (%d of %d)", failures, STATUS_RETRIES)
+            time.sleep(POLL_SECONDS)
+            continue
+        failures = 0
         if status.state == "exited":
             return status
         if datetime.now(UTC) > deadline and not stopped:

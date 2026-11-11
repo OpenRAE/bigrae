@@ -57,6 +57,7 @@ That form is `run` or `collect` with UUID `--request-id`, `--trial-id`, and `--o
 The provisioner rebuilds the worker's management target from its original RAES provision input.
 It runs only the SDK verbs at the fixed trial-control path.
 `run` starts the trial with `systemd-run` only when `status` reports `prepared`.
+While the trial runs, it tolerates up to five consecutive failed `status` polls before it fails the operation.
 It stops the trial when the deadline and a 900-second drain have passed.
 The archive returns through a bounded copy, digest verification, and a create-only object under `trial-exports/`.
 
