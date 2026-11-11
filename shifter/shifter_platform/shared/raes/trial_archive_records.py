@@ -24,7 +24,14 @@ from raes_contracts.json_ingress import parse_bounded_json
 from raes_contracts.timestamps import parse_rfc3339_datetime
 
 from shared.audit.integrity import _SECRET_KEY_SUFFIXES, _SECRET_KEYS
-from shared.raes.trial_archive import MAX_JSON_BYTES, TrialArchiveError, TrialArchiveIdentity, _json, safe_archive_path
+from shared.raes.trial_archive import (
+    BIGRAE_SEAL,
+    MAX_JSON_BYTES,
+    TrialArchiveError,
+    TrialArchiveIdentity,
+    _json,
+    safe_archive_path,
+)
 from shared.raes.trial_archive_lilrae import TRIAL_RECORD_CONTRACT, validate_trial_record
 from shared.schemas._raes_validation import JsonObject, _reject_secret_value
 
@@ -448,7 +455,11 @@ def validate_archive_records(
     _verify_byte_references(payloads, inventory, expected.run_id)
     if marker.get("sealed_contract_versions") == [TRIAL_RECORD_CONTRACT]:
         return validate_trial_record(documents, marker, expected, trace_attempts)
-    run = ExperimentRunModel.model_validate(_json(documents["manifest.json"]))
+    manifest = _json(documents["manifest.json"])
+    if marker["schema_version"] == BIGRAE_SEAL and manifest.get("record_state") != "partial":
+        # The worker cannot attest the cleanup that BigRAE performs after the trial.
+        raise TrialArchiveError("A worker trial record must be partial")
+    run = ExperimentRunModel.model_validate(manifest)
     plan = _retained_plan(payloads)
     _validate_plan_identity(plan, run, expected)
     receipts = _execution_history(run, expected, trace_attempts)

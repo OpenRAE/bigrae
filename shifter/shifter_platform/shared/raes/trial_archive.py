@@ -16,8 +16,11 @@ from typing import IO, TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from shared.raes.trial_archive_jsonl import StructuredTraceReader
 
-from shared.exceptions import ValidationError
+from pydantic import ValidationError as SchemaError
+from shifter_adapter_sdk.trial import TrialSeal
+
 from shared.raes.json_ingress import parse_bounded_json_object
+from shared.raes.trial_archive_paths import TrialArchiveError, safe_archive_path
 from shared.schemas._raes_validation import JsonObject, _reject_secret_value
 
 CHUNK_BYTES = 1024 * 1024
@@ -31,10 +34,9 @@ SEAL_NAME = "seal.json"
 CHECKSUMS_NAME = "checksums.sha256"
 _INVALID_INVENTORY_ENTRY = "Invalid sealed inventory entry"
 _SAFE_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\Z")
-
-
-class TrialArchiveError(ValidationError):
-    """Archive bytes cannot support a collection receipt."""
+#: LilRAE seals its own archives; BigRAE's seal carries a partial RAES run record.
+LILRAE_SEAL = "aptl.run-seal/v1"
+BIGRAE_SEAL = TrialSeal.model_fields["schema_version"].default
 
 
 @dataclass(frozen=True, slots=True)
@@ -82,22 +84,6 @@ class VerifiedTrialArchive:
     evidence_complete: bool
     gap_count: int
     plan_metadata: JsonObject | None = None
-
-
-def safe_archive_path(value: object) -> str:
-    """Reject aliases before using a name as an inventory key."""
-    if (
-        not isinstance(value, str)
-        or not value
-        or len(value) > 512
-        or "\\" in value
-        or ":" in value
-        or any(ord(char) < 32 for char in value)
-        or value.startswith("/")
-        or any(part in {"", ".", ".."} for part in value.split("/"))
-    ):
-        raise TrialArchiveError("Unsafe archive path")
-    return value
 
 
 class _BoundedReader(RawIOBase):
@@ -434,8 +420,13 @@ def _inventory(
     marker: JsonObject, members: dict[str, tuple[int, str]], documents: dict[str, bytes]
 ) -> dict[str, tuple[int, str]]:
     """Require a closed, exact inventory before any structured record joins."""
-    if marker.get("schema_version") != "aptl.run-seal/v1" or marker.get("seal_state") != "sealed":
+    if marker.get("schema_version") not in {LILRAE_SEAL, BIGRAE_SEAL} or marker.get("seal_state") != "sealed":
         raise TrialArchiveError("Unsupported sealed archive")
+    if marker["schema_version"] == BIGRAE_SEAL:
+        try:
+            TrialSeal.model_validate(marker)
+        except SchemaError:
+            raise TrialArchiveError("Invalid BigRAE trial seal") from None
     declared = {}
     for row in _sealed_rows(marker):
         name, identity = _inventory_entry(row)
