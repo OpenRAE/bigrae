@@ -195,8 +195,7 @@ docs-report: ## CI migration report; findings are advisory, tool errors still fa
 	selected="$$(mktemp)"; trap 'rm -f "$$selected"' EXIT; \
 	git ls-files -z -- '*.md' \
 	  ':!:CHANGELOG.md' ':!:shifter/engine/provisioner/CHANGELOG.md' \
-	  ':!:changelog.d/*.md' ':!:CODE_OF_CONDUCT.md' \
-	  ':!:platform/terraform/gcp/modules/portal/identity-platform/functions/identity-platform/vendor/node-forge/README.md' > "$$selected"; \
+	  ':!:changelog.d/*.md' ':!:CODE_OF_CONDUCT.md' > "$$selected"; \
 	mapfile -d '' -t files < "$$selected"; \
 	if [ "$${#files[@]}" -eq 0 ]; then echo 'No maintained Markdown files.' >&2; exit 2; fi; \
 	files=("$${files[@]/#/./}"); \
