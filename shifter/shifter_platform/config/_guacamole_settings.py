@@ -23,6 +23,7 @@ __all__ = [
     "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID",
     "GUACAMOLE_CONTROL_AUDIENCE",
     "GUACAMOLE_JSON_AUTH_SECRET",
+    "GUACAMOLE_SESSION_TTL_MINUTES",
 ]
 
 GUACAMOLE_CONTROL_AUDIENCE = os.environ.get("GUACAMOLE_CONTROL_AUDIENCE", "")
@@ -40,6 +41,12 @@ GUACAMOLE_JSON_AUTH_SECRET = os.environ.get("GUACAMOLE_JSON_AUTH_SECRET", "")
 GUACAMOLE_BASE_URL = os.environ.get("GUACAMOLE_BASE_URL", "/guacamole")
 # Internal URL for server-to-server API calls (defaults to base URL if not set).
 GUACAMOLE_API_BASE_URL = os.environ.get("GUACAMOLE_API_BASE_URL", "") or GUACAMOLE_BASE_URL
+# JSON-auth expiry is also the active Guacamole session lifetime. Keep it long
+# enough for an ordinary range lab while bounding how long a delivered bearer
+# token can be reused.
+GUACAMOLE_SESSION_TTL_MINUTES = int(os.environ.get("GUACAMOLE_SESSION_TTL_MINUTES", "480"))
+if not 5 <= GUACAMOLE_SESSION_TTL_MINUTES <= 1440:
+    raise ValueError("GUACAMOLE_SESSION_TTL_MINUTES must be between 5 and 1440")
 # Bounded async bootstrap workers for Guacamole token creation. Each worker may
 # hold a blocking Guacamole /api/tokens request, so keep this intentionally low
 # and scale with portal instance count.
