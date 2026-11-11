@@ -100,7 +100,7 @@ After cleanup, dispatch replaces an entry whose run status the policy names, up 
 
 1. Dispatch reads the failed trial's RAES run record from the stored archive.
 2. It rebuilds the compilation request from the batch's registered pack and retained authority.
-3. RAES `compile_replacement_trial` compiles a one-entry child plan from the original plan, the failed run, the cleanup receipt, and the slot's replacement history.
+3. RAES `compile_replacement_trial` compiles a one-entry child plan. Its inputs are the original plan, the failed run, the cleanup receipt, and the slot's replacement history.
 4. Dispatch commits the child plan and its snapshot as a pending entry that names the entry it replaces.
 5. The next pass claims the child entry and creates its worker.
 
