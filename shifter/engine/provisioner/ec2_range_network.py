@@ -158,7 +158,7 @@ def plan_ec2_network(
     groups = []
     used = {network.address: 4 for network in networks}
     for node in plan.nodes:
-        placed, guest_network = _place_node(node, networks, cidrs, config, used)
+        placed, guest_network = _place_node(node, networks, cidrs, used)
         guests.extend(placed)
         if len(guests) > 256:
             raise Ec2NetworkError("EC2 guest count exceeds the realization bound")
@@ -199,7 +199,6 @@ def _place_node(
     node: RaesPlanNode,
     networks: tuple[RaesPlanNetwork, ...],
     cidrs: dict[str, ipaddress.IPv4Network],
-    config: Ec2NetworkConfig,
     used: dict[str, int],
 ) -> tuple[list[Ec2GuestPlacement], ipaddress.IPv4Network]:
     """Allocate every replica without crossing subnet capacity or reserved address space."""
