@@ -24,6 +24,8 @@ Tenant identifiers and archive contents grant no access.
 The management command uses this same facade.
 Experiment admission reuses the scientific-record credential rejection rules before retaining inputs in SQL.
 The admission check exhausts the same recursive record visitor, so nested credential fields are checked even when no evidence references are collected.
+Intake refuses archive bytes that match a high-confidence credential pattern.
+The AWS documentation placeholder access key `AKIAIOSFODNN7EXAMPLE` is not a credential, so a scenario can plant it.
 
 The authorization surface inventory records its credential transport and per-operation authority.
 Experiment dispatch calls the same intake service with `run_record_only`.
