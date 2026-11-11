@@ -61,6 +61,11 @@ _SECRET_VALUE_RE = re.compile(
 )
 
 
+# AWS documentation uses this access key ID as a placeholder; it authorizes
+# nothing. Synthetic scenario content uses it as a planted credential.
+_DOCUMENTED_EXAMPLE_KEYS = frozenset({"AKIAIOSFODNN7EXAMPLE"})
+
+
 class RaesRecordError(ValueError):
     """Raised when an RAES sidecar record violates a shared storage contract."""
 
@@ -83,7 +88,7 @@ def _reject_secret_key(path: str, key: str, *, error_cls: type[Exception] = Raes
 
 def _reject_secret_value(path: str, value: str, *, error_cls: type[Exception] = RaesRecordError) -> None:
     """Reject string values that match high-confidence secret patterns."""
-    if _SECRET_VALUE_RE.search(value):
+    if any(match.group(0).upper() not in _DOCUMENTED_EXAMPLE_KEYS for match in _SECRET_VALUE_RE.finditer(value)):
         raise error_cls(f"secret-bearing payload value rejected at {path}")
 
 

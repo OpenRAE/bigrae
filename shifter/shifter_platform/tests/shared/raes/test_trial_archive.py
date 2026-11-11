@@ -573,3 +573,18 @@ def test_run_record_only_intake_keeps_bytes_and_identity_and_reads_only_the_seal
     path.write_bytes(trial_record_archive(run_id="another-run"))
     with pytest.raises(TrialArchiveError):
         validate_trial_archive(path, expected(), run_record_only=True)
+
+
+def test_the_documented_aws_example_key_is_not_a_secret_but_another_access_key_is(tmp_path):
+    """A planted scenario credential uses AWS's documentation placeholder; a real key shape is still refused."""
+    from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
+
+    path = tmp_path / "archive.tar.gz"
+    planted = {"trial/participants/red.json": b'{"note": "Access Key: AKIAIOSFODNN7EXAMPLE"}'}
+    path.write_bytes(trial_record_archive(extra=planted))
+    validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
+
+    leaked = {"trial/participants/red.json": b'{"note": "AKIAIOSFODNN7EXAMPLE AKIA2E3F4G5H6J7K8L9M"}'}
+    path.write_bytes(trial_record_archive(extra=leaked))
+    with pytest.raises(TrialArchiveError, match="secret"):
+        validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
