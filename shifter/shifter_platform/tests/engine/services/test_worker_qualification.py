@@ -203,7 +203,8 @@ def test_migration_refuses_active_workers_and_clears_only_retired_references(app
         assert immutable.envelope == original
     finally:
         old.get_model("engine", "DisposableWorker").objects.filter(pk=guest.row.pk).update(terminal_at=timezone.now())
-        MigrationExecutor(connection).migrate(after)
+        restore = MigrationExecutor(connection)
+        restore.migrate(restore.loader.graph.leaf_nodes())
 
 
 @pytest.mark.parametrize("identity", ["vm_identity", "machine_identity", "daemon_identity"])
