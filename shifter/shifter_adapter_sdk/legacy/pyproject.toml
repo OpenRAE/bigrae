@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "shifter-adapter-sdk"
-version = "0.3.0"
+version = "0.2.5"
 description = "Compatibility distribution; use bigrae-adapter-sdk"
 requires-python = ">=3.12"
 dependencies = ["bigrae-adapter-sdk==0.3.0"]

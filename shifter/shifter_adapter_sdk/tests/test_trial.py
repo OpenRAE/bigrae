@@ -8,6 +8,7 @@ from shifter_adapter_sdk.trial import (
     MAX_TRIAL_OUTPUT_BYTES,
     TrialExport,
     TrialInput,
+    TrialSeal,
     TrialStatus,
     parse_trial_output,
 )
@@ -49,9 +50,15 @@ def test_trial_input_binds_identity_deadline_and_digests():
         attempt_id="0f0e0d0c-0b0a-4908-8706-050403020100",
         deadline="2026-11-08T12:00:00Z",
         unit_sha256="b" * 64,
+        scenario_sha256="c" * 64,
     )
     assert TrialInput.model_validate_json(value.model_dump_json()) == value
-    for field, bad in (("deadline", "2026-11-08T12:00:00+00:00"), ("run_id", "../x"), ("unit_sha256", "B" * 64)):
+    for field, bad in (
+        ("deadline", "2026-11-08T12:00:00+00:00"),
+        ("run_id", "../x"),
+        ("unit_sha256", "B" * 64),
+        ("scenario_sha256", "C" * 64),
+    ):
         with pytest.raises(ValueError):
             TrialInput.model_validate({**value.model_dump(), field: bad})
 
@@ -90,3 +97,39 @@ def test_export_output_names_one_file_without_a_path():
     for file in ("../run.tar", "/tmp/run.tar", "sub/run.tar"):
         with pytest.raises(ValueError):
             TrialExport.model_validate({**value.model_dump(), "file": file})
+
+
+def _seal(**changes):
+    member = {
+        "path": "manifest.json",
+        "size_bytes": 2,
+        "checksum": {"algorithm": "sha256", "value": "a" * 64},
+        "media_type": "application/json",
+        "role": "manifest",
+    }
+    return {
+        "run_id": "run-1",
+        "run_version": "1",
+        "run_status": "completed",
+        "outcome_status": "not-evaluated",
+        "run_record_digest": "sha256:" + "a" * 64,
+        "completeness": {"complete": True, "limitations": []},
+        "inventory": [member],
+    } | changes
+
+
+def test_seal_names_its_owner_and_only_the_raes_run_record_contract():
+    seal = TrialSeal.model_validate(_seal())
+    dumped = seal.model_dump(mode="json")
+    assert dumped["schema_version"] == "bigrae.trial-seal/v1"
+    assert dumped["sealed_contract_versions"] == ["experiment-run/v1"]
+    for changes in (
+        {"sealed_contract_versions": ["lilrae-trial-record/v1"]},
+        {"schema_version": "aptl.run-seal/v1"},
+        {"completeness": {"complete": True, "limitations": ["capture lost"]}},
+        {"completeness": {"complete": False, "limitations": []}},
+        {"inventory": []},
+        {"run_record_digest": "a" * 64},
+    ):
+        with pytest.raises(ValueError):
+            TrialSeal.model_validate(_seal(**changes))

@@ -73,7 +73,7 @@ def records():
     return plan.model_dump(mode="json"), run.model_dump(mode="json")
 
 
-def archive_bytes(*, extra=None, omit=(), change=None, record_change=None, media_types=None):
+def archive_bytes(*, extra=None, omit=(), change=None, record_change=None, media_types=None, bigrae_seal=False):
     plan, run = records()
     if record_change:
         record_change(plan, run)
@@ -109,6 +109,15 @@ def archive_bytes(*, extra=None, omit=(), change=None, record_change=None, media
             "limitations": [{"code": "capture-loss", "detail": "Synthetic failure."}],
         },
     }
+    if bigrae_seal:
+        from shifter_adapter_sdk.trial import TrialSeal
+
+        marker = TrialSeal(
+            **{key: marker[key] for key in ("run_id", "run_version", "run_status", "outcome_status")},
+            run_record_digest=marker["run_record_digest"],
+            completeness={"complete": False, "limitations": ["Synthetic capture failure."]},
+            inventory=inventory,
+        ).model_dump(mode="json")
     members["seal.json"] = encoded(marker)
     if change:
         change(members, marker)
@@ -152,6 +161,42 @@ def test_collects_failed_partial_record_without_claiming_success(tmp_path):
     assert result.outcome_status == "not-evaluated"
     assert result.evidence_complete is False
     assert result.member_count == 4
+
+
+def test_collects_bigrae_sealed_partial_record(tmp_path):
+    """#2861: a non-LilRAE apparatus seals a partial RAES run record with the BigRAE seal."""
+    from shared.raes.trial_archive import validate_trial_archive
+
+    path = tmp_path / "archive.tar.gz"
+    path.write_bytes(archive_bytes(bigrae_seal=True))
+    result = validate_trial_archive(path, expected())
+    assert (result.run_status, result.outcome_status, result.evidence_complete) == ("failed", "not-evaluated", False)
+
+
+def drop_record_state(plan, run):
+    del run["record_state"]
+
+
+def claim_lilrae_record(members, marker):
+    marker["sealed_contract_versions"] = ["lilrae-trial-record/v1"]
+    members["seal.json"] = encoded(marker)
+
+
+@pytest.mark.parametrize(
+    ("change", "record_change", "message"),
+    [
+        (None, drop_record_state, "must be partial"),
+        (claim_lilrae_record, None, "Invalid BigRAE trial seal"),
+        (lambda members, marker: members.update({"seal.json": encoded(marker | {"note": "x"})}), None, "Invalid"),
+    ],
+)
+def test_bigrae_seal_refuses_archival_records_and_other_contracts(tmp_path, change, record_change, message):
+    from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
+
+    path = tmp_path / "archive.tar.gz"
+    path.write_bytes(archive_bytes(bigrae_seal=True, change=change, record_change=record_change))
+    with pytest.raises(TrialArchiveError, match=message):
+        validate_trial_archive(path, expected())
 
 
 @pytest.mark.parametrize("fault", ["wrong-run", "corruption", "missing-chunk", "traversal", "secret"])
