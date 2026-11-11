@@ -178,9 +178,6 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert unit["plan"] == dispatch.batch.inputs["plan"]
     assert unit["snapshot"] == json.loads(scenario_bytes)
     assert unit["snapshot"] == dispatch.batch.inputs["snapshots"][unit["plan_entry_id"]]
-    assert unit["realization"] == {
-        name: dispatch.batch.inputs[name] for name in ("family", "experiment", "task", "capture_specs", "authority")
-    }
     # A concurrent or repeated stager reuses the persisted deadline and the identical objects.
     from cms.services._experiment_dispatch import stage_trial
 

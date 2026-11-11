@@ -20,19 +20,10 @@ def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
     return canonical_json_bytes(inputs["snapshots"][entry_id])
 
 
-#: The retained admission inputs that a worker needs to realize the entry under the RAES engine.
-_REALIZATION_INPUTS = ("family", "experiment", "task", "capture_specs", "authority")
-
-
 def trial_unit_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
-    """Return the staged trial unit: the admitted plan, the entry, its snapshot and its realization inputs."""
+    """Return the staged trial unit: the admitted plan, the entry and its instantiated snapshot."""
     return canonical_json_bytes(
-        {
-            "plan": inputs["plan"],
-            "plan_entry_id": entry_id,
-            "snapshot": inputs["snapshots"][entry_id],
-            "realization": {name: inputs[name] for name in _REALIZATION_INPUTS},
-        }
+        {"plan": inputs["plan"], "plan_entry_id": entry_id, "snapshot": inputs["snapshots"][entry_id]}
     )
 
 
