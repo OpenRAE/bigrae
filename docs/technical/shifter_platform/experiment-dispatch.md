@@ -33,12 +33,11 @@ The launcher rechecks that authority before the provisioner starts.
 
 ## Staged inputs
 
-The coordinator stages four objects under `trial-inputs/<attempt>/` in the assets bucket:
+The coordinator stages three objects under `trial-inputs/<attempt>/` in the assets bucket:
 
 | Object | Content |
 | --- | --- |
 | `scenario.sdl` | The retained concrete trial SDL of the entry |
-| `plan.json` | The retained `admitted-trial-plan/v1` of the batch |
 | `trial-unit.json` | The admitted plan, the plan entry ID, and the entry's instantiated snapshot |
 | `trial.json` | Run ID, attempt ID, deadline, and the digests of `scenario.sdl` and `trial-unit.json` |
 
@@ -73,7 +72,7 @@ For a LilRAE trial record, the run, attempt and trial SDL digest must equal the 
 The SDL digest is the digest of the retained entry's staged trial SDL.
 
 A BigRAE seal is for an apparatus that does not use LilRAE.
-Its `manifest.json` is an RAES run record that retains the staged `plan.json`.
+Its `manifest.json` is an RAES run record that retains the admitted plan from `trial-unit.json`.
 Intake binds the record to the expected plan, entry, run, and attempt with the released RAES validators.
 The record must be `partial`: the worker cannot attest the cleanup that BigRAE performs after the trial.
 BigRAE records that cleanup in its own cleanup receipt.

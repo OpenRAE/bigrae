@@ -256,13 +256,12 @@ Its configure phase installs one executable at `/usr/local/libexec/bigrae/trial-
 BigRAE then uses that executable to run one trial on the worker.
 `bigrae_adapter_sdk.trial` defines the paths, verbs, and closed models.
 
-Before `start`, the host stages four files in `/var/lib/bigrae/trial/input`:
+Before `start`, the host stages three files in `/var/lib/bigrae/trial/input`:
 
 | File | Content |
 | --- | --- |
 | `trial.json` | `TrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 digests of `scenario.sdl` and `trial-unit.json` |
 | `scenario.sdl` | The complete concrete trial SDL |
-| `plan.json` | The admitted `admitted-trial-plan/v1`; its `plan_digest` identifies it |
 | `trial-unit.json` | The admitted RAES trial plan, the plan entry ID, and the entry's instantiated snapshot |
 
 The worker image supplies the trial runtime and its environment pack.
@@ -282,7 +281,7 @@ Keep output within 64 KiB; the host refuses larger or ambiguous output.
 `sealed` in `TrialStatus` is an adapter claim; BigRAE validates the exported archive itself.
 
 An apparatus that does not use LilRAE records the trial as an RAES `experiment-run/v1` record in `manifest.json`.
-The record retains `plan.json` and is `partial`, because BigRAE performs and records cleanup after the trial.
+The record retains the admitted plan from `trial-unit.json` and is `partial`, because BigRAE performs and records cleanup after the trial.
 Seal the archive with a `TrialSeal` in `seal.json`.
 The seal inventory names every member except `seal.json` and the optional `checksums.sha256`.
 The executable must not upload data or create cloud resources.
