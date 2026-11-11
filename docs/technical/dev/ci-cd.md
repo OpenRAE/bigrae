@@ -22,7 +22,7 @@ triggers a deploy (#730).
 | Event | What Runs |
 |-------|-----------|
 | Pull request | Quality only; no deploy |
-| Merge group in the `dev` merge queue | `CodeQL`, `Lint PR title`, and PR Gate with Quality; no deploy |
+| Merge group in the `dev` merge queue | `CodeQL`, `Lint PR title`, `GitGuardian scan`, and PR Gate with Quality; no deploy |
 | Push to `dev` / `main` | Quality only; no deploy |
 | Manual dispatch, `environment: aws-dev` | Quality, then AWS dev deploy |
 | Release Please release on `main` | GCP release (`release-gcp.yml`) for the tagged commit; no deploy |
@@ -50,7 +50,7 @@ Pull requests to `dev` merge through a GitHub merge queue (ADR-003-R9).
 
 The `dev` repository ruleset is in `docs/adr/dev-ruleset.json`.
 GitHub configures a merge queue only through a ruleset.
-The ruleset requires the `CodeQL`, `Lint PR title`, and `PR Gate` contexts.
+The ruleset requires the `CodeQL`, `Lint PR title`, `PR Gate`, and `GitGuardian scan` contexts.
 It does not require strict status checks, because the queue tests each pull request against the latest `dev`.
 The queue squash-merges (ADR-042-R4) and can put more than one pull request in a merge group.
 
@@ -63,6 +63,7 @@ On a merge group, the workflows have no pull request payload:
 
 - Change detection and the diff-based gates compare with `merge_group.base_sha`.
 - `Lint PR title` reads the current titles of the queued pull requests in the merge group.
+- `GitGuardian scan` runs `ggshield` on the merge group commits. The GitGuardian App does not report on a merge group.
 - The SonarQube Cloud scan is a pull request analysis of the queued pull request against the queue base branch.
 
 The composite action `.github/actions/merge-group-prs` reads the queued pull requests from the GraphQL merge queue.

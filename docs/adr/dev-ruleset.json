@@ -49,6 +49,10 @@
           {
             "context": "PR Gate",
             "integration_id": 15368
+          },
+          {
+            "context": "GitGuardian scan",
+            "integration_id": 15368
           }
         ]
       }
