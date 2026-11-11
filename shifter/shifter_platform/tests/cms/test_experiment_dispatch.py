@@ -247,6 +247,13 @@ def test_lost_and_unsealed_runs_are_collected_without_a_new_start(dispatch, sett
     trial.state, trial.exit_code, trial.operation, trial.operation_failed = "exited", 1, "collect", False
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["not-sealed"]
     assert dispatch.engine.collect_requests == [(worker_id, True), (worker_id, False)]
+    # An unsealed trial is a failed attempt with no data: its worker retires and cleanup follows.
+    from cms.models import ExperimentEntry
+
+    assert ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}").state == "failed"
+    assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["retiring"]
+    dispatch.engine.workers[worker_id].retired = True
+    assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["cleanup-recorded"]
 
 
 def test_worker_capacity_refusal_leaves_the_claim_for_reconcile(dispatch, settings):
@@ -289,6 +296,20 @@ def test_a_trial_with_missing_data_fails_and_gets_one_fresh_trial_on_a_new_worke
     assert sorted(step.action for step in steps) == ["replaced", "worker-created"]
     fresh.refresh_from_db()
     assert fresh.token != failed.token and len(dispatch.engine.workers) == 2
+
+    # The batch report shows the failed attempt, its archive facts, and the fresh trial that replaces it.
+    from cms.services import list_experiment_entries
+
+    rows = [
+        row
+        for row in list_experiment_entries(dispatch.actor.credential, dispatch.organization.uuid, dispatch.batch.id)
+        if row["plan_entry_id"] == failed.plan_entry_id
+    ]
+    assert [(row["attempt"], row["state"], row["run_status"], row["data_complete"]) for row in rows] == [
+        (0, "failed", "completed", False),
+        (1, "claimed", None, None),
+    ]
+    assert rows[1]["replaces_attempt_id"] == str(failed.token)
 
     # The policy allows one fresh trial: a second failure of the same entry gets none.
     fresh.state = "failed"

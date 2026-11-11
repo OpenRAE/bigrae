@@ -334,14 +334,18 @@ def _advance_started(
     worker: WorkerView,
     trial: WorkerTrialView,
 ) -> str:
-    """Collect the started trial, then retire its worker, then record cleanup."""
+    """Collect the started trial, then retire its worker, then record cleanup.
+
+    A trial that ended without a collectable archive is a failed attempt with no data.
+    """
     receipt = row.receipt
-    if receipt is None:
+    if receipt is None and row.state != "failed":
         action = _advance_collection(credential, organization_uuid, inputs, row, worker_id, trial)
     elif not worker.retiring:
         action = _retire(credential, worker_id)
     elif worker.retired and not row.cleanup_receipt_json:
-        action = _record_cleanup(credential, organization_uuid, inputs, row, worker_id, receipt.run_status)
+        run_status = receipt.run_status if receipt is not None else "failed"
+        action = _record_cleanup(credential, organization_uuid, inputs, row, worker_id, run_status)
     else:
         action = "waiting-for-cleanup"
     return action
@@ -366,13 +370,22 @@ def _advance_collection(
             collect_worker_trial(credential, worker_id, stop=True)
             action = "recovery-requested"
     elif trial.state == "prepared":
-        action = "start-failed"
+        action = _fail_uncollected(credential, organization_uuid, row, "start-failed")
     elif trial.state == "exited" and trial.operation == "collect" and not trial.operation_failed:
-        action = "not-sealed"
+        action = _fail_uncollected(credential, organization_uuid, row, "not-sealed")
+    elif trial.overdue and trial.operation == "collect":
+        # Past its deadline and drain, and the recovery collection still found no archive.
+        action = _fail_uncollected(credential, organization_uuid, row, "no-archive")
     else:
         collect_worker_trial(credential, worker_id)
         action = "collect-requested"
     return action
+
+
+def _fail_uncollected(credential: CredentialContext, organization_uuid: UUID, row: ExperimentEntry, cause: str) -> str:
+    """Record a trial that ended without a collectable archive as a failed attempt."""
+    observe_experiment_attempt(credential, organization_uuid, _attempt_token(row), "failed")
+    return cause
 
 
 def _create_and_report(

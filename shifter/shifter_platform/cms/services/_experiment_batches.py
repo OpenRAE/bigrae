@@ -12,6 +12,7 @@ from uuid import UUID, uuid4
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
 from cms.models import ExperimentBatch, ExperimentEntry, RaesPackageSource, TrialArchiveDestination, TrialArchiveReceipt
@@ -82,11 +83,15 @@ def list_experiment_entries(
             "state": row.state,
             "worker_ref": row.worker_ref or None,
             "collection_receipt_id": str(row.receipt_id) if row.receipt_id else None,
+            "run_status": row.receipt.run_status if row.receipt else None,
+            "data_complete": row.receipt.evidence_complete if row.receipt else None,
             "cleanup_recorded": bool(row.cleanup_receipt_json),
+            "attempt": row.replacement_ordinal or 0,
+            "replaces_attempt_id": str(row.replaces.token) if row.replaces else None,
         }
-        for row in ExperimentEntry.objects.filter(batch_id=batch_id, organization_uuid=organization_uuid).order_by(
-            "plan_entry_id"
-        )
+        for row in ExperimentEntry.objects.filter(batch_id=batch_id, organization_uuid=organization_uuid)
+        .select_related("receipt", "replaces")
+        .order_by("plan_entry_id", F("replacement_ordinal").asc(nulls_first=True))
     ]
 
 
