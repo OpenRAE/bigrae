@@ -96,7 +96,10 @@ The clean-state claim is `verified-clean`: the destroyed worker leaves no residu
 ## Trial replacement
 
 A trial fails when its archive reports a run status other than `completed`, or when its seal lists a gap in the required trial data.
-LilRAE lists each gap as a `required-data-missing` limitation: a participant that did not end normally, a missing raw chat, an uncaptured host audit log, or an uncaptured trial-end source.
+LilRAE lists each gap as a `required-data-missing` limitation.
+A gap is an abnormal participant end, a missing raw chat, an uncaptured host audit log, or an uncaptured trial-end source.
+A trial also fails when it ends without a collectable archive: its start failed, it exited unsealed, or it passed its deadline and drain.
+Such an attempt has no archive data.
 
 After cleanup, dispatch records a fresh trial for a failed entry when the experiment's RAES `replacement_policy` names `failed`, up to `max_replacements` per entry.
 The fresh trial is a pending entry row that keeps the admitted entry and run identity and names the attempt it replaces.
