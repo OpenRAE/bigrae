@@ -28,7 +28,9 @@ Intake refuses archive bytes that match a high-confidence credential pattern.
 The AWS documentation placeholder access key `AKIAIOSFODNN7EXAMPLE` is not a credential, so a scenario can plant it.
 
 The authorization surface inventory records its credential transport and per-operation authority.
-A future dispatcher can call the same intake service.
+Experiment dispatch calls the same intake service with `run_record_only`.
+In that mode, `validate_trial_run_record` verifies containment, the sealed bytes, and the run record. It reads no other record.
+The private `read_archived_run` operation retrieves a committed archive and returns only its run record.
 
 `TrialArchiveIdentity` carries expected experiment, plan, entry, run, and attempt identifiers.
 It also binds the admitted plan digest, entry digest, and run version.

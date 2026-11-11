@@ -8,11 +8,21 @@ provides cleanup evidence.
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 from raes_contracts.canonical import canonical_json_bytes
 from raes_contracts.contracts import TrialCleanupReceiptModel, validate_trial_cleanup_receipt
 from raes_contracts.contracts.admitted_trial_plan_ingress import parse_admitted_trial_plan_json
+
+
+def entry_inputs(inputs: dict[str, Any], replacement_json: str) -> dict[str, Any]:
+    """Return the batch inputs, or a replacement entry's own child plan and snapshot."""
+    if not replacement_json:
+        return inputs
+    child = json.loads(replacement_json)
+    entry_id = next(iter(child["plan"]["entries"]))
+    return {**inputs, "plan": child["plan"], "snapshots": {entry_id: child["snapshot"]}}
 
 
 def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
@@ -84,7 +94,8 @@ def worker_absence_cleanup_receipt(
             "cleanup_status": "succeeded",
             "obligation_results": results,
             "clean_state_claim": {
-                "disposition": "fresh-range-required",
+                # The destroyed worker leaves no residual state; a later trial gets a new worker.
+                "disposition": "verified-clean",
                 "boundary_refs": list(cleanup.clean_state.boundary_refs),
                 "evidence_refs": [evidence_ref],
             },
