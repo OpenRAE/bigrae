@@ -137,25 +137,41 @@ def _code_scanning_violations(
     rules: dict[str, dict[str, object]], workflows: dict[str, dict[str, object]]
 ) -> list[Violation]:
     """CodeQL gates the queue through a code_scanning rule, not a required check run."""
-    violations: list[Violation] = []
+    return [
+        *_code_scanning_check_run_violations(rules),
+        *_codeql_rule_violations(rules),
+        *_codeql_workflow_violations(workflows),
+    ]
+
+
+def _code_scanning_check_run_violations(rules: dict[str, dict[str, object]]) -> list[Violation]:
+    """Reject a required status check that the code scanning app reports."""
     checks = rules.get("required_status_checks", {}).get("required_status_checks")
-    for item in checks if isinstance(checks, list) else []:
-        if isinstance(item, dict) and item.get("integration_id") == _CODE_SCANNING_APP_ID:
-            violations.append(
-                _violation(
-                    DEV_RULESET_REL,
-                    f"required context '{item.get('context')}' comes from code scanning, which does not report "
-                    "on a merge group; require code scanning results with a code_scanning rule",
-                )
-            )
+    return [
+        _violation(
+            DEV_RULESET_REL,
+            f"required context '{item.get('context')}' comes from code scanning, which does not report "
+            "on a merge group; require code scanning results with a code_scanning rule",
+        )
+        for item in (checks if isinstance(checks, list) else [])
+        if isinstance(item, dict) and item.get("integration_id") == _CODE_SCANNING_APP_ID
+    ]
+
+
+def _codeql_rule_violations(rules: dict[str, dict[str, object]]) -> list[Violation]:
+    """Require a code_scanning rule for CodeQL."""
     tools = rules.get("code_scanning", {}).get("code_scanning_tools")
-    if not isinstance(tools, list) or not any(
-        isinstance(tool, dict) and tool.get("tool") == _CODEQL_TOOL for tool in tools
-    ):
-        violations.append(_violation(DEV_RULESET_REL, "the dev ruleset must have a code_scanning rule for CodeQL"))
+    if isinstance(tools, list) and any(isinstance(tool, dict) and tool.get("tool") == _CODEQL_TOOL for tool in tools):
+        return []
+    return [_violation(DEV_RULESET_REL, "the dev ruleset must have a code_scanning rule for CodeQL")]
+
+
+def _codeql_workflow_violations(workflows: dict[str, dict[str, object]]) -> list[Violation]:
+    """Require a CodeQL workflow that reports on dev pull requests and merge groups."""
     codeql = [(rel, wf) for rel, wf in workflows.items() if wf.get("name") == _CODEQL_WORKFLOW]
     if not codeql:
-        violations.append(_violation(DEV_RULESET_REL, "the code_scanning rule for CodeQL has no CodeQL workflow"))
+        return [_violation(DEV_RULESET_REL, "the code_scanning rule for CodeQL has no CodeQL workflow")]
+    violations: list[Violation] = []
     for rel, wf in codeql:
         violations.extend(_producer_violations(_CODEQL_WORKFLOW, rel, wf, []))
     return violations
