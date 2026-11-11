@@ -66,7 +66,7 @@ other workspace operation. Organization and workspace authority revisions are
 retained in sponsored grants. Source registration does not itself confer source-use or spending
 authority. Provider/authentication selection is independent of compute hosting;
 live edits require revision checks, grant fencing and retained accounting under
-ADR-060. The [source-management preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/source-management-preflight-2243.md)
+ADR-060. The [source-management preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/model-access/source-management-preflight-2243.md)
 records the incumbent validators and integration gaps. This clarifies intended
 architecture; current packaging restrictions remain until implementation and
 qualification, and no provider parity is asserted.
@@ -113,7 +113,7 @@ is not parity evidence. Delivery and proof owners are listed in the
 Registry checks validate documentation structure and existing import rules.
 They do not prove this proposed runtime boundary.
 
-The [M05 broker preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/broker-preflight-2122.md)
+The [M05 broker preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/model-access/broker-preflight-2122.md)
 applies this boundary to the existing listeners, shared contracts, Engine
 credentials/accounting and deployment validators. It records gaps in bounded
 stream cleanup, credential abuse controls, workload-identity claim binding,
@@ -130,7 +130,7 @@ never serialize rejected configuration. Real local TLS and PostgreSQL tests
 exercise the boundary alongside import enforcement. These are local proofs, not
 the live IAM/network/load evidence required to adopt this ADR's support claims.
 
-The [M06 GCP packaging preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/gcp-packaging-preflight-2123.md)
+The [M06 GCP packaging preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/model-access/gcp-packaging-preflight-2123.md)
 records the repository integration gates for broker-only runtime inventory,
 effective NetworkPolicy isolation, exact-target IAM, explicit range egress
 and the real deployment/provenance path. These apply this decision without

@@ -19,7 +19,7 @@ The shared cross-backend ``range_egress`` policy is intentionally *absent* here,
 :mod:`installation.range_egress` (verbatim, non-secret CIDR diagnostics, #775), and the
 loader (:mod:`installation.loader`) strips it out of ``settings`` before validating the
 backend model and validates it separately for every backend. See
-``docs/architecture/gcp-backend-bundle-migration-preflight-729.md``.
+``docs/_deprecated/architecture/gcp-backend-bundle-migration-preflight-729.md``.
 """
 
 from __future__ import annotations

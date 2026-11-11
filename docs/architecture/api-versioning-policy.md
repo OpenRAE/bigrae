@@ -9,7 +9,7 @@ Governing decision: [ADR-040](../adr/index.yaml)
 This policy defines what may change inside `/api/v1/`, what forces a new major,
 and how continuous integration enforces both. It is the operator-facing summary
 of ADR-040; the architecture rationale lives in
-[the publication preflight note](openapi-contract-publication-preflight-1329.md).
+[the publication preflight note](../_deprecated/architecture/openapi-contract-publication-preflight-1329.md).
 
 ## Source of truth
 

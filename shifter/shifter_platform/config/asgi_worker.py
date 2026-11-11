@@ -9,7 +9,7 @@ quiet terminal alive is the Uvicorn server sending protocol-level PING
 frames at ``ws_ping_interval``, which the ALB counts as activity.
 
 The architecture preflight
-(``docs/architecture/aws-long-lived-connection-drain-preflight-931.md``)
+(``docs/_deprecated/architecture/aws-long-lived-connection-drain-preflight-931.md``)
 forbids *assuming* Uvicorn's default ping is active in the built
 Gunicorn-worker path. The bare ``uvicorn_worker.UvicornWorker`` ships
 ``CONFIG_KWARGS = {"loop": "auto", "http": "auto"}`` and leaves the ping

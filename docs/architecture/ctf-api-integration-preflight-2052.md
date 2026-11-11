@@ -4,7 +4,7 @@ Inspected 2026-10-27 at `4b44a4285`. Architecture guidance only: no implementati
 plan, runtime change or delivery claim. ADR-051/052/065 and ADR-066's coordinated
 S8 activation boundary govern. Application paths below are relative to
 `shifter/shifter_platform/`. The [current communication contract](../technical/shifter_platform/ctf-communications.md)
-describes shipped source behavior; the [scheduling preflight](ctf-multi-event-communications-preflight-2052.md)
+describes shipped source behavior; the [scheduling preflight](../_deprecated/architecture/ctf-multi-event-communications-preflight-2052.md)
 covers the same issue's event-rescheduling and task-progress hazards.
 
 ## Decision and existing owners

@@ -5,14 +5,14 @@ Reference for supported communication APIs, channel limits, and receipt behavior
 The `/api/v1/ctf/communications/` controllers translate closed DRF inputs into
 `CampaignDraft` and the existing communication services. PostgreSQL remains the
 workflow authority; no second outbox, scheduler, or transport layer is added.
-See the [API and cutover preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-communication-api-cutover-preflight-2100.md)
+See the [API and cutover preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/ctf-communication-api-cutover-preflight-2100.md)
 and [operator guide](../../features/ctf-communications.md).
 
 The [console design (#2052)](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-communications-console-design-2052.md)
 records the preview, reporting, timeline, and console architecture. The #2052
 [API](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-api-integration-preflight-2052.md),
 [console](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-communications-console-boundaries-2052.md), and
-[scheduling](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-multi-event-communications-preflight-2052.md)
+[scheduling](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/ctf-multi-event-communications-preflight-2052.md)
 preflights record the boundaries.
 
 The [email delivery design (#1525)](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/email-delivery-design-1525.md),

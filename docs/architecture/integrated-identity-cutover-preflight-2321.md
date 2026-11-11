@@ -213,7 +213,7 @@ SQL/OpenFGA descendant proofs, not just mocked controller responses.
 
 ## PLAT-232 organization profile activation
 
-The [#1939 record](organization-profile-settings-preflight-1939.md) describes
+The [#1939 record](../_deprecated/architecture/organization-profile-settings-preflight-1939.md) describes
 the retained S1 surface, not S8 authority. Before activation its session-only
 org-admin/superuser rules remain intact. At S8, `organization.read` and
 `organization.update` use the shared principal policy and credential ceiling;

@@ -14,7 +14,7 @@ locals {
 
 # checkov:skip=CKV_AWS_21:Versioning intentionally disabled - ephemeral data, see #109
 # checkov:skip=CKV_AWS_18:Access logging deferred to the unified logging strategy - see #310
-# checkov:skip=CKV2_AWS_62:No S3 event consumer exists; creating an unused notification stream just to silence Checkov is an anti-pattern - see docs/architecture/s3-bucket-hardening-preflight.md. Revisit when a real consumer (Macie, SQS scanner, Lambda) is added.
+# checkov:skip=CKV2_AWS_62:No S3 event consumer exists; creating an unused notification stream just to silence Checkov is an anti-pattern - see docs/_deprecated/architecture/s3-bucket-hardening-preflight.md. Revisit when a real consumer (Macie, SQS scanner, Lambda) is added.
 # checkov:skip=CKV_AWS_144:Cross-region replication deferred - see #219
 resource "aws_s3_bucket" "this" {
   bucket = var.bucket_name

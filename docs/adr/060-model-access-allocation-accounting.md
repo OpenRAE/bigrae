@@ -108,7 +108,7 @@ demand-strategy/allocation threading are revisited when the broker capability
 lands. See
 [architecture § Launch-time model admission](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/model-access/architecture.md#launch-time-model-admission-m02-2119).
 
-The [M03 allocation preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/allocation-preflight-2120.md)
+The [M03 allocation preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/model-access/allocation-preflight-2120.md)
 records the current repository gaps and applies this decision to atomic
 launch-intent persistence, real-quota serialization, authoritative sharing
 resolution, generation-scoped release and configuration/error boundaries.

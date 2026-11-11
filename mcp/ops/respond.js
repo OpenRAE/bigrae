@@ -5,7 +5,7 @@
 // registrar format responses identically without re-declaring the
 // literal shape. `err(e)` intentionally surfaces `e.message` unchanged
 // — narrowing that is a separate compatibility/security decision (see
-// docs/architecture/mcp-ops-modularization-preflight-690.md), not a
+// docs/_deprecated/architecture/mcp-ops-modularization-preflight-690.md), not a
 // per-domain concern.
 
 export function ok(text) {

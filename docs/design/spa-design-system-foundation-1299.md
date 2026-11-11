@@ -8,7 +8,7 @@ cutover: design system foundation)
 Status: Design artifact for review
 
 Architecture preflight:
-[`docs/architecture/spa-design-system-foundation-preflight-1299.md`](../architecture/spa-design-system-foundation-preflight-1299.md)
+[`docs/_deprecated/architecture/spa-design-system-foundation-preflight-1299.md`](../_deprecated/architecture/spa-design-system-foundation-preflight-1299.md)
 
 Reference implementation:
 [`docs/design/design-system/`](design-system/) (`tokens.css`,

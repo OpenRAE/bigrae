@@ -8,7 +8,7 @@ every attacker-controlled field, emits one structured event through the existing
 ECS log pipeline, and returns fixed empty responses. It performs no
 authenticated or domain mutation, has no model/repository/audit/outbox, and
 never returns parser exceptions, report contents, or the platform error
-envelope. See ``docs/architecture/browser-security-policy-preflight-1520.md``.
+envelope. See ``docs/_deprecated/architecture/browser-security-policy-preflight-1520.md``.
 """
 
 from __future__ import annotations

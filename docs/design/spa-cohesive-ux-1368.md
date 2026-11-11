@@ -15,7 +15,7 @@ Related artifacts:
 - `docs/design/ux-003-oss-shifter-research-personas.md` (personas and JTBD).
 - `docs/design/spa-design-system-foundation-1299.md` (the locked Apple-dark
   Tailwind v4 plus shadcn/ui system).
-- `docs/architecture/spa-cohesive-ux-preflight-1368.md` (binding guardrails).
+- `docs/_deprecated/architecture/spa-cohesive-ux-preflight-1368.md` (binding guardrails).
 
 ## Purpose and Scope
 

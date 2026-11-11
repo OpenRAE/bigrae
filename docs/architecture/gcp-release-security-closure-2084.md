@@ -7,7 +7,7 @@ Date: 2026-09-12
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/2084>
 
 Design source:
-`docs/architecture/gcp-release-security-closure-preflight-2084.md`
+`docs/_deprecated/architecture/gcp-release-security-closure-preflight-2084.md`
 
 Inspection baseline: `99e2a610271985d9072e37612e13f00943e28076`
 (`origin/dev` when implementation started). This is not the selected release

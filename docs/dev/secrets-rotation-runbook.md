@@ -7,7 +7,7 @@ Operator procedures for the mechanisms defined in
 This guide covers RDS IAM, Django `SECRET_KEY`, and Cognito client-secret rotation with API-token cadence. It also describes the retained ASG-based Redis rotation mechanism and its current disabled status.
 
 Apply the architecture guardrails in
-[`../architecture/secrets-rotation-strategy-preflight-159.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/secrets-rotation-strategy-preflight-159.md)
+[`../_deprecated/architecture/secrets-rotation-strategy-preflight-159.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/secrets-rotation-strategy-preflight-159.md)
 before changing production rotation behavior. Never put a secret value in
 argv, an SSM command body, a workflow log, a Terraform output, or an issue
 comment.

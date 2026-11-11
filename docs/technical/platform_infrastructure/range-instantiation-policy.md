@@ -151,5 +151,5 @@ realization.
 
 - [GDC Provisioning](gdc-provisioning.md) - the retained non-user substrate
 - [GCP Infrastructure](gcp-infrastructure.md) - GKE, Helm, and GCP services
-- `docs/architecture/range-instantiation-policy-control-preflight-1354.md` - design rationale
+- `docs/_deprecated/architecture/range-instantiation-policy-control-preflight-1354.md` - design rationale
 - `docs/architecture/range-isolation-model.md` - containment model

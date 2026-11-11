@@ -2,7 +2,7 @@
 
 Design, 2026-10-27. The maintainer moved the open #2085 enforcement work into
 #2090. This note applies ADR-036. The
-[#1520 preflight](browser-security-policy-preflight-1520.md) remains the policy
+[#1520 preflight](../_deprecated/architecture/browser-security-policy-preflight-1520.md) remains the policy
 and collector design. This note records only the enforcement decisions.
 
 ## Decision

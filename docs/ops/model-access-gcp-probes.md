@@ -9,7 +9,7 @@ admission/enrollment path are available in the attested release image.
 ## Project and identity onboarding
 
 A model project may be the platform project, the dynamic-secret project, or a
-dedicated project ([#2243 source-management boundary](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/source-management-preflight-2243.md)).
+dedicated project ([#2243 source-management boundary](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/model-access/source-management-preflight-2243.md)).
 Broker and invocation identities stay distinct when projects coincide.
 
 Each model project needs billing enabled and the `shifter-deployment` label

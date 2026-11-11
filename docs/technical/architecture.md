@@ -387,7 +387,7 @@ a client-owned generation. Destroyed status alone is not verified absence:
 cleanup readback, residual obligations and retained recovery records matter.
 See [retry-safe operations](shifter_platform/retry-safe-range-operations.md).
 
-[Range-event delivery](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/range-event-delivery-preflight-476.md)
+[Range-event delivery](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/_deprecated/architecture/range-event-delivery-preflight-476.md)
 is an implementation record. The current input/result definitions are
 [Engine operation models](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/engine/models/_operation_io.py),
 with shared [wire envelopes](https://github.com/Brad-Edwards/bigrae/blob/dev/shifter/shifter_platform/shared/operation_envelope.py).

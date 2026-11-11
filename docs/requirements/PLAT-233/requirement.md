@@ -35,7 +35,7 @@ Workspace lifecycle is the core of a usable shared-infrastructure admin layer. A
 ## Traceability
 
 - IMPLEMENTS → ADR `docs/adr/066-account-principal-resource-scope.md` (Account hierarchy and S8 supersession)
-- DOCUMENTS → DOCUMENTATION `docs/architecture/workspace-lifecycle-preflight-1940.md` (Workspace lifecycle activation boundary)
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/workspace-lifecycle-preflight-1940.md` (Workspace lifecycle activation boundary)
 - IMPLEMENTS → GITHUB_ISSUE `2314` (Typed defaults and account ancestry)
 - IMPLEMENTS → CODE_FILE `shifter/shifter_platform/workspaces/services/_account.py` (Default workspace creation without implicit grants)
 - TESTS → TEST `shifter/shifter_platform/tests/workspaces/test_account_hierarchy.py` (Idempotent defaults, additional workspaces, and no implicit membership)

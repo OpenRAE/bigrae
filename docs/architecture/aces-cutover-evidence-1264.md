@@ -5,7 +5,7 @@ ACES-native provisioning-only backend can provision a range and report its
 operational evidence through the normal Shifter path, not a demo shortcut. It is
 the cutover evidence gate for ADR-031 / ADR-032.
 
-Design source: `docs/architecture/aces-runtime-target-backend-manifest-preflight-1233.md`.
+Design source: `docs/_deprecated/architecture/aces-runtime-target-backend-manifest-preflight-1233.md`.
 
 ## What it proves
 
@@ -34,7 +34,7 @@ concrete target instance passes an authenticated in-guest readback. The command
 re-asserts the redaction contract (ADR-031-R4) as defense in depth, tears the
 range down by `request_id`, and maps every failure to a bounded, sanitized
 diagnostic. The binding guardrails are in
-[aces-composition-realization-verification-preflight-1569.md](aces-composition-realization-verification-preflight-1569.md).
+[../_deprecated/architecture/aces-composition-realization-verification-preflight-1569.md](../_deprecated/architecture/aces-composition-realization-verification-preflight-1569.md).
 
 For an admitted `active_directory` topology, `succeeded` is downstream of a
 stronger guest-state gate: the provisioner has promoted and read back the exact
@@ -171,7 +171,7 @@ posture, and outputs. IPv6-only and mixed IPv4/IPv6 topologies are unsupported:
 the provisioner manifest publishes a `network-address-family = ipv4-only`
 constraint and non-IPv4 authored networks are rejected at admission before
 dispatch (issue #1568). See
-[aces-gce-network-address-family-preflight-1568.md](aces-gce-network-address-family-preflight-1568.md).
+[../_deprecated/architecture/aces-gce-network-address-family-preflight-1568.md](../_deprecated/architecture/aces-gce-network-address-family-preflight-1568.md).
 
 Image-registry management is a separate operator concern from package-source
 registration and conformance. A registered validation package without an

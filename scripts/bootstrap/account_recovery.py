@@ -2,7 +2,7 @@
 
 Issue #1639 friction point 3, which is the automated bootstrap-CLI leftover
 recovery deferred from #1472 to #1618. Implements the design record in
-``docs/architecture/aws-dirty-account-lifecycle-preflight-1472.md``.
+``docs/_deprecated/architecture/aws-dirty-account-lifecycle-preflight-1472.md``.
 
 A previously-deployed AWS environment that was incompletely torn down leaves
 control-plane residue whose Terraform state is gone (Budgets, RDS parameter

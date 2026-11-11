@@ -5,7 +5,7 @@ Reference for audit read permissions, filters, and response handling.
 The administrator audit and activity history (issue #1947, PLAT-240) is a
 read-only surface over the existing durable audit record. It adds no new store,
 writer, or event vocabulary. The native API and SPA use current action policy. The binding boundaries are recorded in
-[`administrative-audit-activity-preflight-1947.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/administrative-audit-activity-preflight-1947.md)
+[`administrative-audit-activity-preflight-1947.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/administrative-audit-activity-preflight-1947.md)
 and constrained by PLAT-241 (cloud-agnostic, proven components).
 
 ## Read API

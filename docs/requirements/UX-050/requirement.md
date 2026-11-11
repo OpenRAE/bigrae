@@ -28,5 +28,5 @@ A11y tooling catches a substantial fraction of WCAG failures automatically. With
 - TESTS → TEST `scripts/adr_guard/tests/test_accessibility_baseline.py` (baseline non-growth ratchet)
 - TESTS → TEST `shifter/shifter_platform/frontend/src/test/a11y-surface-reconcile.test.ts` (fail-closed surface reconciliation)
 - DOCUMENTS → ADR `docs/adr/index.yaml` (ADR-055 browser-regression and non-growing-baseline contract)
-- DOCUMENTS → DOCUMENTATION `docs/architecture/continuous-accessibility-enforcement-preflight-713.md` (Tool selection, CI cadence, coverage inventory, failure semantics, and baseline algorithm)
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/continuous-accessibility-enforcement-preflight-713.md` (Tool selection, CI cadence, coverage inventory, failure semantics, and baseline algorithm)
 - DOCUMENTS → GITHUB_ISSUE `713` (Architecture decision for continuous accessibility enforcement)

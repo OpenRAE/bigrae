@@ -4,7 +4,7 @@ Status: design. Date: 2026-11-02.
 
 Issue #2564 is the contract. This design supersedes the Google-managed
 encryption decision of ADR-008-R5 for the Terraform-owned GCS buckets. The
-[#962 record](gcp-gcs-cmek-preflight.md) stays as history.
+[#962 record](../_deprecated/architecture/gcp-gcs-cmek-preflight.md) stays as history.
 
 ## Scope
 
