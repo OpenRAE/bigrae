@@ -17,7 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 
 from gcp_inputs import LOCK_OBJECT, gcs_object_url, write_private_file
-from gcp_process import GcpCommandError, ProcessRunner
+from gcp_process import GcpCommandError, ProcessRunner, diagnostic_tail
 
 _GENERATION_RE = re.compile(r"^\d+$", re.ASCII)
 _PRECONDITION_MARKERS = ("412", "precondition", "conditionnotmet")
@@ -82,7 +82,10 @@ def acquire_lock(
                 f"the deployment lock is held by {holder}; wait for it to finish, or remove a stale lock "
                 "with --break-lock"
             )
-        raise GcpCommandError(f"cannot create the deployment lock (exit status {result.returncode})")
+        raise GcpCommandError(
+            f"cannot create the deployment lock (exit status {result.returncode}): "
+            + diagnostic_tail(result.stderr or result.stdout)
+        )
     generation = runner.run(
         ["gcloud", "storage", "objects", "describe", url, "--format=value(generation)"], env=env
     ).stdout.strip()

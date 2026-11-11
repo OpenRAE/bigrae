@@ -256,7 +256,10 @@ command again after a failure:
 3. It creates the initial operator password secret when it does not exist, and
    prints the command that reads it.
 4. It publishes the bundle to `gs://<project>-deployment-config`.
-5. It runs `gcp-deploy --first-install`. On a new deployment, that deploy:
+5. It waits until your identity can read that bucket as the deploy identity.
+   IAM can take several minutes to apply the new foundation grants. The
+   command stops after 10 minutes.
+6. It runs `gcp-deploy --first-install`. On a new deployment, that deploy:
    - imports the base range images that the release pins, as your identity;
    - generates the OpenFGA CA, server certificates, and keys into Secret
      Manager;
