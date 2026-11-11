@@ -265,35 +265,3 @@ def migrate_policy_datastore(runner: ProcessRunner, documents: Sequence[dict[str
         ],
         sensitive=True,
     )
-
-
-def retire_disabled_broker(runner: ProcessRunner, *, enabled: bool) -> None:
-    """Remove old compute before additive shared policies can broaden its egress."""
-    if enabled:
-        return
-    names = ("model-broker", "model-access-control", "model-provider-egress")
-    _delete(runner, "deployment", *names)
-    _delete(runner, "service,poddisruptionbudget", *names)
-    _delete(runner, "serviceaccount", "model-broker")
-    _delete(runner, "configmap", "model-broker-catalog")
-    _delete(
-        runner,
-        "networkpolicy",
-        "model-broker-boundary",
-        "model-access-control-ingress",
-        "model-provider-egress-boundary",
-    )
-    runner.run(
-        [
-            "kubectl",
-            "delete",
-            "networkpolicy",
-            "model-enrollment-control-egress",
-            "-n",
-            "shifter-jobs",
-            "--ignore-not-found",
-            "--wait=true",
-            "--timeout=180s",
-        ],
-        sensitive=True,
-    )

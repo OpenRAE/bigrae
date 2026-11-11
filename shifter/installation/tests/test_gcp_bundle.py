@@ -122,9 +122,7 @@ class TestGcpGeneratedOutputs:
             | set(runtime_inventory_gcp.GCP_CAPACITY_RUNTIME_ENV_KEYS)
             | set(runtime_inventory_gcp.GCP_HELM_RENDERED_RUNTIME_ENV_KEYS)
         )
-        from installation.gcp_model_broker import BROKER_RUNTIME_ENV_KEYS
-
-        assert names == expected | BROKER_RUNTIME_ENV_KEYS
+        assert names == expected
 
     def test_capacity_outputs_publish_their_actual_projection_owner(self):
         outputs = self._by_name()
@@ -161,9 +159,6 @@ class TestGcpGeneratedOutputs:
 
     def test_runtime_outputs_declare_their_isolated_consumers(self):
         for output in _gcp().generated_outputs:
-            if ProcessRole.MODEL_BROKER in output.process_roles:
-                assert output.process_roles == (ProcessRole.MODEL_BROKER,)
-                continue
             assert ProcessRole.PORTAL in output.process_roles, output.name
             assert ProcessRole.WORKER in output.process_roles, output.name
 

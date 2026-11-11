@@ -134,7 +134,6 @@ export interface LaunchRangeRequest {
   agent_id?: number;
   agents?: Record<string, number>;
   workspace_uuid?: string;
-  model_sources?: { aliases: Array<{ logical_alias: string; sources: Array<{ source_id: string; revision: number; weight?: number }> }> };
 }
 
 export function useLaunchRange() {

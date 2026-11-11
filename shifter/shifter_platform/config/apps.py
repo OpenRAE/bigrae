@@ -11,15 +11,13 @@ class PortalConfig(AppConfig):
     name = "config"
 
     def ready(self) -> None:
-        from cms.services import engine_invalidate_sharing_authority, load_runtime_file_inputs
+        from cms.services import load_runtime_file_inputs
         from config.credential_reference import resolve_credential_reference, resolve_local_credential_reference
         from config.credential_scope import credential_target_scope, temporary_participant_credential
         from config.health_checks import (
             register_audit_log_degraded_health_check,
             register_channel_layer_redis_health_check,
         )
-        from config.model_access_authority import register_model_access_authority_signals
-        from config.model_access_sharing import refresh_model_launch_projections
         from config.openfga_authorization import configured_authorization_provider
         from config.organizer_authority import register_organizer_authority_signals
         from config.service_identity import service_proof_profile, verify_service_credential
@@ -34,8 +32,6 @@ class PortalConfig(AppConfig):
             bind_service_credential_verifier,
             bind_temporary_credential_resolver,
         )
-        from shared.model_access.authority_port import bind_authority_invalidator
-        from shared.model_access.projection_port import bind_projection_refresher
         from shared.runtime_file_inputs import bind_file_input_provider
         from shared.service_proof import bind_service_proof_profile
 
@@ -43,8 +39,6 @@ class PortalConfig(AppConfig):
         # conflicting binding is a startup configuration error (#1523).
         bind_audit_writer(audit_log_writer)
         bind_file_input_provider(load_runtime_file_inputs)
-        bind_authority_invalidator(engine_invalidate_sharing_authority)
-        bind_projection_refresher(refresh_model_launch_projections)
         bind_authorization_provider_factory(configured_authorization_provider)
         bind_service_credential_verifier(verify_service_credential)
         bind_service_proof_profile(service_proof_profile)
@@ -55,7 +49,6 @@ class PortalConfig(AppConfig):
         bind_temporary_credential_resolver(temporary_participant_credential)
         register_audit_log_degraded_health_check()
         register_channel_layer_redis_health_check()
-        register_model_access_authority_signals()
         register_organizer_authority_signals()
         register_workspace_invitation_login_signal()
         register_session_assurance_signal()

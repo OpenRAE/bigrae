@@ -101,7 +101,6 @@ def crash_at(phase):
 @pytest.mark.parametrize("phase", ["reserve", "associate", "outbox", "receipt"])
 def test_retry_resumes_one_original_generation(launch_event, ctf_participant, organizer_credential, kind, phase):
     from ctf.services.range.recovery_steps import _ensure_rebuild_replacement_ready
-    from shared.model_access import OwnedReference
 
     recovery = (
         CTFRangeRecovery.objects.create(
@@ -122,7 +121,6 @@ def test_retry_resumes_one_original_generation(launch_event, ctf_participant, or
             return _ensure_rebuild_replacement_ready(
                 recovery,
                 ctf_participant,
-                OwnedReference(owner="ctf", reference=f"draw:{ctf_participant.pk}"),
                 organizer_credential,
             )
         return provision_event_spares(launch_event.pk, 1, operator=organizer_credential)
@@ -275,7 +273,6 @@ def test_event_cleanup_cancels_unbound_launch_without_resurrection(
     from ctf.services.range.launch_intents import execute_launch
     from ctf.services.range.lifecycle import cleanup_event_ranges
     from ctf.services.range.recovery_steps import _ensure_rebuild_replacement_ready
-    from shared.model_access import OwnedReference
 
     recovery = (
         CTFRangeRecovery.objects.create(
@@ -292,7 +289,6 @@ def test_event_cleanup_cancels_unbound_launch_without_resurrection(
             return _ensure_rebuild_replacement_ready(
                 recovery,
                 ctf_participant,
-                OwnedReference(owner="ctf", reference=f"draw:{ctf_participant.pk}"),
                 organizer_credential,
             )
         return provision_event_spares(launch_event.pk, 1, operator=organizer_credential)

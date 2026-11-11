@@ -114,18 +114,6 @@ def _add_render_parsers(subcommands: argparse._SubParsersAction) -> None:
     )
     _add_config_path_argument(render_range_telemetry)
     _add_output_argument(render_range_telemetry, _ENV_LINE)
-    render_model_catalog = subcommands.add_parser(
-        "render-model-access-catalog",
-        help="Render settings.model_access.catalog as a dedicated mounted JSON artifact.",
-    )
-    _add_config_path_argument(render_model_catalog)
-    _add_output_argument(render_model_catalog, "catalog JSON")
-    render_model_env = subcommands.add_parser(
-        "render-model-access-env",
-        help="Render model-access activation, mounted path, and expected digest env lines.",
-    )
-    _add_config_path_argument(render_model_env)
-    _add_output_argument(render_model_env, "model-access env lines")
     render_capacity = subcommands.add_parser(
         "render-capacity",
         help="Render the selected GCP shared-service capacity profile.",

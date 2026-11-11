@@ -25,8 +25,8 @@ Three defects make the broker unfit to run:
    certificates make every deploy fail once fewer than 14 days remain, and expire
    at day 30. The 365-day signing certificate makes deploys fail once fewer than
    30 days remain.
-2. A fresh tenant with a broker template fails its first deploy, because the trust
-   step runs before Terraform creates the cluster. The local bootstrap path needs
+2. A fresh tenant with a broker template fails its first deploy.
+   The trust step runs before Terraform creates the cluster. The local bootstrap path needs
    its trust objects created by hand.
 3. Every model call requires finite spend, rate, concurrency, and token limits.
    The schema states that omitting a limit never means unlimited.
@@ -57,7 +57,7 @@ no controls.
      manual steps.
 
    The intended end state is that guests reach models through that proxy rather
-   than keyless-direct; that switch needs its own decision.
+   than keyless-direct. That switch needs its own decision.
 
 ## Identity-cutover enforcement
 
@@ -69,6 +69,18 @@ Low-level accounting contracts remain available to their isolated tests.
 Keyless-direct and independently supported native source/range controls keep
 their existing boundaries. Mounted-route and direct-service tests verify that
 legacy operator flags and native credentials both leave sharing unavailable.
+The #2909 removal below supersedes this section.
+
+## Removal (#2909)
+
+[Issue #2909](https://github.com/OpenRAE/bigrae/issues/2909) removes the broker and its tests.
+The maintainer selected the whole broker subsystem on 2026-11-11.
+That includes model-access policy, allocation, accounting, sharing, tenant model sources, CTF model cohorts, and their tables.
+It also includes the broker-only authorization actions, settings, deployment resources, and interfaces.
+The [removal design](../architecture/model-access/broker-removal-preflight-2909.md) records the boundary and the data migration.
+
+Keyless-direct stays the only guest model path. Removal installs no replacement gateway.
+Applied migrations, frozen published snapshots, and Terraform `moved` blocks stay as history.
 
 ## Alternatives
 
@@ -76,18 +88,16 @@ legacy operator flags and native credentials both leave sharing unavailable.
 | --- | --- |
 | Fix the broker now: certificate renewal, bootstrap integration, optional limits | Rejected for now. No tenant uses it, and the work would go into a design planned for replacement. |
 | Keep ADR-067 as written | Rejected. Its gateway selection and its rejection of a no-limit mode conflict with the intended default of no controls. |
-| Remove the broker code now | Not decided here. Removal is a separate change. |
+| Remove the broker code now | Selected by #2909. See the removal section above. |
 
 ## Consequences
 
-The bootstrap guide and deploy reference mark the broker as not supported for use.
-The broker's code, migrations, and tests stay in the repository and in CI until a
-removal or replacement decision. Its tests must not make CI unreliable for other
-work. Model calls from ranges are not metered or limited, consistent with ADR-064.
+The broker code, settings, tables, and tests are no longer in the repository.
+Model calls from ranges are not metered or limited, consistent with ADR-064.
 
 The [#2274 replacement evaluation](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/gateway-replacement-evaluation-2274.md)
-compares maintained products and records the maintainer's 2026-10-13 selection
-of self-hosted LiteLLM OSS with deployment-owned rotation through documented key
-create/delete APIs. It defines proposed integration and qualification, including
+compares maintained products and records the maintainer's 2026-10-13 selection of self-hosted LiteLLM OSS.
+Deployment-owned rotation uses documented key create/delete APIs.
+The evaluation defines proposed integration and qualification, including
 secure credential delivery and budget continuity. This product selection changes
 no runtime or guest model path; the decisions above remain in force.

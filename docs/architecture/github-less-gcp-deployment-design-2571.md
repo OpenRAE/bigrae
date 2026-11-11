@@ -207,7 +207,7 @@ has one home outside GitHub.
 | `GCP_REGION` | `settings.region` |
 | `GCP_PUBLIC_HOSTNAME` | `deployment.domain` |
 | `SHIFTER_CONFIG_GCP_DEV` | `bigrae.yaml` |
-| `SHIFTER_CONFIG_OVERLAY_JSON` | `model-broker-overlay.template.json` |
+| `SHIFTER_CONFIG_OVERLAY_JSON` | Removed with the model broker (#2909). |
 | `GCP_IDENTITY_ALLOWED_EMAIL_DOMAIN` | Terraform value `identity_allowed_email_domain` |
 | `GCP_MASTER_AUTHORIZED_CIDRS` | Not read. The operator sets the Terraform value `gke_master_authorized_cidrs`. The CI adapter sets `[]`. |
 | `GCP_BOOTSTRAP_ADMIN_EMAIL` | `settings.operator_bootstrap.admin_email` |

@@ -53,7 +53,6 @@ from worker_host_observation import worker_observations_fragment
 
 if TYPE_CHECKING:
     from gcp_project_runtime import RegisteredProjectRuntime
-    from model_enrollment import EnrollmentDelivery
     from runtime_plugin_execution import GuestPluginPlans
 
 logger = logging.getLogger(__name__)
@@ -147,13 +146,11 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
     pre_mutation_release_attempted = False
     preparation_ready = False
     try:
-        from model_enrollment import load_model_enrollment
         from runtime_plugin_execution import load_prepared_plugin_run
 
         effective_run, plugin_plans = load_prepared_plugin_run(run)
         operation_input = effective_run.input
         preparation_ready = True
-        enrollment = load_model_enrollment(effective_run)
         raes_plan, cloud = prepare_cloud_plan(run, effective_run)
         if operation_input.range_backend == "ec2":
             from raes_ec2_runtime import provision_ec2_run
@@ -161,7 +158,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
             if operation_input.remote_access is not None:
                 # The EC2 shared pool is #2481; never launch without it silently.
                 raise RaesRealizationError("OpenVPN access is not realized by the EC2 range backend")
-            apply_result = provision_ec2_run(effective_run, plugin_plans, enrollment)
+            apply_result = provision_ec2_run(effective_run, plugin_plans)
         else:
             backend = _require_gce_live_fire_binding(operation_input)
             config = load_gce_range_cell_config(backend=backend)
@@ -171,7 +168,7 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
 
             def realize_cloud_before_guests() -> None:
                 """Run admitted cloud work only after the guest driver's complete preflight."""
-                cloud_observed.update(realize_cloud_projects(cloud, selected_config, enrollment))
+                cloud_observed.update(realize_cloud_projects(cloud, selected_config))
 
             network_allocation = _allocated_networks_for_provision(
                 request_id,
@@ -205,7 +202,6 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
                         openvpn=openvpn,
                     ),
                     plugin_plans,
-                    enrollment,
                 ),
                 delivery_bindings=operation_input.binding_transport(),
                 access_bindings=operation_input.access_binding_transport(),
@@ -246,16 +242,9 @@ def run_raes_range_provision(request_id: str, *, operation_id: str | None = None
     )
 
 
-def _apply_guest_callbacks(
-    options: RaesGceApplyOptions, plugins: GuestPluginPlans | None, enrollment: EnrollmentDelivery | None
-) -> RaesGceApplyOptions:
-    """Bind only admitted adapter and model callbacks to the existing guest driver."""
-    return replace(
-        options,
-        runtime_plugin=plugins.execute if plugins is not None else None,
-        model_enrollment=enrollment.execute if enrollment is not None else None,
-        model_broker=enrollment.gce_egress_capability() if enrollment is not None else None,
-    )
+def _apply_guest_callbacks(options: RaesGceApplyOptions, plugins: GuestPluginPlans | None) -> RaesGceApplyOptions:
+    """Bind only the admitted adapter callback to the existing guest driver."""
+    return replace(options, runtime_plugin=plugins.execute if plugins is not None else None)
 
 
 def _provision_evidence(

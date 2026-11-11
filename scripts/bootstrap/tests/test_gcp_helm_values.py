@@ -25,22 +25,6 @@ def _values(tmp_path: Path, outputs=None, **settings: object) -> dict[str, objec
     return generated_helm_values(inputs, sample_gcp_outputs(PROJECT) if outputs is None else outputs)
 
 
-def test_build_values_rejects_missing_broker_readback(tmp_path: Path):
-    """A deploy must not silently run disabled from stale Terraform output."""
-    broker = {
-        "enabled": True,
-        "hostname": "models.example.test",
-        "vip": "10.40.0.25",
-        "admitted_subnets": ["10.50.1.0/24"],
-        "tls_secret_name": "broker-tls-v1",
-        "control_tls_secret_name": "control-tls-v1",
-        "trust_configmap_name": "model-ca-v1",
-        "model_projects": {"models-example": "model-invoke"},
-    }
-    with pytest.raises(ValueError, match="missing applied Terraform output"):
-        _values(tmp_path, model_broker=broker)
-
-
 def test_build_values_supplies_gateway_native_authority(tmp_path: Path):
     values = _values(tmp_path)
     runtime = values["runtimeEnv"]

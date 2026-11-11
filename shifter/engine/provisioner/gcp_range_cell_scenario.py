@@ -297,9 +297,8 @@ def build_instance_plans(
     range_host_pool_slot: int | None = None,
 ) -> list[ResourceDict]:
     """Realize legacy scenario guests into provider-ready instance intents."""
-    # Default-on, keyless model access (ADR-064): attach the range host identity
-    # unless the ADR-059 broker is the model path (MODEL_BROKER_GUEST_VIP set).
-    attach_model_identity = bool(config.service_account_email) and not config.model_broker_vip
+    # Default-on, keyless model access (ADR-064): attach the range host identity.
+    attach_model_identity = bool(config.service_account_email)
     access_by_ref: dict[str, list[str]] = {}
     for declaration in access_declarations:
         access_by_ref.setdefault(str(declaration["target_ref"]), []).append(str(declaration["channel"]))

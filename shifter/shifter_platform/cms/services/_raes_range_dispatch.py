@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 
     from shared.authorization import TargetRef
     from shared.enums import RangeSource
-    from shared.model_access import OwnedReference
-    from shared.model_access.reservation import ModelLaunchScope
     from shared.schemas.range import RangeContext
 
 
@@ -41,9 +39,6 @@ def dispatch_range_launch(
         instantiation_purpose=instantiation_purpose,
         workspace_uuid=options.workspace_uuid,
         enforced_deadline=options.remote_access_teardown_at,
-        model_admission_subject=options.model_admission_subject,
-        model_launch_scope=options.model_launch_scope,
-        model_sources=options.model_sources,
         content_authorizer=options.content_authorizer,
         ctf_policy_workspace_id=options.ctf_policy_workspace_id,
     )
@@ -56,9 +51,6 @@ def create_range_dispatch(  # NOSONAR -- stable cross-service facade retained fo
     range_source: RangeSource | None = None,
     remote_access_teardown_at: datetime | None = None,
     workspace_uuid: str | UUID | None = None,
-    model_admission_subject: OwnedReference | None = None,
-    model_launch_scope: ModelLaunchScope | None = None,
-    model_sources: dict | None = None,
     content_authorizer: User | None = None,
     ctf_policy_workspace_id: int | None = None,
     *,
@@ -90,14 +82,11 @@ def create_range_dispatch(  # NOSONAR -- stable cross-service facade retained fo
             range_source=range_source,
             workspace_uuid=workspace_uuid,
             scope=scope,
-            model_sources=model_sources,
             event_options=NativeEventLaunchOptions(
                 owner_principal=owner_principal,
                 authority_action=authority_action,
                 authority_target=authority_target,
                 remote_access_teardown_at=remote_access_teardown_at,
-                model_admission_subject=model_admission_subject,
-                model_launch_scope=model_launch_scope,
                 request_uuid=request_uuid,
             ),
         )
@@ -118,9 +107,6 @@ def create_range_dispatch(  # NOSONAR -- stable cross-service facade retained fo
             ngfw_enabled=ngfw_enabled,
             remote_access_teardown_at=remote_access_teardown_at,
             workspace_uuid=workspace_uuid,
-            model_admission_subject=model_admission_subject,
-            model_launch_scope=model_launch_scope,
-            model_sources=model_sources,
             content_authorizer=content_authorizer,
             ctf_policy_workspace_id=ctf_policy_workspace_id,
         ),

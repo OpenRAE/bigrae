@@ -86,9 +86,7 @@ def show(store: str, *, runner: ProcessRunner | None = None) -> dict[str, object
             "operator_bootstrap": settings.operator_bootstrap is not None,  # type: ignore[attr-defined]
             "range_image_roles": sorted(inputs.range_images),
             "optional_inputs": sorted(
-                path.name
-                for path in (inputs.foundation_inputs_path, inputs.broker_template_path, inputs.retired_artifacts_path)
-                if path is not None
+                path.name for path in (inputs.foundation_inputs_path, inputs.retired_artifacts_path) if path is not None
             ),
         }
     finally:
