@@ -63,7 +63,9 @@ A test cycle can run for several hours. The gcloud user credentials and the
 Application Default Credentials (ADC) can expire during that time. Then the
 next gcloud call fails with `Reauthentication failed. cannot prompt during
 non-interactive execution`. Before each deploy or destroy, check both
-credentials:
+credentials.
+
+Read-only command:
 
 ```bash
 CLOUDSDK_CORE_ACCOUNT=<operator> gcloud auth print-access-token > /dev/null
