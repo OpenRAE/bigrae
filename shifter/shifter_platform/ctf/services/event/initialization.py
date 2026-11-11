@@ -28,9 +28,7 @@ class _InitializationIntent(BaseModel):
     content_digest: str | None = None
 
 
-def initialization_intent(
-    credential: CredentialContext, event_data: dict[str, object], content: ResolvedCtfContent | None
-) -> dict[str, object]:
+def initialization_intent(credential: CredentialContext, content: ResolvedCtfContent | None) -> dict[str, object]:
     """Persist references and pinned intent, without source content or bearer secrets."""
     try:
         return _InitializationIntent(

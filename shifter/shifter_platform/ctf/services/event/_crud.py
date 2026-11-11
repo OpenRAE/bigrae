@@ -117,7 +117,7 @@ def create_event_for_credential(
     resolved_content = resolve_scenario_ctf_content(scenario_id)
     from .initialization import initialization_intent, resume_event_initialization
 
-    intent = initialization_intent(credential, event_data, resolved_content)
+    intent = initialization_intent(credential, resolved_content)
 
     with transaction.atomic():
         fence_event_actor(_compatibility_actor if _compatibility_actor is not None else credential)

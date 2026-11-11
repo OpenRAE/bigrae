@@ -94,25 +94,29 @@ def _remove_retired_property(
         base_schema["required"].remove(property_name)
 
 
+def _remove_retired_operation(base: dict[str, Any], current: dict[str, Any], operation: dict[str, Any]) -> None:
+    """Project one exact retired write operation; refuse it if the current schema still has it."""
+    path, method = operation["path"], operation["method"]
+    if method not in {"post", "put", "patch", "delete"} or not isinstance(path, str) or not path.startswith("/"):
+        raise RuntimeError("Invalid retired write operation")
+    if method in current.get("paths", {}).get(path, {}):
+        raise RuntimeError(f"Retired API operation was reintroduced: {method} {path}")
+    base.get("paths", {}).get(path, {}).pop(method, None)
+
+
 def _apply_retirement(base: dict[str, Any], current: dict[str, Any], retirement: dict[str, Any]) -> None:
     """Project every exact path and response field in one retirement record."""
-    for retired_path in retirement.get("paths", []):
-        _remove_retired_path(base, current, retired_path)
-    for operation in retirement.get("operations", []):
-        path, method = operation["path"], operation["method"]
-        if method not in {"post", "put", "patch", "delete"} or not isinstance(path, str) or not path.startswith("/"):
-            raise RuntimeError("Invalid retired write operation")
-        if method in current.get("paths", {}).get(path, {}):
-            raise RuntimeError(f"Retired API operation was reintroduced: {method} {path}")
-        base.get("paths", {}).get(path, {}).pop(method, None)
-    for retired_property in retirement.get("response_schema_properties", []):
-        _remove_retired_property(base, current, retired_property)
-    for parameter in retirement.get("parameters", []):
-        _remove_retired_parameter(base, current, parameter)
-    for retired_enum in retirement.get("schema_enum_values", []):
-        _remove_retired_schema_enum_values(base, current, retired_enum)
-    for retired_enum in retirement.get("parameter_enum_values", []):
-        _remove_retired_parameter_enum_values(base, current, retired_enum)
+    projections = (
+        ("paths", _remove_retired_path),
+        ("operations", _remove_retired_operation),
+        ("response_schema_properties", _remove_retired_property),
+        ("parameters", _remove_retired_parameter),
+        ("schema_enum_values", _remove_retired_schema_enum_values),
+        ("parameter_enum_values", _remove_retired_parameter_enum_values),
+    )
+    for key, project in projections:
+        for entry in retirement.get(key, []):
+            project(base, current, entry)
 
 
 def _validate_retired_parameter(parameter: dict[str, str]) -> None:

@@ -98,7 +98,7 @@ def _check_compute(tally: _Tally, clients: GCEClients, plan: RangeCellPlan) -> N
         )
 
 
-def _check_network(tally: _Tally, clients: GCEClients, plan: RangeCellPlan, range_id: int) -> None:
+def _check_network(tally: _Tally, clients: GCEClients, plan: RangeCellPlan) -> None:
     """Read back the owned router, firewalls, subnets, and an owned network."""
     project = plan["project_id"]
     router_nat = plan.get("router_nat")
@@ -158,7 +158,7 @@ def inventory_raes_range_cell(
     tally = _Tally()
     project = plan["project_id"]
     _check_compute(tally, resolved_clients, plan)
-    _check_network(tally, resolved_clients, plan, range_id)
+    _check_network(tally, resolved_clients, plan)
     outcome = _outcome(tally)
     return {
         "outcome": outcome,

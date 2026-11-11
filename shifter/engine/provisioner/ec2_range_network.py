@@ -152,7 +152,7 @@ def plan_ec2_network(
     request_id, generation, range_id = scope.request_id, scope.generation, scope.range_id
     if (scope.environment, scope.region, scope.vpc_id) != (config.environment, config.region, config.vpc_id):
         raise Ec2NetworkError("EC2 range ownership is invalid")
-    networks = _validate_network_coverage(plan, config, allocated_cidrs, images, egress_mode)
+    networks = _validate_network_coverage(plan, allocated_cidrs, images, egress_mode)
     subnets, cidrs = _plan_subnets(networks, allocated_cidrs, config, range_id)
     guests: list[Ec2GuestPlacement] = []
     groups = []
@@ -178,7 +178,6 @@ def plan_ec2_network(
 
 def _validate_network_coverage(
     plan: RaesPlan,
-    config: Ec2NetworkConfig,
     allocated_cidrs: dict[str, str],
     images: dict[str, VerifiedEc2Image],
     egress_mode: str,
@@ -205,7 +204,7 @@ def _place_node(
 ) -> tuple[list[Ec2GuestPlacement], ipaddress.IPv4Network]:
     """Allocate every replica without crossing subnet capacity or reserved address space."""
     placed = []
-    network_address = _node_network(node, networks, cidrs, config)
+    network_address = _node_network(node, networks, cidrs)
     guest_network = cidrs[network_address]
     if (
         type(node.count) is not int
@@ -230,7 +229,6 @@ def _node_network(
     node: RaesPlanNode,
     networks: tuple[RaesPlanNetwork, ...],
     cidrs: dict[str, ipaddress.IPv4Network],
-    config: Ec2NetworkConfig,
 ) -> str:
     """Choose the sole admitted primary network and enforce internal-network egress."""
     if node.acls:

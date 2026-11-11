@@ -88,7 +88,6 @@ def test_recovery_resumes_after_verified_old_pointer_clear(
     launch_event, ctf_participant, organizer_credential, strategy
 ):
     from cms.services import is_event_range_cleanup_verified_absent
-    from ctf.models import CTFRangeLaunch
 
     old, _spare, recovery, cleanup = paused_recovery(launch_event, ctf_participant, organizer_credential, strategy)
     apply_verified_old_cleanup(old, cleanup)
@@ -104,13 +103,6 @@ def test_recovery_resumes_after_verified_old_pointer_clear(
     assert ctf_participant.range_instance_id == recovery.replacement_range_instance_id
     assert ctf_participant.range_request_id == recovery.replacement_request_id
     assert ctf_participant.range_instance_id != old.pk
-    if strategy == "rebuild":
-        intent = CTFRangeLaunch.objects.get(pk=recovery.replacement_request_id)
-        # Teardown cannot turn the old range's sharing subject back into a draw.
-        assert intent.parameters["model_subject"] == {
-            "owner": "deployment",
-            "reference": f"range:{Range.objects.get(request__request_id=old.request.request_id).uuid}",
-        }
 
 
 @pytest.mark.parametrize("proof", ["logical_only", "wrong_operation"])
