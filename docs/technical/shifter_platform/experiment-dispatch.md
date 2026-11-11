@@ -32,11 +32,12 @@ The launcher rechecks that authority before the provisioner starts.
 
 ## Staged inputs
 
-The coordinator stages two objects under `trial-inputs/<attempt>/` in the assets bucket:
+The coordinator stages three objects under `trial-inputs/<attempt>/` in the assets bucket:
 
 | Object | Content |
 | --- | --- |
 | `scenario.sdl` | The retained concrete trial SDL of the entry |
+| `plan.json` | The retained `admitted-trial-plan/v1` of the batch |
 | `trial.json` | Run ID, attempt ID, deadline, and the digest of `scenario.sdl` |
 
 The deadline is the staging time plus the entry's admitted attempt timeout.
@@ -55,9 +56,22 @@ The archive returns through a bounded copy, digest verification, and a create-on
 
 ## Archive intake
 
-Intake accepts the LilRAE trial seal (`lilrae-trial-record/v1`).
-The trial record's run, attempt and trial SDL digest must equal the expected identity.
+Intake accepts two seals.
+
+| Seal | Owner | Record |
+| --- | --- | --- |
+| `aptl.run-seal/v1` | LilRAE | A LilRAE trial record (`lilrae-trial-record/v1`) |
+| `bigrae.trial-seal/v1` | BigRAE (`shifter_adapter_sdk.trial.TrialSeal`) | A `partial` RAES `experiment-run/v1` record |
+
+For a LilRAE trial record, the run, attempt and trial SDL digest must equal the expected identity.
 The SDL digest is the digest of the retained entry's staged trial SDL.
+
+A BigRAE seal is for an apparatus that does not use LilRAE.
+Its `manifest.json` is an RAES run record that retains the staged `plan.json`.
+Intake binds the record to the expected plan, entry, run, and attempt with the released RAES validators.
+The record must be `partial`: the worker cannot attest the cleanup that BigRAE performs after the trial.
+BigRAE records that cleanup in its own cleanup receipt.
+
 Evidence that names another attempt is refused.
 Intake still validates every inventory member and checksum.
 A trial seal has no RAES plan, so its plan metadata is empty.
@@ -70,4 +84,4 @@ The clean-state claim is `fresh-range-required`.
 
 ## Dependency tuple
 
-The tuple is Python 3.14, Django 6.0, RAES 11.0.1, raes-env-packs 7.2.3, and adapter SDK 0.2.0.
+The tuple is Python 3.14, Django 6.0, RAES 11.0.1, raes-env-packs 7.2.3, and adapter SDK 0.3.0.

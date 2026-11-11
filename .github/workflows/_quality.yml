@@ -97,7 +97,7 @@ jobs:
         id: detect
         env:
           RUN_FULL_MATRIX: ${{ inputs.run_full_matrix }}
-          DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}
           DIFF_HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -118,7 +118,7 @@ jobs:
       - name: Detect quality-guard changes (independent of the classifier)
         id: selfcheck
         env:
-          DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before || '' }}
+          DIFF_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.event.before || '' }}
           DIFF_HEAD_SHA: ${{ github.sha }}
         run: |
           set -euo pipefail
@@ -1005,14 +1005,16 @@ jobs:
           oasdiff --version
 
       - name: Breaking-change gate (vs base branch contract)
-        if: ${{ github.event_name == 'pull_request' }}
+        # A merge group compares with its base commit, which includes the
+        # queued pull requests in front of it.
+        if: ${{ github.event_name == 'pull_request' || github.event_name == 'merge_group' }}
         working-directory: shifter/shifter_platform
         env:
           TESTING: "1"
           TEST_DB_BACKEND: sqlite
           DJANGO_DEBUG: "true"
           DJANGO_SECRET_KEY: ${{ github.run_id }}-${{ github.run_attempt }}
-          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha }}
         run: uv run python manage.py api_contract --breaking-against "${BASE_SHA}"
 
   provisioner-lint:
@@ -2860,6 +2862,8 @@ jobs:
         run: |
           if [ "${{ github.event_name }}" = "pull_request" ]; then
             RANGE="${{ github.event.pull_request.base.sha }}..${{ github.event.pull_request.head.sha }}"
+          elif [ "${{ github.event_name }}" = "merge_group" ]; then
+            RANGE="${{ github.event.merge_group.base_sha }}..${{ github.event.merge_group.head_sha }}"
           elif [ "${{ github.event_name }}" = "push" ] && [ "${{ github.event.before }}" != "0000000000000000000000000000000000000000" ]; then
             RANGE="${{ github.event.before }}..${{ github.sha }}"
           else
@@ -2943,6 +2947,8 @@ jobs:
   sonarcloud:
     permissions:
       contents: read
+      # Reads the merge queue entry on merge_group runs (ADR-003-R9).
+      pull-requests: read
     name: SonarCloud
     # Runs after the test jobs so their coverage reports can feed the scan.
     # success() keeps the implicit needs-passed guard that a custom if:
@@ -3081,6 +3087,18 @@ jobs:
         working-directory: shifter/engine/guacamole/authority-extension
         run: mvn --batch-mode --no-transfer-progress -DskipTests compile
 
+      # A merge group has no pull request payload, and SonarQube Cloud has no
+      # reference-branch new-code mode for a branch analysis of the temporary
+      # queue branch. The merge group run is a pull request analysis of the
+      # queued pull request against the queue base branch, so the quality gate
+      # measures the new code of the merge group (ADR-003-R9).
+      - name: Resolve merge group pull request
+        if: ${{ github.event_name == 'merge_group' }}
+        id: merge_group
+        uses: ./.github/actions/merge-group-prs
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
       - name: SonarQube Cloud scan
         # Gated on the upstream repository's immutable IDs, NOT on the variables
         # below being set (ADR-003-R7). `vars.SONAR_PROJECT_KEY != ''` would look
@@ -3102,7 +3120,8 @@ jobs:
         # itself a fork of the upstream, so `head.repo.fork` is true for every
         # PR opened from its own branches and would wrongly skip the scan on
         # every canonical-repo PR (#1310). `push` events (dev branch runs) carry
-        # no pull_request payload and always scan.
+        # no pull_request payload and always scan. `merge_group` runs are in the
+        # base repository context and always scan.
         if: >-
           ${{ github.repository_id == '1241599684'
           && github.repository_owner_id == '308592074'
@@ -3125,3 +3144,4 @@ jobs:
             -Dsonar.scanner.skipJreProvisioning=true
             -Dsonar.qualitygate.wait=true
             ${{ github.event_name == 'workflow_dispatch' && format('-Dsonar.branch.name={0}', github.ref_name) || '' }}
+            ${{ github.event_name == 'merge_group' && format('-Dsonar.pullrequest.key={0} -Dsonar.pullrequest.branch={1} -Dsonar.pullrequest.base={2}', steps.merge_group.outputs.pr-number, steps.merge_group.outputs.head-branch, steps.merge_group.outputs.base-branch) || '' }}

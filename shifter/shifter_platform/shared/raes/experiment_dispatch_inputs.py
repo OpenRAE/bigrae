@@ -1,7 +1,8 @@
 """Dispatch inputs derived from a retained experiment batch.
 
-Dispatch stages each entry's exact trial SDL, bounds the attempt by its admitted
-timeout, and reports cleanup as met by verified absence of the trial's worker VM.
+Dispatch stages each entry's exact trial SDL and the admitted plan, bounds the
+attempt by its admitted timeout, and reports cleanup as met by verified absence
+of the trial's worker VM.
 """
 
 from __future__ import annotations
@@ -17,6 +18,11 @@ from raes_contracts.contracts.admitted_trial_plan_ingress import parse_admitted_
 def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
     """Return the exact concrete trial SDL bytes that dispatch stages for one entry."""
     return canonical_json_bytes(inputs["snapshots"][entry_id])
+
+
+def trial_plan_bytes(inputs: dict[str, Any]) -> bytes:
+    """Return the exact admitted plan bytes that dispatch stages for every entry."""
+    return canonical_json_bytes(inputs["plan"])
 
 
 def trial_scenario_sha256(inputs: dict[str, Any], entry_id: str) -> str:
@@ -35,7 +41,7 @@ _OUTCOME_TRIGGERS = {
 
 def entry_attempt_timeout(inputs: dict[str, Any], entry_id: str) -> int:
     """Return the admitted attempt timeout of one retained entry."""
-    plan = parse_admitted_trial_plan_json(canonical_json_bytes(inputs["plan"]))
+    plan = parse_admitted_trial_plan_json(trial_plan_bytes(inputs))
     return plan.entries[entry_id].execution_controls.attempt_timeout_seconds
 
 
@@ -47,7 +53,7 @@ def worker_absence_cleanup_receipt(
     The worker VM is the trial's only resource boundary, so its verified provider
     absence satisfies every obligation that the outcome triggers.
     """
-    plan = parse_admitted_trial_plan_json(canonical_json_bytes(inputs["plan"]))
+    plan = parse_admitted_trial_plan_json(trial_plan_bytes(inputs))
     entry = plan.entries[entry_id]
     cleanup = plan.cleanup_plans[entry.execution_controls.cleanup_plan_ref]
     trigger = _OUTCOME_TRIGGERS[trial_outcome]

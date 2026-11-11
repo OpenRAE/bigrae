@@ -156,8 +156,14 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["trial-started"]
     assert dispatch.engine.workers[worker_id].qualified
     staged = dispatch.engine.trials[worker_id].staged
-    assert set(staged) == {"trial.json", "scenario.sdl"}
+    assert set(staged) == {"trial.json", "scenario.sdl", "plan.json"}
     assert all(("bigrae-assets", item.key) in dispatch.storage.objects for item in staged.values())
+    # #2861: the staged plan is the exact retained admitted plan.
+    from shared.raes.experiment_dispatch_inputs import trial_plan_bytes
+
+    assert dispatch.storage.objects[("bigrae-assets", staged["plan.json"].key)] == trial_plan_bytes(
+        dispatch.batch.inputs
+    )
     # A concurrent or repeated stager reuses the persisted deadline and the identical objects.
     from cms.services._experiment_dispatch import stage_trial
 

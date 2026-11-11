@@ -148,6 +148,13 @@
         "id": "ADR-003-R8",
         "description": "Repository security analysis used as a release gate MUST fail closed on producer failure and governed findings. CodeQL analysis/upload cannot use `continue-on-error`; the existing Python and JavaScript `security-extended` analyses remain intact. OSV-Scanner MUST discover and scan every owned `package-lock.json` and `uv.lock` as a lockfile, fail the Quality workflow when any scan fails or reports a vulnerability, and preserve per-lock SARIF evidence. Every Python package root with `pyproject.toml` MUST have a corresponding Dependabot uv owner in `.github/dependabot.yml`. Advisory configuration scans remain explicitly named advisory and do not substitute for these blocking source/dependency results or exact deployed-artifact evidence.",
         "checks": []
+      },
+      {
+        "id": "ADR-003-R9",
+        "description": "Pull requests to `dev` merge through a GitHub merge queue. `docs/adr/dev-ruleset.json` is the `dev` repository ruleset, because GitHub configures a merge queue only through a ruleset. The ruleset targets only `dev`; `main` does not use a merge queue and keeps strict status checks. The queue groups more than one pull request in a merge group (`max_entries_to_merge` and `max_entries_to_build` are at least 2). `dev` does not require strict status checks, and that is permitted only with the merge queue, which tests each pull request against the latest `dev`. Each required context has a producer workflow that runs on `pull_request` to `dev` and on `merge_group` (`checks_requested`), and a producer job condition that filters events includes `merge_group`. On a merge group, change detection and diff-based gates compare with `merge_group.base_sha`; `Lint PR title` checks the current titles of the queued pull requests that the merge group contains; and the SonarQube Cloud scan is a pull request analysis of the queued pull request against the queue base branch, because SonarQube Cloud has no reference-branch new-code mode for a branch analysis. No required check is removed, made non-blocking, or replaced by a check that always passes.",
+        "checks": [
+          "dev-merge-queue"
+        ]
       }
     ],
     "exceptions": [],
@@ -157,6 +164,10 @@
     "evidence": [
       ".github/workflows/_quality.yml",
       ".github/workflows/deploy.yml",
+      ".github/workflows/pr-title-lint.yml",
+      ".github/actions/merge-group-prs/action.yml",
+      "docs/adr/dev-ruleset.json",
+      "scripts/adr_guard/tests/test_merge_queue.py",
       ".ground-control.yaml",
       ".gc/plan-rules.md",
       "sonar-project.properties",

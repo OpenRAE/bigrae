@@ -22,6 +22,7 @@ triggers a deploy (#730).
 | Event | What Runs |
 |-------|-----------|
 | Pull request | Quality only; no deploy |
+| Merge group in the `dev` merge queue | `CodeQL`, `Lint PR title`, and PR Gate with Quality; no deploy |
 | Push to `dev` / `main` | Quality only; no deploy |
 | Manual dispatch, `environment: aws-dev` | Quality, then AWS dev deploy |
 | Release Please release on `main` | GCP release (`release-gcp.yml`) for the tagged commit; no deploy |
@@ -41,6 +42,40 @@ gh workflow run deploy.yml --ref <branch> -f environment=aws-dev
 
 The branch you run it from is the code that deploys; the `environment` input
 picks where it goes. `dev` is the integration branch (Quality only).
+
+## Merge Queue
+
+Pull requests to `dev` merge through a GitHub merge queue (ADR-003-R9).
+`main` does not use a merge queue and keeps strict status checks.
+
+The `dev` repository ruleset is in `docs/adr/dev-ruleset.json`.
+GitHub configures a merge queue only through a ruleset.
+The ruleset requires the `CodeQL`, `Lint PR title`, and `PR Gate` contexts.
+It does not require strict status checks, because the queue tests each pull request against the latest `dev`.
+The queue squash-merges (ADR-042-R4) and can put more than one pull request in a merge group.
+
+A pull request must pass the required checks before it enters the queue.
+The queue then makes a merge group commit that contains `dev`, the queued pull requests in front, and the pull request.
+Each required context runs again on the `merge_group` event for that commit.
+When a check fails, the queue removes the pull request, and the pull request does not merge.
+
+On a merge group, the workflows have no pull request payload:
+
+- Change detection and the diff-based gates compare with `merge_group.base_sha`.
+- `Lint PR title` reads the current titles of the queued pull requests in the merge group.
+- The SonarQube Cloud scan is a pull request analysis of the queued pull request against the queue base branch.
+
+The composite action `.github/actions/merge-group-prs` reads the queued pull requests from the GraphQL merge queue.
+The `dev-merge-queue` ADR guard fails when a required producer does not run on `merge_group`.
+
+A repository administrator applies the ruleset:
+
+```bash
+gh api -X POST "repos/{owner}/{repo}/rulesets" --input docs/adr/dev-ruleset.json
+```
+
+The ruleset replaces the classic branch protection for `dev`.
+Remove the classic `dev` protection after the ruleset is active.
 
 ## Workflow Files
 
@@ -101,8 +136,9 @@ The orchestrator uses path filters to run only relevant jobs:
 
 ## Quality Gate
 
-Runs on every PR, direct push to `dev`/`main`, and every manual deploy dispatch
-(the safety gate before an apply) unless the diff is ordinary docs-only.
+Runs on every PR, merge group, direct push to `dev`/`main`, and every manual
+deploy dispatch (the safety gate before an apply) unless the diff is ordinary
+docs-only.
 Guardrail docs such as `.github/pull_request_template.md`,
 `.github/copilot-instructions.md`, `docs/adr/**`, and the ADR enforcement
 guide are quality-relevant and still run Quality.
