@@ -48,6 +48,20 @@ def replace_experiment_entry(
         return "none"
     if ExperimentEntry.objects.filter(replaces=row).exists():
         return "replaced"
+    replacement = _compile_replacement(credential, organization_uuid, inputs, row, row.receipt.pk)
+    if replacement is not None:
+        record_experiment_replacement(credential, organization_uuid, token, replacement)
+    return "replacement-refused" if replacement is None else "replacement-recorded"
+
+
+def _compile_replacement(
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    inputs: dict[str, Any],
+    row: ExperimentEntry,
+    receipt_id: UUID,
+) -> dict[str, Any] | None:
+    """Compile the slot's next RAES replacement, or return None when RAES or the pack refuses it."""
     history = _slot_history(row)
     root_entry_id = history[0]["root_entry_id"] if history else row.plan_entry_id
     source = RaesPackageSource.objects.filter(
@@ -56,11 +70,11 @@ def replace_experiment_entry(
     try:
         if source is None:
             raise CMSError("The batch's pack is no longer registered")
-        failed_run = read_archived_run(credential, organization_uuid, row.receipt.pk)
+        failed_run = read_archived_run(credential, organization_uuid, receipt_id)
         with _pack_snapshot(source) as root:
             if not verify_pack_digest(root, source.package_digest):
                 raise CMSError("The batch's pack changed")
-            replacement = compile_experiment_replacement(
+            return compile_experiment_replacement(
                 root,
                 inputs,
                 root_entry_id=root_entry_id,
@@ -71,6 +85,4 @@ def replace_experiment_entry(
             )
     except (CMSError, ValueError, RaesPackageError, PackDigestError, CloudStorageError, OSError) as exc:
         logger.warning("experiment replacement refused entry=%s reason=%s", row.plan_entry_id, str(exc)[:200])
-        return "replacement-refused"
-    record_experiment_replacement(credential, organization_uuid, token, replacement)
-    return "replacement-recorded"
+        return None
