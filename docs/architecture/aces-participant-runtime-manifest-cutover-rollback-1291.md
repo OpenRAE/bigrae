@@ -68,7 +68,7 @@ The evidence bundle required to widen the claim, in order:
 
 The claim is an output of contract support plus conformance evidence. It is
 never a feature flag, a config toggle, or a documentation update by itself --
-per `docs/architecture/aces-participant-runtime-manifest-conformance-gate-preflight-1291.md`,
+per `docs/_deprecated/architecture/aces-participant-runtime-manifest-conformance-gate-preflight-1291.md`,
 turning current product surfaces into an ACES participant-runtime protocol by
 naming them in the manifest is explicitly out of bounds.
 
@@ -111,7 +111,7 @@ weaken, or replace any of their gates:
 - **Guacamole URLs and token lifecycle** -- `mission_control.guacamole`,
   `mission_control.guacamole_bootstrap`, and `GuacamoleBootstrapRequest` keep
   their signing, TTL, consume-and-clear, and owner-scoped polling semantics
-  (see `docs/architecture/guacamole-token-lifecycle-preflight-939.md`).
+  (see `docs/_deprecated/architecture/guacamole-token-lifecycle-preflight-939.md`).
 - **CTF participant range status** -- `ctf.services.participant`,
   `ctf.services.range`, and `ctf.bridges` keep CTF product identity, event
   access, scoring, and range lifecycle behind CTF services.
@@ -126,16 +126,16 @@ weaken, or replace any of their gates:
 
 ## Cross-references
 
-- `docs/architecture/aces-participant-runtime-manifest-conformance-gate-preflight-1291.md`
+- `docs/_deprecated/architecture/aces-participant-runtime-manifest-conformance-gate-preflight-1291.md`
   -- pre-implementation architecture guidance for #1291; this note fulfills
   its cutover/rollback documentation requirement.
-- `docs/architecture/aces-participant-runtime-mission-control-preflight-1236.md`
+- `docs/_deprecated/architecture/aces-participant-runtime-mission-control-preflight-1236.md`
   -- the participant/Mission Control boundary this note's "untouched
   workflows" section restates.
-- `docs/architecture/aces-runtime-target-backend-manifest-preflight-1233.md`
+- `docs/_deprecated/architecture/aces-runtime-target-backend-manifest-preflight-1233.md`
   -- the original manifest/profile design this note extends with
   participant-runtime-specific cutover and rollback detail.
-- `docs/architecture/aces-cutover-archive-plan-preflight-1238.md` -- the
+- `docs/_deprecated/architecture/aces-cutover-archive-plan-preflight-1238.md` -- the
   overall ACES cutover and archive doctrine (ADR-024/ADR-027) this note's
   posture is a specific instance of.
 - `docs/architecture/aces-migration-parity-inventory.yaml` row

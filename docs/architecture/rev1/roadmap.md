@@ -68,7 +68,7 @@ Required existing issues, all assigned to this milestone:
 Exit verification: [#1538](https://github.com/Brad-Edwards/bigrae/issues/1538).
 The repository-wide gate boundary and current RAES naming constraints are
 recorded in
-[`rev1-contract-runtime-exit-preflight-1538.md`](../rev1-contract-runtime-exit-preflight-1538.md).
+[`rev1-contract-runtime-exit-preflight-1538.md`](../../_deprecated/architecture/rev1-contract-runtime-exit-preflight-1538.md).
 The reviewed exit-verification evidence bundle is
 [`rev1-contract-runtime-exit-1538.md`](../rev1-contract-runtime-exit-1538.md).
 Only #728, #729, #1562, #1566, #1567, and #1569 are native blockers for #1538.

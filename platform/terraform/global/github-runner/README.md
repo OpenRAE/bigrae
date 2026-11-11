@@ -94,7 +94,7 @@ the committed tfvars (ADR-004-R14), and apply with
 --use-existing-network`. Setting `create_runner_network = false` in
 `local.auto.tfvars` alone has no effect: the `-var-file=<env>.tfvars` value
 overrides `*.auto.tfvars`. See
-[`docs/architecture/github-runner-placement-preflight-1437.md`](../../../../docs/architecture/github-runner-placement-preflight-1437.md).
+[`docs/_deprecated/architecture/github-runner-placement-preflight-1437.md`](../../../../docs/_deprecated/architecture/github-runner-placement-preflight-1437.md).
 
 Moving an existing runner fleet onto the managed network replaces every runner
 instance, because the instance subnet changes. Drain active jobs before migration. Retain a recovery path outside the fleet being replaced, then register replacement runners. See the runbook:

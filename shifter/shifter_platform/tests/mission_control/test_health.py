@@ -1,6 +1,6 @@
 """Tests for the portal ``/health`` readiness endpoint (#477).
 
-Per ``docs/architecture/portal-health-readiness-preflight-477.md`` the public
+Per ``docs/_deprecated/architecture/portal-health-readiness-preflight-477.md`` the public
 ``/health`` surface must reflect the real ``django-health-check`` DB / cache /
 storage probes. The ``HealthCheckMiddleware`` may normalize the Host header so
 ALB / ingress-IP probes admit, but it must not create the response. The

@@ -38,5 +38,5 @@ Redis, and external HTTPS load-balancer evidence; bounded `kubectl get` and
 and backend health. No missing signal is converted to zero.
 
 The binding architecture analysis is
-[GCP shared-service event capacity preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-shared-service-event-capacity-preflight-1816.md).
+[GCP shared-service event capacity preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/gcp-shared-service-event-capacity-preflight-1816.md).
 The operator procedure is [GCP event capacity profiles](../../ops/gcp-event-capacity.md).

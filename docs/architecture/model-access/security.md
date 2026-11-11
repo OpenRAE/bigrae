@@ -63,7 +63,7 @@ where IAM cannot constrain a specific publisher model.
 
 Model projects/accounts have explicit tenant/deployment access and billing
 ownership and are not dynamically created per range. Under
-[#2243](source-management-preflight-2243.md), a dedicated model project is
+[#2243](../../_deprecated/architecture/model-access/source-management-preflight-2243.md), a dedicated model project is
 optional: Vertex may use the platform project. Broker and invocation identities
 remain distinct, and effective IAM must deny invocation principals access to
 platform data and unrelated resources even when they reside in the same

@@ -1,7 +1,7 @@
 # GitHub Runner Health Alerts Runbook
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/292>
-Design note: [`docs/architecture/github-runner-health-alerting-preflight-292.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/github-runner-health-alerting-preflight-292.md)
+Design note: [`docs/_deprecated/architecture/github-runner-health-alerting-preflight-292.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/github-runner-health-alerting-preflight-292.md)
 Region: `us-east-2`
 
 This runbook is the operator procedure for responding to CloudWatch alarms on the

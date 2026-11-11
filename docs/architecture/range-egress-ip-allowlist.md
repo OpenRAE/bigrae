@@ -4,7 +4,7 @@ Scope: PLAT-220 (#775). Wave-2 platform requirement. This document records the
 shape of the configuration surface, the default behavior on each backend, and
 the mapping into cloud-native firewall syntax. The preflight artifact for the
 implementation is at
-[range-egress-ip-allowlist-preflight-775.md](range-egress-ip-allowlist-preflight-775.md).
+[../_deprecated/architecture/range-egress-ip-allowlist-preflight-775.md](../_deprecated/architecture/range-egress-ip-allowlist-preflight-775.md).
 ADR-017 records the platform-level rules this implementation is bound by.
 
 PLAT-220's refinements (PLAT-221 scenario overrides, PLAT-222 composable sets +
@@ -14,7 +14,7 @@ Issue #958 closed the renderer gap: `shifter-config render` now generates the
 provider Terraform bridge tfvars directly from `shifter.yaml`, so the operator
 no longer transcribes the allowlist into a second file (see [Operator
 workflow](#operator-workflow) below). The renderer preflight is
-[range-egress-allowlist-render-preflight-958.md](range-egress-allowlist-render-preflight-958.md).
+[../_deprecated/architecture/range-egress-allowlist-render-preflight-958.md](../_deprecated/architecture/range-egress-allowlist-render-preflight-958.md).
 
 Issue #1015 wired that renderer into the deploy paths: the AWS (`_range.yml`)
 deploy workflow and the GCP deploy command (`scripts/bootstrap/deploy.py
@@ -23,7 +23,7 @@ gcp-deploy`, which `_gcp-dev.yml` also runs since #2571) render the deployment's
 end-to-end and is no longer carried as an independently maintained copy in a
 deploy secret (see [CI and scripted deploys](#ci-and-scripted-deploys) below).
 The CI-render preflight is
-[range-egress-ci-render-preflight-1015.md](range-egress-ci-render-preflight-1015.md).
+[../_deprecated/architecture/range-egress-ci-render-preflight-1015.md](../_deprecated/architecture/range-egress-ci-render-preflight-1015.md).
 
 ## Public surface
 

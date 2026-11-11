@@ -224,13 +224,13 @@ Certificates remain valid through the trusted teardown deadline, subject to a
 Destroy, pause, or the deadline disconnects it within one pool heartbeat. On GCE only the provisioner reads the CA, the pool identity reads only
 its server identity, and the shared range-host identity cannot read VPN secrets.
 See [the provider-neutral range substrate](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/provider-neutral-range-substrate.md)
-for the ADR-039 contract and [the issue 1695 architecture preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-openvpn-participant-access-preflight-1695.md)
+for the ADR-039 contract and [the issue 1695 architecture preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/ctf-openvpn-participant-access-preflight-1695.md)
 for the threat model and containment decisions.
 
 ### Scoped communications (ADR-051)
 
 `ctf.services.communication` owns the durable domain for scoped communications,
-detailed in the [communications preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/ctf-communications-raes-inject-preflight-2047.md).
+detailed in the [communications preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/ctf-communications-raes-inject-preflight-2047.md).
 The [communication reference](ctf-communications.md) describes delivered HTTP, worker, email, inbox, and browser behavior.
 A planned feature is supported only when its owning service and contract admit it.
 

@@ -13,7 +13,7 @@ Issue [#2122](https://github.com/Brad-Edwards/bigrae/issues/2122) completes the
 existing standalone broker and Engine control boundary. This is a local runtime
 contract, not a cloud, load, restore or full PLAT-202 qualification record.
 [ADR-059](../../adr/059-range-model-access-broker.md), the
-[preflight](broker-preflight-2122.md) and [security design](security.md) retain
+[preflight](../../_deprecated/architecture/model-access/broker-preflight-2122.md) and [security design](security.md) retain
 their authority and qualification requirements.
 
 ## Ownership and closed routes

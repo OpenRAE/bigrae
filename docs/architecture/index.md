@@ -5,6 +5,7 @@ for the runtime, ownership and support model. It is published through the
 single MkDocs site and linked from the root README.
 
 This directory contains explanations of designs and references to implementation evidence.
+Historical issue records are in [`docs/_deprecated/architecture/`](../_deprecated/README.md).
 Preflights record constraints at an issue's review baseline.
 Their status notes apply at direct links as well as through this index.
 They do not prove implementation, activation, support, or live qualification.
@@ -36,7 +37,7 @@ Use the issue number or subject to locate a record without treating it as
 installation guidance:
 
 ```shell
-rg --files docs/architecture | rg 'preflight|review'
+rg --files docs/architecture docs/_deprecated/architecture | rg 'preflight|review'
 ```
 
 REV1 and later adoption reviews are dated assessments. Their evidence limits and

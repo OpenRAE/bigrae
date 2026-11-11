@@ -16,7 +16,7 @@ proof. A configured endpoint or successful render is not a qualified model
 service. Do not enable this package with an image missing those consumers.
 
 The file-backed inventory restrictions below describe the current package.
-[#2243's source-management boundary](source-management-preflight-2243.md)
+[#2243's source-management boundary](../../_deprecated/architecture/model-access/source-management-preflight-2243.md)
 permits platform-project Vertex with distinct invocation/broker identities and
 tenant-managed source publication.
 

@@ -10,9 +10,9 @@ This document is the canonical reference for the subsystem. The point-in-time
 design notes under `docs/architecture/guacamole-*-preflight-*.md` record the
 decisions that produced the current behaviour:
 
-- `docs/architecture/guacamole-first-click-rdp-preflight-395.md` (token-readiness retry)
-- `docs/architecture/guacamole-token-affinity-preflight-928.md` (single client replica)
-- `docs/architecture/guacamole-token-lifecycle-preflight-939.md` (at-rest token lifecycle)
+- `docs/_deprecated/architecture/guacamole-first-click-rdp-preflight-395.md` (token-readiness retry)
+- `docs/_deprecated/architecture/guacamole-token-affinity-preflight-928.md` (single client replica)
+- `docs/_deprecated/architecture/guacamole-token-lifecycle-preflight-939.md` (at-rest token lifecycle)
 
 ## Architecture overview
 

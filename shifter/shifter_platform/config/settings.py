@@ -249,7 +249,7 @@ from config._terminal_settings import *  # noqa: E402  # NOSONAR
 # exceed the maximum gap between heartbeats; the default is set well above the
 # legitimate spin-up window (default range_spinup_minutes=30) plus retry/poll
 # jitter so a genuinely in-flight spin-up is never marked FAILED on the
-# multi-node portal. See docs/architecture/ctf-scheduler-concurrency-preflight-942.md.
+# multi-node portal. See docs/_deprecated/architecture/ctf-scheduler-concurrency-preflight-942.md.
 CTF_SCHEDULER_STALE_TASK_MINUTES = _env_int("CTF_SCHEDULER_STALE_TASK_MINUTES", 120)
 
 # CTF-1003: automated range cleanup destroys ranges in batches with a pause

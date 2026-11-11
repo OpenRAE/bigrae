@@ -373,7 +373,7 @@ existing broker Vertex path into a qualified invocation and usage adapter.
 [ADR-059](../adr/059-range-model-access-broker.md),
 [ADR-060](../adr/060-model-access-allocation-accounting.md),
 [ADR-061](../adr/061-model-access-operations-qualification.md)
-and the [Vertex adapter preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/vertex-adapter-preflight-2124.md)
+and the [Vertex adapter preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/model-access/vertex-adapter-preflight-2124.md)
 retain their authority. Live qualification evidence is owned by
 [#2334](https://github.com/Brad-Edwards/bigrae/issues/2334); local rendering,
 transport tests and a successful count are not live invocation proof.
