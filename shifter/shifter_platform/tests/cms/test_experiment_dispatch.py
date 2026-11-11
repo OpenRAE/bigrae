@@ -160,14 +160,9 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["trial-started"]
     assert dispatch.engine.workers[worker_id].qualified
     staged = dispatch.engine.trials[worker_id].staged
-    assert set(staged) == {"trial.json", "trial-unit.json", "scenario.sdl", "plan.json"}
+    # #2906: the trial unit is the only staged copy of the admitted plan.
+    assert set(staged) == {"trial.json", "trial-unit.json", "scenario.sdl"}
     assert all(("bigrae-assets", item.key) in dispatch.storage.objects for item in staged.values())
-    # #2861: the staged plan is the exact retained admitted plan.
-    from shared.raes.experiment_dispatch_inputs import trial_plan_bytes
-
-    assert dispatch.storage.objects[("bigrae-assets", staged["plan.json"].key)] == trial_plan_bytes(
-        dispatch.batch.inputs
-    )
     from shifter_adapter_sdk.trial import TrialInput
 
     control = TrialInput.model_validate_json(dispatch.storage.objects[("bigrae-assets", staged["trial.json"].key)])

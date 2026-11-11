@@ -172,8 +172,8 @@ provisioner process. A compatibility probe alone does not qualify a live range.
 To deploy, update, destroy, or debug a GitHub-less GCP deployment, follow
 `.claude/skills/gcp-tenant-operate/SKILL.md`. To publish the release that it
 deploys, follow `.claude/skills/gcp-release/SKILL.md`. These files are the
-agent workflow for Codex and Claude. They link the handbook, RB023, and the
-standup gotchas, which hold the procedure.
+agent workflow for Codex and Claude. They link the install guide, the handbook,
+RB023, and the contributor deploy page, which hold the procedure.
 
 
 ## Documentation authoring

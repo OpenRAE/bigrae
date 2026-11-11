@@ -4,8 +4,9 @@ Applicability: GCP deployments that use the GitHub-less deploy path (ADR-070).
 Operator: platform owner. Source reviewed: 2026-11-09 at revision `5954ab137`.
 This review did not execute a live deployment.
 
-Use these how-to procedures to install, update, and remove a GCP deployment from a verified release.
-Start a new installation with [Install on Google Cloud](../../getting-started/install-gcp.md).
+Use this handbook for the detailed GCP lifecycle tasks and reference: commands, inputs, stages, and retained resources.
+For the installation, update, and removal procedure, use [Install on Google Cloud](../../getting-started/install-gcp.md).
+For contributor releases and test deploys, use [Contributor GCP releases and test deploys](../../dev/gcp-contributor-deploy.md).
 The deployment needs no GitHub access, GitHub Environment, self-hosted runner, or repository checkout.
 The deployer image contains `scripts/bootstrap/deploy.py` and the release's tools.
 
@@ -19,7 +20,7 @@ An operator installs with one bundle and one command, `gcp-install`
 
 The retained CI adapter (`_gcp-dev.yml`) uses the same commands.
 `deploy.yml` currently has no selectable GCP target.
-Contributor GitHub inputs are in [deploy-secrets.md](../../dev/deploy-secrets.md#gcp-gcp-dev).
+Its inputs are in [Retained GCP CI deploy adapter](../../dev/gcp-ci-adapter.md).
 When a command fails, use [RB023](../../runbooks/rb023-gcp-deployment.md).
 
 ## Terms
@@ -39,7 +40,11 @@ When a command fails, use [RB023](../../runbooks/rb023-gcp-deployment.md).
 
 1. Make sure that the GCP project exists and that billing is on.
 2. Enable every Vertex AI model that the deployment configuration uses. The
-   Vertex AI API alone does not enable a model.
+   Vertex AI API alone does not enable a model. An authorized administrator
+   must accept applicable provider or Marketplace terms and confirm regional
+   availability. Missing model enablement can leave participant model calls
+   failing after deployment. Confirm that project policy permits every
+   required Google Cloud API.
 3. Make sure that your Google identity can administer the project IAM:
    `roles/owner`, or `roles/resourcemanager.projectIamAdmin`,
    `roles/iam.roleAdmin`, and `roles/iam.serviceAccountAdmin`. `gcp-install`
@@ -61,17 +66,10 @@ When a command fails, use [RB023](../../runbooks/rb023-gcp-deployment.md).
 6. Use the deployer image of the release
    ([Get and verify the deployer image](#get-and-verify-the-deployer-image)).
    The image holds every tool at the release version.
-7. If you run the commands from a checkout instead, check out the exact release
-   revision with no local changes. Install these tools on `PATH`: `gcloud`,
-   `gke-gcloud-auth-plugin`, `terraform`, `kubectl`, `helm`, `oras`, `trivy`,
-   `git`, and `uv`. The command stops when a tool is missing.
-8. From a checkout, run each command through the `scripts/bootstrap` uv
-   project. The project holds the Python dependencies of the commands. In this
-   guide, `./scripts/bootstrap/deploy.py` means:
-
-   ```bash
-   uv run --project scripts/bootstrap scripts/bootstrap/deploy.py <command>
-   ```
+7. To run the commands from a checkout instead, follow
+   [Deploy from a checkout](../../dev/gcp-contributor-deploy.md#deploy-from-a-checkout).
+   In this guide, `./scripts/bootstrap/deploy.py` means the deploy command in
+   the deployer image or in that checkout.
 
 The foundation needs project administration rights. `gcp-images` runs as your
 own identity: it creates Compute Engine images and a temporary transfer bucket
@@ -83,94 +81,51 @@ Confirm project administration, DNS authority, quota, billing, and the maintenan
 Installation creates billable compute, databases, networking, storage, and images.
 The evidence bucket has locked 90-day retention; its objects cannot be removed before retention ends.
 
+## Lifecycle commands
+
+This table is the single list of the GCP lifecycle commands. The procedures
+link to it. Run `deploy.py <command> --help` for every flag.
+
+| Command | Use | Check after it |
+| --- | --- | --- |
+| `gcp-install --inputs <bundle directory>` | First installation: validate the bundle, apply the foundation, create the operator password secret, publish the bundle, and run `gcp-deploy --first-install` ([Install](#install)). | The foundation, the operator password secret, the bundle, the base images, the OpenFGA credentials and model, the first administrator, and the catalog. Record the printed ingress address and the password read command. Point the DNS A record at the address, unproxied. |
+| `gcp-deploy --store gs://<bucket>` | Complete the first installation after DNS resolves, and update to a newer release ([Update and roll back](#update-and-roll-back)). Add `--first-install` until DNS points at the ingress address. | The certificate becomes `ACTIVE`. `Running workload images match the approved release`. `Post-deploy smoke passed`, with no skipped smoke. Verify provider cleanup and the removal of the temporary smoke Job and Secret. |
+| `gcp-images --project-id <project> --region <region> --store gs://<bucket>` | Import the guest images of a release before an update or a first deploy ([Author and publish the deployment input bundle](#author-and-publish-the-deployment-input-bundle), step 8). | `range-images.json` names the `linux`, `kali`, and `dc` roles that the release supplies. |
+| `gcp-config publish\|pull\|show\|set-range-image --store gs://<bucket>` | Publish, pull, and show the deployment input bundle, and record one range image. | `gcp-config show` shows the expected bundle. |
+| `preflight --cloud gcp --env <environment> --store gs://<bucket>` | Check the tools and the bundle before a change ([Run the preflight](#run-the-preflight)). | The check reports no gap. It makes no change. |
+| `gcp-foundation --inputs <file>` | Apply or upgrade the foundation by hand ([Apply the foundation without GitHub](#apply-the-foundation-without-github)). `gcp-install` runs it for a first installation. | Check the project and the bucket names in the plan before you apply it. The evidence bucket retention lock is permanent. |
+| `gcp-release-scan --release-manifest <file> --project-id <project> --environment <environment>` | Scan the exact images of a release as the release-scan identity. `gcp-deploy` runs the scan itself. | `verdict.json` under `release-scans/` ([Evidence](#evidence)). |
+| `gcp-smoke --store gs://<bucket>` | Run the advisory range smoke alone ([Smoke and exit status](#smoke-and-exit-status)). | `Post-deploy smoke passed`. The smoke range reaches a terminal state, and its provider resources are gone. |
+| `gcp-destroy --store gs://<bucket> --confirm <environment>` | Tear down the platform resources as the destroy identity ([Tear down](#tear-down)). | The application and infrastructure are removed. The retained resources remain and can incur cost. |
+| `gcp-cmek-migrate --bucket <bucket> --key <key>` | Rewrite the live objects of an operator-owned bucket, such as the private pack bucket, with its customer-managed key ([Bucket encryption keys](#bucket-encryption-keys)). | A second run rewrites nothing. |
+
+A reinstall after a destroy runs `gcp-install` again. The ingress address can
+change, so check the DNS record.
+
+Each lifecycle command reads a deployment input bundle from `--store
+gs://<bucket>[/<prefix>]` or `--inputs <dir>`. By default, the command
+impersonates the purpose identity of each stage (`--identity impersonate`). CI
+uses `--identity ambient`, because the job credentials already are that
+identity.
+
 ## Publish a release
 
-The repository maintainer does this procedure once for each release. A
-deployment operator only consumes the result. One release serves every
-deployment, and a new deployment needs no change here.
-
-1. Create the `gcp-release` GitHub Environment once. Limit it to the release
-   refs `refs/heads/main`, `refs/heads/dev`, and `refs/heads/deploy-test`.
-   Protect each of these branches. The Environment holds no secrets or
-   variables.
-2. Merge the Release Please release PR on `main`. The `release-gcp` job of
-   `release-please.yml` then builds the release for the tagged commit (#2660).
-   To build a test release from `dev` or `deploy-test`, or to publish a release
-   again, dispatch the workflow. The `version` input is optional; an empty value
-   uses `version.txt`.
-
-   ```bash
-   gh workflow run release-gcp.yml --ref dev
-   ```
-
-3. Read the deployer image digest and the release manifest in the run summary.
-4. After the first release only, make each package public in the GitHub
-   package settings: `portal`, `provisioner`, `guacd`, `guacamole-client`,
-   `openvpn`, and `deployer-gcp`. GHCR makes a new package private.
-
-The workflow publishes to `ghcr.io/<owner>/<repository>`, in lower case, with
-the workflow `GITHUB_TOKEN`. It uses no cloud identity.
-
-The workflow scans the deployer image digest before it attests the image. The
-scan is a blocking Trivy gate: `trivy image --scanners vuln --severity
-HIGH,CRITICAL --ignore-unfixed --exit-code 1`. Trivy reads its vulnerability
-databases from `mirror.gcr.io`. A HIGH or CRITICAL finding with a fix stops the
-release.
-
-The only accepted exposures are in `platform/deployer/gcp/trivyignore.yaml`.
-Each entry is a HIGH finding in a vendor binary that no vendor build fixes yet.
-Each entry expires on 2026-11-30. After that date, the gate blocks each release
-until a maintainer updates the tools.
-
-A developer builds the guest images in a build project and publishes them to
-`ghcr.io/<owner>/<repository>/gce-<role>` with signed provenance. Each release
-names the newest publication of each role whose provenance verifies, and the
-release manifest carries the authorization model that each deploy publishes. A
-release stops when a guest image is missing or does not verify. The
-[guest image design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md) describes the build
-project and the pipeline.
+The repository maintainer publishes each release with `release-gcp.yml`. A
+deployment operator only consumes the result. The procedure is in
+[Publish a release](../../dev/gcp-contributor-deploy.md#publish-a-release).
 
 ## Get and verify the deployer image
 
-1. Set the release registry and the release revision:
-
-   ```bash
-   REG=ghcr.io/<owner>/<repository>
-   REV=<40-hex revision>
-   ```
-
-2. Resolve the deployer image digest:
-
-   ```bash
-   DIGEST=$(oras resolve "$REG/deployer-gcp:$REV")
-   ```
-
-3. Verify the build provenance of the deployer image. Set `<release ref>` to
-   `refs/heads/main` for a tagged release, or to the branch of a test release:
-
-   ```bash
-   cosign verify-attestation --type https://slsa.dev/provenance/v1 \
-     --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-     --certificate-identity "https://github.com/<owner>/<repo>/.github/workflows/release-gcp.yml@<release ref>" \
-     --certificate-github-workflow-sha "$REV" "$REG/deployer-gcp@$DIGEST"
-   ```
-
-4. Read the release manifest:
-
-   ```bash
-   docker run --rm --entrypoint cat "$REG/deployer-gcp@$DIGEST" /opt/bigrae/release.json
-   ```
-
-5. Run each command in this guide through the deployer image. Always use the
-   digest, not the tag:
-
-   ```bash
-   docker run --rm -it --user "$(id -u):$(id -g)" -e HOME=/tmp \
-     -e CLOUDSDK_CONFIG=/gcloud \
-     -e GOOGLE_APPLICATION_CREDENTIALS=/gcloud/application_default_credentials.json \
-     -v "$HOME/.config/gcloud:/gcloud" \
-     "$REG/deployer-gcp@$DIGEST" gcp-deploy --store gs://<bucket>
-   ```
+1. Resolve, verify, and pull the deployer image, and save its release
+   manifest, with step 3 of
+   [Install on Google Cloud](../../getting-started/install-gcp.md#3-select-and-verify-a-release).
+   The provenance check names the release ref: `refs/heads/main` for a tagged
+   release, or the branch of a test release.
+2. Run each command in this guide through the deployer image by its digest,
+   not its tag. Use the `deploy` shell function of step 5 of
+   [Install on Google Cloud](../../getting-started/install-gcp.md#5-define-the-container-command).
+   It pins the operator account and mounts your Google credentials and the
+   bundle directory.
 
 The deployer image sets `BIGRAE_RELEASE_MANIFEST` and
 `BIGRAE_SOURCE_REVISION`. The command uses that manifest by default. It also
@@ -178,18 +133,7 @@ checks that its own revision equals the manifest revision. A checkout must be a
 clean checkout of that revision; otherwise the command stops.
 
 A test deployment can run deploy tooling that is not the release revision
-(#2689). Use this to test a deploy-script change without a new release build.
-
-1. Set `deployment_tier: test` in the `settings` block of `bigrae.yaml`.
-2. Commit the change to the tooling. The command refuses local changes.
-3. Run `gcp-deploy` from that checkout with `--allow-unreleased-tooling`.
-
-The command refuses the flag for a production deployment and for a CI run
-(`--identity ambient`). Before any change, it stores `tooling-override.json`
-in the release-evidence bucket, under
-`deployments/<release-revision>/<run-id>/<attempt>/`. The record holds the
-release revision and the tooling revision. The release images still get the
-same provenance check and scan.
+(#2689). See [Test deploy tooling without a release](../../dev/gcp-contributor-deploy.md#test-deploy-tooling-without-a-release).
 
 `gcp-deploy` verifies the provenance of the five control-plane images before
 the rollout. That check binds each image to the repository ID, the owner ID,
@@ -225,26 +169,11 @@ check verifies the same digests, so a mirror cannot change the release.
 
 ## Install
 
-1. Write the deployment input bundle in a private directory
-   ([Author and publish the deployment input bundle](#author-and-publish-the-deployment-input-bundle),
-   steps 1 to 4). It is the only configuration of the deployment.
-2. Run the install from the deployer image of the release. Mount the bundle
-   directory into the container, for example with
-   `-v /path/to/bundle:/bundle:ro`, and pass `--inputs /bundle`:
-
-   ```bash
-   ./scripts/bootstrap/deploy.py gcp-install --inputs /path/to/bundle
-   ```
-
-3. Read the ingress address in the command output.
-4. Create a DNS A record for `deployment.domain` at that address. Do not proxy
-   the record.
-5. Run the deploy. It waits up to 60 minutes for the managed certificate to
-   become Active, then runs the smoke:
-
-   ```bash
-   ./scripts/bootstrap/deploy.py gcp-deploy --store gs://<project>-deployment-config
-   ```
+Follow [Install on Google Cloud](../../getting-started/install-gcp.md) for the
+procedure. It writes the deployment input bundle, runs `gcp-install`, asks for
+the DNS A record, and runs `gcp-deploy` to complete the installation. That
+deploy waits up to 60 minutes for the managed certificate to become Active,
+then runs the smoke.
 
 `gcp-install` does these steps. Each step is idempotent, so run the same
 command again after a failure:
@@ -291,6 +220,7 @@ later changes.
 3. Do not set `purpose_contexts`, `github_org`, `github_repo`,
    `github_repository_id`, or `github_owner_id`. The command rejects GitHub
    inputs in this mode.
+   Do not hand-create service accounts or broaden the provider condition.
 4. Preview the foundation:
 
    ```bash
@@ -339,9 +269,14 @@ The deploy and destroy identities can read the config bucket. They can change
 only the `locks/` prefix. Deploy principals can write the bundle; destroy-only
 principals can read it.
 
+Releases publish to the public registry with the workflow token, so the
+`cicd-oidc` root no longer accepts a `release` purpose context. A foundation
+applied before that change must remove its `release` contexts from
+`purpose_contexts` before its next `gcp-foundation` run.
+
 ## Create the initial secrets
 
-Platform Terraform creates and fills the Django, database, Guacamole, Redis, and domain-controller runtime secrets. The deploy generates the OpenFGA credentials.
+Platform Terraform creates and fills the Django key, field-encryption key, database, Guacamole, Redis, and domain-controller runtime secrets. Do not create them by hand. The deploy generates the OpenFGA credentials.
 `gcp-install` creates the first operator password in
 `shifter-<environment>-operator-password` when
 `settings.operator_bootstrap.admin_password_secret_ref` is not set. To supply
@@ -366,6 +301,8 @@ your own password instead, create the secret first:
 3. Set `settings.operator_bootstrap.admin_password_secret_ref` to the
    versionless resource `projects/<project>/secrets/<operator-password-secret>`.
    The command reads the `latest` version as the deploy identity.
+
+Set `settings.operator_bootstrap.enabled: false` to create no operator.
 
 The deploy identity holds the Secret Manager role in the deployment project.
 Thus it can read a secret in that project. The command keeps the password in
@@ -411,19 +348,12 @@ Other inputs that refer to secrets:
        github_owner_id: "<owner-id>"
    ```
 
-   | Setting | Meaning |
-   | --- | --- |
-   | `range_cells` | `backend` (`gce` or `gdc`), `zone`, `zones`, `project_id`, `host_identity_pool_size`, `private_google_access`, `image_key_profiles`, and `worker_vcpu`. A GCE range needs `zone`. `worker_vcpu` (default 8) is the vCPU draw of one disposable worker. |
-   | `participant_openvpn.enabled` | Deploys the shared participant OpenVPN pool. The default is `false`. |
-   | `ctf_content_bucket` | The private CTF content bucket, when the app secret carries CTF content references. |
-   | `operator_bootstrap` | The first operator and the first administrator. `gcp-deploy` requires this block. `enabled` defaults to `true` and then requires `admin_email`. `admin_password_secret_ref` defaults to the secret that `gcp-install` creates. |
-   | `openfga` | Optional override block. The deploy always configures OpenFGA. Leave unset for generated credentials and the release model. For overrides, set all three `*_secret_ref` values; `store_id` and `model_id` are optional. |
-   | `cloud_sql_iam_auth` | Native SQL login. It defaults to `true`, which the current source requires. |
-   | `post_deploy_smoke.user_email` | The portal account that owns the smoke range. The smoke creates the account when it does not exist. An empty value skips the smoke. |
-   | `release_trust` | The numeric repository ID and owner ID of the repository that publishes the release. |
-   | `deployment_tier` | `production` (the default) or `test`. Only a `test` deployment accepts `gcp-deploy --allow-unreleased-tooling`. |
+   The [installation config reference](../dev/installation-config.md#supported-backends)
+   describes each GCP settings block and its default.
 
    The operator email must use the domain in `identity_allowed_email_domain`.
+   `gcp-deploy` checks it against the Terraform output before it creates the
+   operator.
    For a release from `OpenRAE/bigrae`, the release trust IDs are
    `github_repository_id: "1241599684"` and `github_owner_id: "308592074"`.
    For a release from another repository, run
@@ -444,6 +374,9 @@ Other inputs that refer to secrets:
    }
    ```
 
+   Leave `gke_master_authorized_cidrs = []` for Connect Gateway, or use
+   connected RFC1918 networks only. Public operator egress IPs must not be
+   added to `gke_master_authorized_cidrs`; the private endpoint rejects them.
    The sizing values have defaults in
    `platform/terraform/gcp/environments/platform/variables.tf`. Set one only to
    change its default. You can also put HCL values in
@@ -457,6 +390,8 @@ Other inputs that refer to secrets:
    your files.
 5. Add the optional objects only if you need them: `foundation-inputs.json`,
    `model-broker-overlay.template.json`, and `retired-cluster-artifacts.json`.
+   `foundation-inputs.json` is only for
+   `gcp-deploy --reconcile-foundation-image-network`.
    The model broker is parked (ADR-068).
 6. Publish the bundle. The command validates it first:
 
@@ -533,8 +468,10 @@ name the Identity Platform account that the infrastructure stage creates for
 administrator, with the separate personal-credential eligibility. Other
 administrators gain no implicit eligibility.
 
+A failed first install that stopped inside the cutover resumes on the next run.
 A database with users needs the reviewed legacy conversion facts. Pass them
-with `--identity-cutover-facts` and `--identity-bootstrap-facts`. See
+with `--identity-cutover-facts` and `--identity-bootstrap-facts` only to convert
+that database. See
 [native identity operations](../../ops/gcp-native-identity.md).
 
 After activation, the deploy registers the release's in-box catalog as the bootstrap administrator. Its credential permits only installation content actions. It lasts 15 minutes and is revoked after registration. When the configured operator is not the bootstrap administrator,
@@ -544,17 +481,11 @@ issue a content credential, and run the deploy again with
 
 ## Update and roll back
 
-1. Get and verify the deployer image of the new release
-   ([Get and verify the deployer image](#get-and-verify-the-deployer-image)).
-2. Change the bundle if the release needs new inputs, and publish it again.
-3. Run the deploy:
-
-   ```bash
-   ./scripts/bootstrap/deploy.py gcp-deploy --store gs://<bucket>
-   ```
-
-   The deploy publishes the release's authorization model, re-binds the
-   application to it, and registers new in-box packs.
+Follow [Update an installation](../../getting-started/install-gcp.md#update-an-installation)
+for the procedure. Change the bundle if the release needs new inputs, and
+publish it again before the deploy. The deploy publishes the release's
+authorization model, re-binds the application to it, and registers new in-box
+packs.
 
 To roll back application code, select an earlier verified release only when its schema remains compatible.
 Do not retag an image.
@@ -658,6 +589,13 @@ These items stay after a teardown:
   secret and the imported range guest images.
 
 Generated OpenFGA secrets are also retained outside the platform Terraform state.
+
+The `shifter-<environment>-platform-ip` global address is part of the platform
+Terraform, so `gcp-destroy` releases it. A fresh install after a destroy can get
+a different address; one reinstall got the same address again. Update the DNS
+A record to the address that the `--first-install` run prints before you run
+the deploy again.
+
 Retained resources can continue to incur costs.
 Teardown does not remove the Google Cloud project or bypass retention locks.
 For failure, use [RB023](../../runbooks/rb023-gcp-deployment.md), then rerun the same release command after correcting the cause.

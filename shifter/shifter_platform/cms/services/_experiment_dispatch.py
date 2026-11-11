@@ -31,7 +31,6 @@ from shared.raes.experiment_admission import experiment_archive_identity
 from shared.raes.experiment_dispatch_inputs import (
     entry_attempt_timeout,
     entry_inputs,
-    trial_plan_bytes,
     trial_scenario_bytes,
     trial_scenario_sha256,
     trial_unit_bytes,
@@ -155,7 +154,7 @@ def _stage_object(storage: ObjectStorage, key: str, data: bytes) -> StagedObject
 def stage_trial(
     credential: CredentialContext, organization_uuid: UUID, inputs: dict[str, Any], row: ExperimentEntry
 ) -> tuple[dict[str, StagedObject], datetime]:
-    """Stage the trial unit, scenario, plan, and control input for the worker runtime.
+    """Stage the trial unit, scenario, and control input for the worker runtime.
 
     The attempt's deadline is persisted first, so every stager produces the same bytes.
     """
@@ -179,7 +178,6 @@ def stage_trial(
     return {
         "trial-unit.json": unit,
         "scenario.sdl": scenario,
-        "plan.json": _stage_object(storage, prefix + "plan.json", trial_plan_bytes(inputs)),
         "trial.json": _stage_object(storage, prefix + "trial.json", encoded),
     }, deadline
 

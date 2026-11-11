@@ -13,9 +13,9 @@ A GCP deployment without GitHub keeps its values in its deployment config
 bucket and in Secret Manager. See
 [GCP deployment inputs without GitHub](#gcp-deployment-inputs-without-github)
 and the [GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md).
-A GCP CI deployment keeps its values in GitHub. Its CI adapter renders them
-into the same deployment input bundle, and the jobs run the same deploy
-commands.
+The retained GCP CI adapter keeps its values in GitHub. Its CI adapter renders
+them into the same deployment input bundle, and the jobs run the same deploy
+commands. See [Retained GCP CI deploy adapter](gcp-ci-adapter.md).
 
 This file lists values that must be configured before a fresh deploy. Set values
 under **Settings → Secrets and variables → Actions**, separated by:
@@ -145,130 +145,18 @@ sets the suffixed names automatically; do not set the unsuffixed
 ## GCP deployment inputs without GitHub
 
 A GCP deployment without GitHub needs no GitHub secret, variable, or
-Environment (ADR-070). Each input has one home outside GitHub. The commands
-read them from the deployment input bundle in the deployment config bucket.
-The full procedure is in the
-[GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md).
-
-| Input | Home | Notes |
-|---|---|---|
-| Root installation config | `bigrae.yaml` | The project, the region, the domain, and the deployment settings. Secrets appear only as references. |
-| Platform Terraform values | `terraform.tfvars.json` and/or `terraform.tfvars` | Network ranges, sizing, and the Identity Platform allow-list. When both exist, the JSON file wins. |
-| Range guest images | `range-images.json` | Exact GCE references for the `linux`, `kali`, `windows`, and `dc` roles. `gcp-images --store` and `gcp-config set-range-image` write it. |
-| First operator password | Secret Manager | `settings.operator_bootstrap.admin_password_secret_ref`, a versionless resource. The command reads the `latest` version. |
-| Release trust anchor | `bigrae.yaml` | `settings.release_trust`: the numeric repository and owner IDs that sign the release. |
-| Purpose identities | Naming contract | `<name prefix without hyphens>-deploy`, `-scan`, and `-destroy`. The default name prefix is `shifter-<environment>`. |
-| Foundation reconcile inputs | `foundation-inputs.json` | Optional. Only for `gcp-deploy --reconcile-foundation-image-network`. |
-
-### Initial secrets
-
-Platform Terraform generates the Django key, field-encryption key, database credentials, Guacamole keys, Redis credentials, and domain-controller password in Secret Manager. Do not create
-them by hand.
-
-For normal installation, `gcp-install` creates the first operator password when needed.
-For an explicitly managed setup, create only these operator-owned inputs:
-
-1. An optional first operator password. Create a secret in the deployment project and
-   add the password as its first version. Set
-   `settings.operator_bootstrap.admin_password_secret_ref` to
-   `projects/<project>/secrets/<secret>`. The deploy identity reads the secret.
-   Set `operator_bootstrap.enabled: false` to create no operator.
-2. The transactional email API key, only when `email_backend` is set in the
-   Terraform values. Terraform creates the empty `shifter-<environment>-email`
-   secret. Add the provider API key to it.
-
-The operator email must use the domain in `identity_allowed_email_domain`.
-`gcp-deploy` checks it against the Terraform output before it creates the
-operator.
+Environment (ADR-070). Each input has one home outside GitHub: the deployment
+input bundle in the deployment config bucket, and Secret Manager. See
+[Author and publish the deployment input bundle](../technical/handbook/gcp-github-less-deployment.md#author-and-publish-the-deployment-input-bundle),
+[Create the initial secrets](../technical/handbook/gcp-github-less-deployment.md#create-the-initial-secrets),
+and the [installation config reference](../technical/dev/installation-config.md).
 
 ## GCP (gcp-dev)
 
-Consumed by `.github/workflows/_gcp-dev.yml` for a GCP CI deployment. The CI
-adapter (`scripts/gcp/render_ci_deployment_inputs.py`) projects each value onto
-its home in the deployment input bundle. Then the jobs run `gcp-deploy`,
-`gcp-release-scan`, and `gcp-smoke`. A GitHub value that conflicts with a value
-in `SHIFTER_CONFIG_GCP_DEV` stops the render, so each input keeps one meaning.
+The retained GCP CI adapter inputs are in
+[Retained GCP CI deploy adapter](gcp-ci-adapter.md).
 
-| Name | Kind | Required | Notes |
-|---|---|---|---|
-| `GCP_PROJECT_ID` | secret | yes | The Google Cloud project the platform deploys to. |
-| `SHIFTER_CONFIG_GCP_DEV` | secret | yes | Full validated deployment `bigrae.yaml`. The CI adapter writes it as the bundle's `bigrae.yaml`. It is the sole source of `dynamic_secret_project_id`, exact provisioner static-secret refs, and range egress policy for deploy and destroy. |
-| `SHIFTER_CONFIG_OVERLAY_JSON` | variable | no | Optional bounded JSON overlay for `settings.model_access`, `settings.model_broker`, and `settings.model_broker_runtime`. A reviewed `platform/deploy/gcp/<environment>/model-broker-overlay.template.json` takes precedence when present; the command binds its project and public CA, then applies it only to the private configuration copy. Without a template, the CI adapter applies this overlay to the bundle's `bigrae.yaml`. Arbitrary settings, root keys, and secrets are rejected. The broker is parked and not supported for use; leave this unset. See "Optional: model access broker" in `docs/technical/dev/setup.md`. |
-| `GCP_REGION` | variable | no | Projected onto `settings.region`. Default `us-central1` when neither sets it. |
-| `GCP_PUBLIC_HOSTNAME` | secret | yes | DNS name the platform serves on (for example, `shifter.your-domain.example`). Projected onto `deployment.domain`. |
-| `GCP_IDENTITY_ALLOWED_EMAIL_DOMAIN` | secret | yes | Identity Platform beforeCreate allow-list; the bootstrap operator must end with `@<this>` for sign-in to succeed. The CI adapter writes it to the bundle's `terraform.tfvars.json`, with `gke_master_authorized_cidrs = []` for the Connect Gateway path. |
-| `GCP_DEPLOY_SERVICE_ACCOUNT` | secret | yes | Purpose-scoped WIF service account for deploy and post-deploy smoke. |
-| `GCP_RELEASE_SCAN_SERVICE_ACCOUNT` | secret | yes | Purpose-scoped WIF service account for the isolated exact-digest image scan. Store it only in `gcp-release-scan-dev`; it has repository-scoped Artifact Registry read and create-only access under the private bucket's `release-scans/` prefix, but no deployment or runtime-secret authority. |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | secret | yes | Workload identity provider resource id. |
-| `GCP_BOOTSTRAP_ADMIN_EMAIL` | secret | yes | Optional Identity Platform account seed; this does not grant application permission. Must match `GCP_IDENTITY_ALLOWED_EMAIL_DOMAIN`. Projected onto `settings.operator_bootstrap.admin_email`. Required unless `SHIFTER_SKIP_OPERATOR_BOOTSTRAP=true` is set to deliberately skip operator creation (the skip is logged; it sets `operator_bootstrap.enabled: false`). |
-| `GCP_BOOTSTRAP_ADMIN_PASSWORD` | secret | yes | Initial password for the provider account seed; native application access still requires immutable bootstrap facts. The infrastructure stage reads it from this variable (`--operator-password-env`); it is never written to the bundle. Required unless `SHIFTER_SKIP_OPERATOR_BOOTSTRAP=true`. |
-| `GCP_CTF_CONTENT_BUCKET` | variable | with content refs | GCS bucket holding digest-pinned native CTF content bundles; projected onto `settings.ctf_content_bucket`, rendered into the `ctf_content_bucket_name` tfvar, and surfaced to the runtime as `SHIFTER_CTF_CONTENT_BUCKET`. **Required when the app bundle has `ctf_content_references`:** `config/_ctf_content_settings.py` rejects references without a bucket. Missing binding prevents portal startup. The reference catalog itself stays in the app secret, never here. |
-| `PLATFORM_BOOTSTRAP_STAFF_EMAILS` | secret | no | Legacy staff-email input; Django flags do not grant native application authority. Projected onto `settings.operator_bootstrap.staff_emails`. |
-| `PLATFORM_BOOTSTRAP_SUPERUSER_EMAILS` | secret | no | Legacy superuser-email input; Django flags do not grant native application authority. Projected onto `settings.operator_bootstrap.superuser_emails`. |
-| `SMOKE_TEST_USER_EMAIL` | secret | no | Post-deploy smoke user for the advisory `post-deploy-smoke` job. Projected onto `settings.post_deploy_smoke.user_email`. The CI smoke step fails and opens the smoke issue when it is empty. Same contract as AWS dev smoke; see [Post-deploy smoke secrets](#post-deploy-smoke-secrets-dev). |
-| `IDENTITY_CUTOVER_FACTS_JSON` | secret | first hard cut | Reviewed `shifter.identity-cutover-facts/v1` mapping document. CI writes a temporary owner-only file and passes its path as `--identity-cutover-facts`; the command mounts facts only into the one-shot cutover Job and cleans up afterward. |
-| `IDENTITY_BOOTSTRAP_FACTS_JSON` | secret | first hard cut | `shifter.identity-bootstrap-facts/v1` names the exact immutable provider issuer and subject for the first native administrator. CI passes an owner-only file path as `--identity-bootstrap-facts`. Email lookup is not accepted. Both fact files are required together for the first cutover. |
-| `CATALOG_CREDENTIAL` | secret | catalog setup | Current native bearer proof with installation content registration, conformance and publication authority. CI writes a temporary `0600` file, passes only its path as `--catalog-credential-file`, clears the environment value before the command and removes the file afterward. It never enters the deployment bundle. Missing proof leaves the activated application available but reports catalog setup incomplete; obtain a current credential after activation and retry. |
-
-The prepare job scopes its shared preflight to the deployment Environment. The
-exact-release scanner validates `GCP_RELEASE_SCAN_SERVICE_ACCOUNT` and its WIF
-provider inside the separate `gcp-release-scan-<deployment>` Environment, so
-the scanner identity never has to be copied into the deploy Environment.
-
-No GitHub workflow tears down a GCP deployment after #2668. An operator runs
-`deploy.py gcp-destroy` as the destroy identity (see the
-[GitHub-less GCP deployment guide](../technical/handbook/gcp-github-less-deployment.md)).
-
-GCP may report Cloud SQL, Memorystore, or GKE deleted before Service Networking
-and load-balancer dependencies observe the release. `gcp-destroy` retries the
-idempotent Terraform destroy with bounded backoff for this convergence; do not
-delete the reported dependency manually or remove it from state.
-
-`SHIFTER_CONFIG_GCP_DEV` is also required by both deploy and destroy. Its GCP
-settings must include `dynamic_secret_project_id`; no separate GitHub variable
-or tfvars override owns that value. The project is a pre-existing,
-single-deployment Secret Manager boundary and may equal `project_id` only during
-the documented expand phase. Once cut over it must be distinct.
-
-Supported operator-created inputs are declared once in the same config:
-
-```yaml
-settings:
-  project_id: platform-project
-  dynamic_secret_project_id: range-secret-project
-  provisioner_static_secret_refs:
-    GDC_ACCESS_SECRET_ID: projects/platform-project/secrets/shifter-gcp-dev-gdc-access
-    GDC_VM_IMAGE_GCS_SECRET_ID: projects/platform-project/secrets/shifter-gcp-dev-gdc-vm-image-gcs
-    GDC_VMSERIES_IMAGE_GCS_SECRET_ID: projects/platform-project/secrets/shifter-gcp-dev-gdc-vm-image-gcs
-```
-
-Omit unused keys. Values are secret references, never payloads, and must identify
-existing resources before Terraform applies. This closed map supplies exact provisioner IAM and runtime publication. Do not duplicate references in `local.auto.tfvars` or an ad hoc runtime overlay. See the
-[range-secret project rollout](https://github.com/OpenRAE/bigrae/blob/dev/platform/terraform/gcp/README.md#expand-cut-over-drain-contract).
-
-Native CTF scenario-content references live in the existing application secret,
-not in GitHub variables or the generated ConfigMap. Configure the private
-bucket through the GCP Terraform input and follow the
-[native CTF scenario-content runbook](ctf-scenario-content.md).
-
-The foundational identity root also creates `<project>-release-evidence` with
-public access prevention, uniform access, versioning, and an intentionally
-locked 90-day retention policy. Locking is irreversible; confirm the project
-and retention period in the reviewed Terraform plan before applying. Objects
-age out after 365 days.
-
-IAM conditions separate evidence by prefix. Build creates `packer-builds/` source bindings. Validation reads those bindings and creates `packer-validation/` evidence.
-
-Release scan writes `release-scans/`; deployment writes `deployments/`. The
-scan and deployment verdicts
-(`verdict.json`, with an opaque locator and the evidence digest) are stored next
-to their raw evidence; CI uploads no deploy verdict artifact. The image
-validation verdict stays a redacted Actions artifact.
-
-`gcp-deploy` validates the bootstrap operator email against the Terraform output
-`identity_allowed_email_domain` before it creates the operator.
-
-### GitHub Actions WIF trust (ADR-004-R23)
+## GitHub Actions WIF trust (ADR-004-R23)
 
 This procedure applies to a foundation with GitHub federation, which after #2668
 is a developer build project. A deployment without GitHub sets an empty
@@ -349,6 +237,22 @@ A separate credentialless Ubuntu scanner collects the SBOM from a candidate-deri
 
 Raw validation evidence and the SBOM stay in the private evidence
 bucket; only a redacted verdict is uploaded.
+
+### Release-evidence bucket
+
+The foundational identity root also creates `<project>-release-evidence` with
+public access prevention, uniform access, versioning, and an intentionally
+locked 90-day retention policy. Locking is irreversible; confirm the project
+and retention period in the reviewed Terraform plan before applying. Objects
+age out after 365 days.
+
+IAM conditions separate evidence by prefix. Build creates `packer-builds/` source bindings. Validation reads those bindings and creates `packer-validation/` evidence.
+
+Release scan writes `release-scans/`; deployment writes `deployments/`. The
+scan and deployment verdicts
+(`verdict.json`, with an opaque locator and the evidence digest) are stored next
+to their raw evidence; CI uploads no deploy verdict artifact. The image
+validation verdict stays a redacted Actions artifact.
 
 ## AWS portal (`dev` / `prod`)
 
@@ -566,74 +470,10 @@ between `bigrae.yaml.settings.range_egress` and the Terraform inputs.
 
 ## GCP range (`gcp-dev`)
 
-The GCP range network egress allowlist is rendered from the deployment's
-`bigrae.yaml`. `gcp-deploy` writes it into its private `settings.auto.tfvars`,
-separate from the operator's Terraform values. Two Terraform variables expose
-the platform contract:
-
-| Variable                       | Type           | Meaning                                                                          |
-| ------------------------------ | -------------- | -------------------------------------------------------------------------------- |
-| `range_egress_mode`            | `string`       | One of `status-quo` (default), `deny-all`, `allowlist`                           |
-| `range_egress_allowed_cidrs`   | `list(string)` | CIDR allowlist when `range_egress_mode = "allowlist"`                            |
-
-The committed `terraform.tfvars` baseline sets `range_egress_mode =
-"status-quo"`. Deployments that want enforcement set
-`settings.range_egress` in `bigrae.yaml`; the deploy renders it into the
-private var file that loads after the operator's values.
-
-| Name | Kind | Required | Notes |
-|---|---|---|---|
-| `SHIFTER_CONFIG_GCP_DEV` | secret | yes | Full deployment `bigrae.yaml` (root installation config) for a CI deployment. The CI adapter writes it as the bundle's `bigrae.yaml`, and `gcp-deploy` renders the egress variables from it before `terraform apply`. The render fails loud when the secret is empty. |
-
-- **CI (`_gcp-dev.yml`)** renders the bundle from `SHIFTER_CONFIG_GCP_DEV`;
-  `gcp-deploy` renders the egress variables.
-- **A deployment without GitHub** keeps `bigrae.yaml` in its config bucket;
-  `gcp-deploy` renders the same variables.
-- **Local `terraform` runs** use the operator workflow in
-  `docs/architecture/range-egress-ip-allowlist.md` (run `bigrae-config render`
-  by hand, then `terraform apply`).
-
-`bigrae.yaml` contains secret references, not values. It remains the authoritative deployment configuration. Store it as the protected CI payload rather than maintaining a second allowlist. Do **not** also set
-`range_egress_mode` / `range_egress_allowed_cidrs` in the Terraform values;
-that re-introduces the drift this flow removes.
-
-### GCE range-cell backend variables
-
-The GCP range backend is `gce` (GCE range cells). A deployment without GitHub
-sets these non-secret inputs in `bigrae.yaml` (`settings.range_cells` and
-`settings.participant_openvpn`) and in `range-images.json`. A CI deployment
-sets them as GitHub Actions repository or environment **variables** (`vars.*`);
-the CI adapter projects each one onto the same setting. `gcp-deploy` passes them
-to the generated runtime config. Unset values fall back to the code defaults in
-`config.py`. See `docs/dev/gcp-range-cell-deploy.md` for the operator runbook.
-
-`./scripts/bootstrap/deploy.py gcp-images --project-id <project> --store
-gs://<bucket>` verifies the Kali, Ubuntu, and DC images that the release
-selects, imports or reuses them, and writes their exact references to
-`range-images.json`. Without `--store`, it prints the references; a CI
-deployment sets the `GCP_RANGE_*_IMAGE` variables to them. The command needs no
-`GCP_GCE_BASE_IMAGE_BUCKET`. Set these values by hand only to pin a specific
-image outside that flow.
-
-| Variable | Required | Notes |
-|---|---|---|
-| `GCP_RANGE_BACKEND` | no | `gce` (default), the supported native GCE range-cell backend. The legacy `gdc` VM Runtime backend is retired and removed root-and-branch in #2311. |
-| `GCP_RANGE_CELL_PROJECT_ID` | no | Project the range cells provision into. Defaults to the project parsed from the range VPC self-link (`range_network_id`), so it is correct even while the control-plane `GCP_PROJECT_ID` is a deploy-overlay placeholder. |
-| `RANGE_NETWORK_ZONE` | yes | Compute Engine zone for range guests, for example `us-central1-a`. |
-| `GCP_RANGE_LINUX_IMAGE` | yes | Full image or family URL for the default unkeyed Linux/host profile. |
-| `GCP_RANGE_DC_IMAGE` | DC scenarios | Default unkeyed Windows domain-controller image, pre-promoted at bake time. Baked per-domain from `dc-prebaked.pkr.hcl` into family `shifter-<purpose>-dc` (see "Baking a new pre-promoted DC image" in `docs/dev/gcp-range-cell-deploy.md`). |
-| `DC_DOMAIN_PASSWORD` | DC scenarios | **Sensitive.** Domain Administrator password the provisioner sets on the pre-promoted DC (`set_admin_password`). Must match the password baked into the DC image by `a2_setup.ps1` at bake time (its `-AdminPassword` default). Supply the GCP deployment config reference. The renderer forwards it to the provisioner Job through `_GCP_PROVISIONER_ENV_KEYS`. Missing configuration prevents DC password setup. |
-| `GCP_RANGE_KALI_IMAGE` | scenario | Default unkeyed Kali image. Keyed guests use the structured map below. |
-| `GCP_RANGE_WINDOWS_IMAGE` | scenario | Generic Windows guest image. |
-| `GCP_RANGE_IMAGE_KEY_PROFILES_JSON` | keyed scenarios | Optional compact JSON map from exact `(linux|kali|windows|dc, ami_key)` to a complete GCE profile. Normal images use `source_image`, sizing, disk policy, and a typed capability. Preconfigured hosts use an exact `source_machine_image`, machine type, host login, participant container/account, the closed `participant-readiness/v1` contract, and a lowercase SHA-256 readiness-manifest digest. Any profile may opt into public TCP 80/443 with `allow_public_web_egress` (default false). Maximum 32,768 bytes and 64 entries. Unknown keys, unsupported capabilities, and malformed profiles fail before cloud mutation. Use an Actions environment secret when resource names or logical selectors are confidential; the deploy workflow prefers that secret over the repository variable. The value is runtime configuration, not a credential, and is emitted into the private platform ConfigMap. See `docs/dev/gcp-range-cell-deploy.md`. |
-| `GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL` | not read | Keyless guest identity provides default-on direct Vertex access (ADR-064). It combines a predict-only role with host telemetry and uses Workload Identity without key material. The deploy takes it from the Terraform output `range_host_service_account_email`; set no variable. When the model broker is the guest path (`MODEL_BROKER_GUEST_VIP` set) guests stay identity-less instead. |
-| `GCP_RANGE_HOST_IDENTITY_POOL_SIZE` | machine-image hosts | Number of Terraform-created `sh-range-host-<slot>` identities. Must equal `range_host_identity_pool_size`; zero disables preconfigured machine-image hosts. |
-| `GCP_RANGE_PRIVATE_GOOGLE_ACCESS` | no | Set `true` so no-external-IP guests reach approved Google APIs (including Vertex for default-on model access) over Private Google Access. Leave it `false` when the model broker is enabled: broker-enrolled ranges refuse to provision with Private Google Access on. |
-| `RANGE_OPENVPN_ENABLED` | no | Set `true` to give participants an OpenVPN profile for their range's single participant-access target (ADR-039-R10). Projected onto `settings.participant_openvpn.enabled`. It also deploys the shared OpenVPN server pool (#2480): Terraform `openvpn_pool_enabled` follows this setting, and `gcp-deploy` creates the pool PKI and release record. Apply `global/cicd-oidc` first so the deploy identity holds the conditioned pool role. Defaults to `false`. See "Participant OpenVPN access" in `docs/dev/gcp-range-cell-deploy.md`. |
-
-By default, guests use keyless, predict-only Vertex identities (ADR-064). Operators must enable each required model in its region and satisfy effective IAM and quota prerequisites. When the ADR-059 broker is enabled
-it becomes the guest model path and guests stay identity-less, with an admitted
-allocation and trusted one-use enrollment. Terraform retains removal of the legacy invocation identity, key-admin grants, and per-range keys. Revoke externally managed shared keys through their owner before declaring migration complete.
+The range egress allowlist and the GCE range-cell settings, with their CI
+variable names, are in the
+[GCP GCE range-cell deploy runbook](gcp-range-cell-deploy.md#range-egress-allowlist).
+The CI adapter inputs are in [Retained GCP CI deploy adapter](gcp-ci-adapter.md).
 
 ## Local development
 

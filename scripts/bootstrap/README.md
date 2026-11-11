@@ -96,31 +96,9 @@ GCP lifecycle commands and `gcp-images` use no GitHub service.
 
 ### GCP lifecycle commands (ADR-070)
 
-| Command | Purpose |
-| --- | --- |
-| `gcp-install --inputs <private-bundle-directory>` | Initial GCP setup: validate, apply foundation, create operator password, publish inputs, and deploy. |
-| `gcp-deploy --store gs://<bucket>` | Stand up or update one deployment from the release manifest of the deployer image. Add `--first-install` until DNS points at the ingress address. |
-| `gcp-release-scan --release-manifest <file> --project-id <project> --environment <environment>` | Scan the exact images of a release as the release-scan identity. |
-| `gcp-smoke --store gs://<bucket>` | Run the advisory post-deploy range smoke. |
-| `gcp-destroy --store gs://<bucket> --confirm <environment>` | Tear down the platform resources as the destroy identity. |
-| `gcp-config publish\|pull\|show\|set-range-image --store gs://<bucket>` | Publish, pull, and show the deployment input bundle, and record one range image. |
-| `gcp-cmek-migrate --bucket <bucket> --key <key>` | Rewrite the live objects of an operator-owned bucket, such as the private pack bucket, with its customer-managed key. |
-
-Each lifecycle command reads a deployment input bundle from `--store
-gs://<bucket>[/<prefix>]` or `--inputs <dir>`. By default, the command
-impersonates the purpose identity of each stage (`--identity impersonate`). CI
-uses `--identity ambient`, because the job credentials already are that
-identity.
-
-`gcp-deploy` exits with status 3 when only the advisory smoke failed. Each Terraform-owned GCS bucket uses a customer-managed key (ADR-008-R5). `gcp-deploy` rewrites the live objects of the platform buckets with their keys
-after the apply.
-
-`gcp-destroy` keeps the platform key rings and keys, and the
-next deploy adopts them. See
-[Bucket encryption keys](../../docs/technical/handbook/gcp-github-less-deployment.md#bucket-encryption-keys).
-
-Run `deploy.py <command> --help` for every flag. The procedure is in
-`docs/technical/handbook/gcp-github-less-deployment.md`. Failure handling is in
+The [lifecycle command table](../../docs/technical/handbook/gcp-github-less-deployment.md#lifecycle-commands)
+lists each GCP lifecycle command, its use, and the check after it.
+Run `deploy.py <command> --help` for every flag. Failure handling is in
 `docs/runbooks/rb023-gcp-deployment.md`.
 
 ## Fresh AWS Account Order
@@ -176,34 +154,12 @@ Fresh accounts need these endpoints, particularly with portal inspection enabled
 
 GCP standup mirrors the AWS order: apply the foundation first, then prepare the
 inputs and images, then deploy. A deployment without GitHub follows
-`docs/technical/handbook/gcp-github-less-deployment.md`. The CI path follows the steps below and
-the GCP Deployment section of `docs/technical/dev/setup.md`.
+[Install on Google Cloud](../../docs/getting-started/install-gcp.md) and the
+[GCP deployment handbook](../../docs/technical/handbook/gcp-github-less-deployment.md),
+which also gives the project and Vertex AI model prerequisites. The retained CI
+adapter follows [Retained GCP CI deploy adapter](../../docs/dev/gcp-ci-adapter.md).
 
-Before bootstrap, confirm that project policy permits every required Google Cloud API.
-Enable each configured Vertex AI model in its region before pack installation or range qualification.
-Model enablement is separate from enabling the Vertex AI API.
-An authorized administrator must accept applicable provider or Marketplace terms.
-Missing model enablement can leave participant model calls failing after deployment.
-
-For a deployment without GitHub, copy
-`gcp-foundation.github-less.example.tfvars.json` to an operator-owned file
-outside the repository. It names the principals that may impersonate the
-deploy, release-scan, and destroy identities, and the deployment config bucket.
-Do not set `purpose_contexts` or any GitHub input in that file; the command
-rejects them in this mode.
-
-For a CI deployment, copy `gcp-foundation.example.tfvars.json` to an
-operator-owned file outside the repository. Supply the project ID and number,
-numeric GitHub repository and owner IDs, bucket names, and exact purpose
-Environment/branch/workflow tuples. Obtain IDs with `gcloud projects describe`
-and `gh api repos/<owner>/<repo>`; bootstrap verifies them before writes.
-
-Deploy uses the selected tenant branch. A destroy tuple must bind protected
-`refs/heads/dev` or `refs/heads/main`; bootstrap rejects any other destroy tuple
-before writes. No GitHub workflow uses a destroy identity after #2668.
-
-No secret
-payload belongs in this file.
+No secret payload belongs in a foundation inputs file.
 
 For a developer build project (#2668), copy
 `gcp-image-builder.example.tfvars.json` to an operator-owned file outside the
@@ -243,93 +199,17 @@ The image-build network's Terraform resources live in
 `platform/terraform/gcp/modules/image-build-network`, instantiated by the
 foundation root. Six `moved` blocks keep existing networks in the same
 `cicd-oidc` state when upgrading from the former root-level resource addresses. For the Linux management SSH port migration, put reviewed non-secret foundation JSON in the bundle as `foundation-inputs.json`. Run `gcp-deploy --reconcile-foundation-image-network`.
-
-A CI deployment sets the tenant Environment variable
-`GCP_FOUNDATION_INPUTS_JSON` instead, then manually dispatches **Deploy** from
-that tenant branch with its matching `environment` and
-`gcp_reconcile_foundation_image_network=true`. The command uses the existing
-deploy identity to apply only an action-allowlisted saved plan; all other
-foundation resources must remain no-op. The stage checks the live
-image-build network and firewall before and after, retains the existing
-`cicd-oidc` backend, and is skipped for ordinary deployments.
+The command uses the existing deploy identity to apply only an
+action-allowlisted saved plan; all other foundation resources must remain
+no-op. The stage checks the live image-build network and firewall before and
+after, retains the existing `cicd-oidc` backend, and is skipped for ordinary
+deployments.
 
 Its plan uses
 `-refresh=false` so the deploy identity does not need read access to the
 foundational Workload Identity pool; the live image-build resources are checked
 separately. Do not use this narrowly gated migration stage for general
 foundation identity changes.
-
-Retained CI adapter reference; this is not a selectable installation path.
-Use the installation guide for current operator setup.
-
-No tenant uses the CI path after #2668. `deploy.yml` offers no GCP environment
-until a tenant is wired in, and #2672 decides the future of this path.
-
-1. Create the GCP project and enable the required APIs.
-2. Apply `platform/terraform/gcp/global/cicd-oidc`. It creates the GitHub Workload Identity pool/provider and purpose-scoped CI identities. Apply
-   selected deployment values in each project. Each project keeps its own state bucket/prefix. Then set each
-   purpose Environment's explicit service-account secret and
-   `GCP_WORKLOAD_IDENTITY_PROVIDER` from the applicable profile outputs. Its state prefix is separate from platform state. Platform destruction therefore retains CI authentication resources, as with `global/github-runner`:
-
-   ```bash
-   cd platform/terraform/gcp/global/cicd-oidc
-   REPO="$(gh repo set-default --view)"   # Empty: run gh repo set-default <owner>/<repo> first.
-   mapfile -t GITHUB_IDS < <(gh api "repos/$REPO" --jq '.id, .owner.id')
-   terraform init -backend-config="bucket=<project-id>-terraform-state" -backend-config="prefix=cicd-oidc"
-   terraform apply -var="project_id=<project-id>" -var="project_number=<project-number>" \
-     -var="environment=<environment>" -var="name_prefix=<name-prefix>" \
-     -var="github_org=${REPO%/*}" -var="github_repo=${REPO#*/}" \
-     -var="github_repository_id=${GITHUB_IDS[0]}" -var="github_owner_id=${GITHUB_IDS[1]}" \
-     -var="terraform_state_bucket_name=<project-id>-terraform-state" \
-     -var="release_evidence_bucket_name=<release-evidence-bucket>" \
-     -var-file=/path/to/purpose-contexts.tfvars.json \
-     -var='platform_external_bucket_names=["<raes-package-bucket>","<ctf-content-bucket>"]'
-   terraform output -raw workload_identity_provider          # GCP_WORKLOAD_IDENTITY_PROVIDER
-   terraform output -raw release_scan_service_account_email     # GCP_RELEASE_SCAN_SERVICE_ACCOUNT
-   terraform output -raw deploy_service_account_email           # GCP_DEPLOY_SERVICE_ACCOUNT
-   terraform output -raw release_evidence_bucket_name           # private raw evidence store
-   ```
-   `purpose-contexts.tfvars.json` holds only the `purpose_contexts` key, in
-   the shape of `gcp-foundation.example.tfvars.json`.
-   Omit empty optional bucket entries. The external bucket set must exactly cover non-empty `raes_package_bucket_name` and `ctf_content_bucket_name` inputs. This permits workload IAM management on those buckets without project-wide Storage Admin.
-   Publish each purpose output only to its matching protected Environment. For existing installations, follow the staged identity cutover and state-address readback in `docs/dev/deploy-secrets.md`. Do not directly replace the shared CI principal.
-3. Configure the GCP deployment secrets and variables in
-   `docs/dev/deploy-secrets.md` (the `gcp-dev` section), including
-   `SHIFTER_CONFIG_GCP_DEV` and the GCE range-cell variables.
-4. Import the guest images that the release selects and print their exact
-   references:
-
-   ```bash
-   ./scripts/bootstrap/deploy.py gcp-images \
-     --project-id <project> --region <region> \
-     --release-manifest <release.json> --trusted-repository-id <id> --trusted-owner-id <id>
-   ```
-
-   Set the printed references as the `GCP_RANGE_LINUX_IMAGE`,
-   `GCP_RANGE_KALI_IMAGE`, and `GCP_RANGE_DC_IMAGE` variables. A deployment
-   without GitHub passes `--store gs://<bucket>` instead. The command then reads
-   the trust from the store and writes `range-images.json`. Without
-   `--release-manifest`, it reads the release manifest of the deployer image. The
-   command verifies the signed build provenance of all three images before it
-   changes anything. Missing images transfer through a private per-run bucket in the selected project and region. Success and failure both remove that bucket and every transfer object. Required native GCE images must report `READY`. A retry reuses matching `READY` images and creates no bucket when no
-   import is necessary. Add `--dry-run` to verify and inspect without pulling
-   disk payloads or mutating GCP.
-
-   A developer build of `packer-gcp.yml` publishes a guest image only after
-   `packer-gcp-validate.yml` passes for the exact candidate. See
-   `docs/dev/gcp-range-cell-deploy.md` and
-   `docs/architecture/gcp-guest-images.md`.
-5. Run the first deploy through CI as a manual dispatch with
-   `gcp_require_active_certificate=false`:
-   `gh workflow run deploy.yml --ref <branch> -f environment=<environment> -f gcp_require_active_certificate=false`.
-   The CI adapter renders the deployment input bundle from the GitHub values,
-   and the jobs run `gcp-deploy`, `gcp-release-scan`, and `gcp-smoke`. Deployment applies GCP Terraform for GKE, Cloud SQL, Memorystore, and Pub/Sub. The CI adapter builds and attests control-plane images. Migration and catalog stages precede final workload readiness.
-6. Subsequent deploys run through CI as a manual dispatch:
-   `gh workflow run deploy.yml --ref <branch> -f environment=<environment>` (see
-   the CI/CD trigger matrix in `docs/technical/dev/ci-cd.md`). Branch names no
-   longer trigger deploys.
-7. Point the configured hostname at the reserved global ingress IP so the
-   Google-managed TLS certificate can activate.
 
 ### Preflight (validate prerequisites, no changes)
 ```bash

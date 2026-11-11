@@ -18,7 +18,6 @@ STAGED = {
     "trial.json": b"{}",
     "trial-unit.json": b'{"plan_entry_id": "e"}',
     "scenario.sdl": b"name: synthetic\n",
-    "plan.json": b"{}",
 }
 
 

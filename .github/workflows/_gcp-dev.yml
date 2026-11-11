@@ -50,7 +50,7 @@ on:
       PLATFORM_BOOTSTRAP_SUPERUSER_EMAILS:
         required: false
       # Deployment-owned values that the CI adapter projects onto the deployment
-      # input bundle. See docs/dev/deploy-secrets.md for the canonical list.
+      # input bundle. See docs/dev/gcp-ci-adapter.md for the canonical list.
       GCP_PROJECT_ID:
         required: false
       GCP_PUBLIC_HOSTNAME:
@@ -153,7 +153,7 @@ jobs:
         # Shared fail-safe gate (scripts/bootstrap/preflight.py): reports every
         # missing GitHub input at once before the adapter and the deploy command
         # run. The bootstrap operator credentials are required unless
-        # SHIFTER_SKIP_OPERATOR_BOOTSTRAP=true. See docs/dev/deploy-secrets.md.
+        # SHIFTER_SKIP_OPERATOR_BOOTSTRAP=true. See docs/dev/gcp-ci-adapter.md.
         working-directory: scripts/bootstrap
         env:
           GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}

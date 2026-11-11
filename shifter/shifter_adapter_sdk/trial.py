@@ -31,7 +31,6 @@ TRIAL_INPUT_DIRECTORY: Final = TRIAL_ROOT + "/input"
 TRIAL_INPUT_FILE: Final = "trial.json"
 TRIAL_UNIT_FILE: Final = "trial-unit.json"
 TRIAL_SCENARIO_FILE: Final = "scenario.sdl"
-TRIAL_PLAN_FILE: Final = "plan.json"
 TRIAL_SEAL_FILE: Final = "seal.json"
 TRIAL_EXPORT_DIRECTORY: Final = TRIAL_ROOT + "/export"
 TRIAL_VERBS: Final = ("start", "status", "stop", "export")
@@ -150,7 +149,6 @@ __all__ = [
     "TRIAL_EXPORT_DIRECTORY",
     "TRIAL_INPUT_DIRECTORY",
     "TRIAL_INPUT_FILE",
-    "TRIAL_PLAN_FILE",
     "TRIAL_ROOT",
     "TRIAL_UNIT_FILE",
     "TRIAL_SCENARIO_FILE",
