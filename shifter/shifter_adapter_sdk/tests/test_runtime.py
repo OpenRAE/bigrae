@@ -390,3 +390,11 @@ def test_range_validate_planning_is_not_participant_validation(request_input):
     assert parse_input(planning.model_dump_json()) == planning
     response = parse_result(plan(planning, actions=[]).model_dump_json(), planning)
     assert (response.status, response.actions) == ("planned", [])
+
+
+def test_manifest_accepts_only_empty_model_bindings(manifest):
+    stored = manifest.model_dump(mode="json")
+    assert stored["model_bindings"] == {}
+    assert PluginManifest.model_validate(stored) == manifest
+    with pytest.raises(ValueError):
+        PluginManifest.model_validate(stored | {"model_bindings": {"participant": "server"}})

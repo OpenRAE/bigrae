@@ -32,7 +32,7 @@ _PROFILE_RE = re.compile(r"^[a-z][a-z0-9-]*$")
 #: Backend-contract shape versions this module understands. The backend contract is
 #: versioned independently of the root ``shifter.yaml`` (``RootConfig.version``) so a
 #: future metadata field can be added compatibly; an unknown version fails closed.
-SUPPORTED_CONTRACT_VERSIONS: tuple[int, ...] = (1,)
+SUPPORTED_CONTRACT_VERSIONS: tuple[int, ...] = (1, 2)
 
 
 class BackendBundle(_ContractModel):

@@ -419,8 +419,6 @@ def _reserve_warm_intent(
             range_source=WARM_RANGE_SOURCE.value,
             status=ResourceStatus.PROVISIONING.value,
             range_spec=None,
-            model_sources={"aliases": []},
-            model_package_digest=source.package_digest,
             **fields,
         )
     return current

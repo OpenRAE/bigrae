@@ -66,7 +66,6 @@ _EVENT_MUTABLE_FIELDS = frozenset(
         "live_notifications",
         "event_timezone",
         "capacity_hints",
-        "model_demand",
         "logo_url",
         "visible_os_types",
         "theme_color",
@@ -118,10 +117,6 @@ def create_event_for_credential(
     resolved_content = resolve_scenario_ctf_content(scenario_id)
     from .initialization import initialization_intent, resume_event_initialization
 
-    if "model_sources" in event_data:
-        from .model_sources import validate_event_model_source_selection
-
-        validate_event_model_source_selection(credential, placement.workspace_id, event_data["model_sources"])
     intent = initialization_intent(credential, event_data, resolved_content)
 
     with transaction.atomic():

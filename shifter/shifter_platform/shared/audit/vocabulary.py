@@ -62,15 +62,13 @@ class AuditAction(models.TextChoices):
     WARM_FALLBACK = "warm_fallback", "Warm Fallback"
     WARM_ACTIVATE = "warm_activate", "Warm Activate"
     WARM_RETIRE = "warm_retire", "Warm Retire"
-    # Model-access sharing (PLAT-202, #2139): binding publication, withdrawal and
-    # authoritative membership projection changes are audited with safe IDs and
-    # revisions only.
+    # Model-access sharing (PLAT-202, #2139). Retained so that stored audit records
+    # stay readable after the broker removal (#2909); no current code writes them.
     SHARING_PUBLISH = "sharing_publish", "Sharing Publish"
     SHARING_DRAIN = "sharing_drain", "Sharing Drain"
     SHARING_MEMBERSHIP = "sharing_membership", "Sharing Membership"
-    # Model-access request accounting (PLAT-202, #2121, M04): budget reservation,
-    # settlement, retained-unknown charge, revocation fence and reconciliation
-    # adjustment. Prompts, responses, fingerprints and credentials never appear.
+    # Model-access request accounting (PLAT-202, #2121, M04). Retained for stored
+    # audit records after the broker removal (#2909); no current code writes them.
     MODEL_REQUEST_RESERVE = "request_reserve", "Model Request Reserve"
     MODEL_REQUEST_SETTLE = "request_settle", "Model Request Settle"
     MODEL_REQUEST_UNKNOWN = "request_unknown", "Model Request Unknown"
@@ -108,9 +106,8 @@ class AuditEntityType(models.TextChoices):
     AUTHORIZATION_OPERATION = "authorization_operation", "Authorization Operation"
     # ADR-051, #2048: scoped CTF communications (campaigns, intents, deliveries).
     COMMUNICATION = "communication", "Communication"
-    # Model-access sharing binding (PLAT-202, #2139).
+    # Model-access entities (PLAT-202). Retained for stored audit records (#2909).
     SHARING_BINDING = "sharing_binding", "Sharing Binding"
-    # Model-access request accounting (PLAT-202, #2121, M04).
     MODEL_REQUEST = "model_request", "Model Request"
     MODEL_CREDENTIAL = "model_credential", "Model Credential"
     PREPARATION_ADAPTER = "preparation_adapter", "Preparation Adapter"

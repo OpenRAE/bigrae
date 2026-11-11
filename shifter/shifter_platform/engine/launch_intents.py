@@ -441,9 +441,6 @@ def _enqueue_admitted_provisioner_launch(
 
     with transaction.atomic():
         operation_id = _operation_identity(payload, authority)
-        from engine.services._model_allocation_launch import allocate_launch_models
-
-        allocate_launch_models(payload, operation_id)
         from engine.services._gcp_project_inputs import allocate_launch_projects
 
         allocate_launch_projects(payload, operation_id)

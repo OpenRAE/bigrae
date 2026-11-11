@@ -384,8 +384,6 @@ module "portal_secrets" {
 }
 
 module "portal_iam" {
-  model_broker = var.model_broker
-
   source = "../portal/iam"
 
   project_id                = var.project_id

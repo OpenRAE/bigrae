@@ -17,16 +17,6 @@ from ._capacity_bridges import (
     cms_declare_event_capacity,
     cms_release_range_capacity,
 )
-from ._model_access_bridges import (
-    cms_find_model_access_selected_ranges,
-    cms_invalidate_model_access_authority,
-    cms_project_model_launch_authority,
-    cms_project_scenario_model_demands,
-    cms_resolve_model_access_range_instances,
-    cms_resolve_model_access_range_reference,
-    cms_resolve_model_access_selected_ranges,
-    cms_resolve_model_source_sponsorship,
-)
 
 __all__ = [
     "CTFRangeLaunchOptions",
@@ -42,29 +32,21 @@ __all__ = [
     "cms_destroy_recovery_range",
     "cms_dispatch_bound_event_range",
     "cms_fence_pack_reference",
-    "cms_find_model_access_selected_ranges",
     "cms_find_range_instance_id",
     "cms_get_openvpn_profile",
     "cms_get_range_spec",
     "cms_get_range_status",
     "cms_get_range_target_instances",
     "cms_has_openvpn_profile",
-    "cms_invalidate_model_access_authority",
     "cms_is_event_range_cleanup_verified_absent",
     "cms_list_scenarios",
     "cms_project_ctf_receipt_binding",
-    "cms_project_model_launch_authority",
     "cms_project_scenario_images",
-    "cms_project_scenario_model_demands",
     "cms_range_egress_compatible_with_event",
     "cms_range_owner_reassignment_available",
     "cms_reassign_range_owner",
     "cms_reconcile_ctf_range_leases",
     "cms_release_range_capacity",
-    "cms_resolve_model_access_range_instances",
-    "cms_resolve_model_access_range_reference",
-    "cms_resolve_model_access_selected_ranges",
-    "cms_resolve_model_source_sponsorship",
     "cms_start_range",
     "cms_stop_range",
     "get_user_role",
@@ -79,10 +61,6 @@ if TYPE_CHECKING:
     from ctf.models import CTFEvent
     from shared.credentials import CredentialContext
     from shared.identity_scope import PrincipalRef, ResourceScope
-    from shared.model_access import (
-        OwnedReference,
-    )
-    from shared.model_access.reservation import ModelLaunchScope
     from shared.receipt_validation import ReceiptVerifierBinding
     from shared.remote_access import OpenVpnProfile
 
@@ -134,8 +112,6 @@ class RangeProvisionResult:
 class CTFRangeLaunchOptions:
     """Optional CTF launch facts forwarded to the CMS range boundary."""
 
-    model_admission_subject: OwnedReference | None = None
-    model_launch_scope: ModelLaunchScope | None = None
     credential: CredentialContext | None = None
     scope: ResourceScope | None = None
     owner_principal: PrincipalRef | None = None
@@ -167,10 +143,6 @@ def cms_create_range(
     to CTF ranges, allowing the user to hold both a Mission Control range and a
     CTF range simultaneously (#450). The source is server-derived here and is
     never caller-supplied.
-
-    ``model_admission_subject`` is the CTF draw reference (PLAT-202) used to
-    resolve the sharing overlap for required-model admission against the real
-    launch subject rather than the launcher identity.
     """
     import cms.services as cms_services
     from shared.enums import RangeSource
@@ -194,8 +166,6 @@ def cms_create_range(
         ngfw_enabled=ngfw_enabled,
         range_source=RangeSource.CTF,
         remote_access_teardown_at=remote_access_teardown_at,
-        model_admission_subject=options.model_admission_subject,
-        model_launch_scope=options.model_launch_scope,
         scope=options.scope,
         owner_principal=options.owner_principal,
         authority_action="event.manage_ranges",

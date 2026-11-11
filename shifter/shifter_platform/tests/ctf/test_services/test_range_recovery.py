@@ -175,15 +175,13 @@ def _make_pooled_spare(
     from ctf.services.authorization import admit_event_actions
     from ctf.services.range.launch_intents import launch_parameters, reserve_launch
     from management.services import resolve_principal_uuid
-    from shared.model_access import OwnedReference
 
     admission = admit_event_actions(credential, event, "event.manage_ranges")
     owner_principal = resolve_principal_uuid(event.owner_principal_uuid)
     with transaction.atomic():
         locked_event = CTFEvent.objects.select_for_update().get(pk=event.pk)
         spare = CTFSpareRange.objects.create(event=locked_event, status=status)
-        subject = OwnedReference(owner="ctf", reference=f"draw:{spare.pk}")
-        parameters = launch_parameters(locked_event, owner_principal, subject, None)
+        parameters = launch_parameters(locked_event, owner_principal)
         intent = reserve_launch(locked_event, "spare", spare.pk, admission, parameters)
         range_instance = _make_spare_range(
             event=locked_event, owner=owner, scenario_id=scenario_id or event.scenario_id, request_uuid=intent.pk

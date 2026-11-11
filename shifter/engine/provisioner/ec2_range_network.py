@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from shared.model_access.network import RFC1918_IPV4_NETWORKS
+from shared.network import RFC1918_IPV4_NETWORKS
 
 from ec2_range_cleanup import Ec2CleanupScope
 from raes_ec2_image import VerifiedEc2Image
@@ -43,7 +43,6 @@ class Ec2NetworkConfig:
     base_route_table_id: str
     management_cidrs: tuple[str, ...]
     access_cidrs: tuple[str, ...] = ()
-    broker_cidrs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -54,20 +53,17 @@ class Ec2NetworkConfig:
             or not re.fullmatch(r"rtb-[0-9a-f]{8}(?:[0-9a-f]{9})?", self.base_route_table_id)
             or not 1 <= len(self.management_cidrs) <= 16
             or len(self.access_cidrs) > 16
-            or len(self.broker_cidrs) > 16
         ):
             raise Ec2NetworkError("EC2 deployment network coordinates are invalid")
         self._validate_endpoints()
 
     def _validate_endpoints(self) -> None:
-        """Keep all platform destinations outside guest subnets and broker routes exact."""
+        """Keep all platform destinations outside guest subnets."""
         vpc = _network(self.vpc_cidr)
-        for cidr in (*self.management_cidrs, *self.access_cidrs, *self.broker_cidrs):
+        for cidr in (*self.management_cidrs, *self.access_cidrs):
             network = _network(cidr)
             if network.overlaps(vpc):
                 raise Ec2NetworkError("EC2 platform endpoints must be outside the guest network")
-        if any(_network(cidr).prefixlen != 32 for cidr in self.broker_cidrs):
-            raise Ec2NetworkError("EC2 broker destinations must be exact private addresses")
 
 
 @dataclass(frozen=True)
@@ -188,8 +184,8 @@ def _validate_network_coverage(
     egress_mode: str,
 ) -> tuple[RaesPlanNetwork, ...]:
     """Require exact network and image coverage under the admitted egress posture."""
-    if egress_mode not in {"status-quo", "deny-all", "none"} or (egress_mode == "none" and config.broker_cidrs):
-        raise Ec2NetworkError("EC2 egress posture does not admit the requested broker exception")
+    if egress_mode not in {"status-quo", "deny-all", "none"}:
+        raise Ec2NetworkError("EC2 egress posture is unsupported")
     networks = allocation_networks(plan)
     if not 1 <= len(networks) <= 32 or set(allocated_cidrs) != {network.address for network in networks}:
         raise Ec2NetworkError("EC2 subnet allocation does not match the compiled networks")
@@ -245,8 +241,6 @@ def _node_network(
         network_address = networks[0].address
     else:
         raise Ec2NetworkError("EC2 requires one declared or open primary network per guest")
-    if any(net.internal and net.address == network_address for net in networks) and config.broker_cidrs:
-        raise Ec2NetworkError("An internal EC2 network cannot receive broker egress")
     return network_address
 
 
@@ -294,8 +288,6 @@ def _group_for_node(
         ingress.append(_permission("tcp", config.access_cidrs, 22 if channel == "ssh" else 3389))
     ingress.extend(_service_grants(node, range_cidrs))
     egress = [_permission("-1", range_cidrs)]
-    if config.broker_cidrs:
-        egress.append(_permission("tcp", config.broker_cidrs, 443))
     # Collapse exact-duplicate grants (e.g. two participants sharing one channel both
     # yield tcp/22 from the access CIDRs): AWS rejects a permission that appears more
     # than once in a single authorize call ("The same permission must not appear

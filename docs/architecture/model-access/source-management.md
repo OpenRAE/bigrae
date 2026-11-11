@@ -1,16 +1,15 @@
 # Tenant model-source management
 
-> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
-> These retained contracts do not authorize broker activation or establish live qualification.
-> Independently supported native source and range controls retain their own boundaries.
-> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
 
 <!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
 <!-- vale off -->
 
 
 PLAT-202 / #2243 extends the existing model broker, allocation and sharing seams.
-See the [tenant guide](../../features/model-access.md) for the user flows and
+See the tenant guide for the user flows and
 [preflight](source-management-preflight-2243.md) for the boundary assessment.
 
 ## Ownership and publication

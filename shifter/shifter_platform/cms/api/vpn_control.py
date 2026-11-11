@@ -51,7 +51,7 @@ def _verify(assertion: str) -> None:
     """Verify the Google identity token against the configured pool identity, or raise."""
     from google.auth.transport.requests import Request as GoogleTransport
 
-    from shared.model_access.control_identity import verify_google_control_assertion
+    from shared.control_identity import verify_google_control_assertion
 
     audience = str(getattr(settings, "VPN_CONTROL_AUDIENCE", "") or "")
     email = str(getattr(settings, "VPN_CONTROLLER_SERVICE_ACCOUNT_EMAIL", "") or "")
@@ -71,7 +71,7 @@ class VpnControllerAuthentication(BaseAuthentication):
     """Admit only the configured pool service account."""
 
     def authenticate(self, request: Request) -> tuple[VpnControllerPrincipal, VpnControllerCredential]:
-        from shared.model_access import ContractError
+        from shared.control_identity import ControlAssertionError
 
         header = get_authorization_header(request)
         if not header or len(header) > _MAX_ASSERTION_BYTES:
@@ -79,7 +79,7 @@ class VpnControllerAuthentication(BaseAuthentication):
         try:
             assertion = header.decode("ascii")
             _verify(assertion)
-        except (UnicodeError, ContractError) as exc:
+        except (UnicodeError, ControlAssertionError) as exc:
             raise AuthenticationFailed(_AUTHENTICATION_FAILED) from exc
         return VpnControllerPrincipal(), VpnControllerCredential(assertion)
 

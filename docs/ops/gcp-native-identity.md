@@ -136,8 +136,7 @@ stops application workloads and waits for their pods to become terminal or
 absent. Only then does it apply the stopped release and run migration.
 
 Policy
-services remain available. When model access is disabled, broker retirement
-precedes restoration of broader default egress policy. An incomplete probe, database failure, or unknown status aborts deployment
+services remain available. An incomplete probe, database failure, or unknown status aborts deployment
 before workload changes.
 
 An absent legacy cutover table is a known

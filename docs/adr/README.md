@@ -23,13 +23,11 @@ ADR-068's [gateway replacement evaluation](https://github.com/OpenRAE/bigrae/blo
 records the clarified #2274 scope, maintained-product comparison, selected
 LiteLLM OSS edition, deployment-owned rotation and proposed qualification. Its
 registry evidence pointer adds no executable check, exception
-or runtime support claim. Broker parking and the supported keyless-direct path
-remain unchanged until a separate adoption/cutover decision.
+or runtime support claim. Issue #2909 removed the broker; the keyless-direct path
+remains unchanged until a separate adoption/cutover decision.
 
-The GCP model-broker IAM guard accepts the cluster-derived
-`var.workload_identity_pool` reference for its exact Kubernetes service account
-binding. The owning GKE output is resource-backed so fresh bootstrap creates the
-pool before bindings; the allowed role, namespace and service account are unchanged.
+Issue #2909 removed the GCP model-broker IAM guard with the broker.
+The owning GKE workload identity pool output stays resource-backed, so fresh bootstrap creates the pool before bindings.
 
 The GCP `gcp-foundation` bootstrap applies the existing purpose-scoped identity
 root before runners, images, and platform infrastructure. Its optional private
@@ -164,15 +162,13 @@ deadline state and contain no lease-policy branch.
 
 ADR-059, ADR-060, and ADR-061 record the earlier broker design.
 The registry marks them as superseded by ADR-068.
-Their retained contracts describe broker authority, allocation, accounting, and qualification.
-They do not authorize broker activation.
+Issue #2909 removed the broker and the code that implemented these decisions.
 
 Accepted ADR-064 replaces ADR-059's no-service-account guest default for GCP.
 It defines default-on, keyless, predict-only Vertex access through Workload Identity.
-Direct access and broker access remain mutually exclusive per range.
 
-Accepted ADR-068 supersedes ADR-067 and parks the broker.
-Keyless-direct is the supported guest model path while the broker is parked.
+Accepted ADR-068 supersedes ADR-067 and parks the broker; its #2909 amendment removes it.
+Keyless-direct is the only guest model path.
 Future proxy controls are optional, with none enabled by default.
 A separate adoption decision is required before the guest model path changes.
 
@@ -232,11 +228,7 @@ Current mechanisms:
     Full architecture checks, type checks, external IaC scanners, migration checks, and test suites run in CI.
     A commit therefore does not repeat the repository-wide pipeline.
 
-- GCP bootstrap and deployment migration Jobs explicitly disable model access
-  and clear its catalog path/digest: these database-only Jobs do not mount the
-  runtime catalog. Model-broker pods use their application group as `fsGroup`
-  so their non-root process can read the projected 0440 fingerprint files.
-  The dedicated provisioner-launcher Role grants `list` on pods only in the
+- The dedicated provisioner-launcher Role grants `list` on pods only in the
   jobs namespace so cancellation can confirm that foreground Job deletion
   removed every pod. It grants no pod mutation, log, or exec access (ADR-006-R4).
   Range-access NetworkPolicies select the ephemeral post-deploy smoke Job so its SSH/RDP probe can reach guests.
@@ -400,7 +392,7 @@ Current mechanisms:
   cross-tenant credential-access fix.
 
 - ADR-004-R21's legacy guest-role issuer and dedicated checker have been removed.
-  ADR-068 parks the broker. ADR-064 defines the supported keyless, predict-only guest model identity.
+  Issue #2909 removed the broker (ADR-068). ADR-064 defines the keyless, predict-only guest model identity.
   The general IAM checks remain.
 
 - `scripts/check_tf_iam_role_naming/check_tf_iam_role_naming.py` and
@@ -753,45 +745,11 @@ unparseable never suppresses anything, so a malformed date cannot buy
 open-ended cover. `expires_on` is inclusive: the exception is live through that
 date and dead the day after.
 
-### Parked broker contracts
+### Removed broker contracts
 
-These retained implementation contracts do not authorize activation.
-[ADR-068](068-model-access-broker-parked.md) keeps broker and model-access settings disabled.
-The following checks describe the retained code, not a supported deployment.
-
-The retained broker contract requires an enabled v3 accounting catalog, an exact provider
-inventory, separate broker/provisioner workload identities and a versioned HMAC
-Secret reference. Installer projection and real Helm-render tests enforce these
-bindings. GCP deployment cleanup also removes the narrowly scoped provisioner-to-
-control enrollment egress policy. Standby infrastructure renders zero broker and
-control replicas until model access is enabled; no executable deployment or cloud
-qualification is implied by rendering. See [model access operations](../ops/model-access.md).
-
-M05 additionally binds active GCP control identities to the distinct numeric
-service-account IDs read back from Terraform. Installer, Helm schema/templates
-and startup all reject absent or overlapping IDs. Broker isolation is checked
-by the existing import contract; real TLS, PostgreSQL races, bounded worker/DB
-waits and content-sentinel tests lock the runtime boundary. No architectural
-exception or CI relaxation is introduced. See the
-[implemented broker contract](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/broker-runtime.md).
-
-The GCP workflow reads a reviewed per-environment model overlay when present,
-verifies deploy-owned TLS resources, and projects the sealed catalog into every
-runtime ConfigMap consumer. `platform/deploy/gcp/**` is owned by the GCP scripts
-lint, SAST, and test quality unit; a template change therefore cannot bypass
-the production-path quality matrix.
-
-Guest model enrollment is projected as allocation/role/target identities alongside
-an immutable operation input. The tenant-approved adapter manifest declares role
-bindings; only Engine's admitted allocations can populate them. A trusted SSH
-stdin channel delivers a one-use token after realization, and Linux tmpfs holds
-the guest's rotating broker tokens.
-
-GCP provisioner admission permits three
-non-secret enrollment coordinate/trust values only when they exactly match the
-runtime ConfigMap. The broker renderer supplies those values for both Helm and
-Actions. Real TLS helper tests cover trust failure, redirect refusal, state-file
-permissions and serialized refresh. AWS SSM does not qualify as secret delivery.
+Issue #2909 removed the model broker and its model-access control subsystem ([ADR-068](068-model-access-broker-parked.md)).
+The broker installer projections, Helm renders, enrollment delivery, overlay handling, and their checks were removed with it.
+Keyless-direct is the only guest model path ([ADR-064](064-default-range-model-access.md)).
 
 The external-runtime test-quality repair makes toolchain-dependent checks
 selectable with the `integration` marker while retaining them in default CI runs.
@@ -815,9 +773,7 @@ network scoping guards, and secret/identifier hygiene. Full tests, type checks
 and external infrastructure scanners remain in CI. Retired scenario-role checks
 and private-content exclusions are not restored by development-branch merges.
 
-The AWS model-broker module is included in the Terraform validation inventory
-with active contract tests. Broker and control listeners bind the explicit private pod IPv4 address supplied by the Downward API.
-TLS, workload identity, and NetworkPolicy enforce the retained service boundary. EC2 secret categories derive
+Issue #2909 removed the AWS model-broker module, its validation inventory entry, and the broker and control listeners. EC2 secret categories derive
 from a closed authentication-method set. Secret scanning remains enabled without
 a suppression for these category identifiers.
 
@@ -828,7 +784,6 @@ deployment configuration. Native range power capabilities are refused before
 legacy worker dispatch because native realization has a separate member inventory.
 
 The runtime security annotations cover Sonar's wildcard-listener and shared temporary-directory findings.
-Broker/control sockets are private Kubernetes Services with mandatory TLS, workload authentication, and enforced NetworkPolicy.
 The plugin `/tmp` is a per-pod memory volume with a size limit.
 Host mounts are denied.
 These scoped annotations retain those deployment controls and their contract tests.

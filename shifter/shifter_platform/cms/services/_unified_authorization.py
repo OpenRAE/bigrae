@@ -25,12 +25,7 @@ def _range_binding(
     range_uuid: UUID, *, include_terminal: bool = False, read_only_intent: bool = False
 ) -> tuple[RangeInstance, ResourceScope, TargetRef]:
     """Resolve intent, runtime and actual aggregate identity before policy."""
-    instance = (
-        RangeInstance.all_objects.defer("range_spec", "model_launch_scope", "model_sources", "model_source_sponsorship")
-        .select_related("request")
-        .filter(uuid=range_uuid)
-        .first()
-    )
+    instance = RangeInstance.all_objects.defer("range_spec").select_related("request").filter(uuid=range_uuid).first()
     if (
         instance is None
         or (instance.is_deleted and not include_terminal)

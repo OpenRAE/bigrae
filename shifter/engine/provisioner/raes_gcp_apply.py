@@ -117,7 +117,6 @@ def _apply_runtime(
         host_readiness_verifier=options.host_readiness_verifier,
         allocated_network_cidrs=options.allocated_network_cidrs,
         runtime_plugin=options.runtime_plugin,
-        model_enrollment=options.model_enrollment,
         openvpn=options.openvpn,
     )
 
@@ -359,7 +358,7 @@ def _prepare_raes_apply(
         RaesGcePlanOptions(
             config=config,
             access_bindings=realized_access,
-            egress_policy=GceEgressPolicy(mode=options.egress_mode, model_broker=options.model_broker),
+            egress_policy=GceEgressPolicy(mode=options.egress_mode),
             allocated_network_cidrs=options.allocated_network_cidrs,
             remote_access=vpn_access_plan(options),
         ),

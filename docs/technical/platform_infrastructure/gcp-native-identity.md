@@ -66,8 +66,7 @@ values and generated manifests contain references/public connection metadata.
 
 Bootstrap's temporary migration lane includes exact SQL, Google private/restricted
 VIPs, GKE metadata and namespace/pod-selected DNS before Helm installs the platform
-policies. The optional model-access control workload receives the same native
-workers duty in both deployment paths. The publisher maps its runtime token to
+policies. The publisher maps its runtime token to
 the established chart key, preserving the existing mount contract.
 
 Migration

@@ -202,38 +202,10 @@ Preparing this workflow does not create the publisher or publish a package.
 
 ## Guest model access
 
-The broker integration below is retained contract material.
-[ADR-068](../../docs/adr/068-model-access-broker-parked.md) parks broker execution and its controls.
-Keyless-direct is the supported guest model path.
-SDK helpers and manifest fields do not enable the parked broker or guarantee host enrollment.
-
-A plugin manifest may declare `model_bindings`, mapping workload roles such as
-`participant` to names in `required_bindings`. Administrators choose the concrete
-guest when assigning the adapter. The declaration does not grant model access:
-Engine must separately admit that role's model intent, policy and budget.
-
-For a mapped Linux guest, core enrolls the operation before adapter configuration.
-`/run/shifter-model-access/<role>/session.json` contains broker access/refresh
-capabilities and public TLS coordinates; it never contains a provider credential.
-The sibling `helper.py` is a standalone standard-library program. A client can
-obtain a short-lived token with `python3 helper.py token --state /absolute/path/session.json`.
-Only this token command writes the credential to stdout, for consumption by the
-client's token-helper interface; never log or interpolate its output into a command.
-
-An adapter owns client/container setup. Move or mount the whole state directory
-into the client environment, with directory mode 0700, files 0600 and ownership
-matching the client's UID. Mounting a single session file breaks atomic refresh.
-
-Keep the directory on tmpfs. Configure the client to use the broker URL and CA,
-and disable direct provider authentication. Do not send session contents back to
-the isolated worker.
-
-Re-enrollment invalidates the old credential family; expiry
-or refresh failure must stop client model access.
-
-The current delivery implementation requires trusted private SSH on Linux. It
-rejects transports that would persist enrollment in a remote command service.
-Client protocol compatibility and both cloud deployments require live qualification.
+Guests reach models through keyless-direct access, as defined in [ADR-064](../../docs/adr/064-default-range-model-access.md).
+The SDK has no model-access helper.
+The manifest field `model_bindings` remains only so that existing manifests stay valid.
+It must be empty.
 
 ## Apparatus runtime inputs
 

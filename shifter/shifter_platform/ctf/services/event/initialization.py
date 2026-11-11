@@ -8,8 +8,6 @@ from uuid import UUID
 if TYPE_CHECKING:
     from ctf.services.actors import EventActionAdmission
 
-    from .model_sources import PreparedEventModelSources
-
 from django.db import transaction
 from pydantic import BaseModel, ConfigDict
 
@@ -18,16 +16,15 @@ from ctf.models import CTFEvent
 from ctf.services.content_resolution import ResolvedCtfContent, resolve_scenario_ctf_content
 from ctf.services.credential_scope import _event_initialization_scope
 from shared.credentials import CredentialContext, resolve_current_credential
-from shared.model_access.sources import ModelSourceCredentialReference, ModelSourceSelection
+from shared.operation_authority import CredentialReference
 
 
 class _InitializationIntent(BaseModel):
-    """Retain the credential reference, source selection and exact content digest."""
+    """Retain the credential reference and exact content digest."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    authority: ModelSourceCredentialReference
-    model_sources: ModelSourceSelection | None = None
+    authority: CredentialReference
     content_digest: str | None = None
 
 
@@ -36,12 +33,8 @@ def initialization_intent(
 ) -> dict[str, object]:
     """Persist references and pinned intent, without source content or bearer secrets."""
     try:
-        selection = (
-            ModelSourceSelection.model_validate(event_data["model_sources"]) if "model_sources" in event_data else None
-        )
         return _InitializationIntent(
-            authority=ModelSourceCredentialReference.from_credential(credential),
-            model_sources=selection,
+            authority=CredentialReference.from_credential(credential),
             content_digest=content.evidence.declared_digest if content is not None else None,
         ).model_dump(mode="json")
     except ValueError:
@@ -62,10 +55,7 @@ def _initialization_authority(
             credential = admitted_credential
         else:
             credential = resolve_current_credential(intent.authority.credential())
-        if (
-            recovery_credential is None
-            and ModelSourceCredentialReference.from_credential(credential) != intent.authority
-        ):
+        if recovery_credential is None and CredentialReference.from_credential(credential) != intent.authority:
             raise ValueError("initialization credential changed")
         if intent.authority.principal_uuid != event.owner_principal_uuid:
             raise ValueError("initialization owner changed")
@@ -104,10 +94,8 @@ def resume_event_initialization(
         workspace_id=event.workspace_id,
     )
     require_event_creation(_admitted_actor if _admitted_actor is not None else credential, scope_parent(scope))
-    admission, sources = _prepare_initialization(
-        event, intent, content, _admitted_actor if _admitted_actor is not None else credential
-    )
-    return _commit_initialization(event, intent, content, admission, sources)
+    admission = _prepare_initialization(event, content, _admitted_actor if _admitted_actor is not None else credential)
+    return _commit_initialization(event, content, admission)
 
 
 def abort_event_initialization(event_uuid: UUID, credential: CredentialContext) -> None:
@@ -163,43 +151,24 @@ def abort_event_initialization(event_uuid: UUID, credential: CredentialContext) 
         locked.delete(soft=False)
 
 
-def _prepare_initialization(
-    event: CTFEvent,
-    intent: _InitializationIntent,
-    content: ResolvedCtfContent | None,
-    actor: object,
-) -> tuple[EventActionAdmission, PreparedEventModelSources | None]:
-    """Admit content and model-source work before taking the event transaction lock."""
+def _prepare_initialization(event: CTFEvent, content: ResolvedCtfContent | None, actor: object) -> EventActionAdmission:
+    """Admit content work before taking the event transaction lock."""
     from ctf.services.authorization import admit_event_actions
-
-    from .model_sources import prepare_event_model_sources
 
     with _event_initialization_scope(event.pk, event.owner_principal_uuid):
         actions = ["event.manage_config"]
         if content is not None:
             actions.extend(("event.manage_content", "event.manage_challenges"))
-        admission = admit_event_actions(actor, event, *actions)
-        sources = (
-            prepare_event_model_sources(
-                event, admission, intent.model_sources.model_dump(mode="json"), expected_revision=0
-            )
-            if intent.model_sources is not None
-            else None
-        )
-    return admission, sources
+        return admit_event_actions(actor, event, *actions)
 
 
 def _commit_initialization(
     event: CTFEvent,
-    intent: _InitializationIntent,
     content: ResolvedCtfContent | None,
     admission: EventActionAdmission,
-    sources: PreparedEventModelSources | None,
 ) -> CTFEvent:
-    """Fence the admitted declaration and commit content and model-source state atomically."""
+    """Fence the admitted declaration and commit content state atomically."""
     from ctf.services.content_hydration import hydrate_event_ctf_content
-
-    from .model_sources import commit_event_model_sources
 
     with _event_initialization_scope(event.pk, event.owner_principal_uuid), transaction.atomic():
         locked = CTFEvent.objects.select_for_update().get(pk=event.pk)
@@ -213,18 +182,6 @@ def _commit_initialization(
             or locked.owner_principal_uuid != event.owner_principal_uuid
         ):
             raise CTFStateError("Event initialization changed")
-        if intent.model_sources is not None:
-            assert sources is not None
-            commit_event_model_sources(locked, sources)
-            locked.save(
-                update_fields=[
-                    "model_sources",
-                    "model_source_authority",
-                    "model_source_actor_id",
-                    "model_source_revision",
-                    "updated_at",
-                ]
-            )
         if content is not None:
             hydrate_event_ctf_content(locked.pk, content, actor_id=admission)
         locked.initialization_intent = None

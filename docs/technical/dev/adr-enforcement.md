@@ -6,11 +6,8 @@ The checked-in registry, checker implementations, hook configuration, and workfl
 
 ## What Exists
 
-The retained [model-access design for #681](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/index.md) describes the earlier broker architecture.
-ADR-068 governs its current applicability and replacement boundary.
-Registry and import validation do not prove live broker authorization, budgets, revocation, or provider isolation.
-The retained ADR-060-R3 sharing contract requires independent configuration, explicit overlap and membership, deduplicated accounting, and separately revocable range grants.
-Its historical implementation links do not override superseding decisions.
+The [model-access design for #681](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/index.md) is a historical record.
+Issue #2909 removed the broker and its model-access control subsystem (ADR-068).
 
 The current enforcement stack has six parts:
 
@@ -1109,8 +1106,7 @@ immutable IDs and on `purpose_contexts` (ADR-069-R3, ADR-070).
     | Operator password by variable name; Secrets through stdin | `_gcp-dev.yml`, `gcp_control_plane.py` |
     | Single range-zone input (`settings.range_cells.zones`) | `scripts/gcp/render_ci_deployment_inputs.py`, `settings_gcp_deploy.py` |
 
-    The overlay invariant now counts CI adapter runs. Each run receives
-    `SHIFTER_CONFIG_OVERLAY_JSON` and applies it.
+    The overlay invariant counted CI adapter runs until #2909 removed the overlay.
 - **GCP running-image check (`scripts/adr_guard/tests/test_deploy_workflow.py`)**:
   #2698 adds the OpenFGA policy servers to the running-image check
   (ADR-037-R8). `gcp_rollout.py` passes a fourth `--expected-image` argument,
@@ -1182,13 +1178,12 @@ checks require no deployment or live qualification.
 
 Core no longer creates pack-specific provider roles or issues guest provider keys.
 The dedicated legacy role checker moved with the removed issuer; generic IAM,
-permissions-boundary, namespace and model-broker checks remain enforced. The AWS
+permissions-boundary and namespace checks remain enforced. The AWS
 permissions boundary no longer exempts the retired role namespace from its IAM
 deny. Drain existing ranges that depend on those roles using the previous release
 before applying the new platform IAM. GCP teardown retains legacy credential
-revocation, but new ranges receive no provider key. Qualification must establish
-broker-mediated model access on both clouds before declaring the private adapter
-migration complete.
+revocation, but new ranges receive no provider key. Guests use keyless-direct
+model access (ADR-064).
 
 ### Independent SDK publication (ADR-041, ADR-042)
 
@@ -1230,45 +1225,23 @@ The checked-in SHA-512 was verified against the complete release archive locally
 Live tests must establish actual sandbox execution and deny-all
 network enforcement independently of anything the plugin reports.
 
-### Broker process and guest authority (ADR-059, ADR-060)
+### Model broker removal (ADR-068, #2909)
 
-This section describes retained broker checks. ADR-068 governs the parked implementation and any replacement qualification.
-The checks do not authorize activating the retired broker service.
+Issue #2909 removed the model broker and its model-access control subsystem.
+These checks were removed with the components that they protected:
 
-The `model_broker` process has a mandatory import-linter contract forbidding
-application domains, Django, PostgreSQL and Redis dependencies. Its only Engine
-access is the private TLS control API authenticated with Google workload ID
-tokens or a fixed, audience-bound regional STS identity assertion. Provisioner
-enrollment has a distinct principal and operation-specific audience; the broker
-principal cannot issue enrollment. Neither listener trusts forwarded peer headers.
+| Removed check | Protected component |
+| --- | --- |
+| `model-broker-isolation` import-linter contract | `model_broker` process |
+| `_check_model_broker_scope` in `scripts/check_tf_gcp_iam_resource_scope` | Broker and invocation service accounts and roles |
+| `model_source_control_read` allowance in the same checker | Tenant model-source secret reads |
+| `eks-model-broker` Terraform test and broker chart tests | AWS and GCP broker packaging |
+| `SHIFTER_CONFIG_OVERLAY_JSON` consumer count in `test_deploy_workflow.py` | Broker configuration overlay |
 
-Engine stores only hashes of one-use enrollment, access and rotating refresh
-tokens. Every use checks the incumbent range generation, grant epoch, upstream
-authority projections, original hard expiry and current reserved subnet. Request
-budget and token authentication share a transaction. PostgreSQL contention tests
-cover account ceilings and one-use credential rotation. Provider output is never
-written to accounting records; incomplete usage preserves conservative holds.
-
-Vertex and Bedrock adapters implement the shared provider protocol and fixed
-origins with deployment-owned model/identity bindings. Token counting and paid
-transport each recheck a live continuation lease after credential acquisition.
-HTTP redirects, implicit retries, arbitrary URLs and unsupported billing features
-are rejected. Stream framing, CRCs, complete usage, disconnect cancellation and
-revocation are tested through the HTTP/provider boundaries. These local tests do
-not qualify effective cloud IAM, networking, guest delivery or model availability.
-
-## AWS model broker packaging
-
-These retained packaging checks describe the earlier broker implementation.
-ADR-068 governs its applicability; passing them does not authorize activation.
-
-ADR-059's EKS packaging checks live in
-`platform/terraform/modules/portal/eks-model-broker/tests/boundary.tftest.hcl`,
-`shifter/installation/tests/test_aws_model_broker.py`, and the broker chart tests.
-They exercise exact invocation IAM, private endpoint/routing readback, deployment
-intent mismatch rejection and the combined NetworkPolicy permissions. Run native
-Terraform tests, installer tests and chart tests when these boundaries change.
-Live AWS and GCP qualification remains a separate release obligation.
+The IAM checker now rejects the former model-source secret grant like any other project-level secret grant.
+The OpenAPI breaking-change gate accepts exact enum-value retirements in `openapi/v1.retirements.json`.
+Each retired value is named, carries the ADR and issue, and fails the gate if the current contract reintroduces it.
+The #2909 record retires the model-access paths, response fields, token scope values, and the `model_sources` integration value.
 
 ## Architecture handbook drift (ADR-022-R2)
 

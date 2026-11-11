@@ -2,6 +2,8 @@
 
 ## Status
 
+Amended by [ADR-068](068-model-access-broker-parked.md): issue #2909 removed the broker, so every range uses the keyless guest identity.
+
 Accepted for [#2275](https://github.com/Brad-Edwards/bigrae/issues/2275),
 2026-09-19. Supersedes ADR-059's "no-service-account guest default" decision
 (ADR-059-R3) for GCP. Restores the default-on model-access enablement removed

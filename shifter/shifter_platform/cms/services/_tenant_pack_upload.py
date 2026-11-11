@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import logging
 import re
 import tempfile
@@ -16,14 +15,13 @@ from django.conf import settings
 from django.core.files.uploadedfile import UploadedFile
 from django.db import transaction
 
-from cms.models import RaesPackageSource, ScenarioModelNeeds
+from cms.models import RaesPackageSource
 from cms.scenarios.pack_validation import pack_digest, validate_pack
 from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.cloud import get_object_storage
 from shared.credentials import CredentialContext
 from shared.exceptions import ValidationError
 from shared.log_sanitize import safe_log_value
-from shared.model_access import PackModelNeedsDeclaration
 from shared.raes.object_source import stage_uploaded_pack
 from shared.raes.pack_conformance import validate_pack_contract
 from shared.raes.package_loader import resolve_pack_scenario_path
@@ -41,25 +39,9 @@ from ._tenant_pack_upload_journal import (
 )
 
 logger = logging.getLogger(__name__)
-_MODEL_NEEDS_FILE = "model-needs.json"
-_MODEL_NEEDS_MAX_BYTES = 65_536
 
 
-def _pack_model_needs(root: Path, digest: str) -> dict[str, dict[str, object]]:
-    """Bind an optional closed pack declaration to the verified archive digest."""
-    path = root / _MODEL_NEEDS_FILE
-    if not path.exists():
-        return {}
-    if not path.is_file() or path.stat().st_size > _MODEL_NEEDS_MAX_BYTES:
-        raise ValueError("Pack model needs exceed their bound")
-    try:
-        declaration = PackModelNeedsDeclaration.model_validate(json.loads(path.read_text(encoding="utf-8")))
-        return declaration.bind_to_digest(digest)
-    except Exception:  # noqa: BLE001  # untrusted pack content; its error text stays out of the chain
-        raise ValueError("Pack model needs are invalid") from None
-
-
-def _validate_archive(path: Path, name: str, report: str) -> tuple[str, str, dict[str, dict[str, object]], bool]:
+def _validate_archive(path: Path, name: str, report: str) -> tuple[str, str, bool]:
     """Verify bounded archive contents and return their digest and package version."""
     with stage_uploaded_pack(
         path,
@@ -82,7 +64,7 @@ def _validate_archive(path: Path, name: str, report: str) -> tuple[str, str, dic
         pending = bool(required_project_parameters(scenario_path))
         if not pending:
             validate_pack_contract(scenario_path, report)
-        return digest, version, _pack_model_needs(root, digest), pending
+        return digest, version, pending
 
 
 def _persist(
@@ -91,7 +73,6 @@ def _persist(
     request: PackRegistrationRequest,
     report: str | None,
     request_id: str,
-    model_needs: dict[str, dict[str, object]],
     journal: PackUploadJournal,
 ) -> dict[str, Any]:
     """Register validated bytes, their owned archive and conformance evidence atomically."""
@@ -115,17 +96,6 @@ def _persist(
         row.conformance_status = "passed" if report else "pending"
         row.conformance_report_ref = report or ""
         row.save(update_fields=["conformance_status", "conformance_report_ref", "updated_at"])
-        if model_needs:
-            overlay = ScenarioModelNeeds.objects.select_for_update().filter(scenario_id=row.scenario_id).first()
-            if overlay is None:
-                overlay = ScenarioModelNeeds(scenario_id=row.scenario_id)
-            overlay.authored_package_digest = row.package_digest
-            overlay.needs = model_needs
-            overlay.updated_by_id = None
-            overlay.updated_by_principal_uuid = admitted.credential.principal.uuid
-            overlay.save()
-        else:
-            ScenarioModelNeeds.objects.filter(scenario_id=row.scenario_id).delete()
         audit_log(
             AuditEvent(
                 entity_type=AuditEntityType.SCENARIO,
@@ -189,7 +159,7 @@ def upload_tenant_pack(
         path = Path(directory) / "archive"
         try:
             _write_archive(archive, path)
-            digest, version, model_needs, pending = _validate_archive(path, name, report)
+            digest, version, pending = _validate_archive(path, name, report)
         except Exception as exc:  # noqa: BLE001  # untrusted pack content; its error text stays out of the chain
             # Pack validation errors embed archive paths and content, so log only the class.
             logger.warning(
@@ -228,7 +198,6 @@ def upload_tenant_pack(
                 request,
                 None if pending else report,
                 request_id,
-                model_needs,
                 journal,
             )
         except Exception as exc:  # noqa: BLE001  # untrusted pack content; its error text stays out of the chain

@@ -1,9 +1,8 @@
 # GCP model broker deployment package
 
-> **Current applicability** [ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
-> These retained contracts do not authorize broker activation or establish live qualification.
-> Independently supported native source and range controls retain their own boundaries.
-> See the [current handbook](../../technical/architecture.md) and [model-access guide](index.md).
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
 
 <!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
 <!-- vale off -->
@@ -174,7 +173,7 @@ rollout, and old/new CA overlap for existing guests. Verify both replicas after
 rollout and retain the old Secret until old connections and pods drain. A failed
 rotation leaves admission disabled; never disable certificate verification.
 
-Use the [operator probes](../../ops/model-access-gcp-probes.md). Local tests
+Use the operator probes. Local tests
 exercise render/schema, IAM guard negatives, policy union, catalog binding,
 source comparison, exact egress and unsafe combinations. Live LB/CNI source
 preservation, stolen-token rejection, effective provider permission/model

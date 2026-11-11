@@ -11,10 +11,9 @@ directory with these objects:
     both exist, the JSON file comes later, so its values win (Terraform var-file order).
 ``range-images.json``
     Generated exact GCE image references for the range guest roles.
-``foundation-inputs.json``, ``model-broker-overlay.template.json``,
-``retired-cluster-artifacts.json``
-    Optional inputs for the narrow foundation reconcile, the parked broker, and the
-    retirement of manual qualification objects.
+``foundation-inputs.json``, ``retired-cluster-artifacts.json``
+    Optional inputs for the narrow foundation reconcile and the retirement of manual
+    qualification objects.
 
 The loader copies the objects into a private working directory (0700 directory, 0600
 files), validates them, and never prints their contents.
@@ -37,7 +36,6 @@ CONFIG_OBJECT = "bigrae.yaml"
 TERRAFORM_VALUES_OBJECTS = ("terraform.tfvars", "terraform.tfvars.json")
 RANGE_IMAGES_OBJECT = "range-images.json"
 FOUNDATION_INPUTS_OBJECT = "foundation-inputs.json"
-BROKER_TEMPLATE_OBJECT = "model-broker-overlay.template.json"
 RETIRED_ARTIFACTS_OBJECT = "retired-cluster-artifacts.json"
 LOCK_OBJECT = "locks/deploy.lock"
 BUNDLE_OBJECTS = (
@@ -45,7 +43,6 @@ BUNDLE_OBJECTS = (
     *TERRAFORM_VALUES_OBJECTS,
     RANGE_IMAGES_OBJECT,
     FOUNDATION_INPUTS_OBJECT,
-    BROKER_TEMPLATE_OBJECT,
     RETIRED_ARTIFACTS_OBJECT,
 )
 RANGE_IMAGE_ROLES = ("linux", "kali", "windows", "dc")
@@ -189,7 +186,6 @@ class DeploymentInputs:
     terraform_values_paths: tuple[Path, ...]
     range_images: dict[str, str] = field(default_factory=dict)
     foundation_inputs_path: Path | None = None
-    broker_template_path: Path | None = None
     retired_artifacts_path: Path | None = None
 
     @property
@@ -264,7 +260,6 @@ def load_deployment_inputs(
         terraform_values_paths=values_paths,
         range_images=parse_range_images(copied.get(RANGE_IMAGES_OBJECT)),
         foundation_inputs_path=copied.get(FOUNDATION_INPUTS_OBJECT),
-        broker_template_path=copied.get(BROKER_TEMPLATE_OBJECT),
         retired_artifacts_path=copied.get(RETIRED_ARTIFACTS_OBJECT),
     )
 

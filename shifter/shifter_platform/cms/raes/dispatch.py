@@ -114,12 +114,6 @@ class CmsRaesDispatchPort:
         sealed_content = prepare_cloud_content(cloud_content, compiled_plan, self.pack_root)
         delivery_bindings = self._prepare_delivery(compiled_plan)
         artifact_bindings = self._resolve_artifact_bindings(compiled_plan)
-        from uuid import UUID
-
-        from cms.services._model_allocation import needs_model_preparation, prepare_model_access_for_dispatch
-        from engine.services import dispatch_created_raes_range
-
-        prepare_models = needs_model_preparation(self.request_id)
         with transaction.atomic():
             ref = create_raes_range(
                 request_id=self.request_id,
@@ -132,15 +126,11 @@ class CmsRaesDispatchPort:
                     participant_access=tuple(participant_access),
                     artifact=artifact_bindings,
                     runtime_plugin_scope=self.runtime_plugin_scope,
-                    defer_dispatch=prepare_models,
                     openvpn_deadline=self._openvpn_deadline(),
                 ),
                 workspace_id=self.workspace_id,
                 egress_mode=self.egress_mode,
             )
-        if prepare_models:
-            prepare_model_access_for_dispatch(UUID(self.request_id), range_id=UUID(ref.range_id))
-            ref = dispatch_created_raes_range(UUID(self.request_id))
         return ShifterDispatchResult(
             request_id=ref.request_id, accepted=ref.accepted, status=ref.status, range_id=ref.range_id
         )
@@ -155,7 +145,6 @@ class CmsRaesDispatchPort:
         from uuid import UUID
 
         from cms.models import RangeInstance
-        from cms.services._model_allocation import needs_model_preparation, prepare_model_access_for_dispatch
         from cms.services._scoped_range_launch import revalidate_scoped_launch, source_launch_metadata
         from engine.services import (
             dispatch_created_raes_range,
@@ -193,7 +182,6 @@ class CmsRaesDispatchPort:
         plugin_scope, _prepare_files = prepare_runtime_files(
             current, self.scope, self.runtime_plugin_scope, existing_range_id=instance.range_id
         )
-        prepare_models = needs_model_preparation(self.request_id)
         bindings = RangeBindings(
             cloud_content=sealed_content,
             delivery=delivery,
@@ -216,8 +204,6 @@ class CmsRaesDispatchPort:
             """Publish only committed custody, including an outer retry-key binding."""
             nonlocal ref
             publish_range_relationships(UUID(self.request_id))
-            if prepare_models:
-                prepare_model_access_for_dispatch(UUID(self.request_id), range_id=UUID(ref.range_id))
             if self.authority_target is None:
                 ref = dispatch_created_raes_range(UUID(self.request_id), credential=current, prepared_creation=prepared)
 
