@@ -10,12 +10,13 @@ The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/parall
 | Service | Behavior |
 | --- | --- |
 | `start_experiment_dispatch` | Claims entries, creates workers, reconciles |
-| `reconcile_experiment_dispatch` | Advances each claimed entry by at most one step |
+| `reconcile_experiment_dispatch` | Advances each claimed entry by at most one step; claims pending replacement entries |
 | `stop_experiment_dispatch` | Requests a stop for each running trial |
 
 The worker identity is a UUID derived from the attempt token, so a lost response finds the same worker.
 `claim_experiment_entry` bounds active claims to the batch concurrency.
 `create_disposable_worker` bounds live workers to the worker policy and capacity reservations.
+A failure in one entry is reported as `error` for that entry; the pass continues with the other entries.
 
 ## Engine worker trials
 
@@ -61,7 +62,11 @@ The archive returns through a bounded copy, digest verification, and a create-on
 
 ## Archive intake
 
-Intake accepts two seals.
+Dispatch intake checks only what dispatch needs: containment, the sealed bytes of every member, the run ID, and the run status.
+It reads the run status from a LilRAE seal, or from the RAES run record of a BigRAE seal.
+It parses no other archive record.
+
+The general intake accepts two seals.
 
 | Seal | Owner | Record |
 | --- | --- | --- |
@@ -85,7 +90,22 @@ A trial seal has no RAES plan, so its plan metadata is empty.
 
 After verified VM absence, the coordinator records a RAES cleanup receipt.
 Each obligation that the outcome triggers reports success, with the worker absence as evidence.
-The clean-state claim is `fresh-range-required`.
+The clean-state claim is `verified-clean`: the destroyed worker leaves no residual state, and a replacement gets a new worker.
+
+## Trial replacement
+
+The experiment's RAES `replacement_policy` authorizes replacements.
+After cleanup, dispatch replaces an entry whose run status the policy names, up to `max_replacements` per original slot.
+
+1. Dispatch reads the failed trial's RAES run record from the stored archive.
+2. It rebuilds the compilation request from the batch's registered pack and retained authority.
+3. RAES `compile_replacement_trial` compiles a one-entry child plan. Its inputs are the original plan, the failed run, the cleanup receipt, and the slot's replacement history.
+4. Dispatch commits the child plan and its snapshot as a pending entry that names the entry it replaces.
+5. The next pass claims the child entry and creates its worker.
+
+A child entry stages its own plan and snapshot.
+A refused compilation reports `replacement-refused` and records nothing.
+Replacement needs a RAES run record in the archive and the batch's pack still registered.
 
 ## Dependency tuple
 

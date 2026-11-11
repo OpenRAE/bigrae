@@ -126,12 +126,15 @@ def run(dispatch, operation="reconcile", **options):
     return reconcile_experiment_dispatch(*args, scope=dispatch.scope, **options)
 
 
-def finish(dispatch, worker_id, entry, *, attempt_id):
+def finish(dispatch, worker_id, entry, *, attempt_id, run_id=None, run_status=None):
     """The worker exported a sealed archive for the expected attempt and trial SDL."""
-    from shared.raes.experiment_dispatch_inputs import trial_scenario_bytes
+    from shared.raes.experiment_dispatch_inputs import entry_inputs, trial_scenario_bytes
 
-    scenario = "sha256:" + hashlib.sha256(trial_scenario_bytes(dispatch.batch.inputs, entry.plan_entry_id)).hexdigest()
-    raw = trial_record_archive(run_id=entry.run_id, attempt_id=attempt_id, scenario=scenario)
+    inputs = entry_inputs(dispatch.batch.inputs, entry.replacement_json)
+    scenario = "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, entry.plan_entry_id)).hexdigest()
+    raw = trial_record_archive(
+        run_id=run_id or entry.run_id, attempt_id=attempt_id, scenario=scenario, run_status=run_status
+    )
     key = f"trial-exports/{worker_id}/op/run.tar.gz"
     dispatch.storage.objects[("bigrae-assets", key)] = raw
     trial = dispatch.engine.trials[worker_id]
@@ -198,7 +201,6 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
 
 def test_failed_collection_keeps_the_worker_and_shows_the_attempt_not_collected(dispatch, settings):
     from cms.models import ExperimentEntry
-    from shared.exceptions import CMSError
 
     settings.STORAGE_BUCKET_NAME = "bigrae-assets"
     run(dispatch, "start")
@@ -206,9 +208,9 @@ def test_failed_collection_keeps_the_worker_and_shows_the_attempt_not_collected(
     dispatch.engine.workers[worker_id].status = "ready"
     run(dispatch)
     entry = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
-    finish(dispatch, worker_id, entry, attempt_id="another-attempt")
-    with pytest.raises(CMSError):
-        run(dispatch)
+    finish(dispatch, worker_id, entry, attempt_id=str(entry.token), run_id="another-run")
+    # The refused archive is reported for its entry; the pass still advances the others.
+    assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["error"]
     entry.refresh_from_db()
     assert entry.receipt_id is None
     assert not dispatch.engine.workers[worker_id].retiring
@@ -250,3 +252,97 @@ def test_worker_capacity_refusal_leaves_the_claim_for_reconcile(dispatch, settin
     dispatch.engine.capacity = 1
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["worker-created"]
     assert len(dispatch.engine.workers) == 1
+
+
+def _child(inputs, parent):
+    """A committed RAES replacement decision: a one-entry child plan for the failed slot."""
+    import copy
+
+    plan = copy.deepcopy(inputs["plan"])
+    entry = dict(plan["entries"][parent.plan_entry_id], run_id=parent.run_id + "-r1")
+    entry["plan_entry_id"] = parent.plan_entry_id + "-r1"
+    plan["entries"] = {entry["plan_entry_id"]: entry}
+    plan["replacement_origin"] = {"ordinal": 1}
+    return {
+        "root_entry_id": parent.plan_entry_id,
+        "plan": plan,
+        "snapshot": inputs["snapshots"][parent.plan_entry_id],
+        "superseded_run": {},
+        "parent_run": {},
+        "cleanup_receipts": [],
+    }
+
+
+def test_a_failed_run_gets_one_policy_authorized_replacement_that_dispatch_runs(dispatch, settings, monkeypatch):
+    from contextlib import nullcontext
+
+    from cms.models import ExperimentEntry
+    from cms.services import _experiment_replacement as replacement
+
+    settings.STORAGE_BUCKET_NAME = "bigrae-assets"
+    compiled = []
+    monkeypatch.setattr(
+        replacement, "replacement_allowed", lambda _i, status, ordinal: status == "failed" and ordinal == 1
+    )
+    monkeypatch.setattr(replacement, "read_archived_run", lambda *_args: {"run_status": "failed"})
+    monkeypatch.setattr(replacement, "_pack_snapshot", lambda _source: nullcontext("pack-root"))
+    monkeypatch.setattr(replacement, "verify_pack_digest", lambda *_args: True)
+    monkeypatch.setattr(
+        replacement.RaesPackageSource.objects,
+        "filter",
+        lambda **_kw: SimpleNamespace(first=lambda: SimpleNamespace(package_digest="sha256:pack")),
+    )
+
+    def compile_child(root, inputs, **kwargs):
+        compiled.append((root, kwargs["root_entry_id"], kwargs["previous"], kwargs["failed_run"]))
+        return _child(inputs, parent)
+
+    monkeypatch.setattr(replacement, "compile_experiment_replacement", compile_child)
+    run(dispatch, "start")
+    worker_id = next(iter(dispatch.engine.workers))
+    dispatch.engine.workers[worker_id].status = "ready"
+    run(dispatch)
+    parent = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
+    finish(dispatch, worker_id, parent, attempt_id=str(parent.token), run_status="failed")
+    run(dispatch)  # collected
+    run(dispatch)  # retiring
+    dispatch.engine.workers[worker_id].retired = True
+    run(dispatch)  # cleanup recorded
+
+    actions = {step.plan_entry_id: step.action for step in run(dispatch)}
+    assert actions[parent.plan_entry_id] == "replacement-recorded"
+    assert compiled == [("pack-root", parent.plan_entry_id, [], {"run_status": "failed"})]
+    child = ExperimentEntry.objects.get(replaces=parent)
+    assert (child.replacement_ordinal, child.state) == (1, "pending")
+
+    # The next pass claims the replacement and creates its own worker; the parent stays replaced.
+    actions = {step.plan_entry_id: step.action for step in run(dispatch)}
+    assert actions[parent.plan_entry_id] == "replaced"
+    assert actions[child.plan_entry_id] == "worker-created"
+    child.refresh_from_db()
+    assert child.worker_ref and len(dispatch.engine.workers) == 2
+    assert len(compiled) == 1
+
+
+def test_a_replacement_entry_stages_its_own_child_plan_and_snapshot(experiment_inputs):
+    from shared.raes.experiment_dispatch_inputs import entry_inputs, trial_unit_bytes
+    from tests.cms.experiment_admission_fixtures import admit
+
+    batch = admit(experiment_inputs)
+    parent_id = next(iter(batch.inputs["plan"]["entries"]))
+    parent = SimpleNamespace(plan_entry_id=parent_id, run_id=batch.inputs["plan"]["entries"][parent_id]["run_id"])
+    child = _child(batch.inputs, parent)
+    assert entry_inputs(batch.inputs, "") is batch.inputs
+    selected = entry_inputs(batch.inputs, json.dumps(child))
+    unit = json.loads(trial_unit_bytes(selected, parent_id + "-r1"))
+    assert unit["plan"] == child["plan"] and unit["snapshot"] == child["snapshot"]
+
+
+def test_replacement_policy_bounds_the_disposition_and_the_ordinal():
+    from shared.raes.experiment_replacement import replacement_allowed
+
+    inputs = {"plan": {"replacement_policy": {"max_replacements": 2, "replace_on": ["failed", "invalidated"]}}}
+    assert replacement_allowed(inputs, "failed", 1) and replacement_allowed(inputs, "invalidated", 2)
+    assert not replacement_allowed(inputs, "failed", 3)
+    assert not replacement_allowed(inputs, "aborted", 1) and not replacement_allowed(inputs, "completed", 1)
+    assert not replacement_allowed({"plan": {}}, "failed", 1)
