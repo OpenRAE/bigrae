@@ -8,7 +8,8 @@ An operator who has only a published release and a deployment input bundle
    the operator's own Google identity as the only impersonation principal;
 3. creates the initial operator password secret when it does not exist;
 4. publishes the bundle to the deployment config bucket;
-5. runs ``gcp-deploy --first-install``, which imports the release's base range
+5. waits until the new grants let the operator act as the deploy identity;
+6. runs ``gcp-deploy --first-install``, which imports the release's base range
    images, generates the OpenFGA credentials, publishes the authorization
    model, creates the first administrator, and registers the in-box catalog.
 
@@ -23,6 +24,8 @@ import json
 import secrets
 import shutil
 import tempfile
+import time
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -30,10 +33,17 @@ from bootstrap_core import header, info, success
 from gcp_config_store import publish
 from gcp_deploy import DeployOptions, GcpDeployError, run_deploy
 from gcp_foundation import bootstrap_gcp_foundation
+from gcp_identity import PurposeIdentities
 from gcp_inputs import DeploymentInputs, load_deployment_inputs, operator_password_reference, write_private_file
-from gcp_process import ProcessRunner
+from gcp_process import ProcessRunner, diagnostic_tail
 
 _PHRASE_CHARACTERS = "abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789"
+# Google documents IAM change propagation as "typically 2 minutes, potentially 7
+# minutes or longer" (#2894).
+_GRANT_WAIT_SECONDS = 600
+_GRANT_POLL_SECONDS = 15
+# gcloud reports a grant that is not in effect yet as a failed impersonation or an HTTP 403.
+_GRANT_PENDING_MARKERS = ("failed to impersonate", "iam.serviceaccounts.getaccesstoken", "403")
 
 
 @dataclass(frozen=True)
@@ -98,6 +108,36 @@ def ensure_operator_password(runner: ProcessRunner, inputs: DeploymentInputs) ->
     return True
 
 
+def wait_for_deploy_identity(
+    runner: ProcessRunner,
+    inputs: DeploymentInputs,
+    store: str,
+    *,
+    sleep: Callable[[float], None] | None = None,
+    clock: Callable[[], float] | None = None,
+) -> None:
+    """Wait until the operator can read the config bucket as the deploy identity (#2894).
+
+    The foundation has just granted impersonation and bucket access. IAM applies a new
+    grant after a delay, and the deploy first uses both grants to take its lock.
+    """
+    identities = PurposeIdentities.resolve(
+        mode="impersonate", project_id=inputs.project_id, environment=inputs.environment
+    )
+    # Read the time functions at call time, so a test that replaces them does not wait.
+    now = clock or time.monotonic
+    deadline = now() + _GRANT_WAIT_SECONDS
+    while True:
+        result = runner.run(["gcloud", "storage", "ls", store], env=identities.env("deploy"), check=False)
+        if result.returncode == 0:
+            return
+        detail = diagnostic_tail(result.stderr or result.stdout)
+        if not any(marker in detail.lower() for marker in _GRANT_PENDING_MARKERS) or now() >= deadline:
+            raise GcpDeployError(f"the deploy identity {identities.deploy} cannot read {store}: {detail}")
+        info(f"Waiting for the new grants on {identities.deploy} to take effect")
+        (sleep or time.sleep)(_GRANT_POLL_SECONDS)
+
+
 def run_install(options: InstallOptions, *, runner: ProcessRunner | None = None) -> int:
     """Run ``gcp-install``. Return the ``gcp-deploy`` exit status."""
     runner = runner or ProcessRunner()
@@ -118,6 +158,7 @@ def run_install(options: InstallOptions, *, runner: ProcessRunner | None = None)
         store = f"gs://{inputs.project_id}-deployment-config"
         publish(store, options.inputs, runner=runner)
         success(f"Published the deployment inputs to {store}")
+        wait_for_deploy_identity(runner, inputs, store)
     finally:
         shutil.rmtree(workdir, ignore_errors=True)
     return run_deploy(
