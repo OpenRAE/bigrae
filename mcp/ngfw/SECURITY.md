@@ -1,13 +1,12 @@
 # shifter-ngfw MCP security boundaries
 
+This security reference describes the registered tool and its process boundary.
+
 The `shifter-ngfw` MCP server runs with the local operator's AWS
-credentials and exposes a single read-only EC2 discovery tool. It does
-**not** execute PAN-OS CLI commands, does **not** open SSH or SSM
-sessions to firewall instances, and does **not** read NGFW SSH private
-keys or any other material from AWS Secrets Manager. The remaining
+credentials and exposes a single read-only EC2 discovery tool. It executes no PAN-OS CLI commands and opens no SSH or SSM sessions to firewalls. It reads no NGFW private keys or other Secrets Manager material. The remaining
 process boundary that must stay closed:
 
-1. **Local host shell** — every `aws` invocation runs as an argv array
+1. **Local host shell**—every `aws` invocation runs as an argv array
    via `spawn`/`spawnSync`/`execFile`. Shell strings are forbidden.
 
 ## Current tool surface
@@ -24,11 +23,9 @@ The live tool surface is enforced by
 `server.tool("<name>", ...)` registrations out of `index.js` and
 asserts the set equals exactly `{"list_ngfws"}`. It also asserts that
 this document names each registered tool and back-references the
-surface test by file name. A future PR that adds a tool must update
-the test's `EXPECTED_TOOLS` set **and** this document in the same
-change; either edit on its own fails the test.
+surface test by file name. A PR that adds a tool must update `EXPECTED_TOOLS` and this document in the same change. Either edit alone fails the test.
 
-`mcp/ngfw/lib.js` exports legacy helpers (e.g. NGFW SSH command-pipeline
+`mcp/ngfw/lib.js` exports legacy helpers (for example NGFW SSH command-pipeline
 builders). They are NOT registered as MCP tools and are not part of the
 active capability surface. Only `server.tool(...)` registrations in
 `index.js` define what the MCP client can invoke.
@@ -64,15 +61,12 @@ active capability surface. Only `server.tool(...)` registrations in
 ## Removed administration tools
 
 The following tools were previously registered by this server and have
-been removed. They are listed here only so a reader of the security
-doc can see what is **no longer** part of the surface; they are not
-active capabilities and must not be re-introduced without a new
-threat-model review.
+been removed. These entries identify removed capabilities. They are inactive and must not return without a new threat-model review.
 
-- `run_command` — forwarded an arbitrary PAN-OS CLI command to an NGFW
+- `run_command`—forwarded an arbitrary PAN-OS CLI command to an NGFW
   instance through the portal jump host over SSH.
-- `show_system_info` — wrapped `show system info` against the NGFW.
-- `show_routes` — wrapped `show routing route` against the NGFW.
+- `show_system_info`—wrapped `show system info` against the NGFW.
+- `show_routes`—wrapped `show routing route` against the NGFW.
 
 The removal also dropped this server's prior dependence on retrieving
 NGFW SSH private keys from AWS Secrets Manager. The
@@ -98,11 +92,7 @@ MCP server keeps its own npm package and `node_modules`; the shared
 module imports only `node:`-prefixed built-ins so there is no
 cross-package npm dependency.
 
-Because the helper code lives at one site, the argv-array contract
-that ADR-010 enforces — TypeError on shell-string args, spawn-only
-execution, `--output json` appended last in `awsJson`,
-operation-labeled errors (`aws <service> <op>: <stderr>`) — is
-guaranteed identical across MCP servers. Any future MCP server in
+One shared implementation keeps the ADR-010 argument-vector contract consistent across MCP servers. Shell-string arguments raise TypeError; execution uses spawn. `awsJson` appends `--output json` last. Errors identify the operation as `aws <service> <op>: <stderr>`. Any future MCP server in
 this repo MUST import from `mcp/shared/aws-helpers.js`; do not
 re-implement the helpers locally.
 
@@ -112,7 +102,7 @@ re-implement the helpers locally.
 above. It asserts that:
 
 - `index.js` registers exactly the expected set of tools (currently
-  just `list_ngfws`).
+  `list_ngfws`).
 - This document references the surface test and names every live tool.
 - This document does not describe any removed tool as an active
   capability (removed-tool names may appear only under the

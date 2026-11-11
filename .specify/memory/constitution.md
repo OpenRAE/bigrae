@@ -20,6 +20,18 @@ Follow-up TODOs:
 
 # Shifter Constitution
 
+
+This is a historical Spec Kit reference, not the current development workflow.
+The original version and governance text remain preserved below.
+Its branch-deployment table and removed TDD-skill route do not describe current behavior.
+Use [AGENTS.md](../../AGENTS.md) and [the development workflow](../../docs/DEVELOPMENT_WORKFLOW.md) for current authority.
+Use [CONTRIBUTING.md](../../CONTRIBUTING.md) for contribution and authoring steps.
+The original ratification date remains unknown.
+
+<!-- Original constitution preserved as historical policy text. Current guidance above remains checked. -->
+<!-- vale off -->
+<!-- ste-disable -->
+
 ## Core Principles
 
 ### I. Speed to Value
@@ -173,3 +185,6 @@ Code reviews MUST verify alignment with these principles. Use `.cursor/rules` an
 agent guidance files for runtime development guidance.
 
 **Version**: 1.2.0 | **Ratified**: TODO(RATIFICATION_DATE): original adoption date unknown | **Last Amended**: 2025-01-01
+
+<!-- ste-enable -->
+<!-- vale on -->

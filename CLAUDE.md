@@ -1,82 +1,56 @@
-# CLAUDE.md
+# Repository agent guidance
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-The MOST helpful think you can do is stay on task. Answer questions you are asked or do what you are told to do. You get into trouble every time you run off and do something else without asking or jump ahead.
+Use this reference with [AGENTS.md](AGENTS.md), the repository's current agent rules.
+Read the task and existing source before changing files.
+Follow the user's request and preserve its scope.
 
 ## Guiding Principles
 
-- Keep things very simple
-- Do not re-invent the wheel
-- Use proven, solid technologies when possible
-- If the user makes a specific request, answer or execute it. Do not infer doing more or different.
-- Errors, failed tests, or other problems anywhere are always relevant, no matter what you're working on. Do not ignore them.
-
-Research and recommend sound architecture and design patterns. Do not implement anti-patterns for consistency with the codebase.
-
----
+- Keep the solution simple. Reuse proven tools and existing patterns.
+- Answer the question or perform the requested action.
+- Treat errors, failed tests, and material quality problems as work to resolve.
+- Research sound architecture before implementation.
+- Do not repeat an incorrect pattern only for consistency.
 
 ## How To Work
 
-Act as a collaborative principal engineer:
+1. Read the related source, designs, and current repository rules.
+2. Check whether the requested behavior already exists.
+3. Resolve uncertainty from those sources where possible.
+4. Ask the user about unresolved requirements or significant architecture decisions.
+5. Implement authorized work without speculative features or unbuilt-feature documentation.
+6. Run targeted checks. Keep full suites in CI.
+7. Report the result, evidence, and material limits plainly.
 
-- **Think before doing.** Reason about context, check what exists, use common sense.
-- **Don't jump ahead.** Follow the user's lead. Do not design or implement beyond what's been discussed and agreed.
-- **Flag problems.** Surface oddities, logical inconsistencies, or conceptual issues rather than silently working around them.
-- **Ask, don't assume.** When uncertain, clarify rather than guess.
-- **Follow doc style.** Use the shared documentation skill and setup in [CONTRIBUTING.md](CONTRIBUTING.md#documentation).
-- **Question existence.** When reviewing files, do not only check for the assigned task—ask: Does this file need to exist? Is the naming confusing? Does it duplicate something else? Is it a one-off artifact that should be deleted? Understand full context before making mechanical changes.
+For prose, use the shared documentation skill and explicit-path checks in [CONTRIBUTING.md](CONTRIBUTING.md#documentation).
+Review a file's purpose, name, duplication, and consumers before changing it.
+Get permission before work beyond the user's request.
 
 ## AWS
 
-All resources are in `us-east-2`.
-
----
+Deployment configuration selects the cloud and region.
+Use the selected deployment's values; do not infer them from an old example.
+The retained AWS development examples commonly use `us-east-2`.
 
 ## Platform Elements
 
-BigRAE consists of four major elements:
-
-1. **Mission Control** - Presentation layer (user-facing UI)
-2. **BigRAE Engine** - Range management (provisioning, lifecycle, infrastructure)
-3. **BigRAE CMS** - Content management (scenarios, catalog, templates)
-4. **BigRAE Admin** - Platform management (users, cost tracking, administration)
-
+The [current handbook](docs/technical/architecture.md) describes the four platform domains and their service boundaries.
+Use it with the owning source and accepted ADRs.
+Do not treat historical notes as current implementation.
 
 ## Lessons Learned
 
-### Tests: Avoid Micro-Tests with Inline Mocks
+Read the active conversation after context compaction.
+Use fixtures and tests at real boundaries instead of many small tests with repeated inline mocks.
+The test estate has a documented history of memory exhaustion with excessive mocks and workers.
 
-Always read chat history after compacting messages.
+Keep responses concise and technical. Do not add marketing language.
+Verify URLs and prefer official technical documentation.
+Do not invent requirements or add unsolicited features.
 
-Creating many tiny tests each with inline `AsyncMock()`/`MagicMock()` causes OOM (27 GB+). Use fixtures for mocks and write integration-style tests instead of one test per assertion.
-
-When the user asks a question, answer their question. Do not infer you are meant to change anything or do anything else.
-
-Do not jump ahead. Follow the user's lead. Do not design or implement beyond what's been discussed and agreed.
-
-Do not make architectural decisions for the user - ask them first.
-
-Do not add features not explicitly requested.
-
-Do not create documentation for unbuilt features.
-
-Do not assume requirements - ask for clarification.
-
-Do not add "helpful" extras beyond the request.
-
-Keep responses focused and concise.
-
-Write for technical audience (no marketing language).
-
-**Git operations.** The Ground Control `/implement` skill drives the full
-commit / push / PR / CI / SonarCloud / review-fix lifecycle and is the
-authoritative workflow for issue-driven changes. Outside of `/implement`,
-do not commit, push, or open PRs without explicit user direction. Do not
-merge branches under any workflow—merges are always user-driven.
-
-Understand your tasks in the overall context of the project and sound architecture. If something seems wrong or odd, bring it to the user's attention.
-
-Do not guess URLs. Search.
-
-Always prefer official documentation over other sources. Do not trust unverified sources.
+**Git operations:** the Ground Control implement skill owns issue-driven commit, push, PR, CI, and review work.
+Outside that authorized workflow, do not commit, push, or open PRs without explicit user direction.
+The user reviews and approves feature-PR merges and merges into `main`.
+The user's standing rules permit merging `dev` into a feature branch and resolving its conflicts.
+When the user invokes the release skill, use its release script and its bounded merge checks.
+Do not infer release authority from an implementation task.

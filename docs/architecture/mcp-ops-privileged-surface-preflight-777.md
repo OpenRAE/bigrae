@@ -3,6 +3,15 @@
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../technical/architecture.md) and accepted, superseding ADRs.
 
 
+Current execution reference: [operations security](../../mcp/ops/SECURITY.md).
+The `infra_mutation`, `ssm_arbitrary`, and `db_arbitrary` classes expose `plan_<name>` and `execute_<name>(plan_id)` tools, with no original direct tool.
+Planning does not run the handler; execution uses the stored arguments.
+The earlier `execute=true` description below is preserved history, not the current class-wide contract.
+
+<!-- Preserve the original issue-scoped design and revision evidence. Only this historical body is excluded. -->
+<!-- vale off -->
+<!-- ste-disable -->
+
 Issue: GitHub #777, "`mcp/ops` grants any connected MCP client unrestricted
 prod secrets, SQL, and remote-command access".
 
@@ -535,3 +544,6 @@ gating, secret reference returns, prod confirmation refusal, profile
 gating, redacted descriptions). Changes to `mcp/ops/index.js` or
 `.shifter.yaml` that break a surface test break the ADR-014-R5
 guarantee.
+
+<!-- ste-enable -->
+<!-- vale on -->
