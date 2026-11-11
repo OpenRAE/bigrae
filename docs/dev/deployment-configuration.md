@@ -14,38 +14,12 @@ A later file wins, so the values that `bigrae.yaml` owns win over a conflicting 
 The command uses a private `TF_DATA_DIR` for each run.
 
 A deployment without GitHub keeps its bundle in its deployment config bucket, not in this repository.
-The retained CI adapter expects values under `environments/<environment>/terraform.tfvars`.
-Current source retains no selectable GCP CI deployment or environment value directory.
-The CI adapter copies that file into the bundle and adds the GitHub secret values in `terraform.tfvars.json`.
+The retained CI adapter value files and state-selection syntax are in [Retained GCP CI deploy adapter](gcp-ci-adapter.md).
 
 The state location remains the existing bucket and `shifter/<environment>/platform-core` prefix.
 Module names, resource addresses, provider locks and outputs are unchanged.
 Changing the source directory requires no resource import or `terraform state mv`.
 Foundation identity and runner state remain separate.
-
-The following is retained contributor state-selection syntax, not a current selectable CI deployment.
-Restore the authorized value source and private overrides before using it:
-
-```bash
-environment=gcp-dev
-values_dir="$PWD/platform/terraform/gcp/environments/$environment"
-export TF_DATA_DIR="$values_dir/.terraform"
-root=platform/terraform/gcp/environments/platform
-
-terraform -chdir="$root" init -reconfigure \
-  -backend-config="bucket=<existing-state-bucket>" \
-  -backend-config="prefix=shifter/$environment/platform-core"
-
-terraform -chdir="$root" plan \
-  -var-file="$values_dir/terraform.tfvars" \
-  -var-file="$values_dir/local.auto.tfvars"
-```
-
-Supply every operator override that the environment previously used.
-Keep generated range settings last when they are part of the deployment.
-Pass the same files to apply, import and destroy.
-Never share `TF_DATA_DIR` between environments.
-Do not put environment values or credentials in the shared root.
 
 ## Verification before reuse
 

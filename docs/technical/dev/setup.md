@@ -59,22 +59,10 @@ for the authoritative order.
 
 ### Must already exist before deploy (GCP)
 
-- A GCP project with billing enabled, and every Vertex AI model that the
-  configuration uses enabled.
-- The foundation, applied with `deploy.py gcp-foundation`:
-  - without GitHub: the purpose identities with named impersonation
-    principals, and the deployment config bucket;
-  - for CI: Workload Identity Federation for GitHub Actions (pool, provider,
-    purpose service accounts), with the explicit `GCP_*_SERVICE_ACCOUNT` value
-    and `GCP_WORKLOAD_IDENTITY_PROVIDER` set in each purpose Environment.
-- Without GitHub: a published release that the deployment can read, the
-  deployment input bundle in the config bucket, and the first operator password
-  in Secret Manager.
-- A release that selects the Kali, Ubuntu, and DC guest images. `deploy.py
-  gcp-images` verifies and imports them as native GCE images; no
-  platform-owned transfer bucket must already exist. See
-  [`gcp-range-cell-deploy.md`](../../dev/gcp-range-cell-deploy.md) and
-  [`gcp-guest-images.md`](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md).
+A release-driven GCP installation needs only the
+[installation prerequisites](../../getting-started/install-gcp.md#before-you-start).
+The retained GCP CI adapter prerequisites are in
+[Retained GCP CI deploy adapter](../../dev/gcp-ci-adapter.md).
 
 ### Configuration values
 
@@ -186,15 +174,8 @@ A GCP deployment without GitHub needs no change to this repository. Apply its
 foundation, publish its deployment input bundle, and deploy a release
 ([GitHub-less GCP deployment guide](../handbook/gcp-github-less-deployment.md)).
 
-A future GCP CI deployment would need these reviewed repository changes:
-
-1. Add its value file under `gcp/environments/<environment>/`.
-2. Configure its protected GitHub Environments and purpose identities.
-3. Add its explicit workflow authorization choice.
-4. Use a separate state bucket/prefix.
-
-Do not copy the shared Terraform source.
-See [deployment configuration and recovery](../../dev/deployment-configuration.md).
+A future GCP CI deployment needs reviewed repository changes. See
+[Retained GCP CI deploy adapter](../../dev/gcp-ci-adapter.md).
 
 ## AWS Deployment
 
@@ -324,121 +305,11 @@ Helm chart `platform/charts/shifter/` is the only Kubernetes renderer. The
 `deploy.py gcp-deploy` command runs the first install and every update
 (ADR-070).
 
-The source retains two command adapters:
-
-| Path | Inputs | Runner |
-| --- | --- | --- |
-| Without GitHub | The deployment input bundle in the deployment config bucket, and Secret Manager | An operator runs the release's deployer image ([guide](../handbook/gcp-github-less-deployment.md)). |
-| Retained CI adapter | GitHub secrets and variables ([deploy-secrets.md](../../dev/deploy-secrets.md#gcp-gcp-dev)) | `_gcp-dev.yml` renders the same bundle. No GCP target is selectable in `deploy.yml`. |
-
-### 1. GCP Project Setup
-
-Create a GCP project. Before starting bootstrap, enable every Google Cloud API
-required by the selected BigRAE configuration. For each configured Vertex model, an authorized administrator must accept applicable terms and confirm regional availability.
-
-Enabling the API does not enable the model. Enabling the Vertex AI API does not enable individual models. Complete API and model prerequisites before bootstrap, pack installation, or qualification.
-
-Otherwise, application deployment can succeed while model calls report model-not-found.
-
-### 2. Apply the foundation
-
-Run `scripts/bootstrap/deploy.py gcp-foundation --inputs <file> --yes`. The
-inputs select the mode:
-
-- **Without GitHub:** `gcp-install` applies the foundation. See
-  [Install on Google Cloud](../../getting-started/install-gcp.md).
-- **For CI:** start from `scripts/bootstrap/gcp-foundation.example.tfvars.json`.
-  The command verifies the project and repository numeric IDs and requires
-  explicit purpose Environment and workflow trust tuples. Follow the ordering in
-  `scripts/bootstrap/README.md` and the staged cutover and readback in
-  `docs/dev/deploy-secrets.md`.
-- **For a developer build project:** start from
-  `scripts/bootstrap/gcp-image-builder.example.tfvars.json`. The command creates
-  the image build resources and writes the `gcp-image-build` and
-  `gcp-image-validate` Environments of the GitHub repository. See
-  [GCP Guest Images](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md#build-project).
-
-Both modes create the state bucket before the identity Terraform initializes,
-and both can create an isolated private image-build network. Do not hand-create
-service accounts or broaden the provider condition.
-
-For CI, add each output only to its matching GitHub Environment:
-
-| Secret | Value |
-|--------|-------|
-| `GCP_DEPLOY_SERVICE_ACCOUNT` | Deploy service account email |
-| `GCP_RELEASE_SCAN_SERVICE_ACCOUNT` | Release-scan service account email |
-| `GCP_WORKLOAD_IDENTITY_PROVIDER` | WIF provider resource name |
-
-A developer build project does not need these steps. The bootstrap writes the
-image Environments itself.
-
-### 3. Configure the deployment inputs
-
-- **Without GitHub:** write the deployment input bundle. `gcp-install`
-  publishes it and creates the first operator password. See
-  [Install on Google Cloud](../../getting-started/install-gcp.md).
-- **For CI:** set the GitHub secrets and variables in
-  [`docs/dev/deploy-secrets.md`](../../dev/deploy-secrets.md).
-
-The command owns `project_id`, `region`, `public_hostname`, and the other
-values that `bigrae.yaml` defines. Its values win over a conflicting Terraform
-value. Keep committed placeholders synthetic; do not put real project
-identities in the repository.
-
-The model-access broker is parked and unsupported under ADR-068.
-Use the supported keyless-direct guest model path where required.
-
-### 4. Deploy
-
-- **Without GitHub:** `gcp-install` runs the first deploy. See
-  [Install on Google Cloud](../../getting-started/install-gcp.md).
-
-- **Retained CI adapter:** configure and review an explicit authorized target before any dispatch.
-  No GCP target currently exists in `deploy.yml`.
-  An admitted first bootstrap would set `gcp_require_active_certificate=false`.
-
-The command applies the platform Terraform, creates the first Identity Platform
-operator, copies and scans the release images, and verifies their provenance.
-It runs migrations before the Helm upgrade, then waits for rollout, ingress, and the certificate. It runs Terraform,
-`kubectl`, and Helm as the deploy identity, with a private `KUBECONFIG`. See
-[What the deploy does](../handbook/gcp-github-less-deployment.md#what-the-deploy-does) for the
-stage list.
-
-### 5. DNS and TLS
-
-The GCP path requires a real hostname and managed TLS. Point the configured
-hostname to the reserved global ingress IP so the Google-managed certificate can
-become active. Then deploy again without `--first-install`; the command waits
-for the certificate to become Active.
-
-### 6. Optional: participant OpenVPN access
-
-Participant OpenVPN (ADR-039-R10) is off by default. When it is on, every
-deployment runs one shared, autoscaled OpenVPN server pool, and participants
-download an `.ovpn` profile for their range. Both deploy paths create the pool:
-
-1. Apply `platform/terraform/gcp/global/cicd-oidc` for the tenant's identity
-   profile from a revision that includes the pool. The apply adds the deploy and
-   destroy roles `<prefix>_deploy_vpn_pool` and `<prefix>_destroy_vpn_pool`. These roles cover the pool's templates, regional instance group, and autoscaler. VM, disk, and template permissions are limited to `shifter-<environment>-vpn-` names. Without these roles the deploy
-   fails when it creates the pool's instance template. Confirm both bindings:
-
-   ```bash
-   gcloud projects get-iam-policy <project> --format=json \
-     | jq -r '.bindings[] | select(.role | test("vpn_pool")) | .role'
-   ```
-
-2. Turn on the pool. Without GitHub, set
-   `settings.participant_openvpn.enabled: true` in `bigrae.yaml` and publish the
-   bundle. For CI, set the GitHub Environment variable
-   `RANGE_OPENVPN_ENABLED=true`.
-3. Run the deploy. It creates the pool, the tenant OpenVPN CA, and the pool
-   server certificate. It records the scanned digest and starts the servers. Every server must become healthy behind the load balancer.
-4. Plan quota for the pool: the pool adds `e2-standard-2` VMs with two vCPUs each, up to the profile maximum. It also needs one endpoint address and one NAT address.
-
-Do not set `openvpn_pool_enabled` in the Terraform values. The command sets it
-from `settings.participant_openvpn.enabled`. Launches stay safe either way: the
-runtime switch is off unless the deploy renders `RANGE_OPENVPN_ENABLED=true`,
-and that render fails if no pool exists. See "Participant OpenVPN access" in
-[`docs/dev/gcp-range-cell-deploy.md`](../../dev/gcp-range-cell-deploy.md) for
-the network design, sizing, and session rules.
+| Task | Page |
+| --- | --- |
+| Install, update, or remove a deployment from a release | [Install on Google Cloud](../../getting-started/install-gcp.md) |
+| Commands, inputs, deploy stages, and retained resources | [GCP deployment handbook](../handbook/gcp-github-less-deployment.md) |
+| Failures | [RB023](../../runbooks/rb023-gcp-deployment.md) |
+| Releases, checkout deploys, and test deploys | [Contributor GCP releases and test deploys](../../dev/gcp-contributor-deploy.md) |
+| The retained GitHub CI adapter (`_gcp-dev.yml`) | [Retained GCP CI deploy adapter](../../dev/gcp-ci-adapter.md) |
+| Participant OpenVPN access | [Participant OpenVPN access](../../dev/gcp-range-cell-deploy.md#participant-openvpn-access) |

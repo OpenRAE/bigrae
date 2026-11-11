@@ -111,32 +111,21 @@ Live-fire ranges use GCE range cells (per-range subnets with tag firewall isolat
 
 One command stands up and updates a GCP deployment:
 `scripts/bootstrap/deploy.py gcp-deploy` (ADR-070). `gcp-install` orchestrates initial setup, including the first `gcp-deploy`.
-Updates use `gcp-deploy` and the same Helm renderer. There are two ways to
-run it:
+Updates use `gcp-deploy` and the same Helm renderer. An operator runs the
+deployer image of a published release
+([Install on Google Cloud](../../getting-started/install-gcp.md)). The
+[handbook](../handbook/gcp-github-less-deployment.md#what-the-deploy-does)
+lists the deploy stages. The retained GitHub CI adapter runs the same command
+([Retained GCP CI deploy adapter](../../dev/gcp-ci-adapter.md)).
 
-- **Without GitHub:** an operator runs the deployer image of a published
-  release. The command reads the deployment input bundle from the deployment
-  config bucket and impersonates the purpose identities. See the
-  [GitHub-less GCP deployment guide](../handbook/gcp-github-less-deployment.md).
-- **Retained GitHub CI adapter:** `_gcp-dev.yml` supplies the same commands.
-  No GCP target is currently selectable in `deploy.yml`.
-  Each job renders the deployment input bundle from the GitHub secrets and
-  variables, then runs the same command as its federated purpose identity.
+The deploy command expects and enforces:
 
-The command runs these stages:
-
-1. load the deployment input bundle and take the deployment lock
-2. apply GCP Terraform, rewrite the live bucket objects with the bucket keys,
-   and seed the first operator
-3. copy the release images into the deployment Artifact Registry (CI builds
-   its images there)
-4. scan each exact image digest for HIGH and CRITICAL findings as the
-   release-scan identity
-5. verify the provenance of each digest, render the Helm values, and run
-   `helm upgrade --install --atomic`
-6. record the running images, then wait for the ingress address and the
-   managed certificate
-7. run the advisory post-deploy smoke
+- a managed-TLS public hostname from `deployment.domain`
+- a private GKE control-plane endpoint that it reaches through Connect Gateway
+- Cloud Armor on the public ingress backends
+- Terraform-managed Identity Platform for corporate login, with browser-side Google auth and server-side verified-token exchange
+- a first operator account that it seeds from `settings.operator_bootstrap`
+- the ADR-037 release gates: the exact-digest scan, the provenance check, and the running-image check
 
 `gdc-bootstrap` builds only the legacy GDC VM Runtime substrate for the `gdc`
 range backend. It does not deploy the control plane.
@@ -175,20 +164,11 @@ Email is optional. With `email_backend` unset (the default), the portal uses Dja
 
 If `email_backend` is set without `email_from_address` (or without `email_sender_domain` for Mailgun), the renderer fails closed at deploy time rather than sending as `webmaster@localhost`. See `platform/terraform/gcp/README.md` for the operator runbook.
 
-## Current `gcp-dev` concrete values
-
-- Project: `example-gcp-project`
-- Hostname: `shifter.example.com`
-- Managed TLS: enabled
-- Authorized admin CIDRs: empty; operator and CI access use Connect Gateway
-
-Public operator egress IPs must not be added to
-`gke_master_authorized_cidrs`; the private endpoint rejects them.
-
 ## Related Docs
 
 - [Cloud Adapters](../dev/cloud-adapters.md) - Protocol-based cloud abstraction
 - [Networking](networking.md) - VPC/network architecture (AWS section)
 - [Secrets](../dev/secrets.md) - Secret management across clouds
 - [CI/CD](../dev/ci-cd.md) - Full CI/CD documentation including GCP workflows
+- [Retained GCP CI deploy adapter](../../dev/gcp-ci-adapter.md) - GitHub CI inputs for GCP
 - [Terraform](../dev/terraform.md) - Terraform conventions and GCP module patterns
