@@ -19,7 +19,7 @@ def staged(prefix="trial-inputs/attempt/"):
 
     return {
         name: StagedObject(key=prefix + name, sha256=str(index) * 64, size_bytes=10 + index)
-        for index, name in enumerate(("trial.json", "scenario.sdl", "plan.json"), start=1)
+        for index, name in enumerate(("trial.json", "trial-unit.json", "scenario.sdl", "plan.json"), start=1)
     }
 
 
@@ -28,7 +28,7 @@ def ready_worker(apparatus, monkeypatch):
     from engine.models import Range
 
     worker = create(apparatus)
-    Range.objects.update(status="ready", provisioner_operation="provision", provisioner_operation_id=uuid4())
+    Range.objects.update(status="ready", provisioner_operation="raes-range:provision", provisioner_operation_id=uuid4())
     qualified = {"current": True}
     monkeypatch.setattr(
         "engine.services._worker_qualification.has_current_qualification", lambda _worker: qualified["current"]
@@ -71,7 +71,10 @@ def test_start_persists_one_trial_and_its_run_operation_before_launch(ready_work
     command = command_from_payload({**intent.payload, "operation_id": str(intent.operation_id)})
     assert validate_provisioner_command(command)["trial_id"] == str(trial.pk)
     stored = OperationInput.objects.get(operation_id=intent.operation_id).envelope["payload"]
-    assert set(stored["staged"]) == {"trial.json", "scenario.sdl", "plan.json"} and stored["stop"] is False
+    assert (
+        set(stored["staged"]) == {"trial.json", "trial-unit.json", "scenario.sdl", "plan.json"}
+        and stored["stop"] is False
+    )
     assert validate_worker_trial_operation(intent.payload, intent.operation_id) == trial
 
     # A replay returns the same trial; a different attempt or input conflicts and adds nothing.

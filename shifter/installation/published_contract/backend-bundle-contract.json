@@ -2644,6 +2644,32 @@
           "source": "rendered from validated Terraform outputs and the normalized root config"
         },
         {
+          "description": "Public GCP runtime configuration value (CAPACITY_PLANNING_CATALOG) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "CAPACITY_PLANNING_CATALOG",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
+          "description": "Public GCP runtime configuration value (CAPACITY_PLANNING_ENABLED) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "CAPACITY_PLANNING_ENABLED",
+          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "rendered from validated Terraform outputs and the normalized root config"
+        },
+        {
           "description": "Public GCP runtime configuration value (CLOUD_PROJECT_ID) emitted into the platform runtime environment.",
           "destination": "runtime-env",
           "kind": "runtime-env",
@@ -4970,6 +4996,14 @@
                 "pattern": "^$|^[a-z][a-z0-9-]{4,28}[a-z0-9]$",
                 "title": "Project Id",
                 "type": "string"
+              },
+              "worker_vcpu": {
+                "default": 8,
+                "description": "vCPUs that one disposable worker draws from the gce-workers budget (GCP_WORKER_VCPU).",
+                "maximum": 360,
+                "minimum": 1,
+                "title": "Worker Vcpu",
+                "type": "integer"
               },
               "zone": {
                 "default": "",

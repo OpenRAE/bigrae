@@ -97,6 +97,12 @@ from ._identity_cutover import (
 from ._identity_cutover import (
     pending_identity_cutover_work as pending_identity_cutover_work,
 )
+from ._participant_validation import (
+    reconcile_participant_validations as reconcile_participant_validations,
+)
+from ._participant_validation import (
+    validate_participant_configurations as validate_participant_configurations,
+)
 from ._principal_lifecycle import commit_prepared_range_lifecycle as commit_prepared_range_lifecycle
 from ._principal_lifecycle import prepare_range_lifecycle as prepare_range_lifecycle
 from ._principal_lifecycle import prepare_system_range_cleanup as prepare_system_range_cleanup

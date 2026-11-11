@@ -74,6 +74,12 @@ class GcpRangeCellSettings(_ClosedModel):
             "Keyed guest image profiles (GCP_RANGE_IMAGE_KEY_PROFILES_JSON). The provisioner validates entries."
         ),
     )
+    worker_vcpu: int = Field(
+        default=8,
+        ge=1,
+        le=360,
+        description="vCPUs that one disposable worker draws from the gce-workers budget (GCP_WORKER_VCPU).",
+    )
 
     @field_validator("zones")
     @classmethod
@@ -185,6 +191,7 @@ def deployment_runtime_env(
     env = {
         "GCP_RANGE_BACKEND": range_cells.backend,
         "GCP_RANGE_HOST_IDENTITY_POOL_SIZE": str(range_cells.host_identity_pool_size),
+        "GCP_WORKER_VCPU": str(range_cells.worker_vcpu),
         "RANGE_OPENVPN_ENABLED": _bool_text(participant_openvpn.enabled),
     }
     if range_cells.zone:

@@ -68,6 +68,7 @@ class TestDeploymentSettings:
         assert env == {
             "GCP_RANGE_BACKEND": "gce",
             "GCP_RANGE_HOST_IDENTITY_POOL_SIZE": "24",
+            "GCP_WORKER_VCPU": "8",
             "RANGE_OPENVPN_ENABLED": "true",
             "RANGE_NETWORK_ZONE": "us-central1-a",
             "RANGE_NETWORK_ZONES": "us-central1-a,us-east1-b",
@@ -96,6 +97,7 @@ class TestDeploymentSettings:
         assert env == {
             "GCP_RANGE_BACKEND": "gce",
             "GCP_RANGE_HOST_IDENTITY_POOL_SIZE": "0",
+            "GCP_WORKER_VCPU": "8",
             "RANGE_OPENVPN_ENABLED": "false",
         }
         disabled = GcpOperatorBootstrapSettings(enabled=False, staff_emails=["a@example.com"])

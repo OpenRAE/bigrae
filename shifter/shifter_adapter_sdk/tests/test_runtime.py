@@ -381,3 +381,12 @@ def test_worker_refuses_missing_file_before_loading_adapter(request_input, tmp_p
     result = plan_invocation(admitted)
     assert result.status == "failed"
     assert not result.actions
+
+
+def test_range_validate_planning_is_not_participant_validation(request_input):
+    from shifter_adapter_sdk.runtime import parse_input
+
+    planning = request_input.model_copy(update={"phase": "validate"})
+    assert parse_input(planning.model_dump_json()) == planning
+    response = parse_result(plan(planning, actions=[]).model_dump_json(), planning)
+    assert (response.status, response.actions) == ("planned", [])

@@ -68,7 +68,8 @@ def test_migration_recovers_original_trial_and_accepts_legacy_inserts(apparatus)
         captured = DisposableWorker.objects.get(pk=inserted.pk)
         assert captured.initial_trial_id == captured.trial_id == bound
     finally:
-        MigrationExecutor(connection).migrate(after)
+        restore = MigrationExecutor(connection)
+        restore.migrate(restore.loader.graph.leaf_nodes())
 
 
 def test_sqlite_creation_intent_guards_preserve_initial_value():

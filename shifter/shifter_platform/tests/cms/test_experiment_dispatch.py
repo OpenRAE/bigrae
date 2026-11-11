@@ -1,6 +1,7 @@
 """The coordinator advances each admitted entry once, from stored state only."""
 
 import hashlib
+import json
 from dataclasses import dataclass, field
 from types import SimpleNamespace
 from uuid import UUID
@@ -156,7 +157,7 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["trial-started"]
     assert dispatch.engine.workers[worker_id].qualified
     staged = dispatch.engine.trials[worker_id].staged
-    assert set(staged) == {"trial.json", "scenario.sdl", "plan.json"}
+    assert set(staged) == {"trial.json", "trial-unit.json", "scenario.sdl", "plan.json"}
     assert all(("bigrae-assets", item.key) in dispatch.storage.objects for item in staged.values())
     # #2861: the staged plan is the exact retained admitted plan.
     from shared.raes.experiment_dispatch_inputs import trial_plan_bytes
@@ -164,6 +165,17 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert dispatch.storage.objects[("bigrae-assets", staged["plan.json"].key)] == trial_plan_bytes(
         dispatch.batch.inputs
     )
+    from shifter_adapter_sdk.trial import TrialInput
+
+    control = TrialInput.model_validate_json(dispatch.storage.objects[("bigrae-assets", staged["trial.json"].key)])
+    unit_bytes = dispatch.storage.objects[("bigrae-assets", staged["trial-unit.json"].key)]
+    scenario_bytes = dispatch.storage.objects[("bigrae-assets", staged["scenario.sdl"].key)]
+    assert control.unit_sha256 == hashlib.sha256(unit_bytes).hexdigest()
+    assert control.scenario_sha256 == hashlib.sha256(scenario_bytes).hexdigest()
+    unit = json.loads(unit_bytes)
+    assert unit["plan"] == dispatch.batch.inputs["plan"]
+    assert unit["snapshot"] == json.loads(scenario_bytes)
+    assert unit["snapshot"] == dispatch.batch.inputs["snapshots"][unit["plan_entry_id"]]
     # A concurrent or repeated stager reuses the persisted deadline and the identical objects.
     from cms.services._experiment_dispatch import stage_trial
 

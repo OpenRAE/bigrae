@@ -14,7 +14,12 @@ import worker_trial_ops
 from executors.base import CommandResult
 
 ARCHIVE = b"sealed synthetic run archive"
-STAGED = {"trial.json": b"{}", "scenario.sdl": b"name: synthetic\n", "plan.json": b"{}"}
+STAGED = {
+    "trial.json": b"{}",
+    "trial-unit.json": b'{"plan_entry_id": "e"}',
+    "scenario.sdl": b"name: synthetic\n",
+    "plan.json": b"{}",
+}
 
 
 @dataclass

@@ -14,6 +14,8 @@ Use the installed revision and approved credential files.
 3. Obtain a native bearer credential with installation and organization `manage_content` authority.
 4. Save the credential in an owner-only file with mode `0600`.
 5. Obtain approved backend, processor, participant, realization-envelope, and execution-authority documents from their owners.
+6. If a participant manifest names a backend configuration owner, install the adapter that declares that owner.
+   Wait until the installation is ready.
 
 The apparatus authority document contains `schema_version`, `backend`, `processor`, `participants`, `realization_envelope`, and `execution_authority`.
 Its schema version is `bigrae.experiment-admission-authority/v1`.
