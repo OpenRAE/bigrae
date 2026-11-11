@@ -29,7 +29,6 @@ from shared.raes.experiment_admission import (
     validate_experiment_cleanup,
     validate_retained,
 )
-from shared.raes.experiment_dispatch_inputs import entry_inputs
 from shared.raes.experiment_pack_snapshot import stage_local_experiment_pack
 from shared.raes.object_source import stage_object_pack
 from shared.raes.package_loader import RaesPackageError, resolve_pack_root
@@ -313,16 +312,15 @@ def recover_experiment_claim(
 
 
 def _planned_entry(batch: RetainedExperimentBatch, organization_uuid: UUID, plan_entry_id: str) -> ExperimentEntry:
-    """Resolve an entry whose run identity matches its own admitted or replacement plan."""
+    """Resolve the entry's latest attempt: the one that no fresh trial replaces."""
     row = ExperimentEntry.objects.filter(
         batch_id=batch.id,
         batch__organization_uuid=organization_uuid,
         organization_uuid=organization_uuid,
         plan_entry_id=plan_entry_id,
+        replacements__isnull=True,
     ).first()
-    expected = (
-        None if row is None else entry_inputs(batch.inputs, row.replacement_json)["plan"]["entries"].get(plan_entry_id)
-    )
+    expected = batch.inputs["plan"]["entries"].get(plan_entry_id)
     if row is None or expected is None or expected["run_id"] != row.run_id:
         raise CMSError(_UNAVAILABLE)
     return row
@@ -405,7 +403,7 @@ def record_experiment_collection(
     batch = _load(admission, attempt.batch_id)
     try:
         expected = experiment_archive_identity(
-            entry_inputs(batch.inputs, attempt.replacement_json),
+            batch.inputs,
             attempt.plan_entry_id,
             str(token),
             run_version,
@@ -468,9 +466,7 @@ def record_experiment_cleanup(
     attempt = _attempt(organization_uuid, token, locked=False)
     batch = _load(admission, attempt.batch_id)
     try:
-        encoded = validate_experiment_cleanup(
-            entry_inputs(batch.inputs, attempt.replacement_json), attempt.plan_entry_id, str(token), receipt
-        )
+        encoded = validate_experiment_cleanup(batch.inputs, attempt.plan_entry_id, str(token), receipt)
     except (ValueError, ValidationError):
         raise CMSError("Experiment cleanup is invalid or unverified") from None
     with transaction.atomic():

@@ -30,13 +30,12 @@ Every write checks local credential state and SQL ancestry inside its transactio
 A claim token is also the execution attempt identity.
 It does not replace authorization.
 The entry's run identity comes from the retained RAES plan.
-A replacement entry takes its run identity from its committed replacement plan.
+A fresh trial for a failed entry keeps that entry's run identity.
 
 Scheduling order cannot allocate another run or change a trial's scientific inputs.
 One initial attempt is supported per entry.
-A RAES replacement is a new pending entry that names the failed entry it replaces.
-The private replacement service operation `record_experiment_replacement` commits it before dispatch.
-Each entry has at most one replacement.
+A fresh trial for a failed entry is a new pending entry row that names the attempt it replaces.
+Each attempt has at most one fresh trial.
 If a claim response is lost, an operator with organization `manage_content` authority can recover the same token by batch and entry.
 
 Recovery does not allocate another attempt, release capacity, or authorize redispatch.
@@ -87,7 +86,7 @@ Original documents and referenced artifacts each have a separate 16 MiB aggregat
 Destination and resource limits are pinned at admission.
 Database triggers forbid changes to batch inputs and entry identities.
 Tenant plan identity and entry/run uniqueness constraints prevent ambiguous reloads.
-A replacement entry stores the entry it replaces, its slot ordinal, and the committed RAES replacement decision.
+A fresh-trial row stores the attempt it replaces and its ordinal.
 
 Operational changes cannot replace scientific inputs.
 Immutable service projections live in the private `_experiment_batch_records` module; callers use the public `cms.services` facade.

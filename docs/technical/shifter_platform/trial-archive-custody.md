@@ -30,7 +30,7 @@ The AWS documentation placeholder access key `AKIAIOSFODNN7EXAMPLE` is not a cre
 The authorization surface inventory records its credential transport and per-operation authority.
 Experiment dispatch calls the same intake service with `run_record_only`.
 In that mode, `validate_trial_run_record` verifies containment, the sealed bytes, and the run record. It reads no other record.
-The private `read_archived_run` operation retrieves a committed archive and returns only its run record.
+It also reports the seal's completeness: a seal with any limitation is incomplete.
 
 `TrialArchiveIdentity` carries expected experiment, plan, entry, run, and attempt identifiers.
 It also binds the admitted plan digest, entry digest, and run version.

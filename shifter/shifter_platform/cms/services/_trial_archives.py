@@ -404,26 +404,6 @@ def retrieve_trial_archive(
         raise CMSError("Archive retrieval unavailable") from None
 
 
-def read_archived_run(credential: CredentialContext, organization_uuid: UUID, receipt_id: UUID) -> dict[str, object]:
-    """Return the RAES run record of one committed archive; read no other member."""
-    import tarfile
-
-    from shared.raes.json_ingress import parse_bounded_json_object
-
-    receipt = TrialArchiveReceipt.objects.select_related("transfer").filter(pk=receipt_id).first()
-    if receipt is None:
-        raise CMSError(_ARCHIVE_UNAVAILABLE)
-    run_id = receipt.transfer.expected["run_id"]
-    with tempfile.TemporaryDirectory(prefix="trial-run-") as temporary:
-        target = Path(temporary) / "archive"
-        retrieve_trial_archive(credential, organization_uuid, receipt_id, target)
-        with tarfile.open(target, "r:*") as archive:
-            member = archive.extractfile(f"{run_id}/manifest.json")
-            if member is None:
-                raise CMSError("Archive run record unavailable")
-            return parse_bounded_json_object(member.read(), max_bytes=16 * 1024**2)
-
-
 def purge_trial_archives(credential: CredentialContext, organization_uuid: UUID, *, limit: int = 100) -> int:
     """Expire access first, then delete only settled, exactly owned objects."""
     admission = _admit(credential, organization_uuid)

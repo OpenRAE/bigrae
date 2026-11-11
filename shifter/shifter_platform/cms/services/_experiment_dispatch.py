@@ -4,8 +4,8 @@ Each step reuses its owning service. Batch claims bound the concurrency, Engine
 admits worker capacity, holds preserve evidence, archive intake records custody,
 and retirement verifies provider absence. The coordinator keeps no state outside
 those services, so a restart continues from them. It never starts a second
-trial for an entry. A failed entry is redispatched only as a new RAES
-replacement entry that the experiment's replacement policy authorizes.
+trial for an entry. A failed entry gets a fresh trial only when the
+experiment's replacement policy authorizes it.
 """
 
 from __future__ import annotations
@@ -30,7 +30,6 @@ from shared.exceptions import CMSError
 from shared.raes.experiment_admission import experiment_archive_identity
 from shared.raes.experiment_dispatch_inputs import (
     entry_attempt_timeout,
-    entry_inputs,
     trial_scenario_bytes,
     trial_scenario_sha256,
     trial_unit_bytes,
@@ -48,7 +47,7 @@ from ._experiment_batches import (
     record_experiment_worker,
 )
 from ._experiment_dispatch_state import experiment_dispatch_stopped, reserve_trial_deadline, stop_experiment_batch
-from ._experiment_replacement import replace_experiment_entry
+from ._experiment_replacement import rerun_failed_entry
 from ._trial_archives import intake_trial_archive
 
 if TYPE_CHECKING:
@@ -261,7 +260,8 @@ def _collect(
     if not collection.worker_copy_disposable:
         raise CMSError("The trial archive is not yet safe to discard from the worker")
     record_experiment_collection(credential, organization_uuid, token, collection.id, scenario_sha256=scenario)
-    final = "finished" if collection.run_status == "completed" else "failed"
+    # A completed run with a gap in its required trial data is a failed trial.
+    final = "finished" if collection.run_status == "completed" and collection.evidence_complete else "failed"
     observe_experiment_attempt(credential, organization_uuid, token, final)
     return "collected"
 
@@ -404,12 +404,9 @@ def reconcile_experiment_dispatch(
             if row.token is None:
                 action = _dispatch_replacement(credential, organization_uuid, scope, row, collect_only=collect_only)
             elif row.cleanup_receipt_json:
-                action = replace_experiment_entry(credential, organization_uuid, inputs, row)
+                action = rerun_failed_entry(credential, organization_uuid, inputs, row)
             else:
-                row_inputs = entry_inputs(inputs, row.replacement_json)
-                action, trial = _advance(
-                    credential, organization_uuid, row_inputs, scope, row, collect_only=collect_only
-                )
+                action, trial = _advance(credential, organization_uuid, inputs, scope, row, collect_only=collect_only)
         except (CMSError, ValueError) as exc:
             # One entry's failure must not stop the other entries' progress.
             logger.warning("experiment dispatch entry=%s failed reason=%s", row.plan_entry_id, str(exc)[:200])

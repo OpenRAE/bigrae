@@ -1,8 +1,8 @@
 """Validate a trial archive for experiment dispatch: containment, sealed bytes and the run record.
 
-Dispatch needs only the run's status to decide cleanup and replacement. This
-validator keeps the archive containment and byte-integrity checks, and reads no
-record other than the run record.
+Dispatch needs only the run's status and the seal's completeness to decide
+cleanup and a fresh trial. This validator keeps the archive containment and
+byte-integrity checks, and reads no record other than the run record.
 """
 
 from __future__ import annotations
@@ -45,7 +45,14 @@ def validate_trial_run_record(path: Path, expected: TrialArchiveIdentity) -> Ver
             run_id, run_status, outcome_status = run.run_id, run.run_status, run.outcome_status
         if run_id != expected.run_id or not isinstance(run_status, str) or not isinstance(outcome_status, str):
             raise TrialArchiveError("Archive run differs from the expected run")
-        return VerifiedTrialArchive(len(members), run_digest, run_status, outcome_status, False, 0)
+        # The seal lists every gap in the required trial data; dispatch fails a trial with any gap.
+        completeness = marker.get("completeness")
+        limitations = completeness.get("limitations") if isinstance(completeness, dict) else None
+        if not isinstance(limitations, list):
+            raise TrialArchiveError("Archive seal completeness is invalid")
+        return VerifiedTrialArchive(
+            len(members), run_digest, run_status, outcome_status, not limitations, len(limitations)
+        )
     except TrialArchiveError:
         raise
     except RECORD_ERRORS:
