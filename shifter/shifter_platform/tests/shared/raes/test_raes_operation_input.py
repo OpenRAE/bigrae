@@ -116,6 +116,50 @@ def test_candidate_rejects_invalid_management_port(port):
         parse_raes_operation_input(raw)
 
 
+_HARDWARE = {"nic_type": "GVNIC", "disk_interface": "NVME", "enable_secure_boot": False}
+
+
+def test_candidate_carries_nondefault_gce_hardware_choices():
+    raw = _built()
+    raw["image_candidates"]["gce:kali"][0].update(_HARDWARE)
+    projected = parse_raes_operation_input(raw).image_candidates_for("gce", "kali")[0]
+    assert {key: projected[key] for key in _HARDWARE} == _HARDWARE
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"nic_type": ""},
+        {"nic_type": "gvnic"},
+        {"disk_interface": "NVMe"},
+        {"enable_secure_boot": True},
+        {"enable_secure_boot": 0},
+        {"enable_secure_boot": "false"},
+        {
+            "enable_secure_boot": False,
+            "image_kind": "machine-image",
+            "bootstrap_capability": "preconfigured-machine-host",
+            "participant_container_name": "participant-desktop",
+            "participant_username": "student",
+            "participant_readiness_contract": "participant-readiness/v1",
+            "participant_readiness_manifest_sha256": "a" * 64,
+        },
+    ],
+)
+def test_candidate_rejects_default_or_ambiguous_hardware_choices(change):
+    raw = _built()
+    raw["image_candidates"]["gce:kali"][0].update(change)
+    with pytest.raises(RaesOperationInputError, match="hardware choices"):
+        parse_raes_operation_input(raw)
+
+
+def test_candidate_rejects_gce_hardware_choices_for_another_provider():
+    raw = _built()
+    raw["image_candidates"]["aws:kali"] = [dict(raw["image_candidates"]["gce:kali"][0], nic_type="GVNIC")]
+    with pytest.raises(RaesOperationInputError, match="hardware choices"):
+        parse_raes_operation_input(raw)
+
+
 def _built(**overrides: object) -> dict:
     kwargs: dict[str, object] = {
         "plan": _plan(),

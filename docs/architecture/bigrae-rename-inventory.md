@@ -1,5 +1,10 @@
 # BigRAE identifier inventory
 
+This reference records naming dispositions from issue #2555.
+Its dated acceptance evidence is historical, not a readback of current GitHub settings.
+Use `.ground-control.yaml` and `docs/adr/repository-identity.json` for the current repository identity.
+The later transfer to OpenRAE does not rewrite the earlier cutover evidence.
+
 Issue: #2555. This ledger owns the naming dispositions. Internal source layout
 and deployed identity are independent of product branding. Each family below
 includes generated copies and its compatibility fixtures, unless stated otherwise.
@@ -38,7 +43,7 @@ the milestone closes.
 | `Shifter/*` metrics, log namespaces and alarm/dashboards | Monitoring and audit consumers | permanent | Preserve time series, alarms, security signals and retention continuity | Existing observability tests and readback |
 | Existing GHCR package/image roots, OCI digests, pinned image-family names, signed releases and attestations | Deployment and rollback | permanent | Historical provenance remains bound to the original repository; never retag or rewrite it | Verify immutable old digests with original identity; qualify new coordinates separately |
 | Helm description, schema descriptions, umbrella release package name | New documentation and releases | rename-now | Chart resource names/selectors and umbrella version unchanged | Helm schema/render and Release Please config checks |
-| GitHub slug, OIDC/WIF template names, attestation expected repo, Pages URL, canonical tooling | GitHub, CI, provenance, docs and future deployments | rename-now in ordered repository cutover | Repository ID remains `1241599684`; current owner ID remains `56809295`. Names, IDs, protected refs, environments and workflow claims must agree | GitHub identity/settings readback, CI, native template validation and source/repository rollback evidence |
+| GitHub slug, OIDC/WIF template names, attestation expected repo, Pages URL, canonical tooling | GitHub, CI, provenance, docs and future deployments | rename-now in ordered repository cutover | Repository ID is retained; current owner and repository identity come from `docs/adr/repository-identity.json`. Names, IDs, protected refs, environments and workflow claims must agree | GitHub identity/settings readback, CI, native template validation and source/repository rollback evidence |
 | ADR bodies, preflight records, requirements, deprecated docs, changelog, frozen snapshots and issue URLs | Historical evidence | permanent | Preserve original decisions and evidence. Current guardrail changes receive a separate recorded amendment | ADR guard, history and compatibility checks |
 
 ## Acceptance evidence
@@ -48,6 +53,10 @@ repository rename additionally requires GitHub identity/settings readback,
 hosted CI verification and ecosystem coordination. Under the no-deployments
 decision, deployment-state migration and live-workload rehearsal are not
 applicable; no cloud configuration file is required to establish that premise.
+
+<!-- Dated source and repository-cutover evidence is preserved; current applicability and contracts above remain checked. -->
+<!-- vale off -->
+<!-- ste-disable -->
 
 ### Source preparation, 2026-10-23
 
@@ -63,7 +72,7 @@ assumption and is superseded by the user's
 2026-10-25 no-deployments decision. The required full ADR check separately
 reported five expired exceptions and their quality-ownership gaps. The user
 expanded #2555 on 2026-10-25 to repair those failures under GEN-002.
-The [quality design](bigrae-rename-quality-design-2555.md) defines the CI
+The [quality design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/bigrae-rename-quality-design-2555.md) defines the CI
 boundaries and coverage for that scope.
 
 The full CI-level ADR check passes. The guard tests also pass at the initial
@@ -108,3 +117,6 @@ links use the new path. No second hosting destination has been created.
 
 Hosted checks must pass on the final PR head before delivery readiness.
 The cutover does not publish packages or transfer the repository to another owner.
+
+<!-- ste-enable -->
+<!-- vale on -->

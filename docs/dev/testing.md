@@ -1,28 +1,32 @@
 # Testing: Clean-Checkout Commands and Quality Metrics
 
-This document is the contract for running the test suites and for the coverage
-and warning policy that makes the reported numbers trustworthy (REV1 Q6/Q7,
-issue #1529). CI (`.github/workflows/_quality.yml`) is the enforcement authority;
-the commands here reproduce its posture from a clean checkout.
+This reference lists verification commands, CI owners, coverage floors, and warning policy.
+CI enforces the complete suites through `.github/workflows/_quality.yml`.
+Use [local setup](../technical/dev/local-setup.md#tests-and-checks) to select a targeted development check.
 
 ## Command matrix
 
-This matrix is the single list of verification commands. CI is the enforcement
-authority. Unless a row names another workflow, the CI job is in
-`.github/workflows/_quality.yml`. The `paths` job selects jobs for the changed
-paths, so a pull request runs only the jobs that own its changes.
+The matrix is the single command reference.
+The `paths` job selects CI jobs through the quality ownership contract.
+Unless stated otherwise, the owning job is in `.github/workflows/_quality.yml`.
 
-Run the lanes for the packages you change. `make test` runs every row marked
-**yes** in the `make test` column. Do not also run those child targets, because
-that runs the same suites twice. Each `make` target syncs pinned dependencies
-(`uv sync` or `npm ci`) and sets the CI posture. `make help` lists all targets.
+Local development uses specific test modules or cases for changed behavior.
+The lane commands below reproduce complete package checks; do not run them all to verify a local edit.
+`make test` runs every row marked **yes** in its column.
+It must not be combined with its child targets, because that repeats the same suites.
+CI owns full suites unless the user explicitly requests a complete local run.
 
-Base prerequisites: `uv` and Node 20.19+ with npm. The prerequisites column lists
-only additional tools or services.
+The implement workflow retains `make test` as its configured full-completion boundary.
+That configuration does not require running the complete suite locally during ordinary development.
+
+Package targets synchronize dependencies with `uv sync` or `npm ci`.
+Helper targets supply their own tool options. `make help` lists the targets.
+Base prerequisites are `uv` and Node 20.19 or later with npm.
+The prerequisites column lists additional tools or services.
 
 ### Unit and package lanes
 
-| Lane | Local command | Prerequisites | CI job | `make test` |
+| Lane | Lane command | Prerequisites | CI job | `make test` |
 | --- | --- | --- | --- | --- |
 | Platform (SQLite, local only) | `make test-platform` | None | None; CI runs the PostgreSQL lane | yes |
 | Adapter SDK and packaging | `make test-adapter-sdk` | None | Tests (adapter SDK) | yes |
@@ -50,7 +54,7 @@ commands select only unit tests for those packages. See
 
 ### Service and image lanes
 
-| Lane | Local command | Prerequisites | CI job |
+| Lane | Lane command | Prerequisites | CI job |
 | --- | --- | --- | --- |
 | Platform (PostgreSQL, coverage floor) | `make test-platform-postgres` | PostgreSQL on `:5432` | Tests (shifter_platform, PostgreSQL `n`/6), Coverage (shifter_platform) |
 | Platform Redis channel layer | `make test-platform-redis` | Redis on `:6379` | Tests (shifter_platform, Redis channel layer) |
@@ -67,7 +71,7 @@ lane cannot prove. The SQLite lane is a fast local lane; CI does not run it.
 
 ### Frontend and browser lanes
 
-| Lane | Local command | Prerequisites | CI job | `make test` |
+| Lane | Lane command | Prerequisites | CI job | `make test` |
 | --- | --- | --- | --- | --- |
 | Legacy platform JavaScript (Jest) | `make test-js` | None | Tests JavaScript (shifter_platform) | yes |
 | React SPA lint, types, Vitest, build | `make test-spa` | None | SPA (shifter_platform frontend) | yes |
@@ -91,7 +95,7 @@ Security Policy violation. See [browser security policy](#browser-security-polic
 
 ### MCP lanes
 
-| Lane | Local command | Prerequisites | CI job | `make test` |
+| Lane | Lane command | Prerequisites | CI job | `make test` |
 | --- | --- | --- | --- | --- |
 | MCP server packages | `make test-mcp` | None | Lint JavaScript (mcp/`<package>`), Tests JavaScript (mcp/`<package>`) | yes |
 
@@ -100,11 +104,11 @@ under `mcp/`. Lint allows zero warnings.
 
 ### Policy and static checks
 
-| Check | Local command | CI job |
+| Check | Lane command | CI job |
 | --- | --- | --- |
 | Architecture guard, imports, whitespace, changed prose | `make policy` | Architecture (adr conformance), Architecture (import linter), Docs prose (changed Markdown) in `vale.yml` |
 | Commit hooks | `pre-commit run` | None; the hooks run locally before each commit |
-| Workflows, Terraform, Kubernetes | The native commands in [AGENTS.md](https://github.com/Brad-Edwards/bigrae/blob/dev/AGENTS.md#required-checks) | Lint (GitHub Actions), Lint (terraform), Lint and security (Helm chart), Lint (k8s schemas) |
+| Workflows, Terraform, Kubernetes | The native commands in [AGENTS.md](https://github.com/OpenRAE/bigrae/blob/dev/AGENTS.md#required-checks) | Lint (GitHub Actions), Lint (terraform), Lint and security (Helm chart), Lint (k8s schemas) |
 
 `make policy` runs the ADR guard once. Do not also run the configured lint
 command (`adr_guard.py --all --level ci`) in the same pass. Vale checks only the
@@ -118,7 +122,7 @@ not pull-request gates. A pass proves only the scope that its runbook states.
 | Check | Command or entrypoint | Runbook or status |
 | --- | --- | --- |
 | Post-deploy range smoke | `manage.py run_post_deploy_smoke`, run by the deploy workflows | Advisory: a failure opens an issue and does not block the deploy |
-| Participant terminal and Guacamole session | `uat/range-functional-smoke` | [Range functional smoke](https://github.com/Brad-Edwards/bigrae/blob/dev/uat/range-functional-smoke/README.md) |
+| Participant terminal and Guacamole session | `uat/range-functional-smoke` | [Range functional smoke](https://github.com/OpenRAE/bigrae/blob/dev/uat/range-functional-smoke/README.md) |
 | Event load envelope | `event-load-harness` | [GCP event capacity](../ops/gcp-event-capacity.md) |
 | Range escape boundaries | `manage.py run_range_escape_validation` | [Range escape validation](../ops/range-escape-validation.md) |
 | Model broker transport | `scripts/gcp/probe_model_broker.py` | [Model broker probes](../ops/model-access-gcp-probes.md) |
@@ -127,10 +131,12 @@ not pull-request gates. A pass proves only the scope that its runbook states.
 Range readiness or an open port does not prove a working terminal session. An
 accepted destroy request does not prove that teardown completed.
 
-You can also run a package directly (`cd <pkg> && uv run pytest`) from a clean
-checkout. The settings set the platform test posture (`DEBUG`, SQLite backend,
-local provisioner off) through `config._runtime_env.IS_TEST_RUN`; CI does not
-inject it.
+For a targeted check, pass the exact test module or case to `uv run pytest` from its package directory.
+
+The platform's root `conftest.py` defaults `TESTING=1` for pytest.
+Test settings default to `DEBUG=True`, SQLite, and `LOCAL_PROVISIONER=False`.
+Explicit environment values can override the debug and database defaults.
+The platform CI job explicitly sets `TESTING=1`, `TEST_DB_BACKEND=postgres`, and `DJANGO_DEBUG=true`.
 
 ## CI platform lane
 
@@ -148,7 +154,9 @@ worker clones its test database from one migrated template database. The
 A skipped `postgres`-marked test fails its shard. Keep each test fast. One slow
 test makes its shard slow, because the shards do not use recorded durations.
 
-## Test posture (why a clean run matches CI)
+<a id="test-posture-why-a-clean-run-matches-ci"></a>
+
+## Test posture
 
 `config._runtime_env.IS_TEST_RUN` is true when `TESTING=1` or pytest is the entry
 point. Under it the settings default to the test posture so a bare `uv run pytest`
@@ -163,15 +171,17 @@ does not inherit the production HTTPS posture a fresh checkout would otherwise g
 - `TEST_DB_BACKEND` defaults to `sqlite` (`config/_database_settings.py`).
 
 These are covered by `tests/platform/test_clean_checkout_posture.py`.
+Explicit ambient settings can override defaults.
+Use `TEST_DB_BACKEND=sqlite` for a targeted local run when the shell selects PostgreSQL.
 
 Keep cloud test doubles within the provider adapter boundary. The tenant-pack
-and event-content fixtures select AWS and patch its storage constructor. They
-keep the shared storage factory and content resolver intact, so a module imported
-during a fixture cannot retain a temporary replacement after teardown. Content
-tests exercise the real parser and digest checks against synthetic stored bytes.
+and event-content fixtures select AWS and patch its storage constructor. They keep the shared storage factory and content resolver intact.
+A module imported during a fixture cannot retain a temporary replacement after teardown.
+
+Content tests exercise the real parser and digest checks against synthetic stored bytes.
 When fixing an order-dependent failure, run
-the suspected predecessor and failing case together in one process. Also check
-that the next operation uses its own adapter after the patch ends. This follows
+the suspected predecessor and failing case together in one process.
+Also check that the next operation uses its own adapter after the patch ends. This follows
 Python's [guidance on where to patch](https://docs.python.org/3.12/library/unittest.mock.html#where-to-patch).
 
 ## Coverage: two complementary floors
@@ -184,10 +194,8 @@ platform metric was 94% self-covering, ~88% production-only). CI runs `pytest
 
 **Absolute per-package floor**, enforced by `[tool.coverage.report] fail_under`
 in each package. Floors are per-package (a repository aggregate would let a
-high-coverage package mask a regression in a smaller one). Each floor sits one
-point under the measured production-only baseline to absorb run-to-run variance;
-floors only stay level or rise, and a real reduction requires a reviewed,
-time-bounded exception.
+high-coverage package mask a regression in a smaller one). Each floor sits one point below the measured production-only baseline to absorb run-to-run variance.
+Floors only stay level or rise. A reduction requires a reviewed, time-bounded exception.
 
 | Package | Production-only baseline | `fail_under` |
 | --- | --- | --- |
@@ -198,22 +206,21 @@ time-bounded exception.
 | `scripts/check_layer_imports` | 96% | 95 |
 | `shifter/packer` | 76% | 75 |
 
-**SPA (frontend) floor.** The Django-hosted React SPA
-(`shifter/shifter_platform/frontend`) enforces its own absolute floors in
-`vite.config.ts` (`test.coverage.thresholds` for statements, branches,
-functions, and lines), each set one point under the measured baseline like the
-Python packages so the floor absorbs run-to-run variance and only rises. The
+**SPA (frontend) floor.** The Django-hosted React SPA (`shifter/shifter_platform/frontend`) defines coverage floors in `vite.config.ts`.
+`test.coverage.thresholds` covers statements, branches, functions, and lines.
+Each floor sits one point below its measured baseline, as in the Python packages.
+This absorbs run-to-run variance; floors only rise. The
 measured source set is `src/**/*.{ts,tsx}` excluding tests, test support, and
 the generated `src/api/schema.d.ts`; the first-party entrypoint and composition
-root stay measured. The SPA's Vitest LCOV (`frontend/coverage/lcov.info`) is
-uploaded by the `SPA (shifter_platform frontend)` CI job and restored into the
-`sonarcloud` job, so SPA changed lines are held to the same changed-code gate
-below (#1526).
+root stay measured.
 
-**Changed-code floor**, owned by the SonarCloud `raes-strict` quality gate,
-which fails a PR when `new_coverage < 80` (80% coverage on changed lines), plus
-`new_violations > 0`, new duplicated-lines density > 3%, any new rating worse than
-A, and new security hotspots not fully reviewed. PR analysis waits for the gate
+The `SPA (shifter_platform frontend)` CI job uploads Vitest LCOV from `frontend/coverage/lcov.info`.
+The `sonarcloud` job restores it.
+SPA changed lines use the same changed-code gate below (#1526).
+
+**Changed-code floor:** the SonarCloud `raes-strict` quality gate requires 80% changed-line coverage.
+It fails for `new_coverage < 80`, `new_violations > 0`, or new duplicated-lines density above 3%.
+It also fails for any new rating worse than A or new security hotspots that are not fully reviewed. PR analysis waits for the gate
 (`sonar.qualitygate.wait=true`). The conditions are recorded in
 `sonar-project.properties`; each owned Python package publishes its configured
 coverage report for Sonar to consume.
@@ -226,9 +233,9 @@ check `new_coverage`.
 The released OpenFGA/PostgreSQL lane also publishes `coverage-openfga.xml`,
 including the native application and policy SQL duty tests. Sonar consumes both
 platform reports so service-only behavior contributes real coverage evidence.
-This supplemental report has no whole-package floor because it exercises a
-service-specific subset; the `Coverage (shifter_platform)` job still enforces the
-unchanged 87% package floor, and Sonar still enforces 80% changed-code coverage. Run it locally
+This supplemental report has no whole-package floor because it exercises a service-specific subset.
+The `Coverage (shifter_platform)` job still enforces the unchanged 87% package floor.
+Sonar still enforces 80% changed-code coverage. Run it locally
 from `shifter/shifter_platform` with
 `./scripts/run_openfga_integration.sh --cov --cov-report=xml:coverage-openfga.xml --cov-fail-under=0`.
 
@@ -249,7 +256,7 @@ regardless of test order or xdist worker.
   `ignore` filter matched by exact message, with an adjacent owner and removal
   condition. The current set is the `django-health-check` (`<5.0`) class-based
   check deprecations, tracked for migration + removal in
-  [#1601](https://github.com/Brad-Edwards/bigrae/issues/1601).
+  [#1601](https://github.com/OpenRAE/bigrae/issues/1601).
 - Tests that intentionally assert a warning use `pytest.warns` at the behavior
   boundary; that is an assertion, not a baseline exception.
 
@@ -274,13 +281,11 @@ participant actor. The Playwright config's `auth.setup.ts` logs each actor in on
 `LOCAL_PROVISIONER`/`ENGINE_TASK_*` stay unset, so a range launch enqueues
 nothing and contacts no cloud.
 
-Hermetic scope: login/auth-revocation, workspace lifecycle
-(create/rename/archive/restore), shared-audit history, authorization denial
-(client advisory **and** the authoritative API 403), CTF
-organizer/participant/threat-research role landings, and the participant inbox
-with stored and reflected XSS probes under the enforced CSP. Journeys that require a live
-provisioner (range readiness/terminal/cleanup, CTF range, Guacamole) are the
-deployed tier and are tracked separately, not run in the PR lane.
+Hermetic scope includes login, authentication revocation, workspace lifecycle, shared-audit history, and authorization denial.
+Workspace operations cover create, rename, archive, and restore.
+Denial covers client advice and the authoritative API 403.
+The journeys cover CTF organizer, participant, and threat-research role landings.
+The participant inbox includes stored and reflected XSS probes under the enforced CSP.
 
 Authenticated Playwright traces are retained only on a local retry and are never
 uploaded as CI artifacts (ADR-055-R7). Reproduce failures locally with
@@ -294,16 +299,10 @@ A/AA tag set. The `Accessibility` job in `.github/workflows/deploy.yml` runs it 
 **every** pull request as a direct `PR Gate` dependency (it does not inherit the
 frontend path skip, per ADR-055-R2), against a job-local PostgreSQL.
 
-The debt baseline is an exact set of privacy-safe fingerprints
-(`frontend/e2e/a11y/baseline.json`): the scan fails on any new or resolved
-finding, and the `accessibility-baseline` adr_guard check enforces that the
-committed baseline may only shrink versus the trusted base branch (additions
-require an exact-fingerprint waiver in `docs/adr/exceptions.yaml` naming ADR-055,
-per R4/R6). The matrix reconciles fail-closed against the SPA route table
-(`src/test/a11y-surface-reconcile.test.ts`); a new route group with no coverage
-or exclusion fails. Nightly multi-browser runs, deployed-target scans, the
-WCAG-EM manual audit, and the release-evidence gate are the remaining ADR-055
-tail tracked in [#2117](https://github.com/Brad-Edwards/bigrae/issues/2117).
+The debt baseline is an exact set of privacy-safe fingerprints in `frontend/e2e/a11y/baseline.json`.
+The scan fails on any new or resolved finding.
+The `accessibility-baseline` ADR guard permits the committed baseline only to shrink against the trusted base branch.
+Additions require an exact-fingerprint waiver in `docs/adr/exceptions.yaml` naming ADR-055 under R4/R6.
 
 ## Browser security policy
 
@@ -321,9 +320,8 @@ operator procedure for a blocked feature.
 
 ## External tool integration tests
 
-The GCP scripts, bootstrap, adapter SDK and Packer packages register the
-`integration` pytest marker for checks that require external rendering/build
-commands or isolated package/TLS environments. Use `uv run pytest -m "not integration"`
+GCP scripts, bootstrap, adapter SDK, and Packer register the `integration` pytest marker.
+Those checks require external rendering/build commands or isolated package/TLS environments. Use `uv run pytest -m "not integration"`
 from a package directory for its tool-independent unit selection, or
 `uv run pytest -m integration` to run the external-tool checks explicitly.
 GCP scripts and bootstrap default to the unit selection; their CI jobs explicitly

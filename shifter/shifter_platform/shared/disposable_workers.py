@@ -1,5 +1,6 @@
 """Bounded administrator-owned apparatus, distinct from experiment content."""
 
+import re
 from typing import Annotated, Any, Literal, Self
 from uuid import UUID
 
@@ -8,6 +9,9 @@ from shifter_adapter_sdk.runtime import ClosedModel, Digest, canonical_digest
 
 from shared.raes.worker_host import worker_host_shape
 from shared.runtime_plugin_binding import PluginTargetBindings, RuntimeTargetImageProfile
+
+# A predefined machine type states its vCPU count, for example c4a-standard-4.
+_PREDEFINED_MACHINE = re.compile(r"^[a-z][a-z0-9]*-(?:standard|highcpu|highmem)-([1-9]\d{0,2})$")
 
 
 class WorkerSoftwareBinding(ClosedModel):
@@ -38,10 +42,14 @@ class WorkerHostProfile(ClosedModel):
         """Reject ambiguous topology and mutable or undersized apparatus inputs."""
         _, _, _, cpu, ram = worker_host_shape(self.plan)
         _validate_worker_image(self.image)
-        # The incumbent GCE realizer derives e2-custom from the plan when the
-        # image profile has no override. Keep quota demand and physical size in
-        # agreement, including its 256 MiB alignment, before any effects.
-        if cpu not in range(2, 33, 2) or ram % (256 * 1024**2) or not cpu * 512 * 1024**2 <= ram <= cpu * 8 * 1024**3:
+        # Keep quota demand and physical size in agreement before any effects.
+        # A predefined machine type must state the plan's vCPU count. Otherwise
+        # the GCE realizer derives e2-custom from the plan, with 256 MiB alignment.
+        if self.image.machine_type:
+            selected = _PREDEFINED_MACHINE.fullmatch(self.image.machine_type)
+            if selected is None or int(selected.group(1)) != cpu:
+                raise ValueError("Worker machine type must be a predefined shape with the plan's vCPU count")
+        elif cpu not in range(2, 33, 2) or ram % (256 * 1024**2) or not cpu * 512 * 1024**2 <= ram <= cpu * 8 * 1024**3:
             raise ValueError("Worker resources require a supported E2 custom shape")
         if self.capacity_demand.get("vcpu", 0) < cpu or self.capacity_demand.get("instances", 0) < 1:
             raise ValueError("Worker capacity demand does not cover its host")
@@ -53,6 +61,18 @@ class WorkerHostProfile(ClosedModel):
     def digest(self) -> str:
         """Identify the exact admitted apparatus snapshot."""
         return canonical_digest(self.model_dump(mode="json"))
+
+    @property
+    def hardware(self) -> dict[str, object]:
+        """Return the provider settings that the realized host must report."""
+        _, _, _, cpu, ram = worker_host_shape(self.plan)
+        selected = {
+            "machine_type": self.image.machine_type or f"e2-custom-{cpu}-{ram // 1024**2}",
+            "enable_secure_boot": self.image.enable_secure_boot,
+            "image_id": self.image_id,
+        }
+        # Empty interface choices keep the provider default and are not compared.
+        return selected | self.image.model_dump(include={"nic_type", "disk_interface"})
 
 
 class WorkerPolicy(ClosedModel):
@@ -74,12 +94,11 @@ class WorkerPolicy(ClosedModel):
 
 
 def _validate_worker_image(image: RuntimeTargetImageProfile) -> None:
-    """Accept only an exact standard GCE host without resource or egress overrides."""
+    """Accept only an exact standard GCE host without egress overrides."""
     if (
         image.provider != "gcp"
         or image.image_kind != "image"
         or image.bootstrap_capability != "standard"
-        or image.machine_type
         or image.disk_size_gb is None
         or not image.management_ssh_username
         or image.allow_public_web_egress

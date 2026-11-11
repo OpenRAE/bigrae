@@ -42,10 +42,16 @@ The existing image profile validator checks its exact image and resource setting
 The immutable input carries the numeric image ID through the native image resolver.
 
 Existing provider checks verify it before credential installation and against the actual boot disk.
-The first worker path uses the existing E2 custom shape derived from the host plan.
-The image profile cannot override that machine type.
+Without a machine type, the worker uses the E2 custom shape derived from the host plan.
+The image profile can select a predefined machine type, for example the ARM64 type `c4a-standard-2`.
+That type must state the vCPU count of the host plan.
 
 This keeps physical CPU allocation consistent with capacity demand.
+The image profile accepts the NIC, disk-interface, and Secure Boot choices of [GCE guest hardware profiles](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gce-guest-hardware-profiles.md).
+Secure Boot stays enabled by default.
+Default choices do not change the profile digest or the operation input.
+The operation input carries only non-default choices to the GCE renderer.
+
 The host image supplies the pinned Docker version through standard guest bootstrap.
 Capture the image after cloud-init resets machine identity and Docker stops and clears its daemon identity.
 
@@ -118,6 +124,12 @@ The fixed provisioner probe addresses the local Unix Docker socket over bounded,
 It checks daemon count, daemon ID, machine identity, and the pinned runtime version.
 Provider VM identity uses authenticated numeric ID readback in the admitted project and zone.
 The participant `instance_id` output remains a reusable name.
+
+The same readback records the realized machine type, Secure Boot state, NIC type, boot disk interface, and boot image ID.
+Qualification stores these realized settings.
+Qualification fails if a realized setting differs from the retained profile.
+Empty NIC and disk-interface choices are recorded but not compared.
+A worker without current qualification cannot start a trial.
 
 Engine stores bounded qualification facts and never reads a host-management key.
 Qualification expires after 15 minutes or at worker retirement, deadline, or a generation change.
@@ -217,6 +229,7 @@ Reference evidence:
 | [Django transactions](https://docs.djangoproject.com/en/6.0/topics/db/transactions/) | 6.0, atomic | Custody and durable dispatch |
 | [Compute custom images](https://docs.cloud.google.com/compute/docs/instances/create-vm-from-custom-image) | Compute Engine, image creation | Exact host image and independent VMs |
 | [Compute custom machine types](https://docs.cloud.google.com/compute/docs/instances/creating-instance-with-custom-machine-type) | Compute Engine, E2 limits | Resource bounds and exact capacity demand |
+| [Google ARM compute](https://docs.cloud.google.com/compute/docs/instances/arm-on-compute) | Compute Engine, C4A requirements | ARM64 worker machine types |
 | [Docker system info](https://docs.docker.com/reference/cli/docker/system/info/) | Engine CLI, format | Local daemon identity and runtime version |
 | [Cloud-init image cleanup](https://docs.cloud-init.io/en/latest/reference/cli.html#clean) | clean, machine-id | A fresh machine identity after image capture |
 | [Moby daemon identity](https://github.com/moby/moby/blob/master/daemon/id.go) | LoadOrCreateID | A new daemon identity after cloning |

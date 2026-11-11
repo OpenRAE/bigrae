@@ -1,12 +1,8 @@
 # shifter-ops MCP security guardrails
 
-The ops MCP server runs with the local operator's AWS credentials and
-can reach production-facing AWS APIs, the production database, and the
-operator's own range infrastructure. **`shifter-ops` is an *operator
-agent surface*** in the sense of ADR-014-R5—the intended client is
-the operator's own trusted agent loop, and agents are *meant* to
-perform writes, mutations, SSM execution, and secret retrieval as
-routine range-operations work.
+This security reference describes the active tool policy and process boundaries.
+
+The ops MCP server uses the local operator's AWS credentials. It can reach production-facing AWS APIs, the production database, and the operator's range infrastructure. **`shifter-ops` is an *operator agent surface*** under ADR-014-R5. Its client is the operator's trusted agent loop. Writes, mutations, SSM execution, and secret retrieval are intended operations within its policy controls.
 
 The threat surface is therefore **not** "untrusted MCP client connects
 to the server." It is:
@@ -69,11 +65,9 @@ today on the live server.
 
 ## Policy layer—target design (phased rollout)
 
-The sections below describe the **target** policy layer once every
-phase ships. The Implementation Status section above is authoritative
-for what is live in the current tree; everything here is design /
-specification for the in-flight rollout (issue #777 + sub-issues
-#1198–#1202).
+The following sections distinguish implemented controls from design targets.
+The phase numbers above retain delivery history; they do not prove live permissions or deployment qualification.
+The current `.shifter.yaml` and owning policy modules determine the selected session's tools.
 
 Every tool registered on this server is governed by a structured
 per-tool policy declared in `.shifter.yaml` (`mcp_ops:` namespace at
@@ -103,17 +97,16 @@ each handler:
 - **Environment policy.** No default to `prod`. Tools that touch prod
   require an explicit `confirm_env="prod"` argument; otherwise the
   call is refused before the handler runs.
-- **Dry-run defaults.** `infra_mutation`, `ssm_arbitrary`, and
-  `db_arbitrary` classes default to dry-run. The handler returns a
-  preview of what *would* happen; real execution requires
-  `execute=true`. For the highest-impact subset (apex ops), a
-  two-phase `plan_<name>` / `execute_<name>` exchange is used with a
-  single-use, short-TTL plan id.
+- **Plan and execute.** `infra_mutation`, `ssm_arbitrary`, and `db_arbitrary` classes register `plan_<name>` and `execute_<name>` tools.
+  The original direct tool is absent.
+  Planning returns a summary and a short-lived plan ID without running the handler.
+  Execution requires that single-use `plan_id` and runs the stored arguments through the execution gates.
+  Apex operations also require out-of-band operator approval.
 - **Secret handles.** `secret_handle` tools return an opaque handle
   (`shf-secret:<uuid>`) resolvable only inside the server process.
-  Raw secret bytes never enter MCP responses or LLM context. Internal
-  helpers (`fetchCredentials` for the DB pool open) accept the
-  handle and resolve it server-side.
+  Successful responses contain references instead of raw secret bytes.
+  Internal helpers (`fetchCredentials` for the DB pool open) resolve the handle server-side.
+  Error responses have the separate boundary described below.
 - **Idempotency keys.** `named_db_write` mutations require an
   `idempotency_key` argument. Same key on retry returns the cached
   result, so an agent retry storm cannot compound.
@@ -131,11 +124,7 @@ each handler:
 - **Untrusted-input fencing.** Tools that return text from untrusted
   sources (logs, S3 objects, SSM stdout, web fetches) wrap their
   output in `[UNTRUSTED:<source>:BEGIN] ... [UNTRUSTED:<source>:END]`
-  fences. Tools that consume free-form text (`query`, `execute`,
-  `ssm_send_command`, `run_manage_command`) refuse calls whose text
-  arg contains those fences unless `acknowledge_untrusted_input: true`
-  is also set, forcing the agent to acknowledge it is intentionally
-  acting on text from an untrusted source.
+  fences. Free-form consumers include `query`, `execute`, `ssm_send_command`, and `run_manage_command`. They refuse fenced text unless `acknowledge_untrusted_input: true` is set. This forces acknowledgment before acting on untrusted source text.
 - **Apex out-of-band confirmation.** A small set of apex operations
   (`terminate_ec2_instance` against prod, `execute_plan` for
   `db_arbitrary` writes against prod, `restart_ecs_service` against
@@ -164,24 +153,13 @@ truth for the TLS configuration.
 - The tunnel terminates at `localhost`, but the RDS-issued cert
   carries the RDS endpoint in its CN/SAN. `buildPoolConfig` sets
   `ssl.servername` to the RDS endpoint discovered when the SSM
-  tunnel was started (`tunnels[env].rdsHost`). Node's `tls.connect`
-  uses `servername` for both SNI and the default
-  `checkServerIdentity` hostname check, so verification fires
-  against the real RDS endpoint rather than the localhost target of
-  the port forward.
-- The cert chain is rooted at Amazon Root CA 1, which is present in
-  every mainstream OS root store, so the default Node trust store
-  verifies the chain. No bundled CA is shipped in this repo at
+  tunnel was started (`tunnels[env].rdsHost`). Node's `tls.connect` uses `servername` for SNI and the default `checkServerIdentity` hostname check. Verification therefore targets the actual RDS endpoint, not the forwarded localhost address.
+- The certificate chain is rooted at Amazon Root CA 1, available in mainstream OS root stores. The default Node trust store verifies that chain. No bundled CA is shipped in this repo at
   present.
 
-**Switching to a pinned CA bundle.** If the OS trust store ever
-proves insufficient (for example, for an air-gapped host whose root bundle
-is curated separately), download AWS's published global RDS bundle
-from `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`,
-commit it under `mcp/ops/certs/rds-global-bundle.pem`, document the
-sha256 + refresh procedure in this file, and pass
-`ca: readFileSync(<path>)` alongside the existing `servername` in
-the `ssl` block. The check sites stay the same; only the trust
+**Switching to a pinned CA bundle.** If the host's trust store cannot verify that chain, use AWS's published global RDS bundle. Its source is `https://truststore.pki.rds.amazonaws.com/global/global-bundle.pem`. Put the approved bundle at `mcp/ops/certs/rds-global-bundle.pem`. Record its SHA-256 and refresh procedure here. Pass `ca: readFileSync(<path>)` with the existing `servername` in the `ssl` block.
+
+This applies, for example, to an air-gapped host with a separately curated root bundle. The check sites stay the same; only the trust
 input changes.
 
 **Regression coverage.** `mcp/ops/lib.test.js`'s `buildPoolConfig`
@@ -202,10 +180,7 @@ layer:
 - Shared AWS helpers accept structured argv segments, not a pre-joined
   command string. Call sites pass JSON values as a single argv element
   after `JSON.stringify`.
-- Shell escaping is not a remediation strategy. If a value must be
-  interpreted by a remote shell through SSM, that interpretation is
-  isolated to the remote command payload and never routed through
-  the local MCP host shell. Named SSM tools such as
+- Shell escaping is not a remediation strategy. Remote-shell interpretation through SSM is limited to the remote command payload. It must never pass through the local MCP host shell. Named SSM tools such as
   `run_manage_command` have a narrower contract: user input must be
   parsed as structured management-command argv and rejected before
   SSM rendering when it contains shell-control syntax. See
@@ -217,39 +192,39 @@ layer:
 
 ## Validation and boundaries (target—phased rollout)
 
-These describe the target policy layer; today only the seam exists
-(see Implementation Status above).
+Capability-class gates, profile selection, confirmation fields, and schema composition are implemented in the owning policy modules.
+The source and active `.shifter.yaml` define their current scope.
 
 - Reuse the existing Zod schemas in `index.js` for tool input shape
   and the shared helpers in `lib.js` for domain constraints
   (`resolveLogGroup`, `buildInstanceFilters`, `getSsmDocument`,
   `validateManageCommand`, `MAX_S3_READ_SIZE`, `isBinaryContentType`).
-  The policy wrapper composes additional schema fields automatically
-  per class (`confirm_env`, `execute`, `idempotency_key`,
-  `acknowledge_untrusted_input`) once Phases 2–4 ship.
+  The policy wrapper adds `confirm_env`, `idempotency_key`, and `acknowledge_untrusted_input` when their policy conditions apply.
+  Two-phase execution schemas require `plan_id` instead of accepting the original domain arguments again.
+  A tool-specific `execute` argument, such as `reconcile_ranges` uses, is separate from this wrapper contract.
 - Zod validation is defense in depth, not the authorization boundary.
-  The policy layer (once fully rolled out) is the authorization
-  boundary on this surface.
+  The policy layer enforces capability selection and operation gates on this trusted operator surface.
 - Keep capability policy separate from syntax validation. Read-only
   SQL, Secrets Manager names, EC2 IDs, and SSM command IDs can be
   syntactically valid and still need to be gated by class policy.
 
 ## Output, errors, and audit (target—phased rollout)
 
-These describe the target policy layer; today only the seam exists.
+This section separates the response design target from implemented audit and secret-handle behavior.
 
-- MCP responses must not include raw secret values, private keys, DB
-  passwords, OIDC client secrets, full secret-bearing URLs, raw SQL
-  text, or shell command bodies. The `secret_handle` class enforces
-  this by construction once #1198 lands.
-- Error envelopes identify the failed operation with sanitized
-  identifiers. The policy wrapper sanitizes errors using the same
-  `audit.redact` list as the audit log; raw AWS stderr, raw DB
-  errors, and multiline user input never reach error text.
-- The audit log carries actor context (process pid, profile in use,
-  env), operation name, sanitized target identifiers, result class,
-  and request/correlation id when one is present. There is no
-  external identity system; the operator owns the audit file.
+- **Design target:** MCP responses must exclude raw secrets, private keys, database passwords, OIDC client secrets, and complete secret-bearing URLs.
+  The target also excludes raw SQL text and shell command bodies.
+- A successful `secret_handle` result returns an opaque reference resolved inside the server process.
+  Error responses are not covered by that success-path guarantee.
+- Audit redaction applies to arguments and recorded targets.
+  It does not establish a general response-error sanitization guarantee.
+- `respond.err` preserves dependency error messages.
+  Treat those responses as potentially sensitive, untrusted text.
+  Do not publish raw response errors or treat them as instructions.
+- Policy-level response-error sanitization remains a design target.
+  Individual handlers own their narrower protections.
+- The audit log records process PID, profile, environment, operation, sanitized targets, result class, and an available request/correlation identifier.
+  There is no external identity system. The operator owns the audit file.
 
 ## Regression coverage
 
@@ -263,33 +238,14 @@ package; all are live in the current tree.
   sites—CloudWatch filters, SSM command parameters,
   management-command SSM payloads, S3 bucket/key inputs.
 - `mcp/ops/policy.test.js` covers the policy wrapper end-to-end:
-  `parsePolicy` shape validation (top-level keys, class-defaults
-  coverage per declared class, profile membership, version, env
-  block); `loadPolicy` parsing the real `.shifter.yaml`; the
-  `Policy` class lookups (`classDeclared`, `classEnabled`,
-  `classDefaults`, `envDefault`, `envProdRequiresConfirm`);
-  `registerTool`'s class-tag + profile gating (class-disabled tools
-  are not registered; missing / undeclared classes fail closed); and
-  the per-gate behavior added by #1198–#1200—env policy, dry-run
-  defaults, idempotency keys + retry caching, per-class rate caps,
-  audit append, secret-handle return mode, two-phase
-  `plan_<name>` / `execute_<name>` exchange, untrusted-input fencing
-  (producer/consumer), description redaction, and apex out-of-band
-  approval (stderr-only token, single-use consume, 60 seconds timeout).
+  `parsePolicy` shape checks cover top-level keys, declared-class defaults, profile membership, version, and environment configuration. `loadPolicy` parses the actual `.shifter.yaml`. The `Policy` lookups include `classDeclared`, `classEnabled`, `classDefaults`, `envDefault`, and `envProdRequiresConfirm`. `registerTool` omits disabled classes and rejects missing or undeclared classes.
+
+  The same tests cover environment policy, dry-run defaults, retry caching, rate caps, audit append, secret handles, two-phase exchange, and input fencing. They also cover description redaction and apex approval: stderr-only tokens, single use, and a 60-second timeout.
 - `mcp/ops/tool-surface.test.js` (added by #1202) is the
   load-bearing surface invariant for ADR-014-R3 / R5 / R6 on this
-  server: profile gating removes tools from the registered set
-  (read_only / standard / destructive); two-phase classes
-  (`infra_mutation` / `ssm_arbitrary` / `db_arbitrary`) register
-  `plan_<name>` / `execute_<name>` pairs only—the direct name is
-  absent; `secret_handle` class defaults pin `return_mode: handle`
-  in the live policy; prod-touching tools refuse without
-  `confirm_env="prod"`; `dev_bypass_tunnel` descriptions are
-  replaced with the redacted constant; consumer tools refuse fenced
-  input without `acknowledge_untrusted_input: true`; every
-  `apex_operations[*].tool` rule in `.shifter.yaml` points at a live
-  registered `execute_<name>` (`validateApexCoverage` is the load-
-  bearing gate). The behavioral apex flow (stderr-only token, 60 seconds
+  server: profile gating removes tools according to `read_only`, `standard`, or `destructive`. Two-phase classes register only `plan_<name>` and `execute_<name>` pairs, with no direct name. Those classes are `infra_mutation`, `ssm_arbitrary`, and `db_arbitrary`. Live `secret_handle` defaults require `return_mode: handle`. Production operations require `confirm_env="prod"`.
+
+  `dev_bypass_tunnel` descriptions use the redacted constant. Consumers refuse fenced input without `acknowledge_untrusted_input: true`. `validateApexCoverage` requires every `.shifter.yaml` `apex_operations[*].tool` rule to name a registered `execute_<name>`. The behavioral apex flow (stderr-only token, 60 seconds
   parking, `consumeApexToken` release) is unit-tested in
   `mcp/ops/policy.test.js`; the surface test asserts only the
   structural invariants that an MCP client sees.

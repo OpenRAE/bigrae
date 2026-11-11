@@ -35,6 +35,8 @@ _AWS_AMI = re.compile(r"^ami-(?:[0-9a-f]{8}|[0-9a-f]{17})$")
 _MACHINE_TYPE = re.compile(r"^[a-z][a-z0-9-]{1,30}(?:\.[a-z0-9]{1,20})?$")
 _LOCAL_USER = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,31}$")
 _CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+GceNicType = Literal["", "GVNIC", "VIRTIO_NET"]
+GceDiskInterface = Literal["", "NVME", "SCSI"]
 
 
 class RuntimeTargetImageProfile(ClosedModel):
@@ -46,8 +48,8 @@ class RuntimeTargetImageProfile(ClosedModel):
     machine_type: Annotated[str, Field(max_length=100)] = ""
     disk_size_gb: Annotated[int, Field(strict=True, ge=1, le=16_384)] | None = None
     disk_type: Annotated[str, Field(max_length=100)] = ""
-    nic_type: Literal["", "GVNIC", "VIRTIO_NET"] = Field(default="", exclude_if=lambda value: not value)
-    disk_interface: Literal["", "NVME", "SCSI"] = Field(default="", exclude_if=lambda value: not value)
+    nic_type: GceNicType = Field(default="", exclude_if=lambda value: not value)
+    disk_interface: GceDiskInterface = Field(default="", exclude_if=lambda value: not value)
     enable_secure_boot: bool = Field(default=True, strict=True, exclude_if=lambda value: value is True)
     allow_public_web_egress: bool = Field(default=False, strict=True)
     bootstrap_capability: Annotated[str, Field(max_length=64)] = "standard"

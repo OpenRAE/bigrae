@@ -1,135 +1,113 @@
 # Built-image stack smoke (#922)
 
-`stack_smoke.sh` boots the **production portal image** under its **real
-`entrypoint.sh`** against local Postgres / Redis / ElasticMQ doubles and released
-OpenFGA, and asserts the runtime contracts the source-tree pytest estate cannot
-see. It is the same
-class of regression the June-7 hotfix wave shipped live (portal home-directory,
-worker container healthchecks): failures that only appear in the built artifact
-under its real entrypoint, never in `pytest` against the source tree with test
-settings.
+This explanation describes the built-image fixture and its trust boundaries.
+The how-to section covers an authorized local run; the parameter table is reference.
+`stack_smoke.sh` boots the production portal image through its real `entrypoint.sh`.
+It uses local PostgreSQL, Redis, and ElasticMQ doubles with released OpenFGA.
+It verifies runtime contracts that source-tree tests cannot establish.
 
-It runs identically locally and on a hosted CI runner, with **no cloud
-credentials**: the only AWS surface is a local ElasticMQ SQS double reached via
-`AWS_ENDPOINT_URL` with dummy creds.
+The fixture needs no cloud credentials.
+Its AWS queue surface uses `AWS_ENDPOINT_URL` with synthetic credentials against local ElasticMQ.
+A fixture pass does not qualify a live range, terminal, or Guacamole session.
 
 ## What it asserts
 
-1. **Image build**: the production `Dockerfile` (context `./shifter`) installs
-   deps and runs `compilemessages` / `collectstatic` as the non-root `appuser`.
-2. **Native activation**: after migrations, the harness runs the released
-   OpenFGA datastore migrations, applies the chart's separate admin/runtime SQL
-   duties, starts TLS servers with distinct tokens, and publishes the built
-   image's authorization model through the admin API. A normal image command
-   must fail the real entrypoint gate before activation. A bounded maintenance
-   one-shot creates a distinct synthetic human operator and native provider binding through
-   Management services, then calls the real `identity_cutover plan`, `apply`,
-   `identity_cutover_bootstrap`, `verify`, and `identity_runtime_check` commands.
-   The trusted cutover facts explicitly opt in to first-principal personal-token
-   eligibility with `bootstrap_personal_token_eligibility: true`, retained in
-   the plan digest. Bootstrap writes and verifies that separate grant; the
-   administrator role alone does not enable token use. No ordinary self-grant
-   is attempted.
-   It never inserts activated state or replaces the authorization provider.
-3. **Boot**: `entrypoint.sh` waits for the DB, runs migrations exactly once
-   (a dedicated one-shot; every long-running container boots with
-   `SKIP_MIGRATIONS=1`, matching the shared chart’s separate migration Job), and
-   execs the production Gunicorn/Uvicorn ASGI command as `appuser`.
-4. **Readiness**: `/health/` returns 200 from the real dependency-aware
-   `django-health-check` registry (DB + cache + storage + Redis channel layer).
-5. **Native catalog setup**: after web readiness, a real OIDC operator login
-   establishes the session used by `issue_personal_token`. The normal owning
-   service issues a real Knox token with only installation content read/manage/
-   publish scopes, checking the released policy service. The private bearer file
-   goes to `bootstrap_inbox_catalog --credential-file`; the resulting shipped
-   sources must have that exact native owner, installation custody, conformance
-   receipts and explicit publication. No staff flag or implicit deployment actor
-   authorizes registration.
-6. **Real OIDC first login** (`#988`): a real authorization-code flow against a local
-   Cognito-shaped provider double drives `/login/` then `/oauth2/authorize` then
-   `/oidc/callback/` through `mozilla_django_oidc` + `ShifterOIDCBackend`,
-   provisions the first-login Django user, human Principal, exact ProviderBinding
-   and PrincipalSession (proved absent before the flow, then bound to the verified
-   `(issuer, subject)` after), and establishes the Django session reused by the
-   checks below. A regression in OIDC config, the callback, first-login
-   provisioning, or session establishment fails the smoke.
-7. **Websocket**: an authenticated handshake completes through
-   `AllowedHostsOriginValidator`, `AuthMiddlewareStack`, and a routed consumer
-   (`ws/notifications/`), using the session established by the login flow above.
-8. **Authenticated page renders**: the real dashboard / range / terminal /
-   settings / help pages return 200 off the built image, and every local
-   `/static/` asset they reference (plus any declared sourcemap) resolves,
-   catching the missing-terminal-sourcemaps / static-asset regression class
-   (`#923` TEST-3, range-independent subset). Range-dependent checks (live
-   terminal data exchange, Guacamole) are out of scope.
-9. **Workers**: the SQS worker and CTF scheduler boot from the same image and
-   produce their `/tmp/<name>-heartbeat` files.
+1. **Image build:** the production Dockerfile uses context `./shifter`.
+   It installs dependencies and runs `compilemessages` and `collectstatic` as non-root `appuser`.
+2. **Native activation:** the fixture runs the released OpenFGA datastore migrations and applies the chart's separate admin/runtime SQL duties.
+   It starts TLS servers with distinct tokens and publishes the image's authorization model through the admin API.
+   Before activation, a normal image command must fail the real entrypoint gate.
+   A bounded maintenance process creates a distinct synthetic human operator and native provider binding through Management services.
+   It then calls `identity_cutover plan`, `apply`, `identity_cutover_bootstrap`, `verify`, and `identity_runtime_check`.
+   Trusted cutover facts explicitly set `bootstrap_personal_token_eligibility: true`; the plan digest retains that choice.
+   Bootstrap writes and verifies that separate grant. An administrator role alone does not enable token use.
+   The fixture performs no ordinary self-grant, activated-state insertion, or authorization-provider replacement.
+3. **Boot:** a dedicated process runs migrations once.
+   Every long-running container uses `SKIP_MIGRATIONS=1`, matching the chart's separate migration Job.
+   The entrypoint waits for the database and executes production Gunicorn/Uvicorn ASGI as `appuser`.
+4. **Readiness:** `/health/` returns HTTP 200 from the real dependency-aware `django-health-check` registry.
+   The checks cover database, cache, storage, and the Redis channel layer.
+5. **Native catalog:** after readiness, a real OIDC operator login establishes the session used by `issue_personal_token`.
+   The owning service issues a Knox token with installation content read/manage/publish scopes through the released policy service.
+   Its private bearer file goes to `bootstrap_inbox_catalog --credential-file`.
+   Shipped sources must have that native owner, installation custody, conformance receipts, and explicit publication.
+   A staff flag or implicit deployment actor cannot authorize registration.
+6. **First login:** a real authorization-code flow uses a local Cognito-shaped provider double.
+   It follows `/login/`, `/oauth2/authorize`, and `/oidc/callback/` through `mozilla_django_oidc` and `ShifterOIDCBackend`.
+   Before the flow, the first-login user, human Principal, ProviderBinding, and PrincipalSession must be absent.
+   Afterward, the native records bind to the verified `(issuer, subject)` and establish the reusable Django session.
+7. **WebSocket:** the authenticated handshake passes `AllowedHostsOriginValidator`, `AuthMiddlewareStack`, and the `ws/notifications/` route.
+   It uses the login-established session.
+8. **Page renders:** the dashboard, range, terminal, settings, and help pages return HTTP 200 from the image.
+   Every referenced local `/static/` asset and declared source map must resolve.
+   These are the range-independent checks from #923 TEST-3; live terminal exchange and Guacamole remain outside scope.
+9. **Workers:** the SQS worker and CTF scheduler boot from that image and produce their `/tmp/<name>-heartbeat` files.
 
-The order is migrations → released policy service/model → negative runtime gate
-→ native operator cutover/bootstrap/verification → normal web entrypoint/readiness
-→ real operator login → owning token issuance → native inbox registration →
-distinct first browser login → websocket/pages → worker entrypoints.
-The operator and first-login identities are distinct; no browser user or session
-is seeded. Maintenance mode is limited to the operator setup container, and is
-never passed to the web, inbox or worker containers.
+The fixture orders activation before normal web readiness, token issuance, and inbox registration.
+The separate first browser login then supplies WebSocket and page checks, followed by worker checks.
+Operator and first-login identities remain distinct.
+No browser user or session is seeded.
+Maintenance mode is limited to operator setup and never reaches web, inbox, or worker containers.
 
 ### Local trust boundary
 
-All identities, database passwords, provider keys and tokens are synthetic and
-disposable. The trusted local host and Docker daemon control the fixture. The
-OpenFGA images and CLI use the same released digests as the integration harness;
-the chart-owned SQL enforces runtime/admin separation. Only the runtime token
-and CA certificate are mounted into application containers. The token and
-explicit identity facts are private mode-0600 files readable by the image user;
-the admin token never enters application containers. The temporary TLS private
-key is readable by the disposable OpenFGA image, matching the local integration
-fixture; it is not a production certificate. Admin API ports bind only loopback.
-The OIDC provider is the sole identity-provider double; its private-network HTTP
-transport is a local fixture assumption, not a deployment configuration.
+All identities, database passwords, provider keys, and tokens are synthetic and disposable.
+The trusted host and Docker daemon control the fixture.
+OpenFGA images and CLI use the integration harness's released digests.
+Chart-owned SQL separates runtime and administration duties.
+
+Only the runtime token and CA certificate enter application containers.
+Token and identity-fact files use mode 0600 and are readable by the image user.
+The admin token never enters application containers.
+The disposable OpenFGA image can read its temporary TLS private key, as in the local integration fixture.
+That key is not a production certificate. Admin API ports bind only loopback.
+
+The OIDC provider is the only identity-provider double.
+Its private-network HTTP transport is a local fixture assumption, not deployment configuration.
 
 ### Local OIDC provider double
 
-Real login is exercised without any live identity provider (the blocking
-Quality gate stays hosted and credential-free):
+`stub_idp.py` supplies the endpoint shapes derived by `config._oidc_settings`:
+`/oauth2/authorize`, `/oauth2/token`, `/oauth2/userInfo`, and `/.well-known/jwks.json`.
+It signs RS256 ID tokens bound to each request's `state` and `nonce`.
+It rejects incorrect client identifiers or secrets, incorrect or absent redirect URIs, reused codes, and missing bearer tokens.
 
-- `stub_idp.py`: a deterministic, fail-closed, Cognito-shaped OIDC provider
-  double. It serves the exact endpoint shapes `config._oidc_settings` derives
-  (`/oauth2/authorize`, `/oauth2/token`, `/oauth2/userInfo`,
-  `/.well-known/jwks.json`), signs an RS256 ID token bound to the per-request
-  `state`/`nonce`, and rejects the wrong client id/secret, a wrong/absent
-  redirect URI, a reused code, or a missing bearer token. It runs under the
-  built portal image's interpreter (reusing its in-image `PyJWT`/`cryptography`)
-  and generates its keypair fresh at startup, with no committed private key.
-  Standard `login_hint` selects only the explicit synthetic operator; absence
-  selects the separate first-login identity. Each code and access token retains
-  its exact subject/email, so UserInfo cannot switch identities.
-- `oidc_login.py`: a browser-like login driver (cookie jar, manual redirect
-  following) that walks `/login/`, authorize, and callback, then captures the
-  callback-established session. It runs inside the smoke network so it reaches
-  the portal and the IdP by name, and addresses the portal by its logical HTTPS
-  origin (`Host` + `X-Forwarded-Proto: https`) over the private HTTP transport,
-  so the secure-cookie / redirect-URI semantics stay real.
+The double uses the image's Python interpreter, PyJWT, and cryptography packages.
+It generates a fresh key pair at startup; no private key is committed.
+Standard `login_hint` selects the explicit synthetic operator.
+Without it, the double selects the separate first-login identity.
+Codes and access tokens retain the exact subject and email so UserInfo cannot switch identities.
 
-The captured session key is written to a mode-0600 file whose **path** (never
-its value) is passed to `ws_handshake.py` / `page_smoke.py` via `--session-file`,
-so no session/token material lands on any process's argv.
+`oidc_login.py` uses a cookie jar and manual redirects through the real login and callback flow.
+It runs inside the smoke network and resolves the portal and provider by name.
+It addresses the portal's logical HTTPS origin with `Host` and `X-Forwarded-Proto: https` over the private HTTP transport.
+This retains secure-cookie and redirect-URI behavior.
+
+The captured session key goes into a mode-0600 file.
+`ws_handshake.py` and `page_smoke.py` receive only its path through `--session-file`.
+Session and token values never enter process arguments.
 
 ## Run it locally
 
+CI owns the complete image smoke gate.
+Do not run it only to check prose or as a routine targeted source test.
+An explicit local image-validation task requires Docker, uv, Python 3, curl, and OpenSSL.
+Run from the repository root:
+
 ```bash
-# from the repo root; requires docker, uv, python3, curl, openssl
 bash scripts/stack-smoke/stack_smoke.sh
 ```
 
-The script refuses existing container/network names, creates a private docker
-network, and tears down only resources labelled as owned by its run on exit
-(including failures, after a bounded log tail), and exits non-zero on any failed
-assertion.
+The script refuses existing container and network names, then creates a private Docker network.
+On exit, including failure, it removes only resources labeled as owned by that run.
+A failed assertion produces a bounded log tail and nonzero status.
+Investigate the failed contract before retrying; do not remove unrelated containers to clear a name conflict.
 
 ## Parameters (extensibility seam)
 
-All scalars are env-overridable; the worker/scheduler set is one list, so a new
-variation is a parameter change rather than a copy of the workflow block.
+Environment variables override the scalar parameters.
+`SMOKE_WORKER_SPECS` is one list for workers and schedulers.
+A new fixture variation extends parameters instead of copying the workflow.
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
@@ -147,14 +125,14 @@ variation is a parameter change rather than a copy of the workflow block.
 | `SMOKE_PG_IMAGE` / `SMOKE_REDIS_IMAGE` / `SMOKE_ELASTICMQ_IMAGE` | pinned | Dependency double images |
 | `SMOKE_IDP_PORT` | `8080` | Port the local OIDC provider double listens on |
 
-The OIDC login scenario is a single parameter set (client id/secret, issuer,
-auth domain, callback, synthetic claims) on one provider double, so the next
-variation (another fixture version or synthetic claim set) is a parameter
-change rather than a second harness.
+The OIDC fixture uses one parameter set for client identity, issuer, auth domain, callback, and synthetic claims.
+Another version or claim set should extend that fixture rather than introduce another harness.
 
 ## CI
 
-`.github/workflows/_quality.yml` runs this as the `stack-smoke` job, gated on the
-`run_stack_smoke` input that `.github/workflows/deploy.yml` drives from the
-existing `portal_image` / `shifter_platform` path filters, so engine-only or
-docs-only changes never pay the image build.
+`.github/workflows/_quality.yml` owns the `stack-smoke` job.
+The caller's `run_stack_smoke` input and the quality path classifier select it.
+`deploy.yml` selects it for portal-image, platform-infrastructure, smoke-harness changes, or manual dispatch.
+The job also checks `skip_tests` and the classified quality units before execution.
+Ordinary prose changes do not by themselves select the image build.
+See [testing reference](../../docs/dev/testing.md) for the complete lane owner.
