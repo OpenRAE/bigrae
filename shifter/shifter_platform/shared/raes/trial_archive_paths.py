@@ -1,10 +1,28 @@
 """Path containment and the shared error contract for sealed trial archives."""
 
+import tarfile
+
+from raes_contracts.errors import RaesError
+
 from shared.exceptions import ValidationError
 
 
 class TrialArchiveError(ValidationError):
     """Archive bytes cannot support a collection receipt."""
+
+
+# Parser and record failures that archive validation reports as one bounded archive error.
+RECORD_ERRORS: tuple[type[Exception], ...] = (
+    ValueError,
+    TypeError,
+    KeyError,
+    AttributeError,
+    RecursionError,
+    OSError,
+    EOFError,
+    tarfile.TarError,
+    RaesError,
+)
 
 
 def safe_archive_path(value: object) -> str:

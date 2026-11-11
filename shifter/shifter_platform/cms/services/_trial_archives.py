@@ -33,12 +33,15 @@ from shared.raes.trial_archive import (
     safe_archive_path,
     validate_trial_archive,
 )
+from shared.raes.trial_archive_run_record import validate_trial_run_record
 from workspaces.services import OrganizationAuthorizationError
 
 from ._content_authority import fence_content_scope, require_content_scope
 from ._tenant_pack_authority import TenantPackAdmission
 from ._tenant_pack_authority import admit_tenant_pack as _admit_tenant_pack
 from ._tenant_pack_authority import fence_tenant_pack as _fence_tenant_pack
+
+_ARCHIVE_UNAVAILABLE = "Archive unavailable"
 
 
 def _admit(
@@ -278,7 +281,8 @@ def intake_trial_archive(
         with tempfile.TemporaryDirectory(prefix="trial-archive-") as temporary:
             source_path, downloaded = Path(temporary) / "source", Path(temporary) / "verified"
             transfer.archive_bytes, transfer.archive_digest = _snapshot(source, source_path)
-            facts = validate_trial_archive(source_path, expected, run_record_only=run_record_only)
+            validate = validate_trial_run_record if run_record_only else validate_trial_archive
+            facts = validate(source_path, expected)
             transfer.plan_metadata = facts.plan_metadata
             transfer.save(update_fields=["archive_bytes", "archive_digest", "plan_metadata", "updated_at"])
             prior = _prior(transfer)
@@ -380,7 +384,7 @@ def retrieve_trial_archive(
         .first()
     )
     if receipt is None or not _view(receipt).worker_copy_disposable:
-        raise CMSError("Archive unavailable")
+        raise CMSError(_ARCHIVE_UNAVAILABLE)
     try:
         with tempfile.TemporaryDirectory(prefix="trial-retrieve-", dir=target.parent) as temporary:
             staged = Path(temporary) / "archive"
@@ -390,7 +394,7 @@ def retrieve_trial_archive(
                 _fence(fresh)
                 current = TrialArchiveReceipt.objects.select_for_update().get(pk=receipt.id)
                 if not _view(current).worker_copy_disposable:
-                    raise CMSError("Archive unavailable")
+                    raise CMSError(_ARCHIVE_UNAVAILABLE)
                 # Link with exclusive destination creation: no arbitrary local
                 # path replacement, and no partial output on a failed download.
                 _audit(admission.credential, organization_uuid, receipt.id, AuditAction.DOWNLOAD, "archive-retrieved")
@@ -408,7 +412,7 @@ def read_archived_run(credential: CredentialContext, organization_uuid: UUID, re
 
     receipt = TrialArchiveReceipt.objects.select_related("transfer").filter(pk=receipt_id).first()
     if receipt is None:
-        raise CMSError("Archive unavailable")
+        raise CMSError(_ARCHIVE_UNAVAILABLE)
     run_id = receipt.transfer.expected["run_id"]
     with tempfile.TemporaryDirectory(prefix="trial-run-") as temporary:
         target = Path(temporary) / "archive"

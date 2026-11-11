@@ -27,7 +27,7 @@ The admission check exhausts the same recursive record visitor, so nested creden
 
 The authorization surface inventory records its credential transport and per-operation authority.
 Experiment dispatch calls the same intake service with `run_record_only`.
-That mode verifies containment, the sealed bytes, and the run record, and reads no other record.
+In that mode, `validate_trial_run_record` verifies containment, the sealed bytes, and the run record. It reads no other record.
 The private `read_archived_run` operation retrieves a committed archive and returns only its run record.
 
 `TrialArchiveIdentity` carries expected experiment, plan, entry, run, and attempt identifiers.

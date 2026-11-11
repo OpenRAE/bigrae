@@ -12,14 +12,18 @@ import logging
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from django.db import transaction
+
 from cms.models import ExperimentEntry, RaesPackageSource
 from cms.scenarios.pack_validation import PackDigestError, verify_pack_digest
 from shared.cloud.exceptions import CloudStorageError
 from shared.exceptions import CMSError
+from shared.raes.experiment_admission import encode_retained
 from shared.raes.experiment_replacement import compile_experiment_replacement, replacement_allowed
 from shared.raes.package_loader import RaesPackageError
 
-from ._experiment_batches import _owner_validation, _pack_snapshot, record_experiment_replacement
+from ._experiment_authority import _audit, _authorize, _fence
+from ._experiment_batches import _attempt, _owner_validation, _pack_snapshot
 from ._trial_archives import read_archived_run
 
 if TYPE_CHECKING:
@@ -36,6 +40,32 @@ def _slot_history(row: ExperimentEntry) -> list[dict[str, Any]]:
         history.append(json.loads(current.replacement_json))
         current = current.replaces
     return list(reversed(history))
+
+
+def record_experiment_replacement(
+    credential: CredentialContext, organization_uuid: UUID, token: UUID, replacement: dict[str, Any]
+) -> ExperimentEntry:
+    """Persist one committed RAES replacement as a pending entry before any dispatch."""
+    admission = _authorize(credential, organization_uuid, "manage_content")
+    plan = replacement["plan"]
+    ((entry_id, entry),) = plan["entries"].items()
+    with transaction.atomic():
+        _fence(admission)
+        parent = _attempt(organization_uuid, token, locked=True)
+        existing = ExperimentEntry.objects.filter(replaces=parent).first()
+        if existing is not None:
+            return existing
+        child = ExperimentEntry.objects.create(
+            batch_id=parent.batch_id,
+            organization_uuid=organization_uuid,
+            plan_entry_id=entry_id,
+            run_id=entry["run_id"],
+            replaces=parent,
+            replacement_ordinal=plan["replacement_origin"]["ordinal"],
+            replacement_json=encode_retained(replacement),
+        )
+        _audit(admission, child.id, "experiment-replacement-recorded")
+        return child
 
 
 def replace_experiment_entry(

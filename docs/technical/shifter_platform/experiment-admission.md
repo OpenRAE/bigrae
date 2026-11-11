@@ -35,7 +35,8 @@ A replacement entry takes its run identity from its committed replacement plan.
 Scheduling order cannot allocate another run or change a trial's scientific inputs.
 One initial attempt is supported per entry.
 A RAES replacement is a new pending entry that names the failed entry it replaces.
-The private `record_experiment_replacement` operation commits it before dispatch, and each entry has at most one replacement.
+The private replacement service operation `record_experiment_replacement` commits it before dispatch.
+Each entry has at most one replacement.
 If a claim response is lost, an operator with organization `manage_content` authority can recover the same token by batch and entry.
 
 Recovery does not allocate another attempt, release capacity, or authorize redispatch.

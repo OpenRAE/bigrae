@@ -562,14 +562,15 @@ def test_raw_capture_blobs_are_kept_by_checksum_not_parsed_as_documents():
 
 def test_run_record_only_intake_keeps_bytes_and_identity_and_reads_only_the_seal_status(tmp_path):
     """Experiment dispatch reads a LilRAE run's status; it parses no other record."""
-    from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
+    from shared.raes.trial_archive import TrialArchiveError
+    from shared.raes.trial_archive_run_record import validate_trial_run_record
 
     path = tmp_path / "archive.tar.gz"
     opaque = {"materialization/snapshot.b": b"name: not json\n"}
     path.write_bytes(trial_record_archive(run_status="failed", extra=opaque))
-    result = validate_trial_archive(path, expected(), run_record_only=True)
+    result = validate_trial_run_record(path, expected())
     assert (result.run_status, result.outcome_status) == ("failed", "not-evaluated")
 
     path.write_bytes(trial_record_archive(run_id="another-run"))
     with pytest.raises(TrialArchiveError):
-        validate_trial_archive(path, expected(), run_record_only=True)
+        validate_trial_run_record(path, expected())

@@ -328,32 +328,6 @@ def _planned_entry(batch: RetainedExperimentBatch, organization_uuid: UUID, plan
     return row
 
 
-def record_experiment_replacement(
-    credential: CredentialContext, organization_uuid: UUID, token: UUID, replacement: dict[str, Any]
-) -> ExperimentEntry:
-    """Persist one committed RAES replacement as a pending entry before any dispatch."""
-    admission = _authorize(credential, organization_uuid, "manage_content")
-    plan = replacement["plan"]
-    ((entry_id, entry),) = plan["entries"].items()
-    with transaction.atomic():
-        _fence(admission)
-        parent = _attempt(organization_uuid, token, locked=True)
-        existing = ExperimentEntry.objects.filter(replaces=parent).first()
-        if existing is not None:
-            return existing
-        child = ExperimentEntry.objects.create(
-            batch_id=parent.batch_id,
-            organization_uuid=organization_uuid,
-            plan_entry_id=entry_id,
-            run_id=entry["run_id"],
-            replaces=parent,
-            replacement_ordinal=plan["replacement_origin"]["ordinal"],
-            replacement_json=encode_retained(replacement),
-        )
-        _audit(admission, child.id, "experiment-replacement-recorded")
-        return child
-
-
 def _attempt(organization_uuid: UUID, token: UUID, *, locked: bool) -> ExperimentEntry:
     """Resolve the exact tenant-owned attempt and optionally lock its row."""
     if not isinstance(token, UUID):
