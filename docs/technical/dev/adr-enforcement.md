@@ -848,6 +848,13 @@ The first slice intentionally stays small:
   last-applied state) and is read-only, so it needs no IAM introspection the
   deploy role lacks. Enforces ADR-004-R26.
 
+- `dev-merge-queue`
+  Enforces ADR-003-R9. The check runs at fast and CI levels. It reads the `dev` ruleset in `docs/adr/dev-ruleset.json` and the workflows as data.
+  The ruleset must target only `dev` and have a `merge_queue` rule that can group more than one pull request.
+  `dev` must not require strict status checks, and the check accepts that only with the merge queue.
+  Each required context must have a producer workflow that runs on `pull_request` to `dev` and on `merge_group`.
+  A producer job condition that filters events must include `merge_group`.
+
 ## Local Usage
 
 During development, select the changed files and their narrowest checks first.

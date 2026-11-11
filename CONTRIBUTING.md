@@ -92,7 +92,7 @@ Use a lowercase subject. The `pr-title-lint` workflow checks the title.
 Use `feat`, `fix`, or `perf` when the change should produce a release.
 Use a `!` marker for a breaking change.
 
-The maintainer squash-merges feature PRs into `dev`.
+Feature PRs merge into `dev` through the merge queue, which squash-merges them.
 Release promotion preserves those subjects on `main`.
 Follow the [development and release workflow](docs/DEVELOPMENT_WORKFLOW.md) for approval and merge methods.
 
