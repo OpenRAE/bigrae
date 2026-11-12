@@ -9,17 +9,14 @@ from uuid import UUID
 from django.db import transaction
 from django.utils import timezone
 
-from shared.credentials import CredentialRevoked, resolve_current_credential
+from shared.credentials import CredentialContext, CredentialRevoked, resolve_current_credential
 from shared.operation_authority import credential_reference_fields, credential_reference_from_record
 from shared.remote_access import parse_openvpn_capability
 
 from ._launch_authority import range_runtime_binding_digest
 
 if TYPE_CHECKING:
-    from uuid import UUID
-
     from engine.models import VpnAccessProfile
-    from shared.credentials import CredentialContext
 
     from ._vpn_sessions import VpnDestination
 
@@ -27,8 +24,23 @@ if TYPE_CHECKING:
 _VPN_PROFILE_UNAVAILABLE = "VPN profile unavailable"
 
 
+def _resolve_profile_credential(credential: CredentialContext, *, retain_browser_authority: bool) -> CredentialContext:
+    """Keep an issued certificate independent of its browser transport."""
+    if retain_browser_authority and credential.kind in {"session", "temporary"}:
+        from shared.principal_port import resolve_principal
+
+        if resolve_principal(credential.principal) != credential.principal:
+            raise ValueError("VPN principal unavailable")
+        return credential
+    return resolve_current_credential(credential)
+
+
 def admit_vpn_profile_authority(
-    credential: CredentialContext, request_id: UUID, *, participation: bool = False
+    credential: CredentialContext,
+    request_id: UUID,
+    *,
+    participation: bool = False,
+    retain_browser_authority: bool = False,
 ) -> dict[str, object]:
     """Use the owning CMS/CTF decision, separately from the pool workload."""
     from engine.models import Range
@@ -39,7 +51,7 @@ def admit_vpn_profile_authority(
 
     from ._range_authority import project_range_authority
 
-    current = resolve_current_credential(credential)
+    current = _resolve_profile_credential(credential, retain_browser_authority=retain_browser_authority)
     projection = project_range_authority(request_id)
     leaf = TargetRef("range", projection.public_uuid)
     if resolve_credential_scope(leaf) != projection.scope:
@@ -103,10 +115,13 @@ def assert_profile_runtime(row: VpnAccessProfile, *, pending: bool = False) -> t
 
 
 def authorize_vpn_profile(row: VpnAccessProfile) -> tuple[VpnDestination, ...]:
-    """Re-resolve only the original credential and compare its admitted facts."""
+    """Revalidate the original authority and compare its admitted facts."""
     destination = assert_profile_runtime(row)
     fields = admit_vpn_profile_authority(
-        credential_reference_from_record(row), row.generation, participation=row.authority_action == "event.participate"
+        credential_reference_from_record(row),
+        row.generation,
+        participation=row.authority_action == "event.participate",
+        retain_browser_authority=True,
     )
     if any(getattr(row, name) != value for name, value in fields.items()):
         raise ValueError(_VPN_PROFILE_UNAVAILABLE)
