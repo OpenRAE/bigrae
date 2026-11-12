@@ -42,13 +42,23 @@ table inet {TABLE} {{
 """
 
 
-def _elements(client: str, target: str, ports: tuple[int, ...]) -> str:
-    """Render validated set elements; addresses and ports never reach nft unchecked."""
+def _elements(
+    client: str,
+    targets: tuple[tuple[str, tuple[int, ...]], ...] | str,
+    ports: tuple[int, ...] | None = None,
+) -> str:
+    """Render validated target elements; addresses and ports never reach nft unchecked."""
     client_ip = ipaddress.IPv4Address(client)
-    target_ip = ipaddress.IPv4Address(target)
-    if not ports or any(isinstance(port, bool) or not 1 <= port <= 65535 for port in ports):
-        raise ValueError("invalid port list")
-    return ", ".join(f"{client_ip} . {target_ip} . {port}" for port in sorted(set(ports)))
+    items = ((targets, ports),) if isinstance(targets, str) else targets
+    elements: set[tuple[int, int, str]] = set()
+    for target, target_ports in items:
+        target_ip = ipaddress.IPv4Address(target)
+        if not target_ports or any(isinstance(port, bool) or not 1 <= port <= 65535 for port in target_ports):
+            raise ValueError("invalid port list")
+        elements.update((int(target_ip), port, f"{client_ip} . {target_ip} . {port}") for port in target_ports)
+    if not elements:
+        raise ValueError("empty target collection")
+    return ", ".join(item[2] for item in sorted(elements))
 
 
 def _nft(script: str) -> None:
@@ -66,8 +76,18 @@ class Firewall:
     def install(self, tunnel_network: ipaddress.IPv4Network) -> None:
         self._run(base_ruleset(tunnel_network))
 
-    def allow(self, client: str, target: str, ports: tuple[int, ...]) -> None:
-        self._run(f"add element inet {TABLE} allowed {{ {_elements(client, target, ports)} }}\n")
+    def allow(
+        self,
+        client: str,
+        targets: tuple[tuple[str, tuple[int, ...]], ...] | str,
+        ports: tuple[int, ...] | None = None,
+    ) -> None:
+        self._run(f"add element inet {TABLE} allowed {{ {_elements(client, targets, ports)} }}\n")
 
-    def revoke(self, client: str, target: str, ports: tuple[int, ...]) -> None:
-        self._run(f"delete element inet {TABLE} allowed {{ {_elements(client, target, ports)} }}\n")
+    def revoke(
+        self,
+        client: str,
+        targets: tuple[tuple[str, tuple[int, ...]], ...] | str,
+        ports: tuple[int, ...] | None = None,
+    ) -> None:
+        self._run(f"delete element inet {TABLE} allowed {{ {_elements(client, targets, ports)} }}\n")

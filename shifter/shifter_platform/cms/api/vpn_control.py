@@ -130,16 +130,18 @@ class VpnSessionAuthorizeView(_VpnControlView):
             )
         except VpnSessionDenied as exc:
             return _denied(exc)
-        return Response(
-            {
-                "session": str(grant.session_id),
-                "target": grant.target_ip,
-                "ports": list(grant.ports),
-                "heartbeat_seconds": VPN_SESSION_HEARTBEAT_SECONDS,
-                "lease_seconds": VPN_SESSION_LEASE_SECONDS,
-            },
-            status=201,
-        )
+        payload = {
+            "session": str(grant.session_id),
+            "targets": [
+                {"target": destination.target_ip, "ports": list(destination.ports)}
+                for destination in grant.destinations
+            ],
+            "heartbeat_seconds": VPN_SESSION_HEARTBEAT_SECONDS,
+            "lease_seconds": VPN_SESSION_LEASE_SECONDS,
+        }
+        if len(grant.destinations) == 1:
+            payload.update(target=grant.target_ip, ports=list(grant.ports))
+        return Response(payload, status=201)
 
 
 class VpnCrlView(_VpnControlView):

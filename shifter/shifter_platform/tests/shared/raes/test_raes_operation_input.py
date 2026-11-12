@@ -333,7 +333,7 @@ class TestRemoteAccess:
             ),
         )
 
-    def _remote(self, target: str | None = None) -> RaesRemoteAccess:
+    def _remote(self, target: str | tuple[str, ...] | None = None) -> RaesRemoteAccess:
         capability = build_openvpn_capability(target or f"{self._NODE}#0", datetime.now(UTC) + timedelta(days=1))
         return RaesRemoteAccess(capability=capability)
 
@@ -345,6 +345,25 @@ class TestRemoteAccess:
         parsed = parse_raes_operation_input(_built(access_bindings=self._access(), remote_access=remote))
         assert parsed.remote_access == remote
         assert parsed.remote_access.target_ref == f"{self._NODE}#0"
+
+    def test_every_multi_target_member_must_have_declared_participant_access(self):
+        targets = (f"{self._NODE}#0", "provision.node.other#0")
+        remote = self._remote(targets)
+        access = (
+            *self._access(),
+            ParticipantAccessBinding(
+                target_address="provision.node.other",
+                channel="rdp",
+                account_address="provision.account.other",
+            ),
+        )
+
+        parsed = parse_raes_operation_input(_built(access_bindings=access, remote_access=remote))
+        assert parsed.remote_access is not None
+        assert parsed.remote_access.target_refs == targets
+
+        with pytest.raises(RaesOperationInputError, match="declared participant-access targets"):
+            _built(access_bindings=self._access(), remote_access=remote)
 
     def test_a_target_outside_the_declared_participant_access_is_rejected(self):
         with pytest.raises(RaesOperationInputError, match="declared participant-access target"):

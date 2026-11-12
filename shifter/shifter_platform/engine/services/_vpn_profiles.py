@@ -21,6 +21,8 @@ if TYPE_CHECKING:
     from engine.models import VpnAccessProfile
     from shared.credentials import CredentialContext
 
+    from ._vpn_sessions import VpnDestination
+
 
 _VPN_PROFILE_UNAVAILABLE = "VPN profile unavailable"
 
@@ -80,9 +82,9 @@ def admit_vpn_profile_authority(
     }
 
 
-def assert_profile_runtime(row: VpnAccessProfile, *, pending: bool = False) -> tuple[str, tuple[int, ...]]:
+def assert_profile_runtime(row: VpnAccessProfile, *, pending: bool = False) -> tuple[VpnDestination, ...]:
     """Fence the certificate's exact range generation and current destination."""
-    from ._vpn_sessions import _member_destination
+    from ._vpn_sessions import _member_destinations
 
     runtime = row.range
     capability = parse_openvpn_capability(runtime.remote_access_capability)
@@ -97,10 +99,10 @@ def assert_profile_runtime(row: VpnAccessProfile, *, pending: bool = False) -> t
         or capability.teardown_at <= timezone.now()
     ):
         raise ValueError(_VPN_PROFILE_UNAVAILABLE)
-    return _member_destination(runtime, capability.target_ref)
+    return _member_destinations(runtime, capability.target_refs)
 
 
-def authorize_vpn_profile(row: VpnAccessProfile) -> tuple[str, tuple[int, ...]]:
+def authorize_vpn_profile(row: VpnAccessProfile) -> tuple[VpnDestination, ...]:
     """Re-resolve only the original credential and compare its admitted facts."""
     destination = assert_profile_runtime(row)
     fields = admit_vpn_profile_authority(

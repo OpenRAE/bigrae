@@ -7,6 +7,7 @@ endpoint cannot steer the server elsewhere or exhaust it.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import urllib.error
 import urllib.request
@@ -36,13 +37,34 @@ class PortalRefused(PortalError):
 
 
 @dataclass(frozen=True)
-class Grant:
-    """The single destination one authorized client may reach."""
+class TargetGrant:
+    """One exact destination and its declared participant ports."""
 
-    session: str
     target: str
     ports: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Grant:
+    """The exact destinations one authorized client may reach."""
+
+    session: str
+    targets: tuple[TargetGrant, ...]
     heartbeat_seconds: int
+
+    @property
+    def target(self) -> str:
+        """Return the sole target for backward-compatible single-target callers."""
+        if len(self.targets) != 1:
+            raise PortalUnavailable("grant does not contain exactly one target")
+        return self.targets[0].target
+
+    @property
+    def ports(self) -> tuple[int, ...]:
+        """Return the sole target's ports for backward-compatible callers."""
+        if len(self.targets) != 1:
+            raise PortalUnavailable("grant does not contain exactly one target")
+        return self.targets[0].ports
 
 
 def _is_port(value: object) -> bool:
@@ -59,19 +81,31 @@ def _refusal(status: int, payload: dict[str, object]) -> PortalError:
 
 def _grant(payload: dict[str, object]) -> Grant:
     """Validate a grant strictly; anything outside the contract is treated as unavailable."""
-    session, target = payload.get("session"), payload.get("target")
-    ports, interval = payload.get("ports"), payload.get("heartbeat_seconds")
-    if not (
-        isinstance(session, str)
-        and isinstance(target, str)
-        and isinstance(ports, list)
-        and ports
-        and all(_is_port(port) for port in ports)
-        and isinstance(interval, int)
-        and not isinstance(interval, bool)
-    ):
+    session, interval = payload.get("session"), payload.get("heartbeat_seconds")
+    if not (isinstance(session, str) and isinstance(interval, int) and not isinstance(interval, bool)):
         raise PortalUnavailable("grant outside the contract")
-    return Grant(session=session, target=target, ports=tuple(ports), heartbeat_seconds=interval)
+    raw_targets = payload.get("targets")
+    if raw_targets is None:
+        raw_targets = [{"target": payload.get("target"), "ports": payload.get("ports")}]
+    if not isinstance(raw_targets, list) or not 1 <= len(raw_targets) <= 64:
+        raise PortalUnavailable("grant outside the contract")
+    targets = []
+    for item in raw_targets:
+        if not isinstance(item, dict) or set(item) != {"target", "ports"}:
+            raise PortalUnavailable("grant outside the contract")
+        target, ports = item["target"], item["ports"]
+        if not isinstance(target, str) or not isinstance(ports, list) or not ports or not all(map(_is_port, ports)):
+            raise PortalUnavailable("grant outside the contract")
+        try:
+            target_address = ipaddress.IPv4Address(target)
+        except ipaddress.AddressValueError as exc:
+            raise PortalUnavailable("grant outside the contract") from exc
+        if not target_address.is_private or str(target_address) != target:
+            raise PortalUnavailable("grant outside the contract")
+        targets.append(TargetGrant(target, tuple(sorted(set(ports)))))
+    if len({item.target for item in targets}) != len(targets):
+        raise PortalUnavailable("grant outside the contract")
+    return Grant(session=session, targets=tuple(targets), heartbeat_seconds=interval)
 
 
 class PortalClient:
@@ -111,7 +145,7 @@ class PortalClient:
         return status, payload
 
     def authorize(self, common_name: str, client_id: int, client_address: str, **certificate: str) -> Grant:
-        """Ask whether this verified client may connect; return its single grant."""
+        """Ask whether this verified client may connect; return its exact grant."""
         status, payload = self._post(
             "sessions/",
             {

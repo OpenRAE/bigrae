@@ -28,7 +28,12 @@ class RaesRemoteAccess:
     @property
     def target_ref(self) -> str:
         """Return the single range member the capability authorizes."""
-        return str(self.capability["target_ref"])
+        return parse_openvpn_capability(self.capability).target_ref
+
+    @property
+    def target_refs(self) -> tuple[str, ...]:
+        """Return every exact range member the capability authorizes."""
+        return parse_openvpn_capability(self.capability).target_refs
 
     def to_transport(self) -> dict[str, object]:
         """Return the JSON-serialisable transport shape."""
