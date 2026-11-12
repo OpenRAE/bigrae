@@ -42,11 +42,13 @@ The coordinator stages three objects under `trial-inputs/<attempt>/` in the asse
 | `trial-unit.json` | The admitted plan, the plan entry ID, and the entry's instantiated snapshot |
 | `trial.json` | Run ID, attempt ID, deadline, and the digests of `scenario.sdl` and `trial-unit.json` |
 
-The coordinator instantiates the entry from the retained plan and family SDL.
+The coordinator reads the snapshot of the entry from its `ExperimentSnapshot` row.
 It refuses the entry when the snapshot digest differs from the digest that admission recorded.
+
 The deadline is the staging time plus the entry's admitted attempt timeout.
 It is persisted on the entry before upload, so every stager writes identical bytes.
 An existing object with different bytes is refused.
+
 The worker image supplies the trial runtime and its environment pack.
 The installed adapter that controls trials can also validate participant owners at admission.
 The provisioner copies the objects to the worker's fixed trial input directory.

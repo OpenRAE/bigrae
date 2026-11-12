@@ -73,8 +73,9 @@ A missing adapter or a refusal prevents admission.
 
 `ExperimentBatch` stores the complete retained JSON record and its SHA-256 digest.
 The record includes original input text, the expanded family, and complete owner documents.
-For each plan entry, the record keeps the SHA-256 digest of its instantiated snapshot, not the snapshot itself.
-The record size therefore does not grow with the snapshot size.
+For each plan entry, the record keeps the SHA-256 digest of the instantiated snapshot.
+`ExperimentSnapshot` stores the exact snapshot of each plan entry in a separate row.
+Thus, the size of the record does not increase with the number of trials.
 It also includes the RAES plan, normalized participant configurations, capture specifications, and dependency tuple.
 
 Referenced local artifact bytes are verified through the released env-packs resolver and retained as base64.

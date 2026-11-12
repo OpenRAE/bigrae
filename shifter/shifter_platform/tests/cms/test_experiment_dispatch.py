@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 from django.core.exceptions import ObjectDoesNotExist
 
+from shared.exceptions import CMSError
 from tests.cms.experiment_admission_fixtures import admit, experiment_inputs
 from tests.cms.test_runtime_plugins import tenant
 from tests.cms.test_trial_archives import custody
@@ -128,10 +129,9 @@ def run(dispatch, operation="reconcile", **options):
 
 def finish(dispatch, worker_id, entry, *, attempt_id, run_id=None, run_status=None, limitations=()):
     """The worker exported a sealed archive for the expected attempt and trial SDL."""
-    from shared.raes.experiment_dispatch_inputs import trial_scenario_bytes
+    from shared.raes.experiment_dispatch_inputs import trial_scenario_sha256
 
-    inputs = dispatch.batch.inputs
-    scenario = "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, entry.plan_entry_id)).hexdigest()
+    scenario = trial_scenario_sha256(dispatch.batch.inputs, entry.plan_entry_id)
     raw = trial_record_archive(
         run_id=run_id or entry.run_id,
         attempt_id=attempt_id,
@@ -178,8 +178,7 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert unit["plan"] == dispatch.batch.inputs["plan"]
     assert unit["snapshot"] == json.loads(scenario_bytes)
     assert unit["material"] == {
-        name: dispatch.batch.inputs[name]
-        for name in ("experiment", "task", "capture_specs", "authority")
+        name: dispatch.batch.inputs[name] for name in ("experiment", "task", "capture_specs", "authority")
     }
     assert (
         "sha256:" + hashlib.sha256(scenario_bytes).hexdigest()
@@ -191,6 +190,15 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     entry = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
     again, _deadline = stage_trial(dispatch.actor.credential, dispatch.organization.uuid, dispatch.batch.inputs, entry)
     assert again == staged
+    # #2922: dispatch stages the exact stored snapshot and refuses one that differs from its admitted digest.
+    from cms.models import ExperimentSnapshot
+
+    stored = ExperimentSnapshot.objects.get(batch_id=entry.batch_id, plan_entry_id=entry.plan_entry_id)
+    assert scenario_bytes == stored.snapshot_json.encode()
+    ExperimentSnapshot.objects.filter(pk=stored.pk).update(snapshot_json=stored.snapshot_json + " ")
+    with pytest.raises(CMSError, match="admitted inputs"):
+        stage_trial(dispatch.actor.credential, dispatch.organization.uuid, dispatch.batch.inputs, entry)
+    ExperimentSnapshot.objects.filter(pk=stored.pk).update(snapshot_json=stored.snapshot_json)
     # The coordinator restarted: the stored trial is running, so nothing starts again.
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["running"]
 

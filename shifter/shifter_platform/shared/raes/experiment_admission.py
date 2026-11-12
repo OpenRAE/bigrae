@@ -12,7 +12,7 @@ from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
-from raes import admit_scenario_family, canonical_sdl_bytes, canonical_sdl_digest, parse_sdl
+from raes import canonical_sdl_bytes, canonical_sdl_digest
 from raes.canonical import canonical_instantiated_sdl_bytes
 from raes.participant_control_context import SDLControlContextConfigurationValidator, authored_control_context_bindings
 from raes.scenario import InstantiatedScenario
@@ -56,6 +56,8 @@ ExperimentInputError = RaesError
 MAX_RETAINED_BYTES = 64 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
+#: The aggregate bound of the instantiated trial snapshots that admission holds and stores outside the record.
+MAX_SNAPSHOT_BYTES = 256 * 1024**2
 SUPPORTED_DEPENDENCIES = {"raes": "11.0.1", "raes-env-packs": "7.2.3"}
 
 
@@ -400,8 +402,12 @@ def compile_pack_experiment(
     concurrency: int,
     experiment_version: str | None = None,
     owner_validation: OwnerValidation | None = None,
-) -> dict[str, Any]:
-    """Compile one explicitly selected installed experiment and retain its inputs."""
+) -> tuple[dict[str, Any], dict[str, bytes]]:
+    """Compile one explicitly selected installed experiment and retain its inputs.
+
+    Return the retained record and the exact instantiated snapshot of each plan entry.
+    The record keeps the digest of each snapshot, not the snapshot.
+    """
     dependencies = dependency_tuple()
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
@@ -428,7 +434,6 @@ def compile_pack_experiment(
         "documents": _documents(root, experiment),
         "artifacts": custody.payload,
         "family": json.loads(canonical_sdl_bytes(experiment.family)),
-        "family_path": experiment.family_path,
         "experiment": experiment.experiment.model_dump(mode="json"),
         "task": experiment.task.model_dump(mode="json"),
         "capture_specs": {key: item.model_dump(mode="json") for key, item in experiment.capture_specs.items()},
@@ -444,9 +449,12 @@ def compile_pack_experiment(
             "max_original_document_bytes": MAX_DOCUMENT_BYTES,
             "max_referenced_artifact_bytes": MAX_DOCUMENT_BYTES,
             "max_authority_bytes": MAX_AUTHORITY_BYTES,
+            "max_snapshot_bytes": MAX_SNAPSHOT_BYTES,
         },
     }
     retained_bytes = len(encode_retained(payload).encode())
+    snapshots: dict[str, bytes] = {}
+    snapshot_bytes = 0
     for entry in schedule.entries:
         experiment_archive_identity(payload, entry.plan_entry_id, "admission-validation")
         selected = instantiate_admitted_trial_entry(
@@ -458,27 +466,17 @@ def compile_pack_experiment(
         )
         snapshot = canonical_instantiated_sdl_bytes(selected)
         reject_retained_credentials(json.loads(snapshot))
-        digest = "sha256:" + hashlib.sha256(snapshot).hexdigest()
+        digest = snapshot_digest(snapshot)
         retained_bytes += len(digest) + len(entry.plan_entry_id.encode()) + 8
-        if retained_bytes > MAX_RETAINED_BYTES:
+        snapshot_bytes += len(snapshot)
+        if retained_bytes > MAX_RETAINED_BYTES or snapshot_bytes > MAX_SNAPSHOT_BYTES:
             raise ValueError("Experiment hydrated inputs exceed the byte limit")
         payload["snapshot_digests"][entry.plan_entry_id] = digest
+        snapshots[entry.plan_entry_id] = snapshot
     reject_retained_credentials(payload)
-    return payload
+    return payload, snapshots
 
 
-def retained_entry_snapshot(inputs: dict[str, Any], entry_id: str) -> bytes:
-    """Instantiate one entry from the retained plan and family SDL and verify the admitted digest.
-
-    A batch admitted before digests were retained keeps its snapshots in the record.
-    """
-    if "snapshot_digests" not in inputs:
-        return canonical_json_bytes(inputs["snapshots"][entry_id])
-    plan = parse_admitted_trial_plan_json(canonical_json_bytes(inputs["plan"]))
-    family = admit_scenario_family(parse_sdl(inputs["documents"][inputs["family_path"]]))
-    snapshot = canonical_instantiated_sdl_bytes(
-        instantiate_admitted_trial_entry(plan=plan, plan_entry_id=entry_id, family=family)
-    )
-    if "sha256:" + hashlib.sha256(snapshot).hexdigest() != inputs["snapshot_digests"][entry_id]:
-        raise ValueError("Instantiated trial snapshot differs from its admitted digest")
-    return snapshot
+def snapshot_digest(snapshot: bytes) -> str:
+    """Return the prefixed SHA-256 digest that the record keeps for one snapshot."""
+    return "sha256:" + hashlib.sha256(snapshot).hexdigest()

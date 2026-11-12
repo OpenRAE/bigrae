@@ -15,7 +15,14 @@ from django.db import transaction
 from django.db.models import F
 from django.utils import timezone
 
-from cms.models import ExperimentBatch, ExperimentEntry, RaesPackageSource, TrialArchiveDestination, TrialArchiveReceipt
+from cms.models import (
+    ExperimentBatch,
+    ExperimentEntry,
+    ExperimentSnapshot,
+    RaesPackageSource,
+    TrialArchiveDestination,
+    TrialArchiveReceipt,
+)
 from cms.scenarios.pack_validation import PackDigestError, verify_pack_digest
 from shared.cloud import get_object_storage
 from shared.cloud.exceptions import CloudStorageError
@@ -187,7 +194,7 @@ def admit_experiment_batch(
         with _pack_snapshot(source) as root:
             if not verify_pack_digest(root, source.package_digest):
                 raise ValueError("Registered pack digest changed")
-            payload = compile_pack_experiment(
+            payload, snapshots = compile_pack_experiment(
                 root,
                 experiment_id=experiment_id,
                 authority=authority,
@@ -246,6 +253,14 @@ def admit_experiment_batch(
                     )
                     for key, entry in payload["plan"]["entries"].items()
                 ]
+            )
+            ExperimentSnapshot.objects.bulk_create(
+                (
+                    ExperimentSnapshot(batch=row, plan_entry_id=key, snapshot_json=snapshot.decode())
+                    for key, snapshot in snapshots.items()
+                ),
+                # One snapshot can be more than 1 MB; keep each INSERT statement small.
+                batch_size=16,
             )
             _audit(admission, row.id, "experiment-admitted")
     return _project(row)

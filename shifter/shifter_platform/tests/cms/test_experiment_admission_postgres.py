@@ -42,7 +42,7 @@ def test_parallel_claims_obey_unique_claim_and_aggregate_ceiling(experiment_inpu
 
 
 def test_duplicate_admissions_publish_one_complete_batch(experiment_inputs, monkeypatch):
-    from cms.models import ExperimentBatch, ExperimentEntry
+    from cms.models import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
     from cms.services import _experiment_batches
 
     assert connection.vendor == "postgresql"
@@ -50,7 +50,12 @@ def test_duplicate_admissions_publish_one_complete_batch(experiment_inputs, monk
     # compilation results arriving concurrently at the transactional publication.
     prepared = admit(experiment_inputs)
     expected = prepared.expected_trials
+    snapshots = {
+        key: snapshot.encode()
+        for key, snapshot in ExperimentSnapshot.objects.values_list("plan_entry_id", "snapshot_json")
+    }
     ExperimentEntry.objects.all().delete()
+    ExperimentSnapshot.objects.all().delete()
     ExperimentBatch.objects.all().delete()
     payload = dict(prepared.inputs)
     for key in ("organization_uuid", "destination", "source"):
@@ -59,7 +64,7 @@ def test_duplicate_admissions_publish_one_complete_batch(experiment_inputs, monk
 
     def compiled(*args, **kwargs):
         barrier.wait()
-        return dict(payload)
+        return dict(payload), dict(snapshots)
 
     monkeypatch.setattr(_experiment_batches, "compile_pack_experiment", compiled)
 
@@ -75,3 +80,4 @@ def test_duplicate_admissions_publish_one_complete_batch(experiment_inputs, monk
     assert batches[0].id == batches[1].id
     assert ExperimentBatch.objects.count() == 1
     assert ExperimentEntry.objects.count() == expected
+    assert ExperimentSnapshot.objects.count() == expected

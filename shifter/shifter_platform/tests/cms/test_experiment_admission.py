@@ -29,9 +29,10 @@ pytestmark = pytest.mark.django_db
 def test_installed_pack_admission_retains_all_trials_and_reloads_without_compilation(experiment_inputs, monkeypatch):
     import socket
 
-    from cms.models import ExperimentBatch, ExperimentEntry
+    from cms.models import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
     from cms.services import load_experiment_batch
     from shared.raes import experiment_admission
+    from shared.raes.experiment_dispatch_inputs import trial_scenario_bytes
 
     compiler = experiment_admission.compile_admitted_trial_plan
     original_sdl = (experiment_inputs[3] / "sdl/experiment-fixture.sdl.yaml").read_bytes()
@@ -57,15 +58,19 @@ def test_installed_pack_admission_retains_all_trials_and_reloads_without_compila
     assert ExperimentEntry.objects.count() == 64
     assert admit(experiment_inputs).id == batch.id
     raw = batch.inputs
-    # #2922: the record keeps one digest per entry, not the entry's full trial SDL.
+    # #2922: the record keeps one digest per entry. Each entry's exact snapshot has its own row.
     assert "snapshots" not in raw
-    assert len(raw["snapshot_digests"]) == 64
-    entry_id = next(iter(raw["plan"]["entries"]))
-    snapshot = experiment_admission.retained_entry_snapshot(raw, entry_id)
-    assert "sha256:" + hashlib.sha256(snapshot).hexdigest() == raw["snapshot_digests"][entry_id]
-    tampered = {**raw, "snapshot_digests": {**raw["snapshot_digests"], entry_id: "sha256:" + "0" * 64}}
+    assert ExperimentSnapshot.objects.count() == 64
+    stored = dict(ExperimentSnapshot.objects.values_list("plan_entry_id", "snapshot_json"))
+    assert set(stored) == set(raw["snapshot_digests"]) == set(raw["plan"]["entries"])
+    for entry_id, snapshot in stored.items():
+        assert trial_scenario_bytes(raw, entry_id, snapshot) == snapshot.encode()
+        assert "sha256:" + hashlib.sha256(snapshot.encode()).hexdigest() == raw["snapshot_digests"][entry_id]
+    entry_id = next(iter(stored))
     with pytest.raises(ValueError, match="admitted digest"):
-        experiment_admission.retained_entry_snapshot(tampered, entry_id)
+        trial_scenario_bytes(raw, entry_id, stored[entry_id] + " ")
+    with pytest.raises(ValueError, match="admitted digest"):
+        trial_scenario_bytes(raw, entry_id, None)
     assert raw["capture_specs"]
     assert base64.b64decode(raw["artifacts"]["docs/protocol.md"]["base64"]) == (root / "docs/protocol.md").read_bytes()
     for name in ("brief-terse", "brief-rich"):
@@ -226,7 +231,7 @@ def test_unsupported_authority_is_refused_without_partial_rows(experiment_inputs
 
 @pytest.mark.parametrize("revocation", ["credential", "installation", "organization"])
 def test_revocation_during_compilation_rolls_back_admission(experiment_inputs, monkeypatch, revocation):
-    from cms.models import ExperimentBatch, ExperimentEntry
+    from cms.models import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
     from cms.services import _experiment_batches
     from management.models import PrincipalSession
 
@@ -248,6 +253,7 @@ def test_revocation_during_compilation_rolls_back_admission(experiment_inputs, m
         admit(experiment_inputs)
     assert not ExperimentBatch.objects.exists()
     assert not ExperimentEntry.objects.exists()
+    assert not ExperimentSnapshot.objects.exists()
 
 
 def test_large_factorial_is_refused_without_reduction_or_partial_rows(experiment_inputs):
@@ -270,14 +276,16 @@ def test_large_factorial_is_refused_without_reduction_or_partial_rows(experiment
     assert not ExperimentEntry.objects.exists()
 
 
-def test_retained_byte_limit_refuses_atomic_admission(experiment_inputs, monkeypatch):
-    from cms.models import ExperimentBatch, ExperimentEntry
+@pytest.mark.parametrize("limit", ["MAX_RETAINED_BYTES", "MAX_SNAPSHOT_BYTES"])
+def test_byte_limits_refuse_atomic_admission(experiment_inputs, monkeypatch, limit):
+    from cms.models import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
 
-    monkeypatch.setattr("shared.raes.experiment_admission.MAX_RETAINED_BYTES", 1024)
+    monkeypatch.setattr(f"shared.raes.experiment_admission.{limit}", 1024)
     with pytest.raises(CMSError):
         admit(experiment_inputs)
     assert not ExperimentBatch.objects.exists()
     assert not ExperimentEntry.objects.exists()
+    assert not ExperimentSnapshot.objects.exists()
 
 
 @pytest.mark.parametrize("change", ["missing", "changed"])
