@@ -78,7 +78,6 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "ctf_events_content_refresh_create": OperationPolicy((_MANAGE_CONTENT,), "event", "event"),
     "ctf_events_force_delete_create": OperationPolicy((_DELETE_EVENT,), "event", "event"),
     "ctf_events_lifecycle_create": OperationPolicy((_MANAGE_LIFECYCLE,), "event", "event"),
-    "ctf_events_model_access_assessment_retrieve": OperationPolicy((_MANAGE_CONFIG,), "event", "event"),
     "ctf_events_notifications_retrieve": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "event"),
     "ctf_events_ownership_transfer_create": OperationPolicy(("event.transfer_ownership",), "event", "event"),
     "ctf_events_staff_members_retrieve": OperationPolicy((_MANAGE_STAFF,), "event", "event"),
@@ -143,7 +142,6 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
         (_EVENT_READ, _MANAGE_RANGES), "event", "event", selector="organizer_alert_action"
     ),
     "ctf_me_events_participant_retrieve": OperationPolicy((_PARTICIPATE,), "event", "event"),
-    "ctf_me_model_access_retrieve": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
     "ctf_me_pages_retrieve": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
     "ctf_me_profile_retrieve": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
     "ctf_me_profile_partial_update": OperationPolicy((_PARTICIPATE,), "event", "active_event"),

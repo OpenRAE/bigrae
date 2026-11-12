@@ -5,7 +5,7 @@ hosts; the CTF scheduler (organizer image copies) and the portal (CTF webhooks)
 reach organizer-chosen hosts only through it. The GCP browser gateway also uses
 it for HTTPS authority checks. The process admits DNS names on
 443, requires global DNS answers and dials the pinned address; TLS terminates at
-the destination. Same shape as model-provider-egress.
+the destination.
 */}}
 apiVersion: apps/v1
 kind: Deployment

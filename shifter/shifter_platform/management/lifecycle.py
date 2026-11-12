@@ -34,8 +34,6 @@ from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log
 from shared.authorization import AuthorizationProvider
 from shared.constants import USER_CANNOT_BE_NONE
 from shared.credentials import CredentialContext
-from shared.model_access import AuthorityInvalidation, AuthorityState, OwnedReference
-from shared.model_access.authority_port import invalidate_authority, suppress_authority_invalidation_signals
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -330,21 +328,9 @@ def transition_account(
         previous_active = locked_user.is_active
         previous_state = current
 
-        with suppress_authority_invalidation_signals():
-            _apply_lifecycle_action(action, locked_user, profile)
+        _apply_lifecycle_action(action, locked_user, profile)
         revoked = _revoke_live_tokens(locked_user) if action in _DISABLING_ACTIONS else 0
         new_state = derive_lifecycle_state(locked_user)
-        invalidate_authority(
-            AuthorityInvalidation(
-                deployment_id=None,
-                authority_refs=(
-                    OwnedReference(owner="management", reference=f"operator:{locked_user.pk}"),
-                    OwnedReference(owner="management", reference=f"user:{locked_user.pk}"),
-                ),
-                state=(AuthorityState.REVOKED if action in _DISABLING_ACTIONS else AuthorityState.UNKNOWN),
-                reason=f"user-{action.value}",
-            )
-        )
         audit_log(
             AuditEvent(
                 entity_type=AuditEntityType.USER,

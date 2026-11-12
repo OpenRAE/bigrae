@@ -19,7 +19,7 @@ def test_migration_recovers_original_trial_and_accepts_legacy_inserts(apparatus)
     from django.db import IntegrityError, connection, transaction
     from django.db.migrations.executor import MigrationExecutor
 
-    from engine.models import DisposableWorker, OperationInput, Range
+    from engine.models import DisposableWorker, OperationInput
     from engine.services import bind_worker_trial
 
     initial, bound = uuid4(), uuid4()
@@ -33,6 +33,8 @@ def test_migration_recovers_original_trial_and_accepts_legacy_inserts(apparatus)
     try:
         executor.migrate(before)
         legacy = executor.loader.project_state(before).apps.get_model("engine", "DisposableWorker")
+        # Later migrations change the range table, so the range row uses the schema at 0124.
+        historical_range = executor.loader.project_state(after).apps.get_model("engine", "Range")
         MigrationExecutor(connection).migrate(after)
 
         original = DisposableWorker.objects.get(pk=first.worker_id)
@@ -52,7 +54,7 @@ def test_migration_recovers_original_trial_and_accepts_legacy_inserts(apparatus)
             if not field.primary_key and field.name not in {"created_at", "range", "request_id"}
         }
         values.update(
-            range_id=Range.objects.create(
+            range_id=historical_range.objects.create(
                 workspace_id=original.range.workspace_id,
                 scope_kind=original.range.scope_kind,
                 account_id=original.range.account_id,

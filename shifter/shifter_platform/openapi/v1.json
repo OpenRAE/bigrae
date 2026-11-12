@@ -4471,13 +4471,12 @@
             "name": "integration",
             "schema": {
               "enum": [
-                "adapters",
-                "model_sources"
+                "adapters"
               ],
               "type": "string",
               "minLength": 1
             },
-            "description": "* `adapters` - adapters\n* `model_sources` - model_sources",
+            "description": "* `adapters` - adapters",
             "required": true
           },
           {
@@ -6437,516 +6436,6 @@
         }
       }
     },
-    "/api/v1/cms/model-source-options/": {
-      "get": {
-        "operationId": "cms_model_source_options_retrieve",
-        "description": "Discover source choices under the exact organization policy action.",
-        "parameters": [
-          {
-            "in": "query",
-            "name": "purpose",
-            "schema": {
-              "enum": [
-                "range",
-                "ctf",
-                "admin"
-              ],
-              "type": "string",
-              "default": "range",
-              "minLength": 1
-            },
-            "description": "* `range` - range\n* `ctf` - ctf\n* `admin` - admin"
-          },
-          {
-            "in": "query",
-            "name": "scenario",
-            "schema": {
-              "type": "string",
-              "default": "",
-              "maxLength": 255
-            }
-          },
-          {
-            "in": "query",
-            "name": "workspace",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SourceOptions"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "authorization:organization.manage_model_sources"
-        ]
-      }
-    },
-    "/api/v1/cms/organizations/{organization_uuid}/model-ranges/": {
-      "get": {
-        "operationId": "cms_organizations_model_ranges_retrieve",
-        "description": "List model-enabled ranges in administrable tenant workspaces.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "organization_uuid",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          },
-          {
-            "in": "query",
-            "name": "page",
-            "schema": {
-              "type": "integer",
-              "maximum": 1000000,
-              "minimum": 1,
-              "default": 1
-            }
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelRangePage"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "authorization:organization.manage_model_sources"
-        ]
-      }
-    },
-    "/api/v1/cms/organizations/{organization_uuid}/model-sources/": {
-      "get": {
-        "operationId": "cms_organizations_model_sources_retrieve",
-        "description": "List and create sources for an administrable organization.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "organization_uuid",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelSourcePage"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "authorization:organization.manage_model_sources"
-        ]
-      },
-      "post": {
-        "operationId": "cms_organizations_model_sources_create",
-        "description": "List and create sources for an administrable organization.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "organization_uuid",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ModelSourceWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "201": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelSourceView"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "authorization:organization.manage_model_sources"
-        ]
-      }
-    },
-    "/api/v1/cms/organizations/{organization_uuid}/model-sources/{source_id}/": {
-      "put": {
-        "operationId": "cms_organizations_model_sources_update",
-        "description": "Replace a source only at its expected revision.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "organization_uuid",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          },
-          {
-            "in": "path",
-            "name": "source_id",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ModelSourceUpdate"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelSourceView"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "authorization:organization.manage_model_sources"
-        ]
-      }
-    },
-    "/api/v1/cms/organizations/{organization_uuid}/model-sources/{source_id}/retire-credentials/": {
-      "post": {
-        "operationId": "cms_organizations_model_sources_retire_credentials_create",
-        "description": "Retire obsolete credentials after checking live references.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "organization_uuid",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          },
-          {
-            "in": "path",
-            "name": "source_id",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/CredentialRetirement"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "authorization:organization.manage_model_sources"
-        ]
-      }
-    },
-    "/api/v1/cms/organizations/{organization_uuid}/model-sources/available/": {
-      "get": {
-        "operationId": "cms_organizations_model_sources_available_retrieve",
-        "description": "List sources explicitly available to the current actor.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "organization_uuid",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ModelSourcePage"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "authorization:organization.manage_model_sources"
-        ]
-      }
-    },
     "/api/v1/cms/organizations/{organization_uuid}/packs/": {
       "post": {
         "operationId": "cms_organizations_packs_create",
@@ -8061,207 +7550,6 @@
             "description": "Permission denied."
           }
         }
-      }
-    },
-    "/api/v1/cms/ranges/{request_id}/model-access/": {
-      "get": {
-        "operationId": "cms_ranges_model_access_retrieve",
-        "description": "Read or replace model sources under range administration authority.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "request_id",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RangeModelSources"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        }
-      },
-      "put": {
-        "operationId": "cms_ranges_model_access_update",
-        "description": "Read or replace model sources under range administration authority.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "request_id",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/RangeModelSourcesWrite"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RangeModelSources"
-                }
-              }
-            },
-            "description": ""
-          },
-          "202": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RangeModelSources"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        }
-      }
-    },
-    "/api/v1/cms/ranges/{request_id}/model-access/revoke/": {
-      "post": {
-        "operationId": "cms_ranges_model_access_revoke_create",
-        "description": "Revoke a range's model grants under range-administration authority (M09, #2126).\n\nSession/CSRF or a ``model-access:range:write`` scoped token; the service\nre-checks workspace authority and fences the current generation's grants and\ndispatch leases with real-actor audit. Revocation never proves provider\ncancellation, refunds spend or releases outstanding liabilities.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "request_id",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "cms"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RangeModelSources"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "model-access:range:write"
-        ]
       }
     },
     "/api/v1/cms/ranges/{request_id}/scope/": {
@@ -12788,69 +12076,6 @@
         }
       }
     },
-    "/api/v1/ctf/events/{event_id}/model-access/assessment/": {
-      "get": {
-        "operationId": "ctf_events_model_access_assessment_retrieve",
-        "description": "Organizer read of an event's bounded model-access capacity assessment.\n\nReturns only the safe summary — outcome, whether it blocks, the partition and\nbounded reason codes. Raw quota limits, usage figures and account identifiers\nstay operator-only. A ``None`` assessment (model access disabled, no\ndeclaration, or the assessment itself unavailable) reports ``available:false``\nwith empty fields, never a fabricated positive decision.",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "event_id",
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            },
-            "required": true
-          }
-        ],
-        "tags": [
-          "ctf"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EventModelAccessAssessment"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "model-access:event:read"
-        ]
-      }
-    },
     "/api/v1/ctf/events/{event_id}/notifications/": {
       "get": {
         "operationId": "ctf_events_notifications_retrieve",
@@ -16078,58 +15303,6 @@
             "description": "Permission denied."
           }
         }
-      }
-    },
-    "/api/v1/ctf/me/model-access/": {
-      "get": {
-        "operationId": "ctf_me_model_access_retrieve",
-        "description": "Return the participant's own range model-access status: state and allowed aliases.\n\nRange-scoped and redacted (management-preflight-2126.md): the participant sees\nonly their range's availability state and the logical model aliases they may\nuse. Provider/account identifiers, regions, source coordinates, rosters,\nbindings and other members' usage never appear. An absent or unrealized range\nreports ``unavailable`` with no aliases.",
-        "tags": [
-          "ctf"
-        ],
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ParticipantModelAccess"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "model-access:participant:read"
-        ]
       }
     },
     "/api/v1/ctf/me/pages/": {
@@ -21657,371 +20830,6 @@
         }
       }
     },
-    "/api/v1/model-access/bindings/drain/": {
-      "post": {
-        "operationId": "model_access_bindings_drain_create",
-        "description": "Unavailable under ADR-068, including when MODEL_ACCESS_ENABLED is true.",
-        "tags": [
-          "model-access"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Drain"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "deprecated": true,
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RevisionResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "model-access:sharing:write"
-        ]
-      }
-    },
-    "/api/v1/model-access/bindings/policy-preview/": {
-      "post": {
-        "operationId": "model_access_bindings_policy_preview_create",
-        "description": "Unavailable under ADR-068, including when MODEL_ACCESS_ENABLED is true.",
-        "tags": [
-          "model-access"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Subject"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "deprecated": true,
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/EffectivePolicyResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "model-access:operator:read"
-        ]
-      }
-    },
-    "/api/v1/model-access/bindings/publish/": {
-      "post": {
-        "operationId": "model_access_bindings_publish_create",
-        "description": "Unavailable under ADR-068, including when MODEL_ACCESS_ENABLED is true.",
-        "tags": [
-          "model-access"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Publish"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "deprecated": true,
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/RevisionResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "model-access:sharing:write"
-        ]
-      }
-    },
-    "/api/v1/model-access/bindings/selector-preview/": {
-      "post": {
-        "operationId": "model_access_bindings_selector_preview_create",
-        "description": "Unavailable under ADR-068, including when MODEL_ACCESS_ENABLED is true.",
-        "tags": [
-          "model-access"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/Selector"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "deprecated": true,
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SelectorPreviewResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "model-access:sharing:read"
-        ]
-      }
-    },
-    "/api/v1/model-access/bindings/validate/": {
-      "post": {
-        "operationId": "model_access_bindings_validate_create",
-        "description": "Unavailable under ADR-068, including when MODEL_ACCESS_ENABLED is true.",
-        "tags": [
-          "model-access"
-        ],
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/BindingDraft"
-              }
-            }
-          },
-          "required": true
-        },
-        "security": [
-          {
-            "ApiTokenAuth": []
-          },
-          {
-            "cookieAuth": []
-          }
-        ],
-        "deprecated": true,
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidResponse"
-                }
-              }
-            },
-            "description": ""
-          },
-          "503": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": ""
-          },
-          "401": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Authentication failed."
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ApiError"
-                }
-              }
-            },
-            "description": "Permission denied."
-          }
-        },
-        "x-required-scopes": [
-          "model-access:sharing:read"
-        ]
-      }
-    },
     "/api/v1/organizations/{target_uuid}/authorization/operations/{operation_uuid}/": {
       "get": {
         "operationId": "organizations_authorization_operations_retrieve",
@@ -24177,30 +22985,6 @@
           "principal_uuid"
         ]
       },
-      "AccountSummary": {
-        "type": "object",
-        "description": "Per-dimension count of accounts the policy references (never balances).",
-        "properties": {
-          "capacity": {
-            "type": "integer"
-          },
-          "spend": {
-            "type": "integer"
-          },
-          "rate": {
-            "type": "integer"
-          },
-          "concurrency": {
-            "type": "integer"
-          }
-        },
-        "required": [
-          "capacity",
-          "concurrency",
-          "rate",
-          "spend"
-        ]
-      },
       "AccountView": {
         "type": "object",
         "description": "Public account fields; internal database IDs never cross the API.",
@@ -24579,64 +23363,6 @@
         "type": "string",
         "description": "* `xdr` - xdr\n* `xdr_collector` - xdr_collector\n* `cloud_identity_engine` - cloud_identity_engine"
       },
-      "AliasRouting": {
-        "type": "object",
-        "description": "The routing affinity chosen for one logical alias.",
-        "properties": {
-          "logical_alias": {
-            "type": "string"
-          },
-          "affinity": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "affinity",
-          "logical_alias"
-        ]
-      },
-      "AliasSourceOptions": {
-        "type": "object",
-        "description": "Compatible sources and mixing policy for one logical alias.",
-        "properties": {
-          "logical_alias": {
-            "type": "string"
-          },
-          "multiple_allowed": {
-            "type": "boolean"
-          },
-          "sources": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelSourceView"
-            }
-          }
-        },
-        "required": [
-          "logical_alias",
-          "multiple_allowed",
-          "sources"
-        ]
-      },
-      "AliasSourceSelection": {
-        "type": "object",
-        "description": "Chosen source revisions for a logical model alias.",
-        "properties": {
-          "logical_alias": {
-            "type": "string"
-          },
-          "sources": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SourceChoice"
-            }
-          }
-        },
-        "required": [
-          "logical_alias",
-          "sources"
-        ]
-      },
       "ApiError": {
         "type": "object",
         "description": "Schema-only component for the canonical platform API error envelope.\n\nMirrors :func:`shared.api.errors.api_exception_handler` /\n:func:`shared.api.errors.api_error_response` output. It describes the wire\ncontract; it never runs at request time.",
@@ -24794,14 +23520,6 @@
           "timestamp",
           "user_agent"
         ]
-      },
-      "AuthenticationEnum": {
-        "enum": [
-          "workload-identity",
-          "stored-credential"
-        ],
-        "type": "string",
-        "description": "* `workload-identity` - workload-identity\n* `stored-credential` - stored-credential"
       },
       "AuthorizationAction": {
         "type": "object",
@@ -25035,24 +23753,6 @@
           "reason"
         ]
       },
-      "BindingDraft": {
-        "type": "object",
-        "description": "A binding + pool draft. Owner services revalidate the closed contracts.",
-        "properties": {
-          "binding": {
-            "type": "object",
-            "additionalProperties": {}
-          },
-          "pool": {
-            "type": "object",
-            "additionalProperties": {}
-          }
-        },
-        "required": [
-          "binding",
-          "pool"
-        ]
-      },
       "BlankEnum": {
         "enum": [
           ""
@@ -25124,9 +23824,6 @@
             "type": "boolean"
           },
           "can_manage_adapters": {
-            "type": "boolean"
-          },
-          "can_manage_model_sources": {
             "type": "boolean"
           },
           "can_administer_accounts": {
@@ -27508,7 +26205,6 @@
           "authorization:account.manage_credentials",
           "authorization:account.manage_devices",
           "authorization:account.manage_members",
-          "authorization:account.manage_model_sources",
           "authorization:account.manage_organizations",
           "authorization:account.manage_range_scope",
           "authorization:account.manage_sources",
@@ -27547,7 +26243,6 @@
           "authorization:installation.manage_credentials",
           "authorization:installation.manage_devices",
           "authorization:installation.manage_lease_policy",
-          "authorization:installation.manage_model_sources",
           "authorization:installation.manage_principals",
           "authorization:installation.manage_service_credentials",
           "authorization:installation.manage_sources",
@@ -27568,7 +26263,6 @@
           "authorization:organization.manage_credentials",
           "authorization:organization.manage_devices",
           "authorization:organization.manage_members",
-          "authorization:organization.manage_model_sources",
           "authorization:organization.manage_range_scope",
           "authorization:organization.manage_sources",
           "authorization:organization.manage_workspaces",
@@ -27596,13 +26290,11 @@
           "authorization:workspace.manage_egress",
           "authorization:workspace.manage_invitations",
           "authorization:workspace.manage_members",
-          "authorization:workspace.manage_model_sources",
           "authorization:workspace.manage_quota",
           "authorization:workspace.manage_range_scope",
           "authorization:workspace.manage_sources",
           "authorization:workspace.prepare_content",
           "authorization:workspace.publish_content",
-          "authorization:workspace.publish_model_access",
           "authorization:workspace.read",
           "authorization:workspace.read_content",
           "authorization:workspace.read_devices",
@@ -27630,20 +26322,11 @@
           "mission_control:range:write",
           "mission_control:upload:write",
           "mission_control:vpn-profile:read",
-          "model-access:event:read",
-          "model-access:event:write",
-          "model-access:operator:read",
-          "model-access:operator:write",
-          "model-access:participant:read",
-          "model-access:range:read",
-          "model-access:range:write",
-          "model-access:sharing:read",
-          "model-access:sharing:write",
           "workspaces:membership:read",
           "workspaces:membership:write"
         ],
         "type": "string",
-        "description": "* `authorization:account.access_devices` - authorization:account.access_devices\n* `authorization:account.create_event` - authorization:account.create_event\n* `authorization:account.delegate_authorization` - authorization:account.delegate_authorization\n* `authorization:account.delete` - authorization:account.delete\n* `authorization:account.launch_range` - authorization:account.launch_range\n* `authorization:account.manage_adapters` - authorization:account.manage_adapters\n* `authorization:account.manage_authorization` - authorization:account.manage_authorization\n* `authorization:account.manage_content` - authorization:account.manage_content\n* `authorization:account.manage_credentials` - authorization:account.manage_credentials\n* `authorization:account.manage_devices` - authorization:account.manage_devices\n* `authorization:account.manage_members` - authorization:account.manage_members\n* `authorization:account.manage_model_sources` - authorization:account.manage_model_sources\n* `authorization:account.manage_organizations` - authorization:account.manage_organizations\n* `authorization:account.manage_range_scope` - authorization:account.manage_range_scope\n* `authorization:account.manage_sources` - authorization:account.manage_sources\n* `authorization:account.prepare_content` - authorization:account.prepare_content\n* `authorization:account.publish_content` - authorization:account.publish_content\n* `authorization:account.read` - authorization:account.read\n* `authorization:account.read_content` - authorization:account.read_content\n* `authorization:account.read_devices` - authorization:account.read_devices\n* `authorization:account.update` - authorization:account.update\n* `authorization:event.delegate_authorization` - authorization:event.delegate_authorization\n* `authorization:event.delete` - authorization:event.delete\n* `authorization:event.manage` - authorization:event.manage\n* `authorization:event.manage_awards` - authorization:event.manage_awards\n* `authorization:event.manage_challenges` - authorization:event.manage_challenges\n* `authorization:event.manage_communications` - authorization:event.manage_communications\n* `authorization:event.manage_config` - authorization:event.manage_config\n* `authorization:event.manage_content` - authorization:event.manage_content\n* `authorization:event.manage_lifecycle` - authorization:event.manage_lifecycle\n* `authorization:event.manage_participants` - authorization:event.manage_participants\n* `authorization:event.manage_ranges` - authorization:event.manage_ranges\n* `authorization:event.manage_scoring` - authorization:event.manage_scoring\n* `authorization:event.manage_staff` - authorization:event.manage_staff\n* `authorization:event.manage_submissions` - authorization:event.manage_submissions\n* `authorization:event.manage_teams` - authorization:event.manage_teams\n* `authorization:event.participate` - authorization:event.participate\n* `authorization:event.read` - authorization:event.read\n* `authorization:event.transfer_ownership` - authorization:event.transfer_ownership\n* `authorization:installation.access_devices` - authorization:installation.access_devices\n* `authorization:installation.delegate_authorization` - authorization:installation.delegate_authorization\n* `authorization:installation.launch_range` - authorization:installation.launch_range\n* `authorization:installation.manage_accounts` - authorization:installation.manage_accounts\n* `authorization:installation.manage_adapters` - authorization:installation.manage_adapters\n* `authorization:installation.manage_authorization` - authorization:installation.manage_authorization\n* `authorization:installation.manage_cloud_authority` - authorization:installation.manage_cloud_authority\n* `authorization:installation.manage_content` - authorization:installation.manage_content\n* `authorization:installation.manage_credentials` - authorization:installation.manage_credentials\n* `authorization:installation.manage_devices` - authorization:installation.manage_devices\n* `authorization:installation.manage_lease_policy` - authorization:installation.manage_lease_policy\n* `authorization:installation.manage_model_sources` - authorization:installation.manage_model_sources\n* `authorization:installation.manage_principals` - authorization:installation.manage_principals\n* `authorization:installation.manage_service_credentials` - authorization:installation.manage_service_credentials\n* `authorization:installation.manage_sources` - authorization:installation.manage_sources\n* `authorization:installation.prepare_content` - authorization:installation.prepare_content\n* `authorization:installation.publish_content` - authorization:installation.publish_content\n* `authorization:installation.read_audit` - authorization:installation.read_audit\n* `authorization:installation.read_content` - authorization:installation.read_content\n* `authorization:installation.read_devices` - authorization:installation.read_devices\n* `authorization:installation.revoke_personal_tokens` - authorization:installation.revoke_personal_tokens\n* `authorization:installation.use_personal_tokens` - authorization:installation.use_personal_tokens\n* `authorization:organization.access_devices` - authorization:organization.access_devices\n* `authorization:organization.create_event` - authorization:organization.create_event\n* `authorization:organization.delegate_authorization` - authorization:organization.delegate_authorization\n* `authorization:organization.launch_range` - authorization:organization.launch_range\n* `authorization:organization.manage_adapters` - authorization:organization.manage_adapters\n* `authorization:organization.manage_authorization` - authorization:organization.manage_authorization\n* `authorization:organization.manage_content` - authorization:organization.manage_content\n* `authorization:organization.manage_credentials` - authorization:organization.manage_credentials\n* `authorization:organization.manage_devices` - authorization:organization.manage_devices\n* `authorization:organization.manage_members` - authorization:organization.manage_members\n* `authorization:organization.manage_model_sources` - authorization:organization.manage_model_sources\n* `authorization:organization.manage_range_scope` - authorization:organization.manage_range_scope\n* `authorization:organization.manage_sources` - authorization:organization.manage_sources\n* `authorization:organization.manage_workspaces` - authorization:organization.manage_workspaces\n* `authorization:organization.prepare_content` - authorization:organization.prepare_content\n* `authorization:organization.publish_content` - authorization:organization.publish_content\n* `authorization:organization.read` - authorization:organization.read\n* `authorization:organization.read_content` - authorization:organization.read_content\n* `authorization:organization.read_devices` - authorization:organization.read_devices\n* `authorization:organization.update` - authorization:organization.update\n* `authorization:range.access` - authorization:range.access\n* `authorization:range.manage` - authorization:range.manage\n* `authorization:range.read` - authorization:range.read\n* `authorization:range.transfer_ownership` - authorization:range.transfer_ownership\n* `authorization:workspace.access_devices` - authorization:workspace.access_devices\n* `authorization:workspace.archive` - authorization:workspace.archive\n* `authorization:workspace.create_event` - authorization:workspace.create_event\n* `authorization:workspace.delegate_authorization` - authorization:workspace.delegate_authorization\n* `authorization:workspace.launch_range` - authorization:workspace.launch_range\n* `authorization:workspace.leave` - authorization:workspace.leave\n* `authorization:workspace.manage_adapters` - authorization:workspace.manage_adapters\n* `authorization:workspace.manage_authorization` - authorization:workspace.manage_authorization\n* `authorization:workspace.manage_content` - authorization:workspace.manage_content\n* `authorization:workspace.manage_credentials` - authorization:workspace.manage_credentials\n* `authorization:workspace.manage_devices` - authorization:workspace.manage_devices\n* `authorization:workspace.manage_egress` - authorization:workspace.manage_egress\n* `authorization:workspace.manage_invitations` - authorization:workspace.manage_invitations\n* `authorization:workspace.manage_members` - authorization:workspace.manage_members\n* `authorization:workspace.manage_model_sources` - authorization:workspace.manage_model_sources\n* `authorization:workspace.manage_quota` - authorization:workspace.manage_quota\n* `authorization:workspace.manage_range_scope` - authorization:workspace.manage_range_scope\n* `authorization:workspace.manage_sources` - authorization:workspace.manage_sources\n* `authorization:workspace.prepare_content` - authorization:workspace.prepare_content\n* `authorization:workspace.publish_content` - authorization:workspace.publish_content\n* `authorization:workspace.publish_model_access` - authorization:workspace.publish_model_access\n* `authorization:workspace.read` - authorization:workspace.read\n* `authorization:workspace.read_content` - authorization:workspace.read_content\n* `authorization:workspace.read_devices` - authorization:workspace.read_devices\n* `authorization:workspace.restore` - authorization:workspace.restore\n* `authorization:workspace.transfer` - authorization:workspace.transfer\n* `authorization:workspace.update` - authorization:workspace.update\n* `cms:authoring:read` - cms:authoring:read\n* `cms:authoring:write` - cms:authoring:write\n* `cms:preparation-adapters:read` - cms:preparation-adapters:read\n* `cms:preparation-adapters:write` - cms:preparation-adapters:write\n* `cms:preparation:read` - cms:preparation:read\n* `cms:preparation:write` - cms:preparation:write\n* `ctf:communication:read` - ctf:communication:read\n* `ctf:communication:write` - ctf:communication:write\n* `ctf:event:read` - ctf:event:read\n* `ctf:event:write` - ctf:event:write\n* `ctf:play:read` - ctf:play:read\n* `ctf:play:write` - ctf:play:write\n* `ctf:vpn-profile:read` - ctf:vpn-profile:read\n* `mission_control:credentials:write` - mission_control:credentials:write\n* `mission_control:guacamole:read` - mission_control:guacamole:read\n* `mission_control:ngfw:read` - mission_control:ngfw:read\n* `mission_control:ngfw:write` - mission_control:ngfw:write\n* `mission_control:range:read` - mission_control:range:read\n* `mission_control:range:write` - mission_control:range:write\n* `mission_control:upload:write` - mission_control:upload:write\n* `mission_control:vpn-profile:read` - mission_control:vpn-profile:read\n* `model-access:event:read` - model-access:event:read\n* `model-access:event:write` - model-access:event:write\n* `model-access:operator:read` - model-access:operator:read\n* `model-access:operator:write` - model-access:operator:write\n* `model-access:participant:read` - model-access:participant:read\n* `model-access:range:read` - model-access:range:read\n* `model-access:range:write` - model-access:range:write\n* `model-access:sharing:read` - model-access:sharing:read\n* `model-access:sharing:write` - model-access:sharing:write\n* `workspaces:membership:read` - workspaces:membership:read\n* `workspaces:membership:write` - workspaces:membership:write"
+        "description": "* `authorization:account.access_devices` - authorization:account.access_devices\n* `authorization:account.create_event` - authorization:account.create_event\n* `authorization:account.delegate_authorization` - authorization:account.delegate_authorization\n* `authorization:account.delete` - authorization:account.delete\n* `authorization:account.launch_range` - authorization:account.launch_range\n* `authorization:account.manage_adapters` - authorization:account.manage_adapters\n* `authorization:account.manage_authorization` - authorization:account.manage_authorization\n* `authorization:account.manage_content` - authorization:account.manage_content\n* `authorization:account.manage_credentials` - authorization:account.manage_credentials\n* `authorization:account.manage_devices` - authorization:account.manage_devices\n* `authorization:account.manage_members` - authorization:account.manage_members\n* `authorization:account.manage_organizations` - authorization:account.manage_organizations\n* `authorization:account.manage_range_scope` - authorization:account.manage_range_scope\n* `authorization:account.manage_sources` - authorization:account.manage_sources\n* `authorization:account.prepare_content` - authorization:account.prepare_content\n* `authorization:account.publish_content` - authorization:account.publish_content\n* `authorization:account.read` - authorization:account.read\n* `authorization:account.read_content` - authorization:account.read_content\n* `authorization:account.read_devices` - authorization:account.read_devices\n* `authorization:account.update` - authorization:account.update\n* `authorization:event.delegate_authorization` - authorization:event.delegate_authorization\n* `authorization:event.delete` - authorization:event.delete\n* `authorization:event.manage` - authorization:event.manage\n* `authorization:event.manage_awards` - authorization:event.manage_awards\n* `authorization:event.manage_challenges` - authorization:event.manage_challenges\n* `authorization:event.manage_communications` - authorization:event.manage_communications\n* `authorization:event.manage_config` - authorization:event.manage_config\n* `authorization:event.manage_content` - authorization:event.manage_content\n* `authorization:event.manage_lifecycle` - authorization:event.manage_lifecycle\n* `authorization:event.manage_participants` - authorization:event.manage_participants\n* `authorization:event.manage_ranges` - authorization:event.manage_ranges\n* `authorization:event.manage_scoring` - authorization:event.manage_scoring\n* `authorization:event.manage_staff` - authorization:event.manage_staff\n* `authorization:event.manage_submissions` - authorization:event.manage_submissions\n* `authorization:event.manage_teams` - authorization:event.manage_teams\n* `authorization:event.participate` - authorization:event.participate\n* `authorization:event.read` - authorization:event.read\n* `authorization:event.transfer_ownership` - authorization:event.transfer_ownership\n* `authorization:installation.access_devices` - authorization:installation.access_devices\n* `authorization:installation.delegate_authorization` - authorization:installation.delegate_authorization\n* `authorization:installation.launch_range` - authorization:installation.launch_range\n* `authorization:installation.manage_accounts` - authorization:installation.manage_accounts\n* `authorization:installation.manage_adapters` - authorization:installation.manage_adapters\n* `authorization:installation.manage_authorization` - authorization:installation.manage_authorization\n* `authorization:installation.manage_cloud_authority` - authorization:installation.manage_cloud_authority\n* `authorization:installation.manage_content` - authorization:installation.manage_content\n* `authorization:installation.manage_credentials` - authorization:installation.manage_credentials\n* `authorization:installation.manage_devices` - authorization:installation.manage_devices\n* `authorization:installation.manage_lease_policy` - authorization:installation.manage_lease_policy\n* `authorization:installation.manage_principals` - authorization:installation.manage_principals\n* `authorization:installation.manage_service_credentials` - authorization:installation.manage_service_credentials\n* `authorization:installation.manage_sources` - authorization:installation.manage_sources\n* `authorization:installation.prepare_content` - authorization:installation.prepare_content\n* `authorization:installation.publish_content` - authorization:installation.publish_content\n* `authorization:installation.read_audit` - authorization:installation.read_audit\n* `authorization:installation.read_content` - authorization:installation.read_content\n* `authorization:installation.read_devices` - authorization:installation.read_devices\n* `authorization:installation.revoke_personal_tokens` - authorization:installation.revoke_personal_tokens\n* `authorization:installation.use_personal_tokens` - authorization:installation.use_personal_tokens\n* `authorization:organization.access_devices` - authorization:organization.access_devices\n* `authorization:organization.create_event` - authorization:organization.create_event\n* `authorization:organization.delegate_authorization` - authorization:organization.delegate_authorization\n* `authorization:organization.launch_range` - authorization:organization.launch_range\n* `authorization:organization.manage_adapters` - authorization:organization.manage_adapters\n* `authorization:organization.manage_authorization` - authorization:organization.manage_authorization\n* `authorization:organization.manage_content` - authorization:organization.manage_content\n* `authorization:organization.manage_credentials` - authorization:organization.manage_credentials\n* `authorization:organization.manage_devices` - authorization:organization.manage_devices\n* `authorization:organization.manage_members` - authorization:organization.manage_members\n* `authorization:organization.manage_range_scope` - authorization:organization.manage_range_scope\n* `authorization:organization.manage_sources` - authorization:organization.manage_sources\n* `authorization:organization.manage_workspaces` - authorization:organization.manage_workspaces\n* `authorization:organization.prepare_content` - authorization:organization.prepare_content\n* `authorization:organization.publish_content` - authorization:organization.publish_content\n* `authorization:organization.read` - authorization:organization.read\n* `authorization:organization.read_content` - authorization:organization.read_content\n* `authorization:organization.read_devices` - authorization:organization.read_devices\n* `authorization:organization.update` - authorization:organization.update\n* `authorization:range.access` - authorization:range.access\n* `authorization:range.manage` - authorization:range.manage\n* `authorization:range.read` - authorization:range.read\n* `authorization:range.transfer_ownership` - authorization:range.transfer_ownership\n* `authorization:workspace.access_devices` - authorization:workspace.access_devices\n* `authorization:workspace.archive` - authorization:workspace.archive\n* `authorization:workspace.create_event` - authorization:workspace.create_event\n* `authorization:workspace.delegate_authorization` - authorization:workspace.delegate_authorization\n* `authorization:workspace.launch_range` - authorization:workspace.launch_range\n* `authorization:workspace.leave` - authorization:workspace.leave\n* `authorization:workspace.manage_adapters` - authorization:workspace.manage_adapters\n* `authorization:workspace.manage_authorization` - authorization:workspace.manage_authorization\n* `authorization:workspace.manage_content` - authorization:workspace.manage_content\n* `authorization:workspace.manage_credentials` - authorization:workspace.manage_credentials\n* `authorization:workspace.manage_devices` - authorization:workspace.manage_devices\n* `authorization:workspace.manage_egress` - authorization:workspace.manage_egress\n* `authorization:workspace.manage_invitations` - authorization:workspace.manage_invitations\n* `authorization:workspace.manage_members` - authorization:workspace.manage_members\n* `authorization:workspace.manage_quota` - authorization:workspace.manage_quota\n* `authorization:workspace.manage_range_scope` - authorization:workspace.manage_range_scope\n* `authorization:workspace.manage_sources` - authorization:workspace.manage_sources\n* `authorization:workspace.prepare_content` - authorization:workspace.prepare_content\n* `authorization:workspace.publish_content` - authorization:workspace.publish_content\n* `authorization:workspace.read` - authorization:workspace.read\n* `authorization:workspace.read_content` - authorization:workspace.read_content\n* `authorization:workspace.read_devices` - authorization:workspace.read_devices\n* `authorization:workspace.restore` - authorization:workspace.restore\n* `authorization:workspace.transfer` - authorization:workspace.transfer\n* `authorization:workspace.update` - authorization:workspace.update\n* `cms:authoring:read` - cms:authoring:read\n* `cms:authoring:write` - cms:authoring:write\n* `cms:preparation-adapters:read` - cms:preparation-adapters:read\n* `cms:preparation-adapters:write` - cms:preparation-adapters:write\n* `cms:preparation:read` - cms:preparation:read\n* `cms:preparation:write` - cms:preparation:write\n* `ctf:communication:read` - ctf:communication:read\n* `ctf:communication:write` - ctf:communication:write\n* `ctf:event:read` - ctf:event:read\n* `ctf:event:write` - ctf:event:write\n* `ctf:play:read` - ctf:play:read\n* `ctf:play:write` - ctf:play:write\n* `ctf:vpn-profile:read` - ctf:vpn-profile:read\n* `mission_control:credentials:write` - mission_control:credentials:write\n* `mission_control:guacamole:read` - mission_control:guacamole:read\n* `mission_control:ngfw:read` - mission_control:ngfw:read\n* `mission_control:ngfw:write` - mission_control:ngfw:write\n* `mission_control:range:read` - mission_control:range:read\n* `mission_control:range:write` - mission_control:range:write\n* `mission_control:upload:write` - mission_control:upload:write\n* `mission_control:vpn-profile:read` - mission_control:vpn-profile:read\n* `workspaces:membership:read` - workspaces:membership:read\n* `workspaces:membership:write` - workspaces:membership:write"
       },
       "CredentialCreate": {
         "type": "object",
@@ -27711,19 +26394,6 @@
           "name"
         ]
       },
-      "CredentialRetirement": {
-        "type": "object",
-        "description": "Number of obsolete credential versions retired.",
-        "properties": {
-          "retired": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "retired"
-        ]
-      },
       "CtfScenarioListResponse": {
         "type": "object",
         "description": "Envelope returned by the scenario list.",
@@ -27757,19 +26427,6 @@
           "id",
           "name"
         ]
-      },
-      "CurrencyEnum": {
-        "enum": [
-          "AUD",
-          "CAD",
-          "CHF",
-          "EUR",
-          "GBP",
-          "JPY",
-          "USD"
-        ],
-        "type": "string",
-        "description": "* `AUD` - AUD\n* `CAD` - CAD\n* `CHF` - CHF\n* `EUR` - EUR\n* `GBP` - GBP\n* `JPY` - JPY\n* `USD` - USD"
       },
       "CurrentRangeResponse": {
         "type": "object",
@@ -27958,24 +26615,6 @@
         "type": "string",
         "description": "* `` - \n* `NVME` - NVME\n* `SCSI` - SCSI"
       },
-      "Drain": {
-        "type": "object",
-        "description": "Drain request: the binding id and its expected definition revision.",
-        "properties": {
-          "sharing_binding_id": {
-            "type": "string",
-            "maxLength": 64
-          },
-          "expected_definition_revision": {
-            "type": "integer",
-            "minimum": 0
-          }
-        },
-        "required": [
-          "expected_definition_revision",
-          "sharing_binding_id"
-        ]
-      },
       "EffectEnum": {
         "enum": [
           "grant",
@@ -27983,47 +26622,6 @@
         ],
         "type": "string",
         "description": "* `grant` - grant\n* `revoke` - revoke"
-      },
-      "EffectivePolicyResponse": {
-        "type": "object",
-        "description": "Bounded effective-policy projection: overlaps, conflicts, routings, account counts.",
-        "properties": {
-          "stale": {
-            "type": "boolean"
-          },
-          "is_admissible": {
-            "type": "boolean"
-          },
-          "conflicts": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PolicyConflict"
-            }
-          },
-          "contributions": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/PolicyContribution"
-            }
-          },
-          "alias_routings": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AliasRouting"
-            }
-          },
-          "account_summary": {
-            "$ref": "#/components/schemas/AccountSummary"
-          }
-        },
-        "required": [
-          "account_summary",
-          "alias_routings",
-          "conflicts",
-          "contributions",
-          "is_admissible",
-          "stale"
-        ]
       },
       "EffectiveSourceEnum": {
         "enum": [
@@ -28323,22 +26921,6 @@
             "additionalProperties": {},
             "readOnly": true
           },
-          "model_demand": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            "readOnly": true
-          },
-          "model_sources": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/ModelSourceSelection"
-              }
-            ],
-            "readOnly": true
-          },
           "account": {
             "type": "string",
             "nullable": true,
@@ -28355,10 +26937,6 @@
             "type": "string",
             "nullable": true,
             "description": "Return the event's public workspace identity when present.",
-            "readOnly": true
-          },
-          "model_source_revision": {
-            "type": "integer",
             "readOnly": true
           },
           "logo_url": {
@@ -28404,9 +26982,6 @@
           "logo_url",
           "managed_content",
           "max_participants",
-          "model_demand",
-          "model_source_revision",
-          "model_sources",
           "name",
           "organization",
           "owner",
@@ -28501,40 +27076,6 @@
           "page",
           "page_size",
           "team_mode_count"
-        ]
-      },
-      "EventModelAccessAssessment": {
-        "type": "object",
-        "description": "Bounded model-access capacity assessment for an event.",
-        "properties": {
-          "available": {
-            "type": "boolean"
-          },
-          "outcome": {
-            "type": "string",
-            "nullable": true
-          },
-          "blocking": {
-            "type": "boolean",
-            "nullable": true
-          },
-          "partition": {
-            "type": "string",
-            "nullable": true
-          },
-          "reason_codes": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "available",
-          "blocking",
-          "outcome",
-          "partition",
-          "reason_codes"
         ]
       },
       "EventMutationResult": {
@@ -28895,17 +27436,6 @@
             "type": "object",
             "additionalProperties": {}
           },
-          "model_demand": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "additionalProperties": {}
-            },
-            "maxItems": 64
-          },
-          "model_sources": {
-            "$ref": "#/components/schemas/ModelSourceSelection"
-          },
           "account": {
             "type": "string",
             "format": "uuid"
@@ -28917,10 +27447,6 @@
           "workspace": {
             "type": "string",
             "format": "uuid"
-          },
-          "expected_model_source_revision": {
-            "type": "integer",
-            "minimum": 0
           },
           "logo_url": {
             "oneOf": [
@@ -29472,7 +27998,6 @@
           "authorization:account.manage_credentials",
           "authorization:account.manage_devices",
           "authorization:account.manage_members",
-          "authorization:account.manage_model_sources",
           "authorization:account.manage_organizations",
           "authorization:account.manage_range_scope",
           "authorization:account.manage_sources",
@@ -29511,7 +28036,6 @@
           "authorization:installation.manage_credentials",
           "authorization:installation.manage_devices",
           "authorization:installation.manage_lease_policy",
-          "authorization:installation.manage_model_sources",
           "authorization:installation.manage_principals",
           "authorization:installation.manage_service_credentials",
           "authorization:installation.manage_sources",
@@ -29532,7 +28056,6 @@
           "authorization:organization.manage_credentials",
           "authorization:organization.manage_devices",
           "authorization:organization.manage_members",
-          "authorization:organization.manage_model_sources",
           "authorization:organization.manage_range_scope",
           "authorization:organization.manage_sources",
           "authorization:organization.manage_workspaces",
@@ -29560,13 +28083,11 @@
           "authorization:workspace.manage_egress",
           "authorization:workspace.manage_invitations",
           "authorization:workspace.manage_members",
-          "authorization:workspace.manage_model_sources",
           "authorization:workspace.manage_quota",
           "authorization:workspace.manage_range_scope",
           "authorization:workspace.manage_sources",
           "authorization:workspace.prepare_content",
           "authorization:workspace.publish_content",
-          "authorization:workspace.publish_model_access",
           "authorization:workspace.read",
           "authorization:workspace.read_content",
           "authorization:workspace.read_devices",
@@ -29575,7 +28096,7 @@
           "authorization:workspace.update"
         ],
         "type": "string",
-        "description": "* `authorization:account.access_devices` - authorization:account.access_devices\n* `authorization:account.create_event` - authorization:account.create_event\n* `authorization:account.delegate_authorization` - authorization:account.delegate_authorization\n* `authorization:account.delete` - authorization:account.delete\n* `authorization:account.launch_range` - authorization:account.launch_range\n* `authorization:account.manage_adapters` - authorization:account.manage_adapters\n* `authorization:account.manage_authorization` - authorization:account.manage_authorization\n* `authorization:account.manage_content` - authorization:account.manage_content\n* `authorization:account.manage_credentials` - authorization:account.manage_credentials\n* `authorization:account.manage_devices` - authorization:account.manage_devices\n* `authorization:account.manage_members` - authorization:account.manage_members\n* `authorization:account.manage_model_sources` - authorization:account.manage_model_sources\n* `authorization:account.manage_organizations` - authorization:account.manage_organizations\n* `authorization:account.manage_range_scope` - authorization:account.manage_range_scope\n* `authorization:account.manage_sources` - authorization:account.manage_sources\n* `authorization:account.prepare_content` - authorization:account.prepare_content\n* `authorization:account.publish_content` - authorization:account.publish_content\n* `authorization:account.read` - authorization:account.read\n* `authorization:account.read_content` - authorization:account.read_content\n* `authorization:account.read_devices` - authorization:account.read_devices\n* `authorization:account.update` - authorization:account.update\n* `authorization:event.delegate_authorization` - authorization:event.delegate_authorization\n* `authorization:event.delete` - authorization:event.delete\n* `authorization:event.manage` - authorization:event.manage\n* `authorization:event.manage_awards` - authorization:event.manage_awards\n* `authorization:event.manage_challenges` - authorization:event.manage_challenges\n* `authorization:event.manage_communications` - authorization:event.manage_communications\n* `authorization:event.manage_config` - authorization:event.manage_config\n* `authorization:event.manage_content` - authorization:event.manage_content\n* `authorization:event.manage_lifecycle` - authorization:event.manage_lifecycle\n* `authorization:event.manage_participants` - authorization:event.manage_participants\n* `authorization:event.manage_ranges` - authorization:event.manage_ranges\n* `authorization:event.manage_scoring` - authorization:event.manage_scoring\n* `authorization:event.manage_staff` - authorization:event.manage_staff\n* `authorization:event.manage_submissions` - authorization:event.manage_submissions\n* `authorization:event.manage_teams` - authorization:event.manage_teams\n* `authorization:event.participate` - authorization:event.participate\n* `authorization:event.read` - authorization:event.read\n* `authorization:event.transfer_ownership` - authorization:event.transfer_ownership\n* `authorization:installation.access_devices` - authorization:installation.access_devices\n* `authorization:installation.delegate_authorization` - authorization:installation.delegate_authorization\n* `authorization:installation.launch_range` - authorization:installation.launch_range\n* `authorization:installation.manage_accounts` - authorization:installation.manage_accounts\n* `authorization:installation.manage_adapters` - authorization:installation.manage_adapters\n* `authorization:installation.manage_authorization` - authorization:installation.manage_authorization\n* `authorization:installation.manage_cloud_authority` - authorization:installation.manage_cloud_authority\n* `authorization:installation.manage_content` - authorization:installation.manage_content\n* `authorization:installation.manage_credentials` - authorization:installation.manage_credentials\n* `authorization:installation.manage_devices` - authorization:installation.manage_devices\n* `authorization:installation.manage_lease_policy` - authorization:installation.manage_lease_policy\n* `authorization:installation.manage_model_sources` - authorization:installation.manage_model_sources\n* `authorization:installation.manage_principals` - authorization:installation.manage_principals\n* `authorization:installation.manage_service_credentials` - authorization:installation.manage_service_credentials\n* `authorization:installation.manage_sources` - authorization:installation.manage_sources\n* `authorization:installation.prepare_content` - authorization:installation.prepare_content\n* `authorization:installation.publish_content` - authorization:installation.publish_content\n* `authorization:installation.read_audit` - authorization:installation.read_audit\n* `authorization:installation.read_content` - authorization:installation.read_content\n* `authorization:installation.read_devices` - authorization:installation.read_devices\n* `authorization:installation.revoke_personal_tokens` - authorization:installation.revoke_personal_tokens\n* `authorization:installation.use_personal_tokens` - authorization:installation.use_personal_tokens\n* `authorization:organization.access_devices` - authorization:organization.access_devices\n* `authorization:organization.create_event` - authorization:organization.create_event\n* `authorization:organization.delegate_authorization` - authorization:organization.delegate_authorization\n* `authorization:organization.launch_range` - authorization:organization.launch_range\n* `authorization:organization.manage_adapters` - authorization:organization.manage_adapters\n* `authorization:organization.manage_authorization` - authorization:organization.manage_authorization\n* `authorization:organization.manage_content` - authorization:organization.manage_content\n* `authorization:organization.manage_credentials` - authorization:organization.manage_credentials\n* `authorization:organization.manage_devices` - authorization:organization.manage_devices\n* `authorization:organization.manage_members` - authorization:organization.manage_members\n* `authorization:organization.manage_model_sources` - authorization:organization.manage_model_sources\n* `authorization:organization.manage_range_scope` - authorization:organization.manage_range_scope\n* `authorization:organization.manage_sources` - authorization:organization.manage_sources\n* `authorization:organization.manage_workspaces` - authorization:organization.manage_workspaces\n* `authorization:organization.prepare_content` - authorization:organization.prepare_content\n* `authorization:organization.publish_content` - authorization:organization.publish_content\n* `authorization:organization.read` - authorization:organization.read\n* `authorization:organization.read_content` - authorization:organization.read_content\n* `authorization:organization.read_devices` - authorization:organization.read_devices\n* `authorization:organization.update` - authorization:organization.update\n* `authorization:range.access` - authorization:range.access\n* `authorization:range.manage` - authorization:range.manage\n* `authorization:range.read` - authorization:range.read\n* `authorization:range.transfer_ownership` - authorization:range.transfer_ownership\n* `authorization:workspace.access_devices` - authorization:workspace.access_devices\n* `authorization:workspace.archive` - authorization:workspace.archive\n* `authorization:workspace.create_event` - authorization:workspace.create_event\n* `authorization:workspace.delegate_authorization` - authorization:workspace.delegate_authorization\n* `authorization:workspace.launch_range` - authorization:workspace.launch_range\n* `authorization:workspace.leave` - authorization:workspace.leave\n* `authorization:workspace.manage_adapters` - authorization:workspace.manage_adapters\n* `authorization:workspace.manage_authorization` - authorization:workspace.manage_authorization\n* `authorization:workspace.manage_content` - authorization:workspace.manage_content\n* `authorization:workspace.manage_credentials` - authorization:workspace.manage_credentials\n* `authorization:workspace.manage_devices` - authorization:workspace.manage_devices\n* `authorization:workspace.manage_egress` - authorization:workspace.manage_egress\n* `authorization:workspace.manage_invitations` - authorization:workspace.manage_invitations\n* `authorization:workspace.manage_members` - authorization:workspace.manage_members\n* `authorization:workspace.manage_model_sources` - authorization:workspace.manage_model_sources\n* `authorization:workspace.manage_quota` - authorization:workspace.manage_quota\n* `authorization:workspace.manage_range_scope` - authorization:workspace.manage_range_scope\n* `authorization:workspace.manage_sources` - authorization:workspace.manage_sources\n* `authorization:workspace.prepare_content` - authorization:workspace.prepare_content\n* `authorization:workspace.publish_content` - authorization:workspace.publish_content\n* `authorization:workspace.publish_model_access` - authorization:workspace.publish_model_access\n* `authorization:workspace.read` - authorization:workspace.read\n* `authorization:workspace.read_content` - authorization:workspace.read_content\n* `authorization:workspace.read_devices` - authorization:workspace.read_devices\n* `authorization:workspace.restore` - authorization:workspace.restore\n* `authorization:workspace.transfer` - authorization:workspace.transfer\n* `authorization:workspace.update` - authorization:workspace.update"
+        "description": "* `authorization:account.access_devices` - authorization:account.access_devices\n* `authorization:account.create_event` - authorization:account.create_event\n* `authorization:account.delegate_authorization` - authorization:account.delegate_authorization\n* `authorization:account.delete` - authorization:account.delete\n* `authorization:account.launch_range` - authorization:account.launch_range\n* `authorization:account.manage_adapters` - authorization:account.manage_adapters\n* `authorization:account.manage_authorization` - authorization:account.manage_authorization\n* `authorization:account.manage_content` - authorization:account.manage_content\n* `authorization:account.manage_credentials` - authorization:account.manage_credentials\n* `authorization:account.manage_devices` - authorization:account.manage_devices\n* `authorization:account.manage_members` - authorization:account.manage_members\n* `authorization:account.manage_organizations` - authorization:account.manage_organizations\n* `authorization:account.manage_range_scope` - authorization:account.manage_range_scope\n* `authorization:account.manage_sources` - authorization:account.manage_sources\n* `authorization:account.prepare_content` - authorization:account.prepare_content\n* `authorization:account.publish_content` - authorization:account.publish_content\n* `authorization:account.read` - authorization:account.read\n* `authorization:account.read_content` - authorization:account.read_content\n* `authorization:account.read_devices` - authorization:account.read_devices\n* `authorization:account.update` - authorization:account.update\n* `authorization:event.delegate_authorization` - authorization:event.delegate_authorization\n* `authorization:event.delete` - authorization:event.delete\n* `authorization:event.manage` - authorization:event.manage\n* `authorization:event.manage_awards` - authorization:event.manage_awards\n* `authorization:event.manage_challenges` - authorization:event.manage_challenges\n* `authorization:event.manage_communications` - authorization:event.manage_communications\n* `authorization:event.manage_config` - authorization:event.manage_config\n* `authorization:event.manage_content` - authorization:event.manage_content\n* `authorization:event.manage_lifecycle` - authorization:event.manage_lifecycle\n* `authorization:event.manage_participants` - authorization:event.manage_participants\n* `authorization:event.manage_ranges` - authorization:event.manage_ranges\n* `authorization:event.manage_scoring` - authorization:event.manage_scoring\n* `authorization:event.manage_staff` - authorization:event.manage_staff\n* `authorization:event.manage_submissions` - authorization:event.manage_submissions\n* `authorization:event.manage_teams` - authorization:event.manage_teams\n* `authorization:event.participate` - authorization:event.participate\n* `authorization:event.read` - authorization:event.read\n* `authorization:event.transfer_ownership` - authorization:event.transfer_ownership\n* `authorization:installation.access_devices` - authorization:installation.access_devices\n* `authorization:installation.delegate_authorization` - authorization:installation.delegate_authorization\n* `authorization:installation.launch_range` - authorization:installation.launch_range\n* `authorization:installation.manage_accounts` - authorization:installation.manage_accounts\n* `authorization:installation.manage_adapters` - authorization:installation.manage_adapters\n* `authorization:installation.manage_authorization` - authorization:installation.manage_authorization\n* `authorization:installation.manage_cloud_authority` - authorization:installation.manage_cloud_authority\n* `authorization:installation.manage_content` - authorization:installation.manage_content\n* `authorization:installation.manage_credentials` - authorization:installation.manage_credentials\n* `authorization:installation.manage_devices` - authorization:installation.manage_devices\n* `authorization:installation.manage_lease_policy` - authorization:installation.manage_lease_policy\n* `authorization:installation.manage_principals` - authorization:installation.manage_principals\n* `authorization:installation.manage_service_credentials` - authorization:installation.manage_service_credentials\n* `authorization:installation.manage_sources` - authorization:installation.manage_sources\n* `authorization:installation.prepare_content` - authorization:installation.prepare_content\n* `authorization:installation.publish_content` - authorization:installation.publish_content\n* `authorization:installation.read_audit` - authorization:installation.read_audit\n* `authorization:installation.read_content` - authorization:installation.read_content\n* `authorization:installation.read_devices` - authorization:installation.read_devices\n* `authorization:installation.revoke_personal_tokens` - authorization:installation.revoke_personal_tokens\n* `authorization:installation.use_personal_tokens` - authorization:installation.use_personal_tokens\n* `authorization:organization.access_devices` - authorization:organization.access_devices\n* `authorization:organization.create_event` - authorization:organization.create_event\n* `authorization:organization.delegate_authorization` - authorization:organization.delegate_authorization\n* `authorization:organization.launch_range` - authorization:organization.launch_range\n* `authorization:organization.manage_adapters` - authorization:organization.manage_adapters\n* `authorization:organization.manage_authorization` - authorization:organization.manage_authorization\n* `authorization:organization.manage_content` - authorization:organization.manage_content\n* `authorization:organization.manage_credentials` - authorization:organization.manage_credentials\n* `authorization:organization.manage_devices` - authorization:organization.manage_devices\n* `authorization:organization.manage_members` - authorization:organization.manage_members\n* `authorization:organization.manage_range_scope` - authorization:organization.manage_range_scope\n* `authorization:organization.manage_sources` - authorization:organization.manage_sources\n* `authorization:organization.manage_workspaces` - authorization:organization.manage_workspaces\n* `authorization:organization.prepare_content` - authorization:organization.prepare_content\n* `authorization:organization.publish_content` - authorization:organization.publish_content\n* `authorization:organization.read` - authorization:organization.read\n* `authorization:organization.read_content` - authorization:organization.read_content\n* `authorization:organization.read_devices` - authorization:organization.read_devices\n* `authorization:organization.update` - authorization:organization.update\n* `authorization:range.access` - authorization:range.access\n* `authorization:range.manage` - authorization:range.manage\n* `authorization:range.read` - authorization:range.read\n* `authorization:range.transfer_ownership` - authorization:range.transfer_ownership\n* `authorization:workspace.access_devices` - authorization:workspace.access_devices\n* `authorization:workspace.archive` - authorization:workspace.archive\n* `authorization:workspace.create_event` - authorization:workspace.create_event\n* `authorization:workspace.delegate_authorization` - authorization:workspace.delegate_authorization\n* `authorization:workspace.launch_range` - authorization:workspace.launch_range\n* `authorization:workspace.leave` - authorization:workspace.leave\n* `authorization:workspace.manage_adapters` - authorization:workspace.manage_adapters\n* `authorization:workspace.manage_authorization` - authorization:workspace.manage_authorization\n* `authorization:workspace.manage_content` - authorization:workspace.manage_content\n* `authorization:workspace.manage_credentials` - authorization:workspace.manage_credentials\n* `authorization:workspace.manage_devices` - authorization:workspace.manage_devices\n* `authorization:workspace.manage_egress` - authorization:workspace.manage_egress\n* `authorization:workspace.manage_invitations` - authorization:workspace.manage_invitations\n* `authorization:workspace.manage_members` - authorization:workspace.manage_members\n* `authorization:workspace.manage_quota` - authorization:workspace.manage_quota\n* `authorization:workspace.manage_range_scope` - authorization:workspace.manage_range_scope\n* `authorization:workspace.manage_sources` - authorization:workspace.manage_sources\n* `authorization:workspace.prepare_content` - authorization:workspace.prepare_content\n* `authorization:workspace.publish_content` - authorization:workspace.publish_content\n* `authorization:workspace.read` - authorization:workspace.read\n* `authorization:workspace.read_content` - authorization:workspace.read_content\n* `authorization:workspace.read_devices` - authorization:workspace.read_devices\n* `authorization:workspace.restore` - authorization:workspace.restore\n* `authorization:workspace.transfer` - authorization:workspace.transfer\n* `authorization:workspace.update` - authorization:workspace.update"
       },
       "IssuePersonalCredentialTargetTypeEnum": {
         "enum": [
@@ -29654,9 +28175,6 @@
         "type": "object",
         "description": "Validate range launch requests.",
         "properties": {
-          "model_sources": {
-            "$ref": "#/components/schemas/ModelSourceSelection"
-          },
           "agents": {
             "type": "object",
             "additionalProperties": {
@@ -29877,22 +28395,6 @@
           "state"
         ]
       },
-      "Member": {
-        "type": "object",
-        "description": "One resolved selector member reference.",
-        "properties": {
-          "owner": {
-            "type": "string"
-          },
-          "reference": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "owner",
-          "reference"
-        ]
-      },
       "MissionControlLeasePolicySettings": {
         "type": "object",
         "description": "Serialize the complete administrator settings projection.",
@@ -29941,339 +28443,6 @@
         ],
         "type": "string",
         "description": "* `advisory` - Advisory (soft cap)\n* `enforcing` - Enforcing (hard cap)"
-      },
-      "ModelAssignment": {
-        "type": "object",
-        "description": "Effective provider assignment for a workload alias.",
-        "properties": {
-          "workload": {
-            "type": "string"
-          },
-          "logical_alias": {
-            "type": "string"
-          },
-          "provider": {
-            "type": "string"
-          },
-          "model": {
-            "type": "string"
-          },
-          "region": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "logical_alias",
-          "model",
-          "provider",
-          "region",
-          "workload"
-        ]
-      },
-      "ModelPolicyRuntime": {
-        "type": "object",
-        "description": "Runtime availability and effective model assignments.",
-        "properties": {
-          "state": {
-            "$ref": "#/components/schemas/ModelPolicyRuntimeStateEnum"
-          },
-          "assignments": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelAssignment"
-            }
-          }
-        },
-        "required": [
-          "assignments",
-          "state"
-        ]
-      },
-      "ModelPolicyRuntimeStateEnum": {
-        "enum": [
-          "active",
-          "refresh_pending",
-          "unavailable"
-        ],
-        "type": "string",
-        "description": "* `active` - active\n* `refresh_pending` - refresh_pending\n* `unavailable` - unavailable"
-      },
-      "ModelRangePage": {
-        "type": "object",
-        "description": "Paged tenant ranges with source policy metadata.",
-        "properties": {
-          "count": {
-            "type": "integer"
-          },
-          "page": {
-            "type": "integer"
-          },
-          "has_next": {
-            "type": "boolean"
-          },
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelRangeSummary"
-            }
-          }
-        },
-        "required": [
-          "count",
-          "has_next",
-          "page",
-          "results"
-        ]
-      },
-      "ModelRangeSummary": {
-        "type": "object",
-        "description": "Range identity and source policy status for tenant administration.",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "scenario": {
-            "type": "string"
-          },
-          "status": {
-            "type": "string"
-          },
-          "revision": {
-            "type": "integer"
-          },
-          "error": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "error",
-          "request_id",
-          "revision",
-          "scenario",
-          "status"
-        ]
-      },
-      "ModelSourceConfiguration": {
-        "type": "object",
-        "description": "Editable metadata; the service validates provider-specific combinations.",
-        "properties": {
-          "name": {
-            "type": "string",
-            "maxLength": 100
-          },
-          "provider": {
-            "$ref": "#/components/schemas/ModelSourceConfigurationProviderEnum"
-          },
-          "authentication": {
-            "$ref": "#/components/schemas/AuthenticationEnum"
-          },
-          "model": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "region": {
-            "type": "string",
-            "maxLength": 64
-          },
-          "project": {
-            "type": "string",
-            "default": "",
-            "maxLength": 30
-          },
-          "principal": {
-            "type": "string",
-            "default": "",
-            "maxLength": 256
-          },
-          "count_region": {
-            "type": "string",
-            "default": "",
-            "maxLength": 64
-          },
-          "quota_identity": {
-            "type": "string",
-            "maxLength": 256
-          },
-          "context_window_tokens": {
-            "type": "integer",
-            "maximum": 2000000,
-            "minimum": 1
-          },
-          "tokens_per_minute": {
-            "type": "integer",
-            "maximum": 9007199254740991,
-            "minimum": 1,
-            "format": "int64"
-          },
-          "input_price_per_million": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "output_price_per_million": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "currency": {
-            "allOf": [
-              {
-                "$ref": "#/components/schemas/CurrencyEnum"
-              }
-            ],
-            "default": "USD"
-          },
-          "price_valid_until": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "upstream_provider": {
-            "type": "string",
-            "default": "",
-            "maxLength": 100
-          }
-        },
-        "required": [
-          "authentication",
-          "context_window_tokens",
-          "input_price_per_million",
-          "model",
-          "name",
-          "output_price_per_million",
-          "price_valid_until",
-          "provider",
-          "quota_identity",
-          "region",
-          "tokens_per_minute"
-        ]
-      },
-      "ModelSourceConfigurationProviderEnum": {
-        "enum": [
-          "vertex-v1",
-          "bedrock-v1",
-          "anthropic-v1",
-          "openai-v1",
-          "openrouter-v1"
-        ],
-        "type": "string",
-        "description": "* `vertex-v1` - vertex-v1\n* `bedrock-v1` - bedrock-v1\n* `anthropic-v1` - anthropic-v1\n* `openai-v1` - openai-v1\n* `openrouter-v1` - openrouter-v1"
-      },
-      "ModelSourcePage": {
-        "type": "object",
-        "description": "Collection of authorized source metadata.",
-        "properties": {
-          "results": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ModelSourceView"
-            }
-          }
-        },
-        "required": [
-          "results"
-        ]
-      },
-      "ModelSourceSelection": {
-        "type": "object",
-        "description": "Explicit source choices grouped by logical alias.",
-        "properties": {
-          "aliases": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AliasSourceSelection"
-            }
-          }
-        },
-        "required": [
-          "aliases"
-        ]
-      },
-      "ModelSourceUpdate": {
-        "type": "object",
-        "description": "Revision-fenced replacement of source configuration and status.",
-        "properties": {
-          "configuration": {
-            "$ref": "#/components/schemas/ModelSourceConfiguration"
-          },
-          "credential": {
-            "writeOnly": true
-          },
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "enabled": {
-            "type": "boolean",
-            "default": true
-          }
-        },
-        "required": [
-          "configuration",
-          "expected_revision"
-        ]
-      },
-      "ModelSourceView": {
-        "type": "object",
-        "description": "Public source metadata with credential presence only.",
-        "properties": {
-          "id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "organization_uuid": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "revision": {
-            "type": "integer"
-          },
-          "enabled": {
-            "type": "boolean"
-          },
-          "state": {
-            "$ref": "#/components/schemas/ModelSourceViewStateEnum"
-          },
-          "configuration": {
-            "$ref": "#/components/schemas/ModelSourceConfiguration"
-          },
-          "has_credential": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "configuration",
-          "enabled",
-          "has_credential",
-          "id",
-          "organization_uuid",
-          "revision",
-          "state"
-        ]
-      },
-      "ModelSourceViewStateEnum": {
-        "enum": [
-          "pending",
-          "ready",
-          "failed",
-          "retired",
-          "disabled"
-        ],
-        "type": "string",
-        "description": "* `pending` - pending\n* `ready` - ready\n* `failed` - failed\n* `retired` - retired\n* `disabled` - disabled"
-      },
-      "ModelSourceWrite": {
-        "type": "object",
-        "description": "Source configuration and an optional transient credential.",
-        "properties": {
-          "configuration": {
-            "$ref": "#/components/schemas/ModelSourceConfiguration"
-          },
-          "credential": {
-            "writeOnly": true
-          }
-        },
-        "required": [
-          "configuration"
-        ]
       },
       "NGFWCreate": {
         "type": "object",
@@ -31964,25 +30133,6 @@
           "total"
         ]
       },
-      "ParticipantModelAccess": {
-        "type": "object",
-        "description": "Participant-safe model-access state for the participant's own range (M09).\n\n``state`` is one of ``active``, ``refresh_pending`` or ``unavailable`` (a plain\nstring in the contract to avoid an ambiguous shared ``state`` enum).",
-        "properties": {
-          "state": {
-            "type": "string"
-          },
-          "aliases": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "aliases",
-          "state"
-        ]
-      },
       "ParticipantModerationRequest": {
         "type": "object",
         "description": "Optional reason accompanying a ban or disqualification.",
@@ -32688,67 +30838,6 @@
           "username"
         ]
       },
-      "PolicyConflict": {
-        "type": "object",
-        "description": "One priority/facet conflict in the compiled effective policy.",
-        "properties": {
-          "code": {
-            "type": "string"
-          },
-          "facet": {
-            "type": "string",
-            "nullable": true
-          },
-          "logical_alias": {
-            "type": "string",
-            "nullable": true
-          }
-        },
-        "required": [
-          "code",
-          "facet",
-          "logical_alias"
-        ]
-      },
-      "PolicyContribution": {
-        "type": "object",
-        "description": "One binding contributing to the compiled effective policy.",
-        "properties": {
-          "sharing_binding_id": {
-            "type": "string"
-          },
-          "definition_digest": {
-            "type": "string"
-          },
-          "membership_revision": {
-            "type": "integer"
-          },
-          "routing_revision": {
-            "type": "integer"
-          },
-          "priority": {
-            "type": "integer"
-          },
-          "matched_reason": {
-            "type": "string"
-          },
-          "facets": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          }
-        },
-        "required": [
-          "definition_digest",
-          "facets",
-          "matched_reason",
-          "membership_revision",
-          "priority",
-          "routing_revision",
-          "sharing_binding_id"
-        ]
-      },
       "PolicyInvitationCommand": {
         "type": "object",
         "description": "Invite a human recipient; explicit policy assignment is a separate operation.",
@@ -33265,6 +31354,14 @@
           "project_id"
         ]
       },
+      "ProviderEnum": {
+        "enum": [
+          "gcp",
+          "aws"
+        ],
+        "type": "string",
+        "description": "* `gcp` - gcp\n* `aws` - aws"
+      },
       "PublicRegistrationDisposition": {
         "type": "object",
         "description": "Closed organizer decision vocabulary.",
@@ -33429,33 +31526,6 @@
         ],
         "type": "string",
         "description": "* `pending` - pending"
-      },
-      "Publish": {
-        "type": "object",
-        "description": "Publish request: a binding+pool draft under an optimistic definition-revision fence.",
-        "properties": {
-          "binding": {
-            "type": "object",
-            "additionalProperties": {}
-          },
-          "pool": {
-            "type": "object",
-            "additionalProperties": {}
-          },
-          "expected_definition_revision": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "empty_snapshot_ack": {
-            "type": "boolean",
-            "default": false
-          }
-        },
-        "required": [
-          "binding",
-          "expected_definition_revision",
-          "pool"
-        ]
       },
       "RaesCatalogFields": {
         "type": "object",
@@ -34283,62 +32353,6 @@
           "ranges"
         ]
       },
-      "RangeModelSources": {
-        "type": "object",
-        "description": "Range source policy and its current runtime status.",
-        "properties": {
-          "request_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "workspace": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "scenario": {
-            "type": "string"
-          },
-          "revision": {
-            "type": "integer"
-          },
-          "selection": {
-            "$ref": "#/components/schemas/ModelSourceSelection"
-          },
-          "error": {
-            "type": "string"
-          },
-          "runtime": {
-            "$ref": "#/components/schemas/ModelPolicyRuntime"
-          }
-        },
-        "required": [
-          "error",
-          "request_id",
-          "revision",
-          "runtime",
-          "scenario",
-          "selection",
-          "workspace"
-        ]
-      },
-      "RangeModelSourcesWrite": {
-        "type": "object",
-        "description": "Revision-fenced source selection for an existing range.",
-        "properties": {
-          "expected_revision": {
-            "type": "integer",
-            "minimum": 0
-          },
-          "selection": {
-            "$ref": "#/components/schemas/ModelSourceSelection"
-          }
-        },
-        "required": [
-          "expected_revision",
-          "selection"
-        ]
-      },
       "RangePresentation": {
         "type": "object",
         "description": "Response-only projection of ``shared.schemas.RangeContext``.\n\nField set mirrors ``RangeContext.model_fields`` plus its computed\nproperties (``is_ready``, ``is_terminal``, ``is_active``).",
@@ -34863,26 +32877,6 @@
         "type": "string",
         "description": "* `pending` - pending\n* `provisioning` - provisioning\n* `ready` - ready\n* `pausing` - pausing\n* `paused` - paused\n* `resuming` - resuming\n* `destroying` - destroying\n* `destroyed` - destroyed\n* `failed` - failed"
       },
-      "RevisionResponse": {
-        "type": "object",
-        "description": "Bounded published/drained binding-revision projection.",
-        "properties": {
-          "sharing_binding_id": {
-            "type": "string"
-          },
-          "definition_revision": {
-            "type": "integer"
-          },
-          "state": {
-            "type": "string"
-          }
-        },
-        "required": [
-          "definition_revision",
-          "sharing_binding_id",
-          "state"
-        ]
-      },
       "RoleAssignmentMutation": {
         "type": "object",
         "description": "Closed policy assignment command for a principal or group.",
@@ -35235,7 +33229,7 @@
         "description": "Closed provider image profile selected for one adapter target.",
         "properties": {
           "provider": {
-            "$ref": "#/components/schemas/RuntimeTargetImageProfileProviderEnum"
+            "$ref": "#/components/schemas/ProviderEnum"
           },
           "image_kind": {
             "allOf": [
@@ -35346,14 +33340,6 @@
           "image_ref",
           "provider"
         ]
-      },
-      "RuntimeTargetImageProfileProviderEnum": {
-        "enum": [
-          "gcp",
-          "aws"
-        ],
-        "type": "string",
-        "description": "* `gcp` - gcp\n* `aws` - aws"
       },
       "ScenarioDetail": {
         "type": "object",
@@ -35666,38 +33652,6 @@
           "timeline"
         ]
       },
-      "Selector": {
-        "type": "object",
-        "description": "Selector-preview request: one sharing selector to resolve.",
-        "properties": {
-          "selector": {
-            "type": "object",
-            "additionalProperties": {}
-          }
-        },
-        "required": [
-          "selector"
-        ]
-      },
-      "SelectorPreviewResponse": {
-        "type": "object",
-        "description": "Matched selector members and their count (advisory).",
-        "properties": {
-          "matched": {
-            "type": "integer"
-          },
-          "members": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/Member"
-            }
-          }
-        },
-        "required": [
-          "matched",
-          "members"
-        ]
-      },
       "ServiceCredential": {
         "type": "object",
         "description": "Project non-secret native service admission metadata.",
@@ -35794,87 +33748,6 @@
           "is_active"
         ]
       },
-      "SourceChoice": {
-        "type": "object",
-        "description": "Immutable source revision and its allocation weight.",
-        "properties": {
-          "source_id": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "revision": {
-            "type": "integer",
-            "minimum": 1
-          },
-          "weight": {
-            "type": "integer",
-            "maximum": 64,
-            "minimum": 1,
-            "default": 1
-          }
-        },
-        "required": [
-          "revision",
-          "source_id"
-        ]
-      },
-      "SourceOptions": {
-        "type": "object",
-        "description": "Authorized workspaces and scenario-specific source choices.",
-        "properties": {
-          "workspaces": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/SourceWorkspace"
-            }
-          },
-          "workspace": {
-            "type": "string",
-            "format": "uuid",
-            "nullable": true
-          },
-          "aliases": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/AliasSourceOptions"
-            }
-          },
-          "available": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "aliases",
-          "available",
-          "workspace",
-          "workspaces"
-        ]
-      },
-      "SourceWorkspace": {
-        "type": "object",
-        "description": "Workspace identity displayed alongside tenant source options.",
-        "properties": {
-          "uuid": {
-            "type": "string",
-            "format": "uuid"
-          },
-          "name": {
-            "type": "string"
-          },
-          "organization_name": {
-            "type": "string"
-          },
-          "is_personal": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "is_personal",
-          "name",
-          "organization_name",
-          "uuid"
-        ]
-      },
       "SparePoolRequest": {
         "type": "object",
         "description": "Organizer spare-pool top-up request body (``count`` bounded non-negative).",
@@ -35943,19 +33816,6 @@
         },
         "required": [
           "name"
-        ]
-      },
-      "Subject": {
-        "type": "object",
-        "description": "Policy-preview request: the subject reference to compile an effective policy for.",
-        "properties": {
-          "subject": {
-            "type": "object",
-            "additionalProperties": {}
-          }
-        },
-        "required": [
-          "subject"
         ]
       },
       "SubmissionListItem": {
@@ -36397,18 +34257,6 @@
         },
         "required": [
           "username"
-        ]
-      },
-      "ValidResponse": {
-        "type": "object",
-        "description": "Draft-validation result.",
-        "properties": {
-          "valid": {
-            "type": "boolean"
-          }
-        },
-        "required": [
-          "valid"
         ]
       },
       "Webhook": {

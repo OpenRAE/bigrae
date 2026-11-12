@@ -325,8 +325,8 @@ class RuntimeApparatusPin(ClosedModel):
         """Require exact SDK apparatus scope and forbid substrate authority."""
         if self.manifest.protocol != "bigrae.runtime-plugin/v2" or self.manifest.required_files:
             raise ValueError("Apparatus software requires its supported SDK protocol")
-        if self.bindings.file_assets or self.bindings.image_profiles or self.manifest.model_bindings:
-            raise ValueError("Apparatus software cannot replace admitted substrate or model authority")
+        if self.bindings.file_assets or self.bindings.image_profiles:
+            raise ValueError("Apparatus software cannot replace admitted substrate authority")
         self.bindings.validate_manifest(self.manifest)
         if len(self.model_dump_json().encode()) > 32768:
             raise ValueError("Apparatus binding exceeds its bound")

@@ -111,9 +111,6 @@ def build_raes_range_cell_plan(
     joined to this plan by ``raes_access.join_participant_access``. They are the
     only source of a node's participant channels: authored services, ACLs, OS
     family, image, and account existence never synthesize one.
-
-    ``egress_policy.model_broker`` is separately admitted and bound to the deployment VIP;
-    neither scenario authorship nor installation enablement grants it.
     """
     resolved_options = _plan_options(options, legacy)
     resolved_config = resolved_options.config or load_gce_range_cell_config()
@@ -150,12 +147,8 @@ def build_raes_range_cell_plan(
 
     access_by_node = _access_by_node(resolved_options.access_bindings)
 
-    # The deployment may expose a broker endpoint without admitting this range
-    # to use it. Only a range-bound broker capability suppresses the host
-    # identity; broker-free ranges keep their direct keyless Vertex path.
-    attach_model_identity = (
-        bool(resolved_config.service_account_email) and resolved_options.egress_policy.model_broker is None
-    )
+    # Default-on, keyless model access (ADR-064): attach the range host identity.
+    attach_model_identity = bool(resolved_config.service_account_email)
     instance_plans: list[InstancePlan] = []
     for network in raes_plan.networks:
         subnet = subnet_by_address[network.address]

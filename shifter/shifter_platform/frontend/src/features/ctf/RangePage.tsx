@@ -12,7 +12,6 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useGuacamoleSession } from "@/features/mission-control/guacamole";
 
-import { ParticipantModelAccessCard } from "./ParticipantModelAccessCard";
 
 import { titleCase } from "./format";
 
@@ -161,7 +160,6 @@ export function RangePage() {
           <VpnProfileDownload status={status} />
         </CardContent>
       </Card>
-      <ParticipantModelAccessCard />
     </>
   );
 }

@@ -28,7 +28,6 @@ if TYPE_CHECKING:
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from shared.model_access import OwnedReference
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,6 @@ def _participant_principal_uuid(participant: CTFParticipant) -> UUID:
 def _rebuild_replacement(
     recovery: CTFRangeRecovery,
     participant: CTFParticipant,
-    model_subject: OwnedReference,
     credential: CredentialContext,
 ) -> tuple[int, UUID]:
     """Reserve and resume exactly one replacement UUID before invoking CMS."""
@@ -66,7 +64,6 @@ def _rebuild_replacement(
         launch_parameters,
         reserve_launch,
     )
-    from ctf.services.range.model_allocation import project_event_model_scope
     from management.services import resolve_principal_uuid
 
     event = participant.event
@@ -78,13 +75,7 @@ def _rebuild_replacement(
         if recovery.replacement_request_id is not None
         else None
     )
-    parameters = (
-        existing.parameters
-        if existing
-        else launch_parameters(
-            event, owner, model_subject, project_event_model_scope(event, participant.pk, model_subject)
-        )
-    )
+    parameters = existing.parameters if existing else launch_parameters(event, owner)
     with transaction.atomic():
         locked_event = CTFEvent.objects.select_for_update().get(pk=event.pk)
         assert_event_action(event_admission, locked_event, "event.manage_ranges")
@@ -271,15 +262,13 @@ def _ensure_spare_attached(
 def _ensure_rebuild_replacement_ready(
     recovery: CTFRangeRecovery,
     participant: CTFParticipant,
-    model_subject: OwnedReference,
     credential: CredentialContext,
 ) -> None:
     """Provision a fresh rebuild replacement range (idempotent; rebuild-only).
 
     reassign_spare reserves via :func:`_ensure_spare_reserved` before teardown.
-    ``model_subject`` is the pre-teardown authoritative membership subject (PLAT-202).
     """
-    replacement_id, request_id = _rebuild_replacement(recovery, participant, model_subject, credential)
+    replacement_id, request_id = _rebuild_replacement(recovery, participant, credential)
     recovery.replacement_range_instance_id = replacement_id
     recovery.replacement_request_id = request_id
     recovery.phase = RecoveryPhase.REPLACEMENT_READY.value

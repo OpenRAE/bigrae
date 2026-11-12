@@ -3,8 +3,6 @@ import { Link, useNavigate } from "react-router";
 
 import { Loader2 } from "lucide-react";
 
-import { ModelSourcePicker } from "@/components/ModelSourcePicker";
-import type { ModelSourceSelection } from "@/api/model-sources";
 
 import { describeMutationError } from "@/api/errors";
 import { useAgents, useLaunchRange, useLaunchWorkspaces, useScenarios } from "@/api/mission-control";
@@ -60,9 +58,6 @@ interface LaunchOptionsFormProps {
   onSubmit: (event: FormEvent) => void;
   onCancel: () => void;
   isPending: boolean;
-  modelSources: ModelSourceSelection;
-  onModelSourcesChange: (value: ModelSourceSelection) => void;
-  workspace: string;
 }
 
 /** The scenario/agent picker form, once options have loaded successfully. */
@@ -76,7 +71,7 @@ function LaunchOptionsForm({
   errors,
   onSubmit,
   onCancel,
-  isPending, modelSources, onModelSourcesChange, workspace,
+  isPending,
 }: Readonly<LaunchOptionsFormProps>) {
   const selectedScenario = scenarioList.find((scenario) => scenario.id === scenarioId);
 
@@ -130,7 +125,6 @@ function LaunchOptionsForm({
             </Select>
             <FieldError id="f-agent-e" message={errors.agent} />
           </div> : null}
-          <ModelSourcePicker scenario={scenarioId} workspace={workspace} value={modelSources} onChange={onModelSourcesChange} disabled={isPending} />
         </CardContent>
         <CardFooter className="justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onCancel}>
@@ -190,7 +184,6 @@ export function RangeLaunchPage() {
   const [scenarioId, setScenarioId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
-  const [modelSources, setModelSources] = useState<ModelSourceSelection>({ aliases: [] });
 
   const scenarioList = scenarios.data?.scenarios ?? [];
   const agentList = agents.data?.agents ?? [];
@@ -208,7 +201,7 @@ export function RangeLaunchPage() {
     if (Object.keys(nextErrors).length > 0) return;
 
     launch.mutate(
-      { scenario: scenarioId, ...(requiresAgent ? { agent_id: Number(agentId) } : { agents: {} }), ...(workspace ? { workspace_uuid: workspace } : {}), ...(modelSources.aliases.length ? { model_sources: modelSources } : {}) },
+      { scenario: scenarioId, ...(requiresAgent ? { agent_id: Number(agentId) } : { agents: {} }), ...(workspace ? { workspace_uuid: workspace } : {}) },
       { onSuccess: () => navigate(missionControlDashboardPath()) },
     );
   }
@@ -250,7 +243,6 @@ export function RangeLaunchPage() {
               setWorkspace(event.target.value);
               setScenarioId("");
               setAgentId("");
-              setModelSources({ aliases: [] });
             }}
           >
             {launchWorkspaces.data.personal_available ? <option value="">Personal workspace</option> : null}
@@ -268,15 +260,13 @@ export function RangeLaunchPage() {
         scenarioList={scenarioList}
         agentList={agentList}
         scenarioId={scenarioId}
-        onScenarioIdChange={(value) => { setScenarioId(value); setModelSources({ aliases: [] }); }}
+        onScenarioIdChange={setScenarioId}
         agentId={agentId}
         onAgentIdChange={setAgentId}
         errors={errors}
         onSubmit={onSubmit}
         onCancel={() => navigate(missionControlDashboardPath())}
         isPending={launch.isPending}
-        modelSources={modelSources} onModelSourcesChange={setModelSources}
-        workspace={workspace}
       />
     </div>
   );

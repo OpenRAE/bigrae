@@ -14,14 +14,9 @@ ScenarioInstance = ResourceDict
 
 @dataclass(frozen=True)
 class GceEgressPolicy:
-    """Pinned egress posture and separately admitted broker capability.
-
-    Mode uses the existing range-egress vocabulary. The broker capability is
-    never inferred from deployment enablement or a configured VIP.
-    """
+    """Pinned egress posture in the existing range-egress vocabulary."""
 
     mode: str = "status-quo"
-    model_broker: dict[str, object] | None = None
 
 
 DEFAULT_GCE_EGRESS_POLICY = GceEgressPolicy()

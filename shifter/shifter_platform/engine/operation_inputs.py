@@ -263,7 +263,6 @@ def _raes_input_payload(
     claimant's fresh access.
     """
     from engine.services._gcp_project_inputs import projects_for_input, retained_project_cleanup_payload
-    from engine.services._model_guest_bindings import project_model_guest_bindings
     from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
     from engine.services._runtime_plugin_cleanup import retained_cleanup_payload
 
@@ -286,7 +285,6 @@ def _raes_input_payload(
             runtime_plugin=pin,
             gcp_projects=projects_for_input(target, plan, pin),
             cloud_content=_raes_cloud_content(target),
-            model_enrollments=project_model_guest_bindings(target, pin) if not suppress_access else (),
             remote_access=None if suppress_access else _raes_remote_access(target),
         ),
         image_candidates=_raes_image_candidates(plan, target),

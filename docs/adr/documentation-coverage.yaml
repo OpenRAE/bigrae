@@ -207,13 +207,6 @@
       "technical_docs": ["architecture/raes-in-tenant-artifact-preparation-design-1583.md"]
     },
     {
-      "id": "range-model-access",
-      "title": "Per-range model access (planned; PLAT-202 design)",
-      "requirement": "PLAT-202",
-      "user_docs": ["features/model-access.md"],
-      "technical_docs": ["architecture/model-access/architecture.md", "architecture/model-access/allocations.md", "architecture/model-access/gcp-packaging.md", "ops/model-access.md", "ops/model-access-gcp-probes.md"]
-    },
-    {
       "id": "agents",
       "title": "Agents",
       "requirement": "GEN-001",
@@ -331,13 +324,6 @@
       "requirement": "GEN-001",
       "user_docs": ["how-to/aws-ecs-to-eks-migration.md", "ops/portal-eks-operations.md"],
       "technical_docs": ["technical/platform_infrastructure/aws-eks-bundle.md"]
-    },
-    {
-      "id": "tenant-model-sources",
-      "title": "Tenant model sources and range routing",
-      "requirement": "PLAT-202",
-      "user_docs": ["features/model-access.md"],
-      "technical_docs": ["architecture/model-access/source-management.md"]
     },
     {
       "id": "registered-gcp-range-projects",

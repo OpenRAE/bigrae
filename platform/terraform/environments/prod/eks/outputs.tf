@@ -87,11 +87,6 @@ output "provider_api_egress_except" {
   value       = [module.eks.service_ipv4_cidr]
 }
 
-output "model_broker" {
-  description = "Applied private model broker configuration."
-  value       = module.eks.model_broker
-}
-
 output "database_iam_users" {
   description = "RDS IAM login of each runtime workload; each is a member of the portal_runtime duty."
   value       = local.runtime_db_logins

@@ -12,6 +12,7 @@ from django.utils import timezone
 from ctf.exceptions import CTFStateError, CTFValidationError
 from ctf.models import CTFEvent
 from ctf.services.event import create_event, update_event
+from shared.operation_authority import CredentialReference
 from tests.ctf._account_scope import individual_account_uuid
 from workspaces.models import Account
 
@@ -117,27 +118,6 @@ def test_update_rejects_a_different_account_instead_of_ignoring_it(ctf_event):
     )
 
 
-def test_invalid_source_placement_creates_no_event(organizer_credential):
-    from ctf.services.event import create_event_for_credential
-
-    before = CTFEvent.objects.count()
-    with pytest.raises(CTFValidationError, match="model sources"):
-        create_event_for_credential(
-            organizer_credential,
-            _event_data(
-                model_sources={
-                    "aliases": [
-                        {
-                            "logical_alias": "helper",
-                            "sources": [{"source_id": str(uuid4()), "revision": 1}],
-                        }
-                    ]
-                }
-            ),
-        )
-    assert CTFEvent.objects.count() == before
-
-
 @pytest.mark.parametrize("recovery", ["creator", "administrator"])
 def test_pending_event_initialization_recovers_with_current_authority_after_original_expiry(
     organizer_user,
@@ -179,16 +159,12 @@ def test_current_owner_can_abort_an_invalid_pending_initialization(organizer_cre
 
     from ctf.services.event.initialization import abort_event_initialization
     from management.services import human_principal_user_id
-    from shared.model_access.sources import ModelSourceCredentialReference
     from tests.ctf.test_content_hydration import _event
 
     user = get_user_model().objects.get(pk=human_principal_user_id(organizer_credential.principal))
     pending = _event(user)
     pending.initialization_intent = {
-        "authority": ModelSourceCredentialReference.from_credential(organizer_credential).model_dump(mode="json"),
-        "model_sources": {
-            "aliases": [{"logical_alias": "helper", "sources": [{"source_id": str(uuid4()), "revision": 1}]}]
-        },
+        "authority": CredentialReference.from_credential(organizer_credential).model_dump(mode="json"),
         "content_digest": None,
     }
     pending.save(update_fields=["initialization_intent"])

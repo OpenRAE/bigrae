@@ -1,5 +1,5 @@
 {
-  "current_operation_count": 328,
+  "current_operation_count": 311,
   "historical_baseline": {
     "commit": "8aee758331286293cdc837d94eb95fafa5674ae0",
     "operation_count": 220
@@ -997,22 +997,22 @@
     },
     {
       "authority": {
-        "decision": "installation.read_content|account.read_content|organization.read_content|workspace.read_content",
-        "scope": "sql:content_parent;selector=validated_parent",
-        "target": "scope"
+        "decision": "not-mounted",
+        "scope": "none",
+        "target": "none"
       },
-      "disposition": "retained",
+      "disposition": "retired",
       "method": "GET",
       "operation_id": "cms_model_source_options_retrieve",
       "path": "/api/v1/cms/model-source-options/"
     },
     {
       "authority": {
-        "decision": "organization.manage_model_sources",
-        "scope": "sql:organization_range_collection",
-        "target": "organization"
+        "decision": "not-mounted",
+        "scope": "none",
+        "target": "none"
       },
-      "disposition": "retained",
+      "disposition": "retired",
       "method": "GET",
       "operation_id": "cms_organizations_model_ranges_retrieve",
       "path": "/api/v1/cms/organizations/{organization_uuid}/model-ranges/"
@@ -1030,55 +1030,55 @@
     },
     {
       "authority": {
-        "decision": "organization.manage_model_sources",
-        "scope": "sql:organization_source_collection",
-        "target": "organization"
+        "decision": "not-mounted",
+        "scope": "none",
+        "target": "none"
       },
-      "disposition": "retained",
+      "disposition": "retired",
       "method": "GET",
       "operation_id": "cms_organizations_model_sources_retrieve",
       "path": "/api/v1/cms/organizations/{organization_uuid}/model-sources/"
     },
     {
       "authority": {
-        "decision": "organization.manage_model_sources",
-        "scope": "sql:organization",
-        "target": "organization"
+        "decision": "not-mounted",
+        "scope": "none",
+        "target": "none"
       },
-      "disposition": "retained",
+      "disposition": "retired",
       "method": "POST",
       "operation_id": "cms_organizations_model_sources_create",
       "path": "/api/v1/cms/organizations/{organization_uuid}/model-sources/"
     },
     {
       "authority": {
-        "decision": "organization.manage_model_sources",
-        "scope": "sql:organization_source_collection",
-        "target": "organization"
+        "decision": "not-mounted",
+        "scope": "none",
+        "target": "none"
       },
-      "disposition": "retained",
+      "disposition": "retired",
       "method": "GET",
       "operation_id": "cms_organizations_model_sources_available_retrieve",
       "path": "/api/v1/cms/organizations/{organization_uuid}/model-sources/available/"
     },
     {
       "authority": {
-        "decision": "organization.manage_model_sources",
-        "scope": "sql:model_source",
-        "target": "organization"
+        "decision": "not-mounted",
+        "scope": "none",
+        "target": "none"
       },
-      "disposition": "retained",
+      "disposition": "retired",
       "method": "PUT",
       "operation_id": "cms_organizations_model_sources_update",
       "path": "/api/v1/cms/organizations/{organization_uuid}/model-sources/{source_id}/"
     },
     {
       "authority": {
-        "decision": "organization.manage_model_sources",
-        "scope": "sql:model_source",
-        "target": "organization"
+        "decision": "not-mounted",
+        "scope": "none",
+        "target": "none"
       },
-      "disposition": "retained",
+      "disposition": "retired",
       "method": "POST",
       "operation_id": "cms_organizations_model_sources_retire_credentials_create",
       "path": "/api/v1/cms/organizations/{organization_uuid}/model-sources/{source_id}/retire-credentials/"
@@ -1247,39 +1247,6 @@
       "method": "POST",
       "operation_id": "cms_raes_image_mappings_disable_create",
       "path": "/api/v1/cms/raes-image-mappings/disable/"
-    },
-    {
-      "authority": {
-        "decision": "range.read",
-        "scope": "sql:range_request",
-        "target": "range"
-      },
-      "disposition": "added",
-      "method": "GET",
-      "operation_id": "cms_ranges_model_access_retrieve",
-      "path": "/api/v1/cms/ranges/{request_id}/model-access/"
-    },
-    {
-      "authority": {
-        "decision": "range.manage",
-        "scope": "sql:range_request",
-        "target": "range"
-      },
-      "disposition": "added",
-      "method": "PUT",
-      "operation_id": "cms_ranges_model_access_update",
-      "path": "/api/v1/cms/ranges/{request_id}/model-access/"
-    },
-    {
-      "authority": {
-        "decision": "range.manage",
-        "scope": "sql:range_request",
-        "target": "range"
-      },
-      "disposition": "added",
-      "method": "POST",
-      "operation_id": "cms_ranges_model_access_revoke_create",
-      "path": "/api/v1/cms/ranges/{request_id}/model-access/revoke/"
     },
     {
       "authority": {
@@ -1954,17 +1921,6 @@
     },
     {
       "authority": {
-        "decision": "event.manage_config",
-        "scope": "sql:event",
-        "target": "event"
-      },
-      "disposition": "added",
-      "method": "GET",
-      "operation_id": "ctf_events_model_access_assessment_retrieve",
-      "path": "/api/v1/ctf/events/{event_id}/model-access/assessment/"
-    },
-    {
-      "authority": {
         "decision": "event.manage_communications",
         "scope": "sql:event",
         "target": "event"
@@ -2468,17 +2424,6 @@
       "method": "GET",
       "operation_id": "ctf_me_events_participant_retrieve",
       "path": "/api/v1/ctf/me/events/{event_id}/participant/"
-    },
-    {
-      "authority": {
-        "decision": "event.participate",
-        "scope": "sql:active_event",
-        "target": "event"
-      },
-      "disposition": "added",
-      "method": "GET",
-      "operation_id": "ctf_me_model_access_retrieve",
-      "path": "/api/v1/ctf/me/model-access/"
     },
     {
       "authority": {
@@ -3384,61 +3329,6 @@
     },
     {
       "authority": {
-        "decision": "exempt:parked_feature_unavailable",
-        "scope": "sql:parked_sharing_boundary;exemption=parked_feature_unavailable",
-        "target": "none"
-      },
-      "disposition": "added",
-      "method": "POST",
-      "operation_id": "model_access_bindings_drain_create",
-      "path": "/api/v1/model-access/bindings/drain/"
-    },
-    {
-      "authority": {
-        "decision": "exempt:parked_feature_unavailable",
-        "scope": "sql:parked_sharing_boundary;exemption=parked_feature_unavailable",
-        "target": "none"
-      },
-      "disposition": "added",
-      "method": "POST",
-      "operation_id": "model_access_bindings_policy_preview_create",
-      "path": "/api/v1/model-access/bindings/policy-preview/"
-    },
-    {
-      "authority": {
-        "decision": "exempt:parked_feature_unavailable",
-        "scope": "sql:parked_sharing_boundary;exemption=parked_feature_unavailable",
-        "target": "none"
-      },
-      "disposition": "added",
-      "method": "POST",
-      "operation_id": "model_access_bindings_publish_create",
-      "path": "/api/v1/model-access/bindings/publish/"
-    },
-    {
-      "authority": {
-        "decision": "exempt:parked_feature_unavailable",
-        "scope": "sql:parked_sharing_boundary;exemption=parked_feature_unavailable",
-        "target": "none"
-      },
-      "disposition": "added",
-      "method": "POST",
-      "operation_id": "model_access_bindings_selector_preview_create",
-      "path": "/api/v1/model-access/bindings/selector-preview/"
-    },
-    {
-      "authority": {
-        "decision": "exempt:parked_feature_unavailable",
-        "scope": "sql:parked_sharing_boundary;exemption=parked_feature_unavailable",
-        "target": "none"
-      },
-      "disposition": "added",
-      "method": "POST",
-      "operation_id": "model_access_bindings_validate_create",
-      "path": "/api/v1/model-access/bindings/validate/"
-    },
-    {
-      "authority": {
         "decision": "authenticated-platform-contract",
         "scope": "explicit",
         "target": "operation-resource"
@@ -4044,6 +3934,22 @@
       "disposition": "retained",
       "kind": "management-command",
       "scope": "deployment-operator",
+      "surface": "cms:experiment_batch",
+      "target": "installation"
+    },
+    {
+      "decision": "deployment-command",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "deployment-operator",
+      "surface": "cms:experiment_dispatch",
+      "target": "installation"
+    },
+    {
+      "decision": "deployment-command",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "deployment-operator",
       "surface": "cms:prune_agent_uploads",
       "target": "installation"
     },
@@ -4104,12 +4010,12 @@
       "target": "installation"
     },
     {
-      "decision": "installation.manage_content+org.manage_content:configure;org.manage_content:intake,purge;org.read_content:list,retrieve",
+      "decision": "deployment-command",
       "disposition": "retained",
       "kind": "management-command",
-      "scope": "native credential_from_file;SQL-owned organization ancestry and credential ceiling",
+      "scope": "deployment-operator",
       "surface": "cms:trial_archive",
-      "target": "organization"
+      "target": "installation"
     },
     {
       "decision": "deployment-command",
@@ -4269,6 +4175,14 @@
       "kind": "management-command",
       "scope": "deployment-operator",
       "surface": "engine:prune_retry_bindings",
+      "target": "installation"
+    },
+    {
+      "decision": "deployment-command",
+      "disposition": "retained",
+      "kind": "management-command",
+      "scope": "deployment-operator",
+      "surface": "engine:qualify_disposable_workers",
       "target": "installation"
     },
     {
@@ -4566,30 +4480,6 @@
       "scope": "resource-account",
       "surface": "shared-vpn-secret-delivery",
       "target": "vpn-profile"
-    },
-    {
-      "decision": "installation.manage_content+organization.manage_content:admit;organization.read_content:show",
-      "disposition": "retained",
-      "kind": "management-command",
-      "scope": "native credential_from_file;SQL organization ancestry and approved apparatus configuration",
-      "surface": "cms:experiment_batch",
-      "target": "organization"
-    },
-    {
-      "decision": "organization.manage_content:start/stop/collect/reconcile;organization.read_content:show;range.manage:worker trial, hold and retirement;parent.launch_range:worker create",
-      "disposition": "retained",
-      "kind": "management-command",
-      "scope": "native credential_from_file;SQL organization ancestry;exact account/organization/workspace worker parent",
-      "surface": "cms:experiment_dispatch",
-      "target": "organization;exact native workers"
-    },
-    {
-      "decision": "recorded activated bootstrap administrator;installation.manage_cloud_authority:configuration/recovery;parent.launch_range:create;range.read:inspect;range.access:qualification;range.manage:retirement",
-      "disposition": "retained",
-      "kind": "management-command",
-      "scope": "server-only private bootstrap facts;native Knox exact-target credentials;35-minute maximum;personal eligibility;current application policy and SQL membership;revocation on every exit",
-      "surface": "engine:qualify_disposable_workers",
-      "target": "installation;exact account/organization/workspace parent;two exact native workers"
     }
   ],
   "schema": "shifter.identity-authorization-surfaces/v1"
