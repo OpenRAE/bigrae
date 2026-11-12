@@ -24,6 +24,19 @@ Each participant contains `participant_address` and its owner-supplied `manifest
 The optional `worker_profile` field names the published worker host profile for every trial of the batch. It defaults to `default`.
 Admission records that profile's name and digest, and refuses a profile that is not published.
 
+For a disposable worker trial, you can omit `backend` and `realization_envelope`.
+Then supply `capture_offers`, the capture offers of the installed apparatus.
+BigRAE derives both documents from the bound worker host profile and retains them with the batch.
+The derived documents claim only the worker VM: its substrate, CPU architecture, image, and size.
+Supply both documents with no capture offers, or capture offers only. Admission refuses any other set.
+
+A derived admission has these requirements:
+
+- Each selected scenario has one Linux compute node with the profile's CPU architecture.
+- The processor manifest names the `shifter-disposable-worker` backend.
+- A destroy obligation is `best-effort`, with probe references of the form `absence:<name>`.
+  BigRAE writes no receipt for a failed worker cleanup, so it refuses a `required` cleanup obligation.
+
 The optional `max_concurrency` field defaults to 200.
 Its supported configuration range is 1 through 10000.
 Installation authority approves these documents for this admission.

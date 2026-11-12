@@ -27,10 +27,12 @@ The service supports the deployment-selected GCE backend.
 Other backends fail before reservation or dispatch.
 Policy changes affect new workers only.
 
-Admission records the selected profile's name and digest in the batch.
+Admission reads the selected profile once through `published_worker_profile` and records its name and digest in the batch.
+Admission can also derive the batch's apparatus documents from that profile.
 Each new worker of the batch uses that exact profile.
 Worker creation refuses a batch whose profile changed or no longer exists, and dispatch reports the entry as an error.
 A batch admitted before this binding uses the profile `default`.
+
 An unchanged replay recovers retained custody and the original apparatus.
 
 Creation retains its original trial argument independently of a later trial binding.

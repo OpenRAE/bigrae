@@ -20,7 +20,7 @@ from cms.scenarios.pack_validation import PackDigestError, verify_pack_digest
 from shared.cloud import get_object_storage
 from shared.cloud.exceptions import CloudStorageError
 from shared.credentials import CredentialContext
-from shared.disposable_workers import DEFAULT_PROFILE, WorkerProfileError
+from shared.disposable_workers import WorkerProfileError
 from shared.exceptions import CMSError, ValidationError
 from shared.identity_scope import ResourceScope
 from shared.raes.experiment_admission import (
@@ -184,6 +184,8 @@ def admit_experiment_batch(
     if source is None or content_scope(source) != admission.scope:
         raise CMSError(_UNAVAILABLE)
     destination = _destination(organization_uuid)
+    from engine.services import published_worker_profile
+
     try:
         with _pack_snapshot(source) as root:
             if not verify_pack_digest(root, source.package_digest):
@@ -195,7 +197,10 @@ def admit_experiment_batch(
                 concurrency=concurrency,
                 experiment_version=experiment_version,
                 owner_validation=_owner_validation(organization_uuid),
+                worker_profile=published_worker_profile,
             )
+    except WorkerProfileError:
+        raise CMSError("Experiment admission refused; publish the selected worker profile first") from None
     except (
         ValueError,
         OSError,
@@ -206,14 +211,7 @@ def admit_experiment_batch(
         ExperimentInputError,
     ):
         raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
-    from engine.services import worker_profile_binding
-
-    try:
-        worker_profile = worker_profile_binding(payload["authority"].get("worker_profile", DEFAULT_PROFILE))
-    except WorkerProfileError:
-        raise CMSError("Experiment admission refused; publish the selected worker profile first") from None
     payload.update(
-        worker_profile=worker_profile.model_dump(mode="json"),
         organization_uuid=str(organization_uuid),
         destination=destination,
         source={"package_digest": source.package_digest, "package_version": source.package_version},
