@@ -101,6 +101,12 @@ class ExperimentAuthority(BaseModel):
             raise ValueError("Supply the backend and envelope with no capture offers, or capture offers only")
         return self
 
+    def documents(self) -> tuple[BackendManifestV2Model, BackendRealizationEnvelopeModel]:
+        """Return the supplied or derived backend manifest and realization envelope."""
+        if self.backend is None or self.realization_envelope is None:
+            raise ValueError("Experiment apparatus documents are unresolved")
+        return self.backend, self.realization_envelope
+
 
 def dependency_tuple() -> dict[str, str]:
     """Fail closed outside the reviewed installed scientific dependency tuple."""
@@ -154,9 +160,7 @@ def _context(
     experiment: PackExperiment, authority: ExperimentAuthority, owner_validation: OwnerValidation | None = None
 ) -> dict[str, Any]:
     """Compose explicit owner manifests into the released compiler context."""
-    backend, envelope = authority.backend, authority.realization_envelope
-    if backend is None or envelope is None:
-        raise ValueError("Experiment apparatus documents are unresolved")
+    backend, envelope = authority.documents()
     owned: dict[tuple[str, str], list[dict[str, Any]]] = {}
     manifests = {}
     references = []
