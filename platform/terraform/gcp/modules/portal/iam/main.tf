@@ -100,6 +100,12 @@ locals {
     migrator             = "roles/storage.objectViewer"
   }
 
+  # Deploy bootstrap assesses every installed pack before it requests feature
+  # artifacts. Tenant pack archives use the same closed prefix whether the
+  # package store is the shared assets bucket or a dedicated bucket.
+  tenant_pack_bucket        = var.raes_package_bucket_name == "" ? var.assets_bucket_name : var.raes_package_bucket_name
+  tenant_pack_object_prefix = "projects/_/buckets/${local.tenant_pack_bucket}/objects/tenant-packs/"
+
   # Worker trial exports (#2743): the provisioner returns each trial's sealed
   # archive under this prefix. It may only create objects there. The portal
   # reads and removes them with its existing object admin on the bucket.
@@ -331,6 +337,18 @@ resource "google_storage_bucket_iam_member" "feature_artifact_delivery" {
     title       = "feature-artifact-delivery-prefix"
     description = "Only objects under the content-addressed feature-artifact delivery prefix."
     expression  = "resource.name.startsWith(\"${local.feature_artifact_object_prefix}\")"
+  }
+}
+
+resource "google_storage_bucket_iam_member" "migrator_tenant_packs" {
+  bucket = local.tenant_pack_bucket
+  role   = "roles/storage.objectViewer"
+  member = "serviceAccount:${google_service_account.workload["migrator"].email}"
+
+  condition {
+    title       = "tenant-pack-read-prefix"
+    description = "Only installed tenant pack archives needed by deploy bootstrap."
+    expression  = "resource.name.startsWith(\"${local.tenant_pack_object_prefix}\")"
   }
 }
 
