@@ -773,7 +773,6 @@ def test_worker_trial_job_admits_exactly_the_launcher_command(inline_params):
 
 @pytest.mark.parametrize("inline_params", [True, False])
 def test_vpn_profile_job_admits_exactly_the_launcher_command(inline_params):
-    """Every VPN certificate operation is admitted only in its dispatched form."""
     parameters = _canonical_admission_parameters()
     policy = _policy(_load_helm_documents(runtime_env=parameters, inline_params=inline_params))
     canonical = _canonical_admission_job()
