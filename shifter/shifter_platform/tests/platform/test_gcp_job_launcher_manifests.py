@@ -434,6 +434,7 @@ def test_provisioner_job_admission_policy_invariants(source_name: str, loader: A
         "'range'",
         "'raes-range'",
         "'ngfw'",
+        "'vpn-profile'",
         "c.envFrom",
         "v.emptyDir",
         "readOnlyRootFilesystem",
@@ -766,5 +767,35 @@ def test_worker_trial_job_admits_exactly_the_launcher_command(inline_params):
         ["worker-trial", "run", "--request-id", request, "--range-id", trial, "--operation-id", generation],
         ["worker-trial", "run", "--request-id", request, "--trial-id", "invalid", "--operation-id", generation],
         ["worker-trial", "run", "--request-id", request, "--operation-id", generation],
+    ):
+        assert not allows(args), args
+
+
+@pytest.mark.parametrize("inline_params", [True, False])
+def test_vpn_profile_job_admits_exactly_the_launcher_command(inline_params):
+    """Every VPN certificate operation is admitted only in its dispatched form."""
+    parameters = _canonical_admission_parameters()
+    policy = _policy(_load_helm_documents(runtime_env=parameters, inline_params=inline_params))
+    canonical = _canonical_admission_job()
+    request, profile, generation = (
+        "11111111-1111-1111-1111-111111111111",
+        "33333333-3333-3333-3333-333333333333",
+        "22222222-2222-2222-2222-222222222222",
+    )
+
+    def allows(args: list[str]) -> bool:
+        job = copy.deepcopy(canonical)
+        job["spec"]["template"]["spec"]["containers"][0]["args"] = args
+        return _semantic_policy_allows(policy, PROVISIONER_LAUNCHER_USERNAME, job, parameter_data=parameters)
+
+    for operation in ("issue", "revoke", "refresh-crl", "purge"):
+        command = ["vpn-profile", operation, "--request-id", request, "--profile-id", profile]
+        assert allows([*command, "--operation-id", generation]), operation
+        assert not allows(command), operation
+    for args in (
+        ["vpn-profile", "destroy", "--request-id", request, "--profile-id", profile, "--operation-id", generation],
+        ["vpn-profile", "issue", "--request-id", request, "--range-id", profile, "--operation-id", generation],
+        ["vpn-profile", "issue", "--request-id", request, "--profile-id", "invalid", "--operation-id", generation],
+        ["vpn-profile", "issue", "--request-id", request, "--profile-id", profile],
     ):
         assert not allows(args), args
