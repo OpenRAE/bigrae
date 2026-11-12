@@ -10,7 +10,7 @@ Its documentation correction preserves the runtime boundaries described here.
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
 
-**Source review:** 2026-11-12 at `e217926059234f21cc730d9bcf5226214d38f5f1`.
+**Source review:** 2026-11-12 at `e0a536d6d7e4149cb05d63d1d6c6705c7f29f3d1`.
 This explanation describes source boundaries, not live deployment qualification.
 The 2026-11-04 review covered native provider account lookup (#2771) and registered-project IAM requests (#2773), after one-command GCP installation (#2679).
 
@@ -504,6 +504,8 @@ Profiles issued through a browser retain the issuing principal and admitted
 limits after that browser transport ends. Connections and heartbeats still
 recheck live principal, policy, participation, assignment, range, and
 certificate state.
+Delivered profiles enforce a conservative tunnel MSS for private range paths,
+including profiles stored before that setting was added.
 
 The versioned application API is `/api/v1/`, composed by `config/api_urls.py`.
 Authenticated `/api/v1/schema/` and `/api/v1/docs/` expose OpenAPI and Swagger;
