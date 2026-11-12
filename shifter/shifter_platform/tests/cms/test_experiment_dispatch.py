@@ -177,6 +177,10 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     unit = json.loads(unit_bytes)
     assert unit["plan"] == dispatch.batch.inputs["plan"]
     assert unit["snapshot"] == json.loads(scenario_bytes)
+    assert unit["material"] == {
+        name: dispatch.batch.inputs[name]
+        for name in ("experiment", "task", "capture_specs", "authority")
+    }
     assert (
         "sha256:" + hashlib.sha256(scenario_bytes).hexdigest()
         == dispatch.batch.inputs["snapshot_digests"][unit["plan_entry_id"]]
