@@ -24,8 +24,18 @@ def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
 
 
 def trial_unit_bytes(inputs: dict[str, Any], entry_id: str, scenario: bytes) -> bytes:
-    """Return the staged trial unit: the admitted plan, the entry and its instantiated snapshot."""
-    return canonical_json_bytes({"plan": inputs["plan"], "plan_entry_id": entry_id, "snapshot": json.loads(scenario)})
+    """Stage the exact entry and the retained contracts needed by its runtime."""
+    return canonical_json_bytes(
+        {
+            "plan": inputs["plan"],
+            "plan_entry_id": entry_id,
+            "snapshot": json.loads(scenario),
+            "material": {
+                name: inputs[name]
+                for name in ("experiment", "task", "capture_specs", "authority")
+            },
+        }
+    )
 
 
 def trial_plan_bytes(inputs: dict[str, Any]) -> bytes:
