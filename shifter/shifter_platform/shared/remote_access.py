@@ -10,7 +10,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID
 
 OPENVPN_CAPABILITY_VERSION = "openvpn-capability-v1"
@@ -282,11 +282,11 @@ def build_openvpn_capability(target_ref: object, teardown_at: datetime) -> dict[
     normalized_teardown = _require_utc_datetime(teardown_at.isoformat(), "teardown_at")
     if normalized_teardown.microsecond:
         normalized_teardown = normalized_teardown.replace(microsecond=0) + timedelta(seconds=1)
-    targets = (
-        tuple(sorted({_require_target_ref(item) for item in target_ref}))
-        if isinstance(target_ref, (list, tuple, set, frozenset))
-        else (_require_target_ref(target_ref),)
-    )
+    if isinstance(target_ref, (list, tuple, set, frozenset)):
+        raw_targets = cast("list[object] | tuple[object, ...] | set[object] | frozenset[object]", target_ref)
+        targets = tuple(sorted({_require_target_ref(item) for item in raw_targets}))
+    else:
+        targets = (_require_target_ref(target_ref),)
     if not targets or len(targets) > 64:
         raise OpenVpnBindingError("capability must authorize 1 to 64 targets")
     capability = OpenVpnCapability(

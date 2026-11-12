@@ -18,6 +18,7 @@ from . import transport
 
 _MAX_RESPONSE_BYTES = 262_144
 _TIMEOUT = 10
+_INVALID_GRANT = "grant outside the contract"
 
 
 class PortalError(RuntimeError):
@@ -79,33 +80,41 @@ def _refusal(status: int, payload: dict[str, object]) -> PortalError:
     return PortalUnavailable(f"status {status}")
 
 
-def _grant(payload: dict[str, object]) -> Grant:
-    """Validate a grant strictly; anything outside the contract is treated as unavailable."""
-    session, interval = payload.get("session"), payload.get("heartbeat_seconds")
-    if not (isinstance(session, str) and isinstance(interval, int) and not isinstance(interval, bool)):
-        raise PortalUnavailable("grant outside the contract")
+def _target_grant(value: object) -> TargetGrant:
+    """Parse one exact private IPv4 target and its declared ports."""
+    if not isinstance(value, dict) or set(value) != {"target", "ports"}:
+        raise PortalUnavailable(_INVALID_GRANT)
+    target, ports = value["target"], value["ports"]
+    if not isinstance(target, str) or not isinstance(ports, list) or not ports or not all(map(_is_port, ports)):
+        raise PortalUnavailable(_INVALID_GRANT)
+    try:
+        target_address = ipaddress.IPv4Address(target)
+    except ipaddress.AddressValueError as exc:
+        raise PortalUnavailable(_INVALID_GRANT) from exc
+    if not target_address.is_private or str(target_address) != target:
+        raise PortalUnavailable(_INVALID_GRANT)
+    return TargetGrant(target, tuple(sorted(set(ports))))
+
+
+def _target_grants(payload: dict[str, object]) -> tuple[TargetGrant, ...]:
+    """Parse the multi-target grant, accepting the legacy single-target shape."""
     raw_targets = payload.get("targets")
     if raw_targets is None:
         raw_targets = [{"target": payload.get("target"), "ports": payload.get("ports")}]
     if not isinstance(raw_targets, list) or not 1 <= len(raw_targets) <= 64:
-        raise PortalUnavailable("grant outside the contract")
-    targets = []
-    for item in raw_targets:
-        if not isinstance(item, dict) or set(item) != {"target", "ports"}:
-            raise PortalUnavailable("grant outside the contract")
-        target, ports = item["target"], item["ports"]
-        if not isinstance(target, str) or not isinstance(ports, list) or not ports or not all(map(_is_port, ports)):
-            raise PortalUnavailable("grant outside the contract")
-        try:
-            target_address = ipaddress.IPv4Address(target)
-        except ipaddress.AddressValueError as exc:
-            raise PortalUnavailable("grant outside the contract") from exc
-        if not target_address.is_private or str(target_address) != target:
-            raise PortalUnavailable("grant outside the contract")
-        targets.append(TargetGrant(target, tuple(sorted(set(ports)))))
+        raise PortalUnavailable(_INVALID_GRANT)
+    targets = tuple(map(_target_grant, raw_targets))
     if len({item.target for item in targets}) != len(targets):
-        raise PortalUnavailable("grant outside the contract")
-    return Grant(session=session, targets=tuple(targets), heartbeat_seconds=interval)
+        raise PortalUnavailable(_INVALID_GRANT)
+    return targets
+
+
+def _grant(payload: dict[str, object]) -> Grant:
+    """Validate a grant strictly; anything outside the contract is treated as unavailable."""
+    session, interval = payload.get("session"), payload.get("heartbeat_seconds")
+    if not (isinstance(session, str) and isinstance(interval, int) and not isinstance(interval, bool)):
+        raise PortalUnavailable(_INVALID_GRANT)
+    return Grant(session=session, targets=_target_grants(payload), heartbeat_seconds=interval)
 
 
 class PortalClient:
