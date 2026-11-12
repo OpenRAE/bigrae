@@ -50,7 +50,7 @@ def test_duplicate_admissions_publish_one_complete_batch(experiment_inputs, monk
     # compilation results arriving concurrently at the transactional publication.
     prepared = admit(experiment_inputs)
     expected = prepared.expected_trials
-    snapshots = {
+    stored = {
         key: snapshot.encode()
         for key, snapshot in ExperimentSnapshot.objects.values_list("plan_entry_id", "snapshot_json")
     }
@@ -62,9 +62,11 @@ def test_duplicate_admissions_publish_one_complete_batch(experiment_inputs, monk
         payload.pop(key)
     barrier = threading.Barrier(2, timeout=30)
 
-    def compiled(*args, **kwargs):
+    def compiled(*args, snapshots, **kwargs):
         barrier.wait()
-        return dict(payload), dict(snapshots)
+        for snapshot in stored.values():
+            snapshots.write(snapshot)
+        return dict(payload), [(key, len(snapshot)) for key, snapshot in stored.items()]
 
     monkeypatch.setattr(_experiment_batches, "compile_pack_experiment", compiled)
 

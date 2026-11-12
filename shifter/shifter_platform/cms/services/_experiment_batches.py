@@ -4,10 +4,12 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
+from itertools import batched
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 from uuid import UUID, uuid4
 
 from django.conf import settings
@@ -34,6 +36,7 @@ from shared.raes.experiment_admission import (
     compile_pack_experiment,
     encode_retained,
     experiment_archive_identity,
+    read_snapshots,
     validate_experiment_cleanup,
     validate_retained,
 )
@@ -183,7 +186,35 @@ def admit_experiment_batch(
     concurrency: int,
     experiment_version: str | None = None,
 ) -> RetainedExperimentBatch:
-    """Approve apparatus and atomically retain a complete tenant-owned pack plan."""
+    """Approve apparatus and atomically retain a complete tenant-owned pack plan.
+
+    Instantiated trial snapshots go to a temporary file, so memory does not grow with the number of trials.
+    """
+    with tempfile.TemporaryFile(prefix="experiment-snapshots-") as snapshots:
+        return _admit_experiment_batch(
+            credential,
+            organization_uuid,
+            scenario_id=scenario_id,
+            experiment_id=experiment_id,
+            authority=authority,
+            concurrency=concurrency,
+            experiment_version=experiment_version,
+            snapshots=snapshots,
+        )
+
+
+def _admit_experiment_batch(
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    *,
+    scenario_id: str,
+    experiment_id: str,
+    authority: object,
+    concurrency: int,
+    experiment_version: str | None,
+    snapshots: BinaryIO,
+) -> RetainedExperimentBatch:
+    """Compile, then publish the record, its entries and their snapshots in one transaction."""
     operator = require_content_scope(credential, ResourceScope("installation"), "manage_content")
     admission = _authorize(operator, organization_uuid, "manage_content")
     source = RaesPackageSource.objects.filter(scenario_id=scenario_id, organization_uuid=organization_uuid).first()
@@ -194,13 +225,14 @@ def admit_experiment_batch(
         with _pack_snapshot(source) as root:
             if not verify_pack_digest(root, source.package_digest):
                 raise ValueError("Registered pack digest changed")
-            payload, snapshots = compile_pack_experiment(
+            payload, written = compile_pack_experiment(
                 root,
                 experiment_id=experiment_id,
                 authority=authority,
                 concurrency=concurrency,
                 experiment_version=experiment_version,
                 owner_validation=_owner_validation(organization_uuid),
+                snapshots=snapshots,
             )
     except (
         ValueError,
@@ -254,14 +286,15 @@ def admit_experiment_batch(
                     for key, entry in payload["plan"]["entries"].items()
                 ]
             )
-            ExperimentSnapshot.objects.bulk_create(
-                (
-                    ExperimentSnapshot(batch=row, plan_entry_id=key, snapshot_json=snapshot.decode())
-                    for key, snapshot in snapshots.items()
-                ),
-                # One snapshot can be more than 1 MB; keep each INSERT statement small.
-                batch_size=16,
-            )
+            try:
+                # One snapshot can be more than 1 MB; insert a small group at a time.
+                for group in batched(read_snapshots(payload, snapshots, written), 16):
+                    ExperimentSnapshot.objects.bulk_create(
+                        ExperimentSnapshot(batch=row, plan_entry_id=key, snapshot_json=snapshot.decode())
+                        for key, snapshot in group
+                    )
+            except ValueError:
+                raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
             _audit(admission, row.id, "experiment-admitted")
     return _project(row)
 

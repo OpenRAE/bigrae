@@ -6,9 +6,10 @@ import base64
 import hashlib
 import json
 import sys
+from collections.abc import Iterator
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, BinaryIO, Literal, cast
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -56,8 +57,6 @@ ExperimentInputError = RaesError
 MAX_RETAINED_BYTES = 64 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
-#: The aggregate bound of the instantiated trial snapshots that admission holds and stores outside the record.
-MAX_SNAPSHOT_BYTES = 256 * 1024**2
 SUPPORTED_DEPENDENCIES = {"raes": "11.0.1", "raes-env-packs": "7.2.3"}
 
 
@@ -402,11 +401,13 @@ def compile_pack_experiment(
     concurrency: int,
     experiment_version: str | None = None,
     owner_validation: OwnerValidation | None = None,
-) -> tuple[dict[str, Any], dict[str, bytes]]:
+    snapshots: BinaryIO,
+) -> tuple[dict[str, Any], list[tuple[str, int]]]:
     """Compile one explicitly selected installed experiment and retain its inputs.
 
-    Return the retained record and the exact instantiated snapshot of each plan entry.
-    The record keeps the digest of each snapshot, not the snapshot.
+    The record keeps the digest of each instantiated snapshot. Each exact snapshot is written
+    to ``snapshots`` in plan order, so memory does not grow with the number of trials.
+    Return the record and the plan entry ID and size of each written snapshot.
     """
     dependencies = dependency_tuple()
     encoded_authority = canonical_json_bytes(authority)
@@ -449,12 +450,10 @@ def compile_pack_experiment(
             "max_original_document_bytes": MAX_DOCUMENT_BYTES,
             "max_referenced_artifact_bytes": MAX_DOCUMENT_BYTES,
             "max_authority_bytes": MAX_AUTHORITY_BYTES,
-            "max_snapshot_bytes": MAX_SNAPSHOT_BYTES,
         },
     }
     retained_bytes = len(encode_retained(payload).encode())
-    snapshots: dict[str, bytes] = {}
-    snapshot_bytes = 0
+    written: list[tuple[str, int]] = []
     for entry in schedule.entries:
         experiment_archive_identity(payload, entry.plan_entry_id, "admission-validation")
         selected = instantiate_admitted_trial_entry(
@@ -468,13 +467,25 @@ def compile_pack_experiment(
         reject_retained_credentials(json.loads(snapshot))
         digest = snapshot_digest(snapshot)
         retained_bytes += len(digest) + len(entry.plan_entry_id.encode()) + 8
-        snapshot_bytes += len(snapshot)
-        if retained_bytes > MAX_RETAINED_BYTES or snapshot_bytes > MAX_SNAPSHOT_BYTES:
+        if retained_bytes > MAX_RETAINED_BYTES:
             raise ValueError("Experiment hydrated inputs exceed the byte limit")
         payload["snapshot_digests"][entry.plan_entry_id] = digest
-        snapshots[entry.plan_entry_id] = snapshot
+        snapshots.write(snapshot)
+        written.append((entry.plan_entry_id, len(snapshot)))
     reject_retained_credentials(payload)
-    return payload, snapshots
+    return payload, written
+
+
+def read_snapshots(
+    payload: dict[str, Any], snapshots: BinaryIO, written: list[tuple[str, int]]
+) -> Iterator[tuple[str, bytes]]:
+    """Read back each written snapshot in plan order and verify it against its recorded digest."""
+    snapshots.seek(0)
+    for entry_id, size in written:
+        snapshot = snapshots.read(size)
+        if snapshot_digest(snapshot) != payload["snapshot_digests"][entry_id]:
+            raise ValueError("A written trial snapshot differs from its recorded digest")
+        yield entry_id, snapshot
 
 
 def snapshot_digest(snapshot: bytes) -> str:

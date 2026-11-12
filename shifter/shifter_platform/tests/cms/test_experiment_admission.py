@@ -71,6 +71,11 @@ def test_installed_pack_admission_retains_all_trials_and_reloads_without_compila
         trial_scenario_bytes(raw, entry_id, stored[entry_id] + " ")
     with pytest.raises(ValueError, match="admitted digest"):
         trial_scenario_bytes(raw, entry_id, None)
+    # Admission reads back each written snapshot and refuses one that differs from its recorded digest.
+    written = [(entry_id, len(stored[entry_id].encode()))]
+    changed = io.BytesIO(b" " * written[0][1])
+    with pytest.raises(ValueError, match="recorded digest"):
+        list(experiment_admission.read_snapshots(raw, changed, written))
     assert raw["capture_specs"]
     assert base64.b64decode(raw["artifacts"]["docs/protocol.md"]["base64"]) == (root / "docs/protocol.md").read_bytes()
     for name in ("brief-terse", "brief-rich"):
@@ -276,11 +281,10 @@ def test_large_factorial_is_refused_without_reduction_or_partial_rows(experiment
     assert not ExperimentEntry.objects.exists()
 
 
-@pytest.mark.parametrize("limit", ["MAX_RETAINED_BYTES", "MAX_SNAPSHOT_BYTES"])
-def test_byte_limits_refuse_atomic_admission(experiment_inputs, monkeypatch, limit):
+def test_retained_byte_limit_refuses_atomic_admission(experiment_inputs, monkeypatch):
     from cms.models import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
 
-    monkeypatch.setattr(f"shared.raes.experiment_admission.{limit}", 1024)
+    monkeypatch.setattr("shared.raes.experiment_admission.MAX_RETAINED_BYTES", 1024)
     with pytest.raises(CMSError):
         admit(experiment_inputs)
     assert not ExperimentBatch.objects.exists()
