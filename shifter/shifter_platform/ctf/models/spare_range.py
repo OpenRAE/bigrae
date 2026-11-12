@@ -41,6 +41,14 @@ class CTFSpareRange(CTFBaseModel):
         related_name="spare_ranges",
         help_text="Optional team whose selector explicitly includes this spare",
     )
+    cohort = models.ForeignKey(
+        "CTFCohort",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="spare_ranges",
+        help_text="Optional cohort whose selector explicitly includes this spare",
+    )
     range_instance_id = models.IntegerField(
         null=True,
         blank=True,
@@ -88,5 +96,7 @@ class CTFSpareRange(CTFBaseModel):
         errors: dict[str, list[str]] = {}
         if self.team and self.team.event_id != self.event_id:
             errors.setdefault("team", []).append("Team must belong to the same event.")
+        if self.cohort and self.cohort.event_id != self.event_id:
+            errors.setdefault("cohort", []).append("Cohort must belong to the same event.")
         if errors:
             raise ValidationError(errors)

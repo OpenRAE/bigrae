@@ -22,7 +22,13 @@ from uuid import UUID, uuid4
 from django.db import OperationalError, transaction
 from django.utils import timezone
 
-from cms.models import RaesPackageSource, ScenarioMetadata, TenantPackArchive, TenantPackRemoval
+from cms.models import (
+    RaesPackageSource,
+    ScenarioMetadata,
+    ScenarioModelNeeds,
+    TenantPackArchive,
+    TenantPackRemoval,
+)
 from engine.services import RuntimePluginBindingRemovalAdmission
 from shared.audit import (
     AuditAction,
@@ -156,6 +162,7 @@ def _commit_removal(
         )
         archives = _capture_archives(source, removal)
         remove_runtime_plugin_pack_binding(binding_admission, organization_uuid, pack_id, audit=attribution)
+        ScenarioModelNeeds.objects.filter(scenario_id=pack_id).delete()
         ScenarioMetadata.objects.filter(scenario_id=pack_id).delete()
         source.delete()
         _audit(

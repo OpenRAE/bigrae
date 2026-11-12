@@ -12,6 +12,7 @@ from gcp_catalog import initialize_catalog as actual_initialize_catalog
 from gcp_deploy_stages import (
     InfrastructureResult,
     RolloutRequest,
+    apply_broker_overlay,
     check_range_preconditions,
     infrastructure_stage,
     read_infrastructure,
@@ -60,6 +61,7 @@ def recorder(monkeypatch, chart):
         "gcp_prereqs": (
             "ensure_identity_platform",
             "ensure_state_bucket",
+            "release_disabled_broker_load_balancer",
             "remove_deleted_role_bindings",
         ),
         "gcp_control_plane": (
@@ -87,7 +89,9 @@ def recorder(monkeypatch, chart):
     monkeypatch.setattr("gcp_terraform.kms_adoption_variables", lambda *a, **k: {})
     monkeypatch.setattr("gcp_storage_cmek.migrate_buckets", record("migrate_buckets", lambda *a, **k: []))
     monkeypatch.setattr("gcp_helm.render_chart", record("render_chart", lambda *a, **k: chart))
-    monkeypatch.setattr("gcp_helm.build_values", record("build_values", lambda *a, **k: {}))
+    monkeypatch.setattr(
+        "gcp_helm.build_values", record("build_values", lambda *a, **k: {"modelBroker": {"enabled": False}})
+    )
     monkeypatch.setattr("gcp_helm.write_values", record("write_values", lambda *a, **k: Path("/work/values.json")))
     monkeypatch.setattr("gcp_helm.profile_values_path", lambda profile: Path(f"/chart/values-gcp-{profile}.yaml"))
     monkeypatch.setattr("gcp_runtime.compose_runtime_env", record("compose_runtime_env", lambda *a, **k: {}))
@@ -145,6 +149,12 @@ class TestInfrastructureStage:
         assert seen == [outputs["storage_cmek_buckets"]["value"]]
         assert adopted == [{"adopt_storage_kms": "true"}]
 
+    def test_update_releases_a_disabled_broker_before_apply(self, inputs, recorder):
+        order, _ = recorder
+        infrastructure_stage(FakeRunner(), inputs, operator_password="pw", reconcile_foundation=False)
+        assert order.index("release_disabled_broker_load_balancer") < order.index("terraform_apply")
+        assert order.count("kube_env") == 2
+
     def test_read_infrastructure_changes_nothing(self, inputs, recorder):
         order, outputs = recorder
         result = read_infrastructure(FakeRunner(), inputs)
@@ -199,8 +209,13 @@ class TestRolloutStage:
             order.append("policy_restart")
             return ProcessResult(0)
 
+        def disabled_compute(*args):
+            order.append("retire_disabled_compute")
+            return ProcessResult(0)
+
         runner = FakeRunner().on(["kubectl", "logs"], logs).on(["kubectl", "apply"], applied)
         runner.on(["kubectl", "rollout", "restart"], policy_restart)
+        runner.on(["kubectl", "delete", "deployment"], disabled_compute)
         request = RolloutRequest(
             identities={
                 name: f"host/{name}@sha256:" + "1" * 64
@@ -215,7 +230,7 @@ class TestRolloutStage:
         assert order.index("verified_legacy_probe") < order.index("run_gcp_database_migrations")
         assert order.index("run_gcp_database_migrations") < order.index("policy_schema")
         assert order.index("policy_schema") < order.index("policy_restart") < order.index("verified_activation")
-        assert order.index("verified_activation") < order.index("helm_upgrade")
+        assert order.index("verified_activation") < order.index("retire_disabled_compute") < order.index("helm_upgrade")
         assert order.count("policy_restart") == 2
 
     def test_release_cannot_migrate_without_probing_identity(self, inputs, recorder):
@@ -305,6 +320,23 @@ class TestRolloutStage:
 
 
 class TestStageHelpers:
+    def test_broker_overlay_is_a_no_op_without_a_template(self, inputs):
+        runner = FakeRunner()
+        assert apply_broker_overlay(runner, inputs, mode="read", context="ctx") is inputs
+        assert runner.calls == []
+
+    def test_broker_overlay_binds_and_reloads_the_config(self, tmp_path: Path):
+        template = '{"settings": {}}'
+        bundle = write_bundle(tmp_path / "b", extra={"model-broker-overlay.template.json": template})
+        inputs = load_deployment_inputs(str(bundle), tmp_path / "w", FakeRunner(), {})
+        runner = FakeRunner()
+        updated = apply_broker_overlay(runner, inputs, mode="ensure", context="ctx")
+        assert updated.environment == inputs.environment
+        prepare, apply = runner.calls
+        assert prepare.argv[prepare.argv.index("--mode") + 1] == "ensure"
+        assert apply.env["SHIFTER_CONFIG_OVERLAY_FILE"].endswith("model-broker-overlay.json")
+        assert "SHIFTER_CONFIG_OVERLAY_JSON" not in apply.env
+
     def test_preconditions_use_the_deployment_projection(self, inputs, monkeypatch):
         seen = {}
         monkeypatch.setattr(

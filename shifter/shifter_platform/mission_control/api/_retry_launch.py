@@ -40,10 +40,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class LaunchChoices:
-    """Validated workspace and agent selection launch intent."""
+    """Validated workspace, agent selection, and model-source launch intent."""
 
     workspace_uuid: str | UUID | None = None
     agents_selection: dict[str, Any] = field(default_factory=dict)
+    model_sources: dict[str, Any] | None = None
     agents_by_os: dict[str, int] | None = None
 
 
@@ -127,6 +128,7 @@ class RetrySafeLaunchMixin:
                 workspace_uuid=data.get("workspace_uuid"),
                 scope=scope,
                 caller_key=caller_key,
+                model_sources=data.get("model_sources"),
             )
         except RetryKeyConflict:
             logger.warning("Retry key conflict: principal_uuid=%s", user.principal.uuid)
@@ -162,6 +164,7 @@ class RetrySafeLaunchMixin:
                 agents_selection=choices.agents_selection,
                 workspace_uuid=choices.workspace_uuid,
                 caller_key=caller_key,
+                model_sources=choices.model_sources,
                 scope=scope,
             )
         except RetryKeyConflict:

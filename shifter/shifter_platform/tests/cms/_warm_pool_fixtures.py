@@ -22,22 +22,6 @@ def service_credential(settings, *, scopes=None):
     return resolve_service_credential_reference(admission.uuid, audience=settings.GCP_SERVICE_TOKEN_AUDIENCE)
 
 
-def _register_source(actor, *, scenario_id="scn"):
-    """Register one conformant RAES package source owned by ``actor``."""
-    from cms.models import RaesPackageSource
-
-    return RaesPackageSource.objects.create(
-        scenario_id=scenario_id,
-        contract_kind="raes",
-        contract_profile="shifter",
-        package_ref=f"packs/{scenario_id}",
-        package_version="1.0.0",
-        package_digest="sha256:" + "a" * 64,
-        conformance_status="passed",
-        registered_by=actor,
-    )
-
-
 def warm_claim_fixture(django_user_model, settings, live_session_credential, *, claimant_kind="human"):
     from cms.models import RangeInstance, Request
     from cms.services._warm_pool_claim import WarmClaimRequest, _resolve_claim_candidates
@@ -47,6 +31,7 @@ def warm_claim_fixture(django_user_model, settings, live_session_credential, *, 
     from shared.operation_authority import credential_reference_fields
     from shared.range_instantiation_policy import InstantiationPurpose
     from shared.warm_pool.policy import load_policy_json
+    from tests.cms.test_launch_model_admission import _register
     from tests.engine.test_operation_input_raes import _plan
     from workspaces.models import Workspace
     from workspaces.services import add_account_member, create_account, hierarchy_target_scope
@@ -66,7 +51,7 @@ def warm_claim_fixture(django_user_model, settings, live_session_credential, *, 
     workspace.egress_policy = "none"
     workspace.save(update_fields=["egress_policy"])
     scope = hierarchy_target_scope("workspace", workspace.uuid)
-    source = _register_source(user)
+    source = _register(user)
     source.owner_principal_uuid = worker.principal.uuid
     source.scope_kind = "installation"
     source.is_operator_published = True
@@ -106,6 +91,7 @@ def warm_claim_fixture(django_user_model, settings, live_session_credential, *, 
         owner_principal_uuid=worker.principal.uuid,
         range_source="mission_control",
         status="provisioning",
+        model_package_digest=source.package_digest,
     )
     engine_request = EngineRequest.objects.create(
         request_id=request_uuid,

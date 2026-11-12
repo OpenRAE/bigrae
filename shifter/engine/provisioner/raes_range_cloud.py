@@ -28,13 +28,15 @@ def prepare_cloud_plan(
 
 
 def realize_cloud_projects(
-    cloud: RegisteredProjectRuntime | None, config: GCERangeCellConfig
+    cloud: RegisteredProjectRuntime | None, config: GCERangeCellConfig, enrollment: object | None
 ) -> dict[str, GcpProjectState]:
-    """Do not repurpose VM infrastructure as a scenario project."""
+    """Do not repurpose VM infrastructure or silently replace a model identity."""
     if cloud is None:
         return {}
     if any(work.lease.project_id == config.project_id for work, _baseline, _document in cloud.projects):
         raise ValueError("A workload infrastructure project cannot be a scenario project")
+    if enrollment is not None and cloud.attachments:
+        raise ValueError("Combined model and scenario workload identities are unsupported")
     return cloud.provision()
 
 

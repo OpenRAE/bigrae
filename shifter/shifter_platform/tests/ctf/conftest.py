@@ -129,6 +129,21 @@ def _legacy_policy_check(request, relationships):
         return _legacy_decision(False)
     principal = Principal.objects.select_related("user").filter(uuid=request.principal.uuid, is_active=True).first()
     user = None if principal is None else principal.user
+    if request.target.type == "organization" and request.action == "organization.manage_model_sources":
+        from workspaces.models import OrganizationMembership
+
+        legacy_member = (
+            user is not None
+            and OrganizationMembership.objects.filter(
+                organization__uuid=request.target.uuid, user=user, role__in=("owner", "admin")
+            ).exists()
+        )
+        principal_member = OrganizationMembership.objects.filter(
+            organization__uuid=request.target.uuid,
+            principal_uuid=request.principal.uuid,
+        ).exists()
+        if legacy_member or principal_member:
+            return _legacy_decision(True)
     organizer = False
     if (
         request.action.endswith(".create_event")

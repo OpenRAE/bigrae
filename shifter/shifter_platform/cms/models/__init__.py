@@ -47,7 +47,7 @@ from cms.models.provisioning import (
 )
 from cms.models.range import ACTIVE_RANGE_UNIQUE_CONSTRAINT, RangeInstance
 from cms.models.range_status_delivery import RangeStatusDelivery
-from cms.models.scenarios import RaesPackageSource, ScenarioMetadata
+from cms.models.scenarios import RaesPackageSource, ScenarioMetadata, ScenarioModelNeeds
 from cms.models.trial_archives import TrialArchiveDestination, TrialArchiveReceipt, TrialArchiveTransfer
 from cms.models.uploads import AgentUpload, AgentUploadBudget
 
@@ -82,6 +82,7 @@ __all__ = [
     "RangeStatusDelivery",
     "Request",
     "ScenarioMetadata",
+    "ScenarioModelNeeds",
     "Subnet",
     "TenantPackArchive",
     "TenantPackRemoval",

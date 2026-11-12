@@ -231,6 +231,11 @@ the admission policy and the ConfigMap can not drift.
 {{- with .Values.runtime.secretReferences.database -}}
 {{- $_ := set $runtimeEnv "DB_SECRET_ID" . -}}
 {{- end -}}
+{{- if and .Values.modelBroker.enabled (eq (get (default dict .Values.modelBroker.control_env) "MODEL_ACCESS_ENABLED") "true") -}}
+{{- range $key, $value := .Values.modelBroker.enrollment_env -}}
+{{- $_ := set $runtimeEnv $key $value -}}
+{{- end -}}
+{{- end -}}
 {{- toJson $runtimeEnv -}}
 {{- end -}}
 

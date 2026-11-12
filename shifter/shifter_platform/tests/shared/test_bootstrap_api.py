@@ -14,6 +14,7 @@ DENIED_POLICY = {
     "can_read_audit": False,
     "can_manage_lease_policy": False,
     "can_manage_adapters": False,
+    "can_manage_model_sources": False,
 }
 
 
@@ -66,6 +67,7 @@ def test_user_admin_capabilities_false_without_model_permissions(user):
     assert permissions["can_change_users"] is False
     assert permissions["can_delete_users"] is False
     assert permissions["can_manage_adapters"] is False
+    assert permissions["can_manage_model_sources"] is False
 
 
 def test_administer_flags_are_returned_from_policy_decisions_without_staff(user, monkeypatch):
@@ -77,6 +79,7 @@ def test_administer_flags_are_returned_from_policy_decisions_without_staff(user,
             **DENIED_POLICY,
             "can_administer_accounts": True,
             "can_manage_adapters": True,
+            "can_manage_model_sources": True,
         },
     )
     client = APIClient()
@@ -84,6 +87,7 @@ def test_administer_flags_are_returned_from_policy_decisions_without_staff(user,
     permissions = client.get(BOOTSTRAP_URL).json()["permissions"]
     assert permissions["can_administer_accounts"] is True
     assert permissions["can_manage_adapters"] is True
+    assert permissions["can_manage_model_sources"] is True
 
 
 def test_user_admin_capabilities_reflect_model_permissions(django_user_model):

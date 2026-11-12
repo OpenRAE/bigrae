@@ -128,7 +128,9 @@ Set the GCE range-cell inputs in the deployment input bundle:
 Add other roles when the selected scenario needs them.
 
 Add the other guest
-image profiles that the authored topology requires. Guests receive a keyless, least-privilege model identity by default (ADR-064). The range host account has predict-only Vertex authority. Workload Identity attaches it without generating or delivering key material.
+image profiles that the authored topology requires. Guests receive a keyless, least-privilege model identity by default (ADR-064). The range host account has predict-only Vertex authority. Workload Identity attaches it without generating or delivering key material. Guests stay identity-less only when the broker
+is the guest model path (`MODEL_BROKER_GUEST_VIP` set), which is optional
+(ADR-067).
 
 Plugin installation and compatibility are separate from range
 readiness; see the
@@ -137,7 +139,10 @@ readiness; see the
 The deployment `bigrae.yaml` must also set
 `settings.dynamic_secret_project_id` to the pre-existing, deployment-only
 range-secret project. It may equal the platform project in the supported single-project topology.
-A separate project is an operator-selected boundary, not a mandatory second project. New guest, RAES/GDC, VM-Series
+A separate project is an operator-selected boundary, not a mandatory second project. Broker
+model invocation may use that project, the platform project, or another
+administrator-selected project while retaining separate least-privilege
+identities. New guest, RAES/GDC, VM-Series
 and VPN secrets use canonical deployment- and audience-prefixed names in that
 project; persisted full references remain authoritative for guest access.
 
@@ -423,7 +428,9 @@ By default, range guests receive a keyless, least-privilege model-access
 identity (ADR-064). The range host account has `aiplatform.endpoints.predict` in the platform project. Guests obtain it through Workload Identity. It grants no cloud management, storage, secrets, peer-range, or portal authority. Exact preconfigured machine-image profiles use the bounded range-host
 identity pool selected by the range allocation slot.
 
-Keyless-direct is the guest model path for all ranges, including CTF. Issue #2909 removed the model broker (ADR-068).
+Historical broker and keyless-direct modes are mutually exclusive per range. With `MODEL_BROKER_GUEST_VIP`, the provisioner leaves guests without an attached identity. Otherwise it attaches the keyless identity.
+
+ADR-068 parks the broker; do not enable it from this retained compatibility description. ADR-067 does not require broker enforcement. Keyless-direct is the default for all ranges, including CTF; ADR-068 keeps broker operation unsupported.
 
 No provider service-account
 keys or shared model keys are minted into guests; legacy key revocation remains

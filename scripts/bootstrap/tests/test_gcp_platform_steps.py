@@ -17,6 +17,7 @@ from gcp_prereqs import (
     PrerequisiteError,
     ensure_identity_platform,
     ensure_state_bucket,
+    release_disabled_broker_load_balancer,
     remove_deleted_role_bindings,
 )
 from gcp_process import GcpCommandError, ProcessResult
@@ -362,6 +363,28 @@ class TestPrerequisites:
         broken = FakeRunner().on(["gcloud", "storage", "buckets", "get-iam-policy"], ProcessResult(0, "not json"))
         with pytest.raises(PrerequisiteError):
             ensure_state_bucket(broken, {}, bucket="b", project_id=PROJECT, region="us-central1")
+
+    def test_disabled_broker_load_balancer_release(self):
+        runner = FakeRunner()
+        release_disabled_broker_load_balancer(
+            runner, {}, broker_enabled=True, project_id=PROJECT, region="r", cluster="c", kube_env={}
+        )
+        assert runner.calls == []
+        absent = FakeRunner().on(["gcloud", "container", "fleet"], ProcessResult(1))
+        release_disabled_broker_load_balancer(
+            absent, {}, broker_enabled=False, project_id=PROJECT, region="r", cluster="c", kube_env={}
+        )
+        assert not absent.find("kubectl")
+        present = FakeRunner()
+        release_disabled_broker_load_balancer(
+            present, {}, broker_enabled=False, project_id=PROJECT, region="r", cluster="c", kube_env={"KUBECONFIG": "k"}
+        )
+        assert present.find("kubectl", "delete", "service", "model-broker")[0].env["KUBECONFIG"] == "k"
+        failing = FakeRunner().on(["kubectl"], ProcessResult(1))
+        with pytest.raises(PrerequisiteError):
+            release_disabled_broker_load_balancer(
+                failing, {}, broker_enabled=False, project_id=PROJECT, region="r", cluster="c", kube_env={}
+            )
 
 
 class TestDeletedRoleBindings:

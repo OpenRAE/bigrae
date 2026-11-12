@@ -51,6 +51,7 @@ locals {
 module "platform_core" {
   cloud_sql_iam_auth = var.cloud_sql_iam_auth
   openfga_enabled    = var.openfga_enabled
+  model_broker       = var.model_broker
   range_telemetry    = var.range_telemetry
 
   source = "../../modules/platform-core"

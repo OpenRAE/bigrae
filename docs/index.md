@@ -42,6 +42,7 @@ Use [pack installation](scenarios/index.md#install-a-content-pack) for administr
 | [GCP native identity](ops/gcp-native-identity.md) | You are enabling native SQL, separating policy administration or qualifying live renewal and authority. |
 | [GCP range audit telemetry](ops/gcp-range-audit-telemetry.md) | You are changing GCP range flow, NAT, or Vertex AI audit logging, or reading the deploy readback. |
 | [Operations runbooks](runbooks/index.md) | You are diagnosing or recovering a deployed BigRAE environment. |
+| [Model-access operations design](ops/model-access.md) | You are implementing or reviewing planned model access, budgets, revocation, migration, and recovery under #681. |
 
 ## Develop and govern
 

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
 from shared.enums import RangeSource
@@ -14,6 +14,8 @@ if TYPE_CHECKING:
     from shared.authorization import TargetRef
     from shared.credentials import CredentialContext
     from shared.identity_scope import PrincipalRef, ResourceScope
+    from shared.model_access import OwnedReference
+    from shared.model_access.reservation import ModelLaunchScope
     from shared.range_instantiation_policy import BackendAdmission
     from workspaces.services import ResolvedResourceScope
 
@@ -26,6 +28,8 @@ class NativeEventLaunchOptions:
     authority_action: str | None = None
     authority_target: TargetRef | None = None
     remote_access_teardown_at: datetime | None = None
+    model_admission_subject: OwnedReference | None = None
+    model_launch_scope: ModelLaunchScope | None = None
     request_uuid: UUID | None = None
 
 
@@ -36,6 +40,7 @@ class ScopedRangeLaunchOptions:
     scope: ResourceScope | None
     range_source: RangeSource | None = None
     workspace_uuid: UUID | str | None = None
+    model_sources: dict[str, Any] | None = None
     event: NativeEventLaunchOptions = NativeEventLaunchOptions()
 
 

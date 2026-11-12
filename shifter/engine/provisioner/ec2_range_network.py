@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import UUID
 
-from shared.network import RFC1918_IPV4_NETWORKS
+from shared.model_access.network import RFC1918_IPV4_NETWORKS
 
 from ec2_range_cleanup import Ec2CleanupScope
 from raes_ec2_image import VerifiedEc2Image
@@ -43,6 +43,7 @@ class Ec2NetworkConfig:
     base_route_table_id: str
     management_cidrs: tuple[str, ...]
     access_cidrs: tuple[str, ...] = ()
+    broker_cidrs: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
         if (
@@ -53,17 +54,20 @@ class Ec2NetworkConfig:
             or not re.fullmatch(r"rtb-[0-9a-f]{8}(?:[0-9a-f]{9})?", self.base_route_table_id)
             or not 1 <= len(self.management_cidrs) <= 16
             or len(self.access_cidrs) > 16
+            or len(self.broker_cidrs) > 16
         ):
             raise Ec2NetworkError("EC2 deployment network coordinates are invalid")
         self._validate_endpoints()
 
     def _validate_endpoints(self) -> None:
-        """Keep all platform destinations outside guest subnets."""
+        """Keep all platform destinations outside guest subnets and broker routes exact."""
         vpc = _network(self.vpc_cidr)
-        for cidr in (*self.management_cidrs, *self.access_cidrs):
+        for cidr in (*self.management_cidrs, *self.access_cidrs, *self.broker_cidrs):
             network = _network(cidr)
             if network.overlaps(vpc):
                 raise Ec2NetworkError("EC2 platform endpoints must be outside the guest network")
+        if any(_network(cidr).prefixlen != 32 for cidr in self.broker_cidrs):
+            raise Ec2NetworkError("EC2 broker destinations must be exact private addresses")
 
 
 @dataclass(frozen=True)
@@ -152,13 +156,13 @@ def plan_ec2_network(
     request_id, generation, range_id = scope.request_id, scope.generation, scope.range_id
     if (scope.environment, scope.region, scope.vpc_id) != (config.environment, config.region, config.vpc_id):
         raise Ec2NetworkError("EC2 range ownership is invalid")
-    networks = _validate_network_coverage(plan, allocated_cidrs, images, egress_mode)
+    networks = _validate_network_coverage(plan, config, allocated_cidrs, images, egress_mode)
     subnets, cidrs = _plan_subnets(networks, allocated_cidrs, config, range_id)
     guests: list[Ec2GuestPlacement] = []
     groups = []
     used = {network.address: 4 for network in networks}
     for node in plan.nodes:
-        placed, guest_network = _place_node(node, networks, cidrs, used)
+        placed, guest_network = _place_node(node, networks, cidrs, config, used)
         guests.extend(placed)
         if len(guests) > 256:
             raise Ec2NetworkError("EC2 guest count exceeds the realization bound")
@@ -178,13 +182,14 @@ def plan_ec2_network(
 
 def _validate_network_coverage(
     plan: RaesPlan,
+    config: Ec2NetworkConfig,
     allocated_cidrs: dict[str, str],
     images: dict[str, VerifiedEc2Image],
     egress_mode: str,
 ) -> tuple[RaesPlanNetwork, ...]:
     """Require exact network and image coverage under the admitted egress posture."""
-    if egress_mode not in {"status-quo", "deny-all", "none"}:
-        raise Ec2NetworkError("EC2 egress posture is unsupported")
+    if egress_mode not in {"status-quo", "deny-all", "none"} or (egress_mode == "none" and config.broker_cidrs):
+        raise Ec2NetworkError("EC2 egress posture does not admit the requested broker exception")
     networks = allocation_networks(plan)
     if not 1 <= len(networks) <= 32 or set(allocated_cidrs) != {network.address for network in networks}:
         raise Ec2NetworkError("EC2 subnet allocation does not match the compiled networks")
@@ -199,11 +204,12 @@ def _place_node(
     node: RaesPlanNode,
     networks: tuple[RaesPlanNetwork, ...],
     cidrs: dict[str, ipaddress.IPv4Network],
+    config: Ec2NetworkConfig,
     used: dict[str, int],
 ) -> tuple[list[Ec2GuestPlacement], ipaddress.IPv4Network]:
     """Allocate every replica without crossing subnet capacity or reserved address space."""
     placed = []
-    network_address = _node_network(node, networks, cidrs)
+    network_address = _node_network(node, networks, cidrs, config)
     guest_network = cidrs[network_address]
     if (
         type(node.count) is not int
@@ -228,6 +234,7 @@ def _node_network(
     node: RaesPlanNode,
     networks: tuple[RaesPlanNetwork, ...],
     cidrs: dict[str, ipaddress.IPv4Network],
+    config: Ec2NetworkConfig,
 ) -> str:
     """Choose the sole admitted primary network and enforce internal-network egress."""
     if node.acls:
@@ -238,6 +245,8 @@ def _node_network(
         network_address = networks[0].address
     else:
         raise Ec2NetworkError("EC2 requires one declared or open primary network per guest")
+    if any(net.internal and net.address == network_address for net in networks) and config.broker_cidrs:
+        raise Ec2NetworkError("An internal EC2 network cannot receive broker egress")
     return network_address
 
 
@@ -285,6 +294,8 @@ def _group_for_node(
         ingress.append(_permission("tcp", config.access_cidrs, 22 if channel == "ssh" else 3389))
     ingress.extend(_service_grants(node, range_cidrs))
     egress = [_permission("-1", range_cidrs)]
+    if config.broker_cidrs:
+        egress.append(_permission("tcp", config.broker_cidrs, 443))
     # Collapse exact-duplicate grants (e.g. two participants sharing one channel both
     # yield tcp/22 from the access CIDRs): AWS rejects a permission that appears more
     # than once in a single authorize call ("The same permission must not appear

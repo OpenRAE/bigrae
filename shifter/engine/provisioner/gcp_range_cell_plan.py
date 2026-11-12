@@ -172,7 +172,11 @@ def render_range_cell_plan(
     range_host_pool_slot: int | None = None,
     egress_policy: GceEgressPolicy = DEFAULT_GCE_EGRESS_POLICY,
 ) -> RangeCellPlan:
-    """Render the deterministic GCE resources for one range cell."""
+    """Render the deterministic GCE resources for one range cell.
+
+    ``egress_policy.model_broker`` is explicitly admitted, never inferred from
+    installation enablement. Its VIP is bound to ``config.model_broker_vip``.
+    """
     validated_request = validate_gcp_vm_range_cell_request(variables)
     operation = validated_request["operation"]
     if operation["request_id"] != request_uuid:

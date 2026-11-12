@@ -89,14 +89,15 @@ def _resolver(node):
     return GCERangeImageProfile(source_image="projects/x/global/images/ubuntu-1")
 
 
-def test_plugin_failure_enters_resource_and_secret_cleanup_before_readiness():
+@pytest.mark.parametrize("phase", ["runtime_plugin", "model_enrollment"])
+def test_plugin_failure_enters_resource_and_secret_cleanup_before_readiness(phase):
     from runtime_plugin_execution import RuntimePluginExecutionError
 
     clients = _clients(exists=True)
     secrets, secret_calls = _secret_ops()
     plugin = MagicMock(side_effect=RuntimePluginExecutionError("Runtime plugin guest execution failed"))
     composition = MagicMock()
-    options = _apply_options(_config(), clients, secrets, runtime_plugin=plugin, composition_verifier=composition)
+    options = _apply_options(_config(), clients, secrets, **{phase: plugin}, composition_verifier=composition)
     with pytest.raises(RuntimePluginExecutionError):
         apply_raes_range_cell("req-plugin", 7, _plan(), _resolver, options)
     assert clients.instances.delete.call_count == 2
@@ -226,6 +227,27 @@ def test_missing_guest_os_evidence_fails_apply_and_cleans_up():
     # This fake reports every resource absent on readback. Cleanup revisits
     # both guests for disk convergence and deletion; absent resources need no delete call.
     assert clients.instances.get.call_count == 6
+
+
+def test_enrolled_guest_gets_exact_broker_firewall_before_enrollment():
+    clients = _clients()
+    secrets, _ = _secret_ops()
+    cfg = replace(_config(), model_broker_vip="10.20.0.9")
+
+    def enroll(_plan, _outputs):
+        rules = [call.kwargs["firewall_resource"] for call in clients.firewalls.insert.call_args_list]
+        broker = [rule for rule in rules if rule.get("destination_ranges") == ["10.20.0.9/32"]]
+        assert len(broker) == 1
+        assert broker[0]["allowed"] == [{"I_p_protocol": "tcp", "ports": ["443"]}]
+
+    options = _apply_options(
+        cfg,
+        clients,
+        secrets,
+        model_enrollment=enroll,
+        model_broker={"contract_version": "model-broker-egress/v1", "vip": "10.20.0.9", "port": 443},
+    )
+    apply_raes_range_cell("req-broker", 7, _plan(), _resolver, options)
 
 
 def _account_secret_ops() -> tuple[RaesAccountCredentialOps, SimpleNamespace]:

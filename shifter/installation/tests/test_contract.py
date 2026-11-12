@@ -311,7 +311,7 @@ class TestBackendBundle:
         with pytest.raises(ValidationError):
             _minimal_bundle(supported_profiles=supported_profiles)
 
-    @pytest.mark.parametrize("bad_version", [0, 3, 99, True, "1", 1.0, None])
+    @pytest.mark.parametrize("bad_version", [0, 2, 99, True, "1", 1.0, None])
     def test_unsupported_contract_version_fails_closed(self, bad_version):
         with pytest.raises(ValidationError):
             _minimal_bundle(contract_version=bad_version)

@@ -93,6 +93,21 @@ class CTFEvent(ImmutableFieldsMixin, LiveNotificationsMixin, CTFBaseModel):
         blank=True,
         help_text="Organizer-authored shared-resource demand hints declared to the engine (CTF-908)",
     )
+    model_sources = models.JSONField(default=dict, blank=True)
+    model_source_authority = models.JSONField(null=True, blank=True, editable=False)
+    # Historical attribution retained for the cutover disposition only. Runtime
+    # source authority is the exact non-secret credential reference above.
+    model_source_actor_id = models.PositiveIntegerField(null=True, blank=True)
+    model_source_revision = models.PositiveIntegerField(default=0)
+    model_demand = models.JSONField(
+        default=list,
+        blank=True,
+        help_text=(
+            "Typed organizer model demand per workload role (CTF-908, PLAT-202): a list of "
+            "shared.model_access.EventModelDemand payloads. Constrained by the scenario need; "
+            "never names a provider, account, region, shard, credential, or price"
+        ),
+    )
     rules = models.TextField(
         blank=True,
         default="",

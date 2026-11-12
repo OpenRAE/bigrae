@@ -93,8 +93,7 @@ class PluginManifest(ClosedModel):
     required_files: list[Identifier] = Field(
         default_factory=list, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
     )
-    #: Retained so that existing manifests stay valid; model bindings were removed with the broker (#2909).
-    model_bindings: dict[Identifier, Identifier] = Field(default_factory=dict, max_length=0)
+    model_bindings: dict[Identifier, Identifier] = Field(default_factory=dict, max_length=16)
     #: Participant configuration owners (``validator_id@version``) the plugin validates.
     participant_validators: list[Annotated[str, Field(min_length=3, max_length=128)]] = Field(
         default_factory=list, max_length=8, exclude_if=lambda value: not value
@@ -111,6 +110,8 @@ class PluginManifest(ClosedModel):
         ):
             if len(values) != len(set(values)):
                 raise ValueError("plugin declarations must be unique")
+        if not set(self.model_bindings.values()).issubset(self.required_bindings):
+            raise ValueError("model bindings must name declared guest bindings")
         if bool(self.provisioning_concerns) != ("provision.prepare" in self.capabilities):
             raise ValueError("preparation requires explicitly declared provisioning concerns")
         if self.required_bindings and "guest.verify" not in self.capabilities:

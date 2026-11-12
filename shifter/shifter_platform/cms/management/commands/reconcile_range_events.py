@@ -372,6 +372,7 @@ class Command(BaseCommand):
 
         lease_counts = cms_services.expire_due_ranges(batch_size=batch_size)
 
+        self._reconcile_model_access(batch_size)
         self._reconcile_workers(batch_size)
         self._reconcile_range_cleanup(batch_size)
 
@@ -394,6 +395,21 @@ class Command(BaseCommand):
             ctf_delivered,
             ri_counts,
         )
+
+    def _reconcile_model_access(self, batch_size: int) -> None:
+        """Run bounded model-allocation and request cleanup on the scheduled reconciler.
+
+        Release revoked or terminal range allocations before their event-scoped
+        commitments can block a replacement range. Request settlement remains part
+        of the allocation reconciler's isolated pass (ADR-060/061, #2121). A
+        model-access error never stops range reconciliation.
+        """
+        from engine.services import reconcile_model_allocations
+
+        try:
+            reconcile_model_allocations(limit=batch_size)
+        except Exception:
+            logger.exception("reconcile_range_events: model-access reconciliation failed")
 
     def _reconcile_workers(self, batch_size: int) -> None:
         """Retire only due, unheld native workers through their owning service."""

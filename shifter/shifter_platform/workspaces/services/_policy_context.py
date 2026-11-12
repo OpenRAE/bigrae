@@ -52,7 +52,7 @@ def admin_principal_context(
         individual = _individual_account(actor, provider)
     except Exception as exc:
         raise AccountScopeError(_SCOPE_UNAVAILABLE) from exc
-    integrations: tuple[Literal["adapters"], ...] = ("adapters",)
+    integrations: tuple[Literal["adapters", "model_sources"], ...] = ("adapters", "model_sources")
     descendant_kinds: tuple[Literal["organization", "workspace"], ...] = ("organization", "workspace")
     organization_actions = tuple(
         f"organization.manage_{integration}"

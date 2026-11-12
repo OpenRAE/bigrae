@@ -177,13 +177,13 @@ def test_claim_rejects_source_eligibility_changed_after_admission(
 ):
     from cms.exceptions import CMSError
     from cms.models import RaesPackageSource, ScenarioMetadata
-    from cms.services import _warm_pool_claim
+    from cms.services import _model_allocation
     from engine.models import ProvisionerLaunchIntent, RangeAuthorityChange
     from tests.cms._warm_pool_fixtures import warm_claim_fixture
     from workspaces.models import WorkspaceQuotaReservation
 
     claim, generation, instance, source, _ = warm_claim_fixture(django_user_model, settings, live_session_credential)
-    original = _warm_pool_claim._preview_candidate
+    original = _model_allocation.prepare_claim_model_sources
 
     def prepare_then_change(*args, **kwargs):
         prepared = original(*args, **kwargs)
@@ -200,7 +200,7 @@ def test_claim_rejects_source_eligibility_changed_after_admission(
             RaesPackageSource.objects.filter(pk=source.pk).update(**{field: value})
         return prepared
 
-    monkeypatch.setattr(_warm_pool_claim, "_preview_candidate", prepare_then_change)
+    monkeypatch.setattr(_model_allocation, "prepare_claim_model_sources", prepare_then_change)
     with pytest.raises(CMSError):
         attempt_warm_claim(claim)
     instance.refresh_from_db()
@@ -219,7 +219,7 @@ def test_claim_rechecks_network_policy_under_locked_ancestry(
 ):
     from dataclasses import replace
 
-    from cms.services import _warm_pool_claim
+    from cms.services import _model_allocation
     from engine.models import ProvisionerLaunchIntent, RangeAuthorityChange
     from tests.cms._warm_pool_fixtures import warm_claim_fixture
     from workspaces.models import Workspace
@@ -232,7 +232,7 @@ def test_claim_rechecks_network_policy_under_locked_ancestry(
     candidates = _resolve_claim_candidates(claim, None)
     generation.compatibility_digest = candidates[0][1]
     generation.save(update_fields=["compatibility_digest"])
-    prepare = _warm_pool_claim._preview_candidate
+    prepare = _model_allocation.prepare_claim_model_sources
     checked = []
 
     def change_after_admission(*args, **kwargs):
@@ -241,7 +241,7 @@ def test_claim_rechecks_network_policy_under_locked_ancestry(
         checked.append(True)
         return prepared
 
-    monkeypatch.setattr(_warm_pool_claim, "_preview_candidate", change_after_admission)
+    monkeypatch.setattr(_model_allocation, "prepare_claim_model_sources", change_after_admission)
     assert attempt_warm_claim(claim) is None
     assert checked
     instance.refresh_from_db()

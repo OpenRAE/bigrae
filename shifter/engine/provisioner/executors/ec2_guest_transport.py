@@ -7,7 +7,7 @@ import re
 from collections.abc import Callable
 from typing import Any
 
-from shared.network import RFC1918_IPV4_NETWORKS
+from shared.model_access.network import RFC1918_IPV4_NETWORKS
 
 from executors.guest_ssh_executor import GuestSSHExecutor
 

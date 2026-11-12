@@ -55,7 +55,7 @@ async def handle_connect(reader: asyncio.StreamReader, writer: asyncio.StreamWri
 
 async def main() -> None:
     """Listen on the pod's private address."""
-    from shared.network import private_listener_address
+    from shared.model_access.network import private_listener_address
 
     address = private_listener_address(os.environ["CTF_EGRESS_BIND_ADDRESS"])
     server = await asyncio.start_server(handle_connect, address, _LISTEN_PORT, limit=4096)

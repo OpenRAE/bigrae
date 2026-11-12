@@ -109,6 +109,13 @@ class RangeInstance(SoftDeleteMixin, models.Model):
         help_text="Server-derived provenance: which product path created this range.",
     )
     range_spec = models.JSONField(null=True, blank=True)
+    # Closed, server-derived CTF demand; never accepted from portal request JSON.
+    model_launch_scope = models.JSONField(null=True, blank=True)
+    model_sources = models.JSONField(default=dict, blank=True)
+    model_source_policy_revision = models.PositiveIntegerField(default=0)
+    model_source_sponsorship = models.JSONField(null=True, blank=True)
+    model_source_policy_error = models.CharField(max_length=128, blank=True, default="")
+    model_package_digest = models.CharField(max_length=71, blank=True, default="")
     launch_intent_digest = models.CharField(max_length=71, blank=True, default="", editable=False)
     expires_at = models.DateTimeField(
         null=True,

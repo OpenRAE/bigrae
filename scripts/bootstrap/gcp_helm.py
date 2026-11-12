@@ -70,16 +70,26 @@ def build_values(
     the values bind the pinned settings IDs, or leave the policy client unbound
     until publication (#2679).
     """
-    from installation.render import render_gcp_range_telemetry_env, render_mission_control_lease_env
+    from installation.gcp_model_broker import validate_model_broker_readback
+    from installation.render import (
+        render_gcp_range_telemetry_env,
+        render_mission_control_lease_env,
+        render_model_access_catalog,
+        render_model_access_env,
+    )
 
     from gcp_control_plane import GcpRenderArtifacts, render_gcp_helm_values
     from gcp_runtime import gdc_config
 
     root_config = inputs.root_config
     settings = inputs.settings
+    validate_model_broker_readback(outputs.get("model_broker", {}).get("value"), root_config)  # type: ignore[arg-type]
     artifacts = GcpRenderArtifacts(
+        model_access_catalog_json=render_model_access_catalog(root_config),  # type: ignore[arg-type]
+        model_access_env=render_model_access_env(root_config),  # type: ignore[arg-type]
         mission_control_lease_env=render_mission_control_lease_env(root_config),  # type: ignore[arg-type]
         range_telemetry_env=render_gcp_range_telemetry_env(root_config),  # type: ignore[arg-type]
+        model_broker_runtime=root_config.settings.get("model_broker_runtime"),  # type: ignore[attr-defined]
         openfga_settings=_openfga_settings(settings.openfga, policy_binding),  # type: ignore[attr-defined]
         capacity_profile_id=settings.shared_service_capacity_profile,  # type: ignore[attr-defined]
     )

@@ -45,7 +45,7 @@ dispatch; existing shared audit and protected external evidence remain the
 authorities. Provider logging/retention configuration needs explicit review;
 application body-free logging does not imply zero provider retention.
 
-The operations design defines owners, failure
+The [operations design](../ops/model-access.md) defines owners, failure
 responses, service objectives, sizing, retention, recovery, and acceptance
 evidence. GCP qualification feeds #2091. Cross-cloud qualification is tracked
 separately and cannot be inferred from GCP results.
@@ -78,7 +78,7 @@ disabled Helm resources and chart-derived Actions artifacts, digest-bound
 release verification, drain settings and versioned TLS references. The GCP
 script quality lane installs the same pinned Helm binary to test the actual
 compatibility renderer. The
-operator probes distinguish local structural
+[operator probes](../ops/model-access-gcp-probes.md) distinguish local structural
 checks from the live IAM, LB/CNI and rotation evidence required by M10.
 Neither infrastructure provisioning nor a passing health probe qualifies
 model admission. The ADR remains proposed pending runtime qualification.

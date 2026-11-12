@@ -274,14 +274,14 @@ def admin_list_integration_organizations(
     actor: CredentialContext,
     provider: AuthorizationProvider,
     *,
-    integration: Literal["adapters"],
+    integration: Literal["adapters", "model_sources"],
     offset: int = 0,
     limit: int = 50,
 ) -> OrganizationAdminPage:
     """Discover an integration's exact organization grants without parent-read authority."""
     actor = _active_actor(actor)
     _valid_page(offset, limit)
-    if integration != "adapters":
+    if integration not in {"adapters", "model_sources"}:
         raise AccountScopeError(_DENIED)
     query = Organization.objects.filter(account__kind__in=(Account.Kind.TEAM, Account.Kind.ENTERPRISE))
     installation_action = f"installation.manage_{integration}"

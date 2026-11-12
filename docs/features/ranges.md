@@ -36,9 +36,12 @@ Membership or a visible launch button alone does not establish that authority.
 3. Select the approved **Workspace**.
 4. Select the installed **Scenario**.
 5. Select an **Agent** only when the scenario contract requires one.
-6. Select **Launch range**.
-7. Read the accepted operation or error.
+6. Select any authorized model sources required by the scenario.
+7. Select **Launch range**.
+8. Read the accepted operation or error.
 
+The model broker remains parked; source selection does not activate it.
+See [model sources](model-access.md).
 The current workflow allows one active Mission Control range per acting principal.
 Do not submit another launch to recover a lost API response; use [retry-safe operations](retry-safe-range-operations.md).
 

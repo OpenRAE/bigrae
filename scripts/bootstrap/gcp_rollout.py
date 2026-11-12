@@ -37,15 +37,15 @@ def _bool_flag(enabled: bool) -> str:
     return "true" if enabled else "false"
 
 
-def restart_workloads(runner: ProcessRunner, env: Mapping[str, str | None]) -> None:
+def restart_workloads(runner: ProcessRunner, env: Mapping[str, str | None], *, model_broker_enabled: bool) -> None:
     """Restart the control-plane Deployments that read hydrated secrets at start."""
-    deployments = release_deployments(runner, env)
+    deployments = release_deployments(runner, env, model_broker_enabled=model_broker_enabled)
     for deployment in deployments:
         runner.run(["kubectl", "rollout", "restart", f"deployment/{deployment}", "-n", PLATFORM_NAMESPACE], env=env)
 
 
 def release_deployments(
-    runner: ProcessRunner, env: Mapping[str, str | None], *, policy_enabled: bool = False
+    runner: ProcessRunner, env: Mapping[str, str | None], *, model_broker_enabled: bool, policy_enabled: bool = False
 ) -> list[str]:
     """Return the closed release Deployment inventory from the running-image verifier."""
     result = runner.run(
@@ -53,6 +53,8 @@ def release_deployments(
             get_repo_root(),
             "verify_running_image_ids",
             "--list-deployments",
+            "--model-broker-enabled",
+            _bool_flag(model_broker_enabled),
             "--policy-enabled",
             _bool_flag(policy_enabled),
         ),
@@ -68,13 +70,16 @@ def wait_for_rollouts(
     runner: ProcessRunner,
     env: Mapping[str, str | None],
     *,
+    model_broker_enabled: bool,
     policy_enabled: bool = False,
     terminating_timeout_seconds: int = 300,
     sleep: Callable[[float], None] = time.sleep,
     clock: Callable[[], float] = time.monotonic,
 ) -> None:
     """Wait for every release Deployment and for superseded pods to finish terminating."""
-    for deployment in release_deployments(runner, env, policy_enabled=policy_enabled):
+    for deployment in release_deployments(
+        runner, env, model_broker_enabled=model_broker_enabled, policy_enabled=policy_enabled
+    ):
         runner.run(
             ["kubectl", "rollout", "status", f"deployment/{deployment}", "-n", PLATFORM_NAMESPACE, "--timeout=15m"],
             env=env,
@@ -146,6 +151,7 @@ def record_running_images(
     env: Mapping[str, str | None],
     *,
     identities: Mapping[str, str],
+    model_broker_enabled: bool,
     evidence: EvidenceRun,
     workdir: Path,
     pins: ReleasePins | None = None,
@@ -162,6 +168,8 @@ def record_running_images(
             script_argv(
                 get_repo_root(),
                 "verify_running_image_ids",
+                "--model-broker-enabled",
+                _bool_flag(model_broker_enabled),
                 "--pods-json",
                 str(pods_file),
                 "--output",

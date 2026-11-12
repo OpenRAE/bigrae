@@ -43,7 +43,7 @@ from mission_control.views._common import _audit_range_lifecycle
 from shared.api.permissions import IsAuthenticatedSessionOrApiToken
 from shared.api.principals import authenticated_credential
 from shared.api.schema import ApiErrorSerializer
-from shared.api.strict_json import ConfigurationJSONParser
+from shared.api.strict_json import ModelSelectionJSONParser
 from shared.audit import AuditAction
 from shared.authorization.operations import scope_actions
 from shared.credentials import CredentialContext
@@ -60,7 +60,7 @@ class LaunchRangeView(RetrySafeLaunchMixin, MissionControlAPIView):
 
     required_actions = scope_actions("launch_range")
 
-    parser_classes = [ConfigurationJSONParser, FormParser, MultiPartParser]
+    parser_classes = [ModelSelectionJSONParser, FormParser, MultiPartParser]
 
     permission_classes = [
         IsAuthenticatedSessionOrApiToken,
@@ -143,7 +143,9 @@ class LaunchRangeView(RetrySafeLaunchMixin, MissionControlAPIView):
             scope,
             scenario,
             caller_key,
-            LaunchChoices(data.get("workspace_uuid"), self._agents_selection(data), agents_by_os),
+            LaunchChoices(
+                data.get("workspace_uuid"), self._agents_selection(data), data.get("model_sources"), agents_by_os
+            ),
         )
 
     def _resolve_agents_by_os(
@@ -183,12 +185,14 @@ class LaunchRangeView(RetrySafeLaunchMixin, MissionControlAPIView):
         """Create a range and record the launch audit event."""
         if caller_key is not None:
             return self._create_range_first_use(request, user, credential, scope, scenario, caller_key, choices)
+        source_kwargs: dict[str, Any] = {"model_sources": choices.model_sources} if choices.model_sources else {}
         try:
             range_ctx = cms_create_range(
                 credential,
                 scenario,
                 workspace_uuid=choices.workspace_uuid,
                 scope=scope,
+                **source_kwargs,
             )
         except CMSError as exc:
             return self._launch_failure_response(exc, user, scenario)

@@ -4,17 +4,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from typing import Annotated, Literal, Protocol, Self, cast
+from typing import Literal, Protocol, cast
 from uuid import UUID
-
-from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from shared.api_tokens.scopes import validate_scopes
 from shared.authorization import CredentialCeiling, TargetRef
 from shared.authorization.catalog import TargetType
 from shared.credentials import CredentialContext
 from shared.identity_scope import PrincipalRef, ResourceScope
-from shared.retired_authorization import without_retired_values
 
 _OPERATION_AUTHORITY_UNAVAILABLE = "Operation authority unavailable"
 
@@ -170,7 +167,7 @@ def credential_reference_from_record(row: CredentialReferenceRecord) -> Credenti
         )
         if target is None and row.credential_target_uuid is not None:
             raise ValueError("Invalid target")
-        scopes = without_retired_values(_registered_lines(row.credential_scopes))
+        scopes = _registered_lines(row.credential_scopes)
         if scopes:
             validate_scopes(sorted(scopes))
         if row.initiating_principal_uuid is None or row.credential_uuid is None:
@@ -181,65 +178,9 @@ def credential_reference_from_record(row: CredentialReferenceRecord) -> Credenti
             ),
             cast(Literal["session", "personal", "service", "temporary"], row.credential_kind),
             row.credential_uuid,
-            CredentialCeiling(without_retired_values(_registered_lines(row.credential_ceiling_actions)), target),
+            CredentialCeiling(_registered_lines(row.credential_ceiling_actions), target),
             scopes,
             row.credential_event_uuid,
         )
     except Exception:  # noqa: BLE001  # fail-closed authority boundary; the cause stays out of the chain
         raise ValueError(_OPERATION_AUTHORITY_UNAVAILABLE) from None
-
-
-class CredentialReference(BaseModel):
-    """Non-secret, exact initiating credential retained by delayed work."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    principal_uuid: UUID
-    principal_kind: Literal["human", "service"]
-    credential_kind: Literal["session", "personal", "service", "temporary"]
-    credential_uuid: UUID
-    ceiling_actions: Annotated[tuple[str, ...], Field(max_length=256)]
-    target_type: str = ""
-    target_uuid: UUID | None = None
-    scopes: Annotated[tuple[str, ...], Field(max_length=256)] = ()
-    event_uuid: UUID | None = None
-
-    @field_validator("ceiling_actions", "scopes")
-    @classmethod
-    def canonical_values(cls, values: tuple[str, ...]) -> tuple[str, ...]:
-        """Require sorted, unique retained credential limits."""
-        if tuple(sorted(set(values))) != values:
-            raise ValueError("credential values must be unique and sorted")
-        return values
-
-    @classmethod
-    def from_credential(cls, credential: CredentialContext) -> Self:
-        """Capture limits and identity, never bearer proof."""
-        fields = credential_reference_fields(credential)
-        return cls(
-            principal_uuid=cast(UUID, fields["initiating_principal_uuid"]),
-            principal_kind=cast(Literal["human", "service"], fields["initiating_principal_kind"]),
-            credential_kind=cast(Literal["session", "personal", "service", "temporary"], fields["credential_kind"]),
-            credential_uuid=cast(UUID, fields["credential_uuid"]),
-            ceiling_actions=tuple(str(fields["credential_ceiling_actions"]).splitlines()),
-            target_type=str(fields["credential_target_type"]),
-            target_uuid=cast(UUID | None, fields["credential_target_uuid"]),
-            scopes=tuple(str(fields["credential_scopes"]).splitlines()),
-            event_uuid=cast(UUID | None, fields["credential_event_uuid"]),
-        )
-
-    def credential(self) -> CredentialContext:
-        """Rebuild the trusted reference for live owner revalidation."""
-        return credential_reference_from_fields(
-            {
-                "initiating_principal_uuid": self.principal_uuid,
-                "initiating_principal_kind": self.principal_kind,
-                "credential_kind": self.credential_kind,
-                "credential_uuid": self.credential_uuid,
-                "credential_ceiling_actions": "\n".join(self.ceiling_actions),
-                "credential_target_type": self.target_type,
-                "credential_target_uuid": self.target_uuid,
-                "credential_scopes": "\n".join(self.scopes),
-                "credential_event_uuid": self.event_uuid,
-            }
-        )

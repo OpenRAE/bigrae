@@ -131,8 +131,8 @@ def enter_maintenance(manifest: Path, *, timeout_seconds: float = 600) -> None:
                     "--timeout=15m",
                 )
     _wait_application_pods(timeout_seconds, policy_owners)
-    # Restored manifests can carry broader shared egress policies. Never expose
-    # old application pods to those additive grants before termination.
+    # Disabled broker manifests restore broader shared egress policies. Never
+    # expose old broker/proxy pods to those additive grants before termination.
     _kubectl("apply", "-f", str(manifest))
 
 

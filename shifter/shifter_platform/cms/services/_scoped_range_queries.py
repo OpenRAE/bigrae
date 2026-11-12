@@ -20,7 +20,7 @@ _RANGE_UNAVAILABLE = "Range unavailable"
 _RANGE_READ = "range.read"
 
 
-PRIVATE_RANGE_FIELDS = ("range_spec",)
+PRIVATE_RANGE_FIELDS = ("range_spec", "model_launch_scope", "model_sources", "model_source_sponsorship")
 
 
 def list_scoped_ranges(

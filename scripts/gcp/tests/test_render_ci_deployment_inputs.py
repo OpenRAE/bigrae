@@ -107,12 +107,22 @@ def test_bundle_projects_every_github_input_onto_its_home(repo: Path, tmp_path: 
     assert not any("never-written" in path.read_text() for path in output.iterdir())
 
 
-def test_retired_artifact_inventory_is_copied(repo: Path, tmp_path: Path):
+def test_committed_broker_template_wins_over_the_overlay_variable(repo: Path, tmp_path: Path):
     deploy = repo / "platform/deploy/gcp/acme"
     deploy.mkdir(parents=True)
+    (deploy / "model-broker-overlay.template.json").write_text('{"settings": {}}')
     (deploy / "retired-cluster-artifacts.json").write_text("{}")
-    output = _render(repo, tmp_path, _env())
+    overlay = json.dumps({"settings": {"model_access": {"enabled": False}}})
+    output = _render(repo, tmp_path, _env(SHIFTER_CONFIG_OVERLAY_JSON=overlay))
+    assert (output / "model-broker-overlay.template.json").is_file()
     assert (output / "retired-cluster-artifacts.json").is_file()
+    assert "model_access" not in yaml.safe_load((output / "bigrae.yaml").read_text())["settings"]
+
+
+def test_overlay_variable_applies_without_a_template(repo: Path, tmp_path: Path):
+    overlay = json.dumps({"settings": {"model_access": {"enabled": False}}})
+    output = _render(repo, tmp_path, _env(SHIFTER_CONFIG_OVERLAY_JSON=overlay))
+    assert yaml.safe_load((output / "bigrae.yaml").read_text())["settings"]["model_access"] == {"enabled": False}
 
 
 def test_destroy_inputs_need_no_operator(repo: Path, tmp_path: Path):
@@ -145,6 +155,7 @@ def test_operator_opt_out_needs_no_operator_email(repo: Path, tmp_path: Path):
             "GCP_PROJECT_ID conflicts with settings.project_id",
         ),
         ({"GCP_BOOTSTRAP_ADMIN_EMAIL": ""}, "settings.operator_bootstrap"),
+        ({"SHIFTER_CONFIG_OVERLAY_JSON": '{"settings": {"secrets": {}}}'}, "SHIFTER_CONFIG_OVERLAY_JSON is invalid"),
     ],
 )
 def test_invalid_inputs_fail_and_leave_no_bundle(repo: Path, tmp_path: Path, overrides, message):

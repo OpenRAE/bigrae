@@ -65,6 +65,21 @@ The GCP `django_secret_key` reference must be a Google Secret Manager resource n
 environment variable, or the literal `prompt`.
 
 `range_egress` is the shared cross-backend egress policy (see [Render](#render)). Validation is the same for every backend. It is separate from backend-specific settings.
+`model_access` is also cross-backend. Its catalog is checked against the generated
+canonical v1 schema and bundled canonical semantic validator, then normalized before
+rendering. It remains disabled until its runtime consumers are deployed.
+
+### GCP model broker package
+
+`settings.model_broker` defaults to `{enabled: false}`. Enabling requires the
+complete private transport and dedicated model-project inventory described in
+[the deployment package](../../docs/architecture/model-access/gcp-packaging.md).
+The installer validates the closed block and projects applied Terraform output
+into the canonical chart. TLS values stay in separately managed versioned
+Secrets. The broker receives its own runtime role and mounted catalog, without
+portal/worker secrets. M06 supplies infrastructure; executable, admission and
+live qualification milestones must land before enablement.
+
 ## Config File
 
 Start from one of the checked examples:
@@ -205,6 +220,30 @@ command exits `1` and prints the same sanitized issues as `validate` when the
 config is invalid. See
 [`docs/architecture/range-egress-ip-allowlist.md`](../../docs/architecture/range-egress-ip-allowlist.md)
 for the full operator workflow.
+
+### Model-access artifact
+
+`settings.model_access` has a closed envelope: `enabled` and an optional
+`catalog`. An enabled envelope requires a complete catalog and valid canonical
+digest. Catalogs contain provider, project/account, identity, quota, price, and
+policy references; they never contain credential values.
+
+Render the catalog body to its protected mounted artifact separately from the
+runtime environment:
+
+```bash
+uv run --project shifter/installation bigrae-config render-model-access-catalog \
+  bigrae.yaml --output /protected/staging/catalog.json
+uv run --project shifter/installation bigrae-config render-model-access-env \
+  bigrae.yaml --output /protected/staging/model-access.env
+```
+
+The environment output carries only activation, the fixed runtime mount path
+`/etc/shifter/model-access/catalog.json`, and the expected SHA-256 digest. The
+deployment layer owns mounting the protected artifact at that path. The portal
+reparses the file and refuses startup on shape, version, digest, or size
+mismatch. The complete disabled example and deterministic allocation vectors
+live under `docs/architecture/model-access/`.
 
 ## Runtime Inventory
 

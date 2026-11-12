@@ -11,7 +11,8 @@ Use this landing page to find current explanations, technical references, and de
 - [Install on Google Cloud](../getting-started/install-gcp.md) - Install a deployment from a published release
 - [GitHub-less GCP deployment](handbook/gcp-github-less-deployment.md) - Release, foundation, inputs, deploy, update, teardown, and bucket encryption keys without GitHub
 - [Scenario contract transition](handbook/scenario-contract-transition.md) - CyberScript, ACES and current RAES
-- [Per-range model-access design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/index.md) - Historical broker design for #681; #2909 removed the broker (ADR-068)
+- [Per-range model-access design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/index.md) - Retained broker design and backlog for #681; ADR-068 governs current applicability
+- [Model-access contracts](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/model-access/architecture.md) - Retained ownership, allocation, accounting, protocol, and lifecycle contracts under ADR-068
 
 ## Platform Domains
 

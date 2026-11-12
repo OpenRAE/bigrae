@@ -353,11 +353,33 @@ def _literal_string_list_assignment(body: str, key: str) -> set[str] | None:
     return set(re.findall(r'"([^"]+)"', body[match.end() : cursor - 1]))
 
 
+def _model_source_read_is_scoped(name: str, body: str) -> bool:
+    """Accept only the owned credential namespace on the control worker."""
+    expected = {
+        "count": "var.model_broker.enabled ? 1 : 0",
+        "project": "var.project_id",
+        "role": '"roles/secretmanager.secretAccessor"',
+        "member": '"serviceAccount:${google_service_account.workload["workers"].email}"',
+        "expression": "\"resource.name.startsWith('projects/${data.google_project.platform.number}/secrets/shifter-model-source-')\"",
+    }
+    return (
+        name == "model_source_control_read"
+        and body.count("condition {") == 1
+        and "for_each" not in body
+        and not re.search(r"^\s*members\s*=", body, flags=re.MULTILINE)
+        and all(
+            _has_exact_assignment(body, key, value) for key, value in expected.items()
+        )
+    )
+
+
 def _check_literal_members(path: Path, lines: list[str]) -> list[Violation]:
     """Flag literal member/binding resources granting a forbidden role to a workload."""
     violations: list[Violation] = []
     for name, line, body in _extract_resource_blocks(lines, _PROJECT_IAM_MEMBER_RE):
-        if name in _ALLOWED_DYNAMIC_BINDINGS:
+        if name in _ALLOWED_DYNAMIC_BINDINGS or _model_source_read_is_scoped(
+            name, body
+        ):
             continue
         role_match = _LITERAL_ROLE_RE.search(body)
         if not role_match or role_match.group(1) not in FORBIDDEN_ROLES:
@@ -878,6 +900,74 @@ def _check_dynamic_resource_scope(files: dict[Path, list[str]]) -> list[Violatio
     return violations
 
 
+def _check_model_broker_scope(path: Path, lines: list[str]) -> list[Violation]:
+    """Model identities have a closed resource/permission matrix (ADR-059)."""
+    violations: list[Violation] = []
+    header = re.compile(r'^\s*resource\s+"[^"\n]+"\s+"([^"\n]+)"\s*\{')
+    allowed = {
+        "google_service_account_iam_member": (
+            {
+                "service_account_id": "google_service_account.model_invocation[each.key].name",
+                "role": "google_project_iam_custom_role.model_token[each.key].name",
+                "member": '"serviceAccount:${google_service_account.model_broker[0].email}"',
+            },
+            {
+                "service_account_id": "google_service_account.model_broker[0].name",
+                "role": '"roles/iam.workloadIdentityUser"',
+                "member": '"serviceAccount:${var.workload_identity_pool}[shifter-platform/model-broker]"',
+            },
+        ),
+        "google_project_iam_member": (
+            {
+                "project": "each.key",
+                "role": "google_project_iam_custom_role.model_invoke[each.key].name",
+                "member": '"serviceAccount:${google_service_account.model_invocation[each.key].email}"',
+            },
+        ),
+    }
+    role_permissions = {
+        "model_token": {"iam.serviceAccounts.getAccessToken"},
+        "model_invoke": {"aiplatform.endpoints.predict"},
+    }
+    for name, line, body in _extract_resource_blocks(lines, header):
+        resource_type = re.search(r'resource\s+"([^"\n]+)"', body).group(1)
+        if (
+            resource_type == "google_project_iam_custom_role"
+            and name in role_permissions
+        ):
+            if (
+                _literal_string_list_assignment(body, "permissions")
+                != role_permissions[name]
+            ):
+                violations.append(
+                    Violation(
+                        path, line, "model custom role exceeds its exact permission set"
+                    )
+                )
+        if not re.search(
+            r"google_service_account\.model_(?:broker|invocation)\b", body
+        ):
+            continue
+        if resource_type == "google_service_account":
+            continue
+        candidates = allowed.get(resource_type, ())
+        if not any(
+            all(
+                _has_exact_assignment(body, key, value)
+                for key, value in candidate.items()
+            )
+            for candidate in candidates
+        ):
+            violations.append(
+                Violation(
+                    path,
+                    line,
+                    "model identity grant is outside the exact broker/shard IAM matrix",
+                )
+            )
+    return violations
+
+
 def _check_native_identity_scope(path: Path, lines: list[str]) -> list[Violation]:
     """Keep native login and directory roles attached to their exact duties."""
     text = "\n".join(lines)
@@ -927,6 +1017,7 @@ def check_paths(paths: list[Path]) -> list[Violation]:
     violations.extend(_check_dynamic_resource_scope(files))
     for path, lines in files.items():
         violations.extend(_check_native_identity_scope(path, lines))
+        violations.extend(_check_model_broker_scope(path, lines))
         violations.extend(_check_literal_members(path, lines))
         violations.extend(_check_map_driven_members(path, lines, locals_text))
         violations.extend(_check_policy_bindings(path, "\n".join(lines)))

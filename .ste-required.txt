@@ -44,6 +44,8 @@ docs/ops/disaster-recovery.md
 docs/ops/gcp-event-capacity.md
 docs/ops/gcp-native-identity.md
 docs/ops/github-runner-health-alerts.md
+docs/ops/model-access-gcp-probes.md
+docs/ops/model-access.md
 docs/ops/openfga.md
 docs/ops/portal-eks-operations.md
 docs/ops/range-escape-validation.md
@@ -158,6 +160,7 @@ docs/features/ctf-communications.md
 docs/features/ctf-organizer-guide.md
 docs/features/ctf.md
 docs/features/index.md
+docs/features/model-access.md
 docs/features/ngfw.md
 docs/features/org-workspace-admin-console.md
 docs/features/range-workspace-scoping-administration.md

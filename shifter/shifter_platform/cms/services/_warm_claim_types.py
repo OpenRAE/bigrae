@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Protocol
+from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID
 
 from shared.credentials import CredentialContext
 from shared.enums import RangeSource
 from shared.identity_scope import ResourceScope
 from shared.range_instantiation_policy import InstantiationPurpose
+
+if TYPE_CHECKING:
+    from shared.model_access.reservation import ModelLaunchScope
 
 
 class _WarmGeneration(Protocol):
@@ -43,6 +46,8 @@ class WarmClaimRequest:
     #: Trusted event deadline for a CTF-owned generation. Mission Control policy is
     #: resolved only after a warm generation is claimed inside this transaction.
     enforced_deadline: datetime | None = None
+    model_launch_scope: ModelLaunchScope | None = None
+    model_sources: dict[str, Any] | None = None
     policy_workspace_id: int | None = None
     source_binding: tuple[tuple[str, object], ...] | None = None
     source_metadata: tuple[bool, bool] | None = None

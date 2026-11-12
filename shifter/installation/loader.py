@@ -23,7 +23,7 @@ from typing import Any
 import yaml
 from pydantic import ValidationError
 
-from . import mission_control_lease, range_egress, registry, warm_pool
+from . import mission_control_lease, model_access, range_egress, registry, warm_pool
 from .errors import ConfigIssue, InstallationConfigError
 from .schema import RootConfig
 
@@ -214,6 +214,7 @@ def _backend_issues_from_raw(data: dict[str, Any]) -> list[ConfigIssue]:
         shared_keys = (
             range_egress.SETTINGS_KEY,
             warm_pool.SETTINGS_KEY,
+            model_access.SETTINGS_KEY,
             mission_control_lease.SETTINGS_KEY,
         )
         backend_settings = {k: v for k, v in settings.items() if k not in shared_keys}
@@ -222,6 +223,8 @@ def _backend_issues_from_raw(data: dict[str, Any]) -> list[ConfigIssue]:
         issues.extend(range_egress_issues)
         _, warm_pool_issues = warm_pool.validate_settings_block(settings)
         issues.extend(warm_pool_issues)
+        _, model_access_issues = model_access.validate_settings_block(settings)
+        issues.extend(model_access_issues)
         _, mission_control_lease_issues = mission_control_lease.validate_settings_block(settings)
         issues.extend(mission_control_lease_issues)
     secrets = data.get("secrets", {})
@@ -288,6 +291,7 @@ def validate_root_config_data(data: dict[str, Any]) -> RootConfig:
     _shared_settings_keys = (
         range_egress.SETTINGS_KEY,
         warm_pool.SETTINGS_KEY,
+        model_access.SETTINGS_KEY,
         mission_control_lease.SETTINGS_KEY,
     )
     backend_settings = {k: v for k, v in config.settings.items() if k not in _shared_settings_keys}
@@ -307,6 +311,9 @@ def validate_root_config_data(data: dict[str, Any]) -> RootConfig:
     normalized_settings, warm_pool_issues = warm_pool.validate_settings_block(normalized_settings)
     if warm_pool_issues:
         raise InstallationConfigError([*warm_pool_issues, *bundle.secret_reference_issues(config.secrets)])
+    normalized_settings, model_access_issues = model_access.validate_settings_block(normalized_settings)
+    if model_access_issues:
+        raise InstallationConfigError([*model_access_issues, *bundle.secret_reference_issues(config.secrets)])
     normalized_settings, mission_control_lease_issues = mission_control_lease.validate_settings_block(
         normalized_settings
     )

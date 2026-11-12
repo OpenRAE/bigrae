@@ -16,6 +16,7 @@ from gcp_identity_cutover import (
     activate_identity_cutover,
     identity_cutover_boundary,
     migrate_policy_datastore,
+    retire_disabled_broker,
     validate_fact_paths,
 )
 from gcp_process import GcpCommandError, ProcessRunner
@@ -334,3 +335,25 @@ def test_prior_migration_job_delete_failure_cannot_reuse_a_completed_job(cluster
     with pytest.raises(RuntimeError, match="previous GCP migration Job"):
         run_gcp_database_migrations(outputs, values)
     assert not any(call["argv"][0] == "apply" for call in history())
+
+
+@pytest.mark.parametrize("failure", ["", "deployment", "networkpolicy"])
+def test_disabled_broker_foreground_delete_precedes_restored_policy(cluster, failure):
+    runner, configure, history = cluster
+    configure(fail_delete=failure)
+
+    def restore():
+        retire_disabled_broker(runner, enabled=False)
+        runner.run(["kubectl", "restore-marker"])
+
+    if failure:
+        with pytest.raises(GcpCommandError):
+            restore()
+        assert not any(call["argv"][0] == "restore-marker" for call in history())
+    else:
+        restore()
+        calls = [call["argv"] for call in history()]
+        deployment = next(i for i, call in enumerate(calls) if call[:2] == ["delete", "deployment"])
+        network = next(i for i, call in enumerate(calls) if call[:2] == ["delete", "networkpolicy"])
+        assert deployment < network < len(calls) - 1
+        assert {"--cascade=foreground", "--wait=true", "--timeout=180s"} <= set(calls[deployment])

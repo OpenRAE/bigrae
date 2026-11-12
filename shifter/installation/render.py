@@ -108,6 +108,8 @@ def render_tfvars(config: RootConfig) -> str:
         )
         telemetry = gcp_settings.range_telemetry.model_dump(mode="json")
         rendered += "range_telemetry = " + json.dumps(telemetry, separators=(",", ":"), sort_keys=True) + "\n"
+        broker = gcp_settings.model_broker.model_dump(mode="json")
+        rendered += "model_broker = " + json.dumps(broker, separators=(",", ":"), sort_keys=True) + "\n"
         capacity = resolve_capacity_profile(gcp_settings.shared_service_capacity_profile)
         for name, value in capacity.terraform_projection().items():
             rendered += _hcl_value(name, value)
@@ -227,6 +229,34 @@ def render_warm_pool_env(config: RootConfig) -> str:
     return f"{_WARM_POOL_ENV_HEADER}WARM_POOL_POLICY_JSON={encoded}\n"
 
 
+def render_model_access_catalog(config: RootConfig) -> str:
+    """Render the validated non-secret catalog as a dedicated mounted artifact."""
+    import json
+
+    from . import model_access
+
+    raw = config.settings.get(model_access.SETTINGS_KEY)
+    if not isinstance(raw, dict) or not isinstance(raw.get("catalog"), dict):
+        return ""
+    return json.dumps(raw["catalog"], separators=(",", ":"), sort_keys=True, ensure_ascii=False) + "\n"
+
+
+def render_model_access_env(config: RootConfig) -> str:
+    """Render activation plus catalog path/digest without placing the body in env."""
+    from . import model_access
+
+    raw = config.settings.get(model_access.SETTINGS_KEY)
+    if not isinstance(raw, dict) or not isinstance(raw.get("catalog"), dict):
+        return "MODEL_ACCESS_ENABLED=false\nMODEL_ACCESS_CATALOG_PATH=\nMODEL_ACCESS_CATALOG_DIGEST=\n"
+    enabled = "true" if raw.get("enabled") is True else "false"
+    digest = raw["catalog"]["digest"]
+    return (
+        f"MODEL_ACCESS_ENABLED={enabled}\n"
+        f"MODEL_ACCESS_CATALOG_PATH={model_access.DEFAULT_CATALOG_PATH}\n"
+        f"MODEL_ACCESS_CATALOG_DIGEST={digest}\n"
+    )
+
+
 def render_gcp_range_telemetry_env(config: RootConfig) -> str:
     """Render ``settings.range_telemetry`` as the ``GCP_RANGE_TELEMETRY_POLICY_JSON`` env line (#2535).
 
@@ -249,7 +279,7 @@ def render_mission_control_lease_env(config: RootConfig) -> str:
     the AWS and GCP runtime producers and delivered into the ``platform-runtime`` ConfigMap
     (issue #27, ADR-011-R9). An omitted block renders the canonical 30/30/365 defaults, so a
     missing block boots backward-compatibly rather than dropping a configured policy. Like
-    the other runtime env renderers this emits exactly one ``KEY=VALUE`` line (no header comment),
+    ``render_model_access_env`` this emits exactly one ``KEY=VALUE`` line (no header comment),
     because the producers split each rendered line on ``=``.
     """
     from shared.mission_control_lease import MissionControlLeasePolicy, dump_policy_json

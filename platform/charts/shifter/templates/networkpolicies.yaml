@@ -308,7 +308,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: NotIn
-        values: [content-egress]
+        values: [model-broker, model-provider-egress, content-egress]
   policyTypes:
     - Egress
   egress:
@@ -453,7 +453,7 @@ spec:
     matchExpressions:
       - key: app.kubernetes.io/component
         operator: NotIn
-        values: [content-egress]
+        values: [model-broker, model-provider-egress, content-egress]
   policyTypes:
     - Egress
   egress:

@@ -36,6 +36,7 @@ Start with the [first-range tutorial](../getting-started/quickstart.md) if you n
 - [Artifact preparation](../ops/artifact-preparation.md): prepare approved images, packs, and adapters.
 - [Credentials](credentials.md): manage SCM and deployment profile credentials.
 - [NGFW](ngfw.md): use an operator-prepared firewall on a compatible backend.
+- [Model sources](model-access.md): administer sources and distinguish the parked broker from supported direct access.
 
 ## Reference and explanation
 

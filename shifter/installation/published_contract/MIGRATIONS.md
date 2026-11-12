@@ -51,15 +51,6 @@ settings schema and version-1 frozen snapshot remain unchanged.
 Run `shifter-config contract check` to verify drift, compatibility, and registry
 conformance locally before pushing.
 
-## Contract version 2
-
-Issue #2909 removes the bespoke model broker and model-access control.
-These settings are removed from the AWS and GCP settings schemas: `model_broker` and `model_broker_runtime`.
-The shared `settings.model_access` block is also removed.
-The `model-broker` process role and the broker, model-access, and enrollment runtime outputs are removed.
-A configuration that still sets a removed block fails validation with the unknown-field error.
-To migrate, delete these blocks from the configuration. Every supported deployment keeps them disabled.
-
 ## Contract version 1
 
 Initial publication of the backend-bundle contract as a committed, versioned artifact.

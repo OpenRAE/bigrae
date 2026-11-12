@@ -16,6 +16,8 @@ from ctf.exceptions import CTFRangeError
 from ctf.models import CTFEvent, CTFParticipant, CTFRangeLaunch, CTFRangeRecovery, CTFSpareRange
 from shared.credentials import resolve_current_credential, resolve_local_credential
 from shared.identity_scope import ResourceScope
+from shared.model_access import OwnedReference
+from shared.model_access.reservation import ModelLaunchScope
 from shared.operation_authority import credential_reference_fields, credential_reference_from_record
 
 if TYPE_CHECKING:
@@ -26,7 +28,9 @@ if TYPE_CHECKING:
 _EVENT_MANAGE_RANGES = "event.manage_ranges"
 
 
-def launch_parameters(event: CTFEvent, owner: PrincipalRef) -> dict[str, object]:
+def launch_parameters(
+    event: CTFEvent, owner: PrincipalRef, subject: OwnedReference, model_scope: ModelLaunchScope | None
+) -> dict[str, object]:
     """Freeze only public contract fields; never retain bearer proof or pack bytes."""
     from workspaces.services import resource_scope_from_ids
 
@@ -43,6 +47,8 @@ def launch_parameters(event: CTFEvent, owner: PrincipalRef) -> dict[str, object]
                 "scope": asdict(scope),
                 "owner_uuid": str(owner.uuid),
                 "cleanup_at": event.get_cleanup_time(),
+                "model_subject": subject.model_dump(mode="json"),
+                "model_scope": model_scope.model_dump(mode="json") if model_scope else None,
             },
             cls=DjangoJSONEncoder,
         )
@@ -75,10 +81,13 @@ def assert_launch_replay(intent: CTFRangeLaunch, credential: CredentialContext, 
         raise CTFRangeError("Range launch intent changed")
 
 
-def _assert_event_binding(intent: CTFRangeLaunch, event: CTFEvent, owner: PrincipalRef) -> None:
+def _assert_event_binding(
+    intent: CTFRangeLaunch, event: CTFEvent, owner: PrincipalRef, subject: OwnedReference
+) -> None:
     """A retained request cannot follow an event into a different tenant."""
+    live = launch_parameters(event, owner, subject, None)
     if (
-        launch_parameters(event, owner) != intent.parameters
+        live | {"model_scope": None} != intent.parameters | {"model_scope": None}
         or event.deleted_at is not None
         or (intent.subject_kind == "spare" and event.owner_principal_uuid != owner.uuid)
     ):
@@ -115,7 +124,8 @@ def execute_launch(intent: CTFRangeLaunch) -> int:
 
     event = CTFEvent.objects.get(pk=intent.event_id)
     owner = resolve_principal_uuid(UUID(parameters["owner_uuid"]))
-    _assert_event_binding(intent, event, owner)
+    subject = OwnedReference.model_validate(parameters["model_subject"])
+    _assert_event_binding(intent, event, owner, subject)
     event_admission = admit_event_actions(credential, event, _EVENT_MANAGE_RANGES)
     if intent.dispatched_at is not None and intent.range_instance_id is not None:
         return intent.range_instance_id
@@ -128,6 +138,10 @@ def execute_launch(intent: CTFRangeLaunch) -> int:
             datetime.fromisoformat(parameters["cleanup_at"]) if parameters["cleanup_at"] else None
         ),
         launch_options=CTFRangeLaunchOptions(
+            model_admission_subject=subject,
+            model_launch_scope=(
+                ModelLaunchScope.model_validate(parameters["model_scope"]) if parameters["model_scope"] else None
+            ),
             credential=credential,
             scope=scope,
             owner_principal=owner,
@@ -142,7 +156,7 @@ def execute_launch(intent: CTFRangeLaunch) -> int:
         event = CTFEvent.objects.select_for_update().get(pk=intent.event_id)
         assert_event_action(event_admission, event, _EVENT_MANAGE_RANGES)
         locked = CTFRangeLaunch.objects.select_for_update().get(pk=intent.pk)
-        _assert_event_binding(locked, event, owner)
+        _assert_event_binding(locked, event, owner, subject)
         _fence_launch_binding(locked, event, credential, instance_id)
         _bind_launch_subject(intent, event, owner, instance_id)
         locked.range_instance_id = instance_id
@@ -164,7 +178,7 @@ def fence_launch_intent(request_id: UUID, event_uuid: UUID) -> None:
     if resolve_local_credential(credential) != credential:
         raise CTFRangeError("Range launch authority changed")
     owner = resolve_principal_uuid(UUID(intent.parameters["owner_uuid"]))
-    _assert_event_binding(intent, event, owner)
+    _assert_event_binding(intent, event, owner, OwnedReference.model_validate(intent.parameters["model_subject"]))
     request_field = {
         "participant": "range_request_id",
         "spare": "request_id",

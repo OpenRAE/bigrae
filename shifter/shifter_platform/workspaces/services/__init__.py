@@ -193,11 +193,18 @@ from ._memberships import (
     list_workspace_memberships,
     remove_workspace_member,
 )
+from ._model_access import (
+    ModelAccessOrganizationScope,
+    ModelAccessWorkspaceScope,
+    resolve_model_access_organization,
+    resolve_model_access_workspace,
+)
 
 # ``WorkspaceOperation`` is re-exported here on purpose: callers name the
 # operation they want authorized, and the facade is the only module they may
 # import (ADR-001-R1). The role vocabulary is NOT re-exported -- no other layer
 # has business reading or comparing a role code.
+from ._model_access import authorize_model_source_workspace as authorize_model_source_workspace
 from ._organization import (
     OrganizationAuditContext,
     OrganizationAuthorizationError,
@@ -303,6 +310,8 @@ __all__ = [
     "IdentityCutoverStateView",
     "LaunchWorkspacePage",
     "MembershipAuditContext",
+    "ModelAccessOrganizationScope",
+    "ModelAccessWorkspaceScope",
     "NativeRelationshipMutationRequest",
     "OrganizationAdminPage",
     "OrganizationAdminView",
@@ -393,6 +402,7 @@ __all__ = [
     "assert_scope_principal_member",
     "authorize_bound_workspace",
     "authorize_launch_workspace_locked",
+    "authorize_model_source_workspace",
     "authorize_policy_range_rebind",
     "authorize_policy_range_scope_listing",
     "authorize_range_rebind",
@@ -461,6 +471,8 @@ __all__ = [
     "resend_workspace_invitation",
     "reserve_workspace_concurrent_range",
     "resolve_administrable_organization",
+    "resolve_model_access_organization",
+    "resolve_model_access_workspace",
     "resolve_personal_workspace",
     "resolve_range_scope_binding",
     "resolve_resource_scope",

@@ -56,7 +56,7 @@ Also escalate suspected security failures or recovery effects outside the select
 | Range owner | Lifecycle state and residual inventory |
 
 Treat application quotas, cloud service quotas, event-capacity profiles,
-and billing budgets as separate limits. A limit change is
+model-access budgets, and billing budgets as separate limits. A limit change is
 a reviewed configuration or infrastructure change with an owner, expiry or
 review date, cost approval, and post-change readback. Do not solve capacity by
 silently weakening containment, retention, admission, or cleanup checks.

@@ -1,9 +1,9 @@
 # Per-range model and tool access design (#681)
 
-This directory is a historical record of the model-access broker design.
-Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
-The [removal design](broker-removal-preflight-2909.md) records what was removed and what remains.
-[ADR-064](../../adr/064-default-range-model-access.md) defines keyless-direct, the only guest model path.
+This reference separates the current model path from retained broker contracts.
+[ADR-068](../../adr/068-model-access-broker-parked.md) parks the broker and supersedes ADR-059, ADR-060, ADR-061, and ADR-067.
+[ADR-064](../../adr/064-default-range-model-access.md) defines the supported keyless-direct guest model path.
+Retained broker contracts do not authorize activation or extension.
 
 The [replacement evaluation](gateway-replacement-evaluation-2274.md) records the LiteLLM OSS selection, deployment-owned rotation, and proposed qualification.
 The [gateway preflight](../../_deprecated/architecture/model-access/gateway-preflight-2274.md) records repository boundaries for that future integration.
@@ -27,7 +27,6 @@ deployment ranges. Shared resources do not require shared participant tokens.
 
 | Document | Purpose |
 | --- | --- |
-| [Broker removal design](broker-removal-preflight-2909.md) | #2909 removal boundary, retained helpers, data handling and security analysis. |
 | [Gateway replacement evaluation](gateway-replacement-evaluation-2274.md) | #2274 comparison, selected LiteLLM OSS integration, deployment-owned rotation and qualification plan. |
 | [Gateway replacement preflight](../../_deprecated/architecture/model-access/gateway-preflight-2274.md) | #2274 clarified replacement scope, ADR-068 precedence and repository boundaries for future integration. |
 | [Architecture and contracts](architecture.md) | Ownership, configuration, allocation, API, persistence, protocol, lifecycle, and user flows. |
@@ -45,6 +44,8 @@ deployment ranges. Shared resources do not require shared participant tokens.
 | [GCP deployment package](gcp-packaging.md) | Disabled M06 identity, TLS, network, runtime and deployment-lane resources. |
 | [GCP packaging preflight](../../_deprecated/architecture/model-access/gcp-packaging-preflight-2123.md) | M06 repository integration gates for runtime isolation, IAM, egress, TLS and deployment evidence. |
 | [Vertex adapter preflight](../../_deprecated/architecture/model-access/vertex-adapter-preflight-2124.md) | M07 pinned-client compatibility, Vertex transport/identity, count-based accounting, usage/error and whole-repository validation guardrails. |
+| [GCP operator probes](../../ops/model-access-gcp-probes.md) | Project onboarding, effective IAM, source-preservation and TLS qualification cases. |
+| [Operations design](../../ops/model-access.md) | Deployment, sizing, objectives, migration, failure recovery, cost, and release evidence. |
 | [Implementation issues and dependencies](delivery.md) | Coding-sized work, milestones, hard blockers, and completion criteria. |
 | [Example v1 policy](example-policy.v1.json) | Complete disabled, non-secret catalog with its canonical digest. |
 | [Canonical JSON vector](canonical-json-v1-vector.json) | Exact UTF-8 canonical bytes and SHA-256 digest vector. |
@@ -54,6 +55,7 @@ deployment ranges. Shared resources do not require shared participant tokens.
 | [ADR-061](../../adr/061-model-access-operations-qualification.md) | Revocation, operation, and qualification decision. |
 | [ADR-064](../../adr/064-default-range-model-access.md) | Direct keyless default, mutually exclusive with broker-enforced access per range. |
 | [ADR-068](../../adr/068-model-access-broker-parked.md) | Current decision: broker parked, direct access supported, future controls optional. |
+| [Tenant user guide](../../features/model-access.md) | What organizers, participants, and operators will see. |
 
 ## Scope and support claims
 

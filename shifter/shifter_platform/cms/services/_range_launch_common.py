@@ -26,6 +26,8 @@ if TYPE_CHECKING:
 
     from cms.models import Request
     from shared.enums import RangeSource
+    from shared.model_access import OwnedReference
+    from shared.model_access.reservation import ModelLaunchScope
 
 logger = logging.getLogger(__name__)
 
@@ -44,6 +46,9 @@ class LaunchOptions:
     # PLAT-202: the canonical sharing-membership subject (a CTF draw reference)
     # so required-model admission resolves the sharing overlap against the real
     # launch subject rather than the launcher identity.
+    model_admission_subject: OwnedReference | None = None
+    model_launch_scope: ModelLaunchScope | None = None
+    model_sources: dict | None = None
     # CTF ranges belong to a participant, while private scenario visibility is
     # authorized by the event owner who selected the tenant pack.
     content_authorizer: User | None = None

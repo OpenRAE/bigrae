@@ -29,6 +29,29 @@ def test_native_proxy_and_database_user_reach_all_runtime_consumers(tmp_path):
             "databaseCidrs": ["10.60.0.12/32"],
         }
     }
+    from test_model_broker import enabled_values
+
+    values["modelBroker"] = enabled_values()["modelBroker"]
+    broker = values["modelBroker"]
+    catalog = json.loads(
+        (
+            CHART.parents[2] / "docs/architecture/model-access/example-policy.v3.json"
+        ).read_text()
+    )
+    catalog["enabled"] = True
+    broker.update(
+        catalog_json=json.dumps(catalog),
+        catalog_digest=catalog["digest"],
+        provisioner_subject="provisioner@synthetic-project.iam.gserviceaccount.com",
+        providers_json="{}",
+        fingerprint_secret_name="fingerprint-v1",
+        fingerprint_key_version="v1",
+        broker_subject_id="123456789012345678901",
+        provisioner_subject_id="123456789012345678902",
+    )
+    broker["control_env"].update(
+        MODEL_ACCESS_ENABLED="true", MODEL_ACCESS_CATALOG_DIGEST=catalog["digest"]
+    )
     path = tmp_path / "native.json"
     path.write_text(json.dumps(values))
     result = subprocess.run(
@@ -60,10 +83,11 @@ def test_native_proxy_and_database_user_reach_all_runtime_consumers(tmp_path):
     assert {"name": "POSTGRESQL_HOSTNAME", "value": "127.0.0.1"} in guac_pod[
         "containers"
     ][0]["env"]
-    from policy_selectors import selected
+    from test_model_broker import selected
 
     for component, expected in (
         ("portal", True),
+        ("model-access-control", True),
         ("guacamole-client", True),
         ("migrator", True),
         # The scheduled prune CronJob reads the application database (ADR-072-R5).

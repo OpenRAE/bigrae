@@ -19,6 +19,25 @@ def identity_cutover_resource_disposition() -> tuple[int, int]:
     )
 
 
+def identity_cutover_contract_gaps() -> int:
+    """Count persisted model-authority JSON that the native contract cannot prove."""
+    from cms.models import RangeInstance
+    from shared.model_access.reservation import ModelLaunchScope
+    from shared.model_access.sources import ModelSourceSponsorship
+
+    gaps = 0
+    rows = RangeInstance._base_manager.values_list("model_source_sponsorship", "model_launch_scope")
+    for sponsorship, launch_scope in rows.iterator():
+        try:
+            if sponsorship is not None:
+                ModelSourceSponsorship.model_validate(sponsorship)
+            if launch_scope is not None:
+                ModelLaunchScope.model_validate(launch_scope)
+        except ValueError:
+            gaps += 1
+    return gaps
+
+
 def pending_identity_cutover_work() -> tuple[int, int]:
     """Count pending CMS work and rows lacking a complete initiator reference."""
     from cms.models import AgentUpload

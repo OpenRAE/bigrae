@@ -77,6 +77,13 @@ _FINISHED_POD_PHASES = frozenset({"Succeeded", "Failed"})
 # image identity of the rendered release; release containers stay required (#2698).
 _SUPPORT_CONTAINERS = frozenset({"cloud-sql-proxy"})
 
+_BROKER_CONTAINERS = {
+    "model-broker": {"model-broker": "portal"},
+    "model-access-control": {"model-access-control": "portal"},
+    "model-provider-egress": {"provider-egress": "portal"},
+}
+
+
 # The OpenFGA policy servers run the chart-pinned ``openfga`` image when the
 # release renders them, as every native identity release does (#2698).
 _POLICY_CONTAINERS = {
@@ -85,14 +92,14 @@ _POLICY_CONTAINERS = {
 }
 
 
-def release_deployments(*, policy_enabled: bool = False) -> tuple[str, ...]:
+def release_deployments(*, model_broker_enabled: bool = False, policy_enabled: bool = False) -> tuple[str, ...]:
     """Return every Deployment that must converge before evidence is sampled."""
     if set(_RELEASE_DEPLOYMENTS) != set(_RELEASE_CONTAINERS):
         raise ValueError("release deployment and container component maps disagree")
     deployments = tuple(sorted(_RELEASE_DEPLOYMENTS.values()))
     if len(deployments) != len(set(deployments)):
         raise ValueError("release deployment map contains duplicate controllers")
-    optional = list(_POLICY_CONTAINERS) if policy_enabled else []
+    optional = [*(_BROKER_CONTAINERS if model_broker_enabled else ()), *(_POLICY_CONTAINERS if policy_enabled else ())]
     return tuple(sorted((*deployments, *optional)))
 
 
@@ -252,6 +259,7 @@ def build_evidence(
     expected: dict[str, dict[str, str]],
     *,
     source_sha: str,
+    model_broker_enabled: bool = False,
     support: dict[str, dict[str, str]] | None = None,
     policy_enabled: bool = False,
 ) -> dict[str, object]:
@@ -262,6 +270,7 @@ def build_evidence(
 
     required = {
         **_RELEASE_CONTAINERS,
+        **(_BROKER_CONTAINERS if model_broker_enabled else {}),
         **(_POLICY_CONTAINERS if policy_enabled else {}),
     }
     containers = {**required, **_SCHEDULED_CONTAINERS}
@@ -316,6 +325,7 @@ def _write_private_json(path: Path, value: dict[str, object]) -> None:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--list-deployments", action="store_true")
+    parser.add_argument("--model-broker-enabled", choices=("true", "false"), default="false")
     parser.add_argument("--policy-enabled", choices=("true", "false"), default="false")
     parser.add_argument("--pods-json", type=Path)
     parser.add_argument("--output", type=Path)
@@ -328,7 +338,9 @@ def main() -> int:
         if args.list_deployments:
             if args.pods_json or args.output or args.source_sha or args.expected_image or args.support_image:
                 parser.error("--list-deployments cannot be combined with evidence arguments")
-            for deployment in release_deployments(policy_enabled=args.policy_enabled == "true"):
+            for deployment in release_deployments(
+                model_broker_enabled=args.model_broker_enabled == "true", policy_enabled=args.policy_enabled == "true"
+            ):
                 print(deployment)
             return 0
         if not args.pods_json or not args.output or not args.source_sha:
@@ -339,6 +351,7 @@ def main() -> int:
             pods,
             expected,
             source_sha=args.source_sha,
+            model_broker_enabled=args.model_broker_enabled == "true",
             support=parse_support_images(args.support_image),
             policy_enabled=args.policy_enabled == "true",
         )

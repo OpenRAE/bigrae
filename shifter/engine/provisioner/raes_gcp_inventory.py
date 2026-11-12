@@ -19,6 +19,7 @@ from typing import Any
 
 from config import load_gce_range_cell_config
 from gcp_range_cell_clients import GCEClients, _build_clients
+from gcp_range_cell_model_broker import broker_firewall_name
 from gcp_range_cell_ops import _get_or_none
 from gcp_range_cell_types import RangeCellPlan
 from raes_gcp_destroy import RaesGceDestroyOptions, _default_destroy_profile
@@ -98,7 +99,7 @@ def _check_compute(tally: _Tally, clients: GCEClients, plan: RangeCellPlan) -> N
         )
 
 
-def _check_network(tally: _Tally, clients: GCEClients, plan: RangeCellPlan) -> None:
+def _check_network(tally: _Tally, clients: GCEClients, plan: RangeCellPlan, range_id: int) -> None:
     """Read back the owned router, firewalls, subnets, and an owned network."""
     project = plan["project_id"]
     router_nat = plan.get("router_nat")
@@ -111,7 +112,7 @@ def _check_network(tally: _Tally, clients: GCEClients, plan: RangeCellPlan) -> N
             region=plan["region"],
             router=router_nat["router_name"],
         )
-    firewall_names = {rule["name"] for rule in plan["firewalls"]}
+    firewall_names = {rule["name"] for rule in plan["firewalls"]} | {broker_firewall_name(range_id)}
     for firewall_name in sorted(firewall_names):
         tally.check(clients, "firewalls", clients.firewalls.get, project=project, firewall=firewall_name)
     for subnet in plan["subnets"]:
@@ -158,7 +159,7 @@ def inventory_raes_range_cell(
     tally = _Tally()
     project = plan["project_id"]
     _check_compute(tally, resolved_clients, plan)
-    _check_network(tally, resolved_clients, plan)
+    _check_network(tally, resolved_clients, plan, range_id)
     outcome = _outcome(tally)
     return {
         "outcome": outcome,

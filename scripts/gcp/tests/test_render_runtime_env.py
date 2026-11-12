@@ -426,6 +426,22 @@ def test_render_env_draws_the_configured_worker_vcpu_and_rejects_an_invalid_valu
         module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST)
 
 
+def test_render_env_defaults_model_access_to_disabled_without_catalog_body():
+    module = _load_module("render_runtime_env.py", "render_runtime_env")
+    rendered = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST)
+    assert "MODEL_ACCESS_ENABLED=false\n" in rendered
+    assert "MODEL_ACCESS_CATALOG_PATH=\n" in rendered
+    assert "MODEL_ACCESS_CATALOG_DIGEST=\n" in rendered
+    assert "model-access-policy/v1" not in rendered
+
+
+def test_render_env_rejects_incomplete_model_access_projection(monkeypatch):
+    module = _load_module("render_runtime_env.py", "render_runtime_env")
+    monkeypatch.setenv("MODEL_ACCESS_ENABLED", "true")
+    with pytest.raises(ValueError, match="path and digest"):
+        module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST)
+
+
 _OPENVPN_POOL = {
     "endpoint": "203.0.113.7",
     "subnet_cidr": "10.49.0.0/24",

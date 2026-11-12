@@ -18,6 +18,7 @@ An unmounted controller is not a supported endpoint.
 | Content, image inventory, adapters, preparation, and pack files | `cms/api/urls.py`, `cms/api/account_admin_urls.py` | [CMS](../technical/shifter_platform/cms.md), [content authority](../technical/shifter_platform/content-range-authority.md) |
 | CTF events, participants, challenges, scoring, communications, and receipts | `ctf/api/urls.py`, `ctf/api/operation_policy.py` | [CTF](../technical/shifter_platform/ctf.md), [communications](../technical/shifter_platform/ctf-communications.md) |
 | Range launch, status, lifecycle, uploads, remote access, and VPN delivery | `mission_control/api/urls.py` | [API conventions](../technical/dev/api.md), [Mission Control](../technical/shifter_platform/mission_control.md) |
+| Model-access management | `config/api_model_access.py`, `shared/api/model_access.py`, `shared/api/model_sources.py` | [Continuing authority](../technical/shifter_platform/content-range-authority.md), [model access](../features/model-access.md) |
 | Bootstrap, dashboard, schema, and Swagger UI | `config/api_urls.py` | [API development](../technical/dev/api.md) |
 
 `/api/v1/schema/` serves OpenAPI; `/api/v1/docs/` serves the local Swagger UI.
@@ -69,6 +70,7 @@ Distribution, plugin protocol, verification API, and report versions are separat
 | `preparation` | Closed input, build, output, cleanup evidence and `PreparationWorkerResult` |
 | `trial` | `TrialInput`, `TrialStatus`, `TrialExport`, `parse_trial_output`, fixed paths and output limit |
 | `guest` | `read_runtime_values` and bounded runtime-value transport |
+| `model_access` | `enroll`, `access_token`, and the standard-library guest helper CLI |
 | `verification` | Public declarations, runner, bindings, outcomes, discovery, execution, redacted report, and exit status |
 | `worker` | Standard module entrypoint for isolated inspection and runtime planning |
 
@@ -82,7 +84,8 @@ Administrators bind executable software separately from content installation.
 The isolated worker plans bounded actions; the host authorizes and executes them.
 Compatibility inspection alone does not establish guest readiness.
 
-Keyless-direct is the only guest model path (ADR-064).
+The broker remains parked under ADR-068; retained model-access helpers do not enable it.
+Keyless-direct is the supported guest model path.
 Operator verification plugins use a separate runner contract and do not replace the runtime worker.
 Signed-receipt validators use a third, separate callback protocol.
 

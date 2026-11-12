@@ -24,6 +24,7 @@ def configured(monkeypatch):
         "RANGE_ROUTE_TABLE_ID": "rtb-" + "0" * 17,
         "PORTAL_NETWORK_CIDRS": "10.42.0.0/20",
         "ACCESS_NETWORK_CIDRS": "10.42.0.0/20",
+        "MODEL_BROKER_GUEST_CIDRS": "10.42.0.25/32",
     }.items():
         monkeypatch.setenv(key, value)
     run = SimpleNamespace(
@@ -48,6 +49,7 @@ def test_dispatch_uses_current_operation_for_allocation_and_retained_epoch_for_c
     assert clients.call_args.args[0].generation == UUID(int=3)
     options = apply.call_args.args[4]
     assert options.generation == UUID(int=3)
+    assert options.config.broker_cidrs == ()
     assert options.allocated_cidrs == {"backend.ec2.network.default": "10.50.1.0/28"}
 
 
@@ -60,11 +62,20 @@ def test_wrong_provider_cannot_allocate_or_open_cloud_clients(configured, monkey
     reserve.assert_not_called()
 
 
+def test_model_enrollment_needs_an_exact_applied_listener_before_allocation(configured, monkeypatch):
+    run, clients, reserve, _, _ = configured
+    monkeypatch.setenv("MODEL_BROKER_GUEST_CIDRS", "10.42.0.0/20")
+    with pytest.raises(ValueError):
+        runtime.provision_ec2_run(run, enrollment=Mock())
+    clients.assert_not_called()
+    reserve.assert_not_called()
+
+
 @pytest.mark.parametrize("outcome", ["VERIFIED_ABSENT", "RESIDUALS_FOUND", "INCOMPLETE"])
-def test_cleanup_does_not_need_network_settings_and_releases_only_after_absence(configured, monkeypatch, outcome):
+def test_cleanup_does_not_need_broker_settings_and_releases_only_after_absence(configured, monkeypatch, outcome):
     run, _clients, _, _, secrets = configured
     run = SimpleNamespace(**{**vars(run), "operation_id": str(UUID(int=4))})
-    for key in ("PORTAL_NETWORK_CIDRS", "ACCESS_NETWORK_CIDRS", "RANGE_ROUTE_TABLE_ID"):
+    for key in ("MODEL_BROKER_GUEST_CIDRS", "PORTAL_NETWORK_CIDRS", "ACCESS_NETWORK_CIDRS", "RANGE_ROUTE_TABLE_ID"):
         monkeypatch.delenv(key)
     destroy = Mock(return_value={"outcome": outcome, "scope": {}, "residual_categories": []})
     release = Mock()

@@ -241,8 +241,13 @@ def recover_participant_range(
         # Both strategies block the old range before attaching the replacement
         # (#307 one-active-range-per-source; see the module docstring).
         if strategy == RecoveryStrategy.REBUILD.value:
+            # PLAT-202: the replacement inherits the old range's model-access
+            # membership subject, so published range-scoped restrictions carry over.
+            from ctf.bridges import cms_resolve_model_access_range_reference
+
+            model_subject = cms_resolve_model_access_range_reference(old_range_instance_id)
             _ensure_old_range_blocked(recovery, old_range_instance_id, credential)
-            _ensure_rebuild_replacement_ready(recovery, participant, credential)
+            _ensure_rebuild_replacement_ready(recovery, participant, model_subject, credential)
         else:
             # reassign_spare reserves the spare before teardown (no stranding).
             _ensure_spare_reserved(recovery, participant, spare_range_instance_id)

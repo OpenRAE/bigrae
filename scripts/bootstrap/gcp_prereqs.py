@@ -5,7 +5,9 @@ install and on every update:
 
 - initialize the Identity Platform config singleton (Terraform cannot create it);
 - create and harden the Terraform state bucket;
-- create the Artifact Registry service agent before Terraform grants it CMEK access.
+- create the Artifact Registry service agent before Terraform grants it CMEK access;
+- release a disabled model broker's internal load balancer before Terraform removes
+  its address.
 
 Each step is idempotent and runs as the selected purpose identity.
 """
@@ -19,7 +21,7 @@ from urllib import parse as urllib_parse
 from urllib import request as urllib_request
 
 from bootstrap_core import info, success
-from gcp_process import ProcessRunner
+from gcp_process import GcpCommandError, ProcessRunner
 
 STATE_RETENTION_SECONDS = 30 * 24 * 60 * 60
 _IDENTITY_TOOLKIT = "https://identitytoolkit.googleapis.com"
@@ -241,3 +243,53 @@ def ensure_state_bucket(
                 env=env,
             )
             info(f"Removed {member} from {role} on the state bucket")
+
+
+def release_disabled_broker_load_balancer(
+    runner: ProcessRunner,
+    env: Mapping[str, str | None],
+    *,
+    broker_enabled: bool,
+    project_id: str,
+    region: str,
+    cluster: str,
+    kube_env: Mapping[str, str | None],
+) -> None:
+    """Delete the broker Service before Terraform releases its reserved address."""
+    if broker_enabled:
+        return
+    membership = runner.run(
+        [
+            "gcloud",
+            "container",
+            "fleet",
+            "memberships",
+            "describe",
+            cluster,
+            "--location",
+            region,
+            "--project",
+            project_id,
+        ],
+        env=env,
+        check=False,
+    )
+    if membership.returncode != 0:
+        return
+    try:
+        runner.run(
+            [
+                "kubectl",
+                "delete",
+                "service",
+                "model-broker",
+                "-n",
+                "shifter-platform",
+                "--ignore-not-found",
+                "--wait=true",
+                "--timeout=300s",
+            ],
+            env=kube_env,
+        )
+    except GcpCommandError as exc:
+        raise PrerequisiteError(f"cannot release the disabled model broker load balancer: {exc}") from None

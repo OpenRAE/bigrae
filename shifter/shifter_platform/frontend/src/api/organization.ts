@@ -15,7 +15,7 @@ interface OrganizationPage {
   results: Organization[];
 }
 
-export function useAdministrableOrganizations(page = 1, integration: "adapters" = "adapters") {
+export function useAdministrableOrganizations(page = 1, integration: "adapters" | "model_sources" = "adapters") {
   const pageSize = 25;
   return useQuery({
     queryKey: [...organizationKeys.administrable, integration, page],

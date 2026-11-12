@@ -363,6 +363,40 @@ def test_expected_image_parser_rejects_mutable_or_malformed_references(value: st
         module.parse_expected_images([value])
 
 
+def test_optional_broker_requires_explicit_release_enablement_and_both_components():
+    module = _load_module()
+    pods = _valid_pods(module)
+    for component, container_name in (
+        ("model-broker", "model-broker"),
+        ("model-access-control", "model-access-control"),
+        ("model-provider-egress", "provider-egress"),
+    ):
+        image = _EXPECTED["portal"]
+        container = _container(container_name, image["root"], image["digest"])
+        pods["items"].append(
+            {
+                "metadata": {
+                    "name": component + "-123",
+                    "labels": {"app.kubernetes.io/part-of": "shifter", "app.kubernetes.io/component": component},
+                },
+                "spec": {"containers": [{"name": container_name, "image": container["image"]}]},
+                "status": {"containerStatuses": [container]},
+            }
+        )
+    with pytest.raises(ValueError, match="unexpected"):
+        module.build_evidence(pods, _EXPECTED, source_sha=_SHA)
+    assert (
+        len(module.build_evidence(pods, _EXPECTED, source_sha=_SHA, model_broker_enabled=True)["running_containers"])
+        == len(module._RELEASE_CONTAINERS) + 3
+    )
+    pods["items"].pop()
+    with pytest.raises(ValueError, match="missing release components"):
+        module.build_evidence(pods, _EXPECTED, source_sha=_SHA, model_broker_enabled=True)
+    assert {"model-broker", "model-access-control", "model-provider-egress"} <= set(
+        module.release_deployments(model_broker_enabled=True)
+    )
+
+
 def test_policy_servers_are_required_at_their_pinned_image_when_the_release_renders_them():
     """#2698: native identity adds the OpenFGA runtime and admin servers."""
     module = _load_module()

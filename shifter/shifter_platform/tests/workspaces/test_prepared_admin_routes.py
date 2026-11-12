@@ -19,7 +19,7 @@ def test_account_administration_routes_are_mounted_in_production():
     assert match.route == "api/v1/accounts/"
 
 
-@pytest.mark.parametrize("integration", ["adapters"])
+@pytest.mark.parametrize("integration", ["adapters", "model_sources"])
 @pytest.mark.parametrize("authority", ["organization", "installation"])
 def test_integration_discovery_and_bootstrap_admit_organization_only_administrators(
     monkeypatch, integration, authority

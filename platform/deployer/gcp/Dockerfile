@@ -244,6 +244,7 @@ COPY --from=providers /opt/bigrae/terraform-roots /opt/bigrae/terraform-roots
 # Deploy tooling, in the repository layout. get_repo_root() in
 # scripts/bootstrap/bootstrap_core.py resolves to /opt/bigrae.
 COPY shifter/installation /opt/bigrae/lib/installation
+COPY shifter/shifter_platform/shared/model_access /opt/bigrae/lib/shared/model_access
 COPY shifter/shifter_platform/shared/mission_control_lease /opt/bigrae/lib/shared/mission_control_lease
 COPY shifter/shifter_platform/shared/gcp_range_telemetry /opt/bigrae/lib/shared/gcp_range_telemetry
 COPY shifter/shifter_platform/shared/gcp_native_identity /opt/bigrae/lib/shared/gcp_native_identity

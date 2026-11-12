@@ -25,7 +25,7 @@ from .contract import (
 # adding a future ``contract_version`` to ``SUPPORTED_CONTRACT_VERSIONS`` does not silently
 # re-version the bundles — a new version requires an intentional edit here (and a
 # settings/renderer migration for the backend).
-CONTRACT_VERSION = 2
+CONTRACT_VERSION = 1
 ROOT_CONFIG_PATH = "shifter.yaml"
 SHIFTER_CHART_PATH = "platform/charts/shifter"
 

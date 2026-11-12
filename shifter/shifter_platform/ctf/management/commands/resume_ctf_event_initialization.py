@@ -10,7 +10,7 @@ from django.core.management.base import BaseCommand, CommandError
 from ctf.exceptions import CTFError
 from ctf.models import CTFEvent
 from ctf.services.event.initialization import abort_event_initialization, resume_event_initialization
-from shared.operation_authority import CredentialReference
+from shared.model_access.sources import ModelSourceCredentialReference
 
 if TYPE_CHECKING:
     from django.core.management.base import CommandParser
@@ -44,7 +44,7 @@ class Command(BaseCommand):
         """Resume or abort the retained intent under original or supplied current proof."""
         try:
             credential = (
-                CredentialReference.model_validate_json(options["credential_reference"]).credential()
+                ModelSourceCredentialReference.model_validate_json(options["credential_reference"]).credential()
                 if options["credential_reference"]
                 else None
             )

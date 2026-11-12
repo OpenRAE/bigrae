@@ -90,8 +90,9 @@ class TestRenderMissionControlLeaseEnvCommand:
 
 
 class TestSiblingRenderEnvCommands:
-    """The lease render command mirrors the warm-pool render command; exercise both env
-    renderers through the CLI so the shared error and emit paths stay covered."""
+    """The lease render command mirrors the warm-pool and model-access render commands;
+    exercise all three env renderers through the CLI so the shared error and emit paths
+    stay covered."""
 
     def test_render_warm_pool_env_emits_policy_line(self, tmp_path, capsys, aws_config):
         cfg_path = tmp_path / "shifter.yaml"
@@ -109,6 +110,21 @@ class TestSiblingRenderEnvCommands:
         rc = main(["render-warm-pool-env", str(cfg_path)])
         assert rc == 1
         assert "settings.warm_pool" in capsys.readouterr().err
+
+    def test_render_model_access_env_emits_activation_lines(self, tmp_path, capsys, aws_config):
+        cfg_path = tmp_path / "shifter.yaml"
+        _write_yaml(cfg_path, aws_config)
+        rc = main(["render-model-access-env", str(cfg_path)])
+        assert rc == 0
+        assert "MODEL_ACCESS_ENABLED=" in capsys.readouterr().out
+
+    def test_render_model_access_env_invalid_block_exits_nonzero(self, tmp_path, capsys, aws_config):
+        aws_config["settings"]["model_access"] = {"enabled": "notbool"}
+        cfg_path = tmp_path / "shifter.yaml"
+        _write_yaml(cfg_path, aws_config)
+        rc = main(["render-model-access-env", str(cfg_path)])
+        assert rc == 1
+        assert "settings.model_access" in capsys.readouterr().err
 
 
 class TestRenderCapacityCommand:

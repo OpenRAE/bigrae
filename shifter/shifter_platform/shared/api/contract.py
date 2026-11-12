@@ -94,29 +94,21 @@ def _remove_retired_property(
         base_schema["required"].remove(property_name)
 
 
-def _remove_retired_operation(base: dict[str, Any], current: dict[str, Any], operation: dict[str, Any]) -> None:
-    """Project one exact retired write operation; refuse it if the current schema still has it."""
-    path, method = operation["path"], operation["method"]
-    if method not in {"post", "put", "patch", "delete"} or not isinstance(path, str) or not path.startswith("/"):
-        raise RuntimeError("Invalid retired write operation")
-    if method in current.get("paths", {}).get(path, {}):
-        raise RuntimeError(f"Retired API operation was reintroduced: {method} {path}")
-    base.get("paths", {}).get(path, {}).pop(method, None)
-
-
 def _apply_retirement(base: dict[str, Any], current: dict[str, Any], retirement: dict[str, Any]) -> None:
     """Project every exact path and response field in one retirement record."""
-    projections = (
-        ("paths", _remove_retired_path),
-        ("operations", _remove_retired_operation),
-        ("response_schema_properties", _remove_retired_property),
-        ("parameters", _remove_retired_parameter),
-        ("schema_enum_values", _remove_retired_schema_enum_values),
-        ("parameter_enum_values", _remove_retired_parameter_enum_values),
-    )
-    for key, project in projections:
-        for entry in retirement.get(key, []):
-            project(base, current, entry)
+    for retired_path in retirement.get("paths", []):
+        _remove_retired_path(base, current, retired_path)
+    for operation in retirement.get("operations", []):
+        path, method = operation["path"], operation["method"]
+        if method not in {"post", "put", "patch", "delete"} or not isinstance(path, str) or not path.startswith("/"):
+            raise RuntimeError("Invalid retired write operation")
+        if method in current.get("paths", {}).get(path, {}):
+            raise RuntimeError(f"Retired API operation was reintroduced: {method} {path}")
+        base.get("paths", {}).get(path, {}).pop(method, None)
+    for retired_property in retirement.get("response_schema_properties", []):
+        _remove_retired_property(base, current, retired_property)
+    for parameter in retirement.get("parameters", []):
+        _remove_retired_parameter(base, current, parameter)
 
 
 def _validate_retired_parameter(parameter: dict[str, str]) -> None:
@@ -151,67 +143,15 @@ def _remove_retired_parameter(base: dict[str, Any], current: dict[str, Any], par
         operation["parameters"] = [item for item in operation["parameters"] if not matches(item)]
 
 
-def _retired_enum_values(entry: dict[str, Any], keys: set[str]) -> frozenset[str]:
-    """Require exact keys and a non-empty list of named string values."""
-    values = entry.get("values") if isinstance(entry, dict) else None
-    if (
-        not isinstance(entry, dict)
-        or set(entry) != keys | {"values"}
-        or not isinstance(values, list)
-        or not values
-        or not all(isinstance(value, str) and value for value in values)
-    ):
-        raise RuntimeError("Invalid retired API enum values")
-    return frozenset(values)
-
-
-def _project_enum(
-    base_schema: dict[str, Any], current_schema: dict[str, Any], values: frozenset[str], label: str
-) -> None:
-    """Drop only the named values from the baseline enum; a current value is a reintroduction."""
-    if values & set(current_schema.get("enum", [])):
-        raise RuntimeError(f"Retired API enum value was reintroduced: {label}")
-    if "enum" in base_schema:
-        base_schema["enum"] = [value for value in base_schema["enum"] if value not in values]
-
-
-def _remove_retired_schema_enum_values(base: dict[str, Any], current: dict[str, Any], entry: dict[str, Any]) -> None:
-    """Project named values out of one component enum schema."""
-    values = _retired_enum_values(entry, {"schema"})
-    name = entry["schema"]
-    if not isinstance(name, str) or not name:
-        raise RuntimeError("Invalid retired API enum values")
-    base_schema = base.get("components", {}).get("schemas", {}).get(name, {})
-    current_schema = current.get("components", {}).get("schemas", {}).get(name, {})
-    _project_enum(base_schema, current_schema, values, name)
-
-
-def _remove_retired_parameter_enum_values(base: dict[str, Any], current: dict[str, Any], entry: dict[str, Any]) -> None:
-    """Project named values out of one exact operation parameter's enum."""
-    values = _retired_enum_values(entry, {"path", "method", "name", "in"})
-    _validate_retired_parameter({key: entry[key] for key in ("path", "method", "name", "in")})
-    path, method = entry["path"], entry["method"]
-
-    def schema(document: dict[str, Any]) -> dict[str, Any]:
-        """Return the matching parameter schema, or an empty schema when absent."""
-        operation = document.get("paths", {}).get(path, {}).get(method, {})
-        for item in operation.get("parameters", []):
-            if item.get("name") == entry["name"] and item.get("in") == entry["in"]:
-                return item.get("schema", {})
-        return {}
-
-    _project_enum(schema(base), schema(current), values, f"{method} {path} {entry['name']}")
-
-
 def apply_accepted_retirements(base_text: str, current_text: str, major: str = API_MAJOR) -> str:
     """Project accepted whole-feature retirements out of the trusted baseline.
 
     Ordinary breaking changes still go through oasdiff unchanged. This narrow
     projection exists for the ADR-040 carve-out where a separately accepted ADR
     removes a complete product instead of preserving it under another API
-    major. Every path, response property, parameter, and enum value is exact and
-    must be absent from the current runtime contract; metadata cannot waive
-    unrelated changes or hide a reintroduced surface.
+    major. Every path and response property is exact and must be absent from the
+    current runtime contract; metadata cannot waive unrelated changes or hide a
+    reintroduced surface.
     """
     path = retirement_path(major)
     if not path.exists():

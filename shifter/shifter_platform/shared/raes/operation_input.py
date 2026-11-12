@@ -37,6 +37,7 @@ from uuid import UUID
 
 from shared.gcp_cloud_content import CloudContentEnvelope
 from shared.gcp_range_projects import GcpProjectLease
+from shared.model_access.guest_binding import ModelGuestBinding
 from shared.raes.artifact_binding import MAX_ARTIFACT_BINDINGS, ArtifactBinding, ArtifactBindingError
 from shared.raes.content_delivery import ContentDeliveryError, DeliveryBinding
 from shared.raes.participant_access import (
@@ -48,6 +49,7 @@ from shared.runtime_plugin_binding import RuntimePin, parse_runtime_pin
 from shared.runtime_plugin_preparation import RuntimePreparation
 
 from .operation_input_candidates import MAX_IMAGE_CANDIDATES, MAX_IMAGE_KEYS, _validated_candidates
+from .operation_input_enrollment import _model_enrollments
 from .operation_input_identity import (
     RaesOperationInputError,
     RaesRangeIdentity,
@@ -96,6 +98,7 @@ class RaesInputBindings:
     artifact: Sequence[ArtifactBinding] = ()
     runtime_plugin: RuntimePin | None = None
     runtime_preparation: RuntimePreparation | None = None
+    model_enrollments: tuple[ModelGuestBinding, ...] = ()
     remote_access: RaesRemoteAccess | None = None
     management_targets: tuple[str, ...] = ()
     gcp_projects: tuple[GcpProjectLease, ...] = ()
@@ -119,6 +122,7 @@ _INPUT_KEYS = frozenset(
         "egress_mode",
         "runtime_plugin",
         "runtime_preparation",
+        "model_enrollments",
         "resource_generation",
         "remote_access",
         "management_targets",
@@ -145,6 +149,7 @@ _OPTIONAL_INPUT_KEYS = frozenset(
         "egress_mode",
         "runtime_plugin",
         "runtime_preparation",
+        "model_enrollments",
         "resource_generation",
         "remote_access",
         "management_targets",
@@ -181,6 +186,7 @@ class RaesOperationInput:
     _image_candidates: dict[str, tuple[dict[str, Any], ...]]
     runtime_plugin: RuntimePin | None = None
     runtime_preparation: RuntimePreparation | None = None
+    model_enrollments: tuple[ModelGuestBinding, ...] = ()
     resource_generation: str | None = None
     remote_access: RaesRemoteAccess | None = None
     management_targets: tuple[str, ...] = ()
@@ -417,6 +423,7 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
         _image_candidates=_validated_candidates(obj["image_candidates"]),
         runtime_plugin=plugin,
         runtime_preparation=preparation,
+        model_enrollments=_model_enrollments(obj, plugin),
         resource_generation=resource_generation,
         remote_access=remote_access,
         management_targets=management_targets,
@@ -464,6 +471,8 @@ def build_raes_operation_input(
         payload["runtime_plugin"] = bindings.runtime_plugin.model_dump(mode="json")
     if bindings.runtime_preparation is not None:
         payload["runtime_preparation"] = bindings.runtime_preparation.model_dump(mode="json")
+    if bindings.model_enrollments:
+        payload["model_enrollments"] = [row.model_dump(mode="json") for row in bindings.model_enrollments]
     if identity.resource_generation is not None:
         payload["resource_generation"] = identity.resource_generation
     if bindings.remote_access is not None:

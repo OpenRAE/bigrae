@@ -4080,6 +4080,8 @@
       "docs/adr/059-range-model-access-broker.md",
       "docs/_deprecated/architecture/model-access/source-management-preflight-2243.md",
       "docs/architecture/model-access/gcp-packaging.md",
+      "scripts/check_tf_gcp_iam_resource_scope/test_model_broker_scope.py",
+      "platform/charts/shifter/tests/test_model_broker.py",
       "docs/architecture/model-access/index.md",
       "docs/architecture/model-access/architecture.md",
       "docs/architecture/model-access/security.md",
@@ -4102,7 +4104,7 @@
       },
       {
         "id": "ADR-064-R2",
-        "description": "Direct default-on model access and the ADR-059 broker were mutually exclusive per range. Issue #2909 removed the broker, so every range uses the keyless guest identity and no broker guest path exists. Direct-path invocations are not metered or limited.",
+        "description": "Direct default-on model access and the ADR-059 broker are mutually exclusive per range. When the broker is the guest model path (MODEL_BROKER_GUEST_VIP set) the provisioner leaves guests identity-less, preserving the broker's source-preserving keyless isolated egress; the keyless guest identity is attached only when no broker guest path is configured. Direct-path invocations bypass broker request/spend/rate enforcement by design.",
         "checks": []
       }
     ],
@@ -4157,10 +4159,17 @@
       "docs/_deprecated/architecture/model-access/allocation-preflight-2120.md",
       "docs/_deprecated/architecture/model-access/request-accounting-preflight-2121.md",
       "docs/architecture/model-access/allocations.md",
+      "shifter/shifter_platform/engine/services/_model_allocation.py",
+      "shifter/shifter_platform/tests/engine/services/test_model_allocation_postgres.py",
       "docs/architecture/model-access/sharing.md",
       "docs/_deprecated/architecture/model-access/sharing-authority-preflight-2140.md",
       "docs/architecture/model-access/architecture.md",
-      "docs/architecture/model-access/delivery.md"
+      "docs/architecture/model-access/delivery.md",
+      "shifter/shifter_platform/shared/model_access/authority.py",
+      "shifter/shifter_platform/engine/services/_sharing.py",
+      "shifter/shifter_platform/config/model_access_sharing.py",
+      "shifter/shifter_platform/tests/engine/services/test_model_access_authority_postgres.py",
+      "shifter/shifter_platform/tests/engine/services/test_model_access_range_pagination.py"
     ],
     "superseded_by": "ADR-068"
   },
@@ -4196,6 +4205,8 @@
       "https://github.com/Brad-Edwards/bigrae/issues/681",
       "docs/adr/061-model-access-operations-qualification.md",
       "docs/_deprecated/architecture/model-access/request-accounting-preflight-2121.md",
+      "docs/ops/model-access-gcp-probes.md",
+      "docs/ops/model-access.md",
       "docs/architecture/model-access/security.md",
       "docs/architecture/model-access/delivery.md"
     ],
@@ -4515,21 +4526,21 @@
     "status": "accepted",
     "supersedes": "ADR-067",
     "scope": "shifter_platform",
-    "decision": "The ADR-059 model access broker is parked: no tenant runs it, it is not supported for use, and every deployment keeps settings.model_broker and settings.model_access disabled. Keyless Workload Identity direct access (ADR-064) is the only supported guest model path. No work hardens or extends the broker. Issue #2909 removes the whole broker subsystem: the broker runtime, private control service, guest enrollment, model-access policy, allocation, accounting, sharing, tenant model sources, CTF model cohorts, their settings, interfaces, deployment resources, tables, tests, and the five broker-only authorization actions. Recorded operation authority is immutable, so readers drop exactly those retired actions and scopes when they rebuild a stored credential; credentials that hold a retired scope are revoked or disabled. Applied migrations, frozen published snapshots, and Terraform moved blocks remain as history. Model access control remains separate work under the AI Gateway milestone (#2274). Any future model access control path is a transparent proxy whose controls (spend, rate, concurrency, token limits, detections) are optional, with no controls by default and a missing limit meaning no limit; its credentials renew automatically and enabling it needs no manual bootstrap steps. Supersedes ADR-067 and the parked broker design in ADR-059, ADR-060, and ADR-061.",
+    "decision": "The ADR-059 model access broker is parked: no tenant runs it, it is not supported for use, and every deployment keeps settings.model_broker and settings.model_access disabled. Keyless Workload Identity direct access (ADR-064) is the only supported guest model path while it is parked. No work hardens or extends the broker; changes are limited to keeping CI reliable until it is removed or replaced, and model access control is taken up again under the AI Gateway milestone (#2274). Any future model access control path is a transparent proxy whose controls (spend, rate, concurrency, token limits, detections) are optional, with no controls by default and a missing limit meaning no limit; its credentials renew automatically and enabling it needs no manual bootstrap steps. Supersedes ADR-067 and the parked broker design in ADR-059, ADR-060, and ADR-061.",
     "rules": [
       {
         "id": "ADR-068-R1",
-        "description": "The model access broker no longer exists. Issue #2909 removed settings.model_broker, settings.model_broker_runtime, and settings.model_access, and a configuration that sets them fails validation.",
+        "description": "The model access broker stays disabled on every deployment and is documented as not supported for use; no tenant configuration enables settings.model_broker or settings.model_access.",
         "checks": []
       },
       {
         "id": "ADR-068-R2",
-        "description": "Keyless Workload Identity direct access (ADR-064) is the only guest model path.",
+        "description": "While the broker is parked, keyless Workload Identity direct access (ADR-064) is the only supported guest model path.",
         "checks": []
       },
       {
         "id": "ADR-068-R3",
-        "description": "No new work hardens or extends the broker. Issue #2909 removed the broker subsystem and its tests. Readers of immutable recorded authority drop only the retired model-access actions and scopes named in shared/retired_authorization.py; any other unknown value still fails closed. The removal does not activate a replacement gateway.",
+        "description": "No new work hardens or extends the parked broker. Changes to its code are limited to keeping CI reliable for other work (for example, isolating a flaky test) until a removal or replacement decision.",
         "checks": []
       },
       {
@@ -4544,7 +4555,6 @@
     ],
     "evidence": [
       "docs/adr/068-model-access-broker-parked.md",
-      "docs/architecture/model-access/broker-removal-preflight-2909.md",
       "docs/architecture/model-access/gateway-replacement-evaluation-2274.md",
       "docs/adr/064-default-range-model-access.md",
       "docs/technical/dev/setup.md",

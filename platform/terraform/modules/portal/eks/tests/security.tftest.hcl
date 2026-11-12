@@ -775,8 +775,27 @@ run "security_contract" {
 }
 
 
-run "private_route_tables" {
+run "enabled_broker_routes" {
   command = apply
+  variables {
+    model_broker = {
+      enabled                 = true
+      hostname                = "models.example.test"
+      admitted_subnets        = ["10.50.1.0/24"]
+      tls_secret_name         = "broker-tls"
+      control_tls_secret_name = "control-tls"
+      trust_configmap_name    = "model-ca"
+      invocation_models       = { primary = "anthropic.example-model-v1:0" }
+    }
+  }
+  override_module {
+    target = module.model_broker[0]
+    outputs = {
+      peering_id                 = "pcx-mock-broker"
+      listener_security_group_id = "sg-mock-broker"
+      deployment                 = null
+    }
+  }
   assert {
     condition = alltrue([for table in aws_route_table.private :
       length([for route in table.route : route if route.cidr_block == "10.50.0.0/16" && route.vpc_peering_connection_id == aws_vpc_peering_connection.range.id]) == 1
@@ -802,13 +821,21 @@ run "private_route_tables" {
     ]]))
     error_message = "Peering routes must stay bounded to the range + portal + runner CIDRs; the default route uses NAT."
   }
+  assert {
+    condition = (
+      aws_vpc_security_group_ingress_rule.model_broker[0].referenced_security_group_id == "sg-mock-broker" &&
+      aws_vpc_security_group_ingress_rule.model_broker[0].from_port == 8443 &&
+      aws_vpc_security_group_ingress_rule.model_broker[0].to_port == 8443
+    )
+    error_message = "Only the model NLB security group may reach the broker's TLS target port."
+  }
 }
 
-run "range_management_routes" {
+run "range_management_independent_of_optional_broker" {
   command = apply
   assert {
-    condition     = length(aws_route.range_to_management) == 2 && aws_vpc_peering_connection.range.peer_vpc_id == "vpc-mock-range"
-    error_message = "Native guest management must reach every private EKS subnet over the range peering."
+    condition     = !var.model_broker.enabled && length(aws_route.range_to_management) == 2 && aws_vpc_peering_connection.range.peer_vpc_id == "vpc-mock-range"
+    error_message = "Native guest management must exist without a model broker."
   }
 }
 

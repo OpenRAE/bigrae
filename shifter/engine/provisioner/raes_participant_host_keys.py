@@ -7,7 +7,7 @@ from collections.abc import Callable
 from typing import Any
 
 from cryptography.hazmat.primitives.serialization import load_ssh_public_key
-from shared.network import RFC1918_IPV4_NETWORKS
+from shared.model_access.network import RFC1918_IPV4_NETWORKS
 
 from executors.factory import GuestExecutionContext, build_guest_execution_context
 

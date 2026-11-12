@@ -33,6 +33,27 @@ from ._cleanup_verification import CleanupVerificationOutcome, RangeCleanupVerif
 from ._feature_artifacts import AcquiredFeatureArtifact
 from ._gcp_range_projects import GcpRangeProject, GcpRangeProjectUse
 from ._launch import InterruptState, ProvisionerLaunchIntent, ProvisionerLaunchStatus, RangeCancellationAuthority
+from ._model_allocation import (
+    ModelAliasAssignment,
+    ModelAllocation,
+    ModelAllocationAuthority,
+    ModelCapacityDraw,
+    ModelCapacityReservation,
+    ModelLaunchPreparationRecord,
+    ModelOptionalAbsence,
+    ModelPendingGrant,
+    ModelQuotaIdentity,
+    ModelQuotaReading,
+)
+from ._model_budget import (
+    ModelBudgetAccount,
+    ModelBudgetPosting,
+    ModelDispatchLease,
+    ModelReconciliationObligation,
+    ModelRequestReservation,
+)
+from ._model_credentials import ModelAccessCredential
+from ._model_sources import ModelSource, ModelSourceRegistry, ModelSourceRevision
 from ._operation_io import (
     OperationInput,
     OperationResultDisposition,
@@ -66,6 +87,15 @@ from ._runtime_plugins import (
     RuntimePluginRangeBinding,
     RuntimePluginValidation,
 )
+from ._sharing import (
+    AllocationGroup,
+    MembershipProjection,
+    SharingAuthorityFence,
+    SharingBindingRecord,
+    SharingBindingRevision,
+    SharingPoolRecord,
+    SharingPoolRevision,
+)
 from ._subnet import Subnet, SubnetAllocation
 from ._vpn_profile import VpnAccessProfile, VpnCrlState
 from ._vpn_session import VpnSession, VpnSessionEndReason, VpnSessionState
@@ -73,6 +103,7 @@ from ._warm_pool import WarmRangeGeneration
 
 __all__ = [
     "AcquiredFeatureArtifact",
+    "AllocationGroup",
     "App",
     "CapacityAssessment",
     "CapacityDeclaration",
@@ -85,6 +116,26 @@ __all__ = [
     "Instance",
     "Instantiation",
     "InterruptState",
+    "MembershipProjection",
+    "ModelAccessCredential",
+    "ModelAliasAssignment",
+    "ModelAllocation",
+    "ModelAllocationAuthority",
+    "ModelBudgetAccount",
+    "ModelBudgetPosting",
+    "ModelCapacityDraw",
+    "ModelCapacityReservation",
+    "ModelDispatchLease",
+    "ModelLaunchPreparationRecord",
+    "ModelOptionalAbsence",
+    "ModelPendingGrant",
+    "ModelQuotaIdentity",
+    "ModelQuotaReading",
+    "ModelReconciliationObligation",
+    "ModelRequestReservation",
+    "ModelSource",
+    "ModelSourceRegistry",
+    "ModelSourceRevision",
     "OperationInput",
     "OperationResultDisposition",
     "OperationResultInbox",
@@ -116,6 +167,11 @@ __all__ = [
     "RuntimePluginPackBinding",
     "RuntimePluginRangeBinding",
     "RuntimePluginValidation",
+    "SharingAuthorityFence",
+    "SharingBindingRecord",
+    "SharingBindingRevision",
+    "SharingPoolRecord",
+    "SharingPoolRevision",
     "Subnet",
     "SubnetAllocation",
     "VpnAccessProfile",

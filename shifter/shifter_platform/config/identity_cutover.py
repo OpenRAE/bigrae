@@ -11,6 +11,9 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from cms.services import (
+    identity_cutover_contract_gaps as cms_contract_gaps,
+)
+from cms.services import (
     identity_cutover_resource_disposition as cms_resource_disposition,
 )
 from cms.services import (
@@ -22,6 +25,7 @@ from ctf.services import (
 from ctf.services import (
     pending_identity_cutover_work as ctf_pending_work,
 )
+from engine.services import identity_cutover_contract_gaps as engine_contract_gaps
 from engine.services import identity_cutover_resource_disposition as engine_resource_disposition
 from engine.services import pending_identity_cutover_work as engine_pending_work
 from management.services import (
@@ -34,8 +38,8 @@ from management.services import (
 from shared.audit import retained_audit_event_count
 from shared.bootstrap_facts import IdentityBootstrapFacts as IdentityBootstrapFacts
 from shared.bootstrap_facts import load_identity_bootstrap_facts as load_identity_bootstrap_facts
+from shared.model_access.messages import ContractError, strict_json
 from shared.private_files import read_private_file
-from shared.raes.json_ingress import parse_bounded_json_object
 from workspaces.services import identity_cutover_disposition, plan_identity_cutover_accounts
 
 __all__ = [
@@ -77,11 +81,9 @@ def load_identity_cutover_facts(path_value: str) -> IdentityCutoverFacts:
     """Load a bounded owner-only facts file without exposing its content."""
     path = Path(path_value)
     try:
-        payload = parse_bounded_json_object(
-            read_private_file(path, limit=_MAX_FACTS_BYTES), max_bytes=_MAX_FACTS_BYTES, max_depth=32
-        )
+        payload = strict_json(read_private_file(path, limit=_MAX_FACTS_BYTES), limit=_MAX_FACTS_BYTES)
         facts = IdentityCutoverFacts.model_validate(payload)
-    except (OSError, ValueError, ValidationError) as exc:
+    except (OSError, ValueError, ValidationError, ContractError) as exc:
         raise ValueError(_FACTS_DOCUMENT_IS_INVALID) from exc
     _validate_cutover_identifiers(facts)
     return facts
@@ -106,10 +108,13 @@ def build_identity_cutover_plan(facts: IdentityCutoverFacts) -> dict[str, object
     missing_work = sum(item[1] for item in pending_counts)
     domain_blockers = management_blockers + tenancy_blockers + ctf_blockers
     resource_gaps = cms_gaps + engine_gaps
+    contract_gaps = cms_contract_gaps() + engine_contract_gaps()
     if resource_gaps:
         domain_blockers.append({"reason": "resource_owner_principal_missing", "entity_count": resource_gaps})
     if missing_work:
         domain_blockers.append({"reason": "pending_operation_credential_missing", "entity_count": missing_work})
+    if contract_gaps:
+        domain_blockers.append({"reason": "legacy_authority_contract_unresolved", "entity_count": contract_gaps})
     dispositions = {
         **management_disposition,
         **tenancy_disposition,
@@ -122,6 +127,10 @@ def build_identity_cutover_plan(facts: IdentityCutoverFacts) -> dict[str, object
         "credential_bound_work": {
             "pending": pending_work,
             "action": "retain_and_reauthorize_exact_initiator_after_cutover",
+        },
+        "legacy_authority_contracts": {
+            "count": contract_gaps,
+            "action": "block_until_reissued_under_principal_credential_contract",
         },
         "audit": {"events": retained_audit_event_count(), "action": "retain_immutable"},
     }

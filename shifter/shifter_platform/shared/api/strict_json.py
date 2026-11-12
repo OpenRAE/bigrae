@@ -5,9 +5,8 @@ from typing import IO
 from rest_framework.exceptions import ParseError
 from rest_framework.parsers import BaseParser
 
-from shared.raes.json_ingress import parse_bounded_json_object
-
-MAX_JSON_DEPTH = 32
+from shared.model_access import ContractError
+from shared.model_access.messages import JsonObject, strict_json
 
 
 class ClosedJSONParser(BaseParser):
@@ -18,16 +17,14 @@ class ClosedJSONParser(BaseParser):
 
     def parse(
         self, stream: IO[bytes], media_type: str | None = None, parser_context: dict[str, object] | None = None
-    ) -> dict[str, object]:
+    ) -> JsonObject:
         try:
-            return parse_bounded_json_object(
-                stream.read(self.max_bytes + 1), max_bytes=self.max_bytes, max_depth=MAX_JSON_DEPTH
-            )
-        except ValueError:
+            return strict_json(stream.read(self.max_bytes + 1), limit=self.max_bytes)
+        except (ContractError, ValueError):
             raise ParseError("Invalid JSON object") from None
 
 
-class ConfigurationJSONParser(ClosedJSONParser):
+class ModelSelectionJSONParser(ClosedJSONParser):
     """Bound launch/event configuration while preserving duplicate-key checks."""
 
     max_bytes = 1_000_000

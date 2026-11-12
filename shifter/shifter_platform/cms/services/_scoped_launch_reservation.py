@@ -136,6 +136,11 @@ def _create_reservation(launch: PreparedScopedLaunch, resolved: ResolvedResource
         range_source=launch.effective_source.value,
         status="provisioning",
         range_spec=None,
+        model_sources=launch.options.model_sources or {"aliases": []},
+        model_launch_scope=launch.options.event.model_launch_scope.model_dump(mode="json")
+        if launch.options.event.model_launch_scope
+        else None,
+        model_package_digest=launch.source.package_digest,
         launch_intent_digest=launch.intent_digest,
         event_uuid=launch.options.event.authority_target.uuid
         if launch.options.event.authority_target is not None

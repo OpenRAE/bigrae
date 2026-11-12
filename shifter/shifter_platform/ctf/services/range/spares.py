@@ -342,11 +342,16 @@ def _reserve_new_spare_launch(
     """Commit one exact spare draw and generation while the caller holds event and spare locks."""
     from ctf.services.range.capacity import admit_range
     from ctf.services.range.launch_intents import launch_parameters, reserve_launch
+    from ctf.services.range.model_allocation import project_event_model_scope
     from management.services import resolve_principal_uuid
+    from shared.model_access import OwnedReference
 
     owner = resolve_principal_uuid(event.owner_principal_uuid)
+    subject = OwnedReference(owner="ctf", reference=f"draw:{spare.pk}")
     draw_key = _spare_draw_key(spare.pk)
-    parameters = launch_parameters(event, owner)
+    parameters = launch_parameters(
+        event, owner, subject, project_event_model_scope(event, draw_key, subject, spare_id=spare.pk)
+    )
     admission = admit_range(event.pk, draw_key)
     if admission is not None and admission["blocking"]:
         spare.status = SpareRangeStatus.FAILED.value

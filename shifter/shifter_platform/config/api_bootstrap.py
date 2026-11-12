@@ -79,6 +79,7 @@ class BootstrapPermissionsSerializer(serializers.Serializer):
     can_change_users = serializers.BooleanField()
     can_delete_users = serializers.BooleanField()
     can_manage_adapters = serializers.BooleanField(required=False)
+    can_manage_model_sources = serializers.BooleanField(required=False)
     can_administer_accounts = serializers.BooleanField()
     can_administer_platform = serializers.BooleanField()
     can_read_audit = serializers.BooleanField()
@@ -174,6 +175,7 @@ def _policy_permissions(request: Request) -> dict[str, bool]:
             "can_read_audit": False,
             "can_manage_lease_policy": False,
             "can_manage_adapters": False,
+            "can_manage_model_sources": False,
         }
     context = admin_principal_context(
         actor,
@@ -195,6 +197,8 @@ def _policy_permissions(request: Request) -> dict[str, bool]:
         "can_manage_lease_policy": "installation.manage_lease_policy" in actions,
         "can_manage_adapters": "installation.manage_adapters" in actions
         or "organization.manage_adapters" in organization_actions,
+        "can_manage_model_sources": "installation.manage_model_sources" in actions
+        or "organization.manage_model_sources" in organization_actions,
     }
 
 

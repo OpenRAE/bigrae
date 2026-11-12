@@ -163,12 +163,7 @@
       "adr": "ADR-066",
       "issue": 2321,
       "parameters": [
-        {
-          "path": "/api/v1/ctf/communications/",
-          "method": "get",
-          "name": "workspace_id",
-          "in": "query"
-        }
+        {"path": "/api/v1/ctf/communications/", "method": "get", "name": "workspace_id", "in": "query"}
       ],
       "paths": [
         "/api/v1/administer/users/{id}/grant-organizer/",
@@ -231,87 +226,6 @@
         {
           "schema": "ModelSourceConfiguration",
           "property": "allowed_user_ids"
-        }
-      ]
-    },
-    {
-      "adr": "ADR-068",
-      "issue": 2909,
-      "paths": [
-        "/api/v1/cms/model-source-options/",
-        "/api/v1/cms/organizations/{organization_uuid}/model-ranges/",
-        "/api/v1/cms/organizations/{organization_uuid}/model-sources/",
-        "/api/v1/cms/organizations/{organization_uuid}/model-sources/available/",
-        "/api/v1/cms/organizations/{organization_uuid}/model-sources/{source_id}/",
-        "/api/v1/cms/organizations/{organization_uuid}/model-sources/{source_id}/retire-credentials/",
-        "/api/v1/cms/ranges/{request_id}/model-access/",
-        "/api/v1/cms/ranges/{request_id}/model-access/revoke/",
-        "/api/v1/ctf/events/{event_id}/model-access/assessment/",
-        "/api/v1/ctf/me/model-access/",
-        "/api/v1/model-access/bindings/drain/",
-        "/api/v1/model-access/bindings/policy-preview/",
-        "/api/v1/model-access/bindings/publish/",
-        "/api/v1/model-access/bindings/selector-preview/",
-        "/api/v1/model-access/bindings/validate/"
-      ],
-      "response_schema_properties": [
-        {
-          "schema": "BootstrapPermissions",
-          "property": "can_manage_model_sources"
-        },
-        {
-          "schema": "EventDetail",
-          "property": "model_demand"
-        },
-        {
-          "schema": "EventDetail",
-          "property": "model_source_revision"
-        },
-        {
-          "schema": "EventDetail",
-          "property": "model_sources"
-        }
-      ],
-      "schema_enum_values": [
-        {
-          "schema": "CreateServiceCredentialScopesEnum",
-          "values": [
-            "authorization:account.manage_model_sources",
-            "authorization:installation.manage_model_sources",
-            "authorization:organization.manage_model_sources",
-            "authorization:workspace.manage_model_sources",
-            "authorization:workspace.publish_model_access",
-            "model-access:event:read",
-            "model-access:event:write",
-            "model-access:operator:read",
-            "model-access:operator:write",
-            "model-access:participant:read",
-            "model-access:range:read",
-            "model-access:range:write",
-            "model-access:sharing:read",
-            "model-access:sharing:write"
-          ]
-        },
-        {
-          "schema": "IssuePersonalCredentialScopesEnum",
-          "values": [
-            "authorization:account.manage_model_sources",
-            "authorization:installation.manage_model_sources",
-            "authorization:organization.manage_model_sources",
-            "authorization:workspace.manage_model_sources",
-            "authorization:workspace.publish_model_access"
-          ]
-        }
-      ],
-      "parameter_enum_values": [
-        {
-          "path": "/api/v1/administer/organizations/",
-          "method": "get",
-          "name": "integration",
-          "in": "query",
-          "values": [
-            "model_sources"
-          ]
         }
       ]
     }

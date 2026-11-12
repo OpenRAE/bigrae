@@ -15,7 +15,7 @@ from ctf.models import CTFAward, CTFRangeRecovery, CTFSubmission
 from ctf.services.range.recovery import recover_participant_range
 from engine.models import Range as EngineRange
 from shared.audit import AuditAction
-from shared.enums import RangeSource
+from shared.enums import RangeSource, ResourceStatus
 from shared.models import AuditLog
 from tests.ctf.test_services.test_range_recovery import event_with_scenario as event_with_scenario
 from tests.ctf.test_services.test_range_recovery import rich_participant as rich_participant
@@ -46,6 +46,44 @@ def submission_and_award(event_with_scenario, rich_participant, organizer_user, 
 
 class TestRebuildRecovery:
     """``strategy=rebuild``: provision a fresh range for the participant."""
+
+    @pytest.mark.django_db
+    @pytest.mark.parametrize("old_range_status", [ResourceStatus.READY.value, ResourceStatus.FAILED.value])
+    def test_rebuild_admits_against_realized_range_subject_not_draw(
+        self, rich_participant, organizer_credential, monkeypatch, old_range_status
+    ):
+        # PLAT-202 (#2119): the replacement must be admitted against the realized
+        # range's membership subject, not the draw — else a binding published
+        # against the range would be silently dropped on rebuild. A FAILED range is
+        # the organizer's main reason to rebuild and must hand over its identity
+        # too, though its CMS instance is already soft-deleted (#2462).
+        import cms.services._model_admission as gate
+        from shared.model_access import OwnedReference
+
+        participant, old_range = rich_participant
+        if old_range_status == ResourceStatus.FAILED.value:
+            EngineRange.objects.filter(pk=old_range.engine_range.pk).update(status=EngineRange.Status.FAILED)
+            old_range.status = old_range_status
+            old_range.save(update_fields=["status"])
+            participant.range_status = old_range_status
+            participant.save(update_fields=["range_status", "updated_at"])
+        captured: dict[str, object] = {}
+        original = gate.assert_launch_model_access
+
+        def _spy(**kwargs):
+            captured["subject"] = kwargs.get("subject")
+            return original(**kwargs)
+
+        monkeypatch.setattr(gate, "assert_launch_model_access", _spy)
+
+        result = recover_participant_range(
+            participant.pk, strategy=RecoveryStrategy.REBUILD.value, operator=organizer_credential
+        )
+
+        assert result["phase"] == RecoveryPhase.COMPLETED.value
+        assert captured["subject"] == OwnedReference(
+            owner="deployment", reference=f"range:{old_range.engine_range.uuid}"
+        )
 
     @pytest.mark.django_db
     def test_rebuild_preserves_identity_and_scoring_state(

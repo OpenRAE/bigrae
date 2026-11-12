@@ -61,6 +61,7 @@ class RaesEc2ApplyOptions:
     composition_verifier: Callable[..., frozenset[str]] = verify_bootstrap_composition
     operating_system_observer: Callable[..., list[dict[str, str]]] = observe_operating_systems
     runtime_plugin: Callable[..., None] | None = None
+    model_enrollment: Callable[..., None] | None = None
     host_readiness_verifier: Callable[..., None] = verify_preconfigured_hosts
 
 
@@ -192,6 +193,8 @@ def _verify(
         options.content_delivery_realizer(raes_plan=plan, instance_outputs=outputs, delivery_bindings=delivery_bindings)
         verified.update(item.address for item in plan.content if item.source_name)
         verified.update(feature.address for feature in plan.features)
+    if options.model_enrollment:
+        options.model_enrollment(plan, outputs)
     if options.runtime_plugin:
         options.runtime_plugin(plan, outputs)
     # Preconfigured hosts become ready only once the runtime plugin has brought

@@ -12,6 +12,10 @@ from __future__ import annotations
 # Keep this set scoped to that renderer: its contract test asserts exact equality.
 GCP_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
+        "MODEL_BROKER_GUEST_URL",
+        "MODEL_BROKER_GUEST_VIP",
+        "MODEL_ENROLLMENT_CONTROL_URL",
+        "MODEL_ENROLLMENT_CA_PEM_B64",
         "ACCESS_NETWORK_CIDRS",
         "APP_SECRET_ID",
         "CAPACITY_PLANNING_CATALOG",
@@ -77,6 +81,9 @@ GCP_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
         "IDENTITY_SESSION_IDLE_SECONDS",
         "IDENTITY_SESSION_RECHECK_SECONDS",
         "IDENTITY_PLATFORM_TOTP_DISPLAY_NAME",
+        "MODEL_ACCESS_CATALOG_DIGEST",
+        "MODEL_ACCESS_CATALOG_PATH",
+        "MODEL_ACCESS_ENABLED",
         "PORTAL_NETWORK_CIDRS",
         "QUEUE_CMS_CONSUMER_ID",
         "QUEUE_CMS_PUBLISHER_ID",
@@ -207,6 +214,10 @@ GCP_SECRET_RUNTIME_ENV_KEYS: frozenset[str] = frozenset()
 GCP_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
         "DB_AUTH_MODE",
+        "MODEL_BROKER_GUEST_URL",
+        "MODEL_BROKER_GUEST_VIP",
+        "MODEL_ENROLLMENT_CONTROL_URL",
+        "MODEL_ENROLLMENT_CA_PEM_B64",
         "ACCESS_NETWORK_CIDRS",
         "RANGE_OPENVPN_ENDPOINT",
         "RANGE_OPENVPN_ISSUER_SECRET_ID",

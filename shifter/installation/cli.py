@@ -63,6 +63,8 @@ from .render import (
     render_cloud_provider_tfvars,
     render_gcp_range_telemetry_env,
     render_mission_control_lease_env,
+    render_model_access_catalog,
+    render_model_access_env,
     render_tfvars,
     render_warm_pool_env,
 )
@@ -171,6 +173,21 @@ def _cmd_render_gcp_range_telemetry_env(path_str: str, output: str | None) -> in
             print(f"  - {issue.render()}", file=sys.stderr)
         return 1
     return _emit_rendered(rendered, output, config.backend, what="GCP range telemetry runtime env")
+
+
+def _cmd_render_model_access(path_str: str, output: str | None, *, catalog: bool) -> int:
+    """Render the mounted model-access artifact or its bounded env references."""
+    config_path = Path(path_str)
+    try:
+        config = load_root_config(config_path)
+    except InstallationConfigError as exc:
+        print(f"{config_path}: invalid", file=sys.stderr)
+        for issue in exc.issues:
+            print(f"  - {issue.render()}", file=sys.stderr)
+        return 1
+    rendered = render_model_access_catalog(config) if catalog else render_model_access_env(config)
+    what = "model-access catalog" if catalog else "model-access runtime env"
+    return _emit_rendered(rendered, output, config.backend, what=what)
 
 
 def _cmd_render_capacity(path_str: str, output: str | None, projection: str) -> int:
@@ -426,6 +443,10 @@ def _dispatch(args: argparse.Namespace, parser: argparse.ArgumentParser) -> int:
         exit_code = _cmd_render_gcp_range_telemetry_env(args.path, args.output)
     elif args.command == "render-mission-control-lease-env":
         exit_code = _cmd_render_mission_control_lease_env(args.path, args.output)
+    elif args.command == "render-model-access-catalog":
+        exit_code = _cmd_render_model_access(args.path, args.output, catalog=True)
+    elif args.command == "render-model-access-env":
+        exit_code = _cmd_render_model_access(args.path, args.output, catalog=False)
     elif args.command == "render-capacity":
         exit_code = _cmd_render_capacity(args.path, args.output, args.projection)
     elif args.command == "runtime-inventory":

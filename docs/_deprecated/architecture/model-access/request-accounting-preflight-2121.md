@@ -1,4 +1,4 @@
-# Request accounting and dispatch lease preflight: #2121 / M04
+# Request accounting and dispatch lease preflight — #2121 / M04
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../../technical/architecture.md) and accepted, superseding ADRs.
 
@@ -10,7 +10,7 @@ Requirement: PLAT-202. This note applies
 current repository. It is design guidance, not an implementation plan or
 runtime proof. The [architecture](architecture.md),
 [allocation contract](allocations.md), [sharing contract](sharing.md),
-[security design](security.md), and operations design
+[security design](security.md), and [operations design](../../ops/model-access.md)
 remain authoritative.
 
 ## Decision and blocking contract gap

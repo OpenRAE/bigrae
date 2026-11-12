@@ -493,6 +493,7 @@ The proposal records the checks performed. These entry points retain regression 
 | Launch and cancellation locks | `engine/launch_target.py`, `engine/management/commands/drain_provisioner_launch_outbox.py`, `engine/services/_principal_cancellation.py` | `tests/engine/test_provisioner_launch_outbox.py`, `test_native_launch_cancellation_postgres.py`. |
 | Result and capacity settlement | `engine/services/_operation_apply_domain.py`, `_cleanup_verification.py` | `tests/engine/services/test_native_warm_retirement_postgres.py` |
 | Real permission provider | `config/openfga_authorization.py` | `tests/integration/authorization/test_openfga_prepared_administration.py` through the released-server harness. |
+| Parked sharing boundary | `shared/model_access/availability.py`, `config/api/model_access.py` | `tests/config/test_model_access_management_api.py`; direct composition and selector tests. |
 | Notification and restricted projection | `ctf/services/event_projection.py`, `shared/consumers.py`, `config/session_credentials.py` | `tests/ctf/test_native_notification_authority.py`, `tests/integration/asgi/test_native_ctf_notifications.py`; PostgreSQL and Redis transport tests. |
 | Communications console | `ctf/services/communication/read_admission.py`, `targets.py`, `attribution.py` | `tests/ctf/test_communication_native_console.py`; browser parent-change and reviewed-release tests. |
 

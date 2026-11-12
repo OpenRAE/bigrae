@@ -134,6 +134,13 @@ AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
         # Mission Control lease policy (#27): rendered from the validated
         # settings.mission_control_leases block, not the Terraform runtime_env.
         "MISSION_CONTROL_LEASE_POLICY_JSON",
+        "MODEL_ACCESS_CATALOG_DIGEST",
+        "MODEL_ACCESS_CATALOG_PATH",
+        "MODEL_ACCESS_ENABLED",
+        "MODEL_BROKER_GUEST_URL",
+        "MODEL_BROKER_GUEST_CIDRS",
+        "MODEL_ENROLLMENT_CONTROL_URL",
+        "MODEL_ENROLLMENT_CA_PEM_B64",
         "SITE_URL",
         # Follows the presence of a shared Redis channel layer (ADR-072).
         "WEBSOCKET_NOTIFICATIONS_ENABLED",
@@ -152,6 +159,10 @@ AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
 # through the Kubernetes Job's runtimeEnv.
 AWS_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
+        "MODEL_BROKER_GUEST_URL",
+        "MODEL_BROKER_GUEST_CIDRS",
+        "MODEL_ENROLLMENT_CONTROL_URL",
+        "MODEL_ENROLLMENT_CA_PEM_B64",
         "CLOUD_PROVIDER",
         "ENVIRONMENT",
         "DEPLOYMENT_ENVIRONMENT",

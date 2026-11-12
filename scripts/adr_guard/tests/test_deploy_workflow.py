@@ -970,6 +970,19 @@ class TestGcpDeployPreflightInputs(unittest.TestCase):
         )
         self.assertIn("--component deploy", step.get("run", ""))
 
+    def test_non_secret_overlay_reaches_every_ephemeral_config_consumer(self):
+        """Every CI adapter run receives the overlay variable, and the adapter applies it."""
+        for name in ("_gcp-dev.yml",):
+            workflow = (REPO_ROOT / f".github/workflows/{name}").read_text(encoding="utf-8")
+            renders = workflow.count("python scripts/gcp/render_ci_deployment_inputs.py")
+            self.assertGreater(renders, 0)
+            self.assertEqual(
+                workflow.count("SHIFTER_CONFIG_OVERLAY_JSON: ${{ vars.SHIFTER_CONFIG_OVERLAY_JSON }}"), renders
+            )
+        adapter = (REPO_ROOT / "scripts/gcp/render_ci_deployment_inputs.py").read_text(encoding="utf-8")
+        self.assertIn("from apply_shifter_config_overlay import ConfigOverlayError, apply_overlay", adapter)
+        self.assertIn('apply_overlay(config_path, _text(env, "SHIFTER_CONFIG_OVERLAY_JSON"))', adapter)
+
 
 class TestRangePlacementSingleSource(unittest.TestCase):
     """#2029: multi-region range placement and per-region NAT consume ONE input.

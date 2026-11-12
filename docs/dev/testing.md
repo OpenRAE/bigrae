@@ -125,6 +125,7 @@ not pull-request gates. A pass proves only the scope that its runbook states.
 | Participant terminal and Guacamole session | `uat/range-functional-smoke` | [Range functional smoke](https://github.com/OpenRAE/bigrae/blob/dev/uat/range-functional-smoke/README.md) |
 | Event load envelope | `event-load-harness` | [GCP event capacity](../ops/gcp-event-capacity.md) |
 | Range escape boundaries | `manage.py run_range_escape_validation` | [Range escape validation](../ops/range-escape-validation.md) |
+| Model broker transport | `scripts/gcp/probe_model_broker.py` | [Model broker probes](../ops/model-access-gcp-probes.md) |
 | Range audit telemetry | `scripts/gcp/verify_range_audit_telemetry.py` | [Range audit telemetry](../ops/gcp-range-audit-telemetry.md) |
 
 Range readiness or an open port does not prove a working terminal session. An

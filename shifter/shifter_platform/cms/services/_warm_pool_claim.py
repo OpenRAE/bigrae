@@ -46,6 +46,7 @@ from ._warm_claim_types import _ClaimOutcome, _WarmGeneration
 
 if TYPE_CHECKING:
     from cms.models import RangeInstance
+    from cms.services._model_allocation import PreparedClaimModelSources
     from cms.services._range_lease import RangeLease
     from engine.services import PreparedWarmRangeClaim
     from workspaces.services import WorkspaceQuotaAuditContext
@@ -134,9 +135,10 @@ def _run_atomic_claim(request: WarmClaimRequest, candidates: list[tuple[str, str
     prepared = prepare_warm_range_claim(request.credential, request.scope)
     quota_audit = WorkspaceQuotaAuditContext(**principal_actor_fields(prepared.credential.principal))
 
-    candidate = _preview_candidate(request, candidates)
-    if candidate is None:
+    prospective = _prepare_candidate_sources(request, candidates, prepared)
+    if prospective is None:
         return None
+    candidate, claim_sources = prospective
     try:
         with transaction.atomic():
             resolve_range_scope_binding(request.scope, member=prepared.credential.principal, for_update=True)
@@ -162,7 +164,7 @@ def _run_atomic_claim(request: WarmClaimRequest, candidates: list[tuple[str, str
                 outcome = None
             else:
                 outcome = _commit_claimed_generation(
-                    request, generation, prepared, quota_audit, (source_binding, source_metadata)
+                    request, generation, prepared, quota_audit, (source_binding, source_metadata), claim_sources
                 )
     except WorkspaceQuotaRejected as rejected:
         record_workspace_quota_rejection(
@@ -266,6 +268,35 @@ def _grant_claim_remote_access(request: WarmClaimRequest, generation: _WarmGener
     grant_raes_remote_access(generation.request_id, openvpn_deadline(request.backend, lease.maximum_expires_at))
 
 
+def _admit_claim_models(
+    request: WarmClaimRequest,
+    generation: _WarmGeneration,
+    instance: RangeInstance,
+    claim_sources: PreparedClaimModelSources | None,
+) -> bool:
+    """Commit model grant/allocation and activation with the claim, or roll it all back."""
+    from cms.services._model_allocation import needs_model_preparation, prepare_model_access_for_dispatch
+    from engine.services import resolve_model_access_range_views
+
+    if not needs_model_preparation(generation.request_id):
+        return False
+    instance.refresh_from_db()
+    instance.model_launch_scope = (
+        request.model_launch_scope.model_dump(mode="json") if request.model_launch_scope else None
+    )
+    instance.model_sources = request.model_sources or {}
+    instance.save(update_fields=["model_launch_scope", "model_sources"])
+    (view,) = resolve_model_access_range_views(request_uuids=(generation.request_id,))
+    prepare_model_access_for_dispatch(
+        generation.request_id,
+        range_id=view.range_uuid,
+        renew=True,
+        credential=request.credential,
+        _claim_sources=claim_sources,
+    )
+    return True
+
+
 def _system_range_instance_for(request_id: UUID) -> RangeInstance | None:
     """Return the system-owned CMS RangeInstance correlated to ``request_id``."""
     from cms.models import RangeInstance
@@ -321,8 +352,9 @@ def _finish_claim(
     generation: _WarmGeneration,
     range_instance: RangeInstance,
     prepared: PreparedWarmRangeClaim,
+    claim_sources: PreparedClaimModelSources | None,
 ) -> _ClaimOutcome:
-    """Commit native custody, lease, access and queue in the claim transaction."""
+    """Commit native custody, lease, access, model allocation and queue in the claim transaction."""
     from cms.services import AuditEvent, audit_log
     from engine.services import commit_warm_range_claim, enqueue_admitted_warm_activation
     from management.services import human_principal_user_id
@@ -351,6 +383,7 @@ def _finish_claim(
     )
     _assign_initial_user_lease(range_instance, lease)
     _grant_claim_remote_access(request, generation, lease)
+    _admit_claim_models(request, generation, range_instance, claim_sources)
     enqueue_admitted_warm_activation(prepared, request_id=generation.request_id, claimant_request_id=request.request_id)
     audit_log(
         AuditEvent(
@@ -375,13 +408,37 @@ def _finish_claim(
     )
 
 
-def _preview_candidate(request: WarmClaimRequest, candidates: list[tuple[str, str]]) -> _WarmGeneration | None:
-    """Select the exact prospective warm generation before SQL locks."""
+def _prepare_candidate_sources(
+    request: WarmClaimRequest, candidates: list[tuple[str, str]], prepared: PreparedWarmRangeClaim
+) -> tuple[_WarmGeneration, PreparedClaimModelSources | None] | None:
+    """Resolve model policy for the exact prospective warm generation before SQL locks."""
+    from copy import copy
+
+    from cms.models import RangeInstance
     from engine.services import preview_ready_generation
 
-    return preview_ready_generation(
+    from ._model_allocation import prepare_claim_model_sources
+
+    candidate = preview_ready_generation(
         candidates=candidates, backend=request.backend, range_source=request.range_source.value
     )
+    if candidate is None:
+        return None
+    prospective = (
+        RangeInstance.objects.select_related("request").filter(request__request_id=candidate.request_id).first()
+    )
+    if prospective is None:
+        return None
+    prospective = copy(prospective)
+    prospective.owner_principal_uuid = prepared.credential.principal.uuid
+    prospective.scope_kind, prospective.account_id, prospective.organization_id, prospective.workspace_id = (
+        prepared.scope_ids
+    )
+    prospective.model_launch_scope = (
+        request.model_launch_scope.model_dump(mode="json") if request.model_launch_scope else None
+    )
+    prospective.model_sources = request.model_sources or {}
+    return candidate, prepare_claim_model_sources(prospective, prepared.credential)
 
 
 def _commit_claimed_generation(
@@ -390,6 +447,7 @@ def _commit_claimed_generation(
     prepared: PreparedWarmRangeClaim,
     quota_audit: WorkspaceQuotaAuditContext,
     source_snapshot: tuple[dict[str, object], tuple[bool, bool]],
+    claim_sources: PreparedClaimModelSources | None,
 ) -> _ClaimOutcome:
     """Fence source and CMS custody under the accepted ledger claim before atomic effects."""
     from cms.services._pack_fence import fence_pack_reference
@@ -419,4 +477,4 @@ def _commit_claimed_generation(
         from cms.exceptions import CMSError
 
         raise CMSError("Range source changed")
-    return _finish_claim(request, generation, range_instance, prepared)
+    return _finish_claim(request, generation, range_instance, prepared, claim_sources)

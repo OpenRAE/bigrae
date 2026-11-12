@@ -177,6 +177,20 @@ variable "tags" {
   default     = {}
 }
 
+variable "model_broker" {
+  description = "Optional private model broker intent rendered from installation settings."
+  type = object({
+    enabled                 = optional(bool, false)
+    hostname                = optional(string, "")
+    admitted_subnets        = optional(list(string), [])
+    tls_secret_name         = optional(string, "")
+    control_tls_secret_name = optional(string, "")
+    trust_configmap_name    = optional(string, "")
+    invocation_models       = optional(map(string), {})
+  })
+  default = {}
+}
+
 variable "openfga_rotation_schedule" {
   description = "Create the OpenFGA datastore rotation schedules. The deploy sets true only after the provisioning Job has created the logins (#2313)."
   type        = bool
