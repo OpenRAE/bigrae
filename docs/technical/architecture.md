@@ -10,7 +10,7 @@ Its documentation correction preserves the runtime boundaries described here.
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
 
-**Source review:** 2026-11-12 at `34e5260ebdd0d8318eb702eae3123851e450a2aa`.
+**Source review:** 2026-11-12 at `a2fa28e7a37c9fb78b452510c276f90d06c8ff09`.
 This explanation describes source boundaries, not live deployment qualification.
 The 2026-11-04 review covered native provider account lookup (#2771) and registered-project IAM requests (#2773), after one-command GCP installation (#2679).
 
@@ -498,6 +498,8 @@ identifier grammar. Profile endpoints check the shared actor delivery budget
 without consuming it before private material is resolved. They consume the
 budget only when a ready profile proceeds to delivery, so preparation responses
 do not exhaust the participant's download allowance.
+When principal authority is enabled, each pool server loads and refreshes the
+signed revocation list before it admits individual profiles.
 
 The versioned application API is `/api/v1/`, composed by `config/api_urls.py`.
 Authenticated `/api/v1/schema/` and `/api/v1/docs/` expose OpenAPI and Swagger;
