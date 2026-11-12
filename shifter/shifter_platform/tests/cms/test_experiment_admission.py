@@ -105,6 +105,55 @@ def test_admission_binds_the_batch_to_the_selected_published_worker_profile(expe
         admit((actor, organization, source, root, authority | {"worker_profile": "missing"}))
 
 
+def test_omitted_documents_are_derived_from_the_bound_profile_and_claim_no_workflow_results(
+    experiment_inputs, monkeypatch
+):
+    """#2928: BigRAE derives both documents from the profile; the fixture needs results that a worker lacks."""
+    from raes_processor.manifest import reference_processor_manifest_payload
+
+    from cms.models import ExperimentBatch
+    from engine.models import WorkerPolicyRecord
+    from shared.disposable_workers import WorkerPolicy
+    from shared.raes import experiment_admission
+    from shared.raes.worker_apparatus import worker_realization_envelope
+
+    authority = experiment_inputs[-1]
+    authority["capture_offers"] = authority.pop("backend")["capabilities"]["observation"]["capture_offers"]
+    del authority["realization_envelope"]
+    authority["processor"] = reference_processor_manifest_payload(compatible_backends=["shifter-disposable-worker"])
+    compiler, refusals = experiment_admission.compile_admitted_trial_plan, []
+
+    def recorded(request):
+        result = compiler(request)
+        refusals.append((request.realization_envelope, [item.code for item in result.diagnostics]))
+        return result
+
+    monkeypatch.setattr(experiment_admission, "compile_admitted_trial_plan", recorded)
+    with pytest.raises(CMSError, match="verify installed inputs"):
+        admit(experiment_inputs)
+    profile = WorkerPolicy.model_validate(WorkerPolicyRecord.objects.get().configuration).profiles["default"]
+    assert refusals == [(worker_realization_envelope(profile), ["trial-compiler.apparatus-capability-unproven"])]
+    assert not ExperimentBatch.objects.exists()
+
+    # A compiled plan is still refused: each fixture trial has two nodes, and a worker host is one.
+    cleanup = authority["execution_authority"]["cleanup"]
+    cleanup["clean_state"]["verification_probe_refs"] = ["absence:range"]
+    cleanup["cleanup_obligations"]["destroy"] |= {"requirement": "best-effort", "verification_probe_refs": []}
+    derive = experiment_admission.worker_backend_manifest
+    results = ["workflow-result-envelope-v1", "evaluation-result-envelope-v1"]
+    monkeypatch.setattr(
+        experiment_admission,
+        "worker_backend_manifest",
+        lambda *args: (manifest := derive(*args)).model_copy(
+            update={"supported_contract_versions": manifest.supported_contract_versions + results}
+        ),
+    )
+    with pytest.raises(CMSError, match="verify installed inputs"):
+        admit(experiment_inputs)
+    assert refusals[-1][1] == []
+    assert not ExperimentBatch.objects.exists()
+
+
 @pytest.mark.parametrize("suffix", [".task.json", ".capture.json"])
 def test_non_file_experiment_documents_are_ignored(experiment_inputs, suffix):
     (experiment_inputs[3] / "experiments" / f"ignored{suffix}").mkdir()

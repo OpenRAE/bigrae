@@ -30,9 +30,12 @@ Every write checks local credential state and SQL ancestry inside its transactio
 A claim token is also the execution attempt identity.
 It does not replace authorization.
 The entry's run identity comes from the retained RAES plan.
+A fresh trial for a failed entry keeps that entry's run identity.
+
 Admission also retains the name and digest of the batch's worker host profile (`worker_profile` in the authority, default `default`).
 It refuses a profile that the worker policy does not publish.
-A fresh trial for a failed entry keeps that entry's run identity.
+An authority without `backend` and `realization_envelope` gets both documents derived from that profile (`shared.raes.worker_apparatus`).
+The batch retains them as `derived_apparatus`.
 
 Scheduling order cannot allocate another run or change a trial's scientific inputs.
 One initial attempt is supported per entry.

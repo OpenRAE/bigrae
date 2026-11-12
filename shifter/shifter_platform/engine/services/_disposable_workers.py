@@ -393,14 +393,19 @@ def _audit(
     )
 
 
-def worker_profile_binding(name: str = DEFAULT_PROFILE) -> WorkerProfileBinding:
-    """Return the exact current digest of a published host profile for a batch to retain."""
+def published_worker_profile(name: str = DEFAULT_PROFILE) -> WorkerHostProfile:
+    """Return the named host profile of the published worker policy."""
     from engine.models import WorkerPolicyRecord
 
     record = WorkerPolicyRecord.objects.filter(pk=1).first()
     if record is None:
         raise WorkerProfileError("No worker policy is published")
-    return WorkerProfileBinding(name=name, digest=WorkerPolicy.model_validate(record.configuration).select(name).digest)
+    return WorkerPolicy.model_validate(record.configuration).select(name)
+
+
+def worker_profile_binding(name: str = DEFAULT_PROFILE) -> WorkerProfileBinding:
+    """Return the exact current digest of a published host profile for a batch to retain."""
+    return WorkerProfileBinding(name=name, digest=published_worker_profile(name).digest)
 
 
 def _admitted_profile(
