@@ -38,10 +38,12 @@ The coordinator stages three objects under `trial-inputs/<attempt>/` in the asse
 
 | Object | Content |
 | --- | --- |
-| `scenario.sdl` | The retained concrete trial SDL of the entry |
+| `scenario.sdl` | The concrete trial SDL of the entry |
 | `trial-unit.json` | The admitted plan, the plan entry ID, and the entry's instantiated snapshot |
 | `trial.json` | Run ID, attempt ID, deadline, and the digests of `scenario.sdl` and `trial-unit.json` |
 
+The coordinator instantiates the entry from the retained plan and family SDL.
+It refuses the entry when the snapshot digest differs from the digest that admission recorded.
 The deadline is the staging time plus the entry's admitted attempt timeout.
 It is persisted on the entry before upload, so every stager writes identical bytes.
 An existing object with different bytes is refused.

@@ -12,7 +12,7 @@ from typing import Any, Literal, cast
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field
-from raes import canonical_sdl_bytes, canonical_sdl_digest
+from raes import admit_scenario_family, canonical_sdl_bytes, canonical_sdl_digest, parse_sdl
 from raes.canonical import canonical_instantiated_sdl_bytes
 from raes.participant_control_context import SDLControlContextConfigurationValidator, authored_control_context_bindings
 from raes.scenario import InstantiatedScenario
@@ -116,7 +116,7 @@ def validate_retained(raw: str) -> dict[str, Any]:
         raise ValueError("Unsupported experiment dependency tuple")
     plan = parse_admitted_trial_plan_json(canonical_json_bytes(payload["plan"]))
     schedule = plan_batch_schedule(plan)
-    if set(payload["snapshots"]) != set(plan.entries):
+    if set(payload.get("snapshot_digests", payload.get("snapshots", {}))) != set(plan.entries):
         raise ValueError("Retained snapshot set differs from plan entries")
     limits = payload["resource_limits"]
     _concurrency(limits["requested_concurrency"], limits["configured_concurrency_ceiling"], schedule)
@@ -428,12 +428,13 @@ def compile_pack_experiment(
         "documents": _documents(root, experiment),
         "artifacts": custody.payload,
         "family": json.loads(canonical_sdl_bytes(experiment.family)),
+        "family_path": experiment.family_path,
         "experiment": experiment.experiment.model_dump(mode="json"),
         "task": experiment.task.model_dump(mode="json"),
         "capture_specs": {key: item.model_dump(mode="json") for key, item in experiment.capture_specs.items()},
         "authority": parsed,
         "plan": plan.model_dump(mode="json"),
-        "snapshots": {},
+        "snapshot_digests": {},
         "resource_limits": {
             "requested_concurrency": concurrency,
             "configured_concurrency_ceiling": configuration.max_concurrency,
@@ -456,9 +457,28 @@ def compile_pack_experiment(
             exact_descriptor=True,
         )
         snapshot = canonical_instantiated_sdl_bytes(selected)
-        retained_bytes += len(snapshot) + len(entry.plan_entry_id.encode()) + 8
+        reject_retained_credentials(json.loads(snapshot))
+        digest = "sha256:" + hashlib.sha256(snapshot).hexdigest()
+        retained_bytes += len(digest) + len(entry.plan_entry_id.encode()) + 8
         if retained_bytes > MAX_RETAINED_BYTES:
             raise ValueError("Experiment hydrated inputs exceed the byte limit")
-        payload["snapshots"][entry.plan_entry_id] = json.loads(snapshot)
+        payload["snapshot_digests"][entry.plan_entry_id] = digest
     reject_retained_credentials(payload)
     return payload
+
+
+def retained_entry_snapshot(inputs: dict[str, Any], entry_id: str) -> bytes:
+    """Instantiate one entry from the retained plan and family SDL and verify the admitted digest.
+
+    A batch admitted before digests were retained keeps its snapshots in the record.
+    """
+    if "snapshot_digests" not in inputs:
+        return canonical_json_bytes(inputs["snapshots"][entry_id])
+    plan = parse_admitted_trial_plan_json(canonical_json_bytes(inputs["plan"]))
+    family = admit_scenario_family(parse_sdl(inputs["documents"][inputs["family_path"]]))
+    snapshot = canonical_instantiated_sdl_bytes(
+        instantiate_admitted_trial_entry(plan=plan, plan_entry_id=entry_id, family=family)
+    )
+    if "sha256:" + hashlib.sha256(snapshot).hexdigest() != inputs["snapshot_digests"][entry_id]:
+        raise ValueError("Instantiated trial snapshot differs from its admitted digest")
+    return snapshot
