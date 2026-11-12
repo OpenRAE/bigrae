@@ -7,6 +7,7 @@ endpoint cannot steer the server elsewhere or exhaust it.
 
 from __future__ import annotations
 
+import ipaddress
 import json
 import urllib.error
 import urllib.request
@@ -17,6 +18,7 @@ from . import transport
 
 _MAX_RESPONSE_BYTES = 262_144
 _TIMEOUT = 10
+_INVALID_GRANT = "grant outside the contract"
 
 
 class PortalError(RuntimeError):
@@ -36,13 +38,34 @@ class PortalRefused(PortalError):
 
 
 @dataclass(frozen=True)
-class Grant:
-    """The single destination one authorized client may reach."""
+class TargetGrant:
+    """One exact destination and its declared participant ports."""
 
-    session: str
     target: str
     ports: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Grant:
+    """The exact destinations one authorized client may reach."""
+
+    session: str
+    targets: tuple[TargetGrant, ...]
     heartbeat_seconds: int
+
+    @property
+    def target(self) -> str:
+        """Return the sole target for backward-compatible single-target callers."""
+        if len(self.targets) != 1:
+            raise PortalUnavailable("grant does not contain exactly one target")
+        return self.targets[0].target
+
+    @property
+    def ports(self) -> tuple[int, ...]:
+        """Return the sole target's ports for backward-compatible callers."""
+        if len(self.targets) != 1:
+            raise PortalUnavailable("grant does not contain exactly one target")
+        return self.targets[0].ports
 
 
 def _is_port(value: object) -> bool:
@@ -57,21 +80,41 @@ def _refusal(status: int, payload: dict[str, object]) -> PortalError:
     return PortalUnavailable(f"status {status}")
 
 
+def _target_grant(value: object) -> TargetGrant:
+    """Parse one exact private IPv4 target and its declared ports."""
+    if not isinstance(value, dict) or set(value) != {"target", "ports"}:
+        raise PortalUnavailable(_INVALID_GRANT)
+    target, ports = value["target"], value["ports"]
+    if not isinstance(target, str) or not isinstance(ports, list) or not ports or not all(map(_is_port, ports)):
+        raise PortalUnavailable(_INVALID_GRANT)
+    try:
+        target_address = ipaddress.IPv4Address(target)
+    except ipaddress.AddressValueError as exc:
+        raise PortalUnavailable(_INVALID_GRANT) from exc
+    if not target_address.is_private or str(target_address) != target:
+        raise PortalUnavailable(_INVALID_GRANT)
+    return TargetGrant(target, tuple(sorted(set(ports))))
+
+
+def _target_grants(payload: dict[str, object]) -> tuple[TargetGrant, ...]:
+    """Parse the multi-target grant, accepting the legacy single-target shape."""
+    raw_targets = payload.get("targets")
+    if raw_targets is None:
+        raw_targets = [{"target": payload.get("target"), "ports": payload.get("ports")}]
+    if not isinstance(raw_targets, list) or not 1 <= len(raw_targets) <= 64:
+        raise PortalUnavailable(_INVALID_GRANT)
+    targets = tuple(map(_target_grant, raw_targets))
+    if len({item.target for item in targets}) != len(targets):
+        raise PortalUnavailable(_INVALID_GRANT)
+    return targets
+
+
 def _grant(payload: dict[str, object]) -> Grant:
     """Validate a grant strictly; anything outside the contract is treated as unavailable."""
-    session, target = payload.get("session"), payload.get("target")
-    ports, interval = payload.get("ports"), payload.get("heartbeat_seconds")
-    if not (
-        isinstance(session, str)
-        and isinstance(target, str)
-        and isinstance(ports, list)
-        and ports
-        and all(_is_port(port) for port in ports)
-        and isinstance(interval, int)
-        and not isinstance(interval, bool)
-    ):
-        raise PortalUnavailable("grant outside the contract")
-    return Grant(session=session, target=target, ports=tuple(ports), heartbeat_seconds=interval)
+    session, interval = payload.get("session"), payload.get("heartbeat_seconds")
+    if not (isinstance(session, str) and isinstance(interval, int) and not isinstance(interval, bool)):
+        raise PortalUnavailable(_INVALID_GRANT)
+    return Grant(session=session, targets=_target_grants(payload), heartbeat_seconds=interval)
 
 
 class PortalClient:
@@ -111,7 +154,7 @@ class PortalClient:
         return status, payload
 
     def authorize(self, common_name: str, client_id: int, client_address: str, **certificate: str) -> Grant:
-        """Ask whether this verified client may connect; return its single grant."""
+        """Ask whether this verified client may connect; return its exact grant."""
         status, payload = self._post(
             "sessions/",
             {

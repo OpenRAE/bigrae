@@ -244,6 +244,7 @@ resource "google_compute_region_instance_template" "pool" {
       max_clients            = var.max_clients_per_vm
       tunnel_network         = var.tunnel_network
       health_port            = var.health_port
+      openfga_enabled        = var.openfga_enabled
     })
   }
 

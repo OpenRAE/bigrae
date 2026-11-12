@@ -82,9 +82,9 @@ def _validate_current_binding(range_obj: Range, user: User, request_id: UUID) ->
         raise VpnProfileConflict("VPN profile binding does not belong to the current owner")
     if binding.generation != request_id:
         raise VpnProfileConflict("VPN profile binding generation is stale")
-    if is_raes_member_target(binding.target_ref):
-        target_exists = _raes_target_is_current_member(range_obj, binding.target_ref)
-    else:
+    if all(is_raes_member_target(target_ref) for target_ref in binding.target_refs):
+        target_exists = all(_raes_target_is_current_member(range_obj, target_ref) for target_ref in binding.target_refs)
+    elif len(binding.target_refs) == 1:
         target_exists = Instance.objects.filter(
             request=range_obj.request,
             uuid=binding.target_ref,
@@ -94,6 +94,8 @@ def _validate_current_binding(range_obj: Range, user: User, request_id: UUID) ->
             deleted_at__isnull=True,
             destroyed_at__isnull=True,
         ).exists()
+    else:
+        target_exists = False
     if not target_exists:
         raise VpnProfileConflict("VPN profile target is not a current Kali member")
     return binding

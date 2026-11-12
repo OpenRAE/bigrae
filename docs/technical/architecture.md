@@ -10,7 +10,7 @@ Its documentation correction preserves the runtime boundaries described here.
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
 
-**Source review:** 2026-11-09 at `5954ab13763deaba52a257d4ed8bde5bb1402ea6`.
+**Source review:** 2026-11-12 at `e0a536d6d7e4149cb05d63d1d6c6705c7f29f3d1`.
 This explanation describes source boundaries, not live deployment qualification.
 The 2026-11-04 review covered native provider account lookup (#2771) and registered-project IAM requests (#2773), after one-command GCP installation (#2679).
 
@@ -492,6 +492,21 @@ Temporary participants access only their own assigned range through the
 existing event participation permission. Their credentials stay bound to that
 event. Both range owners check live participation, assignment and native custody
 before remote access. See the [participant access design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/temporary-participant-range-access-2785.md).
+
+OpenVPN certificate operations use provisioner Jobs with an exact operation and
+identifier grammar. Profile endpoints check the shared actor delivery budget
+without consuming it before private material is resolved. They consume the
+budget only when a ready profile proceeds to delivery, so preparation responses
+do not exhaust the participant's download allowance.
+When principal authority is enabled, each pool server loads and refreshes the
+signed revocation list before it admits individual profiles.
+Profiles issued through a browser retain the issuing principal and admitted
+limits after that browser transport ends. Connections and heartbeats still
+recheck live principal, policy, participation, assignment, range, and
+certificate state.
+
+Delivered profiles enforce a conservative tunnel MSS for private range paths,
+including profiles stored before that setting was added.
 
 The versioned application API is `/api/v1/`, composed by `config/api_urls.py`.
 Authenticated `/api/v1/schema/` and `/api/v1/docs/` expose OpenAPI and Swagger;

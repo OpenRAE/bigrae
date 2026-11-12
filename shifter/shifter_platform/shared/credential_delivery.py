@@ -29,6 +29,13 @@ def credential_delivery_allowed(user_id: int | UUID, *, limit: int = 50, window:
     return count <= limit
 
 
+def credential_delivery_available(user_id: int | UUID, *, limit: int = 50) -> bool:
+    """Check delivery capacity without charging a non-delivery response."""
+    cache = caches["launch_rate_limit"]
+    count = cache.get(f"credential-delivery:{user_id}", 0)
+    return int(count) < limit
+
+
 def audit_openvpn_profile_download(
     *,
     actor_id: int | None,

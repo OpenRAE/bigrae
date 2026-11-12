@@ -34,13 +34,15 @@ logger = logging.getLogger(__name__)
 _VPN_PROFILE_FILENAME = "bigrae-range.ovpn"
 
 
-def _credential_delivery_error(view: MissionControlAPIView, actor: User | CredentialContext) -> Response | None:
-    """Return a fail-closed delivery response, or None when delivery may proceed."""
-    from shared.credential_delivery import credential_delivery_allowed
+def _credential_delivery_error(
+    view: MissionControlAPIView, actor: User | CredentialContext, *, consume: bool
+) -> Response | None:
+    """Return a fail-closed delivery response, consuming only for a ready profile."""
+    from shared.credential_delivery import credential_delivery_allowed, credential_delivery_available
 
     actor_key = actor.principal.uuid if isinstance(actor, CredentialContext) else actor.pk
     try:
-        allowed = credential_delivery_allowed(actor_key)
+        allowed = credential_delivery_allowed(actor_key) if consume else credential_delivery_available(actor_key)
     except Exception:
         # Fail closed: an unavailable delivery-budget backend blocks profile delivery.
         logger.exception("VPN profile delivery budget check failed: actor=%s", actor_key)
@@ -155,7 +157,7 @@ class MissionControlVpnProfileView(MissionControlAPIView):
             if request.body or set(request.query_params) - {"request_id"}:
                 raise ValueError("Invalid profile request")
             request_id = UUID(request.query_params["request_id"]) if "request_id" in request.query_params else None
-            delivery_error = _credential_delivery_error(self, credential)
+            delivery_error = _credential_delivery_error(self, credential, consume=False)
             if delivery_error is not None:
                 response = delivery_error
             else:
@@ -164,7 +166,12 @@ class MissionControlVpnProfileView(MissionControlAPIView):
                     response = result
                 else:
                     profile, range_instance_id = result
-                    response = _vpn_profile_download_response(credential, profile, range_instance_id)
+                    delivery_error = _credential_delivery_error(self, credential, consume=True)
+                    response = (
+                        delivery_error
+                        if delivery_error is not None
+                        else _vpn_profile_download_response(credential, profile, range_instance_id)
+                    )
             return response
         except ValueError:
             return self.error_response(code="invalid", message="VPN profile request is invalid.", status_code=400)

@@ -835,6 +835,27 @@ class TestVpnPoolFirewall:
         assert "vpn_gateway" not in plan
         assert not any(instance["uuid"].endswith("vpn-gateway") for instance in plan["instances"])
 
+    def test_multi_target_pool_rules_keep_each_nodes_ports_separate(self):
+        plan = self._build(
+            remote_access=RaesGceVpnAccess(
+                target_refs=("node.a#0", "node.b#0"),
+                pool_cidrs=self._POOL,
+            ),
+            access=self._access(("ssh",), "node.a") + self._access(("rdp",), "node.b"),
+        )
+
+        rules = {
+            rule["name"]: rule
+            for rule in plan["firewalls"]
+            if rule["name"]
+            in {
+                vpn_pool_firewall_name(7, "node.a#0"),
+                vpn_pool_firewall_name(7, "node.b#0"),
+            }
+        }
+        assert rules[vpn_pool_firewall_name(7, "node.a#0")]["allowed"] == [{"IPProtocol": "tcp", "ports": ["22"]}]
+        assert rules[vpn_pool_firewall_name(7, "node.b#0")]["allowed"] == [{"IPProtocol": "tcp", "ports": ["3389"]}]
+
     def test_a_range_without_remote_access_admits_no_pool(self):
         plan = self._build(remote_access=None)
         assert not [rule for rule in plan["firewalls"] if "vpn" in rule["name"]]

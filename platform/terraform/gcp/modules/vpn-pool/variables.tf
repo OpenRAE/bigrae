@@ -80,6 +80,12 @@ variable "provisioner_service_account_email" {
   type        = string
 }
 
+variable "openfga_enabled" {
+  description = "Enable principal-bound VPN profiles and their signed revocation list."
+  type        = bool
+  default     = false
+}
+
 variable "machine_type" {
   description = "Server machine type. One OpenVPN process uses one core."
   type        = string

@@ -70,11 +70,11 @@ def mint_remote_access_capability(
     deadline: datetime | None,
     range_backend: str,
 ) -> dict[str, object] | None:
-    """Mint OpenVPN authority for the sole participant-access target, when requested.
+    """Mint OpenVPN authority for the declared participant-access targets, when requested.
 
     ``deadline`` is the CMS-admitted credential deadline (the lease ceiling,
-    ADR-039-R10). A scenario that does not declare exactly one participant-access
-    target launches without VPN. The GCE range-cell backend is the only RAES
+    ADR-039-R10). A scenario without a participant-access target launches without
+    VPN. The GCE range-cell backend is the only RAES
     adapter that realizes the gateway (EC2 is #2443), so a requested deadline on
     any other backend fails closed before the Range or its pool slot exists.
     """
@@ -82,10 +82,10 @@ def mint_remote_access_capability(
         return None
     if range_backend != "gce":
         raise ValueError("OpenVPN access is not realized by the selected range backend")
-    targets = {binding.target_address for binding in participant_access}
-    if len(targets) != 1:
+    targets = sorted({raes_member_target_ref(binding.target_address) for binding in participant_access})
+    if not targets:
         return None
-    return build_openvpn_capability(raes_member_target_ref(next(iter(targets))), deadline)
+    return build_openvpn_capability(targets, deadline)
 
 
 def _verify_existing_remote_access(existing: Range, deadline: datetime | None) -> None:
