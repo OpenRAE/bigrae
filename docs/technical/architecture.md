@@ -504,6 +504,7 @@ Profiles issued through a browser retain the issuing principal and admitted
 limits after that browser transport ends. Connections and heartbeats still
 recheck live principal, policy, participation, assignment, range, and
 certificate state.
+
 Delivered profiles enforce a conservative tunnel MSS for private range paths,
 including profiles stored before that setting was added.
 
