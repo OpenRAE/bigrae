@@ -51,6 +51,7 @@ class TestMintProfile:
         }
         profile = vpn_secret_ops.profiles[(42, str(generation))]
         validate_openvpn_profile_for_endpoint(profile, "203.0.113.7", 1194)
+        assert "mssfix 1300\n" in profile
         assert "verify-x509-name shifter-openvpn-server name\n" in profile
         assert "remote-cert-tls server\n" in profile
         certificate = x509.load_pem_x509_certificate(_block(profile, "cert").encode())

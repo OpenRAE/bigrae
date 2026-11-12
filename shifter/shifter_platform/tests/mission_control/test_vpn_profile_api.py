@@ -165,7 +165,7 @@ def test_exact_scope_downloads_owned_mission_control_profile(settings, standard_
         response = client.post(URL)
 
     assert response.status_code == 200
-    assert response.content == PROFILE.encode()
+    assert response.content == f"mssfix 1300\n{PROFILE}".encode()
     assert response["Content-Type"] == "application/x-openvpn-profile"
     assert response["Content-Disposition"] == 'attachment; filename="bigrae-range.ovpn"'
     assert response["Cache-Control"] == "private, no-store"

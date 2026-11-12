@@ -182,7 +182,15 @@ def test_binding_parser_rejects_open_or_unsafe_shapes(overrides, match):
 
 def test_profile_validator_accepts_a_bounded_inline_credential_for_the_binding():
     binding = parse_openvpn_binding(_binding())
-    assert validate_openvpn_profile(_profile(), binding).startswith(b"client\n")
+    delivered = validate_openvpn_profile(_profile(), binding)
+    assert delivered.startswith(b"mssfix 1300\nclient\n")
+
+
+def test_profile_validator_rejects_a_different_tunnel_mss():
+    binding = parse_openvpn_binding(_binding())
+    profile = _profile().replace("proto udp\n", "proto udp\nmssfix 1400\n")
+    with pytest.raises(OpenVpnBindingError, match="mssfix"):
+        validate_openvpn_profile(profile, binding)
 
 
 @pytest.mark.parametrize(
@@ -271,6 +279,7 @@ def test_raes_member_targets_are_the_single_instance_of_a_declared_node():
 
 def test_the_endpoint_validator_admits_only_the_bound_remote():
     profile = _profile(endpoint="34.1.2.3", port=1194)
-    assert validate_openvpn_profile_for_endpoint(profile, "34.1.2.3", 1194) == profile.encode()
+    delivered = validate_openvpn_profile_for_endpoint(profile, "34.1.2.3", 1194)
+    assert delivered == f"mssfix 1300\n{profile}".encode()
     with pytest.raises(OpenVpnBindingError, match="remote"):
         validate_openvpn_profile_for_endpoint(profile, "34.9.9.9", 1194)

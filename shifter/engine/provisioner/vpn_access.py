@@ -171,6 +171,7 @@ def _render_profile(
         "client\n"
         "dev tun\n"
         "proto udp\n"
+        "mssfix 1300\n"
         f"remote {endpoint.host} {endpoint.port}\n"
         "resolv-retry infinite\n"
         "nobind\n"

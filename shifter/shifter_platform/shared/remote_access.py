@@ -68,6 +68,7 @@ _NO_ARGUMENT_DIRECTIVES = frozenset({"client", "nobind", "persist-key", "persist
 _ONE_ARGUMENT_DIRECTIVES = {
     "dev": frozenset({"tun"}),
     "proto": frozenset({"udp", "udp4"}),
+    "mssfix": frozenset({"1300"}),
     "resolv-retry": frozenset({"infinite"}),
     "remote-cert-tls": frozenset({"server"}),
     "verb": frozenset({"3"}),
@@ -533,6 +534,10 @@ def validate_openvpn_profile_for_endpoint(profile: str, endpoint: str, port: int
     }
     if not required_directives.issubset(seen_directives) or seen_blocks != _INLINE_BLOCKS:
         raise OpenVpnBindingError("profile is missing required directives or inline credentials")
+    if "mssfix" not in seen_directives:
+        encoded = f"mssfix 1300\n{profile}".encode()
+        if len(encoded) > OPENVPN_PROFILE_MAX_BYTES:
+            raise OpenVpnBindingError("profile exceeds the maximum size")
     return encoded
 
 
