@@ -26,6 +26,7 @@ The service supports the deployment-selected GCE backend.
 
 Other backends fail before reservation or dispatch.
 Policy changes affect new workers only.
+
 Admission records the selected profile's name and digest in the batch.
 Each new worker of the batch uses that exact profile.
 Worker creation refuses a batch whose profile changed or no longer exists, and dispatch reports the entry as an error.
