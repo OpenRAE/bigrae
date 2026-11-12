@@ -152,6 +152,12 @@ def test_exact_scope_token_queues_an_individual_profile(settings, participant_us
     assert response.status_code == 202
     assert response.json()["error"]["code"] == "vpn_preparing"
     assert response["Retry-After"] == "5"
+
+    for _ in range(50):
+        response = client.post(URL)
+        assert response.status_code == 202
+
+    assert caches["launch_rate_limit"].get(f"credential-delivery:{participant_user.identity_principal.uuid}") is None
     from engine.models import VpnAccessProfile
 
     profile = VpnAccessProfile.objects.get(range__cms_range_uuid=cms_range.uuid)
@@ -241,10 +247,10 @@ def test_rate_limit_backend_failure_fails_closed(monkeypatch, participant_user, 
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {raw}")
 
-    def fail_add(*args, **kwargs):
+    def fail_get(*args, **kwargs):
         raise RuntimeError("cache unavailable")
 
-    monkeypatch.setattr(caches["launch_rate_limit"], "add", fail_add)
+    monkeypatch.setattr(caches["launch_rate_limit"], "get", fail_get)
     vpn_logger = logging.getLogger("ctf.api.organizer.vpn")
     response = client.post(URL)
 
