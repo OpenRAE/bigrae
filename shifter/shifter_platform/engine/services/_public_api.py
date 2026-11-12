@@ -13,6 +13,7 @@ PUBLIC_API = (
     "reconcile_disposable_workers",
     "WorkerView",
     "configure_worker_policy",
+    "worker_profile_binding",
     "create_disposable_worker",
     "get_disposable_worker",
     "worker_credential_scope",

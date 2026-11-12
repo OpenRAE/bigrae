@@ -16,8 +16,9 @@ Live qualification remains required before delivery.
 ## Apparatus and admission
 
 An installation administrator publishes the worker policy through an authenticated service.
-The policy contains global limits and one host profile.
-The profile contains a validated outer RAES plan, exact image profile, numeric provider image ID, provenance, and resources.
+The policy contains global limits and up to 16 named host profiles.
+A policy published with one unnamed `profile` loads as the profile `default`.
+Each profile contains a validated outer RAES plan, exact image profile, numeric provider image ID, provenance, and resources.
 
 It also fixes Docker version, capacity scope and partition, and approved egress.
 This plan describes apparatus, separately from the experiment SDL.
@@ -25,6 +26,10 @@ The service supports the deployment-selected GCE backend.
 
 Other backends fail before reservation or dispatch.
 Policy changes affect new workers only.
+Admission records the selected profile's name and digest in the batch.
+Each new worker of the batch uses that exact profile.
+Worker creation refuses a batch whose profile changed or no longer exists, and dispatch reports the entry as an error.
+A batch admitted before this binding uses the profile `default`.
 An unchanged replay recovers retained custody and the original apparatus.
 
 Creation retains its original trial argument independently of a later trial binding.

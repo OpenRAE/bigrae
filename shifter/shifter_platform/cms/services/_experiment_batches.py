@@ -20,6 +20,7 @@ from cms.scenarios.pack_validation import PackDigestError, verify_pack_digest
 from shared.cloud import get_object_storage
 from shared.cloud.exceptions import CloudStorageError
 from shared.credentials import CredentialContext
+from shared.disposable_workers import DEFAULT_PROFILE, WorkerProfileError
 from shared.exceptions import CMSError, ValidationError
 from shared.identity_scope import ResourceScope
 from shared.raes.experiment_admission import (
@@ -205,7 +206,14 @@ def admit_experiment_batch(
         ExperimentInputError,
     ):
         raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
+    from engine.services import worker_profile_binding
+
+    try:
+        worker_profile = worker_profile_binding(payload["authority"].get("worker_profile", DEFAULT_PROFILE))
+    except WorkerProfileError:
+        raise CMSError("Experiment admission refused; publish the selected worker profile first") from None
     payload.update(
+        worker_profile=worker_profile.model_dump(mode="json"),
         organization_uuid=str(organization_uuid),
         destination=destination,
         source={"package_digest": source.package_digest, "package_version": source.package_version},

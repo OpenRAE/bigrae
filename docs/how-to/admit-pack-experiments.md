@@ -21,6 +21,9 @@ The apparatus authority document contains `schema_version`, `backend`, `processo
 Its schema version is `bigrae.experiment-admission-authority/v1`.
 Each participant contains `participant_address` and its owner-supplied `manifest`.
 
+The optional `worker_profile` field names the published worker host profile for every trial of the batch. It defaults to `default`.
+Admission records that profile's name and digest, and refuses a profile that is not published.
+
 The optional `max_concurrency` field defaults to 200.
 Its supported configuration range is 1 through 10000.
 Installation authority approves these documents for this admission.

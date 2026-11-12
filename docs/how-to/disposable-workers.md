@@ -20,7 +20,8 @@ Projected Secret symlinks must first be copied to that private file.
 
 Publish an approved worker policy through `configure_worker_policy` or supply it with `--policy-file`.
 The policy file also requires owner-only mode `0600`.
-Pin one Linux host plan, an exact GCE image name and numeric image ID, its provenance digest, Docker version, and resources.
+The policy names each host profile under `profiles`. Qualification uses `default` unless `--profile` names another.
+For each profile, pin one Linux host plan, an exact GCE image name and numeric image ID, its provenance digest, Docker version, and resources.
 Use the existing image preparation and publication procedure for those facts.
 The host plan is apparatus configuration, separate from experiment SDL.
 No participant container or experiment runtime is required.

@@ -16,6 +16,8 @@ The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/parall
 The worker identity is a UUID derived from the attempt token, so a lost response finds the same worker.
 `claim_experiment_entry` bounds active claims to the batch concurrency.
 `create_disposable_worker` bounds live workers to the worker policy and capacity reservations.
+It creates each worker from the host profile that the batch retains, and refuses a profile that changed or no longer exists.
+Dispatch reports that entry as an error rather than a capacity wait.
 A failure in one entry is reported as `error` for that entry; the pass continues with the other entries.
 
 ## Engine worker trials

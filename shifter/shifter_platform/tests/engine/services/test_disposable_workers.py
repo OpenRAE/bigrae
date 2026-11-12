@@ -101,6 +101,27 @@ def test_create_commits_native_launch_and_durable_custody(apparatus):
     assert intent.payload["resource"] == "raes-range"
 
 
+def test_a_batch_binding_selects_its_named_profile_and_refuses_a_changed_one(apparatus):
+    """#2924: a worker uses the exact profile that its batch retains."""
+    from engine.models import DisposableWorker
+    from engine.services import configure_worker_policy, worker_profile_binding
+    from shared.disposable_workers import WorkerProfileBinding, WorkerProfileError
+
+    other = apparatus.profile | {"image_id": "9876543210987654321"}
+    configure_worker_policy(
+        apparatus.credential,
+        {"profiles": {"default": apparatus.profile, "other": other}, "max_live": 2, "max_provisioning": 2},
+    )
+    binding = worker_profile_binding("other")
+    row = DisposableWorker.objects.get(pk=create(apparatus, trial_id=uuid4(), profile_binding=binding).worker_id)
+    assert (row.profile_digest, row.profile["image_id"]) == (binding.digest, other["image_id"])
+    stale = WorkerProfileBinding(name="default", digest="sha256:" + "0" * 64)
+    with pytest.raises(WorkerProfileError):
+        create(apparatus, trial_id=uuid4(), profile_binding=stale)
+    with pytest.raises(WorkerProfileError):
+        worker_profile_binding("missing")
+
+
 def test_dispatch_carries_selected_worker_hardware(apparatus):
     from engine.models import OperationInput, ProvisionerLaunchIntent, WorkerPolicyRecord
     from engine.services import configure_worker_policy

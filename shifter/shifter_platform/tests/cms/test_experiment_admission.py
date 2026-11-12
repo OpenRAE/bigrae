@@ -92,6 +92,19 @@ def test_concurrency_cannot_exceed_authority_or_isolation(experiment_inputs, con
         admit(experiment_inputs, concurrency=concurrency)
 
 
+def test_admission_binds_the_batch_to_the_selected_published_worker_profile(experiment_inputs):
+    """#2924: the batch retains one exact worker host profile; an unpublished selection is refused."""
+    from engine.models import WorkerPolicyRecord
+    from shared.disposable_workers import WorkerPolicy
+
+    policy = WorkerPolicy.model_validate(WorkerPolicyRecord.objects.get().configuration)
+    batch = admit(experiment_inputs)
+    assert batch.inputs["worker_profile"] == {"name": "default", "digest": policy.profiles["default"].digest}
+    actor, organization, source, root, authority = experiment_inputs
+    with pytest.raises(CMSError, match="worker profile"):
+        admit((actor, organization, source, root, authority | {"worker_profile": "missing"}))
+
+
 @pytest.mark.parametrize("suffix", [".task.json", ".capture.json"])
 def test_non_file_experiment_documents_are_ignored(experiment_inputs, suffix):
     (experiment_inputs[3] / "experiments" / f"ignored{suffix}").mkdir()

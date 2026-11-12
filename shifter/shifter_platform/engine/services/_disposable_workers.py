@@ -19,7 +19,13 @@ from shared.credentials import (
     resolve_current_credential,
     resolve_local_credential,
 )
-from shared.disposable_workers import WorkerHostProfile, WorkerPolicy
+from shared.disposable_workers import (
+    DEFAULT_PROFILE,
+    WorkerHostProfile,
+    WorkerPolicy,
+    WorkerProfileBinding,
+    WorkerProfileError,
+)
 from shared.identity_scope import ResourceScope
 from shared.range_instantiation_policy import BackendAdmission, InstantiationPurpose, evaluate_gcp_backend_admission
 
@@ -104,8 +110,12 @@ def create_disposable_worker(
     worker_id: UUID,
     experiment_id: UUID,
     trial_id: UUID | None = None,
+    profile_binding: WorkerProfileBinding | None = None,
 ) -> WorkerView:
-    """Atomically reserve global limits, capacity and native durable dispatch."""
+    """Atomically reserve global limits, capacity and native durable dispatch.
+
+    A new worker uses the exact ``profile_binding`` that its batch retains, or the default profile.
+    """
     from engine.models import DisposableWorker, Range, WorkerPolicyRecord
     from management.services import human_principal_user_id
     from workspaces.services import resolve_range_scope_binding
@@ -134,7 +144,7 @@ def create_disposable_worker(
     admission = _worker_backend()
     record = WorkerPolicyRecord.objects.get(pk=1)
     policy = WorkerPolicy.model_validate(record.configuration)
-    profile = _admitted_profile(existing, policy)
+    profile = _admitted_profile(existing, policy, profile_binding)
     bindings = RangeBindings(credential=current, resource_scope=scope, cms_range_uuid=worker_id, defer_dispatch=True)
     prepared = prepare_raes_range_creation(bindings, resolved.workspace_id, user_id, profile.plan)
     bindings = replace(bindings, prepared_creation=prepared)
@@ -383,10 +393,22 @@ def _audit(
     )
 
 
-def _admitted_profile(worker: DisposableWorker | None, policy: WorkerPolicy) -> WorkerHostProfile:
-    """Recover a retained apparatus; current policy selects only new workers."""
+def worker_profile_binding(name: str = DEFAULT_PROFILE) -> WorkerProfileBinding:
+    """Return the exact current digest of a published host profile for a batch to retain."""
+    from engine.models import WorkerPolicyRecord
+
+    record = WorkerPolicyRecord.objects.filter(pk=1).first()
+    if record is None:
+        raise WorkerProfileError("No worker policy is published")
+    return WorkerProfileBinding(name=name, digest=WorkerPolicy.model_validate(record.configuration).select(name).digest)
+
+
+def _admitted_profile(
+    worker: DisposableWorker | None, policy: WorkerPolicy, binding: WorkerProfileBinding | None
+) -> WorkerHostProfile:
+    """Recover a retained apparatus; the batch's exact binding selects only new workers."""
     if worker is None:
-        return policy.profile
+        return policy.select(binding or DEFAULT_PROFILE)
     profile = WorkerHostProfile.model_validate(worker.profile)
     if profile.digest != worker.profile_digest:
         raise ValueError("Worker apparatus binding changed")

@@ -82,6 +82,8 @@ class ExperimentAuthority(BaseModel):
     realization_envelope: BackendRealizationEnvelopeModel
     execution_authority: TrialExecutionAuthorityModel
     max_concurrency: int = Field(default=200, ge=1, le=10000)
+    #: The published worker host profile that every trial of the batch uses.
+    worker_profile: str = Field(default="default", pattern=r"^[a-z][a-z0-9-]{0,62}$")
 
 
 def dependency_tuple() -> dict[str, str]:
