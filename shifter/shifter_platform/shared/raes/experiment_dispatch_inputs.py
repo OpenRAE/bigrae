@@ -8,23 +8,24 @@ provides cleanup evidence.
 from __future__ import annotations
 
 import hashlib
+import json
 from typing import Any
 
 from raes_contracts.canonical import canonical_json_bytes
 from raes_contracts.contracts import TrialCleanupReceiptModel, validate_trial_cleanup_receipt
 from raes_contracts.contracts.admitted_trial_plan_ingress import parse_admitted_trial_plan_json
 
+from shared.raes.experiment_admission import retained_entry_snapshot
+
 
 def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
-    """Return the canonical instantiated snapshot bytes of one entry."""
-    return canonical_json_bytes(inputs["snapshots"][entry_id])
+    """Return the canonical instantiated snapshot bytes of one entry, verified against its admitted digest."""
+    return retained_entry_snapshot(inputs, entry_id)
 
 
-def trial_unit_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
+def trial_unit_bytes(inputs: dict[str, Any], entry_id: str, scenario: bytes) -> bytes:
     """Return the staged trial unit: the admitted plan, the entry and its instantiated snapshot."""
-    return canonical_json_bytes(
-        {"plan": inputs["plan"], "plan_entry_id": entry_id, "snapshot": inputs["snapshots"][entry_id]}
-    )
+    return canonical_json_bytes({"plan": inputs["plan"], "plan_entry_id": entry_id, "snapshot": json.loads(scenario)})
 
 
 def trial_plan_bytes(inputs: dict[str, Any]) -> bytes:
@@ -34,6 +35,8 @@ def trial_plan_bytes(inputs: dict[str, Any]) -> bytes:
 
 def trial_scenario_sha256(inputs: dict[str, Any], entry_id: str) -> str:
     """Return the prefixed digest of one entry's instantiated snapshot."""
+    if "snapshot_digests" in inputs:
+        return str(inputs["snapshot_digests"][entry_id])
     return "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, entry_id)).hexdigest()
 
 

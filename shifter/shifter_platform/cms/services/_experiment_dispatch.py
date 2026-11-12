@@ -163,8 +163,11 @@ def stage_trial(
     )
     storage = get_object_storage()
     prefix = f"{TRIAL_INPUT_PREFIX}{token}/"
-    unit = _stage_object(storage, prefix + "trial-unit.json", trial_unit_bytes(inputs, row.plan_entry_id))
-    scenario = _stage_object(storage, prefix + "scenario.sdl", trial_scenario_bytes(inputs, row.plan_entry_id))
+    scenario_bytes = trial_scenario_bytes(inputs, row.plan_entry_id)
+    unit = _stage_object(
+        storage, prefix + "trial-unit.json", trial_unit_bytes(inputs, row.plan_entry_id, scenario_bytes)
+    )
+    scenario = _stage_object(storage, prefix + "scenario.sdl", scenario_bytes)
     trial = {
         "schema_version": "bigrae.trial-input/v1",
         "run_id": row.run_id,

@@ -72,7 +72,9 @@ A missing adapter or a refusal prevents admission.
 ## Persistence
 
 `ExperimentBatch` stores the complete retained JSON record and its SHA-256 digest.
-The record includes original input text, the expanded family, hydrated snapshots, and complete owner documents.
+The record includes original input text, the expanded family, and complete owner documents.
+For each plan entry, the record keeps the SHA-256 digest of its instantiated snapshot, not the snapshot itself.
+The record size therefore does not grow with the snapshot size.
 It also includes the RAES plan, normalized participant configurations, capture specifications, and dependency tuple.
 
 Referenced local artifact bytes are verified through the released env-packs resolver and retained as base64.

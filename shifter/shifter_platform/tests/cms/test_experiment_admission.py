@@ -1,6 +1,7 @@
 """Installed public contracts admit a synthetic pack without runtime side effects."""
 
 import base64
+import hashlib
 import io
 import json
 import shutil
@@ -56,7 +57,15 @@ def test_installed_pack_admission_retains_all_trials_and_reloads_without_compila
     assert ExperimentEntry.objects.count() == 64
     assert admit(experiment_inputs).id == batch.id
     raw = batch.inputs
-    assert len(raw["snapshots"]) == 64
+    # #2922: the record keeps one digest per entry, not the entry's full trial SDL.
+    assert "snapshots" not in raw
+    assert len(raw["snapshot_digests"]) == 64
+    entry_id = next(iter(raw["plan"]["entries"]))
+    snapshot = experiment_admission.retained_entry_snapshot(raw, entry_id)
+    assert "sha256:" + hashlib.sha256(snapshot).hexdigest() == raw["snapshot_digests"][entry_id]
+    tampered = {**raw, "snapshot_digests": {**raw["snapshot_digests"], entry_id: "sha256:" + "0" * 64}}
+    with pytest.raises(ValueError, match="admitted digest"):
+        experiment_admission.retained_entry_snapshot(tampered, entry_id)
     assert raw["capture_specs"]
     assert base64.b64decode(raw["artifacts"]["docs/protocol.md"]["base64"]) == (root / "docs/protocol.md").read_bytes()
     for name in ("brief-terse", "brief-rich"):
