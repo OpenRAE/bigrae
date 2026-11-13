@@ -418,6 +418,33 @@ def _select_experiment(root: Path, experiment_id: str, experiment_version: str |
     return candidates[0]
 
 
+def _bind_worker_apparatus(
+    configuration: ExperimentAuthority, worker_profile: Callable[[str], WorkerHostProfile] | None
+) -> tuple[ExperimentAuthority, dict[str, Any], BackendRealizationEnvelopeModel | None]:
+    """Bind the named host profile and derive absent apparatus documents from it.
+
+    Returns the configuration, the retained binding and derived documents, and the
+    derived realization envelope. The envelope is ``None`` when the authority supplies its documents.
+    """
+    profile = None if worker_profile is None else worker_profile(configuration.worker_profile)
+    retained: dict[str, Any] = {}
+    if profile is not None:
+        binding = WorkerProfileBinding(name=configuration.worker_profile, digest=profile.digest)
+        retained["worker_profile"] = binding.model_dump(mode="json")
+    if configuration.backend is not None:
+        return configuration, retained, None
+    if profile is None:
+        raise ValueError("Derived apparatus documents require the bound worker profile")
+    envelope = worker_realization_envelope(profile)
+    backend = worker_backend_manifest(envelope, configuration.capture_offers)
+    retained["derived_apparatus"] = {
+        "backend": backend.model_dump(mode="json"),
+        "realization_envelope": envelope.model_dump(mode="json"),
+    }
+    configuration = configuration.model_copy(update={"backend": backend, "realization_envelope": envelope})
+    return configuration, retained, envelope
+
+
 def compile_pack_experiment(
     root: Path,
     *,
@@ -437,15 +464,9 @@ def compile_pack_experiment(
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
     reject_retained_credentials(parsed)
-    configuration = ExperimentAuthority.model_validate(parsed)
-    profile = None if worker_profile is None else worker_profile(configuration.worker_profile)
-    derived = configuration.backend is None
-    if derived:
-        if profile is None:
-            raise ValueError("Derived apparatus documents require the bound worker profile")
-        envelope = worker_realization_envelope(profile)
-        backend = worker_backend_manifest(envelope, configuration.capture_offers)
-        configuration = configuration.model_copy(update={"backend": backend, "realization_envelope": envelope})
+    configuration, apparatus, envelope = _bind_worker_apparatus(
+        ExperimentAuthority.model_validate(parsed), worker_profile
+    )
     if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
         raise ValueError("Requested concurrency exceeds configured limit")
     experiment = _select_experiment(root, experiment_id, experiment_version)
@@ -484,21 +505,14 @@ def compile_pack_experiment(
             "max_authority_bytes": MAX_AUTHORITY_BYTES,
         },
     }
-    if profile is not None:
-        binding = WorkerProfileBinding(name=configuration.worker_profile, digest=profile.digest)
-        payload["worker_profile"] = binding.model_dump(mode="json")
-    if derived:
-        payload["derived_apparatus"] = {
-            "backend": backend.model_dump(mode="json"),
-            "realization_envelope": envelope.model_dump(mode="json"),
-        }
+    payload.update(apparatus)
     retained_bytes = len(encode_retained(payload).encode())
     for entry in schedule.entries:
         experiment_archive_identity(payload, entry.plan_entry_id, "admission-validation")
         selected = instantiate_admitted_trial_entry(
             plan=plan, plan_entry_id=entry.plan_entry_id, family=experiment.family
         )
-        if derived:
+        if envelope is not None:
             require_worker_scenario(selected, envelope.configuration)
         retained_bytes += custody.retain(
             _selected_control_context_artifacts(selected, plan.entries[entry.plan_entry_id]),
