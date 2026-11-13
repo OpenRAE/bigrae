@@ -65,7 +65,7 @@ class Command(BaseCommand):
 
                 retry_due_failed_cleanup_tasks(limit=3)
                 reconcile_runtime_plugins(limit=3)
-                reconcile_runtime_plugin_operations(limit=6)
+                reconcile_runtime_plugin_operations(limit=30)
                 reconcile_participant_validations(limit=3)
                 reconcile_feature_artifact_acquisitions(limit=3)
                 from engine.services._vpn_profiles import reconcile_vpn_profiles
