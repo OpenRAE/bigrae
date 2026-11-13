@@ -88,6 +88,9 @@ The released control-context pin helper joins selected configuration and authore
 Selected content uses absolute `raes-environment-pack:` locators and exact inventory descriptors.
 
 The published artifact resolver verifies the original bytes before retention.
+Admission retains scenario content, snapshots, and artifacts unchanged, including planted credentials.
+Admission refuses a credential field or credential value in the operator authority.
+Cleanup validation refuses a credential in the owner's cleanup receipt.
 Unavailable or changed selected content prevents admission.
 Original documents and referenced artifacts each have a separate 16 MiB aggregate bound.
 

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import json
-from collections import deque
 from collections.abc import Iterator
 from datetime import datetime
 from typing import overload
@@ -23,7 +22,6 @@ from raes_contracts.contracts import (
 from raes_contracts.json_ingress import parse_bounded_json
 from raes_contracts.timestamps import parse_rfc3339_datetime
 
-from shared.audit.integrity import _SECRET_KEY_SUFFIXES, _SECRET_KEYS
 from shared.raes.trial_archive import (
     BIGRAE_SEAL,
     MAX_JSON_BYTES,
@@ -33,37 +31,18 @@ from shared.raes.trial_archive import (
     safe_archive_path,
 )
 from shared.raes.trial_archive_lilrae import TRIAL_RECORD_CONTRACT, validate_trial_record
-from shared.schemas._raes_validation import JsonObject, _reject_secret_value
+from shared.schemas._raes_validation import JsonObject
 
 
 def _walk(value: object) -> Iterator[JsonObject]:
     """Visit bounded parsed documents without changing their original bytes."""
     if isinstance(value, dict):
         yield value
-        for key, child in value.items():
-            normalized = key.lower().replace("-", "_")
-            if (normalized in _SECRET_KEYS or normalized.endswith(_SECRET_KEY_SUFFIXES)) and child not in (
-                None,
-                "",
-                False,
-                "[REDACTED]",
-                "<redacted>",
-                "REDACTED",
-                [],
-                {},
-            ):
-                raise TrialArchiveError("Archive contains a prohibited credential field")
+        for child in value.values():
             yield from _walk(child)
     elif isinstance(value, list):
         for child in value:
             yield from _walk(child)
-    elif isinstance(value, str):
-        _reject_secret_value("archive", value, error_cls=TrialArchiveError)
-
-
-def reject_retained_credentials(value: object) -> None:
-    """Apply the same scientific-record credential policy before SQL retention."""
-    deque(_walk(value), maxlen=0)
 
 
 def _artifact_path(uri: str, run_id: str) -> str:
