@@ -331,9 +331,7 @@ def test_large_trace_is_streamed_without_requiring_one_large_json_document(tmp_p
     assert trial_archive.validate_trial_archive(path, expected()).member_count == 5
 
 
-@pytest.mark.parametrize(
-    "fault", ["foreign-record", "foreign-attempt", "missing-byte", "bad-json", "oversized-line"]
-)
+@pytest.mark.parametrize("fault", ["foreign-record", "foreign-attempt", "missing-byte", "bad-json", "oversized-line"])
 def test_json_lines_are_validated_incrementally(tmp_path, monkeypatch, fault):
     from shared.raes import trial_archive
 
