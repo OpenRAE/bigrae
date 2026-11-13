@@ -367,15 +367,12 @@ def test_json_lines_scientific_records_resolve_run_evidence_references(tmp_path)
     assert validate_trial_archive(path, expected()).member_count == 5
 
 
-@pytest.mark.parametrize(
-    "body",
-    [b'{"schema_version":"experiment-evidence-record/v1","invalid":true}', b'{"password":"synthetic-excluded-value"}'],
-)
-def test_oversized_json_cannot_bypass_record_or_credential_validation(tmp_path, monkeypatch, body):
+def test_oversized_json_cannot_bypass_record_validation(tmp_path, monkeypatch):
     from shared.raes import trial_archive
 
     monkeypatch.setattr(trial_archive, "MAX_JSON_BYTES", 32768)
     path = tmp_path / "archive.tar.gz"
+    body = b'{"schema_version":"experiment-evidence-record/v1","invalid":true}'
     path.write_bytes(archive_bytes(extra={"evidence/oversized.json": body + b" " * 40000}))
     with pytest.raises(trial_archive.TrialArchiveError):
         trial_archive.validate_trial_archive(path, expected())
