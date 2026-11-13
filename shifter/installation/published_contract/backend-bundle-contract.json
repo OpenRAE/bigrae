@@ -274,8 +274,7 @@
           "portal",
           "worker",
           "provisioner",
-          "range-task",
-          "model-broker"
+          "range-task"
         ],
         "title": "ProcessRole",
         "type": "string"
@@ -395,7 +394,8 @@
       },
       "contract_version": {
         "enum": [
-          1
+          1,
+          2
         ],
         "title": "Contract Version",
         "type": "integer"
@@ -546,7 +546,7 @@
         "storage",
         "task-runner"
       ],
-      "contract_version": 1,
+      "contract_version": 2,
       "deploy": {
         "argv": [
           "python3",
@@ -1071,101 +1071,6 @@
           "process_roles": [
             "portal",
             "worker"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public AWS runtime configuration value (MODEL_ACCESS_CATALOG_DIGEST) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ACCESS_CATALOG_DIGEST",
-          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
-          "process_roles": [
-            "portal",
-            "worker"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public AWS runtime configuration value (MODEL_ACCESS_CATALOG_PATH) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ACCESS_CATALOG_PATH",
-          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
-          "process_roles": [
-            "portal",
-            "worker"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public AWS runtime configuration value (MODEL_ACCESS_ENABLED) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ACCESS_ENABLED",
-          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
-          "process_roles": [
-            "portal",
-            "worker"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public AWS runtime configuration value (MODEL_BROKER_GUEST_CIDRS) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_GUEST_CIDRS",
-          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
-          "process_roles": [
-            "portal",
-            "worker",
-            "provisioner"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public AWS runtime configuration value (MODEL_BROKER_GUEST_URL) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_GUEST_URL",
-          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
-          "process_roles": [
-            "portal",
-            "worker",
-            "provisioner"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public AWS runtime configuration value (MODEL_ENROLLMENT_CA_PEM_B64) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ENROLLMENT_CA_PEM_B64",
-          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
-          "process_roles": [
-            "portal",
-            "worker",
-            "provisioner"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public AWS runtime configuration value (MODEL_ENROLLMENT_CONTROL_URL) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ENROLLMENT_CONTROL_URL",
-          "owner": "aws backend runtime-env renderer (scripts/bootstrap/aws_eks.py render_aws_values)",
-          "process_roles": [
-            "portal",
-            "worker",
-            "provisioner"
           ],
           "sensitivity": "public",
           "source": "rendered from validated Terraform outputs and the normalized root config"
@@ -1964,64 +1869,6 @@
       ],
       "settings_schema": {
         "$defs": {
-          "AwsModelBrokerSettings": {
-            "additionalProperties": false,
-            "description": "Operator-owned endpoint and exact regional model inventory; never keys.\n\nCross-region inference profiles require separate geography/IAM qualification.\nThis transport admits regional Anthropic foundation models only.",
-            "properties": {
-              "admitted_subnets": {
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 256,
-                "title": "Admitted Subnets",
-                "type": "array"
-              },
-              "control_tls_secret_name": {
-                "default": "",
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Control Tls Secret Name",
-                "type": "string"
-              },
-              "enabled": {
-                "default": false,
-                "title": "Enabled",
-                "type": "boolean"
-              },
-              "hostname": {
-                "default": "",
-                "maxLength": 253,
-                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$|^$",
-                "title": "Hostname",
-                "type": "string"
-              },
-              "invocation_models": {
-                "maxProperties": 32,
-                "patternProperties": {
-                  "^[a-z][a-z0-9-]{0,23}$": {
-                    "maxLength": 128,
-                    "pattern": "^anthropic\\.[a-z0-9-]+-v[0-9]+:[0-9]+$",
-                    "type": "string"
-                  }
-                },
-                "title": "Invocation Models",
-                "type": "object"
-              },
-              "tls_secret_name": {
-                "default": "",
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Tls Secret Name",
-                "type": "string"
-              },
-              "trust_configmap_name": {
-                "default": "",
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Trust Configmap Name",
-                "type": "string"
-              }
-            },
-            "title": "AwsModelBrokerSettings",
-            "type": "object"
-          },
           "AwsOpenFgaSettings": {
             "additionalProperties": false,
             "description": "Operator references for the private released policy service on AWS; no payloads (#2313).\n\nThe runtime and admin bundles each hold ``server-preshared-keys``, ``api-token``,\n``tls.crt`` and ``tls.key``; the CA bundle holds only ``ca.crt``. Datastore logins\nare not operator settings: Terraform creates and rotates them.",
@@ -2088,169 +1935,11 @@
             },
             "title": "AwsOpenFgaSettings",
             "type": "object"
-          },
-          "ModelBrokerRuntimeSettings": {
-            "additionalProperties": false,
-            "description": "Mounted provider bindings and versioned Kubernetes Secret references only.",
-            "properties": {
-              "fingerprint_key_version": {
-                "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
-                "title": "Fingerprint Key Version",
-                "type": "string"
-              },
-              "fingerprint_previous_secret_name": {
-                "default": "",
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Fingerprint Previous Secret Name",
-                "type": "string"
-              },
-              "fingerprint_secret_name": {
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Fingerprint Secret Name",
-                "type": "string"
-              },
-              "guest_trust_ca_pem": {
-                "default": "",
-                "maxLength": 16384,
-                "title": "Guest Trust Ca Pem",
-                "type": "string"
-              },
-              "provider_inventory": {
-                "$ref": "#/$defs/ProviderInventory"
-              }
-            },
-            "required": [
-              "provider_inventory",
-              "fingerprint_secret_name",
-              "fingerprint_key_version"
-            ],
-            "title": "ModelBrokerRuntimeSettings",
-            "type": "object"
-          },
-          "ProviderInventory": {
-            "additionalProperties": false,
-            "description": "Closed mounted non-secret configuration independent of guest packages.",
-            "properties": {
-              "contract_version": {
-                "const": "model-broker-providers/v1",
-                "title": "Contract Version",
-                "type": "string"
-              },
-              "targets": {
-                "items": {
-                  "$ref": "#/$defs/ProviderTarget"
-                },
-                "maxItems": 128,
-                "minItems": 1,
-                "title": "Targets",
-                "type": "array"
-              }
-            },
-            "required": [
-              "contract_version",
-              "targets"
-            ],
-            "title": "ProviderInventory",
-            "type": "object"
-          },
-          "ProviderTarget": {
-            "additionalProperties": false,
-            "description": "Explicit approved transport, principal and conservative model context bound.",
-            "properties": {
-              "authentication": {
-                "default": "workload-identity",
-                "enum": [
-                  "workload-identity",
-                  "stored-credential"
-                ],
-                "title": "Authentication",
-                "type": "string"
-              },
-              "context_window_tokens": {
-                "maximum": 2000000,
-                "minimum": 1,
-                "title": "Context Window Tokens",
-                "type": "integer"
-              },
-              "count_region": {
-                "default": "",
-                "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$|^$",
-                "title": "Count Region",
-                "type": "string"
-              },
-              "credential_reference": {
-                "maxLength": 256,
-                "title": "Credential Reference",
-                "type": "string"
-              },
-              "model": {
-                "pattern": "^[a-zA-Z0-9@.:/-]{1,256}$",
-                "title": "Model",
-                "type": "string"
-              },
-              "principal": {
-                "maxLength": 256,
-                "title": "Principal",
-                "type": "string"
-              },
-              "project": {
-                "default": "",
-                "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$|^$",
-                "title": "Project",
-                "type": "string"
-              },
-              "provider": {
-                "enum": [
-                  "vertex-v1",
-                  "bedrock-v1",
-                  "anthropic-v1",
-                  "openai-v1",
-                  "openrouter-v1"
-                ],
-                "title": "Provider",
-                "type": "string"
-              },
-              "region": {
-                "pattern": "^[a-z][a-z0-9-]{1,62}[a-z0-9]$",
-                "title": "Region",
-                "type": "string"
-              },
-              "shard_id": {
-                "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
-                "title": "Shard Id",
-                "type": "string"
-              }
-            },
-            "required": [
-              "shard_id",
-              "provider",
-              "region",
-              "model",
-              "credential_reference",
-              "principal",
-              "context_window_tokens"
-            ],
-            "title": "ProviderTarget",
-            "type": "object"
           }
         },
         "additionalProperties": false,
         "description": "Closed operator-intent settings for the AWS backend (PLAT-2006, GH #728).\n\nOnly genuine operator intent lives here. Terraform variables, generated runtime\noutputs, workflow secret names, and provider SDK payloads are *not* settings — copying\nthem in would turn ``settings`` into a second provider schema (preflight #728).\n``extra='forbid'`` fails unknown AWS settings closed, so a typo or a stale key is a\nconfig-time error rather than a silently-ignored value.\n\nThe shared cross-backend ``range_egress`` policy is intentionally *absent*: it is owned\nand validated by :mod:`installation.range_egress` (which surfaces verbatim, non-secret\nCIDR diagnostics, #775), and the loader validates it separately for every backend. See\nthe module docstring.",
         "properties": {
-          "model_broker": {
-            "$ref": "#/$defs/AwsModelBrokerSettings"
-          },
-          "model_broker_runtime": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ModelBrokerRuntimeSettings"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
-          },
           "openfga": {
             "$ref": "#/$defs/AwsOpenFgaSettings"
           },
@@ -2363,7 +2052,7 @@
         "storage",
         "task-runner"
       ],
-      "contract_version": 1,
+      "contract_version": 2,
       "deploy": null,
       "description": "Shifter on GCP: GKE workloads, Cloud SQL, Pub/Sub, GCS, Secret Manager, and Identity Platform identity, provisioned by the Terraform configuration under platform/terraform/gcp, with the workloads rendered by the shared Helm chart under platform/charts/shifter.",
       "docs": [
@@ -2371,198 +2060,6 @@
         "shifter/installation/README.md"
       ],
       "generated_outputs": [
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_CATALOG_DIGEST",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_CATALOG_PATH",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_CA_FILE",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_CONTROL_AUDIENCE",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_CONTROL_URL",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_FINGERPRINT_KEY_PATH",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_FINGERPRINT_KEY_VERSION",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_FINGERPRINT_PREVIOUS_KEYS_PATH",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_HOSTNAME",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_IDENTITIES_PATH",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_PROVIDER",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_PROVIDERS_PATH",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_REGION",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_TLS_CERT",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_TLS_KEY",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
-        {
-          "description": "Broker-only configuration or mounted-file path; never a credential value.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_PROVIDER_PROXY",
-          "owner": "canonical model broker Helm projection",
-          "process_roles": [
-            "model-broker"
-          ],
-          "sensitivity": "public",
-          "source": "validated deployment transport and mounted catalog identity"
-        },
         {
           "description": "Public GCP runtime configuration value (ACCESS_NETWORK_CIDRS) emitted into the platform runtime environment.",
           "destination": "runtime-env",
@@ -3319,101 +2816,6 @@
           "process_roles": [
             "portal",
             "worker"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public GCP runtime configuration value (MODEL_ACCESS_CATALOG_DIGEST) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ACCESS_CATALOG_DIGEST",
-          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
-          "process_roles": [
-            "portal",
-            "worker"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public GCP runtime configuration value (MODEL_ACCESS_CATALOG_PATH) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ACCESS_CATALOG_PATH",
-          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
-          "process_roles": [
-            "portal",
-            "worker"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public GCP runtime configuration value (MODEL_ACCESS_ENABLED) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ACCESS_ENABLED",
-          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
-          "process_roles": [
-            "portal",
-            "worker"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public GCP runtime configuration value (MODEL_BROKER_GUEST_URL) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_GUEST_URL",
-          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
-          "process_roles": [
-            "portal",
-            "worker",
-            "provisioner"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public GCP runtime configuration value (MODEL_BROKER_GUEST_VIP) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_BROKER_GUEST_VIP",
-          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
-          "process_roles": [
-            "portal",
-            "worker",
-            "provisioner"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public GCP runtime configuration value (MODEL_ENROLLMENT_CA_PEM_B64) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ENROLLMENT_CA_PEM_B64",
-          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
-          "process_roles": [
-            "portal",
-            "worker",
-            "provisioner"
-          ],
-          "sensitivity": "public",
-          "source": "rendered from validated Terraform outputs and the normalized root config"
-        },
-        {
-          "description": "Public GCP runtime configuration value (MODEL_ENROLLMENT_CONTROL_URL) emitted into the platform runtime environment.",
-          "destination": "runtime-env",
-          "kind": "runtime-env",
-          "name": "MODEL_ENROLLMENT_CONTROL_URL",
-          "owner": "gcp backend runtime-env renderer (scripts/gcp/render_runtime_env.py)",
-          "process_roles": [
-            "portal",
-            "worker",
-            "provisioner"
           ],
           "sensitivity": "public",
           "source": "rendered from validated Terraform outputs and the normalized root config"
@@ -4730,73 +4132,6 @@
             "title": "FlowLogMetadata",
             "type": "string"
           },
-          "GcpModelBrokerSettings": {
-            "additionalProperties": false,
-            "description": "Closed transport configuration, provisioned only on explicit enablement.\n\nModel projects are pre-existing, deployment-owned choices and may include\nthe platform project. The map values are stable invocation GSA account IDs,\nnever credentials. This package creates identities and an endpoint, not\nactive participant grants.",
-            "properties": {
-              "admitted_subnets": {
-                "items": {
-                  "type": "string"
-                },
-                "maxItems": 256,
-                "title": "Admitted Subnets",
-                "type": "array"
-              },
-              "control_tls_secret_name": {
-                "default": "",
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Control Tls Secret Name",
-                "type": "string"
-              },
-              "enabled": {
-                "default": false,
-                "title": "Enabled",
-                "type": "boolean"
-              },
-              "global_access": {
-                "default": false,
-                "title": "Global Access",
-                "type": "boolean"
-              },
-              "hostname": {
-                "default": "",
-                "maxLength": 253,
-                "pattern": "^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\\.)+[a-z]{2,63}$|^$",
-                "title": "Hostname",
-                "type": "string"
-              },
-              "model_projects": {
-                "maxProperties": 32,
-                "patternProperties": {
-                  "^[a-z][a-z0-9-]{4,28}[a-z0-9]$": {
-                    "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$",
-                    "type": "string"
-                  }
-                },
-                "title": "Model Projects",
-                "type": "object"
-              },
-              "tls_secret_name": {
-                "default": "",
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Tls Secret Name",
-                "type": "string"
-              },
-              "trust_configmap_name": {
-                "default": "",
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Trust Configmap Name",
-                "type": "string"
-              },
-              "vip": {
-                "default": "",
-                "title": "Vip",
-                "type": "string"
-              }
-            },
-            "title": "GcpModelBrokerSettings",
-            "type": "object"
-          },
           "GcpOpenFgaSettings": {
             "additionalProperties": false,
             "description": "Operator references for the private released policy service; no payloads.\n\nOpenFGA is required. Leave the references empty to let the deploy generate\nthem, and leave the store and model IDs empty to publish the release model.",
@@ -5066,44 +4401,6 @@
             "title": "GcpReleaseTrustSettings",
             "type": "object"
           },
-          "ModelBrokerRuntimeSettings": {
-            "additionalProperties": false,
-            "description": "Mounted provider bindings and versioned Kubernetes Secret references only.",
-            "properties": {
-              "fingerprint_key_version": {
-                "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
-                "title": "Fingerprint Key Version",
-                "type": "string"
-              },
-              "fingerprint_previous_secret_name": {
-                "default": "",
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Fingerprint Previous Secret Name",
-                "type": "string"
-              },
-              "fingerprint_secret_name": {
-                "pattern": "^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$|^$",
-                "title": "Fingerprint Secret Name",
-                "type": "string"
-              },
-              "guest_trust_ca_pem": {
-                "default": "",
-                "maxLength": 16384,
-                "title": "Guest Trust Ca Pem",
-                "type": "string"
-              },
-              "provider_inventory": {
-                "$ref": "#/$defs/ProviderInventory"
-              }
-            },
-            "required": [
-              "provider_inventory",
-              "fingerprint_secret_name",
-              "fingerprint_key_version"
-            ],
-            "title": "ModelBrokerRuntimeSettings",
-            "type": "object"
-          },
           "NatLogFilter": {
             "description": "Cloud NAT log filters: both record categories, errors only, or translations only.",
             "enum": [
@@ -5129,112 +4426,6 @@
               }
             },
             "title": "NatLogPolicy",
-            "type": "object"
-          },
-          "ProviderInventory": {
-            "additionalProperties": false,
-            "description": "Closed mounted non-secret configuration independent of guest packages.",
-            "properties": {
-              "contract_version": {
-                "const": "model-broker-providers/v1",
-                "title": "Contract Version",
-                "type": "string"
-              },
-              "targets": {
-                "items": {
-                  "$ref": "#/$defs/ProviderTarget"
-                },
-                "maxItems": 128,
-                "minItems": 1,
-                "title": "Targets",
-                "type": "array"
-              }
-            },
-            "required": [
-              "contract_version",
-              "targets"
-            ],
-            "title": "ProviderInventory",
-            "type": "object"
-          },
-          "ProviderTarget": {
-            "additionalProperties": false,
-            "description": "Explicit approved transport, principal and conservative model context bound.",
-            "properties": {
-              "authentication": {
-                "default": "workload-identity",
-                "enum": [
-                  "workload-identity",
-                  "stored-credential"
-                ],
-                "title": "Authentication",
-                "type": "string"
-              },
-              "context_window_tokens": {
-                "maximum": 2000000,
-                "minimum": 1,
-                "title": "Context Window Tokens",
-                "type": "integer"
-              },
-              "count_region": {
-                "default": "",
-                "pattern": "^[a-z][a-z0-9-]{0,62}[a-z0-9]$|^$",
-                "title": "Count Region",
-                "type": "string"
-              },
-              "credential_reference": {
-                "maxLength": 256,
-                "title": "Credential Reference",
-                "type": "string"
-              },
-              "model": {
-                "pattern": "^[a-zA-Z0-9@.:/-]{1,256}$",
-                "title": "Model",
-                "type": "string"
-              },
-              "principal": {
-                "maxLength": 256,
-                "title": "Principal",
-                "type": "string"
-              },
-              "project": {
-                "default": "",
-                "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$|^$",
-                "title": "Project",
-                "type": "string"
-              },
-              "provider": {
-                "enum": [
-                  "vertex-v1",
-                  "bedrock-v1",
-                  "anthropic-v1",
-                  "openai-v1",
-                  "openrouter-v1"
-                ],
-                "title": "Provider",
-                "type": "string"
-              },
-              "region": {
-                "pattern": "^[a-z][a-z0-9-]{1,62}[a-z0-9]$",
-                "title": "Region",
-                "type": "string"
-              },
-              "shard_id": {
-                "pattern": "^[a-z0-9](?:[a-z0-9._-]{0,126}[a-z0-9])?$",
-                "title": "Shard Id",
-                "type": "string"
-              }
-            },
-            "required": [
-              "shard_id",
-              "provider",
-              "region",
-              "model",
-              "credential_reference",
-              "principal",
-              "context_window_tokens"
-            ],
-            "title": "ProviderTarget",
             "type": "object"
           },
           "VertexDataAccessLogPolicy": {
@@ -5319,20 +4510,6 @@
             "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$",
             "title": "Dynamic Secret Project Id",
             "type": "string"
-          },
-          "model_broker": {
-            "$ref": "#/$defs/GcpModelBrokerSettings"
-          },
-          "model_broker_runtime": {
-            "anyOf": [
-              {
-                "$ref": "#/$defs/ModelBrokerRuntimeSettings"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "default": null
           },
           "openfga": {
             "$ref": "#/$defs/GcpOpenFgaSettings"
@@ -5505,8 +4682,9 @@
       ]
     }
   },
-  "contract_version": 1,
+  "contract_version": 2,
   "supported_contract_versions": [
-    1
+    1,
+    2
   ]
 }

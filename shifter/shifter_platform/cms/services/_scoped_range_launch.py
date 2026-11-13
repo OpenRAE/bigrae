@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, cast
 from uuid import UUID, uuid4
 
 from django.db import transaction
@@ -33,7 +33,6 @@ if TYPE_CHECKING:
     from shared.authorization import TargetRef
     from shared.credentials import CredentialContext
     from shared.identity_scope import PrincipalRef, ResourceScope
-    from shared.model_access import OwnedReference
     from shared.schemas.range import RangeContext
     from workspaces.services import ResolvedResourceScope
 
@@ -64,50 +63,13 @@ def _validate_scoped_launch_inputs(
     return scope, is_event_launch, range_source or RangeSource.MISSION_CONTROL
 
 
-def _validate_selected_model_sources(
-    current: CredentialContext,
-    workspace_id: int | None,
-    model_sources: dict[str, Any] | None,
-) -> None:
-    """Validate optional tenant-funded model sources against the exact workspace."""
-    if not model_sources:
-        return
-    if workspace_id is None:
-        raise CMSError("Model sources unavailable")
-    from django.conf import settings
-
-    from ._model_source_selection import resolve_launch_sources
-
-    resolve_launch_sources(
-        current,
-        workspace_id,
-        model_sources,
-        catalog=getattr(settings, "MODEL_ACCESS_CATALOG", None),
-    )
-
-
-def _initial_launch_egress(
-    current: CredentialContext,
-    resolved: ResolvedResourceScope,
-    scenario: str,
-    source: RaesPackageSource,
-    model_admission_subject: OwnedReference | None,
-) -> str:
-    """Resolve initial egress and admit the scenario's model requirements."""
-    from ._model_admission import assert_launch_model_access
-
+def _initial_launch_egress(resolved: ResolvedResourceScope) -> str:
+    """Resolve the initial egress mode for the launch workspace."""
     egress = "none"
     if resolved.workspace_id is not None:
         from ._range_workspace import resolve_effective_egress_mode
 
         egress = resolve_effective_egress_mode(resolved.workspace_id)
-    assert_launch_model_access(
-        user=current,
-        scenario_id=scenario,
-        egress_mode=egress,
-        subject=model_admission_subject,
-        package_digest=source.package_digest,
-    )
     return egress
 
 
@@ -132,7 +94,6 @@ def _warm_claim(launch: PreparedScopedLaunch) -> RangeContext | None:
             range_source=launch.effective_source,
             egress_mode=launch.egress,
             request_id=launch.request_id,
-            model_sources=launch.options.model_sources,
             source_binding=tuple(source_launch_binding(launch.source).items()),
             source_metadata=metadata,
         )
@@ -186,7 +147,6 @@ def _prepare_launch(
     resolved = (
         resolve_range_scope_binding(scope) if is_event else resolve_range_scope_binding(scope, member=current.principal)
     )
-    _validate_selected_model_sources(current, resolved.workspace_id, options.model_sources)
     owner = event.owner_principal or current.principal
     user_id = human_principal_user_id(owner) if owner.kind == "human" else None
     launch = PreparedScopedLaunch(
@@ -211,7 +171,7 @@ def _prepare_launch(
         .exists()
     ):
         raise CMSError(_ACTIVE_RANGE_MESSAGE)
-    egress = _initial_launch_egress(current, resolved, scenario, source, event.model_admission_subject)
+    egress = _initial_launch_egress(resolved)
     prepared = cast(PreparedScopedLaunch, replace(launch, egress=egress))
     return prepared
 
@@ -276,16 +236,8 @@ def create_scoped_range(
 def _dispatch_reserved(launch: PreparedScopedLaunch, instance: RangeInstance, egress: str) -> None:
     """Dispatch outside SQL; retain event reservations across uncertain outcomes."""
     try:
-        from ._model_admission import assert_launch_model_access
         from ._raes_dispatch import RaesDispatchOptions, dispatch_object_raes_package, dispatch_repo_raes_package
 
-        assert_launch_model_access(
-            user=launch.current,
-            scenario_id=launch.source.scenario_id,
-            egress_mode=egress,
-            subject=launch.options.event.model_admission_subject,
-            package_digest=launch.source.package_digest,
-        )
         revalidate_scoped_launch(
             launch.current,
             launch.scope,
@@ -333,8 +285,6 @@ def _resume_staged_event_range(
     """Reuse the accepted native plan, never compile a second runtime generation."""
     from engine.services import project_range_authority
 
-    from ._model_allocation import needs_model_preparation, prepare_model_access_for_dispatch
-
     if instance.request is None:
         raise CMSError("Range launch request unavailable")
     projection = project_range_authority(instance.request.request_id)
@@ -346,8 +296,6 @@ def _resume_staged_event_range(
         or projection.parent != event_target
     ):
         raise CMSError("Range launch runtime conflict")
-    if needs_model_preparation(instance.request.request_id):
-        prepare_model_access_for_dispatch(instance.request.request_id, range_id=projection.native_uuid)
 
 
 def _launch_intent_digest(launch: PreparedScopedLaunch) -> str:
@@ -366,13 +314,6 @@ def _launch_intent_digest(launch: PreparedScopedLaunch) -> str:
         "owner": asdict(launch.owner),
         "target": asdict(launch.options.event.authority_target) if launch.options.event.authority_target else None,
         "deadline": launch.options.event.remote_access_teardown_at,
-        "model_sources": launch.options.model_sources,
-        "model_subject": launch.options.event.model_admission_subject.model_dump(mode="json")
-        if launch.options.event.model_admission_subject
-        else None,
-        "model_scope": launch.options.event.model_launch_scope.model_dump(mode="json")
-        if launch.options.event.model_launch_scope
-        else None,
         "backend": launch.backend.backend if launch.backend else None,
     }
     return canonical_payload_digest(json.loads(json.dumps(fields, cls=DjangoJSONEncoder)))

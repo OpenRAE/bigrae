@@ -163,15 +163,15 @@ def test_quiesced_policy_apply_follows_controller_and_application_pod_terminatio
     run, calls = cluster
     run(
         {
-            "shifter-platform/deployment": {"items": [_row("model-broker"), _row("openfga")]},
-            "shifter-platform/pod": {"items": [_row("old-broker", phase="Succeeded")]},
+            "shifter-platform/deployment": {"items": [_row("portal-web"), _row("openfga")]},
+            "shifter-platform/pod": {"items": [_row("old-portal", phase="Succeeded")]},
             "shifter-jobs/job": {"items": [{**_row("active-job"), "status": {"active": 1}}]},
         }
     )
     history = calls()
     assert history[-1][0] == "apply"
-    scale = next(i for i, call in enumerate(history) if call[:2] == ["scale", "deployment/model-broker"])
-    rollout = next(i for i, call in enumerate(history) if call[:3] == ["rollout", "status", "deployment/model-broker"])
+    scale = next(i for i, call in enumerate(history) if call[:2] == ["scale", "deployment/portal-web"])
+    rollout = next(i for i, call in enumerate(history) if call[:3] == ["rollout", "status", "deployment/portal-web"])
     job_wait = next(i for i, call in enumerate(history) if call[0] == "wait")
     final_pod_checks = [i for i, call in enumerate(history) if call[:2] == ["get", "pod"] and i > job_wait]
     assert scale < rollout < job_wait < min(final_pod_checks) <= max(final_pod_checks) < len(history) - 1

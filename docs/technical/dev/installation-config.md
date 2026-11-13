@@ -54,8 +54,7 @@ Run `validate` and `doctor` after you edit the generated GCP configuration.
 | `aws` | `prod`, `dev` | `django_secret_key`, `db_password` |
 | `gcp` | `prod`, `dev` | `django_secret_key` |
 
-`validate` checks `settings` against the selected backend. GCP settings reject unknown keys. Model broker, model access, range egress, warm pool, and Mission Control lease blocks each use their own schema. See "Optional: model access broker" in
-[`setup.md`](setup.md) for the broker blocks.
+`validate` checks `settings` against the selected backend. GCP settings reject unknown keys. Range egress, warm pool, and Mission Control lease blocks each use their own schema.
 
 The GCP deployment settings are closed blocks too. Before #2571, GitHub
 variables and secrets held most of these inputs.
@@ -118,9 +117,7 @@ Validation messages identify paths and do not echo rejected input values.
 `bigrae.yaml` stores secret references only.
 
 Do not put passwords, tokens, private keys, or service-account JSON in
-`bigrae.yaml`. The one exception for certificates is public trust material:
-`settings.model_broker_runtime.guest_trust_ca_pem` holds the broker CA
-certificate (never its key).
+`bigrae.yaml`.
 
 Secret references are checked for recognizable raw secret material, including
 PEM blocks, multi-line values, and implausibly long values. Short raw values can

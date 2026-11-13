@@ -6,7 +6,6 @@ import ipaddress
 import os
 
 from config import GCERangeCellConfig
-from gcp_range_cell_model_broker import admitted_broker_destination, broker_firewall_name
 from gcp_range_cell_naming import _network_tag, _short_resource_name
 from gcp_range_cell_types import (
     DEFAULT_GCE_EGRESS_POLICY,
@@ -313,8 +312,7 @@ def _egress_rules(
         )
     if config.private_google_access:
         # Private Google Access needs an explicit TLS route through egress deny.
-        # This network capability supplies no guest credentials. Model access
-        # uses the separately admitted broker endpoint and enrollment contract.
+        # This network capability supplies no guest credentials.
         rules.append(
             {
                 "name": _short_resource_name("shifter-r", range_id, "egress-googleapis"),
@@ -362,13 +360,6 @@ def build_firewall_plan(
     defense in depth; it is not, by itself, the ``none`` no-NAT guarantee.
     """
     bypass = os.environ.get("GCP_RANGE_PREPROVISIONED_FIREWALLS", "").strip().lower() in {"1", "true", "yes"}
-    broker_destination = admitted_broker_destination(
-        egress_policy,
-        config,
-        subnet_plans,
-        instance_plans or [],
-        bypass,
-    )
     if bypass:
         return []
     deny_general_egress = (egress_policy.mode or "status-quo").strip().lower() in {"none", "deny-all"}
@@ -412,17 +403,6 @@ def build_firewall_plan(
             config,
         )
     )
-    if broker_destination is not None:
-        firewalls.append(
-            {
-                "name": broker_firewall_name(range_id),
-                "direction": "EGRESS",
-                "priority": 900,
-                "target_tags": [range_tag],
-                "destination_ranges": [broker_destination],
-                "allowed": [{"IPProtocol": "tcp", "ports": ["443"]}],
-            }
-        )
     return firewalls
 
 

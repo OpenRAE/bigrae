@@ -4,7 +4,6 @@ import json
 from pathlib import Path
 
 from cms.api.operation_policy import API_OPERATION_POLICY as CMS_OPERATION_POLICY
-from config.model_access_operation_policy import API_OPERATION_POLICY as MODEL_ACCESS_OPERATION_POLICY
 from ctf.api.operation_policy import API_OPERATION_POLICY as CTF_OPERATION_POLICY
 from mission_control.api.operation_policy import API_OPERATION_POLICY as MC_OPERATION_POLICY
 from shared.api.contract import generate_openapi_document
@@ -41,8 +40,7 @@ def test_exact_operation_policy_values_match_the_reviewed_inventory() -> None:
         for row in json.loads(INVENTORY.read_text(encoding="utf-8"))["http"]
         if row["disposition"] in {"retained", "added"}
     }
-    policies = {**CMS_OPERATION_POLICY, **CTF_OPERATION_POLICY, **MC_OPERATION_POLICY, **MODEL_ACCESS_OPERATION_POLICY}
-    assert MODEL_ACCESS_OPERATION_POLICY.keys() <= rows.keys()
+    policies = {**CMS_OPERATION_POLICY, **CTF_OPERATION_POLICY, **MC_OPERATION_POLICY}
     registered_actions = {action.code for action in ACTION_CATALOG}
     for operation_id, policy in policies.items():
         assert set(policy.actions) <= registered_actions, operation_id

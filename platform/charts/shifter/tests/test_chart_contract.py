@@ -70,6 +70,7 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2834/#2837 integration: retain the two session-cleanup
 # gateway rules, maintenance CPU limits, and large-plan result-worker memory.
 # Regenerated for #2904 after giving guacd a writable FreeRDP home.
+# Regenerated for #2909: the removed model broker drops its job env and network policy exclusions.
 GCP_RENDER_SHA256 = {
     "gcp-prod": "217da28f1f44680fbc160344d4e09bde6c7904214c2d2031a264254fca6ac4ac",
     "gcp-dev": "5da6c16dde1a8153d958267a1d65bfd9af3cd735615431b45a882e7a3190bd89",
@@ -610,32 +611,6 @@ class BackendNeutralChartContractTests(unittest.TestCase):
                     expected,
                     f"{profile} render drifted from the frozen GCP byte contract",
                 )
-
-    def test_enrollment_schema_accepts_both_cloud_endpoint_contracts(self) -> None:
-        common = {
-            "MODEL_BROKER_GUEST_URL": "https://models.example.test",
-            "MODEL_ENROLLMENT_CONTROL_URL": "https://model-access-control.shifter-platform.svc:8444",
-            "MODEL_ENROLLMENT_CA_PEM_B64": "ZXhhbXBsZQ==",
-        }
-        endpoints = {
-            "gcp-dev": {"MODEL_BROKER_GUEST_VIP": "10.40.0.25"},
-            "aws-dev": {"MODEL_BROKER_GUEST_CIDRS": "10.40.1.0/24,10.40.2.0/24"},
-        }
-        with tempfile.TemporaryDirectory() as temporary:
-            overlay = Path(temporary) / "enrollment.json"
-            for profile, endpoint in endpoints.items():
-                with self.subTest(profile=profile):
-                    overlay.write_text(json.dumps({"modelBroker": {"enrollment_env": {**common, **endpoint}}}))
-                    # Real Helm schema validation must accept the exact projection
-                    # emitted by each cloud adapter before deployment can proceed.
-                    _render(VALUES_FILES[profile], overlay)
-                    overlay.write_text(json.dumps({"modelBroker": {"enrollment_env": {
-                        **common, **endpoint, "UNDECLARED_SETTING": "unexpected",
-                    }}}))
-                    rejected = _helm("template", "contract-test", str(CHART_DIR),
-                                     "-f", str(VALUES_FILES[profile]), "-f", str(overlay), check=False)
-                    self.assertNotEqual(rejected.returncode, 0)
-                    self.assertIn("UNDECLARED_SETTING", rejected.stderr)
 
     def test_security_and_default_deny_are_preserved_for_every_profile(self) -> None:
         for profile, values_file in VALUES_FILES.items():

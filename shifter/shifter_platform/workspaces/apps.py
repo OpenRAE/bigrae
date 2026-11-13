@@ -11,7 +11,6 @@ class WorkspacesConfig(AppConfig):
     verbose_name = "Workspaces"
 
     def ready(self) -> None:
-        import workspaces.model_access_signals  # noqa: F401
         from workspaces.invitation_adapter import register_workspace_invitation_acceptor
 
         register_workspace_invitation_acceptor()

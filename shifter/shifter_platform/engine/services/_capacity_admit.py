@@ -144,10 +144,6 @@ def reconcile_capacity_budgets(*, now: datetime | None = None) -> int:
     from engine.models import CapacityDraw, CapacityReservation
 
     moment = now or timezone.now()
-    from ._model_allocation_lifecycle import reconcile_model_allocations
-
-    reconcile_model_allocations(now=moment)
-
     with transaction.atomic():
         expired = list(
             CapacityReservation.objects.select_for_update()

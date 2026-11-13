@@ -9,8 +9,8 @@ step that knows the GitHub input names. It writes one private bundle directory:
   onto their settings homes (ADR-070 "Input homes");
 - ``terraform.tfvars``: the committed per-deployment Terraform values;
 - ``terraform.tfvars.json``: the Terraform values that GitHub secrets hold;
-- ``range-images.json``, ``foundation-inputs.json``, and the committed broker template
-  and retired-artifact inventory, when they exist.
+- ``range-images.json``, ``foundation-inputs.json``, and the committed
+  retired-artifact inventory, when they exist.
 
 A GitHub value that conflicts with a value in the root config fails the render, so
 each input keeps one meaning. ``--purpose destroy`` renders the teardown inputs: a
@@ -31,8 +31,6 @@ from pathlib import Path
 from typing import Any
 
 import yaml
-
-from apply_shifter_config_overlay import ConfigOverlayError, apply_overlay
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 PURPOSES = ("deploy", "destroy")
@@ -251,7 +249,7 @@ def render_bundle(
 
     output.mkdir(mode=0o700, parents=False, exist_ok=False)
     try:
-        written = _write_bundle(output, config, committed_values, deploy_dir, secret_values, env)
+        written = _write_bundle(output, config, committed_values, deploy_dir, secret_values)
         if range_images:
             _write_private(output / "range-images.json", json.dumps(range_images, sort_keys=True) + "\n")
             written.append("range-images.json")
@@ -271,22 +269,12 @@ def _write_bundle(
     committed_values: Path,
     deploy_dir: Path,
     secret_values: dict[str, object],
-    env: Mapping[str, str],
 ) -> list[str]:
     written = ["bigrae.yaml", "terraform.tfvars", "terraform.tfvars.json"]
     config_path = output / "bigrae.yaml"
     _write_private(config_path, yaml.safe_dump(config, sort_keys=False))
     _copy_private(committed_values, output / "terraform.tfvars")
     _write_private(output / "terraform.tfvars.json", json.dumps(secret_values, sort_keys=True) + "\n")
-    template = deploy_dir / "model-broker-overlay.template.json"
-    if template.is_file():
-        _copy_private(template, output / template.name)
-        written.append(template.name)
-    else:
-        try:
-            apply_overlay(config_path, _text(env, "SHIFTER_CONFIG_OVERLAY_JSON"))
-        except ConfigOverlayError as exc:
-            raise CiInputsError(f"SHIFTER_CONFIG_OVERLAY_JSON is invalid: {exc}") from None
     inventory = deploy_dir / "retired-cluster-artifacts.json"
     if inventory.is_file():
         _copy_private(inventory, output / inventory.name)

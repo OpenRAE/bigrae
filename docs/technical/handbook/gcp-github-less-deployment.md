@@ -388,11 +388,10 @@ Other inputs that refer to secrets:
    `range_host_identity_pool_size`, `range_network_zones`, and
    `ctf_content_bucket_name` from `bigrae.yaml`. Its values win over a value in
    your files.
-5. Add the optional objects only if you need them: `foundation-inputs.json`,
-   `model-broker-overlay.template.json`, and `retired-cluster-artifacts.json`.
+5. Add the optional objects only if you need them: `foundation-inputs.json` and
+   `retired-cluster-artifacts.json`.
    `foundation-inputs.json` is only for
    `gcp-deploy --reconcile-foundation-image-network`.
-   The model broker is parked (ADR-068).
 6. Publish the bundle. The command validates it first:
 
    ```bash

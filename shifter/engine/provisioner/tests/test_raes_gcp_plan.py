@@ -37,7 +37,6 @@ def _config(
     network_mode: str = "vpc-per-range",
     network_id: str = "",
     service_account_email: str = "",
-    model_broker_vip: str = "",
 ) -> GCERangeCellConfig:
     return GCERangeCellConfig(
         project_id="proj-1",
@@ -47,7 +46,6 @@ def _config(
         network_id=network_id,
         portal_network_cidrs=("203.0.113.0/24",),
         service_account_email=service_account_email,
-        model_broker_vip=model_broker_vip,
     )
 
 
@@ -413,30 +411,6 @@ class TestInstances:
         config = _config(service_account_email="sh-range-host@proj-1.iam.gserviceaccount.com")
         plan = build_raes_range_cell_plan("req-1", 7, _plan((_node(),), (_network(),)), _resolver(), config)
         assert plan["instances"][0]["attach_service_account"] is True
-
-    def test_configured_broker_without_range_admission_keeps_direct_identity(self):
-        """A deployment broker endpoint alone cannot switch a range away from direct Vertex."""
-        config = _config(
-            service_account_email="sh-range-host@proj-1.iam.gserviceaccount.com",
-            model_broker_vip="10.60.0.10",
-        )
-        plan = build_raes_range_cell_plan("req-1", 7, _plan((_node(),), (_network(),)), _resolver(), config)
-        assert plan["instances"][0]["attach_service_account"] is True
-
-    def test_admitted_broker_leaves_guests_identity_less(self):
-        """ADR-059/ADR-064: only a range-admitted broker path suppresses guest cloud identity."""
-        config = _config(
-            service_account_email="sh-range-host@proj-1.iam.gserviceaccount.com",
-            model_broker_vip="10.60.0.10",
-        )
-        options = RaesGcePlanOptions(
-            config=config,
-            egress_policy=GceEgressPolicy(
-                model_broker={"contract_version": "model-broker-egress/v1", "vip": "10.60.0.10", "port": 443}
-            ),
-        )
-        plan = build_raes_range_cell_plan("req-1", 7, _plan((_node(),), (_network(),)), _resolver(), options)
-        assert plan["instances"][0]["attach_service_account"] is False
 
     def test_count_fans_out_to_distinct_instances_and_ips(self):
         node = _node(count=3)

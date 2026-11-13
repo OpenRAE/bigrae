@@ -25,7 +25,7 @@ keys and policy records remain unchanged.
 Strict live-server verification and client migration precede removal of the
 old CA and the next authorization-model publication.
 GCP rollout restarts and readiness checks consume the same closed release
-Deployment inventory, including background workers and optional broker clients.
+Deployment inventory, including background workers.
 
 BigRAE is the current product name. Public BigRAE config, SDK, client and plugin
 names converge on their existing validation and execution owners; legacy names
@@ -131,11 +131,8 @@ objects.
 Integration discovery uses exact organization or installation actions
 and credential ceilings, independently of parent account-read permission.
 
-Management translates principal ownership into the stable user-selector
-references that Engine invalidates when a range moves.
-
 CTF keeps new events
-unavailable until their recorded model/content initialization commits; recovery
+unavailable until their recorded content initialization commits; recovery
 revalidates the original credential and pinned content before completing it.
 Permanent event deletion commits native cleanup for each retained range before
 removing its aggregate records.
@@ -336,10 +333,9 @@ They do not prove that a policy compiles on the Kubernetes API server.
 Kubernetes Checkov is a blocking gate for the rendered Helm chart of each supported values file. A scoped waiver uses a chart template annotation
 with a matching `docs/adr/exceptions.yaml` entry (ADR-004-R11).
 
-The model-access broker is **parked and unsupported** under
-[ADR-068](../adr/068-model-access-broker-parked.md). Keep broker/model-access
-settings disabled. Keyless-direct is the supported guest model path; a proposed
-gateway does not provide current budget enforcement or proxy guarantees.
+Issue #2909 removed the model-access broker and its model-access control subsystem, as recorded in
+[ADR-068](../adr/068-model-access-broker-parked.md).
+Keyless-direct is the only guest model path. A proposed gateway does not provide current budget enforcement or proxy guarantees.
 
 ## Commands, results and events
 
