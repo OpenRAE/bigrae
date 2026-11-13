@@ -27,7 +27,6 @@ from raes_contracts.contracts import (
     BackendManifestV2Model,
     ExperimentArtifactRefModel,
     ExperimentManifestReferenceModel,
-    ObservationCaptureOfferModel,
     ParticipantImplementationManifestModel,
     ProcessorManifestV2Model,
     TrialCleanupReceiptModel,
@@ -54,7 +53,12 @@ from shared.raes.participant_owner_replay import (
 from shared.raes.participant_owner_replay import validation_requests as _validation_requests
 from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
 from shared.raes.trial_archive_records import reject_retained_credentials
-from shared.raes.worker_apparatus import require_worker_scenario, worker_backend_manifest, worker_realization_envelope
+from shared.raes.worker_apparatus import (
+    ApparatusDeclaration,
+    require_worker_scenario,
+    worker_backend_manifest,
+    worker_realization_envelope,
+)
 
 ExperimentInputError = RaesError
 
@@ -88,7 +92,7 @@ class ExperimentAuthority(BaseModel):
     processor: ProcessorManifestV2Model
     participants: list[ParticipantAuthority] = Field(default_factory=list, max_length=256)
     realization_envelope: BackendRealizationEnvelopeModel | None = None
-    capture_offers: list[ObservationCaptureOfferModel] = Field(default_factory=list, max_length=256)
+    apparatus: ApparatusDeclaration | None = None
     execution_authority: TrialExecutionAuthorityModel
     max_concurrency: int = Field(default=200, ge=1, le=10000)
     #: The published worker host profile that every trial of the batch uses.
@@ -96,10 +100,10 @@ class ExperimentAuthority(BaseModel):
 
     @model_validator(mode="after")
     def _one_document_source(self) -> ExperimentAuthority:
-        """Refuse a partial document set; supplied documents carry their own capture offers."""
+        """Refuse a partial document set; supplied documents carry their own apparatus claims."""
         supplied = (self.backend is not None, self.realization_envelope is not None)
-        if supplied not in ((True, True), (False, False)) or all(supplied) == bool(self.capture_offers):
-            raise ValueError("Supply the backend and envelope with no capture offers, or capture offers only")
+        if supplied not in ((True, True), (False, False)) or all(supplied) == (self.apparatus is not None):
+            raise ValueError("Supply the backend and envelope with no apparatus declaration, or the declaration only")
         return self
 
 
@@ -448,8 +452,9 @@ def _bind_worker_apparatus(
         return configuration, retained, None
     if profile is None:
         raise ValueError("Derived apparatus documents require the bound worker profile")
-    envelope = worker_realization_envelope(profile)
-    backend = worker_backend_manifest(envelope, configuration.capture_offers)
+    apparatus = cast(ApparatusDeclaration, configuration.apparatus)
+    envelope = worker_realization_envelope(profile, apparatus)
+    backend = worker_backend_manifest(envelope, apparatus)
     retained["derived_apparatus"] = {
         "backend": backend.model_dump(mode="json"),
         "realization_envelope": envelope.model_dump(mode="json"),
