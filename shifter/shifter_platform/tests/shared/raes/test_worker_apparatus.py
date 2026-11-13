@@ -22,7 +22,7 @@ from shared.raes.worker_apparatus import (
     worker_backend_manifest,
     worker_realization_envelope,
 )
-from tests.engine.services.test_disposable_worker_profile import arm_profile_data, profile_data
+from tests.engine.services.test_disposable_worker_profile import arm_profile_data, profile_data, two_vm_profile_data
 
 OFFER = {
     "offer_id": "trial-transcript",
@@ -173,24 +173,25 @@ def test_selected_scenario_must_be_one_node_of_the_host(tmp_path, node, admitted
     path = tmp_path / "scenario.sdl.yaml"
     path.write_text(f"name: worker-trial\nnodes:\n  target: {node}\n")
     scenario = instantiate_scenario(load_scenario(path))
-    configuration = worker_realization_envelope(
-        WorkerHostProfile.model_validate(arm_profile_data()), _declaration()
-    ).configuration
+    profile = WorkerHostProfile.model_validate(arm_profile_data())
     if admitted:
-        require_worker_scenario(scenario, configuration)
+        require_worker_scenario(scenario, profile, "aarch64")
     else:
-        with pytest.raises(ValueError, match="selected scenario node"):
-            require_worker_scenario(scenario, configuration)
+        with pytest.raises(ValueError, match="selected scenario nodes"):
+            require_worker_scenario(scenario, profile, "aarch64")
 
 
-def test_two_nodes_are_refused(tmp_path):
+def test_a_scenario_needs_one_node_per_worker_vm(tmp_path):
+    """#2947: a two-node scenario fits a two-VM worker and no other."""
     path = tmp_path / "scenario.sdl.yaml"
-    path.write_text("name: worker-trial\nnodes:\n  a: {type: compute, os: linux}\n  b: {type: compute, os: linux}\n")
-    configuration = worker_realization_envelope(
-        WorkerHostProfile.model_validate(profile_data()), _declaration()
-    ).configuration
-    with pytest.raises(ValueError, match="selected scenario node"):
-        require_worker_scenario(instantiate_scenario(load_scenario(path)), configuration)
+    path.write_text(
+        "name: worker-trial\nnodes:\n  a: {type: compute, os: linux, architecture: x86_64}\n"
+        "  b: {type: compute, os: linux, architecture: x86_64}\n"
+    )
+    scenario = instantiate_scenario(load_scenario(path))
+    require_worker_scenario(scenario, WorkerHostProfile.model_validate(two_vm_profile_data()), "x86_64")
+    with pytest.raises(ValueError, match="selected scenario nodes"):
+        require_worker_scenario(scenario, WorkerHostProfile.model_validate(profile_data()), "x86_64")
 
 
 @pytest.mark.parametrize(

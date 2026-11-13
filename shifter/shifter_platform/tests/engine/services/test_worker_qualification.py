@@ -229,3 +229,87 @@ def test_distinct_workers_cannot_share_an_identity(apparatus, guest, identity):
     )
     with pytest.raises(ValueError, match="not independent"):
         qualify_disposable_worker(apparatus.credential, other.worker_id)
+
+
+def _two_vm_worker(apparatus, suffix):
+    """Create a two-VM worker and record one accepted observation per VM."""
+    from engine.models import CapacityReservation, DisposableWorker, Range, WorkerHostObservation
+    from engine.services import configure_worker_policy
+    from tests.engine.services.test_disposable_worker_profile import two_vm_profile_data
+
+    data = two_vm_profile_data() | {"capacity_partition": apparatus.profile["capacity_partition"]}
+    now = timezone.now()
+    for metric, cost in data["capacity_demand"].items():
+        CapacityReservation.objects.create(
+            event_ref=data["capacity_scope_ref"],
+            partition_name="synthetic",
+            metric_name=metric,
+            amount=4 * cost,
+            unit_amount=cost,
+            enforcement="enforcing",
+            window_start=now - timedelta(hours=1),
+            window_end=now + timedelta(hours=1),
+        )
+    configure_worker_policy(apparatus.credential, {"profiles": {"default": data}, "max_live": 2, "max_provisioning": 2})
+    row = DisposableWorker.objects.get(pk=create(apparatus).worker_id)
+    members = [{"uuid": f"provision.node.{name}#0", "asset_type": "gce_vm"} for name in ("victim", "workstation")]
+    Range.objects.filter(pk=row.range_id).update(status="ready", provisioned_instances=members)
+    runtime = Range.objects.get(pk=row.range_id)
+    observations = {
+        member["uuid"]: {
+            "vm_identity": canonical_digest(f"vm-{member['uuid']}-{suffix}"),
+            "machine_identity": canonical_digest(f"machine-{member['uuid']}-{suffix}"),
+            "daemon_identity": canonical_digest(f"daemon-{member['uuid']}-{suffix}"),
+            "docker_version": data["docker_version"],
+            "daemon_count": 1,
+            "hardware": observed_hardware() | {"image_id": image_id},
+            "observed_at": timezone.now().isoformat(),
+        }
+        for member, image_id in zip(members, ("2234567890123456789", "1234567890123456789"), strict=True)
+    }
+    record = WorkerHostObservation.objects.create(
+        range=runtime,
+        operation_id=runtime.provisioner_operation_id,
+        resource_generation=runtime.resource_generation,
+        observations=observations,
+    )
+    return SimpleNamespace(row=row, record=record, observations=observations)
+
+
+def test_two_vm_worker_qualifies_every_vm_and_records_each_fingerprint(apparatus):
+    """#2947: each VM's hardware and independent fingerprints are checked and recorded."""
+    from engine.models import WorkerHostIdentity
+    from engine.services import qualify_disposable_worker
+
+    worker = _two_vm_worker(apparatus, "a")
+    result = qualify_disposable_worker(apparatus.credential, worker.row.pk)
+    trial = worker.observations["provision.node.workstation#0"]
+    assert (result.vm_identity, [host["member"] for host in result.hosts]) == (
+        trial["vm_identity"],
+        ["provision.node.victim#0"],
+    )
+    identities = WorkerHostIdentity.objects.filter(worker=worker.row)
+    assert sorted({row.member for row in identities}) == ["provision.node.victim#0", "provision.node.workstation#0"]
+    assert identities.count() == 6
+    worker.row.refresh_from_db()
+    assert worker.row.qualification["hosts"][0]["vm_identity"] == result.hosts[0]["vm_identity"]
+
+
+def test_a_cloned_vm_cannot_qualify_in_any_worker(apparatus):
+    """#2947: a second VM that repeats a fingerprint is refused, within one worker or across workers."""
+    from engine.services import qualify_disposable_worker
+
+    first = _two_vm_worker(apparatus, "a")
+    qualify_disposable_worker(apparatus.credential, first.row.pk)
+    second = _two_vm_worker(apparatus, "b")
+    victim = dict(second.observations["provision.node.victim#0"])
+    victim["vm_identity"] = first.observations["provision.node.victim#0"]["vm_identity"]
+    second.record.observations = second.observations | {"provision.node.victim#0": victim}
+    second.record.save(update_fields=["observations"])
+    with pytest.raises(ValueError, match="not independent"):
+        qualify_disposable_worker(apparatus.credential, second.row.pk)
+    victim["vm_identity"] = second.observations["provision.node.workstation#0"]["vm_identity"]
+    second.record.observations = second.observations | {"provision.node.victim#0": victim}
+    second.record.save(update_fields=["observations"])
+    with pytest.raises(ValueError, match="not independent"):
+        qualify_disposable_worker(apparatus.credential, second.row.pk)

@@ -26,8 +26,16 @@ from raes_range_contract import _require_gce_live_fire_binding
 from raes_range_ops import _config_for_range_placement
 
 
+def trial_instance(instances: list[dict[str, Any]], trial_host: str) -> dict[str, Any]:
+    """Return the VM that runs the trial: the one a multi-VM worker names, or a one-VM worker's only VM."""
+    selected = [item for item in instances if not trial_host or item["uuid"] == f"{trial_host}#0"]
+    if len(selected) != 1:
+        raise ValueError("the worker trial host is not exactly one VM")
+    return selected[0]
+
+
 def worker_instance_output(value: WorkerTrialInput) -> dict[str, Any]:
-    """Rebuild the single worker VM's management output from retained inputs."""
+    """Rebuild the trial host VM's management output from retained inputs."""
     request_id = str(value.range_request_id)
     run = get_raes_operation_input(str(value.provision_operation_id), request_id=request_id, operation="provision")
     operation_input = run.input
@@ -47,9 +55,7 @@ def worker_instance_output(value: WorkerTrialInput) -> dict[str, Any]:
             reconstruct_for_teardown=allocation.required and not allocation.network_cidrs,
         ),
     )
-    if len(plan["instances"]) != 1:
-        raise ValueError("a worker has exactly one VM")
-    instance = plan["instances"][0]
+    instance = trial_instance(plan["instances"], value.trial_host)
     clients = _build_clients()
     existing = _get_or_none(
         clients.instances.get,
@@ -76,5 +82,5 @@ def worker_instance_output(value: WorkerTrialInput) -> dict[str, Any]:
 
 
 def worker_guest(value: WorkerTrialInput) -> GuestExecutionContext:
-    """Return the guest execution context for the worker VM."""
+    """Return the guest execution context for the trial host VM."""
     return build_guest_execution_context(worker_instance_output(value), os_type="linux", role="raes-node")
