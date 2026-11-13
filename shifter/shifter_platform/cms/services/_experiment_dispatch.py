@@ -24,7 +24,7 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 
-from cms.models import ExperimentEntry
+from cms.models import ExperimentEntry, ExperimentSnapshot
 from shared.cloud import get_object_storage
 from shared.exceptions import CMSError
 from shared.raes.experiment_admission import experiment_archive_identity
@@ -163,8 +163,19 @@ def stage_trial(
     )
     storage = get_object_storage()
     prefix = f"{TRIAL_INPUT_PREFIX}{token}/"
-    unit = _stage_object(storage, prefix + "trial-unit.json", trial_unit_bytes(inputs, row.plan_entry_id))
-    scenario = _stage_object(storage, prefix + "scenario.sdl", trial_scenario_bytes(inputs, row.plan_entry_id))
+    stored = (
+        ExperimentSnapshot.objects.filter(batch_id=row.batch_id, plan_entry_id=row.plan_entry_id)
+        .values_list("snapshot_json", flat=True)
+        .first()
+    )
+    try:
+        scenario_bytes = trial_scenario_bytes(inputs, row.plan_entry_id, stored)
+    except ValueError:
+        raise CMSError("The stored trial snapshot differs from the admitted inputs") from None
+    unit = _stage_object(
+        storage, prefix + "trial-unit.json", trial_unit_bytes(inputs, row.plan_entry_id, scenario_bytes)
+    )
+    scenario = _stage_object(storage, prefix + "scenario.sdl", scenario_bytes)
     trial = {
         "schema_version": "bigrae.trial-input/v1",
         "run_id": row.run_id,

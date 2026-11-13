@@ -7,23 +7,39 @@ provides cleanup evidence.
 
 from __future__ import annotations
 
-import hashlib
+import json
 from typing import Any
 
 from raes_contracts.canonical import canonical_json_bytes
 from raes_contracts.contracts import TrialCleanupReceiptModel, validate_trial_cleanup_receipt
 from raes_contracts.contracts.admitted_trial_plan_ingress import parse_admitted_trial_plan_json
 
-
-def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
-    """Return the canonical instantiated snapshot bytes of one entry."""
-    return canonical_json_bytes(inputs["snapshots"][entry_id])
+from shared.raes.experiment_admission import snapshot_digest
 
 
-def trial_unit_bytes(inputs: dict[str, Any], entry_id: str) -> bytes:
-    """Return the staged trial unit: the admitted plan, the entry and its instantiated snapshot."""
+def trial_scenario_bytes(inputs: dict[str, Any], entry_id: str, stored: str | None) -> bytes:
+    """Return the exact admitted snapshot bytes of one entry, verified against its admitted digest.
+
+    ``stored`` is the entry's stored snapshot. A batch admitted before snapshots were stored
+    outside the record keeps them in the record.
+    """
+    if "snapshot_digests" not in inputs:
+        return canonical_json_bytes(inputs["snapshots"][entry_id])
+    snapshot = (stored or "").encode()
+    if snapshot_digest(snapshot) != inputs["snapshot_digests"][entry_id]:
+        raise ValueError("The stored trial snapshot differs from its admitted digest")
+    return snapshot
+
+
+def trial_unit_bytes(inputs: dict[str, Any], entry_id: str, scenario: bytes) -> bytes:
+    """Stage the exact entry and the retained contracts needed by its runtime."""
     return canonical_json_bytes(
-        {"plan": inputs["plan"], "plan_entry_id": entry_id, "snapshot": inputs["snapshots"][entry_id]}
+        {
+            "plan": inputs["plan"],
+            "plan_entry_id": entry_id,
+            "snapshot": json.loads(scenario),
+            "material": {name: inputs[name] for name in ("experiment", "task", "capture_specs", "authority")},
+        }
     )
 
 
@@ -34,7 +50,9 @@ def trial_plan_bytes(inputs: dict[str, Any]) -> bytes:
 
 def trial_scenario_sha256(inputs: dict[str, Any], entry_id: str) -> str:
     """Return the prefixed digest of one entry's instantiated snapshot."""
-    return "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, entry_id)).hexdigest()
+    if "snapshot_digests" in inputs:
+        return str(inputs["snapshot_digests"][entry_id])
+    return snapshot_digest(canonical_json_bytes(inputs["snapshots"][entry_id]))
 
 
 _OUTCOME_TRIGGERS = {
