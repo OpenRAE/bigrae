@@ -9,7 +9,6 @@ from raes_backend_protocols.manifest import backend_manifest_from_v2_model_with_
 from raes_backend_protocols.trial_control_admission import require_trial_control_capability
 from raes_contracts.contracts import (
     AdmittedExecutionControlModel,
-    ObservationCaptureOfferModel,
     TrialExecutionAuthorityModel,
 )
 from raes_contracts.errors import ConflictError
@@ -17,6 +16,7 @@ from raes_contracts.errors import ConflictError
 from shared.disposable_workers import WorkerHostProfile
 from shared.raes.experiment_admission import ExperimentAuthority
 from shared.raes.worker_apparatus import (
+    ApparatusDeclaration,
     require_worker_scenario,
     worker_architecture,
     worker_backend_manifest,
@@ -43,6 +43,28 @@ OFFER = {
     "disclosure": "full",
     "export_policy": "not-required",
 }
+
+
+APPARATUS = {"schema_version": "bigrae.apparatus-declaration/v1", "capture_offers": [OFFER]}
+#: An apparatus that creates accounts and places files, and reads both back in the guest.
+REALIZER = APPARATUS | {
+    "operating_systems": [{"family": "linux", "distribution": "ubuntu", "versions": ["24.04"]}],
+    "supported_content_types": ["file"],
+    "supported_account_features": ["auth_method"],
+    "concerns": [
+        {"concern": c, "disposition": "realized", "observation_strength": "guest-observed", "mechanism": "readback"}
+        for c in ("operating-system", "content-placement", "account-placement")
+    ],
+    "exact_requirement_kinds": ["declared-capability-match"],
+    "constraint_kinds": ["account-feature", "content-type"],
+    "observation_capabilities": {
+        "operating-system": {"verification_scope": "presence", "observation_strength": "guest-observed"}
+    },
+}
+
+
+def _declaration(data=APPARATUS):
+    return ApparatusDeclaration.model_validate(data)
 
 
 def _authority(requirement):
@@ -102,7 +124,7 @@ def test_architecture_follows_the_gce_machine_family_and_fails_closed(data, arch
 
 
 def test_derived_documents_claim_only_the_host_that_bigrae_realizes():
-    envelope = worker_realization_envelope(WorkerHostProfile.model_validate(arm_profile_data()))
+    envelope = worker_realization_envelope(WorkerHostProfile.model_validate(arm_profile_data()), _declaration())
     claims = {claim.concern.value: (claim.disposition.value, claim.mechanism) for claim in envelope.concerns}
     assert {concern for concern, (disposition, _) in claims.items() if disposition != "unsupported"} == {
         "compute-substrate",
@@ -119,7 +141,7 @@ def test_derived_documents_claim_only_the_host_that_bigrae_realizes():
     )
     assert configuration.network_policy == "worker-egress-none"
 
-    backend = worker_backend_manifest(envelope, [ObservationCaptureOfferModel.model_validate(OFFER)])
+    backend = worker_backend_manifest(envelope, _declaration())
     assert backend.realization_envelope == envelope.identity
     provisioner, observation = backend.capabilities.provisioner, backend.capabilities.observation
     assert (provisioner.supported_node_architectures, provisioner.max_total_nodes) == (["aarch64"], 1)
@@ -151,7 +173,9 @@ def test_selected_scenario_must_be_one_node_of_the_host(tmp_path, node, admitted
     path = tmp_path / "scenario.sdl.yaml"
     path.write_text(f"name: worker-trial\nnodes:\n  target: {node}\n")
     scenario = instantiate_scenario(load_scenario(path))
-    configuration = worker_realization_envelope(WorkerHostProfile.model_validate(arm_profile_data())).configuration
+    configuration = worker_realization_envelope(
+        WorkerHostProfile.model_validate(arm_profile_data()), _declaration()
+    ).configuration
     if admitted:
         require_worker_scenario(scenario, configuration)
     else:
@@ -162,13 +186,15 @@ def test_selected_scenario_must_be_one_node_of_the_host(tmp_path, node, admitted
 def test_two_nodes_are_refused(tmp_path):
     path = tmp_path / "scenario.sdl.yaml"
     path.write_text("name: worker-trial\nnodes:\n  a: {type: compute, os: linux}\n  b: {type: compute, os: linux}\n")
-    configuration = worker_realization_envelope(WorkerHostProfile.model_validate(profile_data())).configuration
+    configuration = worker_realization_envelope(
+        WorkerHostProfile.model_validate(profile_data()), _declaration()
+    ).configuration
     with pytest.raises(ValueError, match="selected scenario node"):
         require_worker_scenario(instantiate_scenario(load_scenario(path)), configuration)
 
 
 @pytest.mark.parametrize(
-    ("drop", "offers", "valid"),
+    ("drop", "declared", "valid"),
     [
         ((), False, True),
         (("backend", "realization_envelope"), True, True),
@@ -178,7 +204,7 @@ def test_two_nodes_are_refused(tmp_path):
         (("backend", "realization_envelope"), False, False),
     ],
 )
-def test_authority_supplies_both_documents_or_only_capture_offers(drop, offers, valid):
+def test_authority_supplies_both_documents_or_only_the_apparatus_declaration(drop, declared, valid):
     from tests.cms.experiment_admission_fixtures import FIXTURE
 
     authority = {"schema_version": "bigrae.experiment-admission-authority/v1"}
@@ -190,10 +216,33 @@ def test_authority_supplies_both_documents_or_only_capture_offers(drop, offers, 
     ):
         if key not in drop:
             authority[key] = json.loads((FIXTURE / "apparatus" / filename).read_text())
-    if offers:
-        authority["capture_offers"] = [OFFER]
+    if declared:
+        authority["apparatus"] = APPARATUS
     if valid:
         ExperimentAuthority.model_validate(authority)
     else:
-        with pytest.raises(ValueError, match="capture offers only"):
+        with pytest.raises(ValueError, match="the declaration only"):
             ExperimentAuthority.model_validate(authority)
+
+
+def test_apparatus_claims_reach_the_documents_and_host_claims_are_refused():
+    """#2928: BigRAE states the host; the apparatus states only what it realizes on the host."""
+    profile = WorkerHostProfile.model_validate(arm_profile_data())
+    envelope = worker_realization_envelope(profile, _declaration(REALIZER))
+    claims = {claim.concern.value: claim.disposition.value for claim in envelope.concerns}
+    assert claims["account-placement"] == claims["operating-system"] == "realized"
+    assert claims["compute-substrate"] == "realized" and claims["service"] == "unsupported"
+    assert envelope.configuration.supported_account_features == ["auth_method"]
+    backend = worker_backend_manifest(envelope, _declaration(REALIZER))
+    provisioner = backend.capabilities.provisioner
+    assert (provisioner.supports_accounts, provisioner.supported_content_types) == (True, ["file"])
+    assert backend.realization_support[0].supported_exact_requirement_kinds == ["declared-capability-match"]
+    host_claim = {
+        "concern": "compute-substrate",
+        "disposition": "realized",
+        "observation_strength": "guest-observed",
+        "mechanism": "virtual-machine",
+    }
+    for concerns in ([host_claim], [REALIZER["concerns"][0]] * 2):
+        with pytest.raises(ValueError, match="host concern or repeats"):
+            _declaration(APPARATUS | {"concerns": concerns})
