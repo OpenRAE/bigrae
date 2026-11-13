@@ -101,6 +101,10 @@ The clean-state claim is `verified-clean`: the destroyed worker leaves no residu
 
 ## Trial replacement
 
+Worker setup failure records a failed attempt without a trial archive.
+Dispatch retires a failed, destroyed, or retiring worker that has no trial.
+It records cleanup only after Engine verifies worker absence, then applies the existing replacement policy.
+
 A trial fails when its archive reports a run status other than `completed`, or when its seal lists a gap in the required trial data.
 LilRAE lists each gap as a `required-data-missing` limitation.
 A gap is an abnormal participant end, a missing raw chat, an uncaptured host audit log, or an uncaptured trial-end source.
