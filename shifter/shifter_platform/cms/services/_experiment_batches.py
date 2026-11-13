@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from itertools import batched
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 from uuid import UUID, uuid4
 
 from django.conf import settings
@@ -176,6 +176,20 @@ def _owner_validation(organization_uuid: UUID) -> OwnerValidation:
     )
 
 
+def _retain_snapshots(
+    row: ExperimentBatch, payload: dict[str, Any], snapshots: BinaryIO, written: list[tuple[str, int]]
+) -> None:
+    """Verify each written snapshot and insert it in small groups, because one snapshot can be more than 1 MB."""
+    try:
+        for group in batched(read_snapshots(payload, snapshots, written), 16):
+            ExperimentSnapshot.objects.bulk_create(
+                ExperimentSnapshot(batch=row, plan_entry_id=key, snapshot_json=snapshot.decode())
+                for key, snapshot in group
+            )
+    except ValueError:
+        raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
+
+
 def admit_experiment_batch(
     credential: CredentialContext,
     organization_uuid: UUID,
@@ -262,17 +276,7 @@ def admit_experiment_batch(
                         for key, entry in payload["plan"]["entries"].items()
                     ]
                 )
-                try:
-                    # One snapshot can be more than 1 MB; insert a small group at a time.
-                    for group in batched(read_snapshots(payload, snapshots, written), 16):
-                        ExperimentSnapshot.objects.bulk_create(
-                            ExperimentSnapshot(batch=row, plan_entry_id=key, snapshot_json=snapshot.decode())
-                            for key, snapshot in group
-                        )
-                except ValueError:
-                    raise CMSError(
-                        "Experiment admission refused; verify installed inputs, versions and limits"
-                    ) from None
+                _retain_snapshots(row, payload, snapshots, written)
                 _audit(admission, row.id, "experiment-admitted")
         return _project(row)
 
