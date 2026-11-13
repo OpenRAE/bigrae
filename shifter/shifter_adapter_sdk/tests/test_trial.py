@@ -6,6 +6,9 @@ import pytest
 from shifter_adapter_sdk.runtime import PluginManifest
 from shifter_adapter_sdk.trial import (
     MAX_TRIAL_OUTPUT_BYTES,
+    AssignedTrialInput,
+    AssignedTrialInputs,
+    AssignedTrialSeal,
     TrialExport,
     TrialInput,
     TrialSeal,
@@ -133,3 +136,60 @@ def test_seal_names_its_owner_and_only_the_raes_run_record_contract():
     ):
         with pytest.raises(ValueError):
             TrialSeal.model_validate(_seal(**changes))
+
+
+def test_an_apparatus_serves_one_trial_mode():
+    manifest = PluginManifest(
+        protocol="bigrae.runtime-plugin/v2",
+        capabilities=["guest.configure", "guest.verify", "trial.assigned"],
+        **_MANIFEST,
+    )
+    assert "trial.assigned" in manifest.capabilities
+    for capabilities in (
+        ["guest.configure", "guest.verify", "trial.control", "trial.assigned"],
+        ["guest.verify", "trial.assigned"],
+    ):
+        with pytest.raises(ValueError, match="one trial mode"):
+            PluginManifest(protocol="bigrae.runtime-plugin/v2", capabilities=capabilities, **_MANIFEST)
+
+
+def _inputs(**changes):
+    entry = {"name": "worker", "version": "1", "schema_version": "backend-manifest/v2", "manifest": {}}
+    return {
+        "family_digest": "sha256:" + "1" * 64,
+        "experiment": {},
+        "task": {},
+        "capture_specs": {},
+        "apparatus_manifests": [entry | {"kind": "backend"}, entry | {"kind": "processor", "name": "processor"}],
+        "realization_envelope": {},
+        "backend": "worker",
+    } | changes
+
+
+def test_assigned_trial_inputs_name_exactly_one_selected_backend():
+    assert AssignedTrialInputs.model_validate(_inputs()).backend == "worker"
+    with pytest.raises(ValueError, match="selected backend"):
+        AssignedTrialInputs.model_validate(_inputs(backend="other"))
+    staged = AssignedTrialInput(
+        run_id="run-1", attempt_id="attempt-1", deadline="2026-11-13T20:00:00Z",
+        assignment_sha256="a" * 64, inputs_sha256="b" * 64,
+    )
+    assert staged.schema_version == "bigrae.assigned-trial-input/v1"
+    with pytest.raises(ValueError, match="UTC"):
+        AssignedTrialInput.model_validate(staged.model_dump() | {"deadline": "2026-11-13T20:00:00+01:00"})
+
+
+def _member(path, value):
+    return {"path": path, "size_bytes": 2, "checksum": {"value": value}, "media_type": "application/json", "role": "x"}
+
+
+def test_assigned_trial_seal_binds_the_outcome_bytes():
+    seal = {"run_id": "run-1", "attempt_id": "attempt-1", "outcome_digest": "sha256:" + "c" * 64}
+    assert AssignedTrialSeal.model_validate(seal | {"inventory": [_member("outcome.json", "c" * 64)]})
+    for inventory in (
+        [_member("outcome.json", "d" * 64)],
+        [_member("evidence/a.json", "c" * 64)],
+        [_member("outcome.json", "c" * 64), _member("outcome.json", "c" * 64)],
+    ):
+        with pytest.raises(ValueError):
+            AssignedTrialSeal.model_validate(seal | {"inventory": inventory})
