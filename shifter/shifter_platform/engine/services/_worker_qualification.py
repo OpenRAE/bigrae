@@ -32,6 +32,24 @@ class WorkerQualification:
     observed_at: str
     operation_id: str
     resource_generation: str
+    #: The other VMs of a multi-VM worker, each with its member, fingerprints, hardware and observation time.
+    hosts: tuple[dict[str, Any], ...] = ()
+
+    def record(self) -> dict[str, Any]:
+        """Return the stored form; a one-VM worker keeps its earlier shape."""
+        value = asdict(self)
+        value["hosts"] = list(value["hosts"])
+        if not value["hosts"]:
+            del value["hosts"]
+        return value
+
+    def fingerprints(self) -> list[tuple[str, str]]:
+        """Return every VM's (kind, fingerprint), the trial host first."""
+        hosts = [asdict(self), *self.hosts]
+        return [(kind, host[f"{kind}_identity"]) for host in hosts for kind in _KINDS]
+
+
+_KINDS = ("vm", "machine", "daemon")
 
 
 def qualify_disposable_worker(credential: CredentialContext, worker_id: UUID) -> WorkerQualification:
@@ -48,25 +66,52 @@ def qualify_disposable_worker(credential: CredentialContext, worker_id: UUID) ->
 
 
 def _qualification(worker: DisposableWorker) -> WorkerQualification:
-    """Require the current apparatus and accepted, fresh host observation."""
+    """Require the current apparatus and an accepted, fresh observation of every worker VM."""
     runtime = worker.range
     profile = _worker_profile(worker)
-    observed = _observed_host(runtime)
-    require_fresh_observation(observed, timezone.now())
-    if observed["docker_version"] != profile.docker_version:
-        raise ValueError("Worker runtime version differs from the retained profile")
-    if any(observed["hardware"][key] != value for key, value in profile.hardware.items()):
-        raise ValueError("Worker hardware differs from the retained profile")
-    return WorkerQualification(
-        observed["vm_identity"],
-        observed["machine_identity"],
-        observed["daemon_identity"],
-        observed["hardware"],
+    observed = _observed_hosts(runtime, profile)
+    hardware, now = profile.hardware, timezone.now()
+    for address, host in observed.items():
+        require_fresh_observation(host, now)
+        if host["docker_version"] != profile.docker_version:
+            raise ValueError("Worker runtime version differs from the retained profile")
+        if any(host["hardware"][key] != value for key, value in hardware[address].items()):
+            raise ValueError("Worker hardware differs from the retained profile")
+    trial = observed[profile.trial_host_address]
+    hosts = tuple(
+        {"member": _member(address), **{key: host[key] for key in _HOST_FACTS}}
+        for address, host in sorted(observed.items())
+        if address != profile.trial_host_address
+    )
+    result = WorkerQualification(
+        trial["vm_identity"],
+        trial["machine_identity"],
+        trial["daemon_identity"],
+        trial["hardware"],
         profile.digest,
-        observed["observed_at"],
+        trial["observed_at"],
         str(runtime.provisioner_operation_id),
         str(runtime.resource_generation),
+        hosts,
     )
+    fingerprints = result.fingerprints()
+    if len(fingerprints) != len(set(fingerprints)):
+        raise ValueError("Worker identity is not independent")
+    return result
+
+
+_HOST_FACTS = ("vm_identity", "machine_identity", "daemon_identity", "hardware", "observed_at")
+
+
+def _fingerprint_members(worker: DisposableWorker, result: WorkerQualification) -> list[str]:
+    """Return the member of each fingerprint, in ``WorkerQualification.fingerprints`` order."""
+    trial = _member(WorkerHostProfile.model_validate(worker.profile).trial_host_address)
+    return [member for member in (trial, *(host["member"] for host in result.hosts)) for _ in _KINDS]
+
+
+def _member(address: str) -> str:
+    """Return the realized member identifier of a one-instance worker VM."""
+    return f"{address}#0"
 
 
 def _worker_profile(worker: DisposableWorker) -> WorkerHostProfile:
@@ -85,14 +130,19 @@ def _worker_profile(worker: DisposableWorker) -> WorkerHostProfile:
     return profile
 
 
-def _observed_host(runtime: Range) -> dict[str, Any]:
-    """Resolve only the exact accepted generation and its single GCE member."""
+def _observed_hosts(runtime: Range, profile: WorkerHostProfile) -> dict[str, dict[str, Any]]:
+    """Resolve the exact accepted generation and one GCE member for each worker VM, by node address."""
     from engine.models import WorkerHostObservation
 
     members = runtime.provisioned_instances
-    if not isinstance(members, list) or len(members) != 1 or not isinstance(members[0], dict):
+    expected = {_member(node.address): node.address for node in profile.nodes}
+    if (
+        not isinstance(members, list)
+        or not all(isinstance(member, dict) for member in members)
+        or sorted(str(member.get("uuid")) for member in members) != sorted(expected)
+    ):
         raise ValueError("Worker observation membership is unavailable")
-    if runtime.range_backend != "gce" or members[0].get("asset_type") != "gce_vm":
+    if runtime.range_backend != "gce" or any(member.get("asset_type") != "gce_vm" for member in members):
         raise ValueError("Worker observation backend is unavailable")
     if runtime.provisioner_operation_id is None or runtime.resource_generation is None:
         raise ValueError("Worker observation generation is unavailable")
@@ -102,9 +152,9 @@ def _observed_host(runtime: Range) -> dict[str, Any]:
     if record is None:
         raise ValueError("Worker host observation is unavailable")
     observations = validate_worker_observations(record.observations)
-    if set(observations) != {members[0].get("uuid")}:
+    if set(observations) != set(expected):
         raise ValueError("Worker observation membership changed")
-    return next(iter(observations.values()))
+    return {expected[member]: observation for member, observation in observations.items()}
 
 
 def has_current_qualification(worker: DisposableWorker) -> bool:
@@ -112,7 +162,7 @@ def has_current_qualification(worker: DisposableWorker) -> bool:
     if not worker.qualification:
         return False
     try:
-        return worker.qualification == asdict(_qualification(worker))
+        return worker.qualification == _qualification(worker).record()
     except (ValueError, TypeError):
         return False
 
@@ -136,19 +186,26 @@ def _store_qualification(
             raise ValueError(_BINDING_CHANGED)
         _require_current_qualification(current, result)
         require_fresh_observation({"observed_at": result.observed_at}, timezone.now())
-        from engine.models import DisposableWorker
+        from engine.models import DisposableWorker, WorkerHostIdentity
 
         peers = DisposableWorker.objects.exclude(pk=current.pk)
-        if (
-            peers.filter(qualification__vm_identity=result.vm_identity).exists()
-            or peers.filter(qualification__daemon_identity=result.daemon_identity).exists()
-            or peers.filter(qualification__machine_identity=result.machine_identity).exists()
+        fingerprints = result.fingerprints()
+        if any(
+            peers.filter(**{f"qualification__{kind}_identity": value}).exists()
+            or WorkerHostIdentity.objects.filter(kind=kind, value=value).exclude(worker=current).exists()
+            for kind, value in fingerprints
         ):
             raise ValueError("Worker identity is not independent")
-        current.qualification = asdict(result)
+        current.qualification = result.record()
         try:
             with transaction.atomic():
                 current.save(update_fields=["qualification"])
+                # Every VM's fingerprints, so a cloned VM cannot qualify even concurrently.
+                current.host_identities.all().delete()
+                WorkerHostIdentity.objects.bulk_create(
+                    WorkerHostIdentity(worker=current, member=member, kind=kind, value=value)
+                    for member, (kind, value) in zip(_fingerprint_members(current, result), fingerprints, strict=True)
+                )
         except IntegrityError:
             raise ValueError("Worker identity is not independent") from None
         _audit(credential, current, "worker_qualify")

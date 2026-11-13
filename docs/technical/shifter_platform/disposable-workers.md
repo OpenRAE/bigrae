@@ -21,6 +21,9 @@ A policy published with one unnamed `profile` loads as the profile `default`.
 Each profile contains a validated outer RAES plan, exact image profile, numeric provider image ID, provenance, and resources.
 
 It also fixes Docker version, capacity scope and partition, and approved egress.
+A profile can declare up to four Linux VMs on one network, for example an agent workstation and a victim.
+It then names the trial host, the VM that runs the trial transport, and gives every other VM its own image and numeric image ID.
+VMs that share a source share one image. A profile with one VM keeps its earlier shape and digest.
 This plan describes apparatus, separately from the experiment SDL.
 The service supports the deployment-selected GCE backend.
 
@@ -138,6 +141,11 @@ Qualification stores these realized settings.
 Qualification fails if a realized setting differs from the retained profile.
 Empty NIC and disk-interface choices are recorded but not compared.
 A worker without current qualification cannot start a trial.
+
+Qualification checks every VM of a multi-VM worker: its membership, hardware, Docker version, and observation freshness.
+It records each VM's VM, machine, and Docker daemon fingerprints in `WorkerHostIdentity`.
+A database constraint refuses a fingerprint that another VM already holds, in the same worker or another, also under concurrent qualification.
+The trial transport reaches only the trial host.
 
 Engine stores bounded qualification facts and never reads a host-management key.
 Qualification expires after 15 minutes or at worker retirement, deadline, or a generation change.

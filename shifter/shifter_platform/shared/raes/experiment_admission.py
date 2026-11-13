@@ -8,6 +8,7 @@ import json
 import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from functools import partial
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any, BinaryIO, Literal, cast
@@ -437,11 +438,12 @@ class InstallationLookups:
 
 def _bind_worker_apparatus(
     configuration: ExperimentAuthority, worker_profile: Callable[[str], WorkerHostProfile] | None
-) -> tuple[ExperimentAuthority, dict[str, Any], BackendRealizationEnvelopeModel | None]:
+) -> tuple[ExperimentAuthority, dict[str, Any], Callable[[InstantiatedScenario], None] | None]:
     """Bind the named host profile and derive absent apparatus documents from it.
 
     Returns the configuration, the retained binding and derived documents, and the
-    derived realization envelope. The envelope is ``None`` when the authority supplies its documents.
+    check that each selected scenario fits the worker VMs. The check is ``None``
+    when the authority supplies its documents.
     """
     profile = None if worker_profile is None else worker_profile(configuration.worker_profile)
     retained: dict[str, Any] = {}
@@ -454,13 +456,14 @@ def _bind_worker_apparatus(
         raise ValueError("Derived apparatus documents require the bound worker profile")
     apparatus = cast(ApparatusDeclaration, configuration.apparatus)
     envelope = worker_realization_envelope(profile, apparatus)
-    backend = worker_backend_manifest(envelope, apparatus)
+    backend = worker_backend_manifest(envelope, apparatus, len(profile.nodes))
     retained["derived_apparatus"] = {
         "backend": backend.model_dump(mode="json"),
         "realization_envelope": envelope.model_dump(mode="json"),
     }
     configuration = configuration.model_copy(update={"backend": backend, "realization_envelope": envelope})
-    return configuration, retained, envelope
+    architecture = envelope.configuration.architecture
+    return configuration, retained, partial(require_worker_scenario, profile=profile, architecture=architecture)
 
 
 def compile_pack_experiment(
@@ -484,7 +487,7 @@ def compile_pack_experiment(
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
     reject_retained_credentials(parsed)
-    configuration, apparatus, envelope = _bind_worker_apparatus(
+    configuration, apparatus, scenario_check = _bind_worker_apparatus(
         ExperimentAuthority.model_validate(parsed), installation.worker_profile
     )
     if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
@@ -533,8 +536,8 @@ def compile_pack_experiment(
         selected = instantiate_admitted_trial_entry(
             plan=plan, plan_entry_id=entry.plan_entry_id, family=experiment.family
         )
-        if envelope is not None:
-            require_worker_scenario(selected, envelope.configuration)
+        if scenario_check is not None:
+            scenario_check(selected)
         retained_bytes += custody.retain(
             _selected_control_context_artifacts(selected, plan.entries[entry.plan_entry_id]),
             exact_descriptor=True,

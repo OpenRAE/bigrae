@@ -37,7 +37,6 @@ from raes_contracts.realization_envelope import (
 
 from shared.disposable_workers import WorkerHostProfile
 from shared.raes.contracts import SHIFTER_BACKEND_NAME
-from shared.raes.worker_host import worker_host_shape
 
 #: GCE machine families whose CPU architecture is fixed by the family name.
 #: The default E2 custom shape is x86-64. Any other family fails closed.
@@ -89,11 +88,12 @@ class ApparatusDeclaration(BaseModel):
 
 
 def worker_architecture(profile: WorkerHostProfile) -> str:
-    """Return the governed CPU architecture term of the profile's GCE machine family."""
-    family = str(profile.hardware["machine_type"]).split("-", 1)[0]
-    if family not in _FAMILY_ARCHITECTURE:
-        raise ValueError("Worker machine family has no known CPU architecture")
-    return _FAMILY_ARCHITECTURE[family]
+    """Return the one governed CPU architecture term of every worker VM's GCE machine family."""
+    families = {str(host["machine_type"]).split("-", 1)[0] for host in profile.hardware.values()}
+    architectures = {_FAMILY_ARCHITECTURE[family] for family in families if family in _FAMILY_ARCHITECTURE}
+    if len(architectures) != 1 or not families <= _FAMILY_ARCHITECTURE.keys():
+        raise ValueError("Worker VMs need one known CPU architecture")
+    return architectures.pop()
 
 
 def worker_realization_envelope(
@@ -104,7 +104,8 @@ def worker_realization_envelope(
     An envelope path cannot address an imported node, whose name contains a dot, so
     :func:`require_worker_scenario` checks each selected scenario against the host.
     """
-    _, _, _, cpu, ram = worker_host_shape(profile.plan)
+    nodes = profile.nodes
+    cpus, mebibytes = [node.cpu for node in nodes], [node.ram // 1024**2 for node in nodes]
     fields = {
         "mode": "disposable-worker",
         "architecture": worker_architecture(profile),
@@ -112,8 +113,8 @@ def worker_realization_envelope(
         "network_policy": f"worker-egress-{profile.egress_mode}",
         "supported_node_types": ["compute"],
         "supported_os_families": ["linux"],
-        "memory_mib": {"minimum": ram // 1024**2, "maximum": ram // 1024**2},
-        "vcpus": {"minimum": cpu, "maximum": cpu},
+        "memory_mib": {"minimum": min(mebibytes), "maximum": max(mebibytes)},
+        "vcpus": {"minimum": min(cpus), "maximum": max(cpus)},
         "operating_systems": [row.model_dump(mode="json") for row in apparatus.operating_systems],
         "supported_content_types": apparatus.supported_content_types,
         "supported_account_features": apparatus.supported_account_features,
@@ -147,15 +148,13 @@ def worker_realization_envelope(
     return BackendRealizationEnvelopeModel(**payload, digest=realization_envelope_digest(payload))
 
 
-def require_worker_scenario(scenario: InstantiatedScenario, configuration: RealizerConfigurationModel) -> None:
-    """Refuse a selected scenario unless its one node is a Linux compute node of the host's architecture."""
+def require_worker_scenario(scenario: InstantiatedScenario, profile: WorkerHostProfile, architecture: str) -> None:
+    """Refuse a selected scenario unless it has one Linux compute node of the hosts' architecture per worker VM."""
     nodes = list(scenario.nodes.values())
-    if len(nodes) != 1 or (nodes[0].type, nodes[0].os, nodes[0].architecture) != (
-        "compute",
-        "linux",
-        configuration.architecture,
+    if len(nodes) != len(profile.nodes) or any(
+        (node.type, node.os, node.architecture) != ("compute", "linux", architecture) for node in nodes
     ):
-        raise ValueError("Worker host cannot realize the selected scenario node")
+        raise ValueError("Worker hosts cannot realize the selected scenario nodes")
 
 
 def _union(offers: Iterable[ObservationCaptureOfferModel], field: str) -> list[str]:
@@ -165,7 +164,7 @@ def _union(offers: Iterable[ObservationCaptureOfferModel], field: str) -> list[s
 
 
 def worker_backend_manifest(
-    envelope: BackendRealizationEnvelopeModel, apparatus: ApparatusDeclaration
+    envelope: BackendRealizationEnvelopeModel, apparatus: ApparatusDeclaration, node_count: int = 1
 ) -> BackendManifestV2Model:
     """Derive the backend manifest of one worker host and the apparatus claims it carries."""
     configuration, capture_offers = envelope.configuration, apparatus.capture_offers
@@ -226,7 +225,7 @@ def worker_backend_manifest(
                     "supported_content_types": configuration.supported_content_types,
                     "supported_account_features": configuration.supported_account_features,
                     "supports_accounts": bool(configuration.supported_account_features),
-                    "max_total_nodes": 1,
+                    "max_total_nodes": node_count,
                 },
                 # BigRAE collects a worker trial's evidence as one sealed file archive:
                 # evidence records and a partial run record. The apparatus offers the captures.

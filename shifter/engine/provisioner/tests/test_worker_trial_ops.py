@@ -194,3 +194,15 @@ def test_a_persistent_status_failure_still_ends_the_run(storage, monkeypatch):
     worker = FakeWorker([status("prepared"), *[{"fail": True}] * (worker_trial_ops.STATUS_RETRIES + 1)])
     with pytest.raises(worker_trial_ops.WorkerTrialError):
         worker_trial_ops.execute_worker_trial(execution(worker), trial_input(), "run", "op-6")
+
+
+def test_the_trial_runs_on_the_named_vm_of_a_multi_vm_worker():
+    """#2947: a multi-VM worker names its trial host; a one-VM worker has exactly one VM."""
+    from worker_trial_target import trial_instance
+
+    workstation, victim = {"uuid": "provision.node.workstation#0"}, {"uuid": "provision.node.victim#0"}
+    assert trial_instance([victim, workstation], "provision.node.workstation") is workstation
+    assert trial_instance([victim], "") is victim
+    for instances, trial_host in (([victim, workstation], ""), ([victim], "provision.node.workstation")):
+        with pytest.raises(ValueError, match="exactly one VM"):
+            trial_instance(instances, trial_host)

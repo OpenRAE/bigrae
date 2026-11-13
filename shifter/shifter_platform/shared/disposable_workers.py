@@ -7,7 +7,7 @@ from uuid import UUID
 from pydantic import Field, model_validator
 from shifter_adapter_sdk.runtime import ClosedModel, Digest, canonical_digest
 
-from shared.raes.worker_host import worker_host_shape
+from shared.raes.worker_host import WorkerNode, worker_host_nodes
 from shared.runtime_plugin_binding import PluginTargetBindings, RuntimeTargetImageProfile
 
 # A predefined machine type states its vCPU count, for example c4a-standard-4.
@@ -23,12 +23,30 @@ class WorkerSoftwareBinding(ClosedModel):
     bindings: PluginTargetBindings
 
 
+ImageId = Annotated[str, Field(pattern=r"^[1-9]\d{0,19}$")]
+
+
+class WorkerHostImage(ClosedModel):
+    """The exact image of one more VM of a multi-VM worker."""
+
+    image: RuntimeTargetImageProfile
+    image_id: ImageId
+
+
 class WorkerHostProfile(ClosedModel):
-    """One independently provisioned outer host; no inner SDL or executable input."""
+    """Independently provisioned outer hosts; no inner SDL or executable input.
+
+    ``image`` and ``image_id`` belong to the trial host: the plan's only VM, or the
+    VM that ``trial_host`` names. ``additional_hosts`` gives every other VM its image.
+    """
 
     plan: dict[str, Any]
     image: RuntimeTargetImageProfile
-    image_id: Annotated[str, Field(pattern=r"^[1-9]\d{0,19}$")]
+    image_id: ImageId
+    trial_host: str = Field(default="", max_length=256, exclude_if=lambda value: not value)
+    additional_hosts: dict[str, WorkerHostImage] = Field(
+        default_factory=dict, max_length=3, exclude_if=lambda value: not value
+    )
     provenance_digest: Digest
     docker_version: Annotated[str, Field(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][a-zA-Z0-9.]+)?$")]
     capacity_scope_ref: UUID
@@ -40,19 +58,21 @@ class WorkerHostProfile(ClosedModel):
     @model_validator(mode="after")
     def validate_host(self) -> Self:
         """Reject ambiguous topology and mutable or undersized apparatus inputs."""
-        _, _, _, cpu, ram = worker_host_shape(self.plan)
-        _validate_worker_image(self.image)
-        # Keep quota demand and physical size in agreement before any effects.
-        # A predefined machine type must state the plan's vCPU count. Otherwise
-        # the GCE realizer derives e2-custom from the plan, with 256 MiB alignment.
-        if self.image.machine_type:
-            selected = _PREDEFINED_MACHINE.fullmatch(self.image.machine_type)
-            if selected is None or int(selected.group(1)) != cpu:
-                raise ValueError("Worker machine type must be a predefined shape with the plan's vCPU count")
-        elif cpu not in range(2, 33, 2) or ram % (256 * 1024**2) or not cpu * 512 * 1024**2 <= ram <= cpu * 8 * 1024**3:
-            raise ValueError("Worker resources require a supported E2 custom shape")
-        if self.capacity_demand.get("vcpu", 0) < cpu or self.capacity_demand.get("instances", 0) < 1:
-            raise ValueError("Worker capacity demand does not cover its host")
+        nodes = self.nodes
+        others = {node.address for node in nodes} - {self.trial_host_address}
+        if (len(nodes) > 1) != bool(self.trial_host) or set(self.additional_hosts) != others:
+            raise ValueError("A multi-VM worker names its trial host and gives every other VM an image")
+        images = self.host_images
+        by_source: dict[str, tuple[RuntimeTargetImageProfile, str]] = {}
+        for node in nodes:
+            _validate_host_shape(node, images[node.address][0])
+            # The provisioner resolves images by source, so VMs that share a source share an image.
+            if by_source.setdefault(node.source, images[node.address]) != images[node.address]:
+                raise ValueError("Worker VMs with one source must use one image")
+        if self.capacity_demand.get("vcpu", 0) < sum(node.cpu for node in nodes) or self.capacity_demand.get(
+            "instances", 0
+        ) < len(nodes):
+            raise ValueError("Worker capacity demand does not cover its hosts")
         if len(self.model_dump_json().encode()) > 131072:
             raise ValueError("Worker profile exceeds its bound")
         return self
@@ -63,16 +83,26 @@ class WorkerHostProfile(ClosedModel):
         return canonical_digest(self.model_dump(mode="json"))
 
     @property
-    def hardware(self) -> dict[str, object]:
-        """Return the provider settings that the realized host must report."""
-        _, _, _, cpu, ram = worker_host_shape(self.plan)
-        selected = {
-            "machine_type": self.image.machine_type or f"e2-custom-{cpu}-{ram // 1024**2}",
-            "enable_secure_boot": self.image.enable_secure_boot,
-            "image_id": self.image_id,
-        }
-        # Empty interface choices keep the provider default and are not compared.
-        return selected | self.image.model_dump(include={"nic_type", "disk_interface"})
+    def nodes(self) -> tuple[WorkerNode, ...]:
+        """Return the plan's VMs in address order."""
+        return worker_host_nodes(self.plan)
+
+    @property
+    def trial_host_address(self) -> str:
+        """Return the address of the VM that runs the trial transport."""
+        return self.trial_host or self.nodes[0].address
+
+    @property
+    def host_images(self) -> dict[str, tuple[RuntimeTargetImageProfile, str]]:
+        """Return each VM's exact image and numeric image ID, by node address."""
+        others = {address: (host.image, host.image_id) for address, host in self.additional_hosts.items()}
+        return {self.trial_host_address: (self.image, self.image_id)} | others
+
+    @property
+    def hardware(self) -> dict[str, dict[str, object]]:
+        """Return the provider settings that each realized VM must report, by node address."""
+        images = self.host_images
+        return {node.address: _host_hardware(node, *images[node.address]) for node in self.nodes}
 
 
 ProfileName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,62}$")]
@@ -124,6 +154,31 @@ class WorkerPolicy(ClosedModel):
         if profile is None or (isinstance(binding, WorkerProfileBinding) and profile.digest != binding.digest):
             raise WorkerProfileError("Worker profile is unavailable or changed")
         return profile
+
+
+def _validate_host_shape(node: WorkerNode, image: RuntimeTargetImageProfile) -> None:
+    """Keep each VM's quota demand, image and physical size in agreement before any effects."""
+    _validate_worker_image(image)
+    # A predefined machine type must state the plan's vCPU count. Otherwise
+    # the GCE realizer derives e2-custom from the plan, with 256 MiB alignment.
+    cpu, ram = node.cpu, node.ram
+    if image.machine_type:
+        selected = _PREDEFINED_MACHINE.fullmatch(image.machine_type)
+        if selected is None or int(selected.group(1)) != cpu:
+            raise ValueError("Worker machine type must be a predefined shape with the plan's vCPU count")
+    elif cpu not in range(2, 33, 2) or ram % (256 * 1024**2) or not cpu * 512 * 1024**2 <= ram <= cpu * 8 * 1024**3:
+        raise ValueError("Worker resources require a supported E2 custom shape")
+
+
+def _host_hardware(node: WorkerNode, image: RuntimeTargetImageProfile, image_id: str) -> dict[str, object]:
+    """Return the provider settings that one realized VM must report."""
+    selected = {
+        "machine_type": image.machine_type or f"e2-custom-{node.cpu}-{node.ram // 1024**2}",
+        "enable_secure_boot": image.enable_secure_boot,
+        "image_id": image_id,
+    }
+    # Empty interface choices keep the provider default and are not compared.
+    return selected | image.model_dump(include={"nic_type", "disk_interface"})
 
 
 def _validate_worker_image(image: RuntimeTargetImageProfile) -> None:
