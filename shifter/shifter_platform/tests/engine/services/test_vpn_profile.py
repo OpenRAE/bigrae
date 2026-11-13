@@ -74,7 +74,7 @@ def test_resolves_and_validates_the_profile_after_ready_owner_checks(settings):
     with boto3_secrets(client):
         result = get_openvpn_profile(user, range_obj.request.request_id)
 
-    assert result.content == PROFILE.encode()
+    assert result.content == f"mssfix 1300\n{PROFILE}".encode()
     assert result.profile_version == "openvpn-profile-v1"
     client.get_secret_value.assert_called_once_with(SecretId=range_obj.vpn_access_binding["secret_ref"])
 

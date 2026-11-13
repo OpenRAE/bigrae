@@ -72,8 +72,8 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2904 after giving guacd a writable FreeRDP home.
 # Regenerated for #2909: the removed model broker drops its job env and network policy exclusions.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "fb45d65676d54014c1f2b71d7f5ea0476a3d1dd51e2ff30a3f027bc38a9226fd",
-    "gcp-dev": "1f955826882b77ef78c863239e8b98deba179ec981990f15449a525d8e420ecc",
+    "gcp-prod": "217da28f1f44680fbc160344d4e09bde6c7904214c2d2031a264254fca6ac4ac",
+    "gcp-dev": "5da6c16dde1a8153d958267a1d65bfd9af3cd735615431b45a882e7a3190bd89",
 }
 
 

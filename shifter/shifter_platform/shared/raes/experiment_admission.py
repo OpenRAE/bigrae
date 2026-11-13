@@ -6,10 +6,11 @@ import base64
 import hashlib
 import json
 import sys
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, BinaryIO, Literal, cast
 from urllib.parse import urlsplit
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -134,7 +135,7 @@ def validate_retained(raw: str) -> dict[str, Any]:
         raise ValueError("Unsupported experiment dependency tuple")
     plan = parse_admitted_trial_plan_json(canonical_json_bytes(payload["plan"]))
     schedule = plan_batch_schedule(plan)
-    if set(payload["snapshots"]) != set(plan.entries):
+    if set(payload.get("snapshot_digests", payload.get("snapshots", {}))) != set(plan.entries):
         raise ValueError("Retained snapshot set differs from plan entries")
     limits = payload["resource_limits"]
     _concurrency(limits["requested_concurrency"], limits["configured_concurrency_ceiling"], schedule)
@@ -418,6 +419,18 @@ def _select_experiment(root: Path, experiment_id: str, experiment_version: str |
     return candidates[0]
 
 
+@dataclass(frozen=True)
+class InstallationLookups:
+    """Installation callbacks that the shared compiler cannot import.
+
+    ``owner_validation`` runs backend participant owners. ``worker_profile`` returns
+    the published host profile of a name.
+    """
+
+    owner_validation: OwnerValidation | None = None
+    worker_profile: Callable[[str], WorkerHostProfile] | None = None
+
+
 def _bind_worker_apparatus(
     configuration: ExperimentAuthority, worker_profile: Callable[[str], WorkerHostProfile] | None
 ) -> tuple[ExperimentAuthority, dict[str, Any], BackendRealizationEnvelopeModel | None]:
@@ -452,25 +465,27 @@ def compile_pack_experiment(
     authority: object,
     concurrency: int,
     experiment_version: str | None = None,
-    owner_validation: OwnerValidation | None = None,
-    worker_profile: Callable[[str], WorkerHostProfile] | None = None,
-) -> dict[str, Any]:
+    installation: InstallationLookups,
+    snapshots: BinaryIO,
+) -> tuple[dict[str, Any], list[tuple[str, int]]]:
     """Compile one explicitly selected installed experiment and retain its inputs.
 
-    ``worker_profile`` returns the published host profile of a name. The batch
-    retains that profile's exact binding, and derived documents come from it.
+    The batch retains the exact binding of the selected worker host profile, and derived documents come from it.
+    The record keeps the digest of each instantiated snapshot. Each exact snapshot is written
+    to ``snapshots`` in plan order, so memory does not grow with the number of trials.
+    Return the record and the plan entry ID and size of each written snapshot.
     """
     dependencies = dependency_tuple()
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
     reject_retained_credentials(parsed)
     configuration, apparatus, envelope = _bind_worker_apparatus(
-        ExperimentAuthority.model_validate(parsed), worker_profile
+        ExperimentAuthority.model_validate(parsed), installation.worker_profile
     )
     if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
         raise ValueError("Requested concurrency exceeds configured limit")
     experiment = _select_experiment(root, experiment_id, experiment_version)
-    request = experiment.compilation_request(**_context(experiment, configuration, owner_validation))
+    request = experiment.compilation_request(**_context(experiment, configuration, installation.owner_validation))
     result = compile_admitted_trial_plan(request)
     if result.plan is None:
         raise ValueError("Experiment compilation refused the supplied combination")
@@ -493,7 +508,7 @@ def compile_pack_experiment(
         "capture_specs": {key: item.model_dump(mode="json") for key, item in experiment.capture_specs.items()},
         "authority": parsed,
         "plan": plan.model_dump(mode="json"),
-        "snapshots": {},
+        "snapshot_digests": {},
         "resource_limits": {
             "requested_concurrency": concurrency,
             "configured_concurrency_ceiling": configuration.max_concurrency,
@@ -507,6 +522,7 @@ def compile_pack_experiment(
     }
     payload.update(apparatus)
     retained_bytes = len(encode_retained(payload).encode())
+    written: list[tuple[str, int]] = []
     for entry in schedule.entries:
         experiment_archive_identity(payload, entry.plan_entry_id, "admission-validation")
         selected = instantiate_admitted_trial_entry(
@@ -519,9 +535,30 @@ def compile_pack_experiment(
             exact_descriptor=True,
         )
         snapshot = canonical_instantiated_sdl_bytes(selected)
-        retained_bytes += len(snapshot) + len(entry.plan_entry_id.encode()) + 8
+        reject_retained_credentials(json.loads(snapshot))
+        digest = snapshot_digest(snapshot)
+        retained_bytes += len(digest) + len(entry.plan_entry_id.encode()) + 8
         if retained_bytes > MAX_RETAINED_BYTES:
             raise ValueError("Experiment hydrated inputs exceed the byte limit")
-        payload["snapshots"][entry.plan_entry_id] = json.loads(snapshot)
+        payload["snapshot_digests"][entry.plan_entry_id] = digest
+        snapshots.write(snapshot)
+        written.append((entry.plan_entry_id, len(snapshot)))
     reject_retained_credentials(payload)
-    return payload
+    return payload, written
+
+
+def read_snapshots(
+    payload: dict[str, Any], snapshots: BinaryIO, written: list[tuple[str, int]]
+) -> Iterator[tuple[str, bytes]]:
+    """Read back each written snapshot in plan order and verify it against its recorded digest."""
+    snapshots.seek(0)
+    for entry_id, size in written:
+        snapshot = snapshots.read(size)
+        if snapshot_digest(snapshot) != payload["snapshot_digests"][entry_id]:
+            raise ValueError("A written trial snapshot differs from its recorded digest")
+        yield entry_id, snapshot
+
+
+def snapshot_digest(snapshot: bytes) -> str:
+    """Return the prefixed SHA-256 digest that the record keeps for one snapshot."""
+    return "sha256:" + hashlib.sha256(snapshot).hexdigest()

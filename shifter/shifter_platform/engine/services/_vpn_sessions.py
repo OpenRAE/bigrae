@@ -60,12 +60,33 @@ class VpnSessionDenied(ValueError):
 
 
 @dataclass(frozen=True)
-class VpnSessionGrant:
-    """The single destination one authorized client may reach."""
+class VpnDestination:
+    """One exact private destination and its declared participant ports."""
 
-    session_id: UUID
     target_ip: str
     ports: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class VpnSessionGrant:
+    """The exact destinations one authorized client may reach."""
+
+    session_id: UUID
+    destinations: tuple[VpnDestination, ...]
+
+    @property
+    def target_ip(self) -> str:
+        """Return the sole target for backward-compatible single-target callers."""
+        if len(self.destinations) != 1:
+            raise ValueError("VPN session does not authorize exactly one destination")
+        return self.destinations[0].target_ip
+
+    @property
+    def ports(self) -> tuple[int, ...]:
+        """Return the sole target's ports for backward-compatible callers."""
+        if len(self.destinations) != 1:
+            raise ValueError("VPN session does not authorize exactly one destination")
+        return self.destinations[0].ports
 
 
 def _require_server(server: object) -> str:
@@ -98,8 +119,8 @@ def _client_address(value: object) -> str:
         return ""
 
 
-def _current_target(range_obj: Range, generation: UUID) -> tuple[str, tuple[int, ...]]:
-    """Return the target and ports while this generation's access is still valid."""
+def _current_targets(range_obj: Range, generation: UUID) -> tuple[VpnDestination, ...]:
+    """Return every exact destination while this generation's access is valid."""
     from engine.models import Range
 
     request = range_obj.request
@@ -114,13 +135,13 @@ def _current_target(range_obj: Range, generation: UUID) -> tuple[str, tuple[int,
         binding.ready
         and binding.generation == generation
         and binding.owner_user_id == range_obj.user_id
-        and capability.target_ref == binding.target_ref
+        and capability.target_refs == binding.target_refs
         and capability.teardown_at > timezone.now()
-        and is_raes_member_target(binding.target_ref)
+        and all(is_raes_member_target(target_ref) for target_ref in binding.target_refs)
     )
     if not valid:
         raise VpnSessionDenied(_ACCESS_REVOKED)
-    return _member_destination(range_obj, binding.target_ref)
+    return _member_destinations(range_obj, binding.target_refs)
 
 
 def _realized_member(range_obj: Range, target_ref: str) -> dict[str, object]:
@@ -154,6 +175,11 @@ def _member_destination(range_obj: Range, target_ref: str) -> tuple[str, tuple[i
     if not ports or address.version != 4 or not address.is_private:
         raise VpnSessionDenied(_ACCESS_REVOKED)
     return str(address), ports
+
+
+def _member_destinations(range_obj: Range, target_refs: tuple[str, ...]) -> tuple[VpnDestination, ...]:
+    """Resolve every authorized member without widening any member's ports."""
+    return tuple(VpnDestination(*_member_destination(range_obj, target_ref)) for target_ref in target_refs)
 
 
 def _audit(session: VpnSession, action: str, state: dict[str, str]) -> None:
@@ -212,13 +238,13 @@ def authorize_vpn_session(
         if profile is None:
             if range_obj.owner_principal_uuid is not None:
                 raise VpnSessionDenied(_ACCESS_REVOKED)
-            target_ip, ports = _current_target(range_obj, generation)
+            destinations = _current_targets(range_obj, generation)
         else:
             profile = VpnAccessProfile.objects.select_for_update(of=("self",)).get(pk=profile.pk)
             profile.range = range_obj
             try:
-                target_ip, ports = assert_profile_runtime(profile)
-                if (target_ip, ports) != admitted_destination:
+                destinations = assert_profile_runtime(profile)
+                if destinations != admitted_destination:
                     raise ValueError("Destination changed")
             except Exception:  # noqa: BLE001  # fail-closed authority check; every failure is one bounded denial
                 raise VpnSessionDenied(_ACCESS_REVOKED) from None
@@ -233,7 +259,7 @@ def authorize_vpn_session(
             lease_expires_at=timezone.now() + timedelta(seconds=VPN_SESSION_LEASE_SECONDS),
         )
         _audit(session, AuditAction.CONNECT, {"client_address": _client_address(client_address)})
-    return VpnSessionGrant(session_id=session.id, target_ip=target_ip, ports=ports)
+    return VpnSessionGrant(session_id=session.id, destinations=destinations)
 
 
 def _require_session_ids(session_ids: object) -> set[UUID]:
@@ -247,7 +273,7 @@ def _require_session_ids(session_ids: object) -> set[UUID]:
 
 
 def _renewed(
-    row: VpnSession, server_name: str, lease: datetime, admitted: dict[UUID, tuple[str, tuple[int, ...]]]
+    row: VpnSession, server_name: str, lease: datetime, admitted: dict[UUID, tuple[VpnDestination, ...]]
 ) -> bool:
     """Extend one reported session's lease, or end it when access is no longer valid."""
     from engine.models import VpnSessionEndReason, VpnSessionState
@@ -263,7 +289,7 @@ def _renewed(
         elif row.range.owner_principal_uuid is not None:
             raise ValueError("VPN authority unavailable")
         else:
-            _current_target(row.range, row.generation)
+            _current_targets(row.range, row.generation)
     except ValueError:
         _end(row, VpnSessionEndReason.REVOKED)
         return False
@@ -342,13 +368,13 @@ def end_vpn_session(*, server: object, session_id: object) -> None:
 
 def _admitted_certificate(
     common_name: object, certificate_serial: object, certificate_fingerprint: object
-) -> tuple[VpnAccessProfile | None, UUID, tuple[str, tuple[int, ...]] | None]:
+) -> tuple[VpnAccessProfile | None, UUID, tuple[VpnDestination, ...] | None]:
     """Match public certificate evidence and evaluate policy before locking the native range."""
     from engine.models import VpnAccessProfile
 
     from ._vpn_profiles import authorize_vpn_profile
 
-    admitted_destination = None
+    admitted_destinations = None
     profile = None
     match = _PROFILE_NAME.fullmatch(common_name) if isinstance(common_name, str) else None
     if match is not None:
@@ -360,10 +386,10 @@ def _admitted_certificate(
                 or certificate_fingerprint.replace(":", "").lower() != profile.certificate_fingerprint
             ):
                 raise ValueError("Certificate mismatch")
-            admitted_destination = authorize_vpn_profile(profile)
+            admitted_destinations = authorize_vpn_profile(profile)
             generation = profile.generation
         except Exception:  # noqa: BLE001  # fail-closed authority check; every failure is one bounded denial
             raise VpnSessionDenied(_ACCESS_REVOKED) from None
     else:
         generation = _require_generation(common_name)
-    return profile, generation, admitted_destination
+    return profile, generation, admitted_destinations

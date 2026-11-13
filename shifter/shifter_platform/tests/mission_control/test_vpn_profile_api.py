@@ -165,11 +165,12 @@ def test_exact_scope_downloads_owned_mission_control_profile(settings, standard_
         response = client.post(URL)
 
     assert response.status_code == 200
-    assert response.content == PROFILE.encode()
+    assert response.content == f"mssfix 1300\n{PROFILE}".encode()
     assert response["Content-Type"] == "application/x-openvpn-profile"
     assert response["Content-Disposition"] == 'attachment; filename="bigrae-range.ovpn"'
     assert response["Cache-Control"] == "private, no-store"
     assert "ETag" not in response
+    assert caches["launch_rate_limit"].get(f"credential-delivery:{standard_user.identity_principal.uuid}") == 1
     audit = AuditLog.objects.get(
         entity_type=AuditEntityType.CREDENTIAL,
         entity_id=cms_range.pk,
@@ -274,16 +275,36 @@ def test_rate_limit_blocks_before_secret_resolution(settings, standard_user):
     secrets.get_secret_value.assert_not_called()
 
 
+def test_preparing_polls_do_not_consume_delivery_budget(monkeypatch, standard_user):
+    _ready_range(standard_user)
+    raw = _token(standard_user, scopes.MISSION_CONTROL_VPN_PROFILE_READ)
+    client = APIClient()
+    client.credentials(HTTP_AUTHORIZATION=f"Bearer {raw}")
+
+    def preparing(view, _actor, *, request_id=None):
+        response = view.error_response(code="vpn_preparing", message="Preparing your VPN profile.", status_code=202)
+        response["Retry-After"] = "5"
+        return response
+
+    monkeypatch.setattr("mission_control.api._vpn._mission_control_profile_result", preparing)
+
+    for _ in range(51):
+        response = client.post(URL)
+        assert response.status_code == 202
+
+    assert caches["launch_rate_limit"].get(f"credential-delivery:{standard_user.identity_principal.uuid}") is None
+
+
 def test_rate_limit_backend_failure_fails_closed(monkeypatch, caplog, standard_user):
     _ready_range(standard_user)
     raw = _token(standard_user, scopes.MISSION_CONTROL_VPN_PROFILE_READ)
     client = APIClient()
     client.credentials(HTTP_AUTHORIZATION=f"Bearer {raw}")
 
-    def fail_add(*args, **kwargs):
+    def fail_get(*args, **kwargs):
         raise RuntimeError("cache unavailable")
 
-    monkeypatch.setattr(caches["launch_rate_limit"], "add", fail_add)
+    monkeypatch.setattr(caches["launch_rate_limit"], "get", fail_get)
 
     with caplog.at_level(logging.ERROR, logger="mission_control.api._vpn"):
         response = client.post(URL)

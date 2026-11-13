@@ -399,8 +399,8 @@ def parse_raes_operation_input(payload: object) -> RaesOperationInput:
     remote_access = parse_remote_access(obj["remote_access"]) if "remote_access" in obj else None
     _require(
         remote_access is None
-        or remote_access.target_ref in {f"{binding.target_address}#0" for binding in access_bindings},
-        "raes operation input remote access target is not a declared participant-access target",
+        or set(remote_access.target_refs) <= {f"{binding.target_address}#0" for binding in access_bindings},
+        "raes operation input remote access targets are not declared participant-access targets",
     )
     from shared.range_management import validate_management_targets
 

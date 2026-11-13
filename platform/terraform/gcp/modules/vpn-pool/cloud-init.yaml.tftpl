@@ -57,6 +57,7 @@ write_files:
         -e MAX_CLIENTS="${max_clients}" \
         -e TUNNEL_NETWORK="${tunnel_network}" \
         -e HEALTH_PORT="${health_port}" \
+        -e OPENFGA_ENABLED="${openfga_enabled}" \
         "$${image}"
 runcmd:
   - systemctl daemon-reload

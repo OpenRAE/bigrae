@@ -31,6 +31,29 @@ class ExperimentBatch(models.Model):
         return f"Experiment batch {self.id}"
 
 
+class ExperimentSnapshot(models.Model):
+    """The exact admitted instantiated trial SDL of one plan entry.
+
+    The batch record keeps the digest of each snapshot, so its size does not grow with the snapshot size.
+    """
+
+    id = models.UUIDField(primary_key=True, default=uuid4, editable=False)
+    batch = models.ForeignKey(ExperimentBatch, on_delete=models.PROTECT)
+    plan_entry_id = models.CharField(max_length=128, editable=False)
+    snapshot_json = models.TextField(editable=False)
+
+    class Meta:
+        """Keep one snapshot for each admitted plan entry."""
+
+        constraints = [
+            models.UniqueConstraint(fields=["batch", "plan_entry_id"], name="experiment_snapshot_entry_unique"),
+        ]
+
+    def __str__(self) -> str:
+        """Return only an opaque administrative reference."""
+        return f"Experiment snapshot {self.id}"
+
+
 class ExperimentEntry(models.Model):
     """An immutable plan/run index plus one conservatively fenced attempt."""
 

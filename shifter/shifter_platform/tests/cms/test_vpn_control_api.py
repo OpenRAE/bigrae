@@ -55,12 +55,13 @@ def google_claims(monkeypatch, pool_identity):
     return claims, seen
 
 
-def _ready_range() -> Range:
+def _ready_range(*, multi: bool = False) -> Range:
     user = get_user_model().objects.create_user(username=f"{uuid4()}@example.com")
     request = Request.objects.create(request_id=uuid4(), request_type="range", user=user)
+    targets = tuple(sorted((_TARGET, "provision.node.dc#0"))) if multi else (_TARGET,)
     realization = {
         "generation": str(request.request_id),
-        "target_ref": _TARGET,
+        **({"target_ref": _TARGET} if not multi else {"target_refs": list(targets)}),
         "endpoint": "203.0.113.7",
         "port": 1194,
         "secret_ref": "projects/p/secrets/profile",
@@ -71,10 +72,22 @@ def _ready_range() -> Range:
         user=user,
         status=Range.Status.READY,
         range_backend="gce",
-        remote_access_capability=build_openvpn_capability(_TARGET, datetime.now(UTC) + timedelta(days=2)),
+        remote_access_capability=build_openvpn_capability(targets, datetime.now(UTC) + timedelta(days=2)),
         vpn_access_binding=bind_openvpn_realization(realization, user.id),
         provisioned_instances=[
-            {"uuid": _TARGET, "role": "raes-node", "private_ip": "10.50.3.3", "participant_access_channels": ["ssh"]}
+            {"uuid": _TARGET, "role": "raes-node", "private_ip": "10.50.3.3", "participant_access_channels": ["ssh"]},
+            *(
+                [
+                    {
+                        "uuid": "provision.node.dc#0",
+                        "role": "raes-node",
+                        "private_ip": "10.50.3.4",
+                        "participant_access_channels": ["rdp"],
+                    }
+                ]
+                if multi
+                else []
+            ),
         ],
     )
 
@@ -163,6 +176,26 @@ class TestSessionLifecycle:
         ended = _post("vpn-control-end", {"server": "vpn-a", "session": body["session"]})
         assert ended.status_code == 204
         assert VpnSession.objects.get(pk=body["session"]).state == VpnSessionState.ENDED
+
+    def test_multi_target_authorization_returns_one_exact_grant(self, google_claims):
+        range_obj = _ready_range(multi=True)
+
+        granted = _post(
+            "vpn-control-authorize",
+            {
+                "common_name": f"participant-{range_obj.request.request_id}",
+                "server": "vpn-a",
+                "client_id": 4,
+            },
+        )
+
+        assert granted.status_code == 201
+        body = granted.json()
+        assert body["targets"] == [
+            {"target": "10.50.3.4", "ports": [3389]},
+            {"target": "10.50.3.3", "ports": [22]},
+        ]
+        assert "target" not in body and "ports" not in body
 
     def test_refusals_disclose_only_a_closed_code(self, google_claims):
         unknown = _post(
