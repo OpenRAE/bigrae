@@ -347,10 +347,12 @@ def _advance(
         trial = get_worker_trial(credential, worker_id)
     except ObjectDoesNotExist:
         if row.state == "failed" or worker.status in {"failed", "destroying", "destroyed"} or worker.retiring:
-            return _advance_failed_setup(credential, organization_uuid, inputs, row, worker_id, worker), None
-        return (
-            "not-started" if collect_only else _start_trial(credential, organization_uuid, inputs, row, worker_id)
-        ), None
+            action = _advance_failed_setup(credential, organization_uuid, inputs, row, worker_id, worker)
+        elif collect_only:
+            action = "not-started"
+        else:
+            action = _start_trial(credential, organization_uuid, inputs, row, worker_id)
+        return action, None
     return _advance_started(credential, organization_uuid, inputs, row, worker_id, worker, trial), trial
 
 
@@ -364,12 +366,14 @@ def _advance_failed_setup(
 ) -> str:
     """Retain setup failure, then use normal retirement and verified cleanup."""
     if row.state != "failed":
-        return _fail_uncollected(credential, organization_uuid, row, "worker-setup-failed")
-    if worker.retired:
-        return _record_cleanup(credential, organization_uuid, inputs, row, worker_id, "failed")
-    if not worker.retiring:
-        return _retire(credential, worker_id)
-    return "waiting-for-cleanup"
+        action = _fail_uncollected(credential, organization_uuid, row, "worker-setup-failed")
+    elif worker.retired:
+        action = _record_cleanup(credential, organization_uuid, inputs, row, worker_id, "failed")
+    elif not worker.retiring:
+        action = _retire(credential, worker_id)
+    else:
+        action = "waiting-for-cleanup"
+    return action
 
 
 def _advance_started(
