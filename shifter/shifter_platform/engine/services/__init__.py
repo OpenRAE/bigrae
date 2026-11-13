@@ -71,7 +71,13 @@ from ._disposable_workers import (
     get_disposable_worker as get_disposable_worker,
 )
 from ._disposable_workers import (
+    published_worker_profile as published_worker_profile,
+)
+from ._disposable_workers import (
     worker_credential_scope as worker_credential_scope,
+)
+from ._disposable_workers import (
+    worker_profile_binding as worker_profile_binding,
 )
 from ._identity_cutover import (
     apply_identity_cutover_resources as apply_identity_cutover_resources,

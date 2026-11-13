@@ -29,12 +29,17 @@ class FakeEngine:
     capacity: int = 10
     collect_requests: list[tuple[UUID, bool]] = field(default_factory=list)
 
-    def create_disposable_worker(self, credential, *, scope, worker_id, experiment_id, trial_id):
+    def create_disposable_worker(self, credential, *, scope, worker_id, experiment_id, trial_id, profile_binding):
         if worker_id not in self.workers:
             if len(self.workers) >= self.capacity:
                 raise ValueError("Worker capacity is unavailable")
             self.workers[worker_id] = SimpleNamespace(
-                status="provisioning", qualified=False, retiring=False, retired=False, trial=trial_id
+                status="provisioning",
+                qualified=False,
+                retiring=False,
+                retired=False,
+                trial=trial_id,
+                profile_binding=profile_binding,
             )
         return self.workers[worker_id]
 
@@ -159,6 +164,10 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert len(dispatch.engine.workers) == 1
 
     worker_id = next(iter(dispatch.engine.workers))
+    # #2924: the worker uses the exact host profile that admission bound to the batch.
+    binding = dispatch.engine.workers[worker_id].profile_binding
+    assert binding.model_dump(mode="json") == dispatch.batch.inputs["worker_profile"]
+    assert binding.name == "default"
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["waiting-for-worker"]
     dispatch.engine.workers[worker_id].status = "ready"
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["trial-started"]

@@ -12,9 +12,10 @@ Use the installed revision and approved credential files.
 1. Install the apparatus adapter as worker software.
    Its plugin must declare `bigrae.runtime-plugin/v2` and the `trial.control` capability.
    It installs only the trial-control command on each worker.
-2. Admit the batch. The requested concurrency sets how many trials run at the same time.
+2. Publish a [worker policy](disposable-workers.md) with a host profile that pins the pre-built trial runtime image and selects that installation.
+3. Admit the batch. Admission binds the batch to the profile that the authority's `worker_profile` names, or to `default`.
+   The requested concurrency sets how many trials run at the same time.
    It cannot exceed the plan's parallel limit, which the scenario's `trial_parallelism` sets.
-3. Publish a [worker policy](disposable-workers.md) whose host profile pins the pre-built trial runtime image and selects that installation.
 4. Reserve worker capacity for the batch concurrency.
 5. Apply the deployment infrastructure. The provisioner needs create-only access to `trial-exports/` in the assets bucket.
 

@@ -75,15 +75,40 @@ class WorkerHostProfile(ClosedModel):
         return selected | self.image.model_dump(include={"nic_type", "disk_interface"})
 
 
-class WorkerPolicy(ClosedModel):
-    """Global limits are published by the operator, never chosen by a launch."""
+ProfileName = Annotated[str, Field(pattern=r"^[a-z][a-z0-9-]{0,62}$")]
+DEFAULT_PROFILE = "default"
 
-    profile: WorkerHostProfile
+
+class WorkerProfileError(RuntimeError):
+    """The selected worker host profile is not published, or its digest changed."""
+
+
+class WorkerProfileBinding(ClosedModel):
+    """The exact host profile that an admitted batch retains for all of its workers."""
+
+    name: ProfileName
+    digest: Digest
+
+
+class WorkerPolicy(ClosedModel):
+    """Global limits and named host profiles are published by the operator, never chosen by a launch."""
+
+    profiles: dict[ProfileName, WorkerHostProfile] = Field(min_length=1, max_length=16)
     max_live: Annotated[int, Field(strict=True, ge=1, le=1000)]
     max_provisioning: Annotated[int, Field(strict=True, ge=1, le=100)]
     lifetime_seconds: Annotated[int, Field(strict=True, ge=60, le=604800)] = 3600
     recovery_attempts: Annotated[int, Field(strict=True, ge=1, le=20)] = 5
     hold_review_seconds: Annotated[int, Field(strict=True, ge=60, le=604800)] = 86400
+
+    @model_validator(mode="before")
+    @classmethod
+    def single_profile(cls, value: object) -> object:
+        """Load a policy published with one unnamed profile as the default profile."""
+        if isinstance(value, dict) and "profile" in value and "profiles" not in value:
+            value = {key: item for key, item in value.items() if key != "profile"} | {
+                "profiles": {DEFAULT_PROFILE: value["profile"]}
+            }
+        return value
 
     @model_validator(mode="after")
     def validate_limits(self) -> Self:
@@ -91,6 +116,14 @@ class WorkerPolicy(ClosedModel):
         if self.max_provisioning > self.max_live:
             raise ValueError("Worker concurrency exceeds live capacity")
         return self
+
+    def select(self, binding: WorkerProfileBinding | str) -> WorkerHostProfile:
+        """Return the named profile; refuse a missing profile or one whose digest changed."""
+        name = binding if isinstance(binding, str) else binding.name
+        profile = self.profiles.get(name)
+        if profile is None or (isinstance(binding, WorkerProfileBinding) and profile.digest != binding.digest):
+            raise WorkerProfileError("Worker profile is unavailable or changed")
+        return profile
 
 
 def _validate_worker_image(image: RuntimeTargetImageProfile) -> None:
