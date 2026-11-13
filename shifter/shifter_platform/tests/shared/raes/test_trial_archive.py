@@ -199,7 +199,7 @@ def test_bigrae_seal_refuses_archival_records_and_other_contracts(tmp_path, chan
         validate_trial_archive(path, expected())
 
 
-@pytest.mark.parametrize("fault", ["wrong-run", "corruption", "missing-chunk", "traversal", "secret"])
+@pytest.mark.parametrize("fault", ["wrong-run", "corruption", "missing-chunk", "traversal"])
 def test_rejects_invalid_archive_before_collection(tmp_path, fault):
     from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
 
@@ -210,8 +210,6 @@ def test_rejects_invalid_archive_before_collection(tmp_path, fault):
             members["traces/chunk-1.bin"] = b"altered bytes"
 
     extra = {"../escape": b"unsafe"} if fault == "traversal" else {}
-    if fault == "secret":
-        extra = {"traces/credential.txt": b"Bearer synthetic-private-proof"}
     path = tmp_path / "archive.tar.gz"
     path.write_bytes(
         archive_bytes(extra=extra, omit=("traces/chunk-1.bin",) if fault == "missing-chunk" else (), change=change)
@@ -334,14 +332,13 @@ def test_large_trace_is_streamed_without_requiring_one_large_json_document(tmp_p
 
 
 @pytest.mark.parametrize(
-    "fault", ["credential", "foreign-record", "foreign-attempt", "missing-byte", "bad-json", "oversized-line"]
+    "fault", ["foreign-record", "foreign-attempt", "missing-byte", "bad-json", "oversized-line"]
 )
 def test_json_lines_are_validated_incrementally(tmp_path, monkeypatch, fault):
     from shared.raes import trial_archive
 
     monkeypatch.setattr(trial_archive, "MAX_JSON_BYTES", 32768)
     rows = {
-        "credential": b'{"password":"synthetic-excluded-value"}\n',
         "foreign-attempt": b'{"execution_attempt_id":"foreign-attempt"}\n',
         "foreign-record": encoded(evidence_record("foreign-run", checksum="0" * 64)) + b"\n",
         "missing-byte": b'{"uri":"missing.bin","checksum":{"algorithm":"sha256","value":"' + b"0" * 64 + b'"}}\n',
@@ -421,7 +418,6 @@ def test_expected_contract_versions_and_digests_are_bound(tmp_path, binding):
             {"run_ref": {"ref_kind": "run", "ref_id": "foreign-run", "ref_version": "1"}},
         ),
         ("evidence/context.data", "application/x-ndjson", {"execution_attempt_id": "foreign-attempt"}),
-        ("evidence/context.data", "application/json", {"password": "synthetic-excluded-value"}),
     ],
 )
 def test_structured_inventory_declarations_and_bindings_are_authoritative(tmp_path, filename, media_type, record):
@@ -560,19 +556,16 @@ def test_raw_capture_blobs_are_kept_by_checksum_not_parsed_as_documents():
     }
 
 
-def test_the_documented_aws_example_key_is_not_a_secret_but_another_access_key_is(tmp_path):
-    """A planted scenario credential uses AWS's documentation placeholder; a real key shape is still refused."""
-    from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
+@pytest.mark.parametrize("filename", ["trial/participants/red.json", "trial/participants/red.jsonl"])
+def test_scenario_credentials_are_preserved_in_the_original_archive(tmp_path, filename):
+    from shared.raes.trial_archive import validate_trial_archive
 
     path = tmp_path / "archive.tar.gz"
-    planted = {"trial/participants/red.json": b'{"note": "Access Key: AKIAIOSFODNN7EXAMPLE"}'}
-    path.write_bytes(trial_record_archive(extra=planted))
+    original = b'{"password":"scenario-fixture","note":"Bearer synthetic-private-proof"}'
+    path.write_bytes(trial_record_archive(extra={filename: original}))
+    before = path.read_bytes()
     validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
-
-    leaked = {"trial/participants/red.json": b'{"note": "AKIAIOSFODNN7EXAMPLE AKIA2E3F4G5H6J7K8L9M"}'}
-    path.write_bytes(trial_record_archive(extra=leaked))
-    with pytest.raises(TrialArchiveError, match="secret"):
-        validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
+    assert path.read_bytes() == before
 
 
 def test_run_record_only_intake_keeps_bytes_and_identity_and_reads_only_the_seal_status(tmp_path):

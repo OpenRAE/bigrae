@@ -34,7 +34,7 @@ from raes_contracts.contracts import (
 )
 from raes_contracts.contracts.admitted_trial_plan_ingress import parse_admitted_trial_plan_json
 from raes_contracts.errors import RaesError
-from raes_contracts.json_ingress import StrictJsonIngressError, parse_bounded_json, parse_bounded_json_object
+from raes_contracts.json_ingress import parse_bounded_json_object
 from raes_contracts.participant_control_context import control_context_asset_reference
 from raes_contracts.realization_envelope import BackendRealizationEnvelopeModel
 from raes_env_packs import PackExperiment, load_pack_experiments, resolve_pack_artifact, validate_pack_content_manifest
@@ -49,7 +49,6 @@ from shared.raes.participant_owner_replay import (
 )
 from shared.raes.participant_owner_replay import validation_requests as _validation_requests
 from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
-from shared.raes.trial_archive_records import reject_retained_credentials
 
 ExperimentInputError = RaesError
 
@@ -237,19 +236,6 @@ def _documents(root: Path, experiment: PackExperiment) -> dict[str, str]:
     return documents
 
 
-def _check_artifact_credentials(data: bytes, media_type: str) -> None:
-    """Apply existing credential rules to original bytes without altering their content."""
-    media_type = media_type.partition(";")[0].strip().lower()
-    if media_type == "application/json" or media_type.endswith("+json"):
-        try:
-            parsed = parse_bounded_json(data, max_bytes=MAX_DOCUMENT_BYTES, root="object", max_depth=64)
-        except StrictJsonIngressError as error:
-            if error.code != "invalid-root":
-                raise
-            parsed = parse_bounded_json(data, max_bytes=MAX_DOCUMENT_BYTES, root="array", max_depth=64)
-        reject_retained_credentials(parsed)
-    else:
-        reject_retained_credentials(data.decode("utf-8", errors="replace"))
 
 
 class _ArtifactCustody:
@@ -284,7 +270,6 @@ class _ArtifactCustody:
         )
         data = resolved.data
         self.total += len(data)
-        _check_artifact_credentials(data, media_type)
         retained = {
             "base64": base64.b64encode(data).decode("ascii"),
             "sha256": hashlib.sha256(data).hexdigest(),
@@ -341,7 +326,6 @@ def validate_experiment_cleanup(inputs: dict[str, Any], entry_id: str, attempt_i
     """Validate a trusted owner's cleanup report against the retained trial authority."""
     try:
         parsed = parse_bounded_json_object(canonical_json_bytes(receipt), max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
-        reject_retained_credentials(parsed)
         plan = parse_admitted_trial_plan_json(canonical_json_bytes(inputs["plan"]))
         entry = plan.entries[entry_id]
         cleanup = plan.cleanup_plans[entry.execution_controls.cleanup_plan_ref]
@@ -405,7 +389,6 @@ def compile_pack_experiment(
     dependencies = dependency_tuple()
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
-    reject_retained_credentials(parsed)
     configuration = ExperimentAuthority.model_validate(parsed)
     if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
         raise ValueError("Requested concurrency exceeds configured limit")
@@ -457,13 +440,11 @@ def compile_pack_experiment(
             exact_descriptor=True,
         )
         snapshot = canonical_instantiated_sdl_bytes(selected)
-        reject_retained_credentials(json.loads(snapshot))
         digest = "sha256:" + hashlib.sha256(snapshot).hexdigest()
         retained_bytes += len(digest) + len(entry.plan_entry_id.encode()) + 8
         if retained_bytes > MAX_RETAINED_BYTES:
             raise ValueError("Experiment hydrated inputs exceed the byte limit")
         payload["snapshot_digests"][entry.plan_entry_id] = digest
-    reject_retained_credentials(payload)
     return payload
 
 
