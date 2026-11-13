@@ -6,13 +6,15 @@ import base64
 import hashlib
 import json
 import sys
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, BinaryIO, Literal, cast
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field
-from raes import admit_scenario_family, canonical_sdl_bytes, canonical_sdl_digest, parse_sdl
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from raes import canonical_sdl_bytes, canonical_sdl_digest
 from raes.canonical import canonical_instantiated_sdl_bytes
 from raes.participant_control_context import SDLControlContextConfigurationValidator, authored_control_context_bindings
 from raes.scenario import InstantiatedScenario
@@ -25,6 +27,7 @@ from raes_contracts.contracts import (
     BackendManifestV2Model,
     ExperimentArtifactRefModel,
     ExperimentManifestReferenceModel,
+    ObservationCaptureOfferModel,
     ParticipantImplementationManifestModel,
     ProcessorManifestV2Model,
     TrialCleanupReceiptModel,
@@ -42,6 +45,7 @@ from raes_processor.trial_compiler import compile_admitted_trial_plan
 from raes_processor.trial_realization import instantiate_admitted_trial_entry
 from raes_processor.trial_scheduler import BatchSchedule, plan_batch_schedule
 
+from shared.disposable_workers import WorkerHostProfile, WorkerProfileBinding
 from shared.raes.pack_delivery_inputs import pack_artifact_relative_path
 from shared.raes.participant_owner_replay import (
     OwnerValidation,
@@ -49,6 +53,7 @@ from shared.raes.participant_owner_replay import (
 )
 from shared.raes.participant_owner_replay import validation_requests as _validation_requests
 from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
+from shared.raes.worker_apparatus import require_worker_scenario, worker_backend_manifest, worker_realization_envelope
 
 ExperimentInputError = RaesError
 
@@ -71,16 +76,30 @@ class ExperimentAuthority(BaseModel):
 
     Only installation content administrators may submit this configuration.
     It is neither a portable scientific schema nor an execution permission.
+    The administrator supplies the backend manifest and realization envelope, or
+    omits both and supplies only the apparatus capture offers. Then BigRAE derives
+    both documents from the bound worker host profile.
     """
 
     model_config = ConfigDict(extra="forbid", strict=True)
     schema_version: Literal["bigrae.experiment-admission-authority/v1"]
-    backend: BackendManifestV2Model
+    backend: BackendManifestV2Model | None = None
     processor: ProcessorManifestV2Model
     participants: list[ParticipantAuthority] = Field(default_factory=list, max_length=256)
-    realization_envelope: BackendRealizationEnvelopeModel
+    realization_envelope: BackendRealizationEnvelopeModel | None = None
+    capture_offers: list[ObservationCaptureOfferModel] = Field(default_factory=list, max_length=256)
     execution_authority: TrialExecutionAuthorityModel
     max_concurrency: int = Field(default=200, ge=1, le=10000)
+    #: The published worker host profile that every trial of the batch uses.
+    worker_profile: str = Field(default="default", pattern=r"^[a-z][a-z0-9-]{0,62}$")
+
+    @model_validator(mode="after")
+    def _one_document_source(self) -> ExperimentAuthority:
+        """Refuse a partial document set; supplied documents carry their own capture offers."""
+        supplied = (self.backend is not None, self.realization_envelope is not None)
+        if supplied not in ((True, True), (False, False)) or all(supplied) == bool(self.capture_offers):
+            raise ValueError("Supply the backend and envelope with no capture offers, or capture offers only")
+        return self
 
 
 def dependency_tuple() -> dict[str, str]:
@@ -131,14 +150,22 @@ def _concurrency(requested: int, configured: int, schedule: BatchSchedule) -> No
         raise ValueError("Requested concurrency is outside the configured or admitted limits")
 
 
+def _documents_of(authority: ExperimentAuthority) -> tuple[BackendManifestV2Model, BackendRealizationEnvelopeModel]:
+    """Return the supplied or derived backend manifest and realization envelope."""
+    if authority.backend is None or authority.realization_envelope is None:
+        raise ValueError("Experiment apparatus documents are unresolved")
+    return authority.backend, authority.realization_envelope
+
+
 def _context(
     experiment: PackExperiment, authority: ExperimentAuthority, owner_validation: OwnerValidation | None = None
 ) -> dict[str, Any]:
     """Compose explicit owner manifests into the released compiler context."""
+    backend, envelope = _documents_of(authority)
     owned: dict[tuple[str, str], list[dict[str, Any]]] = {}
     manifests = {}
     references = []
-    for kind, manifest in (("backend", authority.backend), ("processor", authority.processor)):
+    for kind, manifest in (("backend", backend), ("processor", authority.processor)):
         key = (kind, manifest.identity.name, manifest.identity.version, manifest.schema_version)
         manifests[key] = manifest
         references.append(
@@ -195,7 +222,7 @@ def _context(
     apparatus = AdmittedApparatusBindingModel(
         manifest_refs=references,
         participant_manifest_refs=participant_refs,
-        realization_envelope=authority.realization_envelope.identity,
+        realization_envelope=envelope.identity,
         capability_refs=sorted(experiment.experiment.apparatus_intent.required_capabilities),
     )
     return {
@@ -203,7 +230,7 @@ def _context(
         "apparatus_manifests": manifests,
         "participant_manifests": participants,
         "participant_configuration_validators": validators,
-        "realization_envelope": authority.realization_envelope,
+        "realization_envelope": envelope,
         "execution_authority": authority.execution_authority,
         "limits": TrialCompilationLimitsModel(),
     }
@@ -376,6 +403,45 @@ def _select_experiment(root: Path, experiment_id: str, experiment_version: str |
     return candidates[0]
 
 
+@dataclass(frozen=True)
+class InstallationLookups:
+    """Installation callbacks that the shared compiler cannot import.
+
+    ``owner_validation`` runs backend participant owners. ``worker_profile`` returns
+    the published host profile of a name.
+    """
+
+    owner_validation: OwnerValidation | None = None
+    worker_profile: Callable[[str], WorkerHostProfile] | None = None
+
+
+def _bind_worker_apparatus(
+    configuration: ExperimentAuthority, worker_profile: Callable[[str], WorkerHostProfile] | None
+) -> tuple[ExperimentAuthority, dict[str, Any], BackendRealizationEnvelopeModel | None]:
+    """Bind the named host profile and derive absent apparatus documents from it.
+
+    Returns the configuration, the retained binding and derived documents, and the
+    derived realization envelope. The envelope is ``None`` when the authority supplies its documents.
+    """
+    profile = None if worker_profile is None else worker_profile(configuration.worker_profile)
+    retained: dict[str, Any] = {}
+    if profile is not None:
+        binding = WorkerProfileBinding(name=configuration.worker_profile, digest=profile.digest)
+        retained["worker_profile"] = binding.model_dump(mode="json")
+    if configuration.backend is not None:
+        return configuration, retained, None
+    if profile is None:
+        raise ValueError("Derived apparatus documents require the bound worker profile")
+    envelope = worker_realization_envelope(profile)
+    backend = worker_backend_manifest(envelope, configuration.capture_offers)
+    retained["derived_apparatus"] = {
+        "backend": backend.model_dump(mode="json"),
+        "realization_envelope": envelope.model_dump(mode="json"),
+    }
+    configuration = configuration.model_copy(update={"backend": backend, "realization_envelope": envelope})
+    return configuration, retained, envelope
+
+
 def compile_pack_experiment(
     root: Path,
     *,
@@ -383,17 +449,26 @@ def compile_pack_experiment(
     authority: object,
     concurrency: int,
     experiment_version: str | None = None,
-    owner_validation: OwnerValidation | None = None,
-) -> dict[str, Any]:
-    """Compile one explicitly selected installed experiment and retain its inputs."""
+    installation: InstallationLookups,
+    snapshots: BinaryIO,
+) -> tuple[dict[str, Any], list[tuple[str, int]]]:
+    """Compile one explicitly selected installed experiment and retain its inputs.
+
+    The batch retains the exact binding of the selected worker host profile, and derived documents come from it.
+    The record keeps the digest of each instantiated snapshot. Each exact snapshot is written
+    to ``snapshots`` in plan order, so memory does not grow with the number of trials.
+    Return the record and the plan entry ID and size of each written snapshot.
+    """
     dependencies = dependency_tuple()
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
-    configuration = ExperimentAuthority.model_validate(parsed)
+    configuration, apparatus, envelope = _bind_worker_apparatus(
+        ExperimentAuthority.model_validate(parsed), installation.worker_profile
+    )
     if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
         raise ValueError("Requested concurrency exceeds configured limit")
     experiment = _select_experiment(root, experiment_id, experiment_version)
-    request = experiment.compilation_request(**_context(experiment, configuration, owner_validation))
+    request = experiment.compilation_request(**_context(experiment, configuration, installation.owner_validation))
     result = compile_admitted_trial_plan(request)
     if result.plan is None:
         raise ValueError("Experiment compilation refused the supplied combination")
@@ -411,7 +486,6 @@ def compile_pack_experiment(
         "documents": _documents(root, experiment),
         "artifacts": custody.payload,
         "family": json.loads(canonical_sdl_bytes(experiment.family)),
-        "family_path": experiment.family_path,
         "experiment": experiment.experiment.model_dump(mode="json"),
         "task": experiment.task.model_dump(mode="json"),
         "capture_specs": {key: item.model_dump(mode="json") for key, item in experiment.capture_specs.items()},
@@ -429,37 +503,43 @@ def compile_pack_experiment(
             "max_authority_bytes": MAX_AUTHORITY_BYTES,
         },
     }
+    payload.update(apparatus)
     retained_bytes = len(encode_retained(payload).encode())
+    written: list[tuple[str, int]] = []
     for entry in schedule.entries:
         experiment_archive_identity(payload, entry.plan_entry_id, "admission-validation")
         selected = instantiate_admitted_trial_entry(
             plan=plan, plan_entry_id=entry.plan_entry_id, family=experiment.family
         )
+        if envelope is not None:
+            require_worker_scenario(selected, envelope.configuration)
         retained_bytes += custody.retain(
             _selected_control_context_artifacts(selected, plan.entries[entry.plan_entry_id]),
             exact_descriptor=True,
         )
         snapshot = canonical_instantiated_sdl_bytes(selected)
-        digest = "sha256:" + hashlib.sha256(snapshot).hexdigest()
+        digest = snapshot_digest(snapshot)
         retained_bytes += len(digest) + len(entry.plan_entry_id.encode()) + 8
         if retained_bytes > MAX_RETAINED_BYTES:
             raise ValueError("Experiment hydrated inputs exceed the byte limit")
         payload["snapshot_digests"][entry.plan_entry_id] = digest
-    return payload
+        snapshots.write(snapshot)
+        written.append((entry.plan_entry_id, len(snapshot)))
+    return payload, written
 
 
-def retained_entry_snapshot(inputs: dict[str, Any], entry_id: str) -> bytes:
-    """Instantiate one entry from the retained plan and family SDL and verify the admitted digest.
+def read_snapshots(
+    payload: dict[str, Any], snapshots: BinaryIO, written: list[tuple[str, int]]
+) -> Iterator[tuple[str, bytes]]:
+    """Read back each written snapshot in plan order and verify it against its recorded digest."""
+    snapshots.seek(0)
+    for entry_id, size in written:
+        snapshot = snapshots.read(size)
+        if snapshot_digest(snapshot) != payload["snapshot_digests"][entry_id]:
+            raise ValueError("A written trial snapshot differs from its recorded digest")
+        yield entry_id, snapshot
 
-    A batch admitted before digests were retained keeps its snapshots in the record.
-    """
-    if "snapshot_digests" not in inputs:
-        return canonical_json_bytes(inputs["snapshots"][entry_id])
-    plan = parse_admitted_trial_plan_json(canonical_json_bytes(inputs["plan"]))
-    family = admit_scenario_family(parse_sdl(inputs["documents"][inputs["family_path"]]))
-    snapshot = canonical_instantiated_sdl_bytes(
-        instantiate_admitted_trial_entry(plan=plan, plan_entry_id=entry_id, family=family)
-    )
-    if "sha256:" + hashlib.sha256(snapshot).hexdigest() != inputs["snapshot_digests"][entry_id]:
-        raise ValueError("Instantiated trial snapshot differs from its admitted digest")
-    return snapshot
+
+def snapshot_digest(snapshot: bytes) -> str:
+    """Return the prefixed SHA-256 digest that the record keeps for one snapshot."""
+    return "sha256:" + hashlib.sha256(snapshot).hexdigest()

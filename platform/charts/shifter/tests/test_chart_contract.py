@@ -71,8 +71,8 @@ AWS_DEV_WAF_ACL_ARN = (
 # gateway rules, maintenance CPU limits, and large-plan result-worker memory.
 # Regenerated for #2904 after giving guacd a writable FreeRDP home.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "1c86d03975f2424c832da1d7ae2894d7978b64d9ca9f4674a8d0657f463744fb",
-    "gcp-dev": "a8658a0458139768e2c7c9e06672fe5614dbb01f1a53d8ad60797039298deb3e",
+    "gcp-prod": "217da28f1f44680fbc160344d4e09bde6c7904214c2d2031a264254fca6ac4ac",
+    "gcp-dev": "5da6c16dde1a8153d958267a1d65bfd9af3cd735615431b45a882e7a3190bd89",
 }
 
 

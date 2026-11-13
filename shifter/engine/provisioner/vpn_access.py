@@ -171,6 +171,7 @@ def _render_profile(
         "client\n"
         "dev tun\n"
         "proto udp\n"
+        "mssfix 1300\n"
         f"remote {endpoint.host} {endpoint.port}\n"
         "resolv-retry infinite\n"
         "nobind\n"
@@ -199,16 +200,17 @@ def mint_openvpn_profile(
     secret_ops: VpnSecretOps,
     endpoint: OpenVpnPoolEndpoint,
 ) -> dict[str, object]:
-    """Mint and store the generation's profile for the exact authorized target.
+    """Mint and store the generation's profile for the exact authorized targets.
 
     ``member_refs`` are the realized range's member keys; the capability must
-    name exactly one of them. The returned realization is owner-free; the Engine
+    name only members in that collection. The returned realization is owner-free; the Engine
     binds the range owner it is authoritative for.
     """
     capability = parse_openvpn_capability(remote_access_capability)
     validate_openvpn_capability_window(capability)
-    if list(member_refs).count(capability.target_ref) != 1:
-        raise ValueError("OpenVPN capability must identify exactly one range member")
+    members = list(member_refs)
+    if any(members.count(target_ref) != 1 for target_ref in capability.target_refs):
+        raise ValueError("OpenVPN capability targets must each identify exactly one range member")
     issuer = load_issuer(secret_ops.read_issuer())
     if issuer.ca_certificate.not_valid_after_utc < capability.teardown_at:
         raise ValueError("The tenant OpenVPN CA expires before the authorized access deadline")
@@ -216,10 +218,15 @@ def mint_openvpn_profile(
     certificate, key = _client_certificate(issuer, generation, capability.teardown_at)
     profile = _render_profile(issuer, certificate, key, endpoint)
     validate_openvpn_profile_for_endpoint(profile, endpoint.host, endpoint.port)
+    target_field = (
+        {"target_ref": capability.target_ref}
+        if len(capability.target_refs) == 1
+        else {"target_refs": list(capability.target_refs)}
+    )
     return parse_openvpn_realization(
         {
             "generation": str(generation),
-            "target_ref": capability.target_ref,
+            **target_field,
             "endpoint": endpoint.host,
             "port": endpoint.port,
             "secret_ref": secret_ops.put_profile(range_id, generation, profile),

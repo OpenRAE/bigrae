@@ -6,7 +6,7 @@ import pytest
 
 from shifter_openvpn.controller import RETRY_SECONDS, Controller
 from shifter_openvpn.management import ClientEvent
-from shifter_openvpn.portal import Grant, PortalRefused, PortalUnavailable
+from shifter_openvpn.portal import Grant, PortalRefused, PortalUnavailable, TargetGrant
 
 
 class FakeManagement:
@@ -28,7 +28,7 @@ class FakeManagement:
 
 class FakePortal:
     def __init__(self) -> None:
-        self.authorize_result: Grant | Exception = Grant("s-1", "10.50.3.3", (22, 3389), 15)
+        self.authorize_result: Grant | Exception = Grant("s-1", (TargetGrant("10.50.3.3", (22, 3389)),), 15)
         self.heartbeat_result: tuple[set[str], int] | Exception = (set(), 15)
         self.reported: list[list[str]] = []
         self.ended: list[str] = []
@@ -53,13 +53,13 @@ class FakeFirewall:
         self.allowed: set[tuple] = set()
         self.fail = fail
 
-    def allow(self, client, target, ports):
+    def allow(self, client, targets):
         if self.fail:
             raise RuntimeError("nft failed")
-        self.allowed.add((client, target, ports))
+        self.allowed.add((client, targets))
 
-    def revoke(self, client, target, ports):
-        self.allowed.discard((client, target, ports))
+    def revoke(self, client, targets):
+        self.allowed.discard((client, targets))
 
 
 class FakeCrl:
@@ -101,7 +101,40 @@ def test_an_authorized_client_reaches_only_its_target_ports(parts):
     controller.handle(_established())
 
     assert management.calls == [("allow", 7, 1, ('push "route 10.50.3.3 255.255.255.255"',))]
-    assert firewall.allowed == {("100.96.0.2", "10.50.3.3", (22, 3389))}
+    assert firewall.allowed == {("100.96.0.2", (("10.50.3.3", (22, 3389)),))}
+
+
+def test_an_authorized_client_gets_routes_and_exact_ports_for_every_target(parts):
+    controller, management, portal, firewall, _clock = parts
+    portal.authorize_result = Grant(
+        "s-1",
+        (
+            TargetGrant("10.50.3.3", (22,)),
+            TargetGrant("10.50.3.4", (3389,)),
+        ),
+        15,
+    )
+
+    controller.handle(_connect())
+    controller.handle(_established())
+
+    assert management.calls == [
+        (
+            "allow",
+            7,
+            1,
+            (
+                'push "route 10.50.3.3 255.255.255.255"',
+                'push "route 10.50.3.4 255.255.255.255"',
+            ),
+        )
+    ]
+    assert firewall.allowed == {
+        (
+            "100.96.0.2",
+            (("10.50.3.3", (22,)), ("10.50.3.4", (3389,))),
+        )
+    }
 
 
 def test_stale_heartbeat_termination_does_not_kill_an_already_disconnected_client(parts):
@@ -360,7 +393,7 @@ def test_asynchronous_authorization_failure_stops_the_pool(parts):
 def test_slow_batch_termination_cannot_delay_revocation_of_other_clients_without_bound(parts):
     controller, management, portal, _firewall, clock = parts
     controller.handle(_connect(cid=7))
-    portal.authorize_result = Grant("s-2", "10.50.3.4", (22,), 15)
+    portal.authorize_result = Grant("s-2", (TargetGrant("10.50.3.4", (22,)),), 15)
     controller.handle(_connect(cid=8))
     portal.heartbeat_result = ({"s-1", "s-2"}, 15)
 

@@ -51,8 +51,9 @@ class PortalPort(Protocol):
 class FirewallPort(Protocol):
     """Per-client forwarding allowances."""
 
-    def allow(self, client: str, target: str, ports: tuple[int, ...]) -> None: ...
-    def revoke(self, client: str, target: str, ports: tuple[int, ...]) -> None: ...
+    def allow(self, client: str, targets: tuple[tuple[str, tuple[int, ...]], ...]) -> None: ...
+
+    def revoke(self, client: str, targets: tuple[tuple[str, tuple[int, ...]], ...]) -> None: ...
 
 
 class CrlPort(Protocol):
@@ -67,8 +68,7 @@ class Session:
     """One admitted client and what it may reach."""
 
     session_id: str
-    target: str
-    ports: tuple[int, ...]
+    targets: tuple[tuple[str, tuple[int, ...]], ...]
     address: str | None = None
 
 
@@ -164,11 +164,14 @@ class Controller:
             self._management.deny(event.cid, kid, "portal unavailable")
             return
         with self._lock:
-            self._sessions[event.cid] = Session(grant.session, grant.target, grant.ports)
-        _LOGGER.info(
-            "allow cid=%s session=%s target=%s ports=%s", event.cid, grant.session, grant.target, list(grant.ports)
+            targets = tuple((target.target, target.ports) for target in grant.targets)
+            self._sessions[event.cid] = Session(grant.session, targets)
+        _LOGGER.info("allow cid=%s session=%s target_count=%s", event.cid, grant.session, len(targets))
+        self._management.allow(
+            event.cid,
+            kid,
+            [f'push "route {target} 255.255.255.255"' for target, _ports in targets],
         )
-        self._management.allow(event.cid, kid, [f'push "route {grant.target} 255.255.255.255"'])
 
     def _reauth(self, event: ClientEvent) -> None:
         kid = event.kid if event.kid is not None else 0
@@ -199,7 +202,7 @@ class Controller:
                 self._management.kill(event.cid)
                 return
             try:
-                self._firewall.allow(address, session.target, session.ports)
+                self._firewall.allow(address, session.targets)
             # the client is killed; firewall errors are logged by class only
             except Exception as error:  # noqa: BLE001
                 _LOGGER.error(
@@ -217,7 +220,7 @@ class Controller:
                 return
             if session.address:
                 try:
-                    self._firewall.revoke(session.address, session.target, session.ports)
+                    self._firewall.revoke(session.address, session.targets)
                 # fail closed with the authored termination error; class-only log
                 except Exception as error:  # noqa: BLE001
                     _LOGGER.error("revoke failed cid=%s exc_type=%s", event.cid, type(error).__name__, exc_info=False)
@@ -242,7 +245,7 @@ class Controller:
             forwarding_removed = session.address is None
             if session.address:
                 try:
-                    self._firewall.revoke(session.address, session.target, session.ports)
+                    self._firewall.revoke(session.address, session.targets)
                     forwarding_removed = True
                 # checked below: a kept allowance raises; class-only log
                 except Exception as error:  # noqa: BLE001

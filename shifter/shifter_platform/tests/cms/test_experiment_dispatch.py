@@ -9,6 +9,7 @@ from uuid import UUID
 import pytest
 from django.core.exceptions import ObjectDoesNotExist
 
+from shared.exceptions import CMSError
 from tests.cms.experiment_admission_fixtures import admit, experiment_inputs
 from tests.cms.test_runtime_plugins import tenant
 from tests.cms.test_trial_archives import custody
@@ -28,12 +29,17 @@ class FakeEngine:
     capacity: int = 10
     collect_requests: list[tuple[UUID, bool]] = field(default_factory=list)
 
-    def create_disposable_worker(self, credential, *, scope, worker_id, experiment_id, trial_id):
+    def create_disposable_worker(self, credential, *, scope, worker_id, experiment_id, trial_id, profile_binding):
         if worker_id not in self.workers:
             if len(self.workers) >= self.capacity:
                 raise ValueError("Worker capacity is unavailable")
             self.workers[worker_id] = SimpleNamespace(
-                status="provisioning", qualified=False, retiring=False, retired=False, trial=trial_id
+                status="provisioning",
+                qualified=False,
+                retiring=False,
+                retired=False,
+                trial=trial_id,
+                profile_binding=profile_binding,
             )
         return self.workers[worker_id]
 
@@ -128,10 +134,9 @@ def run(dispatch, operation="reconcile", **options):
 
 def finish(dispatch, worker_id, entry, *, attempt_id, run_id=None, run_status=None, limitations=()):
     """The worker exported a sealed archive for the expected attempt and trial SDL."""
-    from shared.raes.experiment_dispatch_inputs import trial_scenario_bytes
+    from shared.raes.experiment_dispatch_inputs import trial_scenario_sha256
 
-    inputs = dispatch.batch.inputs
-    scenario = "sha256:" + hashlib.sha256(trial_scenario_bytes(inputs, entry.plan_entry_id)).hexdigest()
+    scenario = trial_scenario_sha256(dispatch.batch.inputs, entry.plan_entry_id)
     raw = trial_record_archive(
         run_id=run_id or entry.run_id,
         attempt_id=attempt_id,
@@ -159,6 +164,10 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert len(dispatch.engine.workers) == 1
 
     worker_id = next(iter(dispatch.engine.workers))
+    # #2924: the worker uses the exact host profile that admission bound to the batch.
+    binding = dispatch.engine.workers[worker_id].profile_binding
+    assert binding.model_dump(mode="json") == dispatch.batch.inputs["worker_profile"]
+    assert binding.name == "default"
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["waiting-for-worker"]
     dispatch.engine.workers[worker_id].status = "ready"
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["trial-started"]
@@ -178,8 +187,7 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     assert unit["plan"] == dispatch.batch.inputs["plan"]
     assert unit["snapshot"] == json.loads(scenario_bytes)
     assert unit["material"] == {
-        name: dispatch.batch.inputs[name]
-        for name in ("experiment", "task", "capture_specs", "authority")
+        name: dispatch.batch.inputs[name] for name in ("experiment", "task", "capture_specs", "authority")
     }
     assert (
         "sha256:" + hashlib.sha256(scenario_bytes).hexdigest()
@@ -191,6 +199,15 @@ def test_dispatch_runs_each_trial_once_through_collection_retirement_and_cleanup
     entry = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
     again, _deadline = stage_trial(dispatch.actor.credential, dispatch.organization.uuid, dispatch.batch.inputs, entry)
     assert again == staged
+    # #2922: dispatch stages the exact stored snapshot and refuses one that differs from its admitted digest.
+    from cms.models import ExperimentSnapshot
+
+    stored = ExperimentSnapshot.objects.get(batch_id=entry.batch_id, plan_entry_id=entry.plan_entry_id)
+    assert scenario_bytes == stored.snapshot_json.encode()
+    ExperimentSnapshot.objects.filter(pk=stored.pk).update(snapshot_json=stored.snapshot_json + " ")
+    with pytest.raises(CMSError, match="admitted inputs"):
+        stage_trial(dispatch.actor.credential, dispatch.organization.uuid, dispatch.batch.inputs, entry)
+    ExperimentSnapshot.objects.filter(pk=stored.pk).update(snapshot_json=stored.snapshot_json)
     # The coordinator restarted: the stored trial is running, so nothing starts again.
     assert [step.action for step in run(dispatch) if step.execution_attempt_id] == ["running"]
 
@@ -322,6 +339,36 @@ def test_a_trial_with_missing_data_fails_and_gets_one_fresh_trial_on_a_new_worke
     fresh.state = "failed"
     args = (dispatch.actor.credential, dispatch.organization.uuid, dispatch.batch.inputs)
     assert _experiment_replacement.rerun_failed_entry(*args, fresh) == "none"
+
+
+@pytest.mark.parametrize("status", ["failed", "destroying", "destroyed"])
+def test_failed_worker_setup_waits_for_verified_cleanup_before_replacement(dispatch, monkeypatch, status):
+    from cms.models import ExperimentEntry
+    from cms.services import _experiment_replacement
+
+    monkeypatch.setattr(_experiment_replacement, "_allowed", lambda _inputs, ordinal: ordinal <= 1)
+    run(dispatch, "start")
+    worker_id = next(iter(dispatch.engine.workers))
+    worker = dispatch.engine.workers[worker_id]
+    worker.status = status
+    failed = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
+
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["worker-setup-failed"]
+    failed.refresh_from_db()
+    assert failed.state == "failed" and failed.receipt_id is None
+    assert worker_id not in dispatch.engine.trials
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["retiring"]
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["waiting-for-cleanup"]
+    assert not ExperimentEntry.objects.filter(replaces=failed).exists()
+    assert not failed.cleanup_receipt_json
+
+    worker.retired = True
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["cleanup-recorded"]
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["rerun-recorded"]
+    fresh = ExperimentEntry.objects.get(replaces=failed)
+    assert fresh.state == "pending" and fresh.token is None
+    failed.refresh_from_db()
+    assert failed.state == "failed" and failed.receipt_id is None and failed.cleanup_receipt_json
 
 
 def test_the_replacement_policy_bounds_fresh_trials_for_a_failed_trial():

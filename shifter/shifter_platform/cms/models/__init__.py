@@ -29,7 +29,7 @@ from cms.models.catalogs import (
     InstanceType,
     OperatingSystem,
 )
-from cms.models.experiment_batches import ExperimentBatch, ExperimentEntry
+from cms.models.experiment_batches import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
 from cms.models.files import FileAssetUse, NamedFileAsset
 from cms.models.lease_policy import (
     MissionControlGroupLeasePolicy,
@@ -67,6 +67,7 @@ __all__ = [
     "EntityBase",
     "ExperimentBatch",
     "ExperimentEntry",
+    "ExperimentSnapshot",
     "FileAsset",
     "FileAssetUse",
     "Instance",

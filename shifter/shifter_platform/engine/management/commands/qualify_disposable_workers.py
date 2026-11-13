@@ -24,12 +24,14 @@ from engine.services import (
     resume_worker_cleanup,
     retire_disposable_worker,
     worker_credential_scope,
+    worker_profile_binding,
 )
 from management.services import bootstrap_principal_uuid, issue_worker_validation_credentials
 from shared.authorization import TargetRef, configured_authorization_provider
 from shared.authorization.policy import scope_parent
 from shared.bootstrap_facts import load_identity_bootstrap_facts
 from shared.credentials import CredentialContext
+from shared.disposable_workers import DEFAULT_PROFILE
 from shared.identity_scope import ResourceScope
 from shared.private_files import read_private_file
 from workspaces.services import get_identity_cutover_state, hierarchy_target_scope
@@ -48,6 +50,7 @@ class Command(BaseCommand):
         parser.add_argument("--scope-kind", required=True, choices=("account", "organization", "workspace"))
         parser.add_argument("--scope-id", required=True, type=UUID)
         parser.add_argument("--policy-file")
+        parser.add_argument("--profile", default=DEFAULT_PROFILE, help="Published worker host profile to qualify")
         parser.add_argument("--timeout", default=900, type=int)
         parser.add_argument("--recover", nargs="+", type=UUID)
 
@@ -73,15 +76,21 @@ class Command(BaseCommand):
                     self._wait(credential, identifiers, parsed.timeout, retiring=True)
                     result = {"worker_ids": list(map(str, identifiers)), "cleanup_verified": True}
                 else:
-                    result = self._smoke(credential, scope, identifiers, parsed.timeout)
+                    result = self._smoke(credential, scope, identifiers, parsed.timeout, parsed.profile)
         except Exception:  # noqa: BLE001  # suppress private input/provider causes, including --traceback
             raise CommandError("Worker qualification failed; inspect owned worker IDs and recovery state") from None
         self.stdout.write(json.dumps(result, sort_keys=True))
 
     def _smoke(
-        self, credential: CredentialFor, scope: ResourceScope, identifiers: tuple[UUID, ...], timeout: int
+        self,
+        credential: CredentialFor,
+        scope: ResourceScope,
+        identifiers: tuple[UUID, ...],
+        timeout: int,
+        profile: str,
     ) -> dict[str, object]:
         experiment = uuid4()
+        binding = worker_profile_binding(profile)
         parent = credential(scope_parent(scope))
         qualified = []
         try:
@@ -90,7 +99,13 @@ class Command(BaseCommand):
                 """Admit one owned worker and close its thread-local database connection."""
                 close_old_connections()
                 try:
-                    create_disposable_worker(parent, scope=scope, worker_id=identifier, experiment_id=experiment)
+                    create_disposable_worker(
+                        parent,
+                        scope=scope,
+                        worker_id=identifier,
+                        experiment_id=experiment,
+                        profile_binding=binding,
+                    )
                 finally:
                     connection.close()
 

@@ -166,3 +166,16 @@ def test_invalid_apparatus_fails_before_admission(change):
         data["inner_sdl"] = "untrusted"
     with pytest.raises(ValueError):
         WorkerHostProfile.model_validate(data)
+
+
+def test_a_single_unnamed_policy_profile_loads_as_default_and_selection_is_exact():
+    """#2924: older policies keep working; a binding refuses a changed or missing profile."""
+    from shared.disposable_workers import WorkerPolicy, WorkerProfileBinding, WorkerProfileError
+
+    policy = WorkerPolicy.model_validate({"profile": profile_data(), "max_live": 2, "max_provisioning": 2})
+    profile = policy.select("default")
+    assert set(policy.profiles) == {"default"}
+    assert policy.select(WorkerProfileBinding(name="default", digest=profile.digest)) == profile
+    for binding in ("missing", WorkerProfileBinding(name="default", digest="sha256:" + "0" * 64)):
+        with pytest.raises(WorkerProfileError):
+            policy.select(binding)

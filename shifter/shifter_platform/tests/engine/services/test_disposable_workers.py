@@ -101,14 +101,35 @@ def test_create_commits_native_launch_and_durable_custody(apparatus):
     assert intent.payload["resource"] == "raes-range"
 
 
+def test_a_batch_binding_selects_its_named_profile_and_refuses_a_changed_one(apparatus):
+    """#2924: a worker uses the exact profile that its batch retains."""
+    from engine.models import DisposableWorker
+    from engine.services import configure_worker_policy, worker_profile_binding
+    from shared.disposable_workers import WorkerProfileBinding, WorkerProfileError
+
+    other = apparatus.profile | {"image_id": "9876543210987654321"}
+    configure_worker_policy(
+        apparatus.credential,
+        {"profiles": {"default": apparatus.profile, "other": other}, "max_live": 2, "max_provisioning": 2},
+    )
+    binding = worker_profile_binding("other")
+    row = DisposableWorker.objects.get(pk=create(apparatus, trial_id=uuid4(), profile_binding=binding).worker_id)
+    assert (row.profile_digest, row.profile["image_id"]) == (binding.digest, other["image_id"])
+    stale = WorkerProfileBinding(name="default", digest="sha256:" + "0" * 64)
+    with pytest.raises(WorkerProfileError):
+        create(apparatus, trial_id=uuid4(), profile_binding=stale)
+    with pytest.raises(WorkerProfileError):
+        worker_profile_binding("missing")
+
+
 def test_dispatch_carries_selected_worker_hardware(apparatus):
     from engine.models import OperationInput, ProvisionerLaunchIntent, WorkerPolicyRecord
     from engine.services import configure_worker_policy
     from shared.raes.operation_input import parse_raes_operation_input
 
     policy = WorkerPolicyRecord.objects.get().configuration
-    policy["profile"] = arm_profile_data() | {
-        key: policy["profile"][key] for key in ("capacity_scope_ref", "capacity_partition")
+    policy["profiles"]["default"] = arm_profile_data() | {
+        key: policy["profiles"]["default"][key] for key in ("capacity_scope_ref", "capacity_partition")
     }
     configure_worker_policy(apparatus.credential, policy)
     create(apparatus)
@@ -163,7 +184,7 @@ def test_create_replay_retains_apparatus_after_operator_policy_change(apparatus)
     worker = create(apparatus)
     original = DisposableWorker.objects.get(pk=worker.worker_id).profile
     policy = WorkerPolicyRecord.objects.get().configuration
-    policy["profile"]["docker_version"] = "28.5.2"
+    policy["profiles"]["default"]["docker_version"] = "28.5.2"
     configure_worker_policy(apparatus.credential, policy)
     assert create(apparatus, worker_id=worker.worker_id).worker_id == worker.worker_id
     assert DisposableWorker.objects.get(pk=worker.worker_id).profile == original
@@ -302,7 +323,7 @@ def test_optional_software_uses_apparatus_protocol_without_pack(apparatus, prepa
     installation = install_runtime_plugin(apparatus.credential, apparatus.scope.organization_uuid, manifest)
     RuntimePluginInstallation.objects.filter(pk=installation.id).update(state="ready")
     configuration = WorkerPolicyRecord.objects.get().configuration
-    configuration["profile"]["software"] = {
+    configuration["profiles"]["default"]["software"] = {
         "installation_id": str(installation.id),
         "organization_uuid": str(apparatus.scope.organization_uuid),
         "manifest_digest": installation.manifest_digest,

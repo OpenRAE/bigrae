@@ -16,6 +16,8 @@ The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/parall
 The worker identity is a UUID derived from the attempt token, so a lost response finds the same worker.
 `claim_experiment_entry` bounds active claims to the batch concurrency.
 `create_disposable_worker` bounds live workers to the worker policy and capacity reservations.
+It creates each worker from the host profile that the batch retains, and refuses a profile that changed or no longer exists.
+Dispatch reports that entry as an error rather than a capacity wait.
 A failure in one entry is reported as `error` for that entry; the pass continues with the other entries.
 
 ## Engine worker trials
@@ -42,11 +44,13 @@ The coordinator stages three objects under `trial-inputs/<attempt>/` in the asse
 | `trial-unit.json` | The admitted plan, the plan entry ID, and the entry's instantiated snapshot |
 | `trial.json` | Run ID, attempt ID, deadline, and the digests of `scenario.sdl` and `trial-unit.json` |
 
-The coordinator instantiates the entry from the retained plan and family SDL.
+The coordinator reads the snapshot of the entry from its `ExperimentSnapshot` row.
 It refuses the entry when the snapshot digest differs from the digest that admission recorded.
+
 The deadline is the staging time plus the entry's admitted attempt timeout.
 It is persisted on the entry before upload, so every stager writes identical bytes.
 An existing object with different bytes is refused.
+
 The worker image supplies the trial runtime and its environment pack.
 The installed adapter that controls trials can also validate participant owners at admission.
 The provisioner copies the objects to the worker's fixed trial input directory.
@@ -96,6 +100,10 @@ Each obligation that the outcome triggers reports success, with the worker absen
 The clean-state claim is `verified-clean`: the destroyed worker leaves no residual state, and a fresh trial gets a new worker.
 
 ## Trial replacement
+
+Worker setup failure records a failed attempt without a trial archive.
+Dispatch retires a failed, destroyed, or retiring worker that has no trial.
+It records cleanup only after Engine verifies worker absence, then applies the existing replacement policy.
 
 A trial fails when its archive reports a run status other than `completed`, or when its seal lists a gap in the required trial data.
 LilRAE lists each gap as a `required-data-missing` limitation.

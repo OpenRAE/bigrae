@@ -24,8 +24,9 @@ from uuid import NAMESPACE_URL, UUID, uuid5
 from django.conf import settings
 from django.core.exceptions import ObjectDoesNotExist
 
-from cms.models import ExperimentEntry
+from cms.models import ExperimentEntry, ExperimentSnapshot
 from shared.cloud import get_object_storage
+from shared.disposable_workers import WorkerProfileBinding, WorkerProfileError
 from shared.exceptions import CMSError
 from shared.raes.experiment_admission import experiment_archive_identity
 from shared.raes.experiment_dispatch_inputs import (
@@ -102,14 +103,30 @@ def _attempt_token(row: ExperimentEntry) -> UUID:
 
 
 def _create_worker(
-    credential: CredentialContext, organization_uuid: UUID, scope: ResourceScope, row: ExperimentEntry
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    scope: ResourceScope,
+    row: ExperimentEntry,
+    inputs: dict[str, Any],
 ) -> UUID:
-    """Create or replay the attempt's worker and bind it to the attempt."""
+    """Create or replay the attempt's worker from the batch's retained host profile."""
     from engine.services import create_disposable_worker
 
     token = _attempt_token(row)
     worker_id = worker_id_for(token)
-    create_disposable_worker(credential, scope=scope, worker_id=worker_id, experiment_id=row.batch_id, trial_id=token)
+    # A batch admitted before profile binding has none; it keeps the default profile.
+    binding = inputs.get("worker_profile")
+    try:
+        create_disposable_worker(
+            credential,
+            scope=scope,
+            worker_id=worker_id,
+            experiment_id=row.batch_id,
+            trial_id=token,
+            profile_binding=WorkerProfileBinding.model_validate(binding) if binding else None,
+        )
+    except WorkerProfileError:
+        raise CMSError("The batch's worker profile is unavailable or changed") from None
     record_experiment_worker(credential, organization_uuid, token, f"{_WORKER_REF_PREFIX}{worker_id}")
     return worker_id
 
@@ -118,7 +135,7 @@ def start_experiment_dispatch(
     credential: CredentialContext, organization_uuid: UUID, batch_id: UUID, *, scope: ResourceScope
 ) -> list[DispatchStep]:
     """Claim pending entries up to the batch limit, create their workers, then reconcile."""
-    _authorize(credential, organization_uuid, "manage_content")
+    inputs = _load(_authorize(credential, organization_uuid, "manage_content"), batch_id).inputs
     for row in _entries(organization_uuid, batch_id):
         if row.state != "pending":
             continue
@@ -127,7 +144,7 @@ def start_experiment_dispatch(
             break
         row.refresh_from_db()
         try:
-            _create_worker(credential, organization_uuid, scope, row)
+            _create_worker(credential, organization_uuid, scope, row, inputs)
         except ValueError:
             # Worker capacity is exhausted; reconcile retries the same worker identity.
             break
@@ -163,7 +180,15 @@ def stage_trial(
     )
     storage = get_object_storage()
     prefix = f"{TRIAL_INPUT_PREFIX}{token}/"
-    scenario_bytes = trial_scenario_bytes(inputs, row.plan_entry_id)
+    stored = (
+        ExperimentSnapshot.objects.filter(batch_id=row.batch_id, plan_entry_id=row.plan_entry_id)
+        .values_list("snapshot_json", flat=True)
+        .first()
+    )
+    try:
+        scenario_bytes = trial_scenario_bytes(inputs, row.plan_entry_id, stored)
+    except ValueError:
+        raise CMSError("The stored trial snapshot differs from the admitted inputs") from None
     unit = _stage_object(
         storage, prefix + "trial-unit.json", trial_unit_bytes(inputs, row.plan_entry_id, scenario_bytes)
     )
@@ -314,18 +339,41 @@ def _advance(
     from engine.services import get_disposable_worker, get_worker_trial
 
     if not row.worker_ref:
-        action = "waiting" if collect_only else _create_and_report(credential, organization_uuid, scope, row)
+        action = "waiting" if collect_only else _create_and_report(credential, organization_uuid, scope, row, inputs)
         return action, None
     worker_id = _worker_id(row)
     worker = get_disposable_worker(credential, worker_id)
     try:
         trial = get_worker_trial(credential, worker_id)
     except ObjectDoesNotExist:
-        unstarted = collect_only or worker.retiring
-        return (
-            "not-started" if unstarted else _start_trial(credential, organization_uuid, inputs, row, worker_id)
-        ), None
+        if row.state == "failed" or worker.status in {"failed", "destroying", "destroyed"} or worker.retiring:
+            action = _advance_failed_setup(credential, organization_uuid, inputs, row, worker_id, worker)
+        elif collect_only:
+            action = "not-started"
+        else:
+            action = _start_trial(credential, organization_uuid, inputs, row, worker_id)
+        return action, None
     return _advance_started(credential, organization_uuid, inputs, row, worker_id, worker, trial), trial
+
+
+def _advance_failed_setup(
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    inputs: dict[str, Any],
+    row: ExperimentEntry,
+    worker_id: UUID,
+    worker: WorkerView,
+) -> str:
+    """Retain setup failure, then use normal retirement and verified cleanup."""
+    if row.state != "failed":
+        action = _fail_uncollected(credential, organization_uuid, row, "worker-setup-failed")
+    elif worker.retired:
+        action = _record_cleanup(credential, organization_uuid, inputs, row, worker_id, "failed")
+    elif not worker.retiring:
+        action = _retire(credential, worker_id)
+    else:
+        action = "waiting-for-cleanup"
+    return action
 
 
 def _advance_started(
@@ -386,17 +434,21 @@ def _advance_collection(
 
 
 def _fail_uncollected(credential: CredentialContext, organization_uuid: UUID, row: ExperimentEntry, cause: str) -> str:
-    """Record a trial that ended without a collectable archive as a failed attempt."""
+    """Record a failed attempt without a collectable trial archive."""
     observe_experiment_attempt(credential, organization_uuid, _attempt_token(row), "failed")
     return cause
 
 
 def _create_and_report(
-    credential: CredentialContext, organization_uuid: UUID, scope: ResourceScope, row: ExperimentEntry
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    scope: ResourceScope,
+    row: ExperimentEntry,
+    inputs: dict[str, Any],
 ) -> str:
     """Create the attempt's worker, or report that worker capacity is exhausted."""
     try:
-        _create_worker(credential, organization_uuid, scope, row)
+        _create_worker(credential, organization_uuid, scope, row, inputs)
     except ValueError:
         return "waiting-for-capacity"
     return "worker-created"
@@ -418,7 +470,9 @@ def reconcile_experiment_dispatch(
         trial: WorkerTrialView | None = None
         try:
             if row.token is None:
-                action = _dispatch_replacement(credential, organization_uuid, scope, row, collect_only=collect_only)
+                action = _dispatch_replacement(
+                    credential, organization_uuid, inputs, scope, row, collect_only=collect_only
+                )
             elif row.cleanup_receipt_json:
                 action = rerun_failed_entry(credential, organization_uuid, inputs, row)
             else:
@@ -435,6 +489,7 @@ def reconcile_experiment_dispatch(
 def _dispatch_replacement(
     credential: CredentialContext,
     organization_uuid: UUID,
+    inputs: dict[str, Any],
     scope: ResourceScope,
     row: ExperimentEntry,
     *,
@@ -446,7 +501,7 @@ def _dispatch_replacement(
     if claim_experiment_entry(credential, organization_uuid, row.batch_id, row.plan_entry_id) is None:
         return "waiting-for-capacity"
     row.refresh_from_db()
-    return _create_and_report(credential, organization_uuid, scope, row)
+    return _create_and_report(credential, organization_uuid, scope, row, inputs)
 
 
 def stop_experiment_dispatch(
