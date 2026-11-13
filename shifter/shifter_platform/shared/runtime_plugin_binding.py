@@ -27,6 +27,8 @@ from shifter_adapter_sdk.runtime import (
 
 from shared.runtime_file_inputs import RuntimeFileBinding
 
+RUNTIME_PLUGIN_PLANNING_SECONDS = 30 * 60
+
 _GCE_IMAGE_REF = re.compile(r"^projects/[a-z0-9][-a-z0-9.:]*/global/images/[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$")
 _GCE_MACHINE_IMAGE_REF = re.compile(
     r"^projects/[a-z0-9][-a-z0-9.:]*/global/machineImages/[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$"
