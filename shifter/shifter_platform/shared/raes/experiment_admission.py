@@ -308,7 +308,7 @@ class _ArtifactCustody:
             raise ValueError("Referenced experiment artifact is not exactly installed")
         return relative, artifact_id
 
-    def _retain_bytes(self, relative: str, reference: ExperimentArtifactRefModel | str, media_type: str) -> int:
+    def _retain_bytes(self, relative: str, reference: ExperimentArtifactRefModel | str) -> int:
         """Verify and cache original bytes once, enforcing the aggregate byte limit."""
         if relative in self.payload:
             return 0
@@ -332,7 +332,7 @@ class _ArtifactCustody:
         added = 0
         for reference in references:
             relative, artifact_id = self._reference(reference, exact_descriptor)
-            added += self._retain_bytes(relative, reference if exact_descriptor else artifact_id, reference.media_type)
+            added += self._retain_bytes(relative, reference if exact_descriptor else artifact_id)
             retained = self.payload[relative]
             if (
                 reference.checksum.algorithm != "sha256"
