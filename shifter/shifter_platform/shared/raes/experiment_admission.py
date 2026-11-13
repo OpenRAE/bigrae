@@ -45,6 +45,7 @@ from raes_processor.trial_compiler import compile_admitted_trial_plan
 from raes_processor.trial_realization import instantiate_admitted_trial_entry
 from raes_processor.trial_scheduler import BatchSchedule, plan_batch_schedule
 
+from shared.audit.integrity import _SECRET_KEY_SUFFIXES, _SECRET_KEYS
 from shared.disposable_workers import WorkerHostProfile, WorkerProfileBinding
 from shared.raes.pack_delivery_inputs import pack_artifact_relative_path
 from shared.raes.participant_owner_replay import (
@@ -54,8 +55,31 @@ from shared.raes.participant_owner_replay import (
 from shared.raes.participant_owner_replay import validation_requests as _validation_requests
 from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
 from shared.raes.worker_apparatus import require_worker_scenario, worker_backend_manifest, worker_realization_envelope
+from shared.schemas._raes_validation import _reject_secret_value
 
 ExperimentInputError = RaesError
+
+_REDACTED_VALUES: tuple[object, ...] = (None, "", False, "[REDACTED]", "<redacted>", "REDACTED", [], {})
+
+
+def _reject_operator_credentials(value: object) -> None:
+    """Refuse a credential in operator configuration or an owner report before SQL retention.
+
+    Scenario content is retained unchanged. This check applies only to operator-supplied documents.
+    """
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized = key.lower().replace("-", "_")
+            secret = normalized in _SECRET_KEYS or normalized.endswith(_SECRET_KEY_SUFFIXES)
+            if secret and child not in _REDACTED_VALUES:
+                raise ValueError("Operator document contains a credential field")
+            _reject_operator_credentials(child)
+    elif isinstance(value, list):
+        for child in value:
+            _reject_operator_credentials(child)
+    elif isinstance(value, str):
+        _reject_secret_value("operator document", value, error_cls=ValueError)
+
 
 MAX_RETAINED_BYTES = 64 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
@@ -263,8 +287,6 @@ def _documents(root: Path, experiment: PackExperiment) -> dict[str, str]:
     return documents
 
 
-
-
 class _ArtifactCustody:
     """Cache exact inventory-bound input bytes under one aggregate retention budget."""
 
@@ -353,6 +375,7 @@ def validate_experiment_cleanup(inputs: dict[str, Any], entry_id: str, attempt_i
     """Validate a trusted owner's cleanup report against the retained trial authority."""
     try:
         parsed = parse_bounded_json_object(canonical_json_bytes(receipt), max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
+        _reject_operator_credentials(parsed)
         plan = parse_admitted_trial_plan_json(canonical_json_bytes(inputs["plan"]))
         entry = plan.entries[entry_id]
         cleanup = plan.cleanup_plans[entry.execution_controls.cleanup_plan_ref]
@@ -462,6 +485,7 @@ def compile_pack_experiment(
     dependencies = dependency_tuple()
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
+    _reject_operator_credentials(parsed)
     configuration, apparatus, envelope = _bind_worker_apparatus(
         ExperimentAuthority.model_validate(parsed), installation.worker_profile
     )
