@@ -257,3 +257,24 @@ The record retains the admitted plan from `trial-unit.json` and is `partial`, be
 Seal the archive with a `TrialSeal` in `seal.json`.
 The seal inventory names every member except `seal.json` and the optional `checksums.sha256`.
 The executable must not upload data or create cloud resources.
+
+## Assigned trials
+
+An apparatus plugin can declare `trial.assigned` instead of `trial.control`.
+It uses the same executable, paths, and verbs, but BigRAE is then the RAES coordinator for the trial.
+The RAES runtime on the worker decides what runs. The adapter supplies the backend components and the trial services.
+
+Before `start`, the host stages these files in `/var/lib/bigrae/trial/input`:
+
+| File | Content |
+| --- | --- |
+| `assigned-trial.json` | `AssignedTrialInput`: run ID, attempt ID, UTC deadline, and the SHA-256 digests of `assignment.json` and `inputs.json` |
+| `assignment.json` | The RAES `assigned-trial/v1` assignment, with the sealed plan |
+| `inputs.json` | `AssignedTrialInputs`: the original realization inputs except the scenario family |
+
+The adapter loads the scenario family from its installed pack and refuses a family whose digest differs from `family_digest`.
+Before `stop`, the host also stages `control.json`, the RAES coordinator's `assigned-trial-control/v1` intent.
+
+`start` binds the assignment with `bind_assigned_trial` and advances it until the runtime reports a terminal state.
+`export` writes one archive with `outcome.json`, the RAES `trial-outcome/v1` at that lifecycle cut, and the evidence that the outcome references.
+Seal the archive with an `AssignedTrialSeal` in `seal.json`. The outcome stays untrusted until the coordinator verifies and ingests it.
