@@ -324,6 +324,36 @@ def test_a_trial_with_missing_data_fails_and_gets_one_fresh_trial_on_a_new_worke
     assert _experiment_replacement.rerun_failed_entry(*args, fresh) == "none"
 
 
+@pytest.mark.parametrize("status", ["failed", "destroying", "destroyed"])
+def test_failed_worker_setup_waits_for_verified_cleanup_before_replacement(dispatch, monkeypatch, status):
+    from cms.models import ExperimentEntry
+    from cms.services import _experiment_replacement
+
+    monkeypatch.setattr(_experiment_replacement, "_allowed", lambda _inputs, ordinal: ordinal <= 1)
+    run(dispatch, "start")
+    worker_id = next(iter(dispatch.engine.workers))
+    worker = dispatch.engine.workers[worker_id]
+    worker.status = status
+    failed = ExperimentEntry.objects.get(worker_ref=f"worker:{worker_id}")
+
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["worker-setup-failed"]
+    failed.refresh_from_db()
+    assert failed.state == "failed" and failed.receipt_id is None
+    assert worker_id not in dispatch.engine.trials
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["retiring"]
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["waiting-for-cleanup"]
+    assert not ExperimentEntry.objects.filter(replaces=failed).exists()
+    assert not failed.cleanup_receipt_json
+
+    worker.retired = True
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["cleanup-recorded"]
+    assert [s.action for s in run(dispatch) if s.worker_id == str(worker_id)] == ["rerun-recorded"]
+    fresh = ExperimentEntry.objects.get(replaces=failed)
+    assert fresh.state == "pending" and fresh.token is None
+    failed.refresh_from_db()
+    assert failed.state == "failed" and failed.receipt_id is None and failed.cleanup_receipt_json
+
+
 def test_the_replacement_policy_bounds_fresh_trials_for_a_failed_trial():
     from cms.services._experiment_replacement import _allowed
 

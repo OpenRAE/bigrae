@@ -321,11 +321,30 @@ def _advance(
     try:
         trial = get_worker_trial(credential, worker_id)
     except ObjectDoesNotExist:
-        unstarted = collect_only or worker.retiring
+        if row.state == "failed" or worker.status in {"failed", "destroying", "destroyed"} or worker.retiring:
+            return _advance_failed_setup(credential, organization_uuid, inputs, row, worker_id, worker), None
         return (
-            "not-started" if unstarted else _start_trial(credential, organization_uuid, inputs, row, worker_id)
+            "not-started" if collect_only else _start_trial(credential, organization_uuid, inputs, row, worker_id)
         ), None
     return _advance_started(credential, organization_uuid, inputs, row, worker_id, worker, trial), trial
+
+
+def _advance_failed_setup(
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    inputs: dict[str, Any],
+    row: ExperimentEntry,
+    worker_id: UUID,
+    worker: WorkerView,
+) -> str:
+    """Retain setup failure, then use normal retirement and verified cleanup."""
+    if row.state != "failed":
+        return _fail_uncollected(credential, organization_uuid, row, "worker-setup-failed")
+    if worker.retired:
+        return _record_cleanup(credential, organization_uuid, inputs, row, worker_id, "failed")
+    if not worker.retiring:
+        return _retire(credential, worker_id)
+    return "waiting-for-cleanup"
 
 
 def _advance_started(
@@ -386,7 +405,7 @@ def _advance_collection(
 
 
 def _fail_uncollected(credential: CredentialContext, organization_uuid: UUID, row: ExperimentEntry, cause: str) -> str:
-    """Record a trial that ended without a collectable archive as a failed attempt."""
+    """Record a failed attempt without a collectable trial archive."""
     observe_experiment_attempt(credential, organization_uuid, _attempt_token(row), "failed")
     return cause
 
