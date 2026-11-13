@@ -9,7 +9,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from itertools import batched
 from pathlib import Path
-from typing import Any, BinaryIO
+from typing import Any
 from uuid import UUID, uuid4
 
 from django.conf import settings
@@ -191,112 +191,90 @@ def admit_experiment_batch(
     Instantiated trial snapshots go to a temporary file, so memory does not grow with the number of trials.
     """
     with tempfile.TemporaryFile(prefix="experiment-snapshots-") as snapshots:
-        return _admit_experiment_batch(
-            credential,
-            organization_uuid,
-            scenario_id=scenario_id,
-            experiment_id=experiment_id,
-            authority=authority,
-            concurrency=concurrency,
-            experiment_version=experiment_version,
-            snapshots=snapshots,
-        )
-
-
-def _admit_experiment_batch(
-    credential: CredentialContext,
-    organization_uuid: UUID,
-    *,
-    scenario_id: str,
-    experiment_id: str,
-    authority: object,
-    concurrency: int,
-    experiment_version: str | None,
-    snapshots: BinaryIO,
-) -> RetainedExperimentBatch:
-    """Compile, then publish the record, its entries and their snapshots in one transaction."""
-    operator = require_content_scope(credential, ResourceScope("installation"), "manage_content")
-    admission = _authorize(operator, organization_uuid, "manage_content")
-    source = RaesPackageSource.objects.filter(scenario_id=scenario_id, organization_uuid=organization_uuid).first()
-    if source is None or content_scope(source) != admission.scope:
-        raise CMSError(_UNAVAILABLE)
-    destination = _destination(organization_uuid)
-    try:
-        with _pack_snapshot(source) as root:
-            if not verify_pack_digest(root, source.package_digest):
-                raise ValueError("Registered pack digest changed")
-            payload, written = compile_pack_experiment(
-                root,
-                experiment_id=experiment_id,
-                authority=authority,
-                concurrency=concurrency,
-                experiment_version=experiment_version,
-                owner_validation=_owner_validation(organization_uuid),
-                snapshots=snapshots,
-            )
-    except (
-        ValueError,
-        OSError,
-        RaesPackageError,
-        PackDigestError,
-        ValidationError,
-        CloudStorageError,
-        ExperimentInputError,
-    ):
-        raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
-    payload.update(
-        organization_uuid=str(organization_uuid),
-        destination=destination,
-        source={"package_digest": source.package_digest, "package_version": source.package_version},
-    )
-    payload["resource_limits"]["pack_staging"] = {
-        "max_archive_bytes": settings.RAES_PACKAGE_MAX_ARCHIVE_BYTES,
-        "max_expanded_bytes": settings.RAES_PACKAGE_MAX_UNCOMPRESSED_BYTES,
-        "max_entries": settings.RAES_PACKAGE_MAX_ENTRIES,
-    }
-    try:
-        retained = encode_retained(payload)
-    except (ValueError, TypeError):
-        raise CMSError("Experiment retained inputs exceed supported limits") from None
-    digest = hashlib.sha256(retained.encode()).hexdigest()
-    operator = require_content_scope(operator, ResourceScope("installation"), "manage_content")
-    admission = _authorize(operator, organization_uuid, "manage_content")
-    with transaction.atomic():
-        fence_content_scope(operator, ResourceScope("installation"))
-        _fence(admission)
-        current = RaesPackageSource.objects.select_for_update().filter(pk=source.pk).first()
-        if (
-            not _source_unchanged(current, source, admission)
-            or _destination(organization_uuid, locked=True) != destination
-        ):
+        operator = require_content_scope(credential, ResourceScope("installation"), "manage_content")
+        admission = _authorize(operator, organization_uuid, "manage_content")
+        source = RaesPackageSource.objects.filter(scenario_id=scenario_id, organization_uuid=organization_uuid).first()
+        if source is None or content_scope(source) != admission.scope:
             raise CMSError(_UNAVAILABLE)
-        row, created = ExperimentBatch.objects.get_or_create(
-            organization_uuid=organization_uuid,
-            plan_id=payload["plan"]["plan_id"],
-            defaults={"retained_json": retained, "retained_digest": digest, "concurrency": concurrency},
+        destination = _destination(organization_uuid)
+        try:
+            with _pack_snapshot(source) as root:
+                if not verify_pack_digest(root, source.package_digest):
+                    raise ValueError("Registered pack digest changed")
+                payload, written = compile_pack_experiment(
+                    root,
+                    experiment_id=experiment_id,
+                    authority=authority,
+                    concurrency=concurrency,
+                    experiment_version=experiment_version,
+                    owner_validation=_owner_validation(organization_uuid),
+                    snapshots=snapshots,
+                )
+        except (
+            ValueError,
+            OSError,
+            RaesPackageError,
+            PackDigestError,
+            ValidationError,
+            CloudStorageError,
+            ExperimentInputError,
+        ):
+            raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
+        payload.update(
+            organization_uuid=str(organization_uuid),
+            destination=destination,
+            source={"package_digest": source.package_digest, "package_version": source.package_version},
         )
-        if row.retained_digest != digest:
-            raise CMSError("Experiment admission conflicts with retained inputs")
-        if created:
-            ExperimentEntry.objects.bulk_create(
-                [
-                    ExperimentEntry(
-                        batch=row, organization_uuid=organization_uuid, plan_entry_id=key, run_id=entry["run_id"]
-                    )
-                    for key, entry in payload["plan"]["entries"].items()
-                ]
+        payload["resource_limits"]["pack_staging"] = {
+            "max_archive_bytes": settings.RAES_PACKAGE_MAX_ARCHIVE_BYTES,
+            "max_expanded_bytes": settings.RAES_PACKAGE_MAX_UNCOMPRESSED_BYTES,
+            "max_entries": settings.RAES_PACKAGE_MAX_ENTRIES,
+        }
+        try:
+            retained = encode_retained(payload)
+        except (ValueError, TypeError):
+            raise CMSError("Experiment retained inputs exceed supported limits") from None
+        digest = hashlib.sha256(retained.encode()).hexdigest()
+        operator = require_content_scope(operator, ResourceScope("installation"), "manage_content")
+        admission = _authorize(operator, organization_uuid, "manage_content")
+        with transaction.atomic():
+            fence_content_scope(operator, ResourceScope("installation"))
+            _fence(admission)
+            current = RaesPackageSource.objects.select_for_update().filter(pk=source.pk).first()
+            if (
+                not _source_unchanged(current, source, admission)
+                or _destination(organization_uuid, locked=True) != destination
+            ):
+                raise CMSError(_UNAVAILABLE)
+            row, created = ExperimentBatch.objects.get_or_create(
+                organization_uuid=organization_uuid,
+                plan_id=payload["plan"]["plan_id"],
+                defaults={"retained_json": retained, "retained_digest": digest, "concurrency": concurrency},
             )
-            try:
-                # One snapshot can be more than 1 MB; insert a small group at a time.
-                for group in batched(read_snapshots(payload, snapshots, written), 16):
-                    ExperimentSnapshot.objects.bulk_create(
-                        ExperimentSnapshot(batch=row, plan_entry_id=key, snapshot_json=snapshot.decode())
-                        for key, snapshot in group
-                    )
-            except ValueError:
-                raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
-            _audit(admission, row.id, "experiment-admitted")
-    return _project(row)
+            if row.retained_digest != digest:
+                raise CMSError("Experiment admission conflicts with retained inputs")
+            if created:
+                ExperimentEntry.objects.bulk_create(
+                    [
+                        ExperimentEntry(
+                            batch=row, organization_uuid=organization_uuid, plan_entry_id=key, run_id=entry["run_id"]
+                        )
+                        for key, entry in payload["plan"]["entries"].items()
+                    ]
+                )
+                try:
+                    # One snapshot can be more than 1 MB; insert a small group at a time.
+                    for group in batched(read_snapshots(payload, snapshots, written), 16):
+                        ExperimentSnapshot.objects.bulk_create(
+                            ExperimentSnapshot(batch=row, plan_entry_id=key, snapshot_json=snapshot.decode())
+                            for key, snapshot in group
+                        )
+                except ValueError:
+                    raise CMSError(
+                        "Experiment admission refused; verify installed inputs, versions and limits"
+                    ) from None
+                _audit(admission, row.id, "experiment-admitted")
+        return _project(row)
 
 
 def _claim(row: ExperimentEntry) -> ExperimentClaim:
