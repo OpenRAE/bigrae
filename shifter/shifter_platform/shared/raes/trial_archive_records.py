@@ -147,7 +147,7 @@ def _verify_byte_size(value: JsonObject, actual_size: int) -> None:
         raise TrialArchiveError("Declared evidence size differs from the inventory")
 
 
-def _verify_byte_references(payloads: list[JsonObject], inventory: dict[str, tuple[int, str]], run_id: str) -> None:
+def verify_byte_references(payloads: list[JsonObject], inventory: dict[str, tuple[int, str]], run_id: str) -> None:
     """Verify every nested byte reference without fetching external content."""
     for payload in payloads:
         for value in _walk(payload):
@@ -452,7 +452,7 @@ def validate_archive_records(
     ]
     for payload in payloads:
         trace_attempts.update(validate_structured_bindings(payload, expected))
-    _verify_byte_references(payloads, inventory, expected.run_id)
+    verify_byte_references(payloads, inventory, expected.run_id)
     if marker.get("sealed_contract_versions") == [TRIAL_RECORD_CONTRACT]:
         return validate_trial_record(documents, marker, expected, trace_attempts)
     manifest = _json(documents["manifest.json"])
