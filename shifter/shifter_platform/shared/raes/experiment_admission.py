@@ -52,7 +52,8 @@ from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
 
 ExperimentInputError = RaesError
 
-MAX_RETAINED_BYTES = 64 * 1024**2
+MAX_PLAN_BYTES = 256 * 1024**2
+MAX_RETAINED_BYTES = 512 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
 SUPPORTED_DEPENDENCIES = {"raes": "11.0.1", "raes-env-packs": "7.2.3"}
@@ -205,7 +206,7 @@ def _context(
         "participant_configuration_validators": validators,
         "realization_envelope": authority.realization_envelope,
         "execution_authority": authority.execution_authority,
-        "limits": TrialCompilationLimitsModel(),
+        "limits": TrialCompilationLimitsModel(max_plan_bytes=MAX_PLAN_BYTES),
     }
 
 

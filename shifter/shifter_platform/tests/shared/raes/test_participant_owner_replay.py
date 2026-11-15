@@ -78,7 +78,7 @@ def test_admission_replays_one_owner_call_per_distinct_participant_override(monk
     for name in ("AdmittedApparatusBindingModel", "AdmittedParticipantManifestReferenceModel"):
         monkeypatch.setattr(admission, name, lambda **fields: fields)
     monkeypatch.setattr(admission, "ExperimentManifestReferenceModel", SimpleNamespace(model_validate=dict))
-    monkeypatch.setattr(admission, "TrialCompilationLimitsModel", lambda: None)
+    monkeypatch.setattr(admission, "TrialCompilationLimitsModel", lambda **_fields: None)
     monkeypatch.setattr(admission, "canonical_sdl_digest", lambda _family: SimpleNamespace(value="sha256:" + "2" * 64))
     owner = SimpleNamespace(validator_id="lilrae-opencode-request", validator_version="1")
     participant = _manifest("lilrae-opencode", SimpleNamespace(owner=owner))
