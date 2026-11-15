@@ -13,9 +13,10 @@ from shared.worker_trial import WorkerTrialInput
 
 from config import load_gce_range_cell_config
 from executors.factory import GuestExecutionContext, build_guest_execution_context
-from gcp_range_cell_clients import _build_clients
+from gcp_range_cell_clients import GCEClients, _build_clients
 from gcp_range_cell_host_binding import _host_public_key_from_instance
 from gcp_range_cell_ops import _get_or_none
+from gcp_range_cell_types import InstancePlan, RangeCellPlan
 from provisioner_db_operation_input import get_raes_operation_input
 from raes_gce_image import registry_image_resolver
 from raes_gcp_network_allocation import allocated_networks_for_destroy
@@ -26,7 +27,7 @@ from raes_range_contract import _require_gce_live_fire_binding
 from raes_range_ops import _config_for_range_placement
 
 
-def trial_instance(instances: list[dict[str, Any]], trial_host: str) -> dict[str, Any]:
+def trial_instance(instances: list[InstancePlan], trial_host: str) -> InstancePlan:
     """Return the VM that runs the trial: the one a multi-VM worker names, or a one-VM worker's only VM."""
     selected = [item for item in instances if not trial_host or item["uuid"] == f"{trial_host}#0"]
     if len(selected) != 1:
@@ -34,7 +35,7 @@ def trial_instance(instances: list[dict[str, Any]], trial_host: str) -> dict[str
     return selected[0]
 
 
-def _worker_plan(value: WorkerTrialInput) -> dict[str, Any]:
+def _worker_plan(value: WorkerTrialInput) -> RangeCellPlan:
     """Rebuild the worker's range-cell plan from its retained provision input."""
     request_id = str(value.range_request_id)
     run = get_raes_operation_input(str(value.provision_operation_id), request_id=request_id, operation="provision")
@@ -57,7 +58,7 @@ def _worker_plan(value: WorkerTrialInput) -> dict[str, Any]:
     )
 
 
-def _instance_output(plan: dict[str, Any], instance: dict[str, Any], clients: Any) -> dict[str, Any]:
+def _instance_output(plan: RangeCellPlan, instance: InstancePlan, clients: GCEClients) -> dict[str, Any]:
     """Return one existing worker VM's management output with its pinned host key."""
     existing = _get_or_none(
         clients.instances.get,

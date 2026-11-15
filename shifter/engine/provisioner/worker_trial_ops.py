@@ -16,6 +16,7 @@ import time
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from typing import TYPE_CHECKING
 
 from cryptography.hazmat.primitives import serialization
@@ -168,7 +169,7 @@ def peer_vms(
             node=str(output["uuid"]).rsplit("#", 1)[0],
             address=str(output["private_ip"]),
             host_public_key=str(output["gcp_host_public_key"]),
-            guest=lambda output=output: guest(output),
+            guest=partial(guest, output),
         )
         for output in outputs
     ]

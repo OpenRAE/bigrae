@@ -18,6 +18,7 @@ if TYPE_CHECKING:
     from engine.models import DisposableWorker, Range
 
 _BINDING_CHANGED = "Worker qualification binding changed"
+_NOT_INDEPENDENT = "Worker identity is not independent"
 
 
 @dataclass(frozen=True, slots=True)
@@ -96,7 +97,7 @@ def _qualification(worker: DisposableWorker) -> WorkerQualification:
     )
     fingerprints = result.fingerprints()
     if len(fingerprints) != len(set(fingerprints)):
-        raise ValueError("Worker identity is not independent")
+        raise ValueError(_NOT_INDEPENDENT)
     return result
 
 
@@ -195,7 +196,7 @@ def _store_qualification(
             or WorkerHostIdentity.objects.filter(kind=kind, value=value).exclude(worker=current).exists()
             for kind, value in fingerprints
         ):
-            raise ValueError("Worker identity is not independent")
+            raise ValueError(_NOT_INDEPENDENT)
         current.qualification = result.record()
         try:
             with transaction.atomic():
@@ -207,7 +208,7 @@ def _store_qualification(
                     for member, (kind, value) in zip(_fingerprint_members(current, result), fingerprints, strict=True)
                 )
         except IntegrityError:
-            raise ValueError("Worker identity is not independent") from None
+            raise ValueError(_NOT_INDEPENDENT) from None
         _audit(credential, current, "worker_qualify")
 
 

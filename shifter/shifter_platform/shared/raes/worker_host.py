@@ -3,7 +3,7 @@
 from dataclasses import dataclass
 from typing import Any
 
-from raes_contracts.planning import ProvisioningPlan
+from raes_contracts.planning import PlannedResource, ProvisioningPlan
 
 from shared.raes.completion import load_serialized_plan
 from shared.raes.runtime_target import interpret_provisioning_plan
@@ -34,7 +34,7 @@ def worker_host_nodes(value: dict[str, Any]) -> tuple[WorkerNode, ...]:
     return tuple(_worker_node(node) for node in sorted(nodes, key=lambda item: item.address))
 
 
-def _worker_node(node: Any) -> WorkerNode:
+def _worker_node(node: PlannedResource) -> WorkerNode:
     """Validate one planned VM: Linux, a single instance, a pinned source, and bounded size."""
     if node.payload.get("os_family") != "linux" or node.payload.get("count", 1) != 1:
         raise ValueError("Worker apparatus VMs must each be one Linux instance")
