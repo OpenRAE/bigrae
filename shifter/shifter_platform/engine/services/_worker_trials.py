@@ -16,6 +16,7 @@ from uuid import UUID, uuid4
 from django.db import transaction
 from django.utils import timezone
 
+from shared.disposable_workers import WorkerHostProfile
 from shared.operation_envelope import build_operation_envelope
 from shared.worker_trial import RUN_OVERDUE_SECONDS, StagedObject, WorkerTrialInput, parse_worker_trial_receipt
 
@@ -195,6 +196,7 @@ def _input(trial: WorkerTrial) -> dict[str, object]:
         deadline=trial.deadline.astimezone(UTC).isoformat().replace("+00:00", "Z"),
         staged={name: StagedObject.model_validate(item) for name, item in trial.staged.items()},
         stop=trial.stop_requested,
+        trial_host=WorkerHostProfile.model_validate(trial.worker.profile).trial_host,
     )
     return value.model_dump(mode="json")
 

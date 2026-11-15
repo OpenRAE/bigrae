@@ -430,21 +430,19 @@ def materialize_operation_input(payload: dict[str, object], operation_id: UUID |
 
 
 def _management_targets(target: Range, plan: dict[str, object]) -> tuple[str, ...]:
-    """Request private management only for an Engine-owned worker host."""
+    """Request private management only for the VMs of an Engine-owned worker."""
     from engine.models import DisposableWorker
-    from shared.raes.worker_host import worker_host_shape
+    from shared.raes.worker_host import worker_host_nodes
 
-    targets = []
-    if DisposableWorker.objects.filter(range_id=target.pk).exists():
-        targets.append(worker_host_shape(plan)[0])
-    return tuple(targets)
+    if not DisposableWorker.objects.filter(range_id=target.pk).exists():
+        return ()
+    return tuple(node.address for node in worker_host_nodes(plan))
 
 
 def _worker_image_candidates(target: Range, plan: dict[str, object]) -> dict[str, list[dict[str, object]]] | None:
-    """Project the worker's retained image identity without consulting the registry."""
+    """Project each worker VM's retained image identity without consulting the registry."""
     from engine.models import DisposableWorker
     from shared.disposable_workers import WorkerHostProfile
-    from shared.raes.worker_host import worker_host_shape
 
     worker = DisposableWorker.objects.filter(range_id=target.pk).first()
     if worker is None:
@@ -452,21 +450,24 @@ def _worker_image_candidates(target: Range, plan: dict[str, object]) -> dict[str
     profile = WorkerHostProfile.model_validate(worker.profile)
     if profile.digest != worker.profile_digest or profile.plan != plan:
         raise ValueError("Worker apparatus binding changed")
-    _, source, version, _, _ = worker_host_shape(plan)
-    image = profile.image
-    return {
-        candidate_key("gce", source): [
-            {
-                "source_version": version,
-                "image_ref": image.image_ref,
-                "image_id": profile.image_id,
-                "machine_type": image.machine_type,
-                "disk_size_gb": image.disk_size_gb,
-                "disk_type": image.disk_type,
-                "management_ssh_port": image.management_ssh_port,
-                "management_ssh_username": image.management_ssh_username,
-                # Non-default hardware choices only, so default profiles keep their input.
-                **image.model_dump(include={"nic_type", "disk_interface", "enable_secure_boot"}),
-            }
-        ]
-    }
+    candidates: dict[str, list[dict[str, object]]] = {}
+    images = profile.host_images
+    for node in profile.nodes:
+        image, image_id = images[node.address]
+        candidate = {
+            "source_version": node.version,
+            "image_ref": image.image_ref,
+            "image_id": image_id,
+            "machine_type": image.machine_type,
+            "disk_size_gb": image.disk_size_gb,
+            "disk_type": image.disk_type,
+            "management_ssh_port": image.management_ssh_port,
+            "management_ssh_username": image.management_ssh_username,
+            # Non-default hardware choices only, so default profiles keep their input.
+            **image.model_dump(include={"nic_type", "disk_interface", "enable_secure_boot"}),
+        }
+        existing = candidates.setdefault(candidate_key("gce", node.source), [candidate])
+        if existing != [candidate]:
+            # Candidates are keyed by source, so VMs that share a source must share an image.
+            raise ValueError("Worker VMs with one source must use one image")
+    return candidates

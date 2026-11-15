@@ -88,6 +88,29 @@ class DisposableWorker(models.Model):
         return f"Disposable worker {self.pk}"
 
 
+class WorkerHostIdentity(models.Model):
+    """One independent identity fingerprint of one qualified worker VM.
+
+    Each value belongs to exactly one VM. A multi-VM worker records every VM, so
+    two VMs from a cloned image cannot both qualify, even concurrently.
+    """
+
+    KINDS = (("vm", "vm"), ("machine", "machine"), ("daemon", "daemon"))
+
+    worker = models.ForeignKey(DisposableWorker, on_delete=models.CASCADE, related_name="host_identities")
+    member = models.CharField(max_length=256)
+    kind = models.CharField(max_length=8, choices=KINDS)
+    value = models.CharField(max_length=71)
+
+    class Meta:
+        """Enforce that no fingerprint belongs to two VMs."""
+
+        constraints = [models.UniqueConstraint(fields=["kind", "value"], name="worker_host_identity_unique")]
+
+    def __str__(self) -> str:
+        return f"{self.kind} identity of {self.member}"
+
+
 class WorkerRetirementHold(models.Model):
     """One exact generation and principal own each hold until explicit release."""
 

@@ -23,6 +23,7 @@ The policy file also requires owner-only mode `0600`.
 The policy names each host profile under `profiles`. Qualification uses `default` unless `--profile` names another.
 
 For each profile, pin one Linux host plan, an exact GCE image name and numeric image ID, its provenance digest, Docker version, and resources.
+A multi-VM profile also names `trial_host` and gives each other VM its image under `additional_hosts`, keyed by node address.
 Use the existing image preparation and publication procedure for those facts.
 The host plan is apparatus configuration, separate from experiment SDL.
 No participant container or experiment runtime is required.

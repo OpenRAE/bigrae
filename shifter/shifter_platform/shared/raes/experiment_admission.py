@@ -8,6 +8,7 @@ import json
 import sys
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
+from functools import partial
 from importlib.metadata import version
 from pathlib import Path
 from typing import Any, BinaryIO, Literal, cast
@@ -27,7 +28,6 @@ from raes_contracts.contracts import (
     BackendManifestV2Model,
     ExperimentArtifactRefModel,
     ExperimentManifestReferenceModel,
-    ObservationCaptureOfferModel,
     ParticipantImplementationManifestModel,
     ProcessorManifestV2Model,
     TrialCleanupReceiptModel,
@@ -54,7 +54,12 @@ from shared.raes.participant_owner_replay import (
 )
 from shared.raes.participant_owner_replay import validation_requests as _validation_requests
 from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
-from shared.raes.worker_apparatus import require_worker_scenario, worker_backend_manifest, worker_realization_envelope
+from shared.raes.worker_apparatus import (
+    ApparatusDeclaration,
+    require_worker_scenario,
+    worker_backend_manifest,
+    worker_realization_envelope,
+)
 from shared.schemas._raes_validation import _reject_secret_value
 
 ExperimentInputError = RaesError
@@ -111,7 +116,7 @@ class ExperimentAuthority(BaseModel):
     processor: ProcessorManifestV2Model
     participants: list[ParticipantAuthority] = Field(default_factory=list, max_length=256)
     realization_envelope: BackendRealizationEnvelopeModel | None = None
-    capture_offers: list[ObservationCaptureOfferModel] = Field(default_factory=list, max_length=256)
+    apparatus: ApparatusDeclaration | None = None
     execution_authority: TrialExecutionAuthorityModel
     max_concurrency: int = Field(default=200, ge=1, le=10000)
     #: The published worker host profile that every trial of the batch uses.
@@ -119,10 +124,10 @@ class ExperimentAuthority(BaseModel):
 
     @model_validator(mode="after")
     def _one_document_source(self) -> ExperimentAuthority:
-        """Refuse a partial document set; supplied documents carry their own capture offers."""
+        """Refuse a partial document set; supplied documents carry their own apparatus claims."""
         supplied = (self.backend is not None, self.realization_envelope is not None)
-        if supplied not in ((True, True), (False, False)) or all(supplied) == bool(self.capture_offers):
-            raise ValueError("Supply the backend and envelope with no capture offers, or capture offers only")
+        if supplied not in ((True, True), (False, False)) or all(supplied) == (self.apparatus is not None):
+            raise ValueError("Supply the backend and envelope with no apparatus declaration, or the declaration only")
         return self
 
 
@@ -440,11 +445,12 @@ class InstallationLookups:
 
 def _bind_worker_apparatus(
     configuration: ExperimentAuthority, worker_profile: Callable[[str], WorkerHostProfile] | None
-) -> tuple[ExperimentAuthority, dict[str, Any], BackendRealizationEnvelopeModel | None]:
+) -> tuple[ExperimentAuthority, dict[str, Any], Callable[[InstantiatedScenario], None] | None]:
     """Bind the named host profile and derive absent apparatus documents from it.
 
     Returns the configuration, the retained binding and derived documents, and the
-    derived realization envelope. The envelope is ``None`` when the authority supplies its documents.
+    check that each selected scenario fits the worker VMs. The check is ``None``
+    when the authority supplies its documents.
     """
     profile = None if worker_profile is None else worker_profile(configuration.worker_profile)
     retained: dict[str, Any] = {}
@@ -455,14 +461,16 @@ def _bind_worker_apparatus(
         return configuration, retained, None
     if profile is None:
         raise ValueError("Derived apparatus documents require the bound worker profile")
-    envelope = worker_realization_envelope(profile)
-    backend = worker_backend_manifest(envelope, configuration.capture_offers)
+    apparatus = cast(ApparatusDeclaration, configuration.apparatus)
+    envelope = worker_realization_envelope(profile, apparatus)
+    backend = worker_backend_manifest(envelope, apparatus, len(profile.nodes))
     retained["derived_apparatus"] = {
         "backend": backend.model_dump(mode="json"),
         "realization_envelope": envelope.model_dump(mode="json"),
     }
     configuration = configuration.model_copy(update={"backend": backend, "realization_envelope": envelope})
-    return configuration, retained, envelope
+    architecture = envelope.configuration.architecture
+    return configuration, retained, partial(require_worker_scenario, profile=profile, architecture=architecture)
 
 
 def compile_pack_experiment(
@@ -486,7 +494,7 @@ def compile_pack_experiment(
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
     _reject_operator_credentials(parsed)
-    configuration, apparatus, envelope = _bind_worker_apparatus(
+    configuration, apparatus, scenario_check = _bind_worker_apparatus(
         ExperimentAuthority.model_validate(parsed), installation.worker_profile
     )
     if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
@@ -535,8 +543,8 @@ def compile_pack_experiment(
         selected = instantiate_admitted_trial_entry(
             plan=plan, plan_entry_id=entry.plan_entry_id, family=experiment.family
         )
-        if envelope is not None:
-            require_worker_scenario(selected, envelope.configuration)
+        if scenario_check is not None:
+            scenario_check(selected)
         retained_bytes += custody.retain(
             _selected_control_context_artifacts(selected, plan.entries[entry.plan_entry_id]),
             exact_descriptor=True,
