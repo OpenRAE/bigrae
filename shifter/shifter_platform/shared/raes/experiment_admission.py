@@ -84,7 +84,7 @@ def _reject_operator_credentials(value: object) -> None:
 MAX_RETAINED_BYTES = 64 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
-SUPPORTED_DEPENDENCIES = {"raes": "11.0.1", "raes-env-packs": "7.2.3"}
+SUPPORTED_DEPENDENCIES = {"raes": "12.0.0", "raes-env-packs": "7.2.3"}
 
 
 class ParticipantAuthority(BaseModel):

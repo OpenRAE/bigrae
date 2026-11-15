@@ -8,7 +8,7 @@ pack reaches BigRAE (ADR-034).
 
 Registration records a provenance-only reference. BigRAE stores the location (`package_ref`), version, digest, contract, profile, and bounded provenance. It does not copy the pack body into the catalog. Pack content
 is defined by the `raes-env-packs` contract. BigRAE pins
-`raes-env-packs==7.2.3` with the exact `raes==11.0.1` release, and delegates
+`raes-env-packs==7.2.3` with the exact `raes==12.0.0` release, and delegates
 validation, canonical content identity, and the artifact-requirement publication
 profile to those released libraries. A broken, malformed, or non-conformant pack
 is rejected.
