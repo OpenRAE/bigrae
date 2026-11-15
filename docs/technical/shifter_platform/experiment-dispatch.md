@@ -120,4 +120,4 @@ The failed attempt keeps its archive receipt and cleanup receipt.
 
 ## Dependency tuple
 
-The tuple is Python 3.14, Django 6.0, RAES 11.0.1, raes-env-packs 7.2.3, and adapter SDK 0.3.0.
+The tuple is Python 3.14, Django 6.0, RAES 12.0.0, raes-env-packs 7.2.3, and adapter SDK 0.3.0.

@@ -234,3 +234,7 @@ any changed workflow, Terraform or chart must pass the stack-native checks in
 `AGENTS.md` and `.gc/plan-rules.md`. Reuse existing CI quality ownership lanes,
 not a new workflow or weakened guard. This preflight changes no runtime code and
 claims no runtime, archive API or live-storage qualification.
+
+Scenario archive content is retained unchanged, including planted credentials
+and credential-shaped scenario identifiers. Intake does not classify or redact
+that content. Operational authentication remains outside the scenario archive.

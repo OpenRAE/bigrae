@@ -21,7 +21,7 @@ from shifter_adapter_sdk.trial import TrialSeal
 
 from shared.raes.json_ingress import parse_bounded_json_object
 from shared.raes.trial_archive_paths import RECORD_ERRORS, TrialArchiveError, safe_archive_path
-from shared.schemas._raes_validation import JsonObject, _reject_secret_value
+from shared.schemas._raes_validation import JsonObject
 
 CHUNK_BYTES = 1024 * 1024
 MAX_ARCHIVE_BYTES = 16 * 1024**3
@@ -158,10 +158,9 @@ class _BoundedTarInfo(tarfile.TarInfo):
 def _read_member(
     source: IO[bytes], size: int, *, retain: bool, structured: StructuredTraceReader | None = None
 ) -> tuple[str, bytes]:
-    """Hash streamed artifact bytes while checking credentials and bounded metadata."""
+    """Read original artifact bytes and bounded format metadata."""
     digest = hashlib.sha256()
     retained = bytearray()
-    tail = b""
     remaining = size
     while remaining:
         chunk = source.read(min(CHUNK_BYTES, remaining))
@@ -169,10 +168,6 @@ def _read_member(
             raise TrialArchiveError("Truncated archive member")
         remaining -= len(chunk)
         digest.update(chunk)
-        # Use the existing high-confidence credential-value rules, not the
-        # sidecar field allowlist that intentionally excludes full traces.
-        _reject_secret_value("archive", (tail + chunk).decode("latin1"), error_cls=TrialArchiveError)
-        tail = chunk[-256:]
         if structured is not None:
             structured.feed(chunk)
         if retain:
