@@ -36,6 +36,8 @@ Admission also retains the name and digest of the batch's worker host profile (`
 It refuses a profile that the worker policy does not publish.
 An authority without `backend` and `realization_envelope` gets both documents derived from that profile and its `apparatus` declaration (`shared.raes.worker_apparatus`).
 The batch retains them as `derived_apparatus`.
+The derived backend manifest admits at most one node for each VM of the profile.
+Admission refuses a selected scenario unless it has one Linux compute node of the hosts' architecture for each VM.
 
 Scheduling order cannot allocate another run or change a trial's scientific inputs.
 One initial attempt is supported per entry.

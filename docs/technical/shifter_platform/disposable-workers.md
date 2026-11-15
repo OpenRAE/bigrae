@@ -21,12 +21,13 @@ A policy published with one unnamed `profile` loads as the profile `default`.
 Each profile contains a validated outer RAES plan, exact image profile, numeric provider image ID, provenance, and resources.
 
 It also fixes Docker version, capacity scope and partition, and approved egress.
+This plan describes apparatus, separately from the experiment SDL.
+
 A profile can declare up to four Linux VMs on one network, for example an agent workstation and a victim.
 It then names the trial host, the VM that runs the trial transport, and gives every other VM its own image and numeric image ID.
 VMs that share a source share one image. A profile with one VM keeps its earlier shape and digest.
-This plan describes apparatus, separately from the experiment SDL.
-The service supports the deployment-selected GCE backend.
 
+The service supports the deployment-selected GCE backend.
 Other backends fail before reservation or dispatch.
 Policy changes affect new workers only.
 
