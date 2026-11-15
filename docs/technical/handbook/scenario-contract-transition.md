@@ -9,7 +9,7 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==11.0.1` and `raes-env-packs==7.2.3` in its
+`raes==12.0.0` and `raes-env-packs==7.2.3` in its
 [package manifest](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
@@ -32,10 +32,14 @@ The 2026-10-31 dependency security update (#2696) raised the `pyasn1` floor to
 0.6.5. It did not change the RAES package pins, the serialized plan versions,
 the ownership boundary, or the migration contract.
 
+The 2026-11-13 dependency security update raised the `opentelemetry-api` floor
+to 1.45.2 for CVE-2026-126360. It did not change the RAES package pins, the
+serialized plan versions, the ownership boundary, or the migration contract.
+
 Only `shared.raes` imports the released RAES module family. It validates and
 compiles authored intent into the RAES ProvisioningPlan. The independent
 provisioner validates and reads plain serialized data, not a second authored
-schema. New realization accepts `raes-provisioning-plan-v2` with producer `11.0.1`.
+schema. New realization accepts `raes-provisioning-plan-v2` with producer `12.0.0`.
 Images, cloud resources, secrets and backend realization remain BigRAE-owned.
 
 ## Transition history
@@ -52,7 +56,7 @@ bytes as a new producer is not migration. Retired source/sidecar records are
 removed by cutover migrations; terminal opaque historical envelopes remain
 factual and inert.
 
-Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `10.7.2`, `v2` / `10.6.0`,
+Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `11.0.1`, `v2` / `10.7.2`, `v2` / `10.6.0`,
 `v2` / `10.2.0` and `v2` / `3.5.0` pairs through the current wire checks. It also accepts the exact
 `raes-provisioning-plan-v1` / `2.0.0` pair through its isolated cleanup view. This preserves cleanup identities
 without allowing old producers for new realization. It does not revive the
@@ -122,3 +126,6 @@ The 11.0.1 update (#2834) uses the released fix for bounded verification of
 large secret plans. It retains the existing verification rules and adds
 10.7.2 to the cleanup-only producer list. See the
 [adoption design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/large-plan-release-adoption-2834.md).
+
+The 12.0.0 update (#2954) adopts runtime step dispatch and shared PostgreSQL
+run ledgers. It adds 11.0.1 to the cleanup-only producer list.

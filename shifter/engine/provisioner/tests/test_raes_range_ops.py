@@ -38,7 +38,7 @@ def _serialized_plan() -> dict:
     return {
         "kind": "raes_provisioning_plan",
         "contract_version": RAES_PROVISIONING_PLAN_CONTRACT_VERSION,
-        "raes_version": "11.0.1",
+        "raes_version": "12.0.0",
         "operation_id": _OPERATION_ID,
         "resources": {
             "net.lan": {

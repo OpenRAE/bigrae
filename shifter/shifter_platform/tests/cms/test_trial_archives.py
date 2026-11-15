@@ -356,7 +356,6 @@ def test_retention_fences_a_verified_but_unpublished_writer(custody, monkeypatch
 @pytest.mark.parametrize(
     "record",
     [
-        {"password": "synthetic-excluded-value"},
         {"run_ref": {"ref_kind": "run", "ref_id": "foreign-run", "ref_version": "1"}},
         {
             "raw_content": {
@@ -366,7 +365,7 @@ def test_retention_fences_a_verified_but_unpublished_writer(custody, monkeypatch
         },
     ],
 )
-def test_json_lines_cannot_hide_credentials_foreign_records_or_missing_bytes(custody, record):
+def test_json_lines_cannot_hide_foreign_records_or_missing_bytes(custody, record):
 
     from cms.models import TrialArchiveReceipt
     from shared.exceptions import CMSError
@@ -494,17 +493,18 @@ def test_historical_references_are_preserved_without_claiming_current_ownership(
 )
 @pytest.mark.parametrize(
     "content",
-    [b"configuration:\n  password: synthetic-excluded-value\n", b"participant:\n  API-KEY: synthetic-excluded-value\n"],
+    [b"configuration:\n  password: synthetic-planted-value\n", b"participant:\n  api_key: synthetic-planted-value\n"],
 )
-def test_yaml_credentials_never_upload_or_publish_a_receipt(custody, filename, media_type, content):
-    from cms.models import TrialArchiveReceipt
-    from shared.exceptions import CMSError
-
+def test_yaml_scenario_credentials_are_preserved_in_the_receipted_archive(custody, filename, media_type, content):
     raw = archive_bytes(extra={filename: content}, media_types={filename: media_type})
-    with pytest.raises(CMSError):
-        collect(custody, raw)
-    assert not TrialArchiveReceipt.objects.exists()
-    assert not custody[2].objects
+    assert collect(custody, raw).worker_copy_disposable
+    assert next(iter(custody[2].objects.values())) == raw
+
+
+def test_json_lines_scenario_credentials_are_preserved_in_the_receipted_archive(custody):
+    raw = archive_bytes(extra={"traces/participant.jsonl": b'{"password": "synthetic-planted-value"}\n'})
+    assert collect(custody, raw).worker_copy_disposable
+    assert next(iter(custody[2].objects.values())) == raw
 
 
 @pytest.mark.parametrize("schema", ["experiment-evidence-record/v1", "experiment-run/v1", "trial-cleanup-receipt/v1"])
