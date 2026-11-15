@@ -26,6 +26,7 @@ This plan describes apparatus, separately from the experiment SDL.
 A profile can declare up to four Linux VMs on one network, for example an agent workstation and a victim.
 It then names the trial host, the VM that runs the trial transport, and gives every other VM its own image and numeric image ID.
 VMs that share a source share one image. A profile with one VM keeps its earlier shape and digest.
+For each trial, the trial host's root gets SSH access as root to the other VMs ([experiment dispatch](experiment-dispatch.md)).
 
 The service supports the deployment-selected GCE backend.
 Other backends fail before reservation or dispatch.

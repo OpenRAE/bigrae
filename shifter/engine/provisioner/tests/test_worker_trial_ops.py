@@ -3,12 +3,15 @@
 import hashlib
 import json
 import os
+import subprocess
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 import pytest
+from cryptography.hazmat.primitives import serialization
 from shared.worker_trial import WorkerTrialInput
+from shifter_adapter_sdk.trial import TrialPeers
 
 import worker_trial_ops
 from executors.base import CommandResult
@@ -120,6 +123,76 @@ def test_run_stages_inputs_starts_once_and_returns_the_verified_archive(storage)
     assert (receipt.state, receipt.exit_code, receipt.sealed) == ("exited", 0, True)
     assert receipt.archive.key == f"trial-exports/{value.trial_id}/op-1/run-1.tar.gz"
     assert storage.uploaded == {receipt.archive.key: ARCHIVE}
+
+
+class ShellPeer:
+    """A peer VM whose commands run in a local shell, so the authorized-keys edit runs for real."""
+
+    closed = 0
+
+    def run_command(self, target, script, *, timeout_seconds, document_name):
+        script = f"set -euo pipefail\n{script}\n"
+        result = subprocess.run(["/bin/bash"], input=script, text=True, capture_output=True, check=False)
+        return CommandResult(result.returncode == 0, result.returncode, result.stdout, result.stderr)
+
+    def guest(self):
+        peer = self
+
+        class Guest:
+            executor, target, document_name = peer, "10.0.0.3", "AWS-RunShellScript"
+
+            @staticmethod
+            def close():
+                peer.closed += 1
+
+        return Guest
+
+
+def _peer(shell):
+    return worker_trial_ops.PeerVM(
+        node="nodes.victim", address="10.0.0.3", host_public_key="ssh-ed25519 AAAAhost root@victim", guest=shell.guest
+    )
+
+
+def test_each_run_gives_the_trial_host_a_new_key_that_only_the_peers_root_authorizes(storage, tmp_path, monkeypatch):
+    """#2947: the trial host's root reaches the worker's other VMs as root with a key for this trial only."""
+    keys = tmp_path / "ssh" / "authorized_keys"
+    keys.parent.mkdir()
+    keys.write_text("ssh-ed25519 AAAAoperator operator\n")
+    monkeypatch.setattr(worker_trial_ops, "_AUTHORIZED_KEYS", os.fspath(keys))
+    monkeypatch.setattr(worker_trial_ops, "_AUTHORIZED_KEYS_DIRECTORY", os.fspath(keys.parent))
+    shell = ShellPeer()
+    authorized = []
+    for attempt in ("op-1", "op-2"):
+        worker = FakeWorker([status("prepared"), status("exited", sealed=True, exit_code=0)])
+        worker_trial_ops.execute_worker_trial(execution(worker), trial_input(), "run", attempt, [_peer(shell)])
+        private = serialization.load_ssh_private_key(worker.received["id_ed25519"], password=None)
+        public = private.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH)
+        hosts = TrialPeers.model_validate_json(worker.received["hosts.json"])
+        assert hosts.peers["nodes.victim"].model_dump(mode="json") == {
+            "address": "10.0.0.3",
+            "host_public_key": "ssh-ed25519 AAAAhost",
+        }
+        assert keys.read_text().splitlines() == [
+            "ssh-ed25519 AAAAoperator operator",
+            f"{public.decode()} bigrae-trial-peer",
+        ]
+        authorized.append(public)
+    assert authorized[0] != authorized[1] and shell.closed == 2
+
+
+def test_peer_vms_are_named_by_node_address_and_open_their_own_guest():
+    output = {"uuid": "nodes.victim#0", "private_ip": "10.0.0.3", "gcp_host_public_key": "ssh-ed25519 AAAAhost"}
+    opened = []
+    (peer,) = worker_trial_ops.peer_vms([output], lambda value: opened.append(value) or "guest")
+    assert (peer.node, peer.address, peer.host_public_key) == ("nodes.victim", "10.0.0.3", "ssh-ed25519 AAAAhost")
+    assert peer.guest() == "guest" and opened == [output]
+
+
+def test_a_one_vm_worker_gets_no_peer_key(storage):
+    worker = FakeWorker([status("prepared"), status("exited", sealed=True, exit_code=0)])
+    worker_trial_ops.execute_worker_trial(execution(worker), trial_input(), "run", "op-1")
+    assert set(worker.received) == set(STAGED)
 
 
 def test_run_after_a_lost_result_never_starts_a_second_trial(storage):

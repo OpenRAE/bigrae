@@ -61,7 +61,13 @@ The `restrict-provisioner-jobs` admission policy admits only the dispatched `wor
 That form is `run` or `collect` with UUID `--request-id`, `--trial-id`, and `--operation-id` values.
 
 The provisioner rebuilds the worker's management target from its original RAES provision input.
-For a multi-VM worker, the trial input names the trial host, and the provisioner reaches only that VM.
+For a multi-VM worker, the trial input names the trial host, and the provisioner runs the trial only on that VM.
+
+Before each multi-VM `run`, the provisioner makes a new Ed25519 key pair for the trial.
+Each other VM's root authorizes the public key, which replaces the key of an earlier run.
+The provisioner writes the private key and `hosts.json` under `/var/lib/bigrae/trial/peers` on the trial host.
+`hosts.json` gives each other VM's node address, private address, and pinned host key.
+The trial host's root can then reach each other VM as root over SSH.
 
 The provisioner runs only the SDK verbs at the fixed trial-control path.
 `run` starts the trial with `systemd-run` only when `status` reports `prepared`.

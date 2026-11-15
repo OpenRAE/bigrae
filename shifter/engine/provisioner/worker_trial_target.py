@@ -1,4 +1,4 @@
-"""Reach an existing disposable worker over its private management SSH.
+"""Reach an existing disposable worker's VMs over their private management SSH.
 
 The worker's original RAES provision input rebuilds its range-cell plan, as
 teardown does. Compute Engine readback supplies the pinned host key; the
@@ -34,8 +34,8 @@ def trial_instance(instances: list[dict[str, Any]], trial_host: str) -> dict[str
     return selected[0]
 
 
-def worker_instance_output(value: WorkerTrialInput) -> dict[str, Any]:
-    """Rebuild the trial host VM's management output from retained inputs."""
+def _worker_plan(value: WorkerTrialInput) -> dict[str, Any]:
+    """Rebuild the worker's range-cell plan from its retained provision input."""
     request_id = str(value.range_request_id)
     run = get_raes_operation_input(str(value.provision_operation_id), request_id=request_id, operation="provision")
     operation_input = run.input
@@ -44,7 +44,7 @@ def worker_instance_output(value: WorkerTrialInput) -> dict[str, Any]:
         request_id, load_gce_range_cell_config(backend=_require_gce_live_fire_binding(operation_input))
     )
     allocation = allocated_networks_for_destroy(request_id, run.operation_id, raes_plan, config)
-    plan = build_raes_range_cell_plan(
+    return build_raes_range_cell_plan(
         request_id,
         operation_input.legacy_range_id,
         raes_plan,
@@ -55,8 +55,10 @@ def worker_instance_output(value: WorkerTrialInput) -> dict[str, Any]:
             reconstruct_for_teardown=allocation.required and not allocation.network_cidrs,
         ),
     )
-    instance = trial_instance(plan["instances"], value.trial_host)
-    clients = _build_clients()
+
+
+def _instance_output(plan: dict[str, Any], instance: dict[str, Any], clients: Any) -> dict[str, Any]:
+    """Return one existing worker VM's management output with its pinned host key."""
     existing = _get_or_none(
         clients.instances.get,
         clients.google_exceptions,
@@ -81,6 +83,21 @@ def worker_instance_output(value: WorkerTrialInput) -> dict[str, Any]:
     }
 
 
-def worker_guest(value: WorkerTrialInput) -> GuestExecutionContext:
-    """Return the guest execution context for the trial host VM."""
-    return build_guest_execution_context(worker_instance_output(value), os_type="linux", role="raes-node")
+def worker_instance_outputs(value: WorkerTrialInput) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+    """Rebuild the trial host VM's management output and those of the worker's other VMs."""
+    plan = _worker_plan(value)
+    host = trial_instance(plan["instances"], value.trial_host)
+    clients = _build_clients()
+    peers = [item for item in plan["instances"] if item is not host]
+    return _instance_output(plan, host, clients), [_instance_output(plan, item, clients) for item in peers]
+
+
+def worker_guests(value: WorkerTrialInput) -> tuple[GuestExecutionContext, list[dict[str, Any]]]:
+    """Return the trial host VM's guest context and the other VMs' management outputs."""
+    host, peers = worker_instance_outputs(value)
+    return build_guest_execution_context(host, os_type="linux", role="raes-node"), peers
+
+
+def peer_guest(output: dict[str, Any]) -> GuestExecutionContext:
+    """Return the guest context of one other worker VM."""
+    return build_guest_execution_context(output, os_type="linux", role="raes-node")

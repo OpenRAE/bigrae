@@ -1,6 +1,7 @@
 """Native ``worker-trial`` operations: drive one adapter trial on a disposable worker.
 
-``run`` stages the inputs, starts the adapter's fixed trial-control command when
+``run`` grants a multi-VM worker's trial host root SSH to its other VMs with a
+new key, stages the inputs, starts the adapter's fixed trial-control command when
 the worker reports ``prepared``, waits for the trial to end, and returns its
 sealed archive. ``collect`` never starts a trial. Worker output is untrusted
 data; it selects no command, path or destination.
@@ -12,9 +13,13 @@ import logging
 import os
 import tempfile
 import time
+from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ed25519
 from shared.worker_trial import (
     MAX_STAGED_BYTES,
     TRIAL_EXPORT_PREFIX,
@@ -30,7 +35,12 @@ from shifter_adapter_sdk.trial import (
     TRIAL_CONTROL_COMMAND,
     TRIAL_EXPORT_DIRECTORY,
     TRIAL_INPUT_DIRECTORY,
+    TRIAL_PEER_DIRECTORY,
+    TRIAL_PEER_HOSTS_FILE,
+    TRIAL_PEER_KEY_FILE,
     TrialExport,
+    TrialPeer,
+    TrialPeers,
     TrialStatus,
     parse_trial_output,
 )
@@ -55,6 +65,10 @@ _VERB_TIMEOUT_SECONDS = 120
 STATUS_RETRIES = 5
 _TRANSFER_TIMEOUT_SECONDS = 1800
 _UNIT = "bigrae-trial"
+#: Comment on the one root authorized key that each trial replaces.
+_PEER_KEY_COMMENT = "bigrae-trial-peer"
+_AUTHORIZED_KEYS_DIRECTORY = "/root/.ssh"
+_AUTHORIZED_KEYS = _AUTHORIZED_KEYS_DIRECTORY + "/authorized_keys"
 
 
 class WorkerTrialError(RuntimeError):
@@ -135,6 +149,90 @@ def stage_inputs(
                 raise WorkerTrialError("staging a trial input failed")
 
 
+@dataclass(frozen=True)
+class PeerVM:
+    """Another VM of a multi-VM worker: its node address, its pinned host identity, and its guest context."""
+
+    node: str
+    address: str
+    host_public_key: str
+    guest: Callable[[], GuestExecutionContext]
+
+
+def peer_vms(
+    outputs: Sequence[dict[str, object]], guest: Callable[[dict[str, object]], GuestExecutionContext]
+) -> list[PeerVM]:
+    """Name each other worker VM by its node address, from its management output."""
+    return [
+        PeerVM(
+            node=str(output["uuid"]).rsplit("#", 1)[0],
+            address=str(output["private_ip"]),
+            host_public_key=str(output["gcp_host_public_key"]),
+            guest=lambda output=output: guest(output),
+        )
+        for output in outputs
+    ]
+
+
+def _stream_file(execution: GuestExecutionContext, local: str, target: str) -> None:
+    """Write one root-only file on the guest from a local file, then move it into place."""
+    result = _streaming(execution).run_command_streaming(
+        execution.target,
+        f"umask 077 && install -d -m 0700 {os.path.dirname(target)} && "
+        f"cat > {target}.part && mv {target}.part {target}",
+        stdin_path=local,
+        timeout_seconds=_TRANSFER_TIMEOUT_SECONDS,
+        document_name=execution.document_name,
+    )
+    if not result.success:
+        raise WorkerTrialError("writing a trial file failed")
+
+
+def _authorize(peer: PeerVM, public_key: str) -> None:
+    """Replace the peer root's trial key with this trial's public key."""
+    line = f"{public_key} {_PEER_KEY_COMMENT}"
+    script = (
+        f"umask 077 && install -d -m 0700 {_AUTHORIZED_KEYS_DIRECTORY} && touch {_AUTHORIZED_KEYS} && "
+        f"{{ grep -v ' {_PEER_KEY_COMMENT}$' {_AUTHORIZED_KEYS} || true; echo '{line}'; }} "
+        f"> {_AUTHORIZED_KEYS}.part && "
+        f"mv {_AUTHORIZED_KEYS}.part {_AUTHORIZED_KEYS}"
+    )
+    execution = peer.guest()
+    try:
+        _run(execution, script)
+    finally:
+        execution.close()
+
+
+def grant_peer_access(execution: GuestExecutionContext, peers: Sequence[PeerVM]) -> None:
+    """Give the trial host's root a new key that every other worker VM's root authorizes."""
+    if not peers:
+        return
+    hosts = TrialPeers(
+        peers={
+            peer.node: TrialPeer(address=peer.address, host_public_key=" ".join(peer.host_public_key.split()[:2]))
+            for peer in peers
+        }
+    )
+    key = ed25519.Ed25519PrivateKey.generate()
+    public_key = key.public_key().public_bytes(serialization.Encoding.OpenSSH, serialization.PublicFormat.OpenSSH)
+    for peer in peers:
+        _authorize(peer, public_key.decode())
+    with tempfile.TemporaryDirectory(prefix="worker-trial-peers-") as workdir:
+        private = os.path.join(workdir, TRIAL_PEER_KEY_FILE)
+        with open(os.open(private, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb") as stream:
+            stream.write(
+                key.private_bytes(
+                    serialization.Encoding.PEM, serialization.PrivateFormat.OpenSSH, serialization.NoEncryption()
+                )
+            )
+        listing = os.path.join(workdir, TRIAL_PEER_HOSTS_FILE)
+        with open(listing, "w", encoding="utf-8") as stream:
+            stream.write(hosts.model_dump_json())
+        _stream_file(execution, private, f"{TRIAL_PEER_DIRECTORY}/{TRIAL_PEER_KEY_FILE}")
+        _stream_file(execution, listing, f"{TRIAL_PEER_DIRECTORY}/{TRIAL_PEER_HOSTS_FILE}")
+
+
 def wait_for_exit(execution: GuestExecutionContext, value: WorkerTrialInput, workdir: str) -> TrialStatus:
     """Poll until the trial exits; stop it once the deadline and drain time pass."""
     deadline = datetime.fromisoformat(value.deadline.replace("Z", "+00:00")) + timedelta(seconds=DRAIN_SECONDS)
@@ -184,12 +282,17 @@ def export_archive(
 
 
 def execute_worker_trial(
-    execution: GuestExecutionContext, value: WorkerTrialInput, operation: str, operation_id: str
+    execution: GuestExecutionContext,
+    value: WorkerTrialInput,
+    operation: str,
+    operation_id: str,
+    peers: Sequence[PeerVM] = (),
 ) -> WorkerTrialReceipt:
     """Run or collect one trial and return its closed receipt."""
     storage, bucket = get_object_storage(), load_raes_content_delivery_config().bucket
     with tempfile.TemporaryDirectory(prefix="worker-trial-status-") as workdir:
         if operation == "run":
+            grant_peer_access(execution, peers)
             stage_inputs(execution, value, storage, bucket)
             if trial_status(execution, value, workdir).state == "prepared":
                 _run(execution, f"systemd-run --unit={_UNIT} --collect {TRIAL_CONTROL_COMMAND} start")
@@ -210,7 +313,7 @@ def run_worker_trial_operation(request_id: str, trial_id: str, operation: str, o
     """Load the immutable input, run the operation and append its terminal result."""
     from provisioner_db_appends import OperationRef, append_operation_step_result
     from provisioner_db_operation_input import get_operation_input
-    from worker_trial_target import worker_guest
+    from worker_trial_target import peer_guest, worker_guests
 
     validated = get_operation_input(
         operation_id=operation_id, request_id=request_id, resource="worker-trial", operation=operation
@@ -221,8 +324,10 @@ def run_worker_trial_operation(request_id: str, trial_id: str, operation: str, o
     ref = OperationRef(validated.request_id, validated.operation_id)
     execution = None
     try:
-        execution = worker_guest(value)
-        receipt = execute_worker_trial(execution, value, operation, validated.operation_id)
+        execution, outputs = worker_guests(value)
+        receipt = execute_worker_trial(
+            execution, value, operation, validated.operation_id, peer_vms(outputs, peer_guest)
+        )
     except Exception as exc:  # noqa: BLE001  # guest boundary: causes can carry guest output; authored failure only
         logger.error(
             "Worker trial %s failed for trial_id=%s exc_type=%s",

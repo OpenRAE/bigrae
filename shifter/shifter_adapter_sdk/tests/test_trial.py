@@ -8,6 +8,7 @@ from shifter_adapter_sdk.trial import (
     MAX_TRIAL_OUTPUT_BYTES,
     TrialExport,
     TrialInput,
+    TrialPeers,
     TrialSeal,
     TrialStatus,
     parse_trial_output,
@@ -97,6 +98,20 @@ def test_export_output_names_one_file_without_a_path():
     for file in ("../run.tar", "/tmp/run.tar", "sub/run.tar"):
         with pytest.raises(ValueError):
             TrialExport.model_validate({**value.model_dump(), "file": file})
+
+
+def test_peer_hosts_pin_one_ed25519_host_key_for_at_most_three_other_vms():
+    peer = {"address": "10.0.0.3", "host_public_key": "ssh-ed25519 AAAAC3Nz"}
+    value = TrialPeers.model_validate_json(json.dumps({"peers": {"nodes.victim": peer}}))
+    assert str(value.peers["nodes.victim"].address) == "10.0.0.3"
+    for bad in (
+        {"peers": {}},
+        {"peers": {f"nodes.n{index}": peer for index in range(4)}},
+        {"peers": {"nodes.victim": peer | {"host_public_key": "ssh-rsa AAAAB3Nz"}}},
+        {"peers": {"nodes.victim": peer | {"address": "victim.internal"}}},
+    ):
+        with pytest.raises(ValueError):
+            TrialPeers.model_validate(bad)
 
 
 def _seal(**changes):
