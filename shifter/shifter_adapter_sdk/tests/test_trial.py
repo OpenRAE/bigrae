@@ -11,6 +11,7 @@ from shifter_adapter_sdk.trial import (
     AssignedTrialSeal,
     TrialExport,
     TrialInput,
+    TrialPeers,
     TrialSeal,
     TrialStatus,
     parse_trial_output,
@@ -102,6 +103,20 @@ def test_export_output_names_one_file_without_a_path():
             TrialExport.model_validate({**value.model_dump(), "file": file})
 
 
+def test_peer_hosts_pin_one_ed25519_host_key_for_at_most_three_other_vms():
+    peer = {"address": "10.0.0.3", "host_public_key": "ssh-ed25519 AAAAC3Nz"}
+    value = TrialPeers.model_validate_json(json.dumps({"peers": {"nodes.victim": peer}}))
+    assert str(value.peers["nodes.victim"].address) == "10.0.0.3"
+    for bad in (
+        {"peers": {}},
+        {"peers": {f"nodes.n{index}": peer for index in range(4)}},
+        {"peers": {"nodes.victim": peer | {"host_public_key": "ssh-rsa AAAAB3Nz"}}},
+        {"peers": {"nodes.victim": peer | {"address": "victim.internal"}}},
+    ):
+        with pytest.raises(ValueError):
+            TrialPeers.model_validate(bad)
+
+
 def _seal(**changes):
     member = {
         "path": "manifest.json",
@@ -171,8 +186,11 @@ def test_assigned_trial_inputs_name_exactly_one_selected_backend():
     with pytest.raises(ValueError, match="selected backend"):
         AssignedTrialInputs.model_validate(_inputs(backend="other"))
     staged = AssignedTrialInput(
-        run_id="run-1", attempt_id="attempt-1", deadline="2026-11-13T20:00:00Z",
-        assignment_sha256="a" * 64, inputs_sha256="b" * 64,
+        run_id="run-1",
+        attempt_id="attempt-1",
+        deadline="2026-11-13T20:00:00Z",
+        assignment_sha256="a" * 64,
+        inputs_sha256="b" * 64,
     )
     assert staged.schema_version == "bigrae.assigned-trial-input/v1"
     with pytest.raises(ValueError, match="UTC"):

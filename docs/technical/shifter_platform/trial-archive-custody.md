@@ -189,3 +189,8 @@ require matching verified evidence or an explicit refusal.
 Derived file publication lives in `_trial_archive_exports` behind the existing
 custody service entry point. It reuses the same authority, verification, audit
 and retention primitives; record formatting remains in the export record module.
+
+Scenario source content, including planted credentials and credential-shaped
+identifiers, is retained unchanged. Archive intake does not reject or redact
+content based on credential patterns. Operational authentication remains
+outside the scientific archive.

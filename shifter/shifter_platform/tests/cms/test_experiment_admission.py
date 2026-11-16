@@ -134,10 +134,11 @@ def test_omitted_documents_are_derived_from_the_bound_profile_and_claim_no_workf
     from engine.models import WorkerPolicyRecord
     from shared.disposable_workers import WorkerPolicy
     from shared.raes import experiment_admission
-    from shared.raes.worker_apparatus import worker_realization_envelope
+    from shared.raes.worker_apparatus import ApparatusDeclaration, worker_realization_envelope
 
     authority = experiment_inputs[-1]
-    authority["capture_offers"] = authority.pop("backend")["capabilities"]["observation"]["capture_offers"]
+    offers = authority.pop("backend")["capabilities"]["observation"]["capture_offers"]
+    authority["apparatus"] = {"schema_version": "bigrae.apparatus-declaration/v1", "capture_offers": offers}
     del authority["realization_envelope"]
     authority["processor"] = reference_processor_manifest_payload(compatible_backends=["shifter-disposable-worker"])
     compiler, refusals = experiment_admission.compile_admitted_trial_plan, []
@@ -151,7 +152,10 @@ def test_omitted_documents_are_derived_from_the_bound_profile_and_claim_no_workf
     with pytest.raises(CMSError, match="verify installed inputs"):
         admit(experiment_inputs)
     profile = WorkerPolicy.model_validate(WorkerPolicyRecord.objects.get().configuration).profiles["default"]
-    assert refusals == [(worker_realization_envelope(profile), ["trial-compiler.apparatus-capability-unproven"])]
+    apparatus = ApparatusDeclaration.model_validate(authority["apparatus"])
+    assert refusals == [
+        (worker_realization_envelope(profile, apparatus), ["trial-compiler.apparatus-capability-unproven"])
+    ]
     assert not ExperimentBatch.objects.exists()
 
     # A compiled plan is still refused: each fixture trial has two nodes, and a worker host is one.

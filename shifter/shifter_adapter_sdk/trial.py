@@ -10,6 +10,12 @@ adapter owns what the verbs do. Verb output is untrusted guest data.
 ``status`` and ``stop`` return at once. ``export`` writes one sealed archive
 under ``TRIAL_EXPORT_DIRECTORY`` and reports its identity.
 
+A worker can have more than one VM. Before each ``run``, BigRAE gives the trial
+host's root a new SSH key for that trial under ``TRIAL_PEER_DIRECTORY``. Every
+other VM of the worker authorizes that key for its root. ``TRIAL_PEER_HOSTS_FILE``
+names each other VM by its node address, with its private address and its
+pinned host key. A one-VM worker gets no peer files.
+
 An apparatus that records the trial as an RAES ``experiment-run/v1`` record
 seals the archive with ``TrialSeal``. The record is ``partial``: the worker
 cannot know the cleanup that BigRAE performs after the trial.
@@ -30,6 +36,7 @@ sealed with ``AssignedTrialSeal``.
 from __future__ import annotations
 
 import re
+from ipaddress import IPv4Address
 from typing import Annotated, Final, Literal, Self
 
 from pydantic import Field, model_validator
@@ -46,6 +53,10 @@ TRIAL_UNIT_FILE: Final = "trial-unit.json"
 TRIAL_SCENARIO_FILE: Final = "scenario.sdl"
 TRIAL_SEAL_FILE: Final = "seal.json"
 TRIAL_EXPORT_DIRECTORY: Final = TRIAL_ROOT + "/export"
+TRIAL_PEER_DIRECTORY: Final = TRIAL_ROOT + "/peers"
+TRIAL_PEER_KEY_FILE: Final = "id_ed25519"
+TRIAL_PEER_HOSTS_FILE: Final = "hosts.json"
+MAX_TRIAL_PEERS: Final = 3
 TRIAL_VERBS: Final = ("start", "status", "stop", "export")
 MAX_TRIAL_OUTPUT_BYTES: Final = 65_536
 MAX_TRIAL_ARCHIVE_BYTES: Final = 8 * 1024**3
@@ -71,6 +82,23 @@ class TrialInput(ClosedModel):
         if not _UTC_TIME.fullmatch(self.deadline):
             raise ValueError("trial deadline must be an RFC 3339 UTC time ending in Z")
         return self
+
+
+class TrialPeer(ClosedModel):
+    """One other VM of the worker that the trial host reaches as root over SSH."""
+
+    address: IPv4Address
+    host_public_key: Annotated[str, Field(pattern=r"^ssh-ed25519 [A-Za-z0-9+/]+={0,2}$", max_length=128)]
+
+
+class TrialPeers(ClosedModel):
+    """The staged ``hosts.json``: the other VMs of a multi-VM worker, keyed by node address."""
+
+    schema_version: Literal["bigrae.trial-peers/v1"] = "bigrae.trial-peers/v1"
+    peers: Annotated[
+        dict[Annotated[str, Field(min_length=1, max_length=256)], TrialPeer],
+        Field(min_length=1, max_length=MAX_TRIAL_PEERS),
+    ]
 
 
 class TrialStatus(ClosedModel):
@@ -240,6 +268,7 @@ __all__ = [
     "ASSIGNED_TRIAL_INPUT_FILE",
     "MAX_TRIAL_ARCHIVE_BYTES",
     "MAX_TRIAL_OUTPUT_BYTES",
+    "MAX_TRIAL_PEERS",
     "TRIAL_ASSIGNED_CAPABILITY",
     "TRIAL_ASSIGNMENT_FILE",
     "TRIAL_CONTROL_CAPABILITY",
@@ -248,6 +277,9 @@ __all__ = [
     "TRIAL_EXPORT_DIRECTORY",
     "TRIAL_INPUT_DIRECTORY",
     "TRIAL_INPUT_FILE",
+    "TRIAL_PEER_DIRECTORY",
+    "TRIAL_PEER_HOSTS_FILE",
+    "TRIAL_PEER_KEY_FILE",
     "TRIAL_INPUTS_FILE",
     "TRIAL_OUTCOME_FILE",
     "TRIAL_ROOT",
@@ -261,6 +293,8 @@ __all__ = [
     "AssignedTrialSeal",
     "TrialExport",
     "TrialInput",
+    "TrialPeer",
+    "TrialPeers",
     "TrialSeal",
     "TrialStatus",
     "TrialVerb",

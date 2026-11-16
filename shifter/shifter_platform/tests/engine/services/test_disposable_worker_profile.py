@@ -7,7 +7,7 @@ from uuid import uuid4
 import pytest
 
 
-def _compiled_plan():
+def _compiled_plan(fixture="worker-host.sdl.yaml"):
     from shared.raes.dispatch_port import ShifterDispatchResult
     from shared.raes.package_loader import launch_raes_package
 
@@ -18,7 +18,7 @@ def _compiled_plan():
             plans.append(plan)
             return ShifterDispatchResult("synthetic-worker", True, "accepted")
 
-    path = Path(__file__).parents[1] / "fixtures/worker-host.sdl.yaml"
+    path = Path(__file__).parents[1] / "fixtures" / fixture
     assert launch_raes_package(scenario_path=path, port=Port()).accepted
     return plans[0]
 
@@ -91,11 +91,13 @@ def test_arm_worker_selects_predefined_shape_and_boot_choices():
 
     profile = WorkerHostProfile.model_validate(arm_profile_data())
     assert profile.hardware == {
-        "machine_type": "c4a-standard-2",
-        "enable_secure_boot": False,
-        "image_id": "1234567890123456789",
-        "nic_type": "GVNIC",
-        "disk_interface": "NVME",
+        "provision.node.web": {
+            "machine_type": "c4a-standard-2",
+            "enable_secure_boot": False,
+            "image_id": "1234567890123456789",
+            "nic_type": "GVNIC",
+            "disk_interface": "NVME",
+        }
     }
 
 
@@ -108,10 +110,14 @@ def test_default_hardware_choices_keep_the_existing_profile_identity():
     explicit = WorkerHostProfile.model_validate(data)
     assert explicit.digest == legacy.digest
     assert legacy.hardware == {
-        "machine_type": "e2-custom-2-8192",
-        "enable_secure_boot": True,
-        "image_id": "1234567890123456789",
+        "provision.node.web": {
+            "machine_type": "e2-custom-2-8192",
+            "enable_secure_boot": True,
+            "image_id": "1234567890123456789",
+        }
     }
+    # A one-VM profile keeps its earlier serialized shape, so retained digests stay valid.
+    assert {"trial_host", "additional_hosts"}.isdisjoint(legacy.model_dump(mode="json"))
     assert WorkerHostProfile.model_validate(arm_profile_data()).digest != legacy.digest
 
 
@@ -179,3 +185,46 @@ def test_a_single_unnamed_policy_profile_loads_as_default_and_selection_is_exact
     for binding in ("missing", WorkerProfileBinding(name="default", digest="sha256:" + "0" * 64)):
         with pytest.raises(WorkerProfileError):
             policy.select(binding)
+
+
+def two_vm_profile_data():
+    """A workstation and a victim VM; the workstation runs the trial."""
+    data = profile_data()
+    data["plan"] = _compiled_plan("worker-hosts.sdl.yaml")
+    data["trial_host"] = "provision.node.workstation"
+    data["additional_hosts"] = {
+        "provision.node.victim": {
+            "image": data["image"] | {"image_ref": "projects/synthetic/global/images/victim-v1"},
+            "image_id": "2234567890123456789",
+        }
+    }
+    data["capacity_demand"] = {"vcpu": 4.0, "instances": 2.0}
+    return data
+
+
+def test_two_vm_profile_gives_each_vm_its_image_and_hardware():
+    """#2947: every VM has an exact image; the trial host is named."""
+    from shared.disposable_workers import WorkerHostProfile
+
+    profile = WorkerHostProfile.model_validate(two_vm_profile_data())
+    assert [node.address for node in profile.nodes] == ["provision.node.victim", "provision.node.workstation"]
+    assert profile.trial_host_address == "provision.node.workstation"
+    assert profile.hardware["provision.node.victim"]["image_id"] == "2234567890123456789"
+    assert profile.hardware["provision.node.workstation"]["image_id"] == "1234567890123456789"
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"trial_host": ""},
+        {"trial_host": "provision.node.victim"},
+        {"additional_hosts": {}},
+        {"capacity_demand": {"vcpu": 2.0, "instances": 2.0}},
+        {"capacity_demand": {"vcpu": 4.0, "instances": 1.0}},
+    ],
+)
+def test_two_vm_profile_refuses_an_unnamed_trial_host_a_missing_image_or_short_capacity(change):
+    from shared.disposable_workers import WorkerHostProfile
+
+    with pytest.raises(ValueError):
+        WorkerHostProfile.model_validate(two_vm_profile_data() | change)

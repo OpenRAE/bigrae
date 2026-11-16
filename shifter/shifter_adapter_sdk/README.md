@@ -238,6 +238,15 @@ Before `start`, the host stages three files in `/var/lib/bigrae/trial/input`:
 
 The worker image supplies the trial runtime and its environment pack.
 
+A worker can have more than one VM. Before each `run`, the host also writes two files in `/var/lib/bigrae/trial/peers` on the trial host:
+
+| File | Content |
+| --- | --- |
+| `id_ed25519` | A new private key for this trial. The root account of each other VM authorizes it. |
+| `hosts.json` | `TrialPeers`: each other VM by node address, with its private address and its pinned host key |
+
+A one-VM worker gets no peer files.
+
 The host runs the executable as root with one verb argument:
 
 | Verb | Behavior | Output |

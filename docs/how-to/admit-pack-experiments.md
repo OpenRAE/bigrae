@@ -25,10 +25,13 @@ The optional `worker_profile` field names the published worker host profile for 
 Admission records that profile's name and digest, and refuses a profile that is not published.
 
 For a disposable worker trial, you can omit `backend` and `realization_envelope`.
-Then supply `capture_offers`, the capture offers of the installed apparatus.
-BigRAE derives both documents from the bound worker host profile and retains them with the batch.
-The derived documents claim only the worker VM: its substrate, CPU architecture, image, and size.
-Supply both documents with no capture offers, or capture offers only. Admission refuses any other set.
+Then supply `apparatus`, the declaration that the installed apparatus plugin publishes.
+Its schema version is `bigrae.apparatus-declaration/v1`.
+
+The declaration states what the apparatus realizes on the worker host: operating systems, content types, account features, concern claims, realization support, capture offers, and optional participant, time, and orchestration capabilities.
+BigRAE derives both documents from the bound worker host profile and the declaration, and retains them with the batch.
+BigRAE states the worker VM: its substrate, CPU architecture, image, and size. The declaration cannot claim those concerns.
+Supply both documents with no declaration, or the declaration only. Admission refuses any other set.
 
 A derived admission has these requirements:
 

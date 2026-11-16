@@ -34,8 +34,10 @@ A fresh trial for a failed entry keeps that entry's run identity.
 
 Admission also retains the name and digest of the batch's worker host profile (`worker_profile` in the authority, default `default`).
 It refuses a profile that the worker policy does not publish.
-An authority without `backend` and `realization_envelope` gets both documents derived from that profile (`shared.raes.worker_apparatus`).
+An authority without `backend` and `realization_envelope` gets both documents derived from that profile and its `apparatus` declaration (`shared.raes.worker_apparatus`).
 The batch retains them as `derived_apparatus`.
+The derived backend manifest admits at most one node for each VM of the profile.
+Admission refuses a selected scenario unless it has one Linux compute node of the hosts' architecture for each VM.
 
 Scheduling order cannot allocate another run or change a trial's scientific inputs.
 One initial attempt is supported per entry.
@@ -88,6 +90,9 @@ The released control-context pin helper joins selected configuration and authore
 Selected content uses absolute `raes-environment-pack:` locators and exact inventory descriptors.
 
 The published artifact resolver verifies the original bytes before retention.
+Admission retains scenario content, snapshots, and artifacts unchanged, including planted credentials.
+Admission refuses a credential field or credential value in the operator authority.
+Cleanup validation refuses a credential in the owner's cleanup receipt.
 Unavailable or changed selected content prevents admission.
 Original documents and referenced artifacts each have a separate 16 MiB aggregate bound.
 
@@ -108,7 +113,7 @@ Public errors contain no authoring input, provider payload, or parser details.
 
 ## Dependency tuple
 
-The executable tuple is Python 3.14, Django 6.0, RAES 11.0.1, and raes-env-packs 7.2.3.
+The executable tuple is Python 3.14, Django 6.0, RAES 12.0.0, and raes-env-packs 7.2.3.
 Reload refuses an unsupported RAES/env-packs tuple.
 Portable plan and configuration versions remain subject to their owner validators.
 

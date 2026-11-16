@@ -59,7 +59,7 @@ dependencies = [
     # agreement by tests/shared/raes/test_plan_provisioner_parity.py); changing
     # it requires passing the RAES conformance gate.
     # raes-env-packs 7.2.3 requires RAES 11.0 or later.
-    "raes==11.0.1",
+    "raes==12.0.0",
     # RAES environment-pack contract and canonical content-digest implementation
     # used by the uniform content-ingestion path (#1578, ADR-034) and the public
     # publication profile consumed by artifact resolution (#1580). Keep this
@@ -300,7 +300,7 @@ constraint-dependencies = [
     "cbor2>=5.9.0",
     "urllib3>=2.6.3",
     "filelock>=4.2.1",
-    "opentelemetry-api>=1.45.1",
+    "opentelemetry-api>=1.45.2",
     # Twisted 26.4.0 is affected by multiple HTTP request-processing issues.
     # 26.10.0rc1 is the first upstream release carrying the fixes; keep this
     # exact until a tested stable 26.10 release supersedes it.

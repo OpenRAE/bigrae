@@ -59,6 +59,8 @@ class WorkerTrialInput(_Closed):
     deadline: Annotated[str, Field(min_length=20, max_length=40)]
     staged: dict[str, StagedObject]
     stop: bool = False
+    #: The node address of the VM that runs the trial; empty for a one-VM worker.
+    trial_host: str = Field(default="", max_length=256, exclude_if=lambda value: not value)
 
     @model_validator(mode="after")
     def complete_staging(self) -> Self:

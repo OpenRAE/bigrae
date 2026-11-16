@@ -61,7 +61,15 @@ The `restrict-provisioner-jobs` admission policy admits only the dispatched `wor
 That form is `run` or `collect` with UUID `--request-id`, `--trial-id`, and `--operation-id` values.
 
 The provisioner rebuilds the worker's management target from its original RAES provision input.
-It runs only the SDK verbs at the fixed trial-control path.
+For a multi-VM worker, the trial input names the trial host, and the provisioner runs the trial only on that VM.
+
+Before each multi-VM `run`, the provisioner makes a new Ed25519 key pair for the trial.
+Each other VM's root authorizes the public key, which replaces the key of an earlier run.
+The provisioner writes the private key and `hosts.json` under `/var/lib/bigrae/trial/peers` on the trial host.
+`hosts.json` gives each other VM's node address, private address, and pinned host key.
+The trial host's root can then reach each other VM as root over SSH.
+
+The provisioner runs only the SDK verbs at the fixed trial-control path.
 `run` starts the trial with `systemd-run` only when `status` reports `prepared`.
 While the trial runs, it tolerates up to five consecutive failed `status` polls before it fails the operation.
 It stops the trial when the deadline and a 900-second drain have passed.
@@ -118,4 +126,4 @@ The failed attempt keeps its archive receipt and cleanup receipt.
 
 ## Dependency tuple
 
-The tuple is Python 3.14, Django 6.0, RAES 11.0.1, raes-env-packs 7.2.3, and adapter SDK 0.3.0.
+The tuple is Python 3.14, Django 6.0, RAES 12.0.0, raes-env-packs 7.2.3, and adapter SDK 0.3.0.
