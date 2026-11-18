@@ -73,7 +73,7 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2909: the removed model broker drops its job env and network policy exclusions.
 # Regenerated for #2960: provisioner jobs may carry GCP_RANGE_SHARED_GUEST_FIREWALLS.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "477420aebfe9110c9f3261dbca528884eb1bab1617bb841669245ad96fb1010f",
+    "gcp-prod": "c206af1e1a26c4524e5bedbe72657dc29d21d6495ed18ea5e21dba76d7d1cda8",
     "gcp-dev": "b53f70428141acc960327ed3d380c9a3362df76ec7c1b03582cade06ad834772",
 }
 

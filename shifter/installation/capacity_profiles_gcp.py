@@ -410,7 +410,10 @@ def _build_profile(count: Literal[10, 30, 50, 100, 200, 300, 500]) -> GcpSharedS
         ),
         guacd=GuacdCapacity(
             replicas=guacd_replicas,
-            resources=_resources("500m", "1Gi", "2", "2Gi"),
+            # An RDP session holds about 90-150 MB in guacd, and new sessions are
+            # spread randomly, so the busiest pod carries well above the mean.
+            # A 4Gi limit keeps that pod below its OOM limit.
+            resources=_resources("500m", "2Gi", "2", "4Gi"),
             autoscaling=AutoscalingPolicy(
                 min_replicas=guacd_replicas,
                 max_replicas=max(guacd_replicas + 2, guacd_replicas * 2),

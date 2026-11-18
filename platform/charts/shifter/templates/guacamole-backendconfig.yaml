@@ -14,11 +14,6 @@ spec:
   securityPolicy:
     name: {{ .Values.services.guacamoleClient.backendConfig.securityPolicyName }}
   {{- end }}
-  {{- if .Values.services.guacamoleClient.backendConfig.sessionAffinity.enabled }}
-  sessionAffinity:
-    affinityType: {{ .Values.services.guacamoleClient.backendConfig.sessionAffinity.affinityType }}
-    affinityCookieTtlSec: {{ .Values.services.guacamoleClient.backendConfig.sessionAffinity.affinityCookieTtlSec }}
-  {{- end }}
   {{- /* Explicit, so the check never depends on the pods that exist when the backend is created (#2692). */}}
   healthCheck:
     type: {{ .Values.services.guacamoleClient.backendConfig.healthCheck.type }}

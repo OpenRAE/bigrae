@@ -234,9 +234,11 @@ def test_p30_helm_projection_carries_real_resources_autoscaling_and_backends():
     }
     assert helm["guacd"]["resources"]["limits"] == {
         "cpu": "2",
-        "memory": "2Gi",
+        "memory": "4Gi",
         "ephemeral-storage": "256Mi",
     }
+    assert helm["guacd"]["resources"]["requests"]["memory"] == "2Gi"
+    assert helm["guacamoleClient"]["replicas"] == 1
     assert helm["guacamoleClient"]["resources"]["requests"] == {
         "cpu": "500m",
         "memory": "1Gi",
