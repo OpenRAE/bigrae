@@ -94,6 +94,10 @@ class GCERangeCellConfig:
     # sshd the provisioner drives to a dedicated port. Native single-service
     # guests keep :22.
     host_mgmt_ssh_port: int = 2222
+    # Shared-guest firewall layout (GCP_RANGE_SHARED_GUEST_FIREWALLS): the range VPC
+    # Terraform owns fixed tag-keyed rules, so an eligible range creates one
+    # isolation rule instead of its per-range set.
+    shared_guest_firewalls: bool = False
     metadata_items: tuple[tuple[str, str], ...] = (
         ("block-project-ssh-keys", "true"),
         ("enable-oslogin", "false"),
@@ -263,6 +267,7 @@ def load_gce_range_cell_config(*, backend: str | None = None) -> GCERangeCellCon
         egress_allow_cidrs=_parse_csv_env(os.environ.get("GCP_RANGE_EGRESS_ALLOW_CIDRS", "")),
         private_google_access=_get_bool_env("GCP_RANGE_PRIVATE_GOOGLE_ACCESS", False),
         host_mgmt_ssh_port=_get_int_env("GCP_RANGE_HOST_MGMT_SSH_PORT", 2222),
+        shared_guest_firewalls=_get_bool_env("GCP_RANGE_SHARED_GUEST_FIREWALLS", False),
         range_telemetry=_load_range_telemetry(),
     )
 

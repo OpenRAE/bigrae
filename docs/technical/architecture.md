@@ -250,7 +250,8 @@ the requested session. The gateway sends HTTPS through the existing
 and keeps the default denial of direct public egress.
 
 GCP shared-VPC range cells use per-range subnet/tag firewall policy and explicit
-NAT membership. Guests have no external NIC. Any attached identity is
+NAT membership. The optional shared-guest layout moves the access, egress and OpenVPN rules
+to fixed tag-keyed rules and keeps one isolation rule for each range. Guests have no external NIC. Any attached identity is
 participant-visible and must have no management or cross-range authority;
 keyless, predict-only model access follows ADR-064. GDC VM Runtime and scenario
 Pods are operator validation paths, not participant containment boundaries.

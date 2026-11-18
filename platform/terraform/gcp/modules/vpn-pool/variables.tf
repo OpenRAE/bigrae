@@ -157,3 +157,9 @@ variable "nat_logs" {
   default  = {}
   nullable = false
 }
+
+variable "shared_guest_firewalls" {
+  type        = bool
+  default     = false
+  description = "Create the fixed OpenVPN channel rules keyed by the shifter-range-vpn-ssh and shifter-range-vpn-rdp tags, which replace the per-range pool rules."
+}

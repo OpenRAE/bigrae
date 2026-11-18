@@ -497,3 +497,15 @@ variable "adopt_storage_kms" {
   type        = bool
   default     = false
 }
+
+variable "range_shared_guest_firewalls" {
+  description = "Use the shared-guest range firewall layout: fixed tag-keyed rules here and one isolation rule per range (GCP_RANGE_SHARED_GUEST_FIREWALLS)."
+  type        = bool
+  default     = false
+}
+
+variable "range_private_google_access" {
+  description = "Private Google Access on range subnets (GCP_RANGE_PRIVATE_GOOGLE_ACCESS). With the shared-guest layout it adds the shared Google API egress rule."
+  type        = bool
+  default     = false
+}
