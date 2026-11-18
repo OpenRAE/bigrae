@@ -400,6 +400,12 @@ guacamoleClient:
   replicas: 1
   terminationGracePeriodSeconds: 180
   postgresqlAbsoluteMaxConnections: 10
+  autoscaling:
+    enabled: false
+    minReplicas: 1
+    maxReplicas: 1
+    cpuUtilizationPercentage: 65
+    scaleDownStabilizationSeconds: 900
   resources:
     requests:
       cpu: 250m
@@ -459,6 +465,10 @@ services:
       timeoutSec: 30
       connectionDraining:
         drainingTimeoutSec: 30
+      sessionAffinity:
+        enabled: false
+        affinityType: GENERATED_COOKIE
+        affinityCookieTtlSec: 86400
       healthCheck:
         type: HTTP
         requestPath: /guacamole/

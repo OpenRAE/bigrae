@@ -70,12 +70,42 @@ variable "web_node_count" {
   type = number
 }
 
+variable "web_max_node_count" {
+  type    = number
+  default = 10
+
+  validation {
+    condition     = var.web_max_node_count >= var.web_node_count
+    error_message = "web_max_node_count must be greater than or equal to web_node_count."
+  }
+}
+
 variable "worker_node_count" {
   type = number
 }
 
+variable "worker_max_node_count" {
+  type    = number
+  default = 5
+
+  validation {
+    condition     = var.worker_max_node_count >= var.worker_node_count
+    error_message = "worker_max_node_count must be greater than or equal to worker_node_count."
+  }
+}
+
 variable "provisioner_node_count" {
   type = number
+}
+
+variable "provisioner_max_node_count" {
+  type    = number
+  default = 5
+
+  validation {
+    condition     = var.provisioner_max_node_count >= var.provisioner_node_count
+    error_message = "provisioner_max_node_count must be greater than or equal to provisioner_node_count."
+  }
 }
 
 variable "access_node_count" {
