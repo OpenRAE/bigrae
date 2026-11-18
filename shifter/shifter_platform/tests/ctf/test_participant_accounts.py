@@ -672,6 +672,35 @@ def test_ctf_login_allows_event_users_behind_shared_source(client, settings):
     assert response["Retry-After"] == "300"
 
 
+def test_ctf_login_successes_do_not_consume_the_shared_source_budget(
+    client, ctf_event_active, organizer_credential, monkeypatch, settings
+):
+    """Participants behind one venue address can all sign in; only failures charge (#2973)."""
+    settings.CTF_LOGIN_RATE_LIMIT_MAX = 2
+    settings.CTF_LOGIN_SOURCE_RATE_LIMIT_MAX = 2
+    settings.CTF_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 300
+    monkeypatch.setattr("ctf.services.participant.accounts.request_event_provisioning", lambda *_a, **_kw: None)
+    participants = create_participant_accounts(ctf_event_active.id, count=4, actor=organizer_credential)
+
+    for participant in participants:
+        client.logout()
+        response = client.post(
+            reverse("ctf:ctf_login"),
+            {"username": participant.user.username, "password": TEST_CTF_BOOTSTRAP_PASSWORD},
+        )
+        assert response.status_code == 302
+
+    client.logout()
+    for _attempt in range(2):
+        response = client.post(reverse("ctf:ctf_login"), {"username": "unknown-user", "password": "wrong"})
+        assert response.status_code == 200
+    response = client.post(
+        reverse("ctf:ctf_login"),
+        {"username": participants[0].user.username, "password": TEST_CTF_BOOTSTRAP_PASSWORD},
+    )
+    assert response.status_code == 429
+
+
 def test_ctf_login_limiter_outage_fails_closed_and_is_logged(client, standard_user, monkeypatch, caplog):
     from ctf.views import participant_auth
 
