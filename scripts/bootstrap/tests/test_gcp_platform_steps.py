@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib import error as urllib_error
 
 import pytest
+from installation.capacity_profiles_gcp import resolve_capacity_profile
 
 import gcp_terraform
 from gcp_inputs import load_deployment_inputs
@@ -24,6 +25,7 @@ from gcp_terraform import (
     TerraformStepError,
     apply_destroy_settings,
     backend_prefix,
+    cloud_sql_disk_variables,
     deployment_values,
     drop_unremovable_kms_resources,
     kms_adoption_variables,
@@ -221,6 +223,26 @@ class TestTerraformSteps:
         (targeted,) = runner.find("terraform", f"-chdir={ctx.root}", "apply")
         assert "-var=adopt_storage_kms=true" in targeted.argv
         assert "-target=module.platform_core.module.portal_gcs.google_storage_bucket.assets" in targeted.argv
+
+    def test_cloud_sql_disk_keeps_the_floor_and_never_shrinks(self, inputs):
+        """Terraform grows the disk to the profile floor and keeps a larger live disk (#2965)."""
+        ctx = terraform_context(inputs, inputs.workdir, {})
+        describe = ["gcloud", "sql", "instances", "describe", "shifter-acme-pg"]
+        floor = str(resolve_capacity_profile(inputs.settings.shared_service_capacity_profile).cloud_sql.disk_size_gb)
+        small = FakeRunner().on(describe, ProcessResult(0, "10\n"))
+        assert cloud_sql_disk_variables(small, ctx, inputs) == {"cloud_sql_disk_size_gb": floor}
+        (call,) = small.find(*describe)
+        assert call.argv[-3:] == ["--project", PROJECT, "--format=value(settings.dataDiskSizeGb)"]
+        grown = FakeRunner().on(describe, ProcessResult(0, "5000\n"))
+        assert cloud_sql_disk_variables(grown, ctx, inputs) == {"cloud_sql_disk_size_gb": "5000"}
+        absent = FakeRunner().on(describe, ProcessResult(1, "", "ERROR: The Cloud SQL instance does not exist."))
+        assert cloud_sql_disk_variables(absent, ctx, inputs) == {}
+        denied = FakeRunner().on(describe, ProcessResult(1, "", "ERROR: (gcloud.sql.instances.describe) HTTP 403"))
+        with pytest.raises(GcpCommandError, match="cannot read the disk size"):
+            cloud_sql_disk_variables(denied, ctx, inputs)
+        blank = FakeRunner().on(describe, ProcessResult(0, "\n"))
+        with pytest.raises(GcpCommandError, match="no disk size"):
+            cloud_sql_disk_variables(blank, ctx, inputs)
 
     def test_reinstall_adopts_the_key_rings_that_a_destroy_left(self, inputs):
         # gcp-destroy drops the key rings from state; a reinstall adopts them (#2643, #2564).

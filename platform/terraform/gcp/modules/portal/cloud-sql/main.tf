@@ -113,13 +113,6 @@ resource "google_sql_database_instance" "platform" {
 
     user_labels = var.common_labels
   }
-
-  # Cloud SQL may grow an auto-resized disk but cannot shrink it. Reconciling
-  # the configured floor after growth would otherwise plan a destructive
-  # replacement of the deletion-protected production database.
-  lifecycle {
-    ignore_changes = [settings[0].disk_size]
-  }
 }
 
 # deletion_policy = "ABANDON": the Cloud SQL API deletes only a database that

@@ -372,6 +372,37 @@ def kms_adoption_variables(runner: ProcessRunner, ctx: TerraformContext, inputs:
     return variables
 
 
+def cloud_sql_disk_variables(runner: ProcessRunner, ctx: TerraformContext, inputs: DeploymentInputs) -> dict[str, str]:
+    """Return the Cloud SQL disk size: the profile floor, or the larger live size.
+
+    Cloud SQL can grow a disk but cannot shrink it, and auto-resize can grow it
+    between deploys. Terraform owns the size, so it grows the disk to a larger
+    profile floor and never requests a shrink.
+    """
+    from installation.capacity_profiles_gcp import resolve_capacity_profile
+
+    profile_id = inputs.settings.shared_service_capacity_profile  # type: ignore[attr-defined]
+    floor = resolve_capacity_profile(profile_id).cloud_sql.disk_size_gb
+    instance = f"shifter-{inputs.environment}-pg"
+    result = runner.run(
+        ["gcloud", "sql", "instances", "describe", instance, "--project", inputs.project_id]
+        + ["--format=value(settings.dataDiskSizeGb)"],
+        env=ctx.env,
+        check=False,
+    )
+    if result.returncode != 0:
+        if "does not exist" in f"{result.stdout}\n{result.stderr}".lower():
+            return {}
+        raise GcpCommandError(f"cannot read the disk size of the Cloud SQL instance {instance}")
+    try:
+        live = int(result.stdout.strip())
+    except ValueError:
+        raise GcpCommandError(f"the Cloud SQL instance {instance} reported no disk size") from None
+    if live > floor:
+        info(f"Keeping the Cloud SQL disk at its live size of {live} GB, above the profile floor of {floor} GB")
+    return {"cloud_sql_disk_size_gb": str(max(floor, live))}
+
+
 def drop_unremovable_kms_resources(runner: ProcessRunner, ctx: TerraformContext) -> None:
     """Remove the exact permanent platform key rings and keys from state; their grants stay managed."""
     addresses = set(state_addresses(runner, ctx))

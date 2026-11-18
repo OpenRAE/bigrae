@@ -557,6 +557,7 @@ class TestOtherCommands:
                 or {"adopt_storage_kms": "true"}
             ),
         )
+        monkeypatch.setattr("gcp_terraform.cloud_sql_disk_variables", lambda *a, **k: {"cloud_sql_disk_size_gb": "700"})
         settings_variables = []
         monkeypatch.setattr(
             "gcp_terraform.apply_destroy_settings",
@@ -586,7 +587,7 @@ class TestOtherCommands:
             "terraform_destroy",
         ]
         assert all(step[1] == destroy for step in steps[1:])
-        assert settings_variables == [{"adopt_storage_kms": "true"}]
+        assert settings_variables == [{"adopt_storage_kms": "true", "cloud_sql_disk_size_gb": "700"}]
         steps.clear()
         run_destroy(
             DestroyOptions(source=str(bundle), confirm="acme", lock="external", identity_mode="ambient"),
