@@ -40,20 +40,14 @@ guacd:
     cpuUtilizationPercentage: 65
     scaleDownStabilizationSeconds: 900
 
-# guacamole-client scales horizontally. Session affinity (GENERATED_COOKIE) on
-# the GCE BackendConfig ensures the GCE L7 LB pins each browser session to one
-# pod so in-memory Guacamole tunnels are not broken by routing to a different
-# replica. POSTGRESQL_ABSOLUTE_MAX_CONNECTIONS is set per-replica; the product
-# of replicas × value must stay below the Cloud SQL max_connections limit (1000).
+# Single guacamole-client replica (#928, #2518). The portal mints each Guacamole
+# token server to server through the internal Service, and session revocation
+# deletes it the same way. Guacamole keeps tokens in the memory of one replica,
+# so with more replicas a browser can reach a replica without its token, and a
+# revocation can miss the live session. Browser affinity alone does not fix the
+# server-side legs. Scale guacd for capacity until #2518 shards the client.
 guacamoleClient:
-  replicas: 2
-  postgresqlAbsoluteMaxConnections: 500
-  autoscaling:
-    enabled: true
-    minReplicas: 2
-    maxReplicas: 6
-    cpuUtilizationPercentage: 65
-    scaleDownStabilizationSeconds: 900
+  replicas: 1
 
 services:
   portal:
@@ -66,10 +60,6 @@ services:
       cloud.google.com/neg: '{"ingress": true}'
     backendConfig:
       enabled: true
-      sessionAffinity:
-        enabled: true
-        affinityType: GENERATED_COOKIE
-        affinityCookieTtlSec: 86400
 
 network:
   ingressSourceCidrs:
