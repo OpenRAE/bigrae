@@ -6,4 +6,3 @@
 # `ignoreUntil` so the suppression lapses and the scanner re-reports if upstream
 # still has no fix at the review date. Do NOT add entries for findings that have
 # a patched version — bump the dependency instead.
-
