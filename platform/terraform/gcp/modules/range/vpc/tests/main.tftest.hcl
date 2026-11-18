@@ -152,3 +152,37 @@ run "bridge_nat_router_names_are_published_for_the_readback" {
     error_message = "The module must publish every bridge NAT router it owns (#2535)."
   }
 }
+
+run "shared_guest_rules_are_off_by_default" {
+  command = plan
+
+  assert {
+    condition     = length(google_compute_firewall.shared_guest_access) == 0 && length(google_compute_firewall.shared_guest_egress_deny) == 0
+    error_message = "The shared-guest rules must not exist unless shared_guest_firewalls is enabled."
+  }
+}
+
+run "shared_guest_rules_key_on_the_guest_tag" {
+  command = plan
+
+  variables {
+    shared_guest_firewalls = true
+    range_network_cidr     = "10.50.0.0/16"
+    access_network_cidrs   = ["10.47.0.0/20"]
+  }
+
+  assert {
+    condition     = google_compute_firewall.shared_guest_access[0].target_tags == toset(["shifter-range-guest"]) && google_compute_firewall.shared_guest_access[0].source_ranges == toset(["10.47.0.0/20"])
+    error_message = "Shared participant access must come only from the access workloads and target only shared-guest hosts."
+  }
+
+  assert {
+    condition     = google_compute_firewall.shared_guest_egress_internal[0].destination_ranges == toset(["10.50.0.0/16"]) && google_compute_firewall.shared_guest_egress_deny[0].priority == 65534
+    error_message = "Shared guest egress must stay inside the range network above a default deny."
+  }
+
+  assert {
+    condition     = length(google_compute_firewall.shared_guest_egress_googleapis) == 0
+    error_message = "The Google API egress rule must follow private_google_access."
+  }
+}

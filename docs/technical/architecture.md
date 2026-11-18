@@ -257,6 +257,9 @@ Pods are operator validation paths, not participant containment boundaries.
 See [GCP deployment](../dev/gcp-range-cell-deploy.md) for exact supported modes
 and image prerequisites. GCE does not support the NGFW range capability.
 
+The optional shared-guest layout moves the range access, egress and OpenVPN
+rules to fixed tag-keyed rules. Each range then keeps one isolation rule.
+
 The platform namespace denies public egress. Under ADR-006-R3, designated
 egress proxies are the only exception: they admit DNS names on port 443, reject
 nonglobal addresses and carry no cloud identity. The portal enforces one

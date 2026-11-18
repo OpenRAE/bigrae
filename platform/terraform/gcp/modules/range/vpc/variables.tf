@@ -81,3 +81,27 @@ variable "nat_logs" {
     error_message = "nat_logs.filter must be ALL, ERRORS_ONLY, or TRANSLATIONS_ONLY."
   }
 }
+
+variable "shared_guest_firewalls" {
+  type        = bool
+  default     = false
+  description = "Create the fixed range-guest rules keyed by the shifter-range-guest tag. The provisioner then creates one isolation rule for each eligible range (GCP_RANGE_SHARED_GUEST_FIREWALLS)."
+}
+
+variable "range_network_cidr" {
+  type        = string
+  default     = ""
+  description = "Range VPC base CIDR. The shared-guest egress rule allows guest egress inside it; each range's isolation rule limits ingress to its own subnet."
+}
+
+variable "access_network_cidrs" {
+  type        = list(string)
+  default     = []
+  description = "Access-workload source ranges (portal and guacd) for shared participant SSH and RDP ingress."
+}
+
+variable "private_google_access" {
+  type        = bool
+  default     = false
+  description = "Allow shared-guest TLS egress to the Google private API VIP (GCP_RANGE_PRIVATE_GOOGLE_ACCESS)."
+}
