@@ -251,7 +251,7 @@ participants get while the event runs:
 | Kind | What the participant gets |
 |------|---------------------------|
 | Live message alerts | A toast when a new message arrives in the inbox |
-| New challenge released | An inbox notice when a hidden challenge becomes visible |
+| New challenge released | An inbox notice when a hidden challenge becomes visible, or a visible challenge reaches its release time |
 | First blood | An inbox notice when a challenge has its first solve |
 | Scoreboard position changes | A toast when the participant's scoreboard position changes |
 | Range ready | A toast when the participant's range is ready |
