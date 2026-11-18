@@ -3,6 +3,11 @@ output "gke_cluster_name" {
   value       = google_container_cluster.platform.name
 }
 
+output "access_node_pool_name" {
+  description = "Name of the access node pool."
+  value       = google_container_node_pool.access.name
+}
+
 output "gke_cluster_location" {
   description = "Location of the GKE cluster."
   value       = google_container_cluster.platform.location

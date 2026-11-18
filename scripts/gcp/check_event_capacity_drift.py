@@ -89,6 +89,7 @@ def collect_live_state(
     sql_instance: str,
     redis_instance: str,
     cluster: str,
+    access_node_pool: str,
     namespace: str,
     vpn_pool: str | None = None,
 ) -> dict[str, object]:
@@ -114,7 +115,7 @@ def collect_live_state(
             "container",
             "node-pools",
             "describe",
-            "access",
+            access_node_pool,
             "--cluster",
             cluster,
             "--project",
@@ -343,6 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sql-instance")
     parser.add_argument("--redis-instance")
     parser.add_argument("--cluster")
+    parser.add_argument("--access-node-pool", help="Access node pool name: Terraform output access_node_pool_name")
     parser.add_argument("--namespace", default="shifter-platform")
     parser.add_argument("--vpn-pool", help="OpenVPN pool instance group name, when the tenant deploys the pool")
     return parser
@@ -355,10 +357,18 @@ def main(argv: list[str] | None = None) -> int:
         if args.observed:
             observed = _read_object(args.observed)
         else:
-            required = (args.project, args.region, args.sql_instance, args.redis_instance, args.cluster)
+            required = (
+                args.project,
+                args.region,
+                args.sql_instance,
+                args.redis_instance,
+                args.cluster,
+                args.access_node_pool,
+            )
             if not all(required):
                 raise DriftInputError(
-                    "live inspection requires --project, --region, --sql-instance, --redis-instance, and --cluster"
+                    "live inspection requires --project, --region, --sql-instance, --redis-instance, --cluster, "
+                    "and --access-node-pool"
                 )
             observed = collect_live_state(
                 desired,
@@ -367,6 +377,7 @@ def main(argv: list[str] | None = None) -> int:
                 sql_instance=args.sql_instance,
                 redis_instance=args.redis_instance,
                 cluster=args.cluster,
+                access_node_pool=args.access_node_pool,
                 namespace=args.namespace,
                 vpn_pool=args.vpn_pool,
             )

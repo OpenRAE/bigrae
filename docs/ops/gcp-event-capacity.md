@@ -94,9 +94,12 @@ request increases ahead of the event:
    uv run python scripts/gcp/check_event_capacity_drift.py \
      --desired /tmp/shifter-event-capacity.json \
      --project <project> --region <region> --cluster <cluster> \
+     --access-node-pool <access-node-pool> \
      --sql-instance <sql-instance> --redis-instance <redis-instance> \
      --vpn-pool <vpn-instance-group>
    ```
+
+   Pass `--access-node-pool` with Terraform output `access_node_pool_name`.
 
    When participant OpenVPN is enabled, pass `--vpn-pool` with Terraform output `openvpn_pool.instance_group`. The check compares machine type, minimum and maximum server counts, and CPU target. Without it the pool fields
    are skipped. Exit 0 and `capacity drift: none` are required. Exit 1 is real drift. Exit 2

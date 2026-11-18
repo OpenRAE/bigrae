@@ -132,6 +132,7 @@ def test_live_state_requires_capacity_profile_label_on_every_provider_resource(m
             sql_instance="sql",
             redis_instance="redis",
             cluster="cluster",
+            access_node_pool="prefix-access",
             namespace="namespace",
         )
 
@@ -147,10 +148,45 @@ def test_live_state_uses_effective_autoscaling_minimum_for_access_capacity(monke
         sql_instance="sql",
         redis_instance="redis",
         cluster="cluster",
+        access_node_pool="prefix-access",
         namespace="namespace",
     )
 
     assert observed["terraform"]["capacity.access_node_count"] == 3
+
+
+def test_live_state_reads_the_named_access_node_pool(monkeypatch):
+    """The read command names the Terraform access node pool, not a fixed name (#2963)."""
+    responses = iter(_live_responses())
+    calls: list[list[str]] = []
+
+    def run(argv):
+        calls.append(argv)
+        return next(responses)
+
+    monkeypatch.setattr(_MODULE, "_run_json", run)
+    collect_live_state(
+        {},
+        project="project",
+        region="region",
+        sql_instance="sql",
+        redis_instance="redis",
+        cluster="cluster",
+        access_node_pool="prefix-access",
+        namespace="namespace",
+    )
+
+    node_pool_reads = [argv for argv in calls if argv[:4] == ["gcloud", "container", "node-pools", "describe"]]
+    assert [argv[4] for argv in node_pool_reads] == ["prefix-access"]
+
+
+def test_live_inspection_requires_the_access_node_pool(tmp_path, capsys):
+    desired = tmp_path / "desired.json"
+    desired.write_text("{}", encoding="utf-8")
+    argv = ["--desired", str(desired), "--project", "p", "--region", "r"]
+    argv += ["--sql-instance", "s", "--redis-instance", "i", "--cluster", "c"]
+    assert _MODULE.main(argv) == 2
+    assert "--access-node-pool" in capsys.readouterr().err
 
 
 def _live(monkeypatch, extra: list[dict], **kwargs) -> dict:
@@ -163,6 +199,7 @@ def _live(monkeypatch, extra: list[dict], **kwargs) -> dict:
         sql_instance="sql",
         redis_instance="redis",
         cluster="cluster",
+        access_node_pool="prefix-access",
         namespace="namespace",
         **kwargs,
     )

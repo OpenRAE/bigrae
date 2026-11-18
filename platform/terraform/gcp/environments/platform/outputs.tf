@@ -68,6 +68,11 @@ output "gke_cluster_name" {
   value       = module.platform_core.gke_cluster_name
 }
 
+output "access_node_pool_name" {
+  description = "Name of the access node pool. The event capacity drift check reads it."
+  value       = module.platform_core.access_node_pool_name
+}
+
 output "gke_cluster_location" {
   description = "Location of the GKE cluster."
   value       = module.platform_core.gke_cluster_location

@@ -73,6 +73,11 @@ output "gke_cluster_name" {
   value       = module.portal_gke.gke_cluster_name
 }
 
+output "access_node_pool_name" {
+  description = "Name of the access node pool."
+  value       = module.portal_gke.access_node_pool_name
+}
+
 output "gke_cluster_location" {
   description = "Location of the GKE cluster."
   value       = module.portal_gke.gke_cluster_location
