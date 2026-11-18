@@ -10,6 +10,7 @@ from rest_framework import serializers
 
 from ctf.api.serializers._common import _NamedRefSerializer
 from ctf.api.serializers.organizer_challenges import AwardSerializer
+from ctf.enums import ScoreboardKind
 
 _SET_MODE_REQUIRED = "This field is required for set mode."
 _GENERATED_MODE_REJECTS_VALUE = "Do not supply a password for generated mode."
@@ -383,6 +384,16 @@ class ScoreTimelineResponseSerializer(serializers.Serializer):
     participant_id = serializers.CharField(read_only=True)
     participant_name = serializers.CharField(read_only=True)
     timeline = serializers.ListField(child=serializers.DictField(), read_only=True)
+
+
+class PublicScoreboardQuerySerializer(serializers.Serializer):
+    """Optional board selector for the public scoreboard read (#2968).
+
+    Absent ``kind`` keeps the event default: team rows for a team event and
+    individual rows for a solo event.
+    """
+
+    kind = serializers.ChoiceField(choices=[kind.value for kind in ScoreboardKind], required=False)
 
 
 class PublicScoreboardResponseSerializer(serializers.Serializer):

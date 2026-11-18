@@ -202,6 +202,8 @@ NON_API_ROUTE_POLICY: dict[str, str] = {
             "participant_range",
             "participant_terminal",
             "scoreboard",
+            "individual_scoreboard",
+            "team_scoreboard",
             "participant_solve_history",
             "participant_team",
             "team_join",

@@ -111,6 +111,8 @@ sidebar, while organizer pages use the shared icon sidebar.
 | Challenge detail | `/ctf/challenges/<challenge_id>/` | Participant | Read challenge instructions, hints, files, and submit flags. |
 | Participant range | `/ctf/range/` | Participant | Access range status and participant resources. |
 | Scoreboard | `/ctf/scoreboard/` | Participant | Compare event scoring and rank. |
+| Individual scoreboard | `/ctf/individual-scoreboard/` | Participant | Compare participant rank in a team-mode event. |
+| Team scoreboard | `/ctf/team-scoreboard/` | Participant | Compare team rank in a team-mode event. |
 | Team | `/ctf/team/` | Participant | Inspect team membership and status. |
 | Join team | `/ctf/team/join/` | Participant | Join or create a team where event rules allow it. |
 | Help | `/ctf/help/` | Participant | Get CTF-specific help. |
@@ -377,6 +379,7 @@ only organizer access should not be forced through CTF participant pages.
 Use side navigation for durable surfaces that users revisit frequently:
 
 - Participant: Event Home, Challenges, Range, Scoreboard, Team, Help.
+- A team-mode event replaces Scoreboard with Individual scoreboard and Team scoreboard.
 - Organizer: Overview, Ranges, CTF Events, Assets, Terminal, Scenarios, Docs.
 
 Side navigation items must map to stable route names and permission policies.
@@ -403,6 +406,7 @@ route_path        # SPA path
 icon_key          # lucide icon name
 active_context    # optional: range or event the surface reads or sets
 feature_flag      # optional rollout flag
+event_mode        # optional: solo or team event that shows the entry
 children          # optional nested or contextual entries
 ```
 
