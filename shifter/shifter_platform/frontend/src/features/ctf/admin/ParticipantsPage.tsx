@@ -140,6 +140,7 @@ function ParticipantsBody({ query }: Readonly<{ query: ReturnType<typeof useCtfP
         <TableRow className="hover:bg-transparent">
           <TableHead>Name</TableHead>
           <TableHead>Email</TableHead>
+          <TableHead>Username</TableHead>
           <TableHead className="w-[130px]">Status</TableHead>
           <TableHead className="w-[80px] text-right">Score</TableHead>
           <TableHead className="w-[110px] text-right">Actions</TableHead>
@@ -154,6 +155,7 @@ function ParticipantsBody({ query }: Readonly<{ query: ReturnType<typeof useCtfP
               </Link>
             </TableCell>
             <TableCell className="text-sm text-muted-foreground">{participant.email}</TableCell>
+            <TableCell className="font-mono text-sm">{participant.username ?? ""}</TableCell>
             <TableCell>
               <Badge variant="secondary">{titleCase(participant.status)}</Badge>
             </TableCell>

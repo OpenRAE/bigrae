@@ -178,6 +178,27 @@ export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
             <fieldset className="flex flex-col gap-3">
               <legend className="mb-1 text-sm font-medium">Options</legend>
               <CheckboxField id="e-team" label="Team mode" checked={state.team_mode} onChange={(c) => set("team_mode", c)} />
+              <TextField
+                id="e-sharedpassword"
+                label="Shared initial participant password (optional)"
+                type="password"
+                value={state.participant_shared_password}
+                error={firstError("participant_password_override")}
+                onChange={(v) => set("participant_shared_password", v)}
+              />
+              <p className="text-muted-foreground text-xs">
+                New participant accounts get this password and must change it at first sign-in. Leave it blank to give
+                each new account its own generated password.
+                {existing.data?.participant_shared_password_set ? " A shared password is set now." : ""}
+              </p>
+              {existing.data?.participant_shared_password_set ? (
+                <CheckboxField
+                  id="e-disablesharedpassword"
+                  label="Disable the event shared participant password"
+                  checked={state.disable_participant_shared_password}
+                  onChange={(c) => set("disable_participant_shared_password", c)}
+                />
+              ) : null}
               {state.team_mode ? (
                 <TextField
                   id="e-teamsize"

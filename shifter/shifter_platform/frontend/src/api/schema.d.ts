@@ -5828,6 +5828,8 @@ export interface components {
             readonly max_participants: number | null;
             readonly team_mode: boolean;
             readonly team_size_limit: number | null;
+            /** @description Report whether an event-shared initial password is set, never its value. */
+            readonly participant_shared_password_set: boolean;
             readonly range_config: {
                 [key: string]: unknown;
             };
@@ -5998,6 +6000,8 @@ export interface components {
             logo_url?: string;
             visible_os_types?: string[];
             theme_color?: string;
+            /** @description Event-shared initial participant password for new accounts. An empty value turns it off. */
+            participant_password_override?: string;
         };
         /** @description Display metadata, with no content, object key, owner or digest. */
         FileAsset: {
@@ -7021,6 +7025,7 @@ export interface components {
             readonly id: string;
             readonly name: string;
             readonly email: string;
+            readonly username: string | null;
             readonly status: string;
             readonly role: string;
             readonly hidden: boolean;

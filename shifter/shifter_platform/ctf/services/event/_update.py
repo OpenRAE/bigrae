@@ -124,6 +124,9 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
         raise CTFNotFoundError("Event not found") from None
     if actor_id is not None:
         actor_id = admit_event_actions(actor_id, candidate, "event.manage_config")
+    from ._crud import validate_shared_participant_password
+
+    validate_shared_participant_password(event_data)
     safe_candidate = _safe_event_update_data(candidate, event_data)
     _admit_scenario_change(candidate, safe_candidate, actor_id)
     with transaction.atomic():
