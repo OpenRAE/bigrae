@@ -33,7 +33,7 @@ def pool(monkeypatch, vpn_secret_ops):
     return vpn_secret_ops
 
 
-def _remote(target: str = _TARGET) -> RaesRemoteAccess:
+def _remote(target: str | tuple[str, ...] = _TARGET) -> RaesRemoteAccess:
     return RaesRemoteAccess(capability=build_openvpn_capability(target, datetime.now(UTC) + timedelta(days=1)))
 
 
@@ -53,7 +53,7 @@ class TestPrepare:
             raes_openvpn.prepare_raes_openvpn(_REQUEST_ID, 7, _plan(), _remote())
 
     def test_a_target_outside_the_plan_fails_closed(self, pool):
-        with pytest.raises(RaesRealizationError, match="exactly one range member"):
+        with pytest.raises(RaesRealizationError, match="identify exactly one range member"):
             raes_openvpn.prepare_raes_openvpn(_REQUEST_ID, 7, _plan(), _remote("provision.node.dc#0"))
 
     @pytest.mark.parametrize("cidrs", ["", "0.0.0.0/0", "8.8.8.0/24", "10.0.0.0/8"])
@@ -72,6 +72,16 @@ class TestPrepare:
         assert realization["target_ref"] == _TARGET
         assert realization["endpoint"] == "203.0.113.7"
         assert (7, _REQUEST_ID) in pool.profiles
+
+    def test_prepared_multi_target_access_preserves_the_exact_set(self, pool):
+        targets = (_TARGET, "provision.node.victim#0")
+        prepared = raes_openvpn.prepare_raes_openvpn(_REQUEST_ID, 7, _plan(), _remote(targets))
+
+        assert prepared.plan_access() == RaesGceVpnAccess(
+            target_refs=targets,
+            pool_cidrs=("10.49.0.0/24",),
+        )
+        assert prepared.publish()["target_refs"] == list(targets)
 
 
 class TestCleanup:

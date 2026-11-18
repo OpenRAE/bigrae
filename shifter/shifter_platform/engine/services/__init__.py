@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime
-
 import django.db as _api_django_db
 
 import engine.secrets as _api_engine_secrets
@@ -21,17 +19,6 @@ from . import _feature_artifact_launcher as _api_feature_artifact_launcher
 from . import _feature_artifacts as _api_feature_artifacts
 from . import _gcp_project_registration as _api_gcp_project_registration
 from . import _lifecycle as _api_lifecycle
-from . import _model_admission as _api_model_admission
-from . import _model_broker_control as _api_model_broker_control
-from . import _model_credentials as _api_model_credentials
-from . import _model_launch_api as _api_model_launch_api
-from . import _model_policy_transition as _api_model_policy_transition
-from . import _model_request_accounting as _api_model_request_accounting
-from . import _model_request_commit as _api_model_request_commit
-from . import _model_request_lifecycle as _api_model_request_lifecycle
-from . import _model_request_reconcile as _api_model_request_reconcile
-from . import _model_source_control as _api_model_source_control
-from . import _model_sources as _api_model_sources
 from . import _ngfw as _api_ngfw
 from . import _operation_apply as _api_operation_apply
 from . import _preparation_adapters as _api_preparation_adapters
@@ -53,13 +40,14 @@ from . import _range as _api_range
 from . import _range_by_request as _api_range_by_request
 from . import _range_escape as _api_range_escape
 from . import _range_ownership as _api_range_ownership
+from . import _range_relationships as _api_range_relationships
 from . import _receipt as _api_receipt
 from . import _runtime_plugin_bindings as _api_runtime_plugin_bindings
 from . import _runtime_plugin_controller as _api_runtime_plugin_controller
 from . import _runtime_plugin_file_selection as _api_runtime_plugin_file_selection
 from . import _runtime_plugin_operations as _api_runtime_plugin_operations
 from . import _runtime_plugins as _api_runtime_plugins
-from . import _sharing as _api_sharing
+from . import _runtime_project_parameters as _api_runtime_project_parameters
 from . import _subnet_coordination as _api_subnet_coordination
 from . import _terminal as _api_terminal
 from . import _vpn as _api_vpn
@@ -83,17 +71,28 @@ from ._disposable_workers import (
     get_disposable_worker as get_disposable_worker,
 )
 from ._disposable_workers import (
+    published_worker_profile as published_worker_profile,
+)
+from ._disposable_workers import (
     worker_credential_scope as worker_credential_scope,
+)
+from ._disposable_workers import (
+    worker_profile_binding as worker_profile_binding,
 )
 from ._identity_cutover import (
     apply_identity_cutover_resources as apply_identity_cutover_resources,
 )
-from ._identity_cutover import identity_cutover_contract_gaps as identity_cutover_contract_gaps
 from ._identity_cutover import (
     identity_cutover_resource_disposition as identity_cutover_resource_disposition,
 )
 from ._identity_cutover import (
     pending_identity_cutover_work as pending_identity_cutover_work,
+)
+from ._participant_validation import (
+    reconcile_participant_validations as reconcile_participant_validations,
+)
+from ._participant_validation import (
+    validate_participant_configurations as validate_participant_configurations,
 )
 from ._principal_lifecycle import commit_prepared_range_lifecycle as commit_prepared_range_lifecycle
 from ._principal_lifecycle import prepare_range_lifecycle as prepare_range_lifecycle
@@ -110,6 +109,7 @@ from ._range_authority import has_range_runtime as has_range_runtime
 from ._range_authority import lock_range_remote_authority as lock_range_remote_authority
 from ._range_authority import native_range_id_by_request as native_range_id_by_request
 from ._range_authority import project_range_authority as project_range_authority
+from ._range_cleanup_retry import reconcile_range_cleanup_verification as reconcile_range_cleanup_verification
 from ._vpn_profiles import get_vpn_crl as get_vpn_crl
 from ._worker_qualification import (
     WorkerQualification as WorkerQualification,
@@ -137,6 +137,18 @@ from ._worker_retirement import (
 )
 from ._worker_retirement import (
     retire_disposable_worker as retire_disposable_worker,
+)
+from ._worker_trials import (
+    WorkerTrialView as WorkerTrialView,
+)
+from ._worker_trials import (
+    collect_worker_trial as collect_worker_trial,
+)
+from ._worker_trials import (
+    get_worker_trial as get_worker_trial,
+)
+from ._worker_trials import (
+    start_worker_trial as start_worker_trial,
 )
 
 transaction = _api_django_db.transaction
@@ -198,62 +210,6 @@ dispatch_prepared_range_resume = _api_lifecycle.dispatch_prepared_range_resume
 pause_range = _api_lifecycle.pause_range
 resume_range = _api_lifecycle.resume_range
 
-admit_range_model_access = _api_model_admission.admit_range_model_access
-
-advance_model_call = _api_model_broker_control.advance_model_call
-commit_model_call = _api_model_broker_control.commit_model_call
-finish_model_call = _api_model_broker_control.finish_model_call
-reserve_model_call = _api_model_broker_control.reserve_model_call
-
-authenticate_model_access = _api_model_credentials.authenticate_model_access
-exchange_model_enrollment = _api_model_credentials.exchange_model_enrollment
-issue_model_enrollment = _api_model_credentials.issue_model_enrollment
-refresh_model_access = _api_model_credentials.refresh_model_access
-
-disable_optional_model_preparation = _api_model_launch_api.disable_optional_model_preparation
-fence_model_policy_publication = _api_model_launch_api.fence_model_policy_publication
-get_model_launch_preparation = _api_model_launch_api.get_model_launch_preparation
-get_model_warm_scope = _api_model_launch_api.get_model_warm_scope
-list_model_launch_refreshes = _api_model_launch_api.list_model_launch_refreshes
-prepare_model_launch = _api_model_launch_api.prepare_model_launch
-project_model_launch_authority = _api_model_launch_api.project_model_launch_authority
-record_model_observations = _api_model_launch_api.record_model_observations
-
-admit_range_model_policy_change = _api_model_policy_transition.admit_range_model_policy_change
-begin_range_model_policy_change = _api_model_policy_transition.begin_range_model_policy_change
-get_range_model_policy_status = _api_model_policy_transition.get_range_model_policy_status
-revoke_range_model_access = _api_model_policy_transition.revoke_range_model_access
-
-RequestIdempotency = _api_model_request_accounting.RequestIdempotency
-ReservationOutcome = _api_model_request_accounting.ReservationOutcome
-reserve_request = _api_model_request_accounting.reserve_request
-
-commit_request_spend = _api_model_request_commit.commit_request_spend
-
-DispatchGrant = _api_model_request_lifecycle.DispatchGrant
-charge_unknown = _api_model_request_lifecycle.charge_unknown
-check_dispatch_lease = _api_model_request_lifecycle.check_dispatch_lease
-fence_revoked_requests = _api_model_request_lifecycle.fence_revoked_requests
-open_dispatch = _api_model_request_lifecycle.open_dispatch
-release_before_dispatch = _api_model_request_lifecycle.release_before_dispatch
-renew_continuation_lease = _api_model_request_lifecycle.renew_continuation_lease
-settle_request = _api_model_request_lifecycle.settle_request
-
-apply_late_evidence = _api_model_request_reconcile.apply_late_evidence
-close_expired_revocations = _api_model_request_reconcile.close_expired_revocations
-reconcile_expired_dispatches = _api_model_request_reconcile.reconcile_expired_dispatches
-reconcile_model_requests = _api_model_request_reconcile.reconcile_model_requests
-
-model_source_execution = _api_model_source_control.model_source_execution
-
-ModelSourceView = _api_model_sources.ModelSourceView
-authorize_model_source_organization = _api_model_sources.authorize_model_source_organization
-compile_authorized_model_sources = _api_model_sources.compile_authorized_model_sources
-create_model_source = _api_model_sources.create_model_source
-list_model_sources = _api_model_sources.list_model_sources
-project_authorized_model_sources = _api_model_sources.project_authorized_model_sources
-retire_unused_model_source_credentials = _api_model_sources.retire_unused_model_source_credentials
-update_model_source = _api_model_sources.update_model_source
 
 create_ngfw = _api_ngfw.create_ngfw
 destroy_ngfw = _api_ngfw.destroy_ngfw
@@ -290,6 +246,7 @@ prepare_ngfw_lifecycle = _api_principal_ngfw.prepare_ngfw_lifecycle
 
 PreparedRaesRangeCreation = _api_principal_range_create.PreparedRaesRangeCreation
 prepare_raes_range_creation = _api_principal_range_create.prepare_raes_range_creation
+publish_range_relationships = _api_range_relationships.publish_range_relationships
 
 PreparedWarmRangeClaim = _api_principal_warm_claim.PreparedWarmRangeClaim
 commit_warm_range_claim = _api_principal_warm_claim.commit_warm_range_claim
@@ -373,6 +330,8 @@ RuntimePluginPackView = _api_runtime_plugin_bindings.RuntimePluginPackView
 bind_runtime_plugin = _api_runtime_plugin_bindings.bind_runtime_plugin
 has_runtime_plugin_binding = _api_runtime_plugin_bindings.has_runtime_plugin_binding
 runtime_plugin_file_selection = _api_runtime_plugin_file_selection.runtime_plugin_file_selection
+runtime_plugin_plan_parameters = _api_runtime_project_parameters.runtime_plugin_plan_parameters
+project_parameters_for_binding = _api_runtime_project_parameters.project_parameters_for_binding
 list_runtime_plugin_bindings = _api_runtime_plugin_bindings.list_runtime_plugin_bindings
 prepare_runtime_plugin_binding = _api_runtime_plugin_bindings.prepare_runtime_plugin_binding
 prepare_runtime_plugin_pack_binding_removal = _api_runtime_plugin_bindings.prepare_runtime_plugin_pack_binding_removal
@@ -386,21 +345,6 @@ change_runtime_plugin = _api_runtime_plugins.change_runtime_plugin
 install_runtime_plugin = _api_runtime_plugins.install_runtime_plugin
 list_runtime_plugins = _api_runtime_plugins.list_runtime_plugins
 
-MembershipEvidence = _api_sharing.MembershipEvidence
-ModelAccessRangeView = _api_sharing.ModelAccessRangeView
-SharingError = _api_sharing.SharingError
-drain_sharing_binding = _api_sharing.drain_sharing_binding
-get_or_create_allocation_group = _api_sharing.get_or_create_allocation_group
-invalidate_sharing_authority = _api_sharing.invalidate_sharing_authority
-preview_effective_policy = _api_sharing.preview_effective_policy
-project_selector_resolution = _api_sharing.project_selector_resolution
-publish_authority_fence = _api_sharing.publish_authority_fence
-publish_membership_projection = _api_sharing.publish_membership_projection
-publish_sharing_binding = _api_sharing.publish_sharing_binding
-resolve_model_access_range_page = _api_sharing.resolve_model_access_range_page
-resolve_model_access_range_reference = _api_sharing.resolve_model_access_range_reference
-resolve_model_access_range_views = _api_sharing.resolve_model_access_range_views
-validate_sharing_binding = _api_sharing.validate_sharing_binding
 
 read_subnet_reservation = _api_subnet_coordination.read_subnet_reservation
 release_subnet_reservation = _api_subnet_coordination.release_subnet_reservation
@@ -452,10 +396,3 @@ reserve_warm_generation = _api_warm_pool_admission.reserve_warm_generation
 
 WarmRecoveryProgress = _api_warm_pool_sweep.WarmRecoveryProgress
 reconcile_retained_warm_generations = _api_warm_pool_sweep.reconcile_retained_warm_generations
-
-
-def reconcile_model_allocations(*, now: datetime | None = None, limit: int = 100) -> int:
-    """Lazily expose allocation cleanup without importing models during app setup."""
-    from ._model_allocation_lifecycle import reconcile_model_allocations as reconcile
-
-    return reconcile(now=now, limit=limit)

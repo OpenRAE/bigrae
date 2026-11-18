@@ -114,6 +114,11 @@ if __name__ == "__main__":
     project_parser.add_argument("--request-id", required=True)
     project_parser.add_argument("--operation-id", required=True)
 
+    trial_parser = subparsers.add_parser("worker-trial", help="Run or collect one disposable worker trial")
+    trial_parser.add_argument("operation", choices=["run", "collect"])
+    trial_parser.add_argument("--request-id", required=True)
+    trial_parser.add_argument("--trial-id", required=True)
+    trial_parser.add_argument("--operation-id", required=True)
     vpn_parser = subparsers.add_parser("vpn-profile", help="Individual OpenVPN certificate lifecycle")
     vpn_parser.add_argument("operation", choices=["issue", "revoke", "refresh-crl", "purge"])
     vpn_parser.add_argument("--request-id", required=True)
@@ -125,6 +130,10 @@ if __name__ == "__main__":
         from gcp_project_registration import run_project_registration
 
         run_project_registration(args.request_id, args.operation_id, operation=args.operation)
+    elif args.resource == "worker-trial":
+        from worker_trial_ops import run_worker_trial_operation
+
+        run_worker_trial_operation(args.request_id, args.trial_id, args.operation, args.operation_id)
     elif args.resource == "vpn-profile":
         from vpn_profile_ops import run_vpn_profile_operation
 

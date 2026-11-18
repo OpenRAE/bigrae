@@ -94,7 +94,7 @@ class AdrGuardTests(unittest.TestCase):
         adr_008 = next(entry for entry in registry if entry["id"] == "ADR-008")
 
         self.assertIn(
-            "docs/architecture/gcp-range-secret-project-boundary-preflight-1586.md",
+            "docs/_deprecated/architecture/gcp-range-secret-project-boundary-preflight-1586.md",
             adr_008["evidence"],
         )
 
@@ -6150,7 +6150,7 @@ class LilraeIdentityBoundaryTests(unittest.TestCase):
     def test_identity_preflight_may_name_prohibited_relationships(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
-            rel = "docs/architecture/aptl-lilrae-techvault-identity-preflight-2062.md"
+            rel = "docs/_deprecated/architecture/aptl-lilrae-techvault-identity-preflight-2062.md"
             self._write(
                 repo_root,
                 rel,
@@ -6164,7 +6164,7 @@ class LilraeIdentityBoundaryTests(unittest.TestCase):
     def test_retired_techvault_note_requires_historical_boundary(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
-            rel = "docs/architecture/techvault-encrypted-ami-preflight-1455.md"
+            rel = "docs/_deprecated/architecture/techvault-encrypted-ami-preflight-1455.md"
             self._write(repo_root, rel, "# TechVault Encrypted AMI Preflight\n")
 
             violations = ADR_GUARD.check_lilrae_identity_boundary(repo_root, [rel])
@@ -6176,7 +6176,7 @@ class LilraeIdentityBoundaryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             repo_root = Path(tmp)
             current_rel = "docs/architecture/example.md"
-            retired_rel = "docs/architecture/techvault-encrypted-ami-preflight-1455.md"
+            retired_rel = "docs/_deprecated/architecture/techvault-encrypted-ami-preflight-1455.md"
             self._write(
                 repo_root,
                 current_rel,

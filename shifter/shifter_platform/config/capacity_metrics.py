@@ -8,7 +8,7 @@ cannot see from outside the process: how busy each portal web worker is and how
 full its terminal-session budget is.
 
 Design contract (see
-``docs/architecture/portal-app-saturation-autoscaling-preflight-940.md``):
+``docs/_deprecated/architecture/portal-app-saturation-autoscaling-preflight-940.md``):
 
 - Signals live in their own ``Shifter/PortalCapacity`` namespace, never
   ``Shifter/WorkerHealth`` (that namespace is worker-container liveness).

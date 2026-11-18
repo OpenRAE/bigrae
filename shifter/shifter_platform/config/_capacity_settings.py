@@ -4,7 +4,7 @@ Extracted from ``config/settings.py`` to keep that module under the 500-line cap
 (Sonar S104), mirroring ``config/_oidc_settings.py``. These knobs configure the
 per-worker ``Shifter/PortalCapacity`` emitter; the design contract lives in
 ``config/capacity_metrics.py`` and
-``docs/architecture/portal-app-saturation-autoscaling-preflight-940.md``.
+``docs/_deprecated/architecture/portal-app-saturation-autoscaling-preflight-940.md``.
 
 When enabled, each Uvicorn worker runs a daemon that publishes its in-flight HTTP
 request concurrency, worker busy ratio, and terminal-session utilization to

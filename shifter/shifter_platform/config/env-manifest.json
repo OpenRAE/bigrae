@@ -593,6 +593,11 @@
       "source_file": "config/_guacamole_settings.py"
     },
     {
+      "default": "'480'",
+      "name": "GUACAMOLE_SESSION_TTL_MINUTES",
+      "source_file": "config/_guacamole_settings.py"
+    },
+    {
       "default": "'3'",
       "name": "GUACAMOLE_TOKEN_RETRY_ATTEMPTS",
       "source_file": "config/settings.py"
@@ -671,21 +676,6 @@
       "default": null,
       "name": "MISSION_CONTROL_LEASE_POLICY_JSON",
       "source_file": "config/_mission_control_lease_settings.py"
-    },
-    {
-      "default": "''",
-      "name": "MODEL_ACCESS_CATALOG_DIGEST",
-      "source_file": "config/_model_access_settings.py"
-    },
-    {
-      "default": "''",
-      "name": "MODEL_ACCESS_CATALOG_PATH",
-      "source_file": "config/_model_access_settings.py"
-    },
-    {
-      "default": "'false'",
-      "name": "MODEL_ACCESS_ENABLED",
-      "source_file": "config/_model_access_settings.py"
     },
     {
       "default": null,

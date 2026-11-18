@@ -22,6 +22,7 @@ triggers a deploy (#730).
 | Event | What Runs |
 |-------|-----------|
 | Pull request | Quality only; no deploy |
+| Merge group in the `dev` merge queue | `CodeQL`, `Lint PR title`, `GitGuardian scan`, and PR Gate with Quality; no deploy |
 | Push to `dev` / `main` | Quality only; no deploy |
 | Manual dispatch, `environment: aws-dev` | Quality, then AWS dev deploy |
 | Release Please release on `main` | GCP release (`release-gcp.yml`) for the tagged commit; no deploy |
@@ -41,6 +42,43 @@ gh workflow run deploy.yml --ref <branch> -f environment=aws-dev
 
 The branch you run it from is the code that deploys; the `environment` input
 picks where it goes. `dev` is the integration branch (Quality only).
+
+## Merge Queue
+
+Pull requests to `dev` merge through a GitHub merge queue (ADR-003-R9).
+`main` does not use a merge queue and keeps strict status checks.
+
+The `dev` repository ruleset is in `docs/adr/dev-ruleset.json`.
+GitHub configures a merge queue only through a ruleset.
+The ruleset requires the `Lint PR title`, `PR Gate`, and `GitGuardian scan` contexts and CodeQL code scanning results.
+It does not require strict status checks, because the queue tests each pull request against the latest `dev`.
+The queue squash-merges (ADR-042-R4) and can put more than one pull request in a merge group.
+
+A pull request must pass the required checks before it enters the queue.
+The queue then makes a merge group commit that contains `dev`, the queued pull requests in front, and the pull request.
+Each required context runs again on the `merge_group` event for that commit.
+When a check fails, the queue removes the pull request, and the pull request does not merge.
+
+On a merge group, the workflows have no pull request payload:
+
+- Quality change detection compares with the queue base branch. The SonarQube Cloud scan uses the same base, so tests and coverage run for all new code in the merge group.
+- The other change detection and the diff-based gates compare with `merge_group.base_sha`.
+- `Lint PR title` reads the current titles of the queued pull requests in the merge group.
+- `GitGuardian scan` runs `ggshield` on the merge group commits. The GitGuardian App does not report on a merge group.
+- The SonarQube Cloud scan is a pull request analysis of the queued pull request against the queue base branch.
+- CodeQL gates `dev` through a `code_scanning` ruleset rule. The code scanning check run does not report on a merge group, so it cannot be a required status check.
+
+The composite action `.github/actions/merge-group-prs` reads the queued pull requests from the GraphQL merge queue.
+The `dev-merge-queue` ADR guard fails when a required producer does not run on `merge_group`.
+
+A repository administrator applies the ruleset:
+
+```bash
+gh api -X POST "repos/{owner}/{repo}/rulesets" --input docs/adr/dev-ruleset.json
+```
+
+The ruleset replaces the classic branch protection for `dev`.
+Remove the classic `dev` protection after the ruleset is active.
 
 ## Workflow Files
 
@@ -94,22 +132,23 @@ The orchestrator uses path filters to run only relevant jobs:
 | `shifter_engine` | BigRAE Engine code, ECR module |
 | `shifter_platform` | Portal/Guacamole Terraform and platform deploy workflow |
 | `quality_relevant` | Any non-docs change, plus guardrail docs; controls whether Quality runs without launching deploy or Terraform plan jobs |
-| `portal_image` | Portal image build inputs (`shifter/shifter_platform/**`, `cyberscript`, `installation`, `.dockerignore`); triggers the portal image build/deploy on a deploy dispatch without running Terraform |
+| `portal_image` | Portal image build inputs (`shifter/shifter_platform/**`, `installation`, `.dockerignore`); triggers the portal image build/deploy on a deploy dispatch without running Terraform |
 | `gcp` | GCP Terraform, the Helm chart, GCP scripts, the GCP deploy command modules in `scripts/bootstrap`, GCP cloud adapters |
 | `mcp` | MCP package changes, routed to Quality only |
 | `quality_only` | Non-deploy test-support and guardrail surfaces (`scripts/stack-smoke/**`, each development pack under `shifter/environment-packs/`, `_quality.yml`, ADR/guardrail checker paths), routed to Quality only. Shipped environment packs route to `portal_image` |
 
 ## Quality Gate
 
-Runs on every PR, direct push to `dev`/`main`, and every manual deploy dispatch
-(the safety gate before an apply) unless the diff is ordinary docs-only.
+Runs on every PR, merge group, direct push to `dev`/`main`, and every manual
+deploy dispatch (the safety gate before an apply) unless the diff is ordinary
+docs-only.
 Guardrail docs such as `.github/pull_request_template.md`,
 `.github/copilot-instructions.md`, `docs/adr/**`, and the ADR enforcement
 guide are quality-relevant and still run Quality.
 
-The deploy workflow exposes one `quality_relevant` output for this decision:
-non-docs changes make it true, ordinary docs-only changes make it false, and
-guardrail docs make it true even though they are documentation. PR Gate accepts
+The deploy workflow exposes one `quality_relevant` output for this decision.
+Non-docs changes and guardrail docs make it true.
+Ordinary docs-only changes make it false. PR Gate accepts
 a skipped Quality job only when `quality_relevant` is false.
 
 Inside `_quality.yml`, the always-run path-detection job runs
@@ -163,7 +202,7 @@ image when the top-level Quality job is legitimately skipped.
   soft-fail is scoped to Kubernetes manifest hardening and does not justify
   Terraform soft-fail.
 - **Tests**: package-local Python, JavaScript, and harness suites, including
-  `shifter_platform`, `cyberscript`, `shifter/engine/provisioner`, `packer`,
+  `shifter_platform`, `shifter/engine/provisioner`, `packer`,
   `installation`, `scripts/bootstrap`, `scripts/gcp`, `scripts/stack-smoke`, the Postgres migration proof, and MCP package
   tests including `mcp/planner`.
 - **IaC scanning**: Checkov for Terraform is a **blocking gate** under
@@ -180,25 +219,19 @@ Commit-message or label-based test skips are not accepted by `deploy.yml`.
 
 ## Terraform Flow
 
-Each component follows the same pattern:
+Authorized deployment jobs initialize and validate the selected root before creating a saved plan.
+The common lock timeout is five minutes:
 
-1. **Plan job**:
-   - Checkout repo (tfvars are committed)
-   - `terraform init`
-   - `terraform validate`
-   - `terraform plan -lock-timeout=5m -out=tfplan`
-   - Comment plan on PR (if PR)
+```text
+terraform plan -lock-timeout=5m -out=tfplan
+terraform apply -lock-timeout=5m tfplan
+```
 
-2. **Apply job** (if plan succeeds):
-   - Skip on PRs
-   - Create a local saved `tfplan` with `terraform plan -lock-timeout=5m -out=tfplan`
-   - `terraform apply -lock-timeout=5m tfplan`
-
-Branch and manual deploy runs are queued by the Deploy workflow's concurrency
-group so a newer push cannot cancel a Terraform process after it has started
-mutating remote infrastructure or while it holds the backend lock. Pull request
-runs may still be cancelled by newer commits because they do not execute apply
-jobs.
+The job supplies its protected backend and deployment values before these commands.
+Individual reusable workflows retain their own job dependencies and readback checks.
+Pull requests and pushes validate; they do not authorize infrastructure apply.
+Manual dispatches queue by deployment so another run cannot cancel an active mutation.
+Newer commits may cancel pull-request validation because it performs no apply.
 
 The saved plan file created inside the apply job is the apply contract. If state
 moves after that local plan, Terraform should fail the saved-plan apply instead
@@ -217,72 +250,34 @@ for the required surface.
 
 ## AWS Platform Deployment
 
-The `Core -> Range -> Engine -> Platform` chain above is the order between the
-reusable workflows. This section documents the ordered sequence of jobs and
-steps **inside** the platform reusable workflow (`_shifter-platform.yml`), which
-is the portal (platform) stack. Jobs run in this order (each `needs` the
-previous):
+This reference describes `_shifter-platform.yml` inside the orchestrator's AWS dependency chain.
+Use [developer setup](setup.md#aws-deployment) for authorized contributor deployment.
+Published AWS installation support is planned.
 
-1. **`push-guacamole-images`**: build and push the `guacd` and
-   `guacamole-client` images to ECR (only when the pinned tag is absent). Runs
-   first because the portal plan and apply reference them.
-2. **`plan`**: render `local.auto.tfvars` from `TF_VARS_<ENV>_PORTAL` (and the
-   engine image digest into `zz-engine-image.auto.tfvars`), render the backend
-   config, then `init` / `validate` / `plan`.
-3. **`apply`** (branch/dispatch only), in order:
-   - **Drain Service Discovery** registrations the plan will delete (scale
-     affected ECS services to zero) so replacements do not collide.
-   - `terraform apply` the saved plan.
-   - **Restore ECS desired counts** after apply.
-   - **Assert portal inspection** route and endpoint wiring (no-op when
-     inspection is off; fails the deploy if the routed firewall path is
-     unhealthy).
-   - **Verify RDS pending modifications applied** (dev only): a successful apply
-     that leaves non-empty `PendingModifiedValues` fails the job.
-   - **Wait for Guacamole ECS services to stabilize** (bounded poll).
-4. **`build`**: build and push the portal image
-   (`shifter/shifter_platform/Dockerfile`) to `shifter-<env>-portal`. The image
-   is tagged `<short-sha>-<run-id>-<run-attempt>` and the job outputs its
-   digest; there is no `latest` tag.
-5. **`deploy`**, in order:
-   - **Resolve topology** from Terraform state (`enable_autoscaling`,
-     `ec2_instance_id`, `asg_name`).
-   - **Update Parameter Store** with the new image digest and tag.
-   - **Update bootstrap admin parameters** (staff / superuser emails).
-   - **Run database migrations** on one healthy instance (ASG mode; single
-     instance mode migrates inside its deploy script).
-   - **Deploy via SSM** (single instance) **or trigger an ASG instance
-     refresh** (ASG mode).
-   - **Verify ASG image digest** and **verify ASG worker health** (ASG mode).
-6. **`verify`**: post-deploy health check.
-7. **`post-deploy-smoke`** (dev applies only, `continue-on-error`): run
-   `scripts/smoke-test.sh`. A failure opens a `[smoke-test]` bug issue and does
-   not fail the deploy. Requires the `SMOKE_*` secrets (see
-   [`docs/dev/deploy-secrets.md`](../../dev/deploy-secrets.md)).
+| Job | Current responsibility |
+| --- | --- |
+| `push-guacamole-images` | Build and attest Guacamole images when platform inputs require it |
+| `apply` | Initialize the portal data-plane root, create a saved plan, apply it, and check infrastructure readback |
+| `build` | Build the portal image after Guacamole images succeed or are legitimately skipped |
+| `eks-deploy` | After a successful build, render protected config, backend inputs, and exact image digests; invoke the EKS lifecycle |
+| `post-deploy-smoke` | Run the configured development smoke and retain its separate failure result |
 
-**Single instance mode** targets the `{env}-portal-ec2` tagged instance.
-**Auto Scaling mode** refreshes `{env}-portal-asg` and verifies the new digest
-and worker health on every in-service instance.
+`build` does not depend on a legacy ECS/ASG portal apply.
+The EKS lifecycle owns its isolated Terraform root and shared Helm deployment.
+It provisions database prerequisites, runs migrations through the dedicated owner duty, and verifies workload and admission boundaries.
+The image tag is `<short-sha>-<run-id>-<run-attempt>`; deployment consumes the digest.
+There is no `latest` deployment identity.
 
-**Refresh scope and timing (issue #1639).** The ASG instance refresh runs only when the
-portal actually changed (the portal image or platform Terraform). An engine-provisioner-only
-deploy no longer triggers a full portal refresh. Refresh readiness tracks the ALB target
-group (`health_check_type = "ELB"`), so a refresh converges once the portal is actually
-serving instead of waiting out the EC2 "insufficient data to evaluate its health" window.
-The ASG timing is environment-owned Terraform (`health_check_type`,
-`health_check_grace_period`, and `instance_refresh_instance_warmup` on the portal root),
-so a dev or proof tenant can shorten the health-grace to speed up the deploy, test, fix
-loop without changing prod.
+Earlier SSM deployment, portal instance refresh, and Guacamole ECS stabilization steps do not describe the current EKS path.
+Do not use their topology outputs or `DB_IAM_AUTH_RUNTIME` switches to recover EKS workloads.
+See [EKS operations](../../ops/portal-eks-operations.md) and [AWS native identity](../../ops/aws-native-identity.md).
 
 ### First-run DNS timing
 
-On a fresh account the first Portal apply blocks while AWS validates ACM
-certificates and SES identities. Publish the validation records in the
-authoritative DNS zone while the apply is waiting, and publish the runtime
-routing records (ALB CNAMEs, CTFd A record) once the apply creates those
-endpoints. The exact records and commands are in
-[`docs/dev/deploy-secrets.md`](../../dev/deploy-secrets.md)
-under the first-run DNS validation and routing sections.
+On a fresh account, publish SES validation records from the portal data-plane outputs.
+The EKS root supplies ingress certificate validation through `bundle_outputs.ingress_certificate_dns_records`.
+Publish those records in the authoritative DNS zone, then verify certificate issuance before routing application traffic.
+See [deployment secrets and DNS](../../dev/deploy-secrets.md) for the current output owners and routing procedure.
 
 ## Environment Detection
 
@@ -305,8 +300,10 @@ dispatch environment=aws-dev   → AWS dev deploy
 
 `deploy.yml` runs on `workflow_dispatch`. The `environment` input selects the deployment target; the bootstrap flags are strict by default.
 
-- `environment`: which environment to deploy: `aws-dev` or `gcp-dev`. A closed choice enum. The branch you run the workflow from is the code that deploys.
-- `aws_first_deploy` (default `false`): allow the AWS engine deploy to skip the ECS task-family existence check. Set `true` only for the first-ever deploy to a fresh AWS environment, before the platform Terraform apply has created the provisioner task definition. On any normal deploy a missing or typo'd task family fails the run instead of skipping silently. Clear it (re-run without the flag) once the platform stack has been applied.
+- `environment`: the closed deployment choice currently contains only `aws-dev`.
+  The selected ref supplies the code.
+  No GCP target is selectable.
+- `aws_first_deploy` (default `false`): allow the AWS engine deploy to skip the ECS task-family existence check. Set `true` only for the first-ever deploy to a fresh AWS environment, before the platform Terraform apply has created the provisioner task definition. On any normal deploy, a missing or misspelled task family fails the run. Clear the flag once the platform stack has been applied.
 - `gcp_require_active_certificate` (default `true`): require the GKE ManagedCertificate to be Active for the public hostname. Set `false` only for first-time GCP bootstrap, before DNS for the hostname has been pointed at the ingress IP.
 
 ## Runner Policy
@@ -332,11 +329,14 @@ The self-hosted runner has:
 3. Expand the job you want to inspect
 4. Each step shows its logs
 
-Terraform plans are also posted as PR comments.
+Keep full Terraform plans in the approved private evidence boundary.
+Only redacted summaries belong in public review records.
 
 ## Common Issues
 
-### Workflow Doesn't Trigger
+<a id="workflow-doesnt-trigger"></a>
+
+### Workflow Does Not Trigger
 - Check branch protection rules
 - Verify path filters match your changes
 - Look for `paths-filter` in deploy.yml
@@ -353,15 +353,23 @@ Terraform plans are also posted as PR comments.
 - Review build logs for dependency issues
 
 ### Deploy Fails
-- Check EC2 instance is running
-- Verify SSM agent is healthy
-- Review SSM command output in AWS console
+
+- Check the exact failed job and its selected protected environment.
+- For EKS, inspect the normal lifecycle output, rollout, admission checks, and authenticated health.
+- Use [RB012](../../runbooks/rb012-portal-deployment.md) and the EKS operations guide.
+- Retired EC2 portal SSM commands do not diagnose current EKS application workloads.
 
 ### GCP Deploy Fails
+
+No GCP workflow target is currently selectable.
+Use [RB023](../../runbooks/rb023-gcp-deployment.md) for the release-driven deployment path.
+The following points describe the retained CI adapter if an authorized target is added.
 - Verify each purpose Environment has its explicit `GCP_*_SERVICE_ACCOUNT` and `GCP_WORKLOAD_IDENTITY_PROVIDER` secrets set
 - Check the `Render deployment inputs` step: the CI adapter stops when a required input is missing or when a GitHub value conflicts with the root config
 - Check the `Run the infrastructure stage` step for IAM or bucket-name conflicts on the GCS backend bucket. The step log shows each command that ran and the error of the command that failed
 - The command keeps the Terraform outputs, the runtime env, and the generated Helm values in a private temporary directory, not in the workflow log. Review the ingress resources and the `BackendConfig` resources if hostname, DNS, certificate, or Cloud Armor behavior is wrong
 - Review the `guacamole-runtime` Secret sync in the `Run the rollout stage` step if the Guacamole client pods stay in `CreateContainerConfigError`
-- If the portal auth path is wrong, verify the Terraform outputs expose `public_hostname`, `managed_tls_enabled=true`, that Identity Platform was provisioned successfully, that the blocking function and MFA configuration are present, that the bootstrap operator credentials were supplied, and that the managed certificate reaches `Active`
+- If portal authentication fails, verify `public_hostname` and `managed_tls_enabled=true` in the Terraform outputs.
+  Check Identity Platform, its blocking function, and MFA configuration.
+  Confirm that bootstrap operator credentials were supplied and the managed certificate reaches `Active`.
 - Check `kubectl rollout status` output for the specific control-plane deployment that stalled

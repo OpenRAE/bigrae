@@ -70,7 +70,7 @@ DNS, startup order, and bootstrap behavior. The substrate may enforce provider s
 membership, ownership, and access-binding invariants on the resulting resources, but it
 must not classify scenario internals into a universal placement taxonomy. The GCP
 specialization is fixed by
-[`scenario-gcp-range-cell-contract-preflight-1344.md`](scenario-gcp-range-cell-contract-preflight-1344.md).
+[`../_deprecated/architecture/scenario-gcp-range-cell-contract-preflight-1344.md`](../_deprecated/architecture/scenario-gcp-range-cell-contract-preflight-1344.md).
 
 A successful operation returns one closed, versioned result containing the request and
 operation identifiers, `changed` or `already-converged`, achieved lifecycle state,
@@ -83,7 +83,7 @@ Remote-access output is limited to readiness and non-secret binding metadata: in
 UUID, protocol, address/port, username when non-secret, and a secret *reference* when a
 credential is required. Passwords, private keys, Guacamole tokens/URLs, kubeconfigs,
 and provider access tokens never cross this interface. Guacamole session construction
-and just-in-time secret resolution remain in the existing Engine/Mission Control access
+and on-demand secret resolution remain in the existing Engine/Mission Control access
 services. A scenario declares a logical member target and access channel; the platform
 resolves the concrete provider address and rejects foreign or non-member targets rather
 than accepting an arbitrary scenario-supplied hostname.
@@ -262,9 +262,9 @@ capability is advertised.
 
 The full HTTP, identity, secret-delivery, profile-shape, parity, and extensibility
 guardrails are recorded in
-[`ctf-openvpn-participant-access-preflight-1695.md`](ctf-openvpn-participant-access-preflight-1695.md)
+[`../_deprecated/architecture/ctf-openvpn-participant-access-preflight-1695.md`](../_deprecated/architecture/ctf-openvpn-participant-access-preflight-1695.md)
 and
-[`non-ctf-openvpn-range-access-preflight-1696.md`](non-ctf-openvpn-range-access-preflight-1696.md).
+[`../_deprecated/architecture/non-ctf-openvpn-range-access-preflight-1696.md`](../_deprecated/architecture/non-ctf-openvpn-range-access-preflight-1696.md).
 
 ## Conformance obligations
 
@@ -367,7 +367,7 @@ must remain unsupported/cold-fallback rather than mutating or contradicting pers
 intent.
 
 The detailed cross-layer guardrails are recorded in
-[`range-warm-pool-preflight-28.md`](range-warm-pool-preflight-28.md).
+[`../_deprecated/architecture/range-warm-pool-preflight-28.md`](../_deprecated/architecture/range-warm-pool-preflight-28.md).
 
 ## Program-reference traceability
 

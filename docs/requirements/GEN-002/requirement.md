@@ -85,7 +85,7 @@ The repo now has guardrail enforcement in ADR registry, adr_guard, CI, hooks, an
 - IMPLEMENTS → CODE_FILE `scripts/adr_guard/boundary_mock_baseline.json` (Boundary mock legacy baseline)
 - CONSTRAINS → ADR `ADR-019` (Tests mock external boundaries, not first-party topology)
 - DOCUMENTS → DOCUMENTATION `docs/technical/dev/adr-enforcement.md` (Developer ADR enforcement documentation)
-- DOCUMENTS → DOCUMENTATION `docs/architecture/raes-provisioning-plan-accessor-boundary-preflight-1937.md` (Accepted RAES accessor-boundary decision and compatibility handoff to #2082)
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/raes-provisioning-plan-accessor-boundary-preflight-1937.md` (Accepted RAES accessor-boundary decision and compatibility handoff to #2082)
 - IMPLEMENTS → CODE_FILE `scripts/quality_ownership/contract.py` (Production-path quality-ownership contract parser (#1530))
 - IMPLEMENTS → CODE_FILE `scripts/quality_ownership/classify_paths.py` (Fail-closed changed-path classifier for the _quality.yml paths job (#1530))
 - IMPLEMENTS → CONFIG `.github/quality-path-filters.yaml` (Versioned production-path quality-ownership contract (#1530))

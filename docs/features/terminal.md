@@ -1,86 +1,80 @@
 # Terminal
 
-Access range instances via SSH and RDP.
+Connect to devices in a range that you are authorized to access.
+Wait until the range is ready before opening a connection.
+Available protocols depend on the scenario, image, and backend.
 
-## SSH Access
+## SSH access
 
-Browser-based SSH terminal for command-line access to all instances.
+The browser terminal opens an SSH session for the selected device.
+The platform checks access on connection and while the session is active.
 
 ### Connect via SSH
 
-1. Go to **Terminal**
-2. Click on an instance name
-3. Terminal opens in a new tab/pane
+1. Open **Terminal**.
+2. Select a device tab.
+3. Wait for the connection status and prompt.
+4. Run only commands authorized for that guest.
 
-### Layout Options
+If the session closes, read the displayed reason before selecting **Reconnect**.
+A permission failure needs current authorization; refreshing cannot grant it.
 
-- **Tabbed view**: One instance per tab, switch between tabs
-- **Split view**: Multiple instances visible simultaneously
+### Layout options
 
-Toggle between views using the layout button in the Terminal header.
+Select **Tabs** for one visible terminal or **Split** for two panes.
+Choose each pane's device separately.
+Changing a device closes that pane's old connection and opens another.
+Keep long-running work in a guest session that can survive reconnection.
 
-## RDP Access
+## RDP access
 
-Remote Desktop for graphical access to Windows and Kali machines.
+RDP uses a server-brokered Guacamole session in another browser tab.
+An RDP button does not prove that the guest has a working desktop service.
 
 ### Connect via RDP
 
-1. Go to **Terminal**
-2. Find the instance with RDP available
-3. Click the **RDP** button
-4. Remote desktop opens in a new browser window
+1. Select the device in **Terminal**.
+2. Select **RDP**.
+3. Permit the portal's new tab if your browser blocks it.
+4. Wait for the queued session or read the reported error.
 
-### RDP Availability
+### RDP availability
 
-| Instance Type | RDP Available |
-|---------------|---------------|
-| Kali (Attacker) | Yes |
-| Windows Workstation | Yes |
-| Windows Server/DC | Yes |
-| Ubuntu | Yes |
+Check the scenario's access contract and the operator's image qualification.
+Do not infer RDP support from an OS name alone.
+The first-range Linux smoke exercise declares SSH access to both devices.
 
-## File Transfers
+## File transfers
 
-Transfer files to and from instances via SFTP in RDP sessions.
+File transfer requires a Guacamole connection with SFTP support and an approved transfer root.
+It is not available through every SSH or RDP connection.
 
-### Upload Files
+### Upload files
 
-1. Open an RDP session
-2. Press **Ctrl+Shift+Alt** to open the Guacamole menu
-3. Select **Devices** in the sidebar
-4. Drag files into the file browser or use the upload button
+1. Open a connection that supports file transfer.
+2. Press **Ctrl+Shift+Alt** to open the Guacamole menu.
+3. Open **Devices**.
+4. Use the file browser to upload an approved file.
 
-### Download Files
+### Download files
 
-1. Open the Guacamole menu (**Ctrl+Shift+Alt**)
-2. Navigate to the file in **Devices**
-3. Click the file to download
+1. Open **Devices** in the Guacamole menu.
+2. Select the authorized file to download.
+3. Store it in the approved local destination.
 
-### File Locations
+### File locations
 
-The upload directory is a per-image property recorded when the range is
-provisioned, not a fixed rule applied at connection time. The built-in images
-default to the locations below; a custom image can declare its own root.
+The image's recorded upload root determines the transfer location.
+Built-in defaults are `/home/kali`, `/home/ubuntu`, and `C:\Users\Administrator\Downloads` for their corresponding images.
+A custom image can use another root.
+Ask the operator if the connection does not expose a file browser.
 
-| Instance | Default Upload Directory |
-|----------|--------------------------|
-| Kali | `/home/kali` |
-| Ubuntu | `/home/ubuntu` |
-| Windows | `C:\Users\Administrator\Downloads` |
+## Instance types
 
-## Instance Types
-
-Each range includes different instances based on the scenario:
-
-| Role | Description |
-|------|-------------|
-| Attacker | Kali Linux with attack tools |
-| Victim | Workstation with your agent |
-| DC | Windows Domain Controller |
-| Server | Linux server |
+The installed scenario defines its device names, roles, images, and protocols.
+NGFW management uses its [separate access flow](ngfw.md#accessing-ngfw-management).
 
 ## Tips
 
-- Keep SSH terminals open while running long commands
-- Use split view when coordinating between attacker and victim
-- RDP sessions may require login credentials displayed in the Terminal page
+Keep downloaded credentials and exercise files private.
+Use [terminal troubleshooting](../how-to/troubleshooting.md#terminal-issues) when a connection fails.

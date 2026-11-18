@@ -12,8 +12,9 @@ can never diverge on what a fresh standup requires:
 The checks are declarative and the evaluators are pure and injectable
 (``env`` / ``repo_root`` / ``tool_exists``) so tests assert observable behavior
 without patching first-party seams (ADR-019). The operator-facing prerequisite
-list is documented in ``docs/dev/deploy-secrets.md`` and the setup guide; the
-``test_spec_matches_deploy_secrets_doc`` parity test keeps them in step.
+list is documented in ``docs/dev/deploy-secrets.md`` (AWS) and
+``docs/dev/gcp-ci-adapter.md`` (the retained GCP CI adapter); the doc parity
+tests keep them in step.
 """
 
 from __future__ import annotations
@@ -181,6 +182,7 @@ def _shifter_config_secret(environment: str) -> str:
 _AWS_COMPONENT_STACKS = {"core": "CORE", "range": "RANGE", "portal": "PORTAL", "eks": "EKS"}
 _AWS_DEFAULT_COMPONENTS = ("core", "range", "portal")
 _DOCS = "docs/dev/deploy-secrets.md"
+_GCP_CI_DOCS = "docs/dev/gcp-ci-adapter.md"
 
 
 def _aws_secret_checks(environment: str, component: str | None) -> list[SecretCheck]:
@@ -227,44 +229,44 @@ def _aws_secret_checks(environment: str, component: str | None) -> list[SecretCh
 def _gcp_secret_checks(component: str | None = None) -> list[SecretCheck]:
     """Build GCP checks for the selected protected-environment boundary."""
     checks = [
-        SecretCheck("GCP_PROJECT_ID", "GCP project", True, f"Set GCP_PROJECT_ID (see {_DOCS})."),
+        SecretCheck("GCP_PROJECT_ID", "GCP project", True, f"Set GCP_PROJECT_ID (see {_GCP_CI_DOCS})."),
         SecretCheck(
             "SHIFTER_CONFIG_GCP_DEV",
             "Validated gcp-dev shifter.yaml payload",
             True,
-            f"Set SHIFTER_CONFIG_GCP_DEV (see {_DOCS}).",
+            f"Set SHIFTER_CONFIG_GCP_DEV (see {_GCP_CI_DOCS}).",
         ),
-        SecretCheck("GCP_PUBLIC_HOSTNAME", "Public hostname", True, f"Set GCP_PUBLIC_HOSTNAME (see {_DOCS})."),
+        SecretCheck("GCP_PUBLIC_HOSTNAME", "Public hostname", True, f"Set GCP_PUBLIC_HOSTNAME (see {_GCP_CI_DOCS})."),
         SecretCheck(
             "GCP_IDENTITY_ALLOWED_EMAIL_DOMAIN",
             "Identity allowed email domain",
             True,
-            f"Set GCP_IDENTITY_ALLOWED_EMAIL_DOMAIN (see {_DOCS}).",
+            f"Set GCP_IDENTITY_ALLOWED_EMAIL_DOMAIN (see {_GCP_CI_DOCS}).",
         ),
         SecretCheck(
             "GCP_DEPLOY_SERVICE_ACCOUNT",
             "Deploy service account",
             True,
-            f"Set GCP_DEPLOY_SERVICE_ACCOUNT (see {_DOCS}).",
+            f"Set GCP_DEPLOY_SERVICE_ACCOUNT (see {_GCP_CI_DOCS}).",
         ),
         SecretCheck(
             "GCP_WORKLOAD_IDENTITY_PROVIDER",
             "Workload identity provider",
             True,
-            f"Set GCP_WORKLOAD_IDENTITY_PROVIDER (see {_DOCS}).",
+            f"Set GCP_WORKLOAD_IDENTITY_PROVIDER (see {_GCP_CI_DOCS}).",
         ),
         SecretCheck(
             "GCP_BOOTSTRAP_ADMIN_EMAIL",
             "Bootstrap operator email",
             True,
-            f"Set GCP_BOOTSTRAP_ADMIN_EMAIL, or opt out with {SKIP_OPERATOR_ENV}=true (see {_DOCS}).",
+            f"Set GCP_BOOTSTRAP_ADMIN_EMAIL, or opt out with {SKIP_OPERATOR_ENV}=true (see {_GCP_CI_DOCS}).",
             opt_out_env=SKIP_OPERATOR_ENV,
         ),
         SecretCheck(
             "GCP_BOOTSTRAP_ADMIN_PASSWORD",
             "Bootstrap operator password",
             True,
-            f"Set GCP_BOOTSTRAP_ADMIN_PASSWORD, or opt out with {SKIP_OPERATOR_ENV}=true (see {_DOCS}).",
+            f"Set GCP_BOOTSTRAP_ADMIN_PASSWORD, or opt out with {SKIP_OPERATOR_ENV}=true (see {_GCP_CI_DOCS}).",
             opt_out_env=SKIP_OPERATOR_ENV,
         ),
     ]
@@ -275,7 +277,7 @@ def _gcp_secret_checks(component: str | None = None) -> list[SecretCheck]:
                 "GCP_RELEASE_SCAN_SERVICE_ACCOUNT",
                 "Exact-release scan service account",
                 True,
-                f"Set GCP_RELEASE_SCAN_SERVICE_ACCOUNT (see {_DOCS}).",
+                f"Set GCP_RELEASE_SCAN_SERVICE_ACCOUNT (see {_GCP_CI_DOCS}).",
             ),
         )
     return checks

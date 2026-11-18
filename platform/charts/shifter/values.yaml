@@ -280,7 +280,7 @@ workers:
         memory: 256Mi
         ephemeral-storage: 128Mi
       limits:
-        cpu: 500m
+        cpu: "1"
         memory: 512Mi
         ephemeral-storage: 256Mi
   raesOperationRecordPrune:
@@ -314,11 +314,11 @@ workers:
     resources:
       requests:
         cpu: 100m
-        memory: 256Mi
+        memory: 512Mi
         ephemeral-storage: 128Mi
       limits:
-        cpu: 500m
-        memory: 512Mi
+        cpu: "1"
+        memory: 2Gi
         ephemeral-storage: 256Mi
   outboxDrainer:
     replicas: 1
@@ -372,7 +372,7 @@ workers:
         memory: 256Mi
         ephemeral-storage: 128Mi
       limits:
-        cpu: 250m
+        cpu: "1"
         memory: 512Mi
         ephemeral-storage: 256Mi
 
@@ -526,33 +526,3 @@ edge:
       enabled: false
       certificateName: platform-managed-cert
       frontendConfigName: platform-frontend-config
-
-# M06 packages the M05 process contract; enable only with qualified listener images.
-modelBroker:
-  enabled: false
-  role_arn: ""
-  target_group_arn: ""
-  vpc_id: ""
-  endpoint_cidrs: []
-  health_check_cidrs: []
-  hostname: ""
-  vip: ""
-  admitted_subnets: []
-  global_access: false
-  tls_secret_name: ""
-  control_tls_secret_name: ""
-  trust_configmap_name: ""
-  gsa: ""
-  region: ""
-  control_env: {}
-  catalog_json: ""
-  catalog_digest: ""
-  identities_json: ""
-  providers_json: ""
-  enrollment_env: {}
-  provisioner_subject: ""
-  broker_subject_id: ""
-  provisioner_subject_id: ""
-  fingerprint_secret_name: ""
-  fingerprint_key_version: ""
-  fingerprint_previous_secret_name: ""

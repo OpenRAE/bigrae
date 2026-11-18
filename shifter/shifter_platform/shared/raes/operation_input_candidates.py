@@ -7,13 +7,14 @@ management metadata and unbounded candidate collections fail at parse time.
 from __future__ import annotations
 
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, get_args
 
 from shared.raes.image_policy import (
     validate_management_ssh_port,
     validate_management_ssh_username,
     validate_provider_image_id,
 )
+from shared.runtime_plugin_binding import GceDiskInterface, GceNicType
 
 from .operation_input_identity import (
     _KEY_SEPARATOR,
@@ -26,8 +27,11 @@ from .operation_input_identity import (
 MAX_IMAGE_CANDIDATES = 64
 MAX_IMAGE_KEYS = 256
 
+_HARDWARE_KEYS = frozenset({"nic_type", "disk_interface", "enable_secure_boot"})
+
 # Exactly the registry columns consumed by the resolver, including optional
-# participant-host fields for a preconfigured machine image.
+# participant-host fields for a preconfigured machine image and the non-default
+# GCE hardware choices of a worker host image profile.
 _CANDIDATE_KEYS = frozenset(
     {
         "image_id",
@@ -45,8 +49,9 @@ _CANDIDATE_KEYS = frozenset(
         "participant_readiness_contract",
         "participant_readiness_manifest_sha256",
     }
+    | _HARDWARE_KEYS
 )
-_OPTIONAL_CANDIDATE_KEYS = frozenset(
+_OPTIONAL_CANDIDATE_KEYS = _HARDWARE_KEYS | frozenset(
     {
         "image_id",
         "management_ssh_port",
@@ -90,7 +95,22 @@ def _validate_participant_host_fields(candidate: dict[str, Any], field: str, boo
         raise RaesOperationInputError(f"{field} participant host fields require a preconfigured host")
 
 
-def _validated_candidate(raw: object, field: str) -> dict[str, Any]:
+def _validate_hardware_fields(candidate: dict[str, Any], field: str, provider: str) -> None:
+    """Accept only non-default GCE boot-image choices; defaults never cross the boundary."""
+    if _HARDWARE_KEYS.isdisjoint(candidate):
+        return
+    if (
+        provider != "gce"
+        or candidate.get("image_kind", "image") != "image"
+        # A present interface key must name a choice: empty is a default and never crosses.
+        or candidate.get("nic_type", "GVNIC") not in get_args(GceNicType)[1:]
+        or candidate.get("disk_interface", "NVME") not in get_args(GceDiskInterface)[1:]
+        or candidate.get("enable_secure_boot", False) is not False
+    ):
+        raise RaesOperationInputError(f"{field} hardware choices are invalid")
+
+
+def _validated_candidate(raw: object, field: str, provider: str) -> dict[str, Any]:
     """Return one registry candidate row closed on exactly the resolver's columns."""
     candidate = _require_mapping(raw, field)
     _require_exact_keys(candidate, _CANDIDATE_KEYS, field, optional=_OPTIONAL_CANDIDATE_KEYS)
@@ -108,6 +128,7 @@ def _validated_candidate(raw: object, field: str) -> dict[str, Any]:
     if not isinstance(image_ref, str) or not image_ref.strip():
         raise RaesOperationInputError(f"{field} image_ref is invalid")
     _validate_host_fields(candidate, field)
+    _validate_hardware_fields(candidate, field, provider)
     return candidate
 
 
@@ -130,7 +151,9 @@ def _validated_candidates(value: object) -> dict[str, tuple[dict[str, Any], ...]
             f"raes operation input image_candidates['{key}'] carries more than {MAX_IMAGE_CANDIDATES} candidates",
         )
         projected[key] = tuple(
-            _validated_candidate(entry, f"raes operation input image_candidates['{key}'][{index}]")
+            _validated_candidate(
+                entry, f"raes operation input image_candidates['{key}'][{index}]", key.split(_KEY_SEPARATOR)[0]
+            )
             for index, entry in enumerate(entries)
         )
     return projected

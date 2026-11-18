@@ -27,5 +27,5 @@ No accessibility pass has ever been done on this codebase. WCAG 2.2 AA is the st
 - TESTS → TEST `shifter/shifter_platform/frontend/src/test/a11y-surface-reconcile.test.ts` (fail-closed surface reconciliation)
 - DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#2117` (remaining ADR-055 tail: nightly matrix, deployed scans, WCAG-EM manual audit, and the release-evidence gate)
 - DOCUMENTS → ADR `docs/adr/index.yaml` (ADR-055 continuous accessibility enforcement contract)
-- DOCUMENTS → DOCUMENTATION `docs/architecture/continuous-accessibility-enforcement-preflight-713.md` (WCAG scope, manual-audit cadence, release evidence, triage, and waiver design)
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/continuous-accessibility-enforcement-preflight-713.md` (WCAG scope, manual-audit cadence, release evidence, triage, and waiver design)
 - DOCUMENTS → GITHUB_ISSUE `713` (Architecture decision for continuous accessibility enforcement)

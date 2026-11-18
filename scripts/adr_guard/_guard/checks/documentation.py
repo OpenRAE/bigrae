@@ -122,11 +122,13 @@ def check_no_agent_attribution(repo_root: Path, files: list[str] | None) -> list
 
 LILRAE_IDENTITY_RULE_ID = "ADR-024-R6"
 ADR_INDEX_PATH = "docs/adr/index.yaml"
-_LILRAE_IDENTITY_PREFLIGHT = "docs/architecture/aptl-lilrae-techvault-identity-preflight-2062.md"
+_LILRAE_IDENTITY_PREFLIGHT = (
+    "docs/_deprecated/architecture/aptl-lilrae-techvault-identity-preflight-2062.md"
+)
 _LILRAE_CURRENT_PROSE_FILES = {
     ADR_INDEX_PATH,
-    "docs/architecture/aces-runtime-target-backend-manifest-preflight-1233.md",
-    "docs/architecture/raes-hard-cutover-preflight-1862.md",
+    "docs/_deprecated/architecture/aces-runtime-target-backend-manifest-preflight-1233.md",
+    "docs/_deprecated/architecture/raes-hard-cutover-preflight-1862.md",
     "docs/architecture/raes-migration-adr.md",
     "docs/requirements/PLAT-2010/requirement.md",
     "docs/requirements/PLAT-211/requirement.md",
@@ -137,12 +139,12 @@ _LILRAE_CURRENT_PROSE_FILES = {
     "docs/requirements/PLAT-216/requirement.md",
 }
 _RETIRED_TECHVAULT_DOCS = {
-    "docs/architecture/gce-per-instance-image-resolution-preflight-1761.md",
-    "docs/architecture/gcp-normal-scenario-range-cell-migration-preflight-1350.md",
-    "docs/architecture/gcp-techvault-gce-image-preflight-1760.md",
-    "docs/architecture/packer-scenario-bake-standardization-preflight-1469.md",
-    "docs/architecture/rev1-build-deployment-provenance-preflight-1519.md",
-    "docs/architecture/techvault-encrypted-ami-preflight-1455.md",
+    "docs/_deprecated/architecture/gce-per-instance-image-resolution-preflight-1761.md",
+    "docs/_deprecated/architecture/gcp-normal-scenario-range-cell-migration-preflight-1350.md",
+    "docs/_deprecated/architecture/gcp-techvault-gce-image-preflight-1760.md",
+    "docs/_deprecated/architecture/packer-scenario-bake-standardization-preflight-1469.md",
+    "docs/_deprecated/architecture/rev1-build-deployment-provenance-preflight-1519.md",
+    "docs/_deprecated/architecture/techvault-encrypted-ami-preflight-1455.md",
 }
 _HISTORICAL_BOUNDARY_MARKER = "**Historical boundary (issue #2062, 2026-08-19):**"
 _FALSE_TECHVAULT_PAIR = re.compile(r"\bTechVault\s*/\s*(?:APTL|LilRAE)\b", re.IGNORECASE)

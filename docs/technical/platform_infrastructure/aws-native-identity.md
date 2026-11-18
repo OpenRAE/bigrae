@@ -1,7 +1,7 @@
 # AWS native identity implementation
 
 This contract records how the AWS backend binds the shared identity model
-(#2313). The [design](../../design/aws-native-identity-integration-2313.md)
+(#2313). The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/aws-native-identity-integration-2313.md)
 records the owner decisions and the threat model.
 [ADR-066](../../adr/066-account-principal-resource-scope.md) is the binding model.
 
@@ -109,9 +109,7 @@ a source identity equal to their user name.
 
 ## Verification
 
-Unit tests cover the verifier, admission, the client, session assurance, the
-gateway (Python and Java), database settings, the entrypoint, the provisioning
-and reconciliation commands, the rotation function and the refresh Job.
+Unit tests cover verification, admission, clients, sessions, Python/Java gateways, database settings, and the entrypoint. They also cover provisioning, reconciliation, rotation, and credential refresh.
 Terraform tests cover the IAM grants, secret readers, rotation settings and the
 access node. A released-server PostgreSQL test covers the IAM logins and duties.
 These tests do not prove live IAM, token renewal, rotation or tunnel behavior.

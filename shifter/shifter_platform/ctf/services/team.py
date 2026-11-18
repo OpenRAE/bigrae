@@ -328,27 +328,7 @@ def disband_team(participant_id: UUID) -> None:
     with transaction.atomic():
         locked_team = _lock_team(team.pk, extra_ids=(participant.pk,))
         _require_no_solves(locked_team)
-        member_ids = tuple(locked_team.members.order_by("pk").values_list("pk", flat=True))
         locked_team.members.update(team=None)
-        from ctf.bridges import cms_invalidate_model_access_authority
-        from shared.model_access import AuthorityInvalidation, AuthorityState, OwnedReference
-
-        for offset in range(0, len(member_ids), 62):
-            cms_invalidate_model_access_authority(
-                AuthorityInvalidation(
-                    deployment_id=None,
-                    authority_refs=(
-                        OwnedReference(owner="ctf", reference=f"event:{locked_team.event_id}"),
-                        OwnedReference(owner="ctf", reference=f"team:{locked_team.pk}"),
-                        *(
-                            OwnedReference(owner="ctf", reference=f"participant:{member_id}")
-                            for member_id in member_ids[offset : offset + 62]
-                        ),
-                    ),
-                    state=AuthorityState.UNKNOWN,
-                    reason="ctf-team-disbanded",
-                )
-            )
         locked_team.delete()
     logger.info("Captain %s disbanded team %s", participant.pk, team.pk)
 

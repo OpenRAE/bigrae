@@ -80,6 +80,12 @@ variable "provisioner_service_account_email" {
   type        = string
 }
 
+variable "openfga_enabled" {
+  description = "Enable principal-bound VPN profiles and their signed revocation list."
+  type        = bool
+  default     = false
+}
+
 variable "machine_type" {
   description = "Server machine type. One OpenVPN process uses one core."
   type        = string
@@ -150,4 +156,10 @@ variable "nat_logs" {
   })
   default  = {}
   nullable = false
+}
+
+variable "shared_guest_firewalls" {
+  type        = bool
+  default     = false
+  description = "Create the fixed OpenVPN channel rules keyed by the shifter-range-vpn-ssh and shifter-range-vpn-rdp tags, which replace the per-range pool rules."
 }

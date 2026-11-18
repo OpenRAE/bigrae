@@ -7,7 +7,7 @@ import pytest
 from django.db import connection
 
 from cms.exceptions import CMSError
-from shared.authorization import AuthorizationDecision, CredentialCeiling, DecisionKind, TargetRef
+from shared.authorization import AuthorizationDecision, CredentialCeiling, DecisionKind, RelationshipState, TargetRef
 from shared.credentials import CredentialContext
 from shared.identity_scope import ResourceScope
 
@@ -56,7 +56,13 @@ def content_actor(settings, monkeypatch, django_user_model):
             DecisionKind.ALLOWED if allowed else DecisionKind.DENIED, "policy_allowed" if allowed else "policy_denied"
         )
 
-    monkeypatch.setattr(port, "_provider_factory", lambda: SimpleNamespace(check=check))
+    relationships = set()
+    provider = SimpleNamespace(
+        check=check,
+        write_relationships=lambda change: relationships.add(change.grant_tuple),
+        read_relationships=lambda change: RelationshipState(change.grant_tuple in relationships, False),
+    )
+    monkeypatch.setattr(port, "_provider_factory", lambda: provider)
     return SimpleNamespace(
         credential=credential,
         scope=ResourceScope("account", accounts[0].uuid),

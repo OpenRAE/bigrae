@@ -37,6 +37,7 @@ from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shlex
 import subprocess
 import sys
@@ -300,6 +301,17 @@ class PromotionTitleLintTests(unittest.TestCase):
             if "semantic-pull-request" in str(step.get("uses", ""))
         )
 
+    def _resolve_env(self, value: object) -> object:
+        """Resolve a whole-value ``${{ env.NAME }}`` reference to the workflow env.
+
+        The workflow keeps one rule set in its ``env`` for the pull_request
+        action and the merge_group step (ADR-003-R9).
+        """
+        match = re.fullmatch(r"\$\{\{\s*env\.([A-Za-z_][A-Za-z0-9_]*)\s*\}\}", str(value).strip())
+        if not match:
+            return value
+        return self.workflow["env"][match.group(1)]
+
     def test_triggers_on_every_branch_that_requires_the_context(self) -> None:
         branches = self.workflow["on"]["pull_request"]["branches"]
         for branch in TITLE_LINT_BRANCHES:
@@ -312,7 +324,7 @@ class PromotionTitleLintTests(unittest.TestCase):
         The promotion title comes from `devmain`; the release title is
         release-please's, and linting `main` newly puts it in scope.
         """
-        with_config = self.lint_step["with"]
+        with_config = {key: self._resolve_env(value) for key, value in self.lint_step["with"].items()}
         for title in (PROMOTION_TITLE, RELEASE_PR_TITLE):
             with self.subTest(title=title):
                 prefix, separator, subject = title.partition(": ")

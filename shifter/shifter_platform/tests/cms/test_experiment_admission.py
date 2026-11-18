@@ -1,6 +1,7 @@
 """Installed public contracts admit a synthetic pack without runtime side effects."""
 
 import base64
+import hashlib
 import io
 import json
 import shutil
@@ -28,9 +29,10 @@ pytestmark = pytest.mark.django_db
 def test_installed_pack_admission_retains_all_trials_and_reloads_without_compilation(experiment_inputs, monkeypatch):
     import socket
 
-    from cms.models import ExperimentBatch, ExperimentEntry
+    from cms.models import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
     from cms.services import load_experiment_batch
     from shared.raes import experiment_admission
+    from shared.raes.experiment_dispatch_inputs import trial_scenario_bytes
 
     compiler = experiment_admission.compile_admitted_trial_plan
     original_sdl = (experiment_inputs[3] / "sdl/experiment-fixture.sdl.yaml").read_bytes()
@@ -56,7 +58,24 @@ def test_installed_pack_admission_retains_all_trials_and_reloads_without_compila
     assert ExperimentEntry.objects.count() == 64
     assert admit(experiment_inputs).id == batch.id
     raw = batch.inputs
-    assert len(raw["snapshots"]) == 64
+    # #2922: the record keeps one digest per entry. Each entry's exact snapshot has its own row.
+    assert "snapshots" not in raw
+    assert ExperimentSnapshot.objects.count() == 64
+    stored = dict(ExperimentSnapshot.objects.values_list("plan_entry_id", "snapshot_json"))
+    assert set(stored) == set(raw["snapshot_digests"]) == set(raw["plan"]["entries"])
+    for entry_id, snapshot in stored.items():
+        assert trial_scenario_bytes(raw, entry_id, snapshot) == snapshot.encode()
+        assert "sha256:" + hashlib.sha256(snapshot.encode()).hexdigest() == raw["snapshot_digests"][entry_id]
+    entry_id = next(iter(stored))
+    with pytest.raises(ValueError, match="admitted digest"):
+        trial_scenario_bytes(raw, entry_id, stored[entry_id] + " ")
+    with pytest.raises(ValueError, match="admitted digest"):
+        trial_scenario_bytes(raw, entry_id, None)
+    # Admission reads back each written snapshot and refuses one that differs from its recorded digest.
+    written = [(entry_id, len(stored[entry_id].encode()))]
+    changed = io.BytesIO(b" " * written[0][1])
+    with pytest.raises(ValueError, match="recorded digest"):
+        list(experiment_admission.read_snapshots(raw, changed, written))
     assert raw["capture_specs"]
     assert base64.b64decode(raw["artifacts"]["docs/protocol.md"]["base64"]) == (root / "docs/protocol.md").read_bytes()
     for name in ("brief-terse", "brief-rich"):
@@ -90,6 +109,72 @@ def test_installed_pack_admission_retains_all_trials_and_reloads_without_compila
 def test_concurrency_cannot_exceed_authority_or_isolation(experiment_inputs, concurrency):
     with pytest.raises(CMSError):
         admit(experiment_inputs, concurrency=concurrency)
+
+
+def test_admission_binds_the_batch_to_the_selected_published_worker_profile(experiment_inputs):
+    """#2924: the batch retains one exact worker host profile; an unpublished selection is refused."""
+    from engine.models import WorkerPolicyRecord
+    from shared.disposable_workers import WorkerPolicy
+
+    policy = WorkerPolicy.model_validate(WorkerPolicyRecord.objects.get().configuration)
+    batch = admit(experiment_inputs)
+    assert batch.inputs["worker_profile"] == {"name": "default", "digest": policy.profiles["default"].digest}
+    actor, organization, source, root, authority = experiment_inputs
+    with pytest.raises(CMSError, match="worker profile"):
+        admit((actor, organization, source, root, authority | {"worker_profile": "missing"}))
+
+
+def test_omitted_documents_are_derived_from_the_bound_profile_and_claim_no_workflow_results(
+    experiment_inputs, monkeypatch
+):
+    """#2928: BigRAE derives both documents from the profile; the fixture needs results that a worker lacks."""
+    from raes_processor.manifest import reference_processor_manifest_payload
+
+    from cms.models import ExperimentBatch
+    from engine.models import WorkerPolicyRecord
+    from shared.disposable_workers import WorkerPolicy
+    from shared.raes import experiment_admission
+    from shared.raes.worker_apparatus import ApparatusDeclaration, worker_realization_envelope
+
+    authority = experiment_inputs[-1]
+    offers = authority.pop("backend")["capabilities"]["observation"]["capture_offers"]
+    authority["apparatus"] = {"schema_version": "bigrae.apparatus-declaration/v1", "capture_offers": offers}
+    del authority["realization_envelope"]
+    authority["processor"] = reference_processor_manifest_payload(compatible_backends=["shifter-disposable-worker"])
+    compiler, refusals = experiment_admission.compile_admitted_trial_plan, []
+
+    def recorded(request):
+        result = compiler(request)
+        refusals.append((request.realization_envelope, [item.code for item in result.diagnostics]))
+        return result
+
+    monkeypatch.setattr(experiment_admission, "compile_admitted_trial_plan", recorded)
+    with pytest.raises(CMSError, match="verify installed inputs"):
+        admit(experiment_inputs)
+    profile = WorkerPolicy.model_validate(WorkerPolicyRecord.objects.get().configuration).profiles["default"]
+    apparatus = ApparatusDeclaration.model_validate(authority["apparatus"])
+    assert refusals == [
+        (worker_realization_envelope(profile, apparatus), ["trial-compiler.apparatus-capability-unproven"])
+    ]
+    assert not ExperimentBatch.objects.exists()
+
+    # A compiled plan is still refused: each fixture trial has two nodes, and a worker host is one.
+    cleanup = authority["execution_authority"]["cleanup"]
+    cleanup["clean_state"]["verification_probe_refs"] = ["absence:range"]
+    cleanup["cleanup_obligations"]["destroy"] |= {"requirement": "best-effort", "verification_probe_refs": []}
+    derive = experiment_admission.worker_backend_manifest
+    results = ["workflow-result-envelope-v1", "evaluation-result-envelope-v1"]
+    monkeypatch.setattr(
+        experiment_admission,
+        "worker_backend_manifest",
+        lambda *args: (manifest := derive(*args)).model_copy(
+            update={"supported_contract_versions": manifest.supported_contract_versions + results}
+        ),
+    )
+    with pytest.raises(CMSError, match="verify installed inputs"):
+        admit(experiment_inputs)
+    assert refusals[-1][1] == []
+    assert not ExperimentBatch.objects.exists()
 
 
 @pytest.mark.parametrize("suffix", [".task.json", ".capture.json"])
@@ -217,7 +302,7 @@ def test_unsupported_authority_is_refused_without_partial_rows(experiment_inputs
 
 @pytest.mark.parametrize("revocation", ["credential", "installation", "organization"])
 def test_revocation_during_compilation_rolls_back_admission(experiment_inputs, monkeypatch, revocation):
-    from cms.models import ExperimentBatch, ExperimentEntry
+    from cms.models import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
     from cms.services import _experiment_batches
     from management.models import PrincipalSession
 
@@ -239,6 +324,7 @@ def test_revocation_during_compilation_rolls_back_admission(experiment_inputs, m
         admit(experiment_inputs)
     assert not ExperimentBatch.objects.exists()
     assert not ExperimentEntry.objects.exists()
+    assert not ExperimentSnapshot.objects.exists()
 
 
 def test_large_factorial_is_refused_without_reduction_or_partial_rows(experiment_inputs):
@@ -262,13 +348,14 @@ def test_large_factorial_is_refused_without_reduction_or_partial_rows(experiment
 
 
 def test_retained_byte_limit_refuses_atomic_admission(experiment_inputs, monkeypatch):
-    from cms.models import ExperimentBatch, ExperimentEntry
+    from cms.models import ExperimentBatch, ExperimentEntry, ExperimentSnapshot
 
     monkeypatch.setattr("shared.raes.experiment_admission.MAX_RETAINED_BYTES", 1024)
     with pytest.raises(CMSError):
         admit(experiment_inputs)
     assert not ExperimentBatch.objects.exists()
     assert not ExperimentEntry.objects.exists()
+    assert not ExperimentSnapshot.objects.exists()
 
 
 @pytest.mark.parametrize("change", ["missing", "changed"])
@@ -324,7 +411,6 @@ def test_corrupt_retained_digest_is_refused_before_projection(experiment_inputs)
 
 
 def test_collection_joins_existing_custody_receipt_and_does_not_release_claim(experiment_inputs, tmp_path):
-    from dataclasses import asdict
 
     from cms.models import ExperimentEntry
     from cms.services import (
@@ -395,7 +481,7 @@ def test_collection_joins_existing_custody_receipt_and_does_not_release_claim(ex
     original.write_bytes(raw)
     validate_trial_archive(original, identity)
     receipt = intake_trial_archive(actor.credential, organization.uuid, identity, io.BytesIO(raw))
-    assert receipt.expected == asdict(identity)
+    assert receipt.expected == identity.as_record()
     record_experiment_collection(actor.credential, organization.uuid, claim.token, receipt.id)
     record_experiment_collection(actor.credential, organization.uuid, claim.token, receipt.id)
     assert ExperimentEntry.objects.get(token=claim.token).receipt_id == receipt.id

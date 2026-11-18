@@ -35,7 +35,7 @@ resource "aws_route" "range_to_management" {
   vpc_peering_connection_id = aws_vpc_peering_connection.range.id
 }
 
-# Preserve existing applied peering and routes when upgrading the broker layout.
+# Preserve applied peering and routes from the retired broker module layout.
 moved {
   from = module.model_broker[0].aws_vpc_peering_connection.range
   to   = aws_vpc_peering_connection.range

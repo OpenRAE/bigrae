@@ -1,5 +1,7 @@
 # Scenario contracts: CyberScript, ACES and RAES
 
+Reference for current producer compatibility, cleanup readers, and the historical contract transition.
+
 This page records the transition requested by #1531 and the current supported
 contract. Return to the [current-state handbook](../architecture.md).
 
@@ -7,16 +9,15 @@ contract. Return to the [current-state handbook](../architecture.md).
 
 CyberScript is retired. Current authoring, package registration, catalog, API,
 persistence and new provisioning use RAES. The platform currently pins
-`raes==10.7.2` and `raes-env-packs==7.2.2` in its
-[package manifest](../../../shifter/shifter_platform/pyproject.toml)
+`raes==12.0.0` and `raes-env-packs==7.2.3` in its
+[package manifest](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/pyproject.toml)
 and lockfile. Check those files when upgrading; a historical page is not a
 second pin registry. Other dependencies in that manifest, such as the Markdown
 parser added for #2090, do not change these pins.
 
 Repository-wide maintenance can change this manifest without a change to the
 scenario contract. The 2026-10-25 dependency security refresh changed only
-supporting framework and tool dependencies. The 2026-10-28 logging and
-exception-handling cleanup (#2569) changed only the Ruff lint rules. The
+supporting framework and tool dependencies. In that manifest, the 2026-10-28 logging and exception-handling cleanup (#2569) changed only Ruff lint rules. The
 2026-10-28 CI change (#2582) added the `pytest-split` test dependency and raised
 the `autobahn` floor for CVE-2026-116579. These changes did not alter the RAES
 package pins, the serialized plan versions, the ownership boundary, or the
@@ -31,10 +32,14 @@ The 2026-10-31 dependency security update (#2696) raised the `pyasn1` floor to
 0.6.5. It did not change the RAES package pins, the serialized plan versions,
 the ownership boundary, or the migration contract.
 
+The 2026-11-13 dependency security update raised the `opentelemetry-api` floor
+to 1.45.2 for CVE-2026-126360. It did not change the RAES package pins, the
+serialized plan versions, the ownership boundary, or the migration contract.
+
 Only `shared.raes` imports the released RAES module family. It validates and
 compiles authored intent into the RAES ProvisioningPlan. The independent
 provisioner validates and reads plain serialized data, not a second authored
-schema. New realization accepts `raes-provisioning-plan-v2` with producer `10.7.2`.
+schema. New realization accepts `raes-provisioning-plan-v2` with producer `12.0.0`.
 Images, cloud resources, secrets and backend realization remain BigRAE-owned.
 
 ## Transition history
@@ -51,7 +56,7 @@ bytes as a new producer is not migration. Retired source/sidecar records are
 removed by cutover migrations; terminal opaque historical envelopes remain
 factual and inert.
 
-Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `10.6.0`,
+Cleanup alone accepts the exact `raes-provisioning-plan-v2` / `11.0.1`, `v2` / `10.7.2`, `v2` / `10.6.0`,
 `v2` / `10.2.0` and `v2` / `3.5.0` pairs through the current wire checks. It also accepts the exact
 `raes-provisioning-plan-v1` / `2.0.0` pair through its isolated cleanup view. This preserves cleanup identities
 without allowing old producers for new realization. It does not revive the
@@ -62,7 +67,7 @@ retired CyberScript or ACES path.
 The target stays one released RAES contract, with backend capabilities advertised
 only when their admitted shapes have real guest effects and readback evidence.
 The current
-[backend manifest](../../../shifter/shifter_platform/shared/raes/backend-manifest.json)
+[backend manifest](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/shared/raes/backend-manifest.json)
 and realization envelope bound claims. Parsing a field, retaining a projection,
 or passing unit conformance is not proof of live scenario support. Private packs
 and executable adapters remain separately owned and authorized.
@@ -89,8 +94,13 @@ it cannot establish that condition. Rollback is an operator-controlled restore
 of the preceding release and matching pre-cutover database backup, with workers
 stopped. There is no in-process mixed-schema rollback flag.
 
-The [hard-cut decision](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/raes-migration-adr.md)
-and [ADR registry](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/adr/index.yaml)
+Before restoration, obtain data-owner approval and record the exact source, image digests, backup, and retained range inventory.
+Keep old and new writers stopped during reconciliation.
+Verify identity, policy, object references, cleanup authority, and provider resources before reopening admission.
+Do not infer rollback safety from an atomic Helm upgrade or a source-only test.
+
+The [hard-cut decision](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/raes-migration-adr.md)
+and [ADR registry](https://github.com/OpenRAE/bigrae/blob/dev/docs/adr/index.yaml)
 retain the detailed migration and realization constraints. Earlier preflights
 are historical records and do not override them.
 
@@ -111,3 +121,11 @@ pending completion results. The completion validator also requires the installed
 producer version. Preserve original plans; never relabel or replay them as the
 new version. Retained ranges keep their cleanup-only reader. Deployment and
 live tenant qualification require explicit user approval.
+
+The 11.0.1 update (#2834) uses the released fix for bounded verification of
+large secret plans. It retains the existing verification rules and adds
+10.7.2 to the cleanup-only producer list. See the
+[adoption design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/large-plan-release-adoption-2834.md).
+
+The 12.0.0 update (#2954) adopts runtime step dispatch and shared PostgreSQL
+run ledgers. It adds 11.0.1 to the cleanup-only producer list.

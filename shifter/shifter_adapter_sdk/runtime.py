@@ -9,7 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 from pathlib import Path
-from typing import Annotated, Final, Literal, Protocol, Self
+from typing import TYPE_CHECKING, Annotated, Final, Literal, Protocol, Self
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -35,7 +35,10 @@ WorkerImage = Annotated[
     Field(max_length=1024, pattern=r"^[a-z0-9][a-z0-9.:-]+/[a-z0-9/._-]+@sha256:[a-f0-9]{64}$"),
 ]
 Phase = Literal["prepare", "validate", "configure", "verify", "cleanup"]
-Capability = Literal["provision.prepare", "guest.configure", "guest.verify"]
+if TYPE_CHECKING:
+    from .validation import ValidationInput, ValidationResult
+
+Capability = Literal["provision.prepare", "guest.configure", "guest.verify", "trial.control", "participant.validate"]
 
 
 class ClosedModel(BaseModel):
@@ -81,7 +84,7 @@ class PluginManifest(ClosedModel):
     distribution: Identifier
     entry_point: Identifier
     worker_image: WorkerImage
-    capabilities: list[Capability] = Field(min_length=1, max_length=3)
+    capabilities: list[Capability] = Field(min_length=1, max_length=5)
     required_bindings: list[Identifier] = Field(max_length=64)
     provisioning_concerns: list[Identifier] = Field(
         default_factory=list, max_length=64, exclude_if=lambda value: not value
@@ -90,7 +93,12 @@ class PluginManifest(ClosedModel):
     required_files: list[Identifier] = Field(
         default_factory=list, max_length=MAX_FILE_INPUTS, exclude_if=lambda value: not value
     )
-    model_bindings: dict[Identifier, Identifier] = Field(default_factory=dict, max_length=16)
+    #: Retained so that existing manifests stay valid; model bindings were removed with the broker (#2909).
+    model_bindings: dict[Identifier, Identifier] = Field(default_factory=dict, max_length=0)
+    #: Participant configuration owners (``validator_id@version``) the plugin validates.
+    participant_validators: list[Annotated[str, Field(min_length=3, max_length=128)]] = Field(
+        default_factory=list, max_length=8, exclude_if=lambda value: not value
+    )
 
     @model_validator(mode="after")
     def unique_declarations(self) -> Self:
@@ -103,14 +111,20 @@ class PluginManifest(ClosedModel):
         ):
             if len(values) != len(set(values)):
                 raise ValueError("plugin declarations must be unique")
-        if not set(self.model_bindings.values()).issubset(self.required_bindings):
-            raise ValueError("model bindings must name declared guest bindings")
         if bool(self.provisioning_concerns) != ("provision.prepare" in self.capabilities):
             raise ValueError("preparation requires explicitly declared provisioning concerns")
         if self.required_bindings and "guest.verify" not in self.capabilities:
             raise ValueError("a runtime plugin must provide readiness verification")
         if not self.required_bindings and self.capabilities != ["provision.prepare"]:
             raise ValueError("a plugin without guests must provide only preparation")
+        if "trial.control" in self.capabilities and (
+            self.protocol != "bigrae.runtime-plugin/v2" or "guest.configure" not in self.capabilities
+        ):
+            raise ValueError("trial control requires the apparatus protocol and a configure phase")
+        if ("participant.validate" in self.capabilities) != bool(self.participant_validators) or (
+            self.participant_validators and self.protocol != "bigrae.runtime-plugin/v2"
+        ):
+            raise ValueError("participant validation requires the apparatus protocol and declared owners")
         return self
 
     @property
@@ -317,7 +331,7 @@ class RuntimePlan(ClosedModel):
         default_factory=list, max_length=4096, repr=False, exclude_if=lambda value: not value
     )
     secret_payloads: list[SecretPayloadValue] = Field(
-        default_factory=list, max_length=1024, repr=False, exclude_if=lambda value: not value
+        default_factory=list, max_length=2048, repr=False, exclude_if=lambda value: not value
     )
 
     @model_validator(mode="after")
@@ -379,17 +393,22 @@ class RuntimePlugin(Protocol):
     def plan(self, request: RuntimeInput) -> RuntimePlan: ...
 
 
-def parse_input(raw: str | bytes) -> RuntimeInput | InspectionInput:
+def parse_input(raw: str | bytes) -> RuntimeInput | InspectionInput | ValidationInput:
     """Parse a bounded request without importing any executable plugin."""
+    from .validation import ValidationInput
+
     value = decode_message(raw, limit=MAX_INPUT_BYTES)
     if isinstance(value, dict) and value.get("phase") == "inspect":
         return InspectionInput.model_validate(value)
+    # Range planning also has a validate phase; only participant validation names an owner.
+    if isinstance(value, dict) and value.get("phase") == "validate" and "owner" in value:
+        return ValidationInput.model_validate(value)
     return RuntimeInput.model_validate(value)
 
 
 def parse_result(
-    raw: str | bytes, request: RuntimeInput | InspectionInput, *, result_secret: str = ""
-) -> RuntimePlan | InspectionResult:
+    raw: str | bytes, request: RuntimeInput | InspectionInput | ValidationInput, *, result_secret: str = ""
+) -> RuntimePlan | InspectionResult | ValidationResult:
     """Host-side parser: validate shape and invocation before using worker output."""
     if request.phase == "prepare":
         from .runtime_sealing import open_result
@@ -401,6 +420,12 @@ def parse_result(
         inspection = InspectionResult.model_validate(value)
         inspection.authorize(request)
         return inspection
+    from .validation import ValidationInput, ValidationResult
+
+    if isinstance(request, ValidationInput):
+        validation = ValidationResult.model_validate(value)
+        validation.authorize(request)
+        return validation
     plan = RuntimePlan.model_validate(value)
     plan.authorize(request)
     return plan

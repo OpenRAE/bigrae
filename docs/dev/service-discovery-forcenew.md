@@ -15,9 +15,7 @@ on this resource type.
 
 ## Why It Matters
 
-ECS uses Cloud Map to route traffic between services. When ECS tasks are
-registered in a Cloud Map service and Terraform attempts to delete that service,
-the AWS API rejects the delete with a `ResourceInUse` error. The apply fails
+ECS uses Cloud Map to route traffic between services. AWS refuses to delete a Cloud Map service with registered ECS tasks. It returns `ResourceInUse` and the apply remains incomplete. The apply fails
 mid-way, leaving infrastructure in a partial state.
 
 ## Operational Rule
@@ -48,10 +46,7 @@ python3 scripts/handle_sd_replacement/handle_sd_replacement.py \
     restore --snapshot sd_replacement_snapshot.json
 ```
 
-The script reads the saved plan via `terraform show -json`, determines which ECS
-services correspond to the affected Cloud Map services using the
-`_SD_SUFFIX_TO_OUTPUT_KEY` mapping in the source file, and writes a
-`sd_replacement_snapshot.json` with the original desired counts. The restore
+The script reads `terraform show -json` output for the saved plan. `_SD_SUFFIX_TO_OUTPUT_KEY` maps affected Cloud Map services to ECS services. It saves original desired counts in `sd_replacement_snapshot.json`. The restore
 step is idempotent: if the snapshot is empty or absent, it exits 0 without
 calling AWS.
 

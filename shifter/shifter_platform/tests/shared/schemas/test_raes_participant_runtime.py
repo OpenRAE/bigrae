@@ -199,3 +199,11 @@ def test_participant_ref_exceeding_column_length_rejected():
 def test_idempotency_key_exceeding_column_length_rejected():
     # idempotency_key is validated against its 128-char storage column.
     _assert_invalid(_record(idempotency_key="k" * 129), "idempotency_key exceeds 128")
+
+
+def test_bearer_prose_is_not_a_credential_but_bearer_tokens_are():
+    from shared.schemas._raes_validation import _SECRET_VALUE_RE
+
+    assert not _SECRET_VALUE_RE.search("Issue a bearer token. Tokens never expire.")
+    for credential in ("Bearer eyJhbGciOiJIUzI1NiJ9.e30.sig", "bearer abc123", "Authorization: Bearer x-y_z"):
+        assert _SECRET_VALUE_RE.search(credential)

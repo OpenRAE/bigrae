@@ -3,6 +3,8 @@
 Applicability: Kubernetes workers and Jobs on GCP/AWS; specific AWS functions
 only when deployed. Operator: platform owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A worker repeatedly fails, a heartbeat probe is unhealthy, or an optional cloud
@@ -27,18 +29,19 @@ function reports errors. Legacy alerts may still call this a Lambda failure.
 
 3. Correlate failures with request/operation IDs and classify configuration,
    database, queue, provider, quota, policy-admission, image, or code failure.
-4. On AWS, inspect a Lambda only after confirming the named function is part of
-   the selected deployment; identity rotation functions are separate from
-   range provisioning.
+4. On AWS, confirm that the named Lambda belongs to the selected deployment before inspection. Identity rotation functions are separate from range provisioning.
 
 CTF status deliveries use the existing `worker-reconciler`. A receiver failure
-leaves the CMS status committed and retains a `cms.RangeStatusDelivery` row.
-The row contains only the source id, status transition, verified-cleanup flag,
-attempt count, next attempt time, and exception class. Retry proceeds in status
+leaves the CMS status committed and retains a `cms.RangeStatusDelivery` row. The row contains only the source id, status transition, verified-cleanup flag,
+attempt count, next attempt time, and exception class.
+
+Retry proceeds in status
 order for each range, with backoff capped at five minutes; a failing range does
 not block other ranges. Successful receiver writes and deletion of the pending
 row commit together. Pending rows survive terminal CMS states and source-row
-pruning. Correlate `CTF range status delivery retained for retry` records by
+pruning.
+
+Correlate `CTF range status delivery retained for retry` records by
 delivery id and range-instance id; `ctf_delivered` in the reconciler summary
 shows recovery. Restore the failed dependency and let the reconciler retry;
 do not delete pending rows to clear an error.

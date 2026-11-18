@@ -4,6 +4,7 @@ import json
 from copy import deepcopy
 from uuid import uuid4
 
+import pytest
 import yaml
 from cryptography.fernet import Fernet
 from raes.scenarios import load_scenario
@@ -25,7 +26,8 @@ from tests.shared.raes.test_gcp_project_demands import NeverDispatch
 from tests.shared.raes.test_realizability import _cloud_contract
 
 
-def test_full_native_cloud_input_and_cleanup_cross_the_shared_boundary(tmp_path, settings):
+@pytest.mark.parametrize("secret_count", [768, 2048])
+def test_full_native_cloud_input_and_cleanup_cross_the_shared_boundary(tmp_path, settings, secret_count):
     path = _cloud_contract(tmp_path)
     document = yaml.safe_load(path.read_text())
     runtime = document["nodes"]["web"]["runtime"]
@@ -35,7 +37,8 @@ def test_full_native_cloud_input_and_cleanup_cross_the_shared_boundary(tmp_path,
     application = runtime["platform_applications"][0]
     template = application["secrets"][0]
     application["secrets"] = [
-        {**deepcopy(template), "secret_id": f"example-{index}", "native_id": f"example-{index}"} for index in range(768)
+        {**deepcopy(template), "secret_id": f"example-{index}", "native_id": f"example-{index}"}
+        for index in range(secret_count)
     ]
     document["realization"] = {"default": "closed"}
     path.write_text(yaml.safe_dump(document))
@@ -75,7 +78,9 @@ def test_full_native_cloud_input_and_cleanup_cross_the_shared_boundary(tmp_path,
         operation_id=operation_id, request_id=uuid4(), resource="raes-range", operation="provision", payload=payload
     )
     encoded = json.dumps(envelope, sort_keys=True, separators=(",", ":")).encode()
-    assert 4 * 1024**2 < len(encoded) < 8 * 1024**2
+    assert 4 * 1024**2 < len(encoded) < 16 * 1024**2
+    if secret_count == 2048:
+        assert len(encoded) > 8 * 1024**2
     received = validate_operation_envelope(json.loads(encoded))
     assert parse_raes_operation_input(received["payload"]).plan == plan
     (request,) = runtime_plugin_requests(pin, plan, operation_id, 7, backend="gce")

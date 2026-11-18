@@ -1,75 +1,53 @@
 # Basic Range with NGFW
 
-Basic attacker-victim setup with traffic routed through your Next-Generation Firewall for network visibility in XDR/XSIAM.
+Use this guide only for an installed pack and backend that support the required firewall attachment.
+The GCE range-cell path rejects the retained NGFW attachment and segmented-routing capability.
+Do not use this page as a GCP launch procedure.
 
 ## Architecture
 
-```mermaid
-graph LR
-    subgraph Attack Subnet
-        A[Kali Attacker]
-    end
-    subgraph Target Subnet
-        W[Workstation]
-    end
-    A -->|Through NGFW| W
-    W -->|Reports to| C[Your XDR/XSIAM Console]
-    NGFW[Your NGFW] -->|Logs to| C
-```
+A compatible pack declares attacker and target networks with firewall attachment between them.
+The installed contract determines routing and telemetry; the page title does not establish either.
 
 ## Instances
 
-| Instance | OS | Role | Agent |
-|----------|-----|------|-------|
-| Attacker | Kali Linux | Attack machine | No |
-| Workstation | Windows/Linux* | Victim | Yes |
-
-*Workstation OS determined by your uploaded agent type.
+Check the pack's guest images, endpoint installer needs, and firewall reference.
 
 ## Network
 
-Two subnets with NGFW routing between them:
-
-- **Attack subnet**: Kali attacker
-- **Target subnet**: Victim workstation
-
-All traffic between subnets passes through your NGFW.
+Have the operator verify the declared segmentation and supported firewall attachment.
+Do not assume every guest flow passes through a firewall.
 
 ## Prerequisites
 
-Before launching this scenario:
-
-1. Set up an NGFW (see [NGFW Guide](../features/ngfw))
-2. Complete SCM device association
-3. Configure log forwarding to XDR/XSIAM
+Use the operator-owned [NGFW setup guide](../how-to/ngfw-demo.md) for provisioning and integration.
+Confirm backend compatibility and a ready firewall before a launch.
+SCM association, licensing, and log forwarding need their own successful results.
 
 ## Access
 
-- **Attacker (Kali)**: SSH terminal, RDP for GUI
-- **Workstation**: SSH terminal, RDP if Windows
+Use [Terminal](../features/terminal.md) for guest access.
+Use the [NGFW management flow](../features/ngfw.md#accessing-ngfw-management) for the firewall.
 
-## Use Cases
+## Use cases
 
-- Network-level threat detection demos
-- Correlating endpoint and network alerts
-- Firewall policy testing
-- Traffic analysis demonstrations
+Use only the authorized firewall policy and endpoint/network telemetry tests.
+The operator defines permitted destinations and expected evidence.
 
-## Launch Steps
+## Launch steps
 
-1. Ensure NGFW is set up and ready
-2. Go to **Ranges** in the sidebar
-3. Select **Basic Range with NGFW** scenario
-4. Select victim OS (Windows or Linux)
-5. Select your agent
-6. Click **Launch Range**
-7. Wait for provisioning
+1. Confirm the compatible backend, installed pack, and ready firewall with the operator.
+2. Open **Ranges > Launch a range**.
+3. Select the approved workspace and scenario.
+4. Select the installer required by that scenario.
+5. Select **Launch range**.
+6. Wait for **Ready** and check the pack's routing verification.
+7. [Destroy the range](../features/ranges.md#destroy-a-range) after the exercise.
 
-## What You See in XDR/XSIAM
+Range cleanup does not necessarily destroy a separately managed persistent firewall.
+Ask its operator to remove unused firewall resources through the setup procedure.
 
-With NGFW integration, you get:
+## What you see in XDR/XSIAM
 
-- Endpoint alerts from your agent
-- Network alerts from firewall logs
-- Correlated view of attack activity
-- Traffic metadata and session information
+Endpoint and network alerts depend on successful agent enrollment, log forwarding, filters, and the approved test.
+BigRAE does not guarantee an alert, correlation, or delivery time from a successful launch.

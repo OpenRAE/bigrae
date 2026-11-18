@@ -8,7 +8,6 @@ separate jobs.
 
 from __future__ import annotations
 
-import dataclasses
 import functools
 import json
 import os
@@ -19,7 +18,7 @@ from pathlib import Path
 from bootstrap_core import get_repo_root, header, info, success, warn
 from gcp_evidence import EvidenceRun
 from gcp_inputs import DeploymentInputs, private_workdir, write_private_file
-from gcp_kube import cluster_name, kube_env
+from gcp_kube import kube_env
 from gcp_process import ProcessRunner, scoped_environment, script_argv
 
 
@@ -38,45 +37,6 @@ class InfrastructureResult:
 def gateway_context(project_id: str, location: str, cluster: str) -> str:
     """Return the kubeconfig context name that Connect Gateway credentials create."""
     return f"connectgateway_{project_id}_{location}_{cluster}"
-
-
-def apply_broker_overlay(
-    runner: ProcessRunner, inputs: DeploymentInputs, *, mode: str, context: str
-) -> DeploymentInputs:
-    """Bind the reviewed broker overlay to the private config copy and reload the inputs."""
-    from installation.loader import load_root_config
-    from installation.settings_gcp import GcpBackendSettings
-
-    if inputs.broker_template_path is None:
-        return inputs
-    overlay = inputs.workdir / "model-broker-overlay.json"
-    overlay.unlink(missing_ok=True)
-    repo = get_repo_root()
-    runner.run(
-        script_argv(
-            repo,
-            "prepare_model_broker_overlay",
-            "--template",
-            str(inputs.broker_template_path),
-            "--project-id",
-            inputs.project_id,
-            "--context",
-            context,
-            "--output",
-            str(overlay),
-            "--mode",
-            mode,
-        )
-    )
-    runner.run(
-        script_argv(repo, "apply_shifter_config_overlay", "--config", str(inputs.config_path)),
-        env={"SHIFTER_CONFIG_OVERLAY_FILE": str(overlay), "SHIFTER_CONFIG_OVERLAY_JSON": None},
-    )
-    root_config = load_root_config(inputs.config_path)
-    # dataclasses.replace returns the type of its argument (DeploymentInputs).
-    return dataclasses.replace(  # NOSONAR - S5886 reports the TypeVar bound, not DeploymentInputs.
-        inputs, root_config=root_config, settings=GcpBackendSettings.from_root_settings(root_config.settings)
-    )
 
 
 def reconcile_foundation_image_network(runner: ProcessRunner, inputs: DeploymentInputs) -> None:
@@ -206,7 +166,6 @@ def infrastructure_stage(
     from gcp_prereqs import (
         ensure_identity_platform,
         ensure_state_bucket,
-        release_disabled_broker_load_balancer,
         remove_deleted_role_bindings,
     )
     from gcp_runtime import gdc_config
@@ -225,39 +184,12 @@ def infrastructure_stage(
     ensure_identity_platform(runner, {}, project_id=inputs.project_id)
     if reconcile_foundation:
         reconcile_foundation_image_network(runner, inputs)
-    cluster = cluster_name(inputs.environment)
-    context = gateway_context(inputs.project_id, inputs.region, cluster)
-    cluster_exists = (
-        runner.run(
-            ["gcloud", "container", "fleet", "memberships", "describe", cluster, "--location", inputs.region]
-            + ["--project", inputs.project_id],
-            check=False,
-        ).returncode
-        == 0
-    )
-    early_kube: dict[str, str | None] = {}
-    if cluster_exists:
-        early_kube = kube_env(
-            runner, {}, workdir=inputs.workdir, project_id=inputs.project_id, location=inputs.region, cluster=cluster
-        )
-        with scoped_environment(early_kube):
-            inputs = apply_broker_overlay(runner, inputs, mode="ensure", context=context)
     bucket = state_bucket_name(inputs.project_id)
     ensure_state_bucket(runner, {}, bucket=bucket, project_id=inputs.project_id, region=inputs.region)
     remove_deleted_role_bindings(runner, {}, project_id=inputs.project_id)
     ensure_gcp_artifact_registry_service_identity(gdc_config(inputs))
     ctx = terraform_context(inputs, inputs.workdir, {})
     terraform_init(runner, ctx, state_bucket=bucket, prefix=backend_prefix(inputs.environment))
-    if cluster_exists:
-        release_disabled_broker_load_balancer(
-            runner,
-            {},
-            broker_enabled=bool(inputs.settings.model_broker.enabled),  # type: ignore[attr-defined]
-            project_id=inputs.project_id,
-            region=inputs.region,
-            cluster=cluster,
-            kube_env=early_kube,
-        )
     terraform_apply(runner, ctx, variables=kms_adoption_variables(runner, ctx, inputs) or None)
     outputs = terraform_outputs(runner, ctx)
     # A bucket default key applies only to new writes; move the live objects too (#2564).
@@ -405,7 +337,6 @@ def _finish_rollout(
     *,
     pool: object,
     pki_changed: bool,
-    broker_enabled: bool,
     documents: list[dict[str, object]],
 ) -> None:
     """Restart and wait for the workloads, roll the VPN pool, and record the running images."""
@@ -413,8 +344,8 @@ def _finish_rollout(
     from gcp_rollout import ReleasePins, record_running_images, restart_workloads, wait_for_rollouts
 
     pins = ReleasePins.from_documents(documents)
-    restart_workloads(runner, {}, model_broker_enabled=broker_enabled)
-    wait_for_rollouts(runner, {}, model_broker_enabled=broker_enabled, policy_enabled=pins.policy is not None)
+    restart_workloads(runner, {})
+    wait_for_rollouts(runner, {}, policy_enabled=pins.policy is not None)
     if pool:
         roll_out_pool(
             runner,
@@ -428,7 +359,6 @@ def _finish_rollout(
         runner,
         {},
         identities=request.identities,
-        model_broker_enabled=broker_enabled,
         evidence=request.evidence,
         workdir=inputs.workdir,
         pins=pins,
@@ -474,7 +404,6 @@ def rollout_stage(
         activate_identity_cutover,
         identity_cutover_boundary,
         migrate_policy_datastore,
-        retire_disabled_broker,
     )
     from gcp_openvpn import ensure_pki, pool_output
     from gcp_policy import publish_policy_model, release_model
@@ -486,7 +415,6 @@ def rollout_stage(
     cluster = str(outputs["gke_cluster_name"]["value"])
     context = gateway_context(inputs.project_id, location, cluster)
     with scoped_environment(infrastructure.kube):
-        inputs = apply_broker_overlay(runner, inputs, mode="read", context=context)
         pool = pool_output(outputs)
         pki_changed = (
             ensure_pki(runner, {}, pool=pool, project_id=inputs.project_id, workdir=inputs.workdir) if pool else False
@@ -502,7 +430,6 @@ def rollout_stage(
         # publishes the release model after the policy servers are ready (#2679).
         binding = policy_settings(inputs).pinned_binding  # type: ignore[attr-defined]
         release = render(binding=binding)
-        broker_enabled = bool((release.values.get("modelBroker") or {}).get("enabled"))  # type: ignore[union-attr]
         ensure_gcp_control_plane_namespaces()
         # Only prerequisite bindings change before a conclusive probe. Policy
         # rotation that makes the incumbent runtime unverifiable stops here.
@@ -530,7 +457,6 @@ def rollout_stage(
                 cutover = cutover.with_documents(release.documents)
             activate_identity_cutover(runner, cutover)
             sync_gcp_guacamole_runtime_secret(gdc_config(inputs), outputs)
-            retire_disabled_broker(runner, enabled=broker_enabled)
             adopt_objects(runner, {}, release.documents)
             helm_upgrade(runner, {}, release.values_files)
             retire_inventoried_artifacts(runner, inputs, context)
@@ -543,7 +469,6 @@ def rollout_stage(
             request,
             pool=pool,
             pki_changed=pki_changed,
-            broker_enabled=broker_enabled,
             documents=release.documents,
         )
         active = _open_access(runner, inputs, outputs, request, documents=release.documents, cutover=cutover)

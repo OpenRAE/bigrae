@@ -117,6 +117,10 @@ def fail_current_provisioner_operation(
     except (KeyError, TypeError, ValueError):
         return False
     target = lock_provisioner_target(payload)
+    if payload.get("resource") == "worker-trial":
+        from engine.services._worker_trials import fail_worker_trial_dispatch
+
+        return fail_worker_trial_dispatch(payload, expected_operation_id)
     if isinstance(target, GcpRangeProject):
         failed = _fail_project_registration(payload, expected_operation_id, target)
     elif not isinstance(target, (Range, Instance)) or not _generation_still_authorizes_failure(

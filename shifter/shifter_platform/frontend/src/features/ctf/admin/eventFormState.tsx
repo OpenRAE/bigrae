@@ -6,7 +6,6 @@ import { Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 import { useCreateCtfEvent, useCtfEvent, useCtfScenarios, useUpdateCtfEvent } from "@/api/ctfAdmin";
-import type { ModelSourceSelection } from "@/api/model-sources";
 import { ApiError, describeMutationError } from "@/api/errors";
 import type { ContentScopeOption, CtfEventDetail, CtfEventWrite } from "@/api/types";
 import { contentScopeKey, useContentScopes } from "@/api/scenarios";
@@ -29,8 +28,6 @@ export const LIVE_NOTIFICATION_OPTIONS: ReadonlyArray<{ kind: LiveNotificationKi
 
 interface FormState {
   workspace: string;
-  model_sources: ModelSourceSelection;
-  model_source_revision: number;
   name: string;
   description: string;
   public_registration_enabled: boolean;
@@ -61,7 +58,7 @@ interface FormState {
 }
 
 const EMPTY: FormState = {
-  workspace: "", model_sources: { aliases: [] }, model_source_revision: 0,
+  workspace: "",
   name: "",
   description: "",
   public_registration_enabled: false,
@@ -94,8 +91,6 @@ const EMPTY: FormState = {
 function fromEvent(event: CtfEventDetail): FormState {
   return {
     workspace: event.workspace ?? "",
-    model_sources: event.model_sources ?? { aliases: [] },
-    model_source_revision: event.model_source_revision ?? 0,
     name: event.name ?? "",
     description: event.description ?? "",
     public_registration_enabled: Boolean(event.public_registration_enabled),
@@ -165,8 +160,6 @@ function parseCapacityHints(text: string): Record<string, unknown> {
 function toPayload(state: FormState): CtfEventWrite {
   return {
     ...(state.workspace ? { workspace: state.workspace } : {}),
-    model_sources: state.model_sources,
-    expected_model_source_revision: state.model_source_revision,
     name: state.name,
     description: state.description,
     public_registration_enabled: state.public_registration_enabled,
@@ -313,7 +306,7 @@ export function useEventFormState(mode: "create" | "edit") {
 
   function selectCatalog(value: string) {
     setSelectedCatalog(catalogChoices.find((row) => contentScopeKey(row) === value) ?? null);
-    setState((previous) => ({ ...previous, scenario_id: "", model_sources: { aliases: [] } }));
+    setState((previous) => ({ ...previous, scenario_id: "" }));
   }
 
   function browseCatalogs(offset: number) {

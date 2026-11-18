@@ -393,7 +393,7 @@ from this shell without changing these platform-wide rules:
 - **Module delivery.** Mission Control, Scenario Editor, CTF, and Admin
   implementations were delivered by #1370–#1373 and completed by #1311; this issue
   delivers the shell they mount into. See
-  `docs/architecture/spa-platform-shell-preflight-1369.md`.
+  `docs/_deprecated/architecture/spa-platform-shell-preflight-1369.md`.
 
 ## Constraints honored
 

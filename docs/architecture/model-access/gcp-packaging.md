@@ -1,5 +1,13 @@
 # GCP model broker deployment package
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 M06 / #2123 supplies disabled deployment infrastructure for PLAT-202. M05
 owns the executable broker and private Engine control server, M07 the Vertex
 adapter, M08 admission/enrollment projection, and M10 independent deployed
@@ -7,7 +15,7 @@ proof. A configured endpoint or successful render is not a qualified model
 service. Do not enable this package with an image missing those consumers.
 
 The file-backed inventory restrictions below describe the current package.
-[#2243's source-management boundary](source-management-preflight-2243.md)
+[#2243's source-management boundary](../../_deprecated/architecture/model-access/source-management-preflight-2243.md)
 permits platform-project Vertex with distinct invocation/broker identities and
 tenant-managed source publication.
 
@@ -165,7 +173,7 @@ rollout, and old/new CA overlap for existing guests. Verify both replicas after
 rollout and retain the old Secret until old connections and pods drain. A failed
 rotation leaves admission disabled; never disable certificate verification.
 
-Use the [operator probes](../../ops/model-access-gcp-probes.md). Local tests
+Use the operator probes. Local tests
 exercise render/schema, IAM guard negatives, policy union, catalog binding,
 source comparison, exact egress and unsafe combinations. Live LB/CNI source
 preservation, stolen-token rejection, effective provider permission/model
@@ -201,3 +209,5 @@ The realizer rejects missing or non-private VIPs, creates only TCP 443 to that
 exact /32, and retains the fixed firewall name for teardown and residual
 inventory even after broker configuration is disabled. The provisioner Job
 environment allowlists carry this non-secret value through both GCP renderers.
+
+<!-- vale on -->

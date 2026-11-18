@@ -37,8 +37,18 @@ def write_experiment_content_manifest(root):
 @pytest.fixture
 def experiment_inputs(custody, make_pack, tmp_path, settings):
     from cms.scenarios.pack_validation import pack_digest
+    from engine.models import WorkerPolicyRecord
+    from shared.disposable_workers import WorkerPolicy
+    from tests.engine.services.test_disposable_worker_profile import profile_data
 
     actor, organization, _ = custody
+    # Admission binds the batch to the published default worker host profile.
+    WorkerPolicyRecord.objects.create(
+        pk=1,
+        configuration=WorkerPolicy(profiles={"default": profile_data()}, max_live=2, max_provisioning=2).model_dump(
+            mode="json"
+        ),
+    )
     root = make_pack(tmp_path / "experiment-fixture", sdl=None)
     shutil.copytree(FIXTURE / "pack", root, dirs_exist_ok=True)
     write_experiment_content_manifest(root)

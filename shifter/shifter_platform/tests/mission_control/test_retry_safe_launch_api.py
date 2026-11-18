@@ -49,6 +49,66 @@ def test_replay_same_key_recovers_without_duplicate(authenticated_client, make_a
     assert PublicOperationRetryBinding.objects.filter(actor_key=str(principal_for_user(user).uuid)).count() == 1
 
 
+def test_retry_key_publishes_after_binding_commit(authenticated_client, make_agent, hydratable_scenario, monkeypatch):
+    from django.db import connection
+
+    from engine.models import PublicOperationRetryBinding
+    from shared.authorization import port
+
+    client, user = authenticated_client(email="retry-publication@example.com")
+    agent = make_agent(user)
+    factory = port._provider_factory
+    published = []
+
+    def provider():
+        policy = factory()
+        write = policy.write_relationships
+
+        def publish(change):
+            assert not connection.in_atomic_block
+            assert PublicOperationRetryBinding.objects.filter(caller_key="committed-parent").exists()
+            published.append(change)
+            write(change)
+
+        policy.write_relationships = publish
+        return policy
+
+    monkeypatch.setattr(port, "_provider_factory", provider)
+    response = _launch(client, agent.id, hydratable_scenario.scenario_id, key="committed-parent")
+
+    assert response.status_code == 200, response.content
+    assert len(published) == 1
+    binding = PublicOperationRetryBinding.objects.get(caller_key="committed-parent")
+    assert str(binding.request_id) == response.json()["range"]["request_id"]
+
+
+def test_rolled_back_retry_launch_publishes_nothing(authenticated_client, make_agent, hydratable_scenario, monkeypatch):
+    from django.db import transaction
+
+    from engine.models import PublicOperationRetryBinding
+    from shared.authorization import port
+
+    client, user = authenticated_client(email="retry-rollback@example.com")
+    agent = make_agent(user)
+    factory = port._provider_factory
+    published = []
+
+    def provider():
+        policy = factory()
+        policy.write_relationships = published.append
+        return policy
+
+    monkeypatch.setattr(port, "_provider_factory", provider)
+    with pytest.raises(ValueError, match="rollback contender"), transaction.atomic():
+        response = _launch(client, agent.id, hydratable_scenario.scenario_id, key="rolled-back-parent")
+        assert response.status_code == 200, response.content
+        assert not published
+        raise ValueError("rollback contender")
+
+    assert not published
+    assert not PublicOperationRetryBinding.objects.filter(caller_key="rolled-back-parent").exists()
+
+
 def test_same_key_different_selection_conflicts(authenticated_client, make_agent, hydratable_scenario):
     client, user = authenticated_client(email="retry-conflict@example.com")
     agent_one = make_agent(user)

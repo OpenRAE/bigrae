@@ -1,4 +1,4 @@
-"""Public dormant identity/credential administration routing surface."""
+"""Mounted native identity, credential, and audit administration routes."""
 
 from django.urls import include, path
 

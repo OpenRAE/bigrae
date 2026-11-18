@@ -17,7 +17,7 @@ Participant solve history, the specific challenges a participant has solved, sha
 
 ## Rationale
 
-Aggregate competitive standing (rank, score, solves, last solve) is inherently public on a scoreboard, but the specific set of challenges a participant has solved is sensitive: it reveals a competitor's skill areas and progress and enables targeting or collusion inference. It is nobody's business except the participant and the event organizer, unless the participant elects to share. Exposing every participant's per-challenge history to all participants (the literal reading of CTF-401's drill-down clause) is a privacy over-share; the semi-private posture (own participant + organizer) is the deliberate product decision. See ADR-028 and docs/architecture/ctf-scoreboard-contract-preflight-521.md.
+Aggregate competitive standing (rank, score, solves, last solve) is inherently public on a scoreboard, but the specific set of challenges a participant has solved is sensitive: it reveals a competitor's skill areas and progress and enables targeting or collusion inference. It is nobody's business except the participant and the event organizer, unless the participant elects to share. Exposing every participant's per-challenge history to all participants (the literal reading of CTF-401's drill-down clause) is a privacy over-share; the semi-private posture (own participant + organizer) is the deliberate product decision. See ADR-028 and docs/_deprecated/architecture/ctf-scoreboard-contract-preflight-521.md.
 
 ## Traceability
 

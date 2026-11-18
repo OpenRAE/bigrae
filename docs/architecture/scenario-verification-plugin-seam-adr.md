@@ -218,6 +218,11 @@ its compatibility contract accounts for plugin identity. Since the first host
 grants guest actions only, core guest destruction fulfills cleanup without loading
 the plugin again. Other host capabilities require separately reviewed contracts.
 
+The launcher checks up to 30 pending planning invocations per pass.
+Queue expiry and provisioner waiting use the same 30-minute planning budget.
+This budget includes queue delay and result collection across concurrent provisions.
+Each isolated plugin Job keeps its 120-second execution deadline.
+
 Guest action runtime-value references are limited to an original guest binding's
 private address and verified participant SSH public key. Core resolves the
 closed fields, bounds their JSON transport, and validates all references before

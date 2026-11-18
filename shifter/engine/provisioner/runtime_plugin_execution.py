@@ -10,7 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from shared.raes.participant_access import ParticipantAccessBinding
-from shared.runtime_plugin_binding import runtime_plugin_requests
+from shared.runtime_plugin_binding import RUNTIME_PLUGIN_PLANNING_SECONDS, runtime_plugin_requests
 from shared.runtime_plugin_preparation import RuntimePreparation
 from shifter_adapter_sdk.guest import RUNTIME_VALUES_ENV
 from shifter_adapter_sdk.runtime import GuestAction, GuestTarget, RuntimeInput, RuntimePlan
@@ -102,7 +102,7 @@ def load_guest_plugin_plans(run: RaesOperationRun) -> GuestPluginPlans | None:
             parsed.legacy_range_id,
             backend=parsed.range_backend,
         )
-        deadline = time.monotonic() + 600
+        deadline = time.monotonic() + RUNTIME_PLUGIN_PLANNING_SECONDS
         while time.monotonic() < deadline:
             plans = tuple(_read_plan(request, run) for request in requests)
             if all(plan is not None for plan in plans):

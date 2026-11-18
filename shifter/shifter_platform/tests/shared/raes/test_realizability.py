@@ -14,6 +14,7 @@ reintroduces ``apply`` fails these tests rather than provisioning a range.
 
 from __future__ import annotations
 
+from copy import deepcopy
 from pathlib import Path
 from unittest.mock import Mock
 
@@ -97,6 +98,39 @@ def test_released_cloud_contract_reaches_native_admission_without_dispatch(tmp_p
 def test_released_cloud_contract_rejects_malformed_replication(tmp_path):
     with pytest.raises(ScenarioValidationError, match="User-managed secret replication requires replicas"):
         load_scenario(_cloud_contract(tmp_path, mode="user-managed"))
+
+
+def test_large_closed_secret_plan_passes_unchanged_authority_verification(tmp_path):
+    """The released verification budget must admit the plan it compiled."""
+    from raes_processor.planner import realization_authority_diagnostics
+    from raes_runtime import RuntimeManager
+
+    from shared.raes.runtime_target import create_shifter_backend_target
+
+    path = _cloud_contract(tmp_path)
+    document = yaml.safe_load(path.read_text())
+    application = document["nodes"]["web"]["runtime"]["platform_applications"][0]
+    template = application["secrets"][0]
+    application["secrets"] = [
+        {**deepcopy(template), "secret_id": f"example-{index}", "native_id": f"example-{index}"}
+        for index in range(2048)
+    ]
+    document["realization"] = {"default": "closed"}
+    path.write_text(yaml.safe_dump(document))
+    scenario = load_scenario(path)
+    dispatch = Mock(side_effect=AssertionError("verification must not dispatch"))
+    target = create_shifter_backend_target(port=Mock(realize=dispatch), scenario=scenario)
+
+    execution = RuntimeManager(target).plan(scenario)
+
+    assert not [row for row in execution.diagnostics if row.is_error]
+    findings = realization_authority_diagnostics(execution.provisioning, manifest=target.manifest)
+    assert not [row for row in findings if row.is_error]
+    planned = execution.provisioning.resources["provision.node.web"].payload
+    secrets = planned["spec"]["node"]["runtime"]["platform_applications"][0]["secrets"]
+    assert len(secrets) == 2048
+    assert secrets[-1]["native_id"] == "example-2047"
+    dispatch.assert_not_called()
 
 
 def _variant(tmp_path: Path, *, replace: tuple[str, str]) -> Path:

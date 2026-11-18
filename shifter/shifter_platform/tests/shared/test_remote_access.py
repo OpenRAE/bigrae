@@ -62,6 +62,40 @@ def test_capability_and_binding_accept_an_exact_raes_member_target():
     assert parse_openvpn_binding(_binding(target_ref=member)).target_ref == member
 
 
+def test_multi_target_capability_and_realization_preserve_the_exact_sorted_set():
+    targets = ("provision.node.a14-kali#0", "provision.node.dc#0", "provision.node.victim#0")
+    capability = build_openvpn_capability(list(reversed(targets)), datetime.now(UTC) + timedelta(days=5))
+    parsed_capability = parse_openvpn_capability(capability)
+
+    realization = _realization(target_refs=list(targets))
+    realization.pop("target_ref")
+    parsed_binding = parse_openvpn_binding(bind_openvpn_realization(realization, 42))
+
+    assert parsed_capability.target_refs == targets
+    assert parsed_binding.target_refs == targets
+    assert capability["version"] == "openvpn-capability-v2"
+    assert parsed_binding.version == "openvpn-binding-v3"
+
+
+@pytest.mark.parametrize(
+    "targets",
+    [
+        ["provision.node.dc#0", "provision.node.a14-kali#0"],
+        ["provision.node.a14-kali#0", "provision.node.a14-kali#0"],
+    ],
+    ids=["unsorted", "duplicate"],
+)
+def test_multi_target_parser_rejects_noncanonical_sets(targets):
+    capability = {
+        "version": "openvpn-capability-v2",
+        "channel": "openvpn",
+        "target_refs": targets,
+        "teardown_at": (datetime.now(UTC) + timedelta(days=5)).isoformat(),
+    }
+    with pytest.raises(OpenVpnBindingError, match="sorted and unique"):
+        parse_openvpn_capability(capability)
+
+
 @pytest.mark.parametrize(
     "target",
     [
@@ -148,7 +182,15 @@ def test_binding_parser_rejects_open_or_unsafe_shapes(overrides, match):
 
 def test_profile_validator_accepts_a_bounded_inline_credential_for_the_binding():
     binding = parse_openvpn_binding(_binding())
-    assert validate_openvpn_profile(_profile(), binding).startswith(b"client\n")
+    delivered = validate_openvpn_profile(_profile(), binding)
+    assert delivered.startswith(b"mssfix 1300\nclient\n")
+
+
+def test_profile_validator_rejects_a_different_tunnel_mss():
+    binding = parse_openvpn_binding(_binding())
+    profile = _profile().replace("proto udp\n", "proto udp\nmssfix 1400\n")
+    with pytest.raises(OpenVpnBindingError, match="mssfix"):
+        validate_openvpn_profile(profile, binding)
 
 
 @pytest.mark.parametrize(
@@ -237,6 +279,7 @@ def test_raes_member_targets_are_the_single_instance_of_a_declared_node():
 
 def test_the_endpoint_validator_admits_only_the_bound_remote():
     profile = _profile(endpoint="34.1.2.3", port=1194)
-    assert validate_openvpn_profile_for_endpoint(profile, "34.1.2.3", 1194) == profile.encode()
+    delivered = validate_openvpn_profile_for_endpoint(profile, "34.1.2.3", 1194)
+    assert delivered == f"mssfix 1300\n{profile}".encode()
     with pytest.raises(OpenVpnBindingError, match="remote"):
         validate_openvpn_profile_for_endpoint(profile, "34.9.9.9", 1194)

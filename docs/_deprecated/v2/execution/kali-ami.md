@@ -1,5 +1,13 @@
 # Kali AMI
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Pre-baked Kali Linux with pentesting tools and Claude Code.
 
 ## What's In It
@@ -97,3 +105,5 @@ packer build -var-file=dev.pkrvars.hcl kali.pkr.hcl
 
 Base image requires AWS Marketplace subscription (free):
 [AWS Marketplace - Kali Linux](https://aws.amazon.com/marketplace/pp/prodview-fznsw3f7mq7to)
+
+<!-- vale on -->

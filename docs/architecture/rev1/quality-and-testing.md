@@ -1,5 +1,13 @@
 # REV1 Implementation And Test Review
 
+> **Applicability** Dated review reference, 2026-07-11. The recorded baseline is `cb3668ea66de45bdab66933c675f944357e60943`.
+> Findings and test results below apply to that review, not the current system.
+> This documentation review did not repeat the original verification.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Implementation quality
 
 The codebase has strong local discipline: Ruff and format gates are clean,
@@ -178,3 +186,5 @@ when the event harness represents real portal and range-access traffic.
 - Architecture guard, import contracts, Ruff, and format checks passed.
 - Relevant baseline GitHub platform, JavaScript, migration, and Sonar checks
   passed.
+
+<!-- vale on -->

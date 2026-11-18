@@ -1,28 +1,46 @@
 # Authorization policies and groups
 
-BigRAE administrators can define reusable authorization groups and policies for a workspace from **Administer → Policies and groups**.
+Use this guide to assign scoped permissions through the account administration surface.
+You need authority to administer authorization for the selected scope.
+Your credential ceiling must permit each delegated action too.
 
 ## Concepts
 
-- A **group** collects human or service principals. Adding a service principal uses the same public principal UUID and policy coverage as adding a human.
-- A **policy** collects explicit BigRAE actions such as workspace read or workspace authorization administration.
-- A **policy assignment** attaches a policy to a principal or group.
-- A **direct assignment** attaches one action directly to a principal or group.
-- A **predefined policy** is a built-in administrator/operator policy with a matching assignment group. The workspace surface provisions the Workspace Administrator display identities; the full catalog also defines installation, account, organization and event administrators.
+A **group** collects human or service principals by public principal UUID.
+A **policy** collects explicit BigRAE actions.
+A **policy assignment** attaches a policy to a principal or group.
+A **direct assignment** grants one action to a principal or group.
+Predefined administrator policies provide reusable action sets and matching groups.
+Membership and ownership remain separate from those permissions.
 
-Every grant and revoke returns an operation state:
+## Grant or revoke authority
 
-- `requested`: BigRAE recorded the intent and is applying it.
-- `confirmed`: OpenFGA primary-backed readback matches the requested state.
-- `denied`: the actor, credential or scope could not delegate the requested authority.
-- `unresolved`: the external outcome is uncertain. BigRAE blocks a conflicting edit until reconciliation confirms it.
+1. Open **Administer > Accounts**.
+2. Select the permitted account, organization, or workspace.
+3. Open its policy tab.
+4. Select the principal or group and the explicit policy or action.
+5. Review the target scope before submitting the change.
+6. Inspect the returned operation state.
 
-An accepted HTTP request is not itself proof that permission changed. Use the operation status shown by the page. Status refreshes are observational; for a `requested` or `unresolved` operation, use **Reconcile status** to explicitly retry authoritative readback. The UI deliberately does not retry mutations automatically.
+| State | Meaning |
+| --- | --- |
+| `requested` | The intent is recorded and is being applied. |
+| `confirmed` | Authoritative OpenFGA readback matches the requested state. |
+| `denied` | The actor, credential, or scope cannot delegate that authority. |
+| `unresolved` | The external outcome is uncertain. |
 
-If a response is lost before an operation ID reaches the page, use **Retry original command**. The page retains the original destination, payload and idempotency key and locks those inputs until a response is obtained. Retrying recovers the recorded operation rather than creating a conflicting edit.
+HTTP acceptance alone does not prove that permissions changed.
+For `requested` or `unresolved`, use **Reconcile status** to retry authoritative readback.
+A status refresh observes the operation; it does not repeat the mutation.
+
+If the response was lost before an operation ID arrived, use **Retry original command**.
+The page preserves the original destination, payload, and retry key.
+Do not edit those inputs or submit a different command until the original result is known.
 
 ## Safety rules
 
-Authority can be delegated only within both the signed-in actor's current grant and the admitted credential's exact action ceiling. BigRAE rejects self-add, cross-account references, unknown actions, policy/group amplification beyond that ceiling, invalid ancestry and unavailable evaluators. Removing a grant establishes an exclusion fence before deleting the positive relationship, so delayed older work cannot restore a completed revocation.
-
-This feature is the S2 administration slice. Existing BigRAE application permission surfaces are migrated in the separate S8 cutover; an old permission check never overrides a denial from this service.
+The server rejects delegation beyond current authority or credential limits.
+It rejects self-add, cross-account references, unknown actions, invalid ancestry, and unavailable evaluators.
+Revocation establishes an exclusion before removing the positive relationship.
+Delayed older work cannot restore a completed revocation.
+See [authorization reference](../technical/shifter_platform/authorization.md) for exact contracts.

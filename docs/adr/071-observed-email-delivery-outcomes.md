@@ -5,7 +5,7 @@
 Accepted 2026-10-29. Specializes ADR-051 for the CTF email channel (ADR-051-R14)
 and amends PLAT-103. Issue
 [#1525](https://github.com/Brad-Edwards/bigrae/issues/1525) records the work.
-The [design](../architecture/email-delivery-design-1525.md) records the
+The [design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/email-delivery-design-1525.md) records the
 architecture, the data flows, and the security controls.
 
 ## Context

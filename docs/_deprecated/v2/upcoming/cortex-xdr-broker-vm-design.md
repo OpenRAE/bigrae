@@ -1,5 +1,13 @@
 # Cortex XDR Broker VM Integration Design
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Overview
 
 This document outlines the design for adding Cortex XDR Broker VM instances to Shifter ranges. The Broker VM acts as a bridge between range instances and the Cortex XDR/XSIAM cloud, enabling agent proxy functionality for isolated environments.
@@ -528,3 +536,5 @@ locals {
 - [Configure the Broker VM](https://docs-cortex.paloaltonetworks.com/r/Cortex-XDR/Cortex-XDR-Pro-Administrator-Guide/Configure-the-Broker-VM)
 - [Create a Broker VM AMI](https://docs-cortex.paloaltonetworks.com/r/Cortex-XDR/Cortex-XDR-Pro-Administrator-Guide/Create-a-Broker-VM-Amazon-Machine-Image-AMI)
 - [Broker VM Applets](https://docs-cortex.paloaltonetworks.com/r/Cortex-XDR/Cortex-XDR-3.x-Documentation/Broker-VM-data-collector-applets)
+
+<!-- vale on -->

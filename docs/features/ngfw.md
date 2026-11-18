@@ -1,104 +1,82 @@
 # NGFW
 
-Set up persistent Next-Generation Firewalls for traffic logging.
+Use an operator-prepared Next-Generation Firewall only on a compatible backend.
+The current GCE range-cell path does not support the retained NGFW attachment contract.
+Do not infer supported GCP use from the presence of a setup screen.
 
-## What is NGFW?
+## What is NGFW
 
-A software firewall that routes range traffic and logs it to your XDR/XSIAM. Use NGFW scenarios to demonstrate network-level visibility alongside endpoint detection.
+An NGFW can supply firewall policy and network telemetry for a compatible range.
+The scenario and backend must support its attachment and routing requirements.
+The firewall is managed separately from an ordinary guest range.
 
 ## Prerequisites
 
-Before setting up NGFW:
+Have the operator confirm backend support, licensing, SCM registration, and log-forwarding prerequisites.
+Integration secrets use [Credentials](credentials.md), not platform personal tokens.
+You need current permission to manage or access the firewall.
 
-1. Add SCM credentials (see [Credentials](credentials))
-2. Add a deployment profile credential
-3. Have access to Strata Cloud Manager
+## Setup wizard
 
-## Setup Wizard
+Use the operator-owned [NGFW setup guide](../how-to/ngfw-demo.md) for provisioning and integration steps.
+This page covers user launch and access after successful setup.
 
-### Step 1: Name and Profile
+### Step 1: Name and profile
 
-1. Go to **Assets > NGFWs**
-2. Click **Setup NGFW**
-3. Enter a name for the NGFW
-4. Select a deployment profile
+Use the approved deployment profile identifier from the operator's procedure.
 
 ### Step 2: Registration
 
-Select your SCM credential for PIN-based device registration.
+Use the approved SCM credential identifier.
 
 ### Step 3: Confirmation
 
-Review your settings before proceeding.
+Confirm the intended firewall and destination before a cost-bearing operation.
 
 ### Step 4: Provisioning
 
-NGFW provisioning begins. This takes several minutes.
+Monitor the actual operation result.
+This guide provides no fixed provisioning-time guarantee.
 
-## After Provisioning
+## After provisioning
 
-Once the NGFW is ready:
+Ask the operator to verify licensing, SCM association, routing, and log forwarding.
+Then select the installed compatible scenario through [range launch](ranges.md#launch-a-range).
+The current public bootstrap catalog does not guarantee a legacy NGFW scenario entry.
 
-1. **Associate in SCM**: Add the device to your Strata Cloud Manager folder
-2. **Connect to XDR/XSIAM**: Configure log forwarding in SCM
-3. **Launch NGFW Range**: Use "Basic Range with NGFW" or "Cortex BYOT"
+## Accessing NGFW management
 
-## Accessing NGFW Management
+### CLI access
 
-### CLI Access
+1. Open **Assets > NGFWs**.
+2. Select the ready firewall.
+3. Under **CLI access**, select **Open CLI**.
+4. Permit the new session tab if the browser blocks it.
+5. Read any session error before retrying.
 
-Access the PAN-OS command line interface directly from BigRAE:
+The portal brokers the authorized SSH session.
+It does not expose a generic tunnel to your local computer.
 
-1. Go to your NGFW detail page
-2. Click **Open CLI** in the Management Access section
-3. A new browser tab opens with SSH access to the NGFW
-4. Login username: `admin`
+### GUI access
 
-Use the CLI for configuration changes, troubleshooting, and advanced operations.
-
-### GUI Access
-
-Access the PAN-OS web interface:
-
-**Option 1: SSH Tunnel (Recommended)**
-1. Click **Open CLI** to establish SSH connection
-2. From your local terminal, create an SSH tunnel:
-   ```bash
-   ssh -L 8443:<management_ip>:443 -i <key> admin@<management_ip>
-   ```
-3. Browse to `https://localhost:8443`
-
-**Option 2: VPN Access**
-If you have VPN access to the VPC, browse directly to `https://<management_ip>`
-
-**Option 3: Kali Desktop**
-If you have an active range with Kali, use the browser from within the Kali desktop
-
-**Login Credentials:**
-- Username: `admin`
-- Password: Set during initial bootstrap (check SCM or contact admin)
+The current detail page provides CLI access, not a general GUI launch control.
+Use only an operator-approved management network and credential procedure for the PAN-OS web interface.
+Do not infer a reachable management address from an open browser SSH session.
 
 ## Managing NGFWs
 
-From the NGFW page:
+The list shows firewall state and metadata.
+Use **Deprovision** only when authorized to remove the persistent firewall.
+Confirm that no exercise still depends on it.
+Follow the operator procedure to verify resource and license cleanup.
 
-- View provisioned NGFWs with status
-- See serial numbers and creation dates
-- Refresh status
-- Deprovision (destroy) an NGFW
+## NGFW status
 
-## NGFW Status
-
-| Status | Meaning |
-|--------|---------|
-| Provisioning | NGFW being created |
-| Awaiting Association | Waiting for SCM device association |
-| Ready | NGFW available for use |
-| Deprovisioning | NGFW being destroyed |
-| Failed | Setup error occurred |
+Use the reported state and operation error for the selected firewall.
+A ready firewall alone does not prove that a range has the required attachment or that telemetry reaches a console.
 
 ## Tips
 
-- NGFWs are persistent - set up once, reuse across multiple ranges
-- Complete SCM association before launching NGFW ranges
-- Deprovision NGFWs you no longer need to free resources
+Range destruction and persistent-firewall deprovisioning are separate operations.
+Coordinate both with the operator to avoid leaving unused resources.
+See [NGFW scenario limits](../scenarios/ngfw-range.md).

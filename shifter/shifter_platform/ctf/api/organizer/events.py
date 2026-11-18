@@ -42,7 +42,7 @@ from ctf.api.serializers import (
     ForceDeleteEventResultSerializer,
 )
 from ctf.enums import EventCapability
-from shared.api.strict_json import ModelSelectionJSONParser
+from shared.api.strict_json import ConfigurationJSONParser
 
 if TYPE_CHECKING:
     from django.db.models import QuerySet
@@ -123,7 +123,7 @@ def _event_projection_context(
 class EventListView(APIView):
     """List the organizer's events (GET) or create one (POST)."""
 
-    parser_classes = [ModelSelectionJSONParser, FormParser, MultiPartParser]
+    parser_classes = [ConfigurationJSONParser, FormParser, MultiPartParser]
 
     permission_classes = CTF_ORGANIZER_PERMISSIONS
     required_read_scopes = _EVENT_READ
@@ -225,7 +225,7 @@ class EventListView(APIView):
 class EventDetailView(APIView):
     """Get, update, or delete a single owned event."""
 
-    parser_classes = [ModelSelectionJSONParser, FormParser, MultiPartParser]
+    parser_classes = [ConfigurationJSONParser, FormParser, MultiPartParser]
 
     permission_classes = CTF_ORGANIZER_PERMISSIONS
     required_read_scopes = _EVENT_READ

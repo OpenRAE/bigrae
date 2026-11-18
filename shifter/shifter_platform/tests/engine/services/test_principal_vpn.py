@@ -84,6 +84,59 @@ def test_individual_profile_admits_administrator_without_impersonating_range_own
     assert row.initiating_principal_uuid != vpn_range.owner.uuid
 
 
+def test_browser_issued_profile_survives_logout_but_not_principal_disable(
+    vpn_range, django_user_model, live_session_credential
+):
+    from engine.models import VpnAccessProfile
+    from engine.services import VpnSessionDenied
+    from engine.services._vpn_profiles import admit_vpn_profile_authority
+    from management.models import Principal, PrincipalSession
+
+    user = django_user_model.objects.create_user(username="vpn-browser-principal")
+    credential = live_session_credential(user)
+    row = VpnAccessProfile.objects.create(
+        range=vpn_range.realized,
+        generation=vpn_range.request.request_id,
+        resource_generation=vpn_range.realized.resource_generation,
+        expires_at=timezone.now() + timedelta(minutes=30),
+        state="ready",
+        certificate_serial="5678",
+        certificate_fingerprint="ef" * 32,
+        issuer_fingerprint="cd" * 32,
+        secret_ref="synthetic-browser-profile-reference",
+        **admit_vpn_profile_authority(credential, vpn_range.request.request_id),
+    )
+    PrincipalSession.objects.filter(credential_uuid=credential.credential_uuid).delete()
+    assert connect(row).target_ip == "10.50.3.3"
+
+    Principal.objects.filter(uuid=credential.principal.uuid).update(is_active=False)
+    with pytest.raises(VpnSessionDenied):
+        connect(row)
+
+
+def test_temporary_participant_profile_is_not_bound_to_browser_transport(monkeypatch):
+    from engine.services._vpn_profiles import _resolve_profile_credential
+    from shared.authorization import CredentialCeiling, TargetRef
+    from shared.credentials import CredentialContext
+    from shared.identity_scope import PrincipalRef
+
+    event_uuid = uuid4()
+    credential = CredentialContext(
+        PrincipalRef(uuid4(), "human"),
+        "temporary",
+        uuid4(),
+        CredentialCeiling(frozenset({"event.read", "event.participate"}), TargetRef("event", event_uuid)),
+        frozenset(),
+        event_uuid,
+    )
+    monkeypatch.setattr("shared.principal_port.resolve_principal", lambda principal: principal)
+    monkeypatch.setattr(
+        "engine.services._vpn_profiles.resolve_current_credential",
+        lambda _credential: pytest.fail("issued participant profile must not depend on its browser session"),
+    )
+    assert _resolve_profile_credential(credential, retain_browser_authority=True) == credential
+
+
 def test_revoked_original_credential_cannot_borrow_later_live_credential(vpn_range):
     from engine.services import VpnSessionDenied
     from management.models import ServiceCredentialAdmission

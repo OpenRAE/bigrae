@@ -1,5 +1,8 @@
 # Privacy Notice And Cookie Disclosure
 
+Use the how-to section to replace the operator-owned notice.
+The remaining sections are reference for the template and browser behavior.
+
 The BigRAE portal ships a neutral privacy notice shell and a dismissible
 browser-storage disclosure. These are operator-facing mechanics only. They are
 not legal advice, not a binding privacy policy, and not a GDPR compliance claim.
@@ -26,9 +29,9 @@ not legal advice, not a binding privacy policy, and not a GDPR compliance claim.
    - international transfers, if any
    - lawful bases, if applicable
    - data-subject rights mechanisms
-3. Rebuild and redeploy the portal image or static bundle so the updated
-   template is served at `/privacy/`.
-4. Verify `/privacy/` is reachable without authentication and that the cookie
+3. Build the portal image with the replacement template.
+4. Deploy it through the separately authorized deployment procedure.
+5. Verify `/privacy/` is reachable without authentication and that the cookie
    notice links to it.
 
 If you maintain environment-specific template directories, point Django's
@@ -42,6 +45,7 @@ upstream file in place.
 - The notice uses disclosure language and a **Dismiss** action. It is not a
   consent banner and does not manage non-essential cookie preferences.
 - The notice does not call the server when dismissed.
+The neutral template is not an operator-approved legal notice.
 
 ## Out Of Scope
 

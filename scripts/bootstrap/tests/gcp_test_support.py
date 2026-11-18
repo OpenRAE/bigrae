@@ -129,6 +129,12 @@ def sample_gcp_outputs(project_id: str = "example-gcp-project") -> dict[str, dic
                 "user_name": "guacamole",
             }
         },
+        "guacamole_controller_identity": {
+            "value": {
+                "email": f"shiftergcpdev-guacamole-client@{project_id}.iam.gserviceaccount.com",
+                "unique_id": "123456789012345678901",
+            }
+        },
         "public_ingress_ip_name": {"value": "shifter-gcp-dev-platform-ip"},
         "public_ingress_ip_address": {"value": "34.123.45.67"},
         "public_hostname": {"value": "portal.example.test"},
@@ -148,6 +154,7 @@ def sample_gcp_outputs(project_id: str = "example-gcp-project") -> dict[str, dic
         "workload_service_accounts": {
             "value": {
                 "portal": f"shiftergcpdev-portal@{project_id}.iam.gserviceaccount.com",
+                "guacamole-client": f"shiftergcpdev-guacamole-client@{project_id}.iam.gserviceaccount.com",
                 "workers": f"shiftergcpdev-workers@{project_id}.iam.gserviceaccount.com",
                 "ctf-scheduler": f"shiftergcpdev-ctf-scheduler@{project_id}.iam.gserviceaccount.com",
                 "migrator": f"shiftergcpdev-migrator@{project_id}.iam.gserviceaccount.com",

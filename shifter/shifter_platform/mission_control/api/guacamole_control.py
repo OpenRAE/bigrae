@@ -16,8 +16,7 @@ from rest_framework.views import APIView
 
 from mission_control.guacamole_authority import renew_gateway_authority
 from shared.aws_web_identity import verify_aws_web_identity_token
-from shared.model_access import ContractError
-from shared.model_access.control_identity import verify_google_control_assertion
+from shared.control_identity import ControlAssertionError, verify_google_control_assertion
 
 _UNAUTHORIZED = "control.unauthorized"
 
@@ -54,8 +53,8 @@ class GatewayAuthentication(BaseAuthentication):
             elif email and subject:
                 self._verify_google(assertion, audience, email, subject)
             else:
-                raise ContractError(_UNAUTHORIZED)
-        except (UnicodeError, ContractError):
+                raise ControlAssertionError(_UNAUTHORIZED)
+        except (UnicodeError, ControlAssertionError):
             raise AuthenticationFailed("Gateway authentication failed") from None
         return GatewayIdentity(), None
 
@@ -74,7 +73,7 @@ class GatewayAuthentication(BaseAuthentication):
     @staticmethod
     def _verify_aws(assertion: str, audience: str, role: str) -> None:
         if not assertion.startswith("Bearer "):
-            raise ContractError(_UNAUTHORIZED)
+            raise ControlAssertionError(_UNAUTHORIZED)
         try:
             verified = verify_aws_web_identity_token(
                 assertion[7:],
@@ -83,9 +82,9 @@ class GatewayAuthentication(BaseAuthentication):
                 account_id=str(getattr(settings, "AWS_ACCOUNT_ID", "") or ""),
             )
         except ValueError:
-            raise ContractError(_UNAUTHORIZED) from None
+            raise ControlAssertionError(_UNAUTHORIZED) from None
         if verified != role:
-            raise ContractError(_UNAUTHORIZED)
+            raise ControlAssertionError(_UNAUTHORIZED)
 
     def authenticate_header(self, request: Request) -> str:
         return 'Bearer realm="guacamole-control"'

@@ -18,7 +18,7 @@
 // public API and runtime behavior are unchanged, and every name
 // previously importable from `./policy.js` is re-exported below.
 //
-// See docs/architecture/mcp-ops-privileged-surface-preflight-777.md
+// See docs/_deprecated/architecture/mcp-ops-privileged-surface-preflight-777.md
 // for the threat model and mcp/ops/SECURITY.md for the operational
 // rules.
 
@@ -84,8 +84,9 @@ export { PolicyError, Policy };
 // reads the per-class flags and chooses whether the gate fires.
 //
 // 1. **Env policy**  — `confirm_env="prod"` required for prod calls.
-// 2. **Dry-run defaults** — classes with `execute_default: false`
-//    return a preview unless `args.execute === true`.
+// 2. **Plan and execute** — `execute_default: false` requires `two_phase: true`.
+//    Register plan_<name> / execute_<name>(plan_id), with no direct tool.
+//    Planning does not run the handler; execution replays the stored args.
 // 3. **Description redaction** — classes with `description_redaction:
 //    true` get their description replaced before it reaches
 //    `server.tool()` (so `list_tools` cannot surface bypass

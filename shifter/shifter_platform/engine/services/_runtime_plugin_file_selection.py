@@ -52,13 +52,12 @@ def runtime_plugin_file_selection(scope: RuntimePluginScope) -> tuple[str | None
         .first()
     )
     if row is None:
+        assert_file_selection(scope, None, None)
         return None, {}
     try:
         manifest = PluginManifest.model_validate(row.installation.manifest)
         bindings = PluginTargetBindings.model_validate(row.bindings)
         bindings.validate_manifest(manifest)
-        if not manifest.required_files:
-            return None, {}
         if (
             row.pack_digest != scope.pack_digest
             or not row.enabled
@@ -66,6 +65,7 @@ def runtime_plugin_file_selection(scope: RuntimePluginScope) -> tuple[str | None
             or manifest.digest != row.installation.manifest_digest
         ):
             raise ValueError("File selection is unavailable")
+        assert_file_selection(scope, row, row.installation)
         return file_selection_digest(row, row.installation), dict(bindings.file_assets)
     except ValueError:
         raise ValidationError("The adapter's required file selection is unavailable") from None

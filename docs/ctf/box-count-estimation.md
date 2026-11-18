@@ -1,5 +1,13 @@
 # Box Count Estimation: 4-Hour AI-Assisted CTF
 
+> **Applicability** Research and estimation reference. The original scope and assumptions apply to the retained text below.
+> Recommendations and estimates are not measured platform capacity or implemented behavior.
+> This documentation review did not reproduce the external studies or run an event capacity test.
+> See the [current architecture](../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Estimates for the number and difficulty range of target boxes needed per participant range, given a 4-hour event with AI assistance (Claude Code on Kali) and skill levels ranging from zero experience to experienced national security cyber operators.
 
 ---
@@ -301,3 +309,5 @@ These are rough estimates assuming on-demand pricing. Actual costs depend on ins
 | Expected beginner completion | 2-4 boxes in 4 hours (satisfying) |
 | Instances per range | ~12 |
 | Fleet size (100 participants) | ~1,200 instances |
+
+<!-- vale on -->

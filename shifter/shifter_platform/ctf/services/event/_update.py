@@ -118,8 +118,6 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
 
     from ctf.services.authorization import admit_event_actions
 
-    from .model_sources import commit_event_model_sources, prepare_event_model_sources
-
     try:
         candidate = CTFEvent.objects.get(pk=event_id)
     except CTFEvent.DoesNotExist:
@@ -128,16 +126,6 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
         actor_id = admit_event_actions(actor_id, candidate, "event.manage_config")
     safe_candidate = _safe_event_update_data(candidate, event_data)
     _admit_scenario_change(candidate, safe_candidate, actor_id)
-    prepared_sources = (
-        prepare_event_model_sources(
-            candidate,
-            actor_id,
-            event_data["model_sources"],
-            expected_revision=event_data.get("expected_model_source_revision"),
-        )
-        if "model_sources" in event_data
-        else None
-    )
     with transaction.atomic():
         try:
             event = CTFEvent.objects.select_for_update().get(pk=event_id)
@@ -178,8 +166,6 @@ def update_event(event_id: UUID, event_data: dict[str, Any], *, actor_id: object
         old_reminder_hours = list(event.reminder_hours)
         public_registration_was_enabled = event.public_registration_enabled
 
-        if prepared_sources is not None:
-            commit_event_model_sources(event, prepared_sources)
         for key, value in safe_data.items():
             setattr(event, key, value)
         event.save()

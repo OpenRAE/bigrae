@@ -1,10 +1,10 @@
 # Signed-receipt CTF validators
 
+Reference for approved verifier profiles, callback binding, key lifecycle, and scoring behavior.
+The final checklist guides deployment qualification.
+
 BigRAE supports participant/range-bound signed receipts through the closed
-`receipt-v1` validator protocol. This protocol is deployment opt-in: an
-installed Django app registers each verifier profile at startup, and a trusted
-provisioning or activation integration enrolls the exact range assignment in
-Engine. Organizer content can select only a registered profile and objective.
+`receipt-v1` validator protocol. This protocol requires deployment opt-in. An installed Django app registers each verifier profile at startup. A trusted provisioning or activation integration enrolls the exact range assignment in Engine. Organizer content can select only a registered profile and objective.
 
 Legacy static, regex, programmable, installed-app, and HTTP validators retain
 their existing contracts. A receipt-capable programmable or installed-app
@@ -46,10 +46,11 @@ The profile owns the HTTPS URL, audience, service-auth secret reference,
 provider contract, issuer, algorithms, permitted objectives, and all transport
 bounds. Participant and organizer input cannot provide a URL, header,
 credential, issuer, key, algorithm, timeout, or arbitrary request template.
-URLs must be public HTTPS without userinfo, query, or fragment. Runtime uses
-DNS-pinned TLS 1.2 or later, preserves the original hostname for SNI and
-certificate validation, follows no redirects, limits address fallback, and
-applies one total deadline across secret lookup, DNS, connects, and reads.
+URLs must be public HTTPS without userinfo, query, or fragment.
+
+Runtime uses DNS-pinned TLS 1.2 or later. It preserves the original hostname for SNI and certificate validation. It follows no redirects and limits address fallback.
+
+One total deadline covers secret lookup, DNS, connects, and reads.
 
 ## Organizer and content configuration
 
@@ -80,11 +81,7 @@ Legacy callables are never signature-probed or retried with a different shape.
 
 ## Trusted binding and provider response
 
-The participant submits only the opaque receipt. BigRAE derives the event,
-participant, challenge, assigned CMS range, owner, lease, Engine
-materialization, current assignment epoch, registration revision, provider
-namespaces, reset generation, profile, issuer, key mode, algorithm, and key ID
-through CTF → CMS → Engine services.
+The participant submits only the opaque receipt. BigRAE derives the binding through CTF → CMS → Engine services. The binding includes event, participant, challenge, assigned CMS range, owner, lease, and Engine materialization. It also includes assignment epoch, registration revision, provider namespaces, reset generation, profile, issuer, key mode, algorithm, and key ID.
 
 The receipt callback request is `POST` JSON with exact top-level members
 `contract`, `provider_contract`, `audience`, `receipt`, and `binding`.
@@ -139,10 +136,7 @@ secret reference, key bytes, endpoint, or callback body.
 ## Scoring, replay, and failure behavior
 
 Remote verification occurs before database locks. A positive result is only
-provisional. The scoring transaction locks and reloads the participant and
-challenge, repeats availability and objective-uniqueness checks, and confirms
-the exact CMS/Engine registration before creating a solve and receipt
-consumption. A revocation or reassignment racing the callback therefore prevents
+provisional. The scoring transaction locks and reloads the participant and challenge. It repeats availability and objective-uniqueness checks, then confirms the exact CMS/Engine registration before creating a solve and receipt consumption. A revocation or reassignment racing the callback therefore prevents
 commit. Rollback leaves the receipt retryable; committed consumption survives
 submission soft deletion and rejects alternate encodings with the same provider
 identity.
@@ -157,9 +151,7 @@ unavailable provider, or invalid provider response. Logs never include the
 receipt, service token, endpoint query, provider exception, response, claims, or
 key material.
 
-Authorized submission history stores a fixed signed-receipt redaction marker
-for every context-capable verification attempt, whether the receipt succeeds,
-is rejected, or cannot resolve an active binding. Legacy flag types retain their
+Authorized submission history stores a fixed signed-receipt redaction marker for every context-capable verification attempt. This includes success, rejection, and failure to resolve an active binding. Legacy flag types retain their
 existing submitted-value history. The separate receipt-consumption row stores
 only a SHA-256 identity digest and bounded issuer/generation evidence for a
 successful redemption.

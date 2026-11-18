@@ -23,12 +23,13 @@ pytestmark = pytest.mark.django_db
 _TARGET = "provision.node.kali#0"
 
 
-def _ready_range(*, target_ip: str = "10.50.3.3", channels=("ssh", "rdp"), days: int = 2) -> Range:
+def _ready_range(*, target_ip: str = "10.50.3.3", channels=("ssh", "rdp"), days: int = 2, multi=False) -> Range:
     user = get_user_model().objects.create_user(username=f"{uuid4()}@example.com")
     request = Request.objects.create(request_id=uuid4(), request_type="range", user=user)
+    targets = tuple(sorted((_TARGET, "provision.node.dc#0"))) if multi else (_TARGET,)
     realization = {
         "generation": str(request.request_id),
-        "target_ref": _TARGET,
+        **({"target_ref": _TARGET} if not multi else {"target_refs": list(targets)}),
         "endpoint": "203.0.113.7",
         "port": 1194,
         "secret_ref": "projects/p/secrets/profile",
@@ -39,7 +40,7 @@ def _ready_range(*, target_ip: str = "10.50.3.3", channels=("ssh", "rdp"), days:
         user=user,
         status=Range.Status.READY,
         range_backend="gce",
-        remote_access_capability=build_openvpn_capability(_TARGET, datetime.now(UTC) + timedelta(days=days)),
+        remote_access_capability=build_openvpn_capability(targets, datetime.now(UTC) + timedelta(days=days)),
         vpn_access_binding=bind_openvpn_realization(realization, user.id),
         provisioned_instances=[
             {
@@ -52,7 +53,7 @@ def _ready_range(*, target_ip: str = "10.50.3.3", channels=("ssh", "rdp"), days:
                 "uuid": "provision.node.dc#0",
                 "role": "raes-node",
                 "private_ip": "10.50.3.4",
-                "participant_access_channels": [],
+                "participant_access_channels": ["rdp"] if multi else [],
             },
         ],
     )
@@ -78,6 +79,14 @@ class TestAuthorize:
         assert (session.state, session.server, session.client_id) == (VpnSessionState.ACTIVE, "vpn-a", 1)
         assert session.generation == range_obj.request.request_id
         assert session.lease_expires_at > timezone.now()
+
+    def test_a_multi_target_generation_keeps_each_targets_declared_ports(self):
+        grant = _connect(_ready_range(multi=True))
+
+        assert [(item.target_ip, item.ports) for item in grant.destinations] == [
+            ("10.50.3.4", (3389,)),
+            ("10.50.3.3", (22, 3389)),
+        ]
 
     def test_a_newer_connection_supersedes_the_older_one(self):
         range_obj = _ready_range()

@@ -48,6 +48,9 @@ class ResolvedImage:
     domain_dns_name: str = ""
     domain_netbios_name: str = ""
     image_id: str = ""
+    nic_type: str = ""
+    disk_interface: str = ""
+    enable_secure_boot: bool = True
 
 
 #: Authored version sentinels meaning "unpinned / any" (raes defaults an
@@ -121,6 +124,9 @@ def _to_resolved(candidate: dict[str, Any]) -> ResolvedImage:
         participant_username=str(candidate.get("participant_username", "")),
         participant_readiness_contract=str(candidate.get("participant_readiness_contract", "")),
         participant_readiness_manifest_sha256=str(candidate.get("participant_readiness_manifest_sha256", "")),
+        nic_type=str(candidate.get("nic_type", "")),
+        disk_interface=str(candidate.get("disk_interface", "")),
+        enable_secure_boot=candidate.get("enable_secure_boot", True) is not False,
     )
 
 

@@ -9,6 +9,11 @@ on:
     branches:
       - main
       - dev
+  # `CodeQL` is a required context on `dev`, and `dev` merges through a merge
+  # queue (ADR-003-R9). Code scanning reports the context on a merge group only
+  # when the analysis runs on the merge_group event.
+  merge_group:
+    types: [checks_requested]
   schedule:
     # Weekly Sunday 06:00 UTC re-scan to catch any drift between PR runs.
     - cron: '0 6 * * 0'

@@ -15,7 +15,7 @@ from tests.cms.test_runtime_plugin_packs import pack_api
 from tests.cms.test_runtime_plugins import manifest, tenant
 from tests.engine.services.test_runtime_plugin_pull_secret import pull_secret_env
 
-pytestmark = [pytest.mark.django_db, pytest.mark.postgres]
+pytestmark = [pytest.mark.django_db(transaction=True), pytest.mark.postgres]
 __all__ = ["manifest", "pack_api", "pull_secret_env", "storage_client", "tenant"]
 
 

@@ -5,7 +5,7 @@ Status: implementation design. Date: 2026-10-31.
 This design records the decisions for issue #665 and requirement CTF-802.
 [ADR-072](../adr/072-live-ctf-notifications-per-event.md) records the binding
 decisions. ADR-051-R6 and the
-[preflight](ctf-realtime-notifications-preflight-665.md) constrain the design.
+[preflight](../_deprecated/architecture/ctf-realtime-notifications-preflight-665.md) constrain the design.
 Application paths are relative to `shifter/shifter_platform/`.
 
 ## Context

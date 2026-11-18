@@ -3,6 +3,8 @@
 Applicability: GKE primary; EKS optional. Operator: platform incident
 commander. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 The public portal or `/health/` is unavailable, returns errors, or fails ingress

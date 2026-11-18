@@ -30,10 +30,45 @@ on:
     branches:
       - dev
       - main
+  # `Lint PR title` is a required context on `dev`, and `dev` merges through a
+  # merge queue (ADR-003-R9). The context must report on each merge group, or
+  # the queue does not merge. A title edit after the pull request enters the
+  # queue does not start a new merge group, so the merge group run reads the
+  # current titles of the queued pull requests and checks them again.
+  merge_group:
+    types: [checks_requested]
 
 permissions:
   contents: read
   pull-requests: read
+
+# One rule set for both events. The pull_request step passes it to the action,
+# and the merge_group step applies the same header grammar to each title.
+env:
+  # Allowed conventional-commit types. release-please bumps the version only on
+  # `feat` (minor), `fix`/`perf` (patch), and a breaking marker (major); the
+  # remaining common types plus the legacy Keep-a-Changelog types (security,
+  # added, changed, deprecated, removed, fixed), retained for continuity, are
+  # valid non-bumping titles. See CONTRIBUTING.md.
+  TITLE_TYPES: |
+    security
+    added
+    changed
+    deprecated
+    removed
+    fixed
+    feat
+    fix
+    chore
+    docs
+    refactor
+    test
+    ci
+    build
+    perf
+    revert
+  # Subject must start with a lowercase letter.
+  SUBJECT_PATTERN: ^[a-z].*$
 
 jobs:
   lint-title:
@@ -41,40 +76,67 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Validate conventional-commit title
+        if: github.event_name == 'pull_request'
         # amannn/action-semantic-pull-request v5.5.3
         uses: amannn/action-semantic-pull-request@0723387faaf9b38adef4775cd42cfd5155ed6017
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          # Allowed conventional-commit types. release-please bumps the version
-          # only on `feat` (minor), `fix`/`perf` (patch), and a breaking marker
-          # (major); the remaining common types plus the legacy Keep-a-Changelog
-          # types (security, added, changed, deprecated, removed, fixed),
-          # retained for continuity, are valid non-bumping titles. See
-          # CONTRIBUTING.md.
-          types: |
-            security
-            added
-            changed
-            deprecated
-            removed
-            fixed
-            feat
-            fix
-            chore
-            docs
-            refactor
-            test
-            ci
-            build
-            perf
-            revert
+          types: ${{ env.TITLE_TYPES }}
           # Scopes are optional; if present, must be lowercase kebab-case.
           requireScope: false
-          # Subject must start with a lowercase letter.
-          subjectPattern: ^[a-z].*$
+          subjectPattern: ${{ env.SUBJECT_PATTERN }}
           subjectPatternError: |
             The subject "{subject}" found in the pull request title "{title}"
             must start with a lowercase letter. Examples:
               feat(provisioner): add per-instance image resolution
               fix(gcp): retry transient API errors
+
+      # The action reads the pull_request payload only, and a merge group has
+      # none. These steps read the queued titles from the merge queue.
+      - name: Check out the merge group helper
+        if: github.event_name == 'merge_group'
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/actions
+
+      - name: Resolve merge group pull requests
+        if: github.event_name == 'merge_group'
+        id: merge_group
+        uses: ./.github/actions/merge-group-prs
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Validate queued conventional-commit titles
+        if: github.event_name == 'merge_group'
+        env:
+          PRS: ${{ steps.merge_group.outputs.prs }}
+        shell: python3 {0}
+        run: |
+          import json
+          import os
+          import re
+          import sys
+
+          # The header grammar of conventional-changelog-conventionalcommits,
+          # which the pull_request action parses with.
+          header = re.compile(r"^(\w*)(?:\((.*)\))?!?: (.*)$")
+          types = os.environ["TITLE_TYPES"].split()
+          subject_pattern = re.compile(os.environ["SUBJECT_PATTERN"])
+          failed = False
+          for pr in json.loads(os.environ["PRS"]):
+              number = pr["number"]
+              match = header.match(pr["title"])
+              if not match or not match.group(1) or not match.group(3):
+                  print(f"PR #{number}: the title is not a conventional commit header")
+                  failed = True
+              elif match.group(1) not in types:
+                  print(f"PR #{number}: unknown release type; allowed: {', '.join(types)}")
+                  failed = True
+              elif not subject_pattern.match(match.group(3)):
+                  print(f"PR #{number}: the subject must start with a lowercase letter")
+                  failed = True
+              else:
+                  print(f"PR #{number}: title is valid")
+          sys.exit(1 if failed else 0)

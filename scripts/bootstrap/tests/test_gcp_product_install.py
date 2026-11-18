@@ -304,6 +304,9 @@ class TestInstall:
         monkeypatch.setattr(gcp_install, "bootstrap_gcp_foundation", lambda path: order.append(("foundation", path)))
         monkeypatch.setattr(gcp_install, "ensure_operator_password", lambda runner, inputs: order.append("password"))
         monkeypatch.setattr(gcp_install, "publish", lambda store, source, runner: order.append(("publish", store)))
+        monkeypatch.setattr(
+            gcp_install, "wait_for_deploy_identity", lambda runner, inputs, store: order.append(("grants", store))
+        )
 
         def deploy(options, runner):
             order.append(("deploy", options.source, options.first_install, options.release_manifest))
@@ -320,6 +323,36 @@ class TestInstall:
             "foundation",
             "password",
             "publish",
+            "grants",
             "deploy",
         ]
         assert order[-1] == ("deploy", f"gs://{PROJECT}-deployment-config", True, "release.json")
+
+    def test_install_waits_for_the_new_deploy_identity_grants(self, inputs):
+        store = f"gs://{PROJECT}-deployment-config"
+        answers = iter(
+            [
+                ProcessResult(1, "", "ERROR: (gcloud.storage.ls) Failed to impersonate [sa]."),
+                ProcessResult(1, "", "HTTPError 403: sa does not have storage.objects.list access"),
+                ProcessResult(0, f"{store}/bigrae.yaml\n"),
+            ]
+        )
+        runner = FakeRunner().on(["gcloud", "storage", "ls"], lambda argv, env, stdin: next(answers))
+        sleeps: list[float] = []
+        gcp_install.wait_for_deploy_identity(runner, inputs, store, sleep=sleeps.append, clock=lambda: 0.0)
+        calls = runner.find("gcloud", "storage", "ls", store)
+        assert len(calls) == 3 and sleeps == [gcp_install._GRANT_POLL_SECONDS] * 2
+        deploy = f"shifter{inputs.environment}-deploy@{PROJECT}.iam.gserviceaccount.com"
+        assert all(call.env["CLOUDSDK_AUTH_IMPERSONATE_SERVICE_ACCOUNT"] == deploy for call in calls)
+
+    def test_deploy_identity_wait_stops_on_other_errors_and_at_the_deadline(self, inputs):
+        store = f"gs://{PROJECT}-deployment-config"
+        missing = FakeRunner().on(["gcloud", "storage", "ls"], ProcessResult(1, "", "404 bucket does not exist"))
+        with pytest.raises(gcp_deploy.GcpDeployError, match=r"cannot read .*404 bucket does not exist"):
+            gcp_install.wait_for_deploy_identity(missing, inputs, store, sleep=pytest.fail, clock=lambda: 0.0)
+        pending = FakeRunner().on(["gcloud", "storage", "ls"], ProcessResult(1, "", "Failed to impersonate [sa]"))
+        times = iter([0.0, gcp_install._GRANT_WAIT_SECONDS - 1, gcp_install._GRANT_WAIT_SECONDS])
+        sleeps: list[float] = []
+        with pytest.raises(gcp_deploy.GcpDeployError, match="Failed to impersonate"):
+            gcp_install.wait_for_deploy_identity(pending, inputs, store, sleep=sleeps.append, clock=lambda: next(times))
+        assert len(pending.find("gcloud", "storage", "ls")) == 2 and len(sleeps) == 1

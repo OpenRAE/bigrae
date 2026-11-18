@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
+
+logger = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from engine.models import OperationResultInbox, ProvisionerLaunchIntent, Range
@@ -87,3 +90,44 @@ def _cleanup_retry_due(
     ).count()
     delay = min(60 * 2 ** min(max(attempts - 1, 0), 6), 3600)
     return (terminal.applied_at or terminal.created_at) + timedelta(seconds=delay) <= now
+
+
+def reconcile_range_cleanup_verification(*, now: datetime | None = None, limit: int = 100) -> int:
+    """Retry only current unverified ordinary native destroys in a bounded pass."""
+    from django.db.models import OuterRef, Subquery
+    from django.utils import timezone
+
+    from engine.models import CleanupVerificationOutcome, Range, RangeCleanupVerification
+
+    if type(limit) is not int or not 1 <= limit <= 100:
+        raise ValueError("Cleanup reconciliation limit is invalid")
+    moment = now or timezone.now()
+    latest = (
+        RangeCleanupVerification.objects.filter(
+            request_id=OuterRef("request__request_id"), operation_id=OuterRef("provisioner_operation_id")
+        )
+        .order_by("-created_at", "-pk")
+        .values("outcome")[:1]
+    )
+    requests = list(
+        Range.objects.filter(
+            status="destroyed",
+            cms_range_uuid__isnull=False,
+            owner_principal_uuid__isnull=False,
+            resource_generation__isnull=False,
+            provisioner_operation_id__isnull=False,
+            warm_generation__isnull=True,
+            disposable_worker__isnull=True,
+        )
+        .annotate(cleanup_outcome=Subquery(latest))
+        .filter(cleanup_outcome__in=[CleanupVerificationOutcome.INCOMPLETE, CleanupVerificationOutcome.RESIDUALS_FOUND])
+        .order_by("updated_at", "pk")
+        .values_list("request__request_id", flat=True)[:limit]
+    )
+    queued = 0
+    for request_id in requests:
+        try:
+            queued += int(retry_range_cleanup_verification(UUID(str(request_id)), now=moment))
+        except Exception:  # noqa: BLE001  # each obligation remains held; provider diagnostics stay private
+            logger.warning("Ordinary range cleanup retry remains pending")
+    return queued

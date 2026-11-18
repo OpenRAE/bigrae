@@ -7,6 +7,7 @@ key, this module rewrites each live object that does not use it, in place:
   not replace an object that a concurrent writer stored after the listing;
 - a bucket with a locked retention policy holds immutable evidence, so it is
   listed and never rewritten;
+- native project state keeps its validated lease-specific customer-supplied key;
 - noncurrent and soft-deleted generations stay as they are: a rewrite of a
   noncurrent generation would make a new live object.
 
@@ -16,6 +17,7 @@ never reach argv, a log, or an error message.
 
 from __future__ import annotations
 
+import base64
 import json
 import re
 from collections.abc import Mapping
@@ -26,6 +28,7 @@ from gcp_process import ProcessRunner
 
 # gcloud storage reads these characters in a URL as wildcards (wildcard_iterator).
 _WILDCARD_RE = re.compile(r"[*?\[\]]")
+_PROJECT_STATE_RE = re.compile(r"raes/project-state/[0-9a-f]{32}/default\.tfstate", re.ASCII)
 # Raw API field names (kmsKeyName, timeDeleted, retentionPolicy) as JSON.
 _RAW_JSON = ("--raw", "--format=json")
 
@@ -45,12 +48,30 @@ class MigrationReport:
     soft_deleted_residual: int | None
     retained_residual: int
     unaddressable_residual: int
+    customer_supplied_state: int = 0
 
 
 def _uses_key(item: Mapping[str, object], key: str) -> bool:
     """Return whether an object generation is encrypted with ``key`` (any key version)."""
     kms = str(item.get("kmsKeyName") or "")
     return kms == key or kms.startswith(f"{key}/cryptoKeyVersions/")
+
+
+def _uses_project_state_key(item: Mapping[str, object]) -> bool:
+    """Validate the native state path and provider-owned encryption metadata."""
+    if not _PROJECT_STATE_RE.fullmatch(str(item.get("name", ""))) or item.get("kmsKeyName"):
+        return False
+    encryption = item.get("customerEncryption")
+    if not isinstance(encryption, Mapping) or encryption.get("encryptionAlgorithm") != "AES256":
+        return False
+    digest = encryption.get("keySha256")
+    if not isinstance(digest, str):
+        return False
+    try:
+        decoded = base64.b64decode(digest, validate=True)
+    except ValueError:
+        return False
+    return len(decoded) == 32 and base64.b64encode(decoded).decode("ascii") == digest
 
 
 def _json(runner: ProcessRunner, argv: list[str], env: Mapping[str, str | None] | None, what: str) -> object:
@@ -106,9 +127,9 @@ def _is_live(item: Mapping[str, object]) -> bool:
 
 
 def _needs_rewrite(item: Mapping[str, object], key: str) -> bool:
-    """Return whether a generation is a live, addressable object that does not use ``key``."""
+    """Return whether a live, addressable object still needs the bucket key."""
     addressable = bool(item.get("generation")) and not _WILDCARD_RE.search(str(item["name"]))
-    return _is_live(item) and addressable and not _uses_key(item, key)
+    return _is_live(item) and addressable and not _uses_key(item, key) and not _uses_project_state_key(item)
 
 
 def _rewrite_live_objects(runner: ProcessRunner, bucket: str, key: str, env: Mapping[str, str | None] | None) -> int:
@@ -131,6 +152,20 @@ def _rewrite_live_objects(runner: ProcessRunner, bucket: str, key: str, env: Map
     return rewritten
 
 
+def _classify_live_encryption(live: list[dict[str, object]], key: str) -> tuple[list[dict[str, object]], int]:
+    """Classify authoritative metadata once for each live object."""
+    pending: list[dict[str, object]] = []
+    supplied_state = 0
+    for item in live:
+        if _uses_key(item, key):
+            continue
+        if _uses_project_state_key(item):
+            supplied_state += 1
+        else:
+            pending.append(item)
+    return pending, supplied_state
+
+
 def _verified_report(
     after: list[dict[str, object]],
     bucket: str,
@@ -140,9 +175,9 @@ def _verified_report(
     rewritten: int,
     soft_deleted: int | None,
 ) -> MigrationReport:
-    """Count the generations after the rewrite; fail when an addressable live object still lacks ``key``."""
+    """Count protected generations and reject live objects without an approved key."""
     live = [item for item in after if _is_live(item)]
-    pending = [item for item in live if not _uses_key(item, key)]
+    pending, supplied_state = _classify_live_encryption(live, key)
     retained = pending if locked else []
     unaddressable = [] if locked else [item for item in pending if _WILDCARD_RE.search(str(item["name"]))]
     unmigrated = len(pending) - len(retained) - len(unaddressable)
@@ -152,11 +187,12 @@ def _verified_report(
     return MigrationReport(
         bucket=bucket,
         rewritten=rewritten,
-        customer_managed=len(live) - len(pending),
+        customer_managed=len(live) - len(pending) - supplied_state,
         noncurrent_residual=sum(1 for item in after if not _is_live(item) and not _uses_key(item, key)),
         soft_deleted_residual=soft_deleted,
         retained_residual=len(retained),
         unaddressable_residual=len(unaddressable),
+        customer_supplied_state=supplied_state,
     )
 
 
@@ -185,6 +221,8 @@ def _print_report(report: MigrationReport) -> None:
         f"{report.bucket}: rewrote {report.rewritten} live objects; "
         f"{report.customer_managed} live objects use the bucket key"
     )
+    if report.customer_supplied_state:
+        info(f"{report.bucket}: {report.customer_supplied_state} native state objects retain customer-supplied keys")
     residuals = (
         f"{report.noncurrent_residual} noncurrent, {soft}, {report.retained_residual} under a locked retention "
         f"policy, {report.unaddressable_residual} with wildcard characters in the name"

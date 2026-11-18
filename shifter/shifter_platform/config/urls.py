@@ -95,7 +95,7 @@ urlpatterns = [
     # the trailing-slash variant is the canonical URL used by the GCP
     # readiness/liveness probes, the Docker HEALTHCHECK, and the
     # ``shifter/installation`` backend bundle contract. See issue #477 and
-    # ``docs/architecture/portal-health-readiness-preflight-477.md``.
+    # ``docs/_deprecated/architecture/portal-health-readiness-preflight-477.md``.
     path("health/", CoarseHealthCheckView.as_view(), name="portal_health"),
     path("health", CoarseHealthCheckView.as_view(), name="portal_health_no_slash"),
 ]

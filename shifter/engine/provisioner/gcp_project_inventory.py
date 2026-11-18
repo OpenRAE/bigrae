@@ -12,6 +12,8 @@ from urllib.parse import quote
 from pydantic import TypeAdapter
 from shared.gcp_range_projects import (
     MAX_BASELINE_BYTES,
+    MAX_PROJECT_SECRETS,
+    MAX_PROJECT_SERVICE_ACCOUNTS,
     GcpProjectState,
     GcpSecretState,
     GcpServiceAccountState,
@@ -31,6 +33,7 @@ _RM = "https://cloudresourcemanager.googleapis.com/v3/"
 _IAM = "https://iam.googleapis.com/v1/"
 _SECRETS = "https://secretmanager.googleapis.com/v1/"
 _MAX_PAGE_BYTES = 1_048_576
+MAX_INVENTORY_BYTES = 4 * 1024 * 1024
 _GET_IAM_POLICY = ":getIamPolicy"
 
 
@@ -95,7 +98,7 @@ class GcpProjectInventory:
 
     def read(self, project_id: str) -> GcpProjectState:
         """Enumerate every managed object, requesting IAM policy version three."""
-        self._remaining = MAX_BASELINE_BYTES
+        self._remaining = MAX_INVENTORY_BYTES
         identifier = TypeAdapter(ProjectID).validate_python(project_id)
         project = self._read(_RM + "projects/" + identifier)
         if project.get("projectId") != identifier or project.get("state") != "ACTIVE":
@@ -111,7 +114,9 @@ class GcpProjectInventory:
     def _accounts(self, identifier: str) -> dict[str, GcpServiceAccountState]:
         """Read account metadata, policies and user-managed key metadata in the selected project."""
         accounts: dict[str, GcpServiceAccountState] = {}
-        for account in self._pages(_IAM + f"projects/{identifier}/serviceAccounts", "accounts", 1024):
+        for account in self._pages(
+            _IAM + f"projects/{identifier}/serviceAccounts", "accounts", MAX_PROJECT_SERVICE_ACCOUNTS
+        ):
             account_name = self._resource_name(account, f"projects/{identifier}/serviceAccounts/")
             email = account.get("email")
             if not isinstance(email, str) or email in accounts:
@@ -133,7 +138,7 @@ class GcpProjectInventory:
     def _secrets(self, name: str) -> dict[str, GcpSecretState]:
         """Read secret metadata and version identities without accessing baseline payloads."""
         secrets: dict[str, GcpSecretState] = {}
-        for secret in self._pages(_SECRETS + name + "/secrets", "secrets", 1024):
+        for secret in self._pages(_SECRETS + name + "/secrets", "secrets", MAX_PROJECT_SECRETS):
             secret_name = self._resource_name(secret, name + "/secrets/")
             if secret_name in secrets:
                 raise ValueError(_UNAVAILABLE)

@@ -10,7 +10,7 @@ Architecture preflight for CTF-008/010/012, inspected 2026-10-27 at
 `4b44a4285`. This specializes ADR-051; it is design guidance, not an
 implementation plan or a claim of shipping behavior. ADR-052, ADR-065 and
 ADR-066 retain their authority and activation boundaries. Read the companion
-[scheduler preflight](../architecture/ctf-multi-event-communications-preflight-2052.md)
+[scheduler preflight](../_deprecated/architecture/ctf-multi-event-communications-preflight-2052.md)
 for independent schedule preservation, task/intent divergence and range-lifecycle
 boundaries. Application paths below are relative to `shifter/shifter_platform/`.
 
@@ -71,7 +71,7 @@ child of that campaign. Default-latest release could send another tab's edit.
 Preserve campaign plus `occurrence_key` across uncertain release responses;
 existing replay checks reject changed meaning. Draft creation lacks release's
 idempotency guarantee: reconcile a lost create response before creating and
-releasing a replacement. Never create a new campaign just to retry release.
+releasing a replacement. Never create a new campaign only to retry release.
 
 Choose atomic admission across all target events and requested channels. Invalid
 authority, scope, revision, source, dependency or capacity must leave no partial

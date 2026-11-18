@@ -1,10 +1,17 @@
 # Model-access architecture and contracts
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker design and delivery evidence below; preserve its original contract and issue history. -->
+<!-- vale off -->
+
 This is proposed behavior for [#681](index.md). Names and JSON shapes below
 are design contracts for implementation, not installed endpoints or RAES
 schema additions. ADR-059 through ADR-061 govern the design.
 
-The [#2243 source-management preflight](source-management-preflight-2243.md)
+The [#2243 source-management preflight](../../_deprecated/architecture/model-access/source-management-preflight-2243.md)
 extends this design to authorized tenant source configuration, including Vertex
 in the platform project. It identifies current runtime restrictions separately
 from the intended provider-neutral management boundary.
@@ -642,3 +649,5 @@ projection do not implement M05 authentication/streaming or M08 enrollment,
 and do not mark any grant active. Their consumers must use the exact
 broker-only inventory and the explicit admitted egress seam; setting a global
 broker VIP never enrolls a range.
+
+<!-- vale on -->

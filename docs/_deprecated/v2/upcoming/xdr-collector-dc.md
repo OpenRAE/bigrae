@@ -1,5 +1,13 @@
 # XDR Collector on Domain Controller Design
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Design for adding Cortex XDR Collector (XDRC) installation as a new setup plan for Domain Controller instances.
 
 **Status:** Draft
@@ -340,3 +348,5 @@ sequenceDiagram
 - [XDR Collector (XDRC) Overview](https://docs-cortex.paloaltonetworks.com/r/Cortex-XDR/Cortex-XDR-Documentation/XDR-Collector-XDRC)
 - [Add an XDR Collector profile for Windows](https://docs-cortex.paloaltonetworks.com/r/Cortex-XDR/Cortex-XDR-4.x-Documentation/Add-an-XDR-Collector-profile-for-Windows)
 - [Microsoft Windows Event Logs Collection](https://cortex.marketplace.pan.dev/marketplace/details/MicrosoftWindowsEvents/)
+
+<!-- vale on -->

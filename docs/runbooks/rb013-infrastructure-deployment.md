@@ -3,6 +3,8 @@
 Applicability: Terraform-owned GCP and optional AWS infrastructure. Operator:
 platform owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 Infrastructure drift or a reviewed change requires deployment, or Terraform
@@ -10,9 +12,7 @@ plan/apply fails for the selected environment.
 
 ## Investigation
 
-1. Confirm the selected backend/environment from validated `shifter.yaml`, the
-   correct Terraform root and remote state, the approved Git revision, and the
-   protected cloud identity.
+1. Confirm the backend and deployment from validated `bigrae.yaml`. Check the Terraform root, remote state, approved Git revision, and protected cloud identity.
 2. Review the saved plan by resource address and action. Separate expected
    release changes from drift, replacements, IAM/network expansion, and
    destructive actions.

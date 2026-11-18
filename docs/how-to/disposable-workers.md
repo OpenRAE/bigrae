@@ -20,14 +20,23 @@ Projected Secret symlinks must first be copied to that private file.
 
 Publish an approved worker policy through `configure_worker_policy` or supply it with `--policy-file`.
 The policy file also requires owner-only mode `0600`.
-Pin one Linux host plan, an exact GCE image name and numeric image ID, its provenance digest, Docker version, and resources.
+The policy names each host profile under `profiles`. Qualification uses `default` unless `--profile` names another.
+
+For each profile, pin one Linux host plan, an exact GCE image name and numeric image ID, its provenance digest, Docker version, and resources.
+A multi-VM profile also names `trial_host` and gives each other VM its image under `additional_hosts`, keyed by node address.
 Use the existing image preparation and publication procedure for those facts.
 The host plan is apparatus configuration, separate from experiment SDL.
 No participant container or experiment runtime is required.
+
 The existing Ubuntu range image can supply Docker and the standard host bootstrap.
 Use a publication that clears machine and Docker identities before capture.
 Older publications need a rebuild through the protected guest-image workflow.
-See [Linux identity at capture](../architecture/gcp-guest-images.md#linux-identity-at-capture).
+See [Linux identity at capture](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md#linux-identity-at-capture).
+
+To use an ARM64 worker, set the image profile `machine_type` to a predefined C4A type with the plan's vCPU count.
+Set `disk_type` to `hyperdisk-balanced`, `nic_type` to `GVNIC`, and `disk_interface` to `NVME`.
+Set `enable_secure_boot` to `false` only when the trial loads an unsigned kernel module.
+The image must be an ARM64 image.
 
 Reserve capacity through the existing Engine assessment service and deployment catalog.
 The profile names that reservation scope and its approved capacity partition.
@@ -35,6 +44,10 @@ The partition must match the deployment project, region, and GCE backend.
 Use enforcing reservations with per-worker costs that cover the pinned VM.
 Missing, expired, advisory, insufficient, or wrong-partition budgets refuse admission.
 Never insert reservation rows by hand for a live smoke.
+
+Every GCP deployment declares the `gce-workers` partition for its project and range region.
+Its `vcpu` and `instances` budgets are enforcing database reservations.
+Each worker draws one instance and `range_cells.worker_vcpu` vCPUs, 8 by default.
 
 ## Run qualification
 
@@ -56,6 +69,8 @@ The catalog initializer's credential remains unchanged.
 
 The command prints its worker UUIDs before creation.
 It starts two workers in parallel, checks private SSH access, and verifies distinct VM, machine, and Docker daemon identities.
+It also verifies that each realized VM has the machine type, Secure Boot state, interfaces, and image of the profile.
+
 It then requests retirement through Engine and waits for verified provider absence.
 Success requires `independent_workers: 2` and `cleanup_verified: true`.
 A failed probe, timeout, uncertain cleanup, or failed credential revocation fails the smoke.

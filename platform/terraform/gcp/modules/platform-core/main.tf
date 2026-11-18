@@ -200,6 +200,10 @@ module "range_vpc" {
   range_egress_allowed_cidrs = var.range_egress_allowed_cidrs
   range_network_zones        = var.range_network_zones
   nat_logs                   = var.range_telemetry.nat_logs
+  shared_guest_firewalls     = var.range_shared_guest_firewalls
+  range_network_cidr         = var.range_network_cidr
+  access_network_cidrs       = compact([var.gke_access_pods_cidr])
+  private_google_access      = var.range_private_google_access
 
   depends_on = [module.project_services]
 }
@@ -384,8 +388,6 @@ module "portal_secrets" {
 }
 
 module "portal_iam" {
-  model_broker = var.model_broker
-
   source = "../portal/iam"
 
   project_id                = var.project_id
@@ -432,12 +434,14 @@ module "vpn_pool" {
   artifact_repository               = module.portal_artifact_registry.artifact_registry_repositories["openvpn"]
   provisioner_service_account_email = module.portal_iam.workload_service_accounts["provisioner"]
   deploy_service_account_email      = var.deploy_service_account_email
+  openfga_enabled                   = var.openfga_enabled
   machine_type                      = var.openvpn_pool_machine_type
   min_vms                           = var.openvpn_pool_min_vms
   max_vms                           = var.openvpn_pool_max_vms
   cpu_target_pct                    = var.openvpn_pool_cpu_target_pct
   vpc_flow_logs                     = var.range_telemetry.vpc_flow_logs
   nat_logs                          = var.range_telemetry.nat_logs
+  shared_guest_firewalls            = var.range_shared_guest_firewalls
 
   depends_on = [module.project_services]
 }

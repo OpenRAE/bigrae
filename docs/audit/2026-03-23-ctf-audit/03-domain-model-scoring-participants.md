@@ -1,5 +1,13 @@
 # Chunk Report: Domain Model, Scoring, Challenges, Participants
 
+> **Applicability** Dated audit reference, 2026-03-23. The audit names no exact source revision.
+> Its original worktree cannot be reconstructed from this record alone.
+> Findings and test counts below are historical evidence, not a current defect or delivery assessment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Status: `Partial`
 
 ## What Still Looks Good
@@ -99,7 +107,7 @@ Why it matters:
 
 Assessment:
 
-- Resolved in #535 (CTF-006): organizer creation is now explicitly immediate seat provisioning (`registered`). The misleading transient `invited` hop, the `invited` participant status itself (removed from the enum in migration `0047`), `invited_count`, and the acceptance vocabulary were all removed; a participant is `registered` the moment it is created. A true self-service invitation (magic-link / OIDC identity binding) is deferred to a separate identity design (see `docs/architecture/ctf-participant-lifecycle-preflight-535.md`).
+- Resolved in #535 (CTF-006): organizer creation is now explicitly immediate seat provisioning (`registered`). The misleading transient `invited` hop, the `invited` participant status itself (removed from the enum in migration `0047`), `invited_count`, and the acceptance vocabulary were all removed; a participant is `registered` the moment it is created. A true self-service invitation (magic-link / OIDC identity binding) is deferred to a separate identity design (see `docs/_deprecated/architecture/ctf-participant-lifecycle-preflight-535.md`).
 
 ## Requirement Readout From This Chunk
 
@@ -116,3 +124,5 @@ Highest-value domain fixes:
 3. Decide whether `CTFChallenge.flag_hash` is legacy read-only or still a first-class source of truth; right now it is both.
 4. Replace fixed challenge categories with event-scoped category records if `CTF-102` is meant literally.
 5. Either embrace auto-registration as the product model and update the requirements/UX language, or restore a true invited-to-registered transition.
+
+<!-- vale on -->

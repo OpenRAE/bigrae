@@ -37,6 +37,6 @@ Browser-based access is non-negotiable for Shifter's target users, PANW consulta
 - TESTS → TEST `shifter/shifter_platform/tests/mission_control/test_api_ngfw_ssh_url.py` (NGFW Guacamole bootstrap API tests)
 - TESTS → TEST `shifter/shifter_platform/tests/mission_control/test_guacamole_readiness.py` (Guacamole token-exchange readiness retry tests (issue #395))
 - TESTS → TEST `shifter/shifter_platform/tests/mission_control/test_guacamole_ssh.py` (Guacamole SSH URL generation unit tests)
-- DOCUMENTS → DOCUMENTATION `docs/architecture/guacamole-first-click-rdp-preflight-395.md` (First-click Guacamole RDP preflight design note (issue #395))
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/guacamole-first-click-rdp-preflight-395.md` (First-click Guacamole RDP preflight design note (issue #395))
 - IMPLEMENTS → CODE_FILE `shifter/shifter_platform/mission_control/guacamole_session.py` (Guacamole remote-access session service (browser-based range access orchestration))
 - TESTS → TEST `shifter/shifter_platform/tests/mission_control/test_guacamole_session.py` (Behavior tests for the Guacamole remote-access session service)

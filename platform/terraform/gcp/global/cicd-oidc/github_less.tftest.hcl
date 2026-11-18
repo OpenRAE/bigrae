@@ -49,6 +49,14 @@ run "impersonation_only_foundation" {
     error_message = "Impersonation must enable the lifecycle identities with the naming contract that gcp-deploy derives."
   }
   assert {
+    condition = (
+      google_project_iam_member.release_scan_quota_consumer[0].project == "example-project" &&
+      google_project_iam_member.release_scan_quota_consumer[0].role == "roles/serviceusage.serviceUsageConsumer" &&
+      google_project_iam_member.release_scan_quota_consumer[0].member == "serviceAccount:custunseen-scan@example-project.iam.gserviceaccount.com"
+    )
+    error_message = "The scan identity must consume API quota only on its deployment project."
+  }
+  assert {
     condition     = length(google_service_account.packer_build) == 0 && length(google_service_account.validate) == 0
     error_message = "Impersonation must not enable the image purposes."
   }
@@ -261,4 +269,20 @@ run "release_purpose_is_retired" {
     }
   }
   expect_failures = [var.purpose_contexts]
+}
+
+run "disabled_scanner_has_no_quota_grant" {
+  command = plan
+  module {
+    source = "../../modules/cicd-oidc-identity"
+  }
+  variables {
+    impersonation_principals = {
+      deploy = ["group:operators@example.com"]
+    }
+  }
+  assert {
+    condition     = length(google_project_iam_member.release_scan_quota_consumer) == 0
+    error_message = "A disabled scanner must receive no API consumption grant."
+  }
 }

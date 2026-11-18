@@ -1,5 +1,13 @@
 # Shifter
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Self-service cyber range platform. Users provision isolated Kali + victim environments for XDR/XSIAM testing.
 
 ## Docs
@@ -42,3 +50,5 @@ Self-service cyber range platform. Users provision isolated Kali + victim enviro
 - [Overview](upcoming/index.md) - Planned attack execution capabilities
 - [Atomic Red Team](upcoming/atomic-red-team.md) - Case as Outcome design
 - [OpenBAS Integration](upcoming/openbas-integration.md) - Range as Outcome design
+
+<!-- vale on -->

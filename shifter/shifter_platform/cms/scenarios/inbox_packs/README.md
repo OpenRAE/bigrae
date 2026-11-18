@@ -1,5 +1,8 @@
 # In-box environment-pack bootstrap seed
 
+This reference describes the in-box manifest and registration boundary.
+The numbered section is a how-to guide for an authorized pack-delivery change.
+
 `manifest.yaml` declares the scenario packs registered into the tenant by
 default (an in-box bootstrap seed, not a BigRAE-shipped distribution catalog).
 
@@ -33,7 +36,8 @@ the Dockerfile copies and fails when the routing does not match.
 Packs are validated as foreign input at registration against the
 `raes-env-packs` contract, and their advertised digest must match the exact
 associated-artifact inventory. Bootstrap retries are service-level no-ops only
-for the same immutable identity; manifest or content drift fails visibly. A
-missing or malformed declaration fails the deploy bootstrap, and a failure in
-any entry rolls back every new registration from that invocation rather than
-installing a partial batch.
+for the same immutable identity; manifest or content drift fails visibly. A missing or malformed declaration fails deploy bootstrap. Registration failure rolls back new registrations in that transaction instead of accepting a partial registration batch.
+
+Conformance and publication follow registration through their owning services.
+A later conformance or publication failure is not covered by the registration transaction.
+Use the command's result and retained source state to diagnose that stage before retrying.

@@ -12,6 +12,7 @@ from uuid import UUID
 from shared.credentials import CredentialContext
 from shared.exceptions import CMSError
 from shared.raes.experiment_admission import experiment_archive_identity
+from shared.raes.experiment_dispatch_inputs import trial_scenario_sha256
 from shared.raes.trial_archive import TrialArchiveError, TrialArchiveIdentity
 from shared.raes.trial_results import TrialArchiveContents, inspect_trial_archive
 
@@ -209,11 +210,17 @@ def _unavailable_plan(
     expected, root = collection.expected, batch.inputs["plan"]
     if expected["plan_id"] == root["plan_id"]:
         try:
-            correct = asdict(
-                experiment_archive_identity(
-                    batch.inputs, expected["entry_id"], expected["attempt_id"], expected["run_version"]
-                )
+            # A trial seal binds the retained entry's trial SDL; derive its digest, never trust the record.
+            scenario = (
+                trial_scenario_sha256(batch.inputs, expected["entry_id"]) if "scenario_sha256" in expected else ""
             )
+            correct = experiment_archive_identity(
+                batch.inputs,
+                expected["entry_id"],
+                expected["attempt_id"],
+                expected["run_version"],
+                scenario_sha256=scenario,
+            ).as_record()
         except (KeyError, ValueError):
             raise CMSError("Retained archive identity does not match its admitted entry") from None
         if expected != correct:

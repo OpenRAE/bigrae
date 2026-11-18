@@ -141,6 +141,10 @@ def _outputs(
         },
         "identity_platform_api_key": {"value": "identity-platform-api-key"},
         "identity_platform_project_id": {"value": "shifter-gcp-dev"},
+        "guacamole_controller_identity": {
+            "value": {"email": "gateway@shifter-gcp-dev.iam.gserviceaccount.com", "unique_id": "123456789012345678901"}
+        },
+        "workload_service_accounts": {"value": {"guacamole-client": "gateway@shifter-gcp-dev.iam.gserviceaccount.com"}},
         "dynamic_secret_project_id": {
             "value": (
                 "shifter-gcp-dev-range-secrets" if dynamic_secret_project_id is None else dynamic_secret_project_id
@@ -193,9 +197,52 @@ def _outputs(
     if native_identity is not None:
         outputs["native_identity"] = {"value": native_identity}
         outputs["workload_service_accounts"] = {
-            "value": {name: user + ".gserviceaccount.com" for name, user in native_identity["database_users"].items()}
+            "value": {
+                **outputs["workload_service_accounts"]["value"],
+                **{name: user + ".gserviceaccount.com" for name, user in native_identity["database_users"].items()},
+            }
         }
     return outputs
+
+
+def test_gateway_uses_exact_native_identity_and_own_https_audience():
+    module = _load_module("render_runtime_env.py", "render_runtime_env")
+    values = module._gateway_runtime_values(
+        _outputs(), project_id="shifter-gcp-dev", site_url="https://portal.example.test"
+    )
+    endpoint = "https://portal.example.test/api/v1/mission-control/guacamole/control/authority/"
+    assert values == {
+        "GUACAMOLE_CONTROL_URL": endpoint,
+        "GUACAMOLE_CONTROL_AUDIENCE": endpoint,
+        "GUACAMOLE_CONTROL_IDENTITY": "google",
+        "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL": "gateway@shifter-gcp-dev.iam.gserviceaccount.com",
+        "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID": "123456789012345678901",
+        "GUACAMOLE_CONTROLLER_ROLE_ARN": "",
+    }
+
+
+@pytest.mark.parametrize("change", ["missing", "empty_id", "invalid_id", "wrong_account", "wrong_project", "extra"])
+def test_gateway_rejects_missing_or_mismatched_identity_metadata(change):
+    module = _load_module("render_runtime_env.py", "render_runtime_env")
+    outputs = _outputs()
+    identity = outputs["guacamole_controller_identity"]["value"]
+    if change == "missing":
+        outputs.pop("guacamole_controller_identity")
+    elif change == "empty_id":
+        identity["unique_id"] = ""
+    elif change == "invalid_id":
+        identity["unique_id"] = "not-a-native-subject"
+    elif change == "wrong_account":
+        outputs["workload_service_accounts"]["value"]["guacamole-client"] = (
+            "other@shifter-gcp-dev.iam.gserviceaccount.com"
+        )
+    elif change == "wrong_project":
+        identity["email"] = "gateway@other-project.iam.gserviceaccount.com"
+        outputs["workload_service_accounts"]["value"]["guacamole-client"] = identity["email"]
+    else:
+        identity["unexpected"] = "value"
+    with pytest.raises((KeyError, ValueError)):
+        module._gateway_runtime_values(outputs, project_id="shifter-gcp-dev", site_url="https://portal.example.test")
 
 
 def test_render_env_emits_production_security_profile():
@@ -346,19 +393,36 @@ def test_render_env_turns_on_the_live_notification_capability():
     assert "WEBSOCKET_NOTIFICATIONS_ENABLED=true" in rendered
 
 
-def test_render_env_defaults_model_access_to_disabled_without_catalog_body():
+def test_render_env_declares_the_worker_capacity_partition_for_this_deployment():
     module = _load_module("render_runtime_env.py", "render_runtime_env")
-    rendered = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST)
-    assert "MODEL_ACCESS_ENABLED=false\n" in rendered
-    assert "MODEL_ACCESS_CATALOG_PATH=\n" in rendered
-    assert "MODEL_ACCESS_CATALOG_DIGEST=\n" in rendered
-    assert "model-access-policy/v1" not in rendered
+    lines = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST).splitlines()
+    env = dict(line.split("=", 1) for line in lines)
+    assert env["CAPACITY_PLANNING_ENABLED"] == "true"
+    catalog = json.loads(env["CAPACITY_PLANNING_CATALOG"])
+    assert catalog["partitions"] == [
+        {
+            "name": "gce-workers",
+            "provider": "gcp",
+            "backend": "gce",
+            "account": env["GCP_PROJECT_ID"],
+            "region": env["RANGE_NETWORK_REGION"],
+        }
+    ]
+    assert sorted(metric["name"] for metric in catalog["metrics"]) == ["instances", "vcpu"]
+    assert {(metric["partition"], metric["enforcement"]) for metric in catalog["metrics"]} == {
+        ("gce-workers", "enforcing")
+    }
+    assert {metric["name"]: metric["per_range_cost"] for metric in catalog["metrics"]} == {"instances": 1, "vcpu": 8}
 
 
-def test_render_env_rejects_incomplete_model_access_projection(monkeypatch):
+def test_render_env_draws_the_configured_worker_vcpu_and_rejects_an_invalid_value(monkeypatch):
     module = _load_module("render_runtime_env.py", "render_runtime_env")
-    monkeypatch.setenv("MODEL_ACCESS_ENABLED", "true")
-    with pytest.raises(ValueError, match="path and digest"):
+    monkeypatch.setenv("GCP_WORKER_VCPU", "16")
+    lines = module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST).splitlines()
+    catalog = json.loads(dict(line.split("=", 1) for line in lines)["CAPACITY_PLANNING_CATALOG"])
+    assert {metric["name"]: metric["per_range_cost"] for metric in catalog["metrics"]}["vcpu"] == 16
+    monkeypatch.setenv("GCP_WORKER_VCPU", "0")
+    with pytest.raises(ValueError, match="GCP_WORKER_VCPU"):
         module.render_env(_outputs(), engine_image=PINNED_ENGINE_DIGEST)
 
 

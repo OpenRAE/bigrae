@@ -10,7 +10,7 @@
 #
 # This is NOT a copy of the AWS apply order, the bootstrap backend registry,
 # or the deploy path filters — each of those owns a narrower concern. See
-# docs/architecture/terraform-root-pr-validation-preflight-1528.md.
+# docs/_deprecated/architecture/terraform-root-pr-validation-preflight-1528.md.
 #
 # Provider version constraints stay canonical in each root's Terraform
 # `required_providers`; resolved versions and checksums stay canonical in each
@@ -226,11 +226,6 @@ modules:
     owner: "@Brad-Edwards"
     contract: terraform_test
     test: tests/security.tftest.hcl
-    test_profile: aws-1.13.3
-  - path: platform/terraform/modules/portal/eks-model-broker
-    owner: "@Brad-Edwards"
-    contract: terraform_test
-    test: tests/boundary.tftest.hcl
     test_profile: aws-1.13.3
   - path: platform/terraform/modules/portal/eks-provisioner-env
     owner: "@Brad-Edwards"

@@ -118,6 +118,22 @@ class TestFirewall:
             with pytest.raises(ValueError):
                 firewall.allow(client, target, ports)
 
+    def test_multiple_targets_are_installed_in_one_atomic_nft_update(self):
+        scripts: list[str] = []
+        firewall = Firewall(runner=scripts.append)
+
+        firewall.allow(
+            "100.96.0.2",
+            (("10.50.3.4", (3389,)), ("10.50.3.3", (22, 3389))),
+        )
+
+        assert scripts == [
+            "add element inet shifter_vpn allowed { "
+            "100.96.0.2 . 10.50.3.3 . 22, "
+            "100.96.0.2 . 10.50.3.3 . 3389, "
+            "100.96.0.2 . 10.50.3.4 . 3389 }\n"
+        ]
+
 
 class TestConfig:
     def test_a_complete_environment_loads(self, monkeypatch):
@@ -236,6 +252,31 @@ class TestPortalClient:
         assert sent[0].get_header("Authorization") == "Bearer token-for-aud"
         assert json.loads(sent[0].data)["server"] == "vpn-a"
 
+    def test_authorize_accepts_a_closed_multi_target_grant(self, client):
+        portal, _sent, replies = client
+        replies.append(
+            (
+                201,
+                json.dumps(
+                    {
+                        "session": "s",
+                        "targets": [
+                            {"target": "10.50.3.3", "ports": [3389, 22]},
+                            {"target": "10.50.3.4", "ports": [3389]},
+                        ],
+                        "heartbeat_seconds": 15,
+                    }
+                ).encode(),
+            )
+        )
+
+        grant = portal.authorize("participant-x", 3, "198.51.100.2")
+
+        assert [(item.target, item.ports) for item in grant.targets] == [
+            ("10.50.3.3", (22, 3389)),
+            ("10.50.3.4", (3389,)),
+        ]
+
     @pytest.mark.parametrize(
         ("status", "body", "error"),
         [
@@ -244,6 +285,11 @@ class TestPortalClient:
             (
                 201,
                 b'{"session": "s", "target": "10.50.3.3", "ports": ["22"], "heartbeat_seconds": 15}',
+                PortalUnavailable,
+            ),
+            (
+                201,
+                b'{"session": "s", "target": "10.50.3.3\\nroute 0.0.0.0", "ports": [22], "heartbeat_seconds": 15}',
                 PortalUnavailable,
             ),
             (201, b"x" * 70_000, PortalUnavailable),

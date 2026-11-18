@@ -33,7 +33,12 @@ from config import (
     gce_image_profile_fingerprint,
     load_gce_range_cell_config,
 )
-from gcp_range_cell_firewall import build_firewall_plan
+from gcp_range_cell_firewall import (
+    SHARED_GUEST_TAG,
+    SHARED_VPN_CHANNEL_TAGS,
+    build_firewall_plan,
+    build_shared_firewall_plan,
+)
 from gcp_range_cell_naming import (
     _network_name_from_id,
     _network_self_link,
@@ -92,6 +97,9 @@ class RaesGcePlanOptions:
     allocated_network_cidrs: Sequence[tuple[str, str]] | None = None
     reconstruct_for_teardown: bool = False
     remote_access: RaesGceVpnAccess | None = None
+    # Teardown and inventory name the rules of both firewall layouts, so a range
+    # created before a layout change still loses every rule it owns.
+    include_all_firewall_layouts: bool = False
 
 
 def build_raes_range_cell_plan(
@@ -111,9 +119,6 @@ def build_raes_range_cell_plan(
     joined to this plan by ``raes_access.join_participant_access``. They are the
     only source of a node's participant channels: authored services, ACLs, OS
     family, image, and account existence never synthesize one.
-
-    ``egress_policy.model_broker`` is separately admitted and bound to the deployment VIP;
-    neither scenario authorship nor installation enablement grants it.
     """
     resolved_options = _plan_options(options, legacy)
     resolved_config = resolved_options.config or load_gce_range_cell_config()
@@ -150,12 +155,8 @@ def build_raes_range_cell_plan(
 
     access_by_node = _access_by_node(resolved_options.access_bindings)
 
-    # The deployment may expose a broker endpoint without admitting this range
-    # to use it. Only a range-bound broker capability suppresses the host
-    # identity; broker-free ranges keep their direct keyless Vertex path.
-    attach_model_identity = (
-        bool(resolved_config.service_account_email) and resolved_options.egress_policy.model_broker is None
-    )
+    # Default-on, keyless model access (ADR-064): attach the range host identity.
+    attach_model_identity = bool(resolved_config.service_account_email)
     instance_plans: list[InstancePlan] = []
     for network in raes_plan.networks:
         subnet = subnet_by_address[network.address]
@@ -172,6 +173,8 @@ def build_raes_range_cell_plan(
             )
 
     _reject_unplaceable_nodes(raes_plan, networks_by_address)
+    if _uses_shared_guest_firewalls(resolved_config, subnet_plans):
+        _add_shared_guest_tags(instance_plans, resolved_options.remote_access)
 
     plan: RangeCellPlan = {
         "project_id": resolved_config.project_id,
@@ -186,15 +189,9 @@ def build_raes_range_cell_plan(
         "manage_network": manage_network,
         "subnets": subnet_plans,
         "instances": instance_plans,
-        "firewalls": _all_firewalls(
-            range_id,
-            subnet_plans,
-            instance_plans,
-            raes_plan,
-            resolved_config,
-            resolved_options.egress_policy,
-        )
-        + vpn_pool_firewalls(range_id, instance_plans, resolved_options.remote_access),
+        "firewalls": _range_firewalls(
+            range_id, subnet_plans, instance_plans, raes_plan, resolved_config, resolved_options
+        ),
     }
     # A non-`none` range owns an explicit Cloud Router + NAT scoped to its subnets;
     # a `none` (zero-egress) range omits it so its subnets carry no NAT path.
@@ -228,7 +225,77 @@ def _plan_options(
             legacy.get("allocated_network_cidrs", resolved.allocated_network_cidrs),
         ),
         reconstruct_for_teardown=cast(bool, legacy.get("reconstruct_for_teardown", resolved.reconstruct_for_teardown)),
+        include_all_firewall_layouts=resolved.include_all_firewall_layouts,
     )
+
+
+def _uses_shared_guest_firewalls(config: GCERangeCellConfig, subnet_plans: list[SubnetPlan]) -> bool:
+    """Use the shared layout only where one isolation rule keeps today's reachability.
+
+    A single-subnet range allows only intra-subnet traffic plus its authored
+    services, which the isolation rule covers. A multi-subnet range limits
+    cross-subnet traffic to authored service ports, so it keeps the per-range layout.
+    """
+    return config.shared_guest_firewalls and len(subnet_plans) == 1
+
+
+def _add_shared_guest_tags(instance_plans: list[InstancePlan], remote_access: RaesGceVpnAccess | None) -> None:
+    """Attach the shared-guest tag and the OpenVPN channel tags of authorized targets."""
+    targets = set(remote_access.target_refs) if remote_access is not None else set()
+    for instance in instance_plans:
+        tags = [*instance["tags"], SHARED_GUEST_TAG]
+        if instance["uuid"] in targets:
+            tags.extend(
+                SHARED_VPN_CHANNEL_TAGS[channel]
+                for channel in sorted(set(instance.get("participant_access_channels", [])))
+                if channel in SHARED_VPN_CHANNEL_TAGS
+            )
+        instance["tags"] = tags
+
+
+def _range_firewalls(
+    range_id: int,
+    subnet_plans: list[SubnetPlan],
+    instance_plans: list[InstancePlan],
+    raes_plan: RaesPlan,
+    config: GCERangeCellConfig,
+    options: RaesGcePlanOptions,
+) -> list[FirewallPlan]:
+    """Select the firewall layout; teardown names the rules of both layouts."""
+    shared = _uses_shared_guest_firewalls(config, subnet_plans)
+    layouts: list[list[FirewallPlan]] = []
+    if shared or options.include_all_firewall_layouts:
+        layouts.append(
+            build_shared_firewall_plan(
+                range_id,
+                subnet_plans,
+                config,
+                instance_plans=instance_plans,
+                egress_policy=options.egress_policy,
+            )
+            + _acl_firewalls(range_id, raes_plan)
+        )
+    if not shared or options.include_all_firewall_layouts:
+        layouts.append(
+            _all_firewalls(range_id, subnet_plans, instance_plans, raes_plan, config, options.egress_policy)
+            + vpn_pool_firewalls(range_id, instance_plans, options.remote_access)
+        )
+    firewalls: dict[str, FirewallPlan] = {}
+    for layout in layouts:
+        for firewall in layout:
+            firewalls.setdefault(firewall["name"], firewall)
+    return list(firewalls.values())
+
+
+def _acl_firewalls(range_id: int, raes_plan: RaesPlan) -> list[FirewallPlan]:
+    """Render authored node ACLs, which stay range-scaled in both layouts."""
+    cidr_lookup = acl_cidr_lookup(raes_plan.networks)
+    return [
+        firewall
+        for node in raes_plan.nodes
+        if node.acls
+        for firewall in build_acl_firewalls(range_id, node, node_tag(range_id, node.address), cidr_lookup)
+    ]
 
 
 def _all_firewalls(

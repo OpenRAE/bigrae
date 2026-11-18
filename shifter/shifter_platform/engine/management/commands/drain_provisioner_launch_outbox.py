@@ -57,12 +57,16 @@ class Command(BaseCommand):
             with self._active_heartbeat():
                 from engine.services import (
                     reconcile_feature_artifact_acquisitions,
+                    reconcile_participant_validations,
                     reconcile_runtime_plugin_operations,
                     reconcile_runtime_plugins,
                 )
+                from engine.services._failed_cleanup_task import retry_due_failed_cleanup_tasks
 
+                retry_due_failed_cleanup_tasks(limit=3)
                 reconcile_runtime_plugins(limit=3)
-                reconcile_runtime_plugin_operations(limit=6)
+                reconcile_runtime_plugin_operations(limit=30)
+                reconcile_participant_validations(limit=3)
                 reconcile_feature_artifact_acquisitions(limit=3)
                 from engine.services._vpn_profiles import reconcile_vpn_profiles
 
@@ -236,4 +240,6 @@ class Command(BaseCommand):
             current.task_ref = task_ref
             current.last_error = ""
             current.launched_at = timezone.now()
-            current.save(update_fields=["status", "task_ref", "last_error", "launched_at"])
+            if current.authority_kind == "cleanup":
+                current.next_attempt_at = current.launched_at + timedelta(minutes=1)
+            current.save(update_fields=["status", "task_ref", "last_error", "launched_at", "next_attempt_at"])

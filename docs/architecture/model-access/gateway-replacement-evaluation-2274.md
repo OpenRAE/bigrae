@@ -1,8 +1,11 @@
-# Model gateway replacement evaluation — #2274
+# Model gateway replacement evaluation (#2274)
 
 Evaluated 2026-10-12; selected by the maintainer on 2026-10-13. Status: selected
 OSS replacement for qualification; no product has been installed or qualified
 by this evaluation.
+
+This explanation retains the dated comparison and its original external sources.
+It is not a fresh product, license, or security assessment.
 
 **Select a separately deployed, self-hosted LiteLLM OSS proxy, with credential
 rotation owned by deployment automation.** Bifrost was the second candidate,
@@ -86,6 +89,7 @@ workers and approved secret stores. It does not call licensed regeneration APIs,
 enable paid features or introduce another token/exchange protocol. Native
 secret-manager integrations are also [Enterprise features](https://docs.litellm.ai/docs/secret);
 the OSS integration uses Shifter's existing secret-delivery boundary instead.
+
 Automatic delivery, revocation and accounting continuity must be qualified.
 
 Bifrost's [budget documentation](https://docs.getbifrost.ai/features/governance/budget-and-limits)
@@ -121,9 +125,14 @@ records compromised PyPI releases 1.82.7 and 1.82.8 on 2026-03-24. It states tha
 official proxy-image users were unaffected and describes a revised publishing
 pipeline and image signing. Its [security advisories](https://github.com/BerriAI/litellm/security)
 include recent authentication, credential-custody and caller-routing defects.
-This is a material dependency risk: select a patched, reviewed release, verify
-its upstream image signature against a pinned trusted key, retain its digest
-and SBOM, and repeat client/security qualification on upgrades. Do not install
+This is a material dependency risk.
+
+Select a patched, reviewed release.
+Verify its upstream image signature against a pinned trusted key.
+Retain its digest and SBOM.
+Repeat client/security qualification on upgrades.
+
+Do not install
 an unpinned SDK into Shifter or treat signing as proof that application code is
 safe. This evaluation did not install the affected packages or investigate any
 Shifter exposure.
@@ -155,41 +164,36 @@ need separate authorization; none is used here.
 
 ## Smallest proposed LiteLLM integration
 
-1. **One isolated product deployment.** Deploy a pinned official proxy image
-   through the existing installer, Helm and GCP bootstrap/deploy flow, with its
-   own service account, restricted secret mounts and private inference endpoint.
+1. **One isolated product deployment.** Deploy a pinned official proxy image through the existing installer, Helm, and GCP bootstrap/deploy flow.
+   Give it its own service account, restricted secret mounts, and private inference endpoint.
    Keep it outside portal/provisioner processes and outside the public portal
-   listener. Give it a dedicated database/user with no access to Engine tables;
-   use a separately isolated Redis service for multiple replicas. Existing
-   cloud provisioning patterns may be reused; shared portal database credentials
-   or an existing Redis instance's spare capacity are not assumptions.
+   listener. Give it a dedicated database/user with no access to Engine tables.
+   Use a separately isolated Redis service for multiple replicas. Existing cloud provisioning patterns may be reused.
+   Do not assume shared portal database credentials or an existing Redis instance's spare capacity.
 2. **Vertex first.** Map approved logical aliases to fixed dated publisher
    models, regions and the deployment's existing GCP project. Use gateway-held
    Workload Identity/ADC and exact invocation grants. Other projects/accounts
    remain optional, not a prerequisite. Bedrock/direct providers and additional
    protocols follow only after independent qualification.
 3. **Native gateway keys and controls.** Engine retains tenant/source-use and
-   range-operation authority. A narrow integration calls native gateway key
-   create/revoke operations and delivers only the scoped gateway credential
-   through existing operation/secret delivery and the public adapter SDK.
+   range-operation authority. A narrow integration calls native gateway key create/revoke operations.
+   It delivers only the scoped gateway credential through existing operation/secret delivery and the public adapter SDK.
    Bind it to the admitted range generation, allowed aliases and lifetime;
    guests never receive the administrator key or provider credentials. For
    automatic rotation, use the deployment-owned sequence below through documented
    OSS APIs and secure delivery. Do not revive the bespoke enrollment/freshness
    protocol. Attach budgets/RPM/TPM/concurrency/detections only when explicitly
    configured; no finite defaults, zero caps or large-number unlimited sentinels.
-4. **One accounting authority per new workload.** Use the selected product's
-   native optional usage/budget mechanisms rather than reserve the same request
-   in both gateway and old Engine ledgers. Engine keeps source-use authority and
+4. **One accounting authority per new workload.** Use the selected product's native optional usage/budget mechanisms.
+   Do not reserve the same request in both gateway and old Engine ledgers. Engine keeps source-use authority and
    lifecycle/audit references, not a gateway financial counter. This proposed
    authority change needs an explicit migration decision. Preserve old Engine
    liabilities and immutable history read-only; do not reinterpret v1–v4 finite
    policy fields as unlimited. Any new installation policy needs its own
    versioned contract and owner-service validation.
 5. **Standard private TLS renewal.** The existing GKE public managed certificate
-   does not prove renewal for a private gateway hostname. Select a standard
-   automatically renewing private TLS integration, such as cert-manager with
-   an approved issuer, and qualify issuance, trust delivery, renewal and reload.
+   does not prove renewal for a private gateway hostname. Select a standard private TLS integration with automatic renewal, such as cert-manager with an approved issuer.
+   Qualify issuance, trust delivery, renewal, and reload.
    cert-manager is a proposed additional dependency, not an installed facility.
    No new CA/issuer service is authorized by this recommendation. Create cluster
    and issuer prerequisites before gateway enablement; no hand-created trust
@@ -215,7 +219,7 @@ approved secret store and only references in operation records.
 2. Publish the replacement through existing secret/operation delivery. The guest
    credential helper must refresh without manual changes, using the public SDK
    boundary. A version-bound acknowledgment confirms installation for the current
-   generation, not just that a server-side secret exists.
+   generation. A server-side secret alone is not that acknowledgment.
 3. Revoke the old key after acknowledgment, within a bounded overlap window.
    Reconcile failed delivery and missed acknowledgments without extending old
    credentials indefinitely. If refresh fails, the original key expires at its
@@ -229,10 +233,11 @@ approved secret store and only references in operation records.
 Where spend controls are configured, both keys must share the same persistent
 native budget owner and window. Creation of a new key must not create another
 spending allowance. For example, a synthetic budget of 100 units with 60 spent
-retains 40 units across both keys during overlap and after revocation. Preserve
-usage and outstanding charges under their original owners; do not copy a
-remaining balance into a fresh per-key counter and then discard the old counter.
-With no spend control configured, rotation must not add one. Gateway-key
+retains 40 units across both keys during overlap and after revocation. Preserve usage and outstanding charges under their original owners.
+Do not copy a remaining balance into a fresh per-key counter and then discard the old counter.
+With no spend control configured, rotation must not add one.
+
+Gateway-key
 replacement, provider Workload Identity refresh and TLS renewal remain separate
 operations. This section specifies qualification behavior, not implemented
 automation or a new credential service.
@@ -256,14 +261,15 @@ and quota-service operation. No vendor quote, measured traffic or cloud cost
 model was supplied, so dollar totals and a migration duration would be invented.
 
 Qualify on an authorized non-production deployment with synthetic traffic,
-without shadowing real prompts. Then make a separate reviewed decision to move
-guests from keyless-direct to the qualified proxy. For that slice, remove direct
+without shadowing real prompts. Then make a separate reviewed decision to move guests from keyless-direct to the qualified proxy.
+ For that slice, remove direct
 provider authority and egress bypass; a proxy outage cannot trigger direct
 fallback. Rollback is an explicit operator transition between qualified modes,
-including credential fencing, not request-level failover. Retain legacy usage,
-outstanding liabilities and restore evidence. Only after cutover and dependency
-inventory should another change remove parked broker code, infrastructure and
-UI assumptions. This evaluation neither files implementation issues nor removes
+including credential fencing, not request-level failover.
+
+Retain legacy usage,
+outstanding liabilities and restore evidence. Only after cutover and dependency inventory should another change remove parked broker code, infrastructure, and UI assumptions.
+ This evaluation neither files implementation issues nor removes
 any of those assets.
 
 ## Qualification required before adoption
@@ -276,12 +282,10 @@ any of those assets.
 | Credential lifecycle | OSS key create/delete, range reset/generation change and stop, startup longer than the old freshness window, expiry and deployment-owned rotation with automatic guest refresh. Exercise lost create/delete replies, orphaned replacements, failed delivery, missed acknowledgments, bounded overlap, stale operations and worker restart. Measure cross-replica revocation delay; old credentials do not resurrect after restore. |
 | Rotation accounting | With a configured persistent native budget owner, old and new keys share one remaining allowance during overlap. Rotation, retries and restart retain spend, unresolved charges and the budget window; expiry/deletion cannot reset usage. With no configured controls, rotation adds none. |
 | Identity/routing/privacy | Same-project keyless Vertex; denied foreign tenant/model/admin access; fixed provider destinations and identities despite untrusted inputs; no direct bypass or hidden billed replay. Inspect logs/errors/traces/artifacts using synthetic secret and prompt sentinels. |
-| Bootstrap and renewal | First enablement on a fresh cluster without manual trust objects; automatic certificate renewal/reload and provider token refresh during active streams; restart and near-expiry redeploy succeed without turning off TLS verification. |
+| Bootstrap and renewal | First enablement on a fresh cluster needs no manual trust objects. Automatic certificate renewal/reload and provider token refresh work during active streams. Restart and near-expiry redeploy succeed with TLS verification enabled. |
 | Operation and recovery | Draining, pod/node loss, upgrades and DB/Redis restore; measure p95/p99 added latency, concurrency, memory and provider errors at the declared workload. Retained liabilities, native state recovery and controlled rollback must work. |
 
 Selection is **self-hosted LiteLLM OSS with deployment-owned rotation**. Private
-TLS and runtime qualification remain to be established. If the chosen release
-cannot pass the mandatory client, privacy, fixed-routing, renewal or configured-control
-cases, do not compensate by rebuilding gateway machinery: reassess Bifrost
-(including its Enterprise HA cost) against the same cases. No candidate's
-marketing throughput or provider count substitutes for this evidence.
+TLS and runtime qualification remain to be established. The chosen release must pass the mandatory client, privacy, fixed-routing, renewal, and configured-control cases.
+If it fails, do not compensate by rebuilding gateway machinery.
+Reassess Bifrost, including its Enterprise HA cost, against the same cases. No candidate's marketing throughput or provider count substitutes for this evidence.

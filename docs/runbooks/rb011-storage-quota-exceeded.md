@@ -3,6 +3,8 @@
 Applicability: application quota on GCS or S3. Operator: CMS/application owner.
 Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 An upload is refused because the user's storage budget or per-file limit is

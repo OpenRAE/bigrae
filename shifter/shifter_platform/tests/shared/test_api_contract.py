@@ -220,6 +220,13 @@ class TestPublishedContract:
         assert set(scoreboard["required"]) == expected
         assert set(scoreboard["properties"]) == expected
 
+    def test_public_scoreboard_declares_the_optional_kind_selector(self, openapi_document: dict[str, Any]) -> None:
+        operation = openapi_document["paths"]["/api/v1/ctf/events/{event_id}/scoreboard/"]["get"]
+        (kind,) = [param for param in operation["parameters"] if param["name"] == "kind"]
+        assert kind["in"] == "query"
+        assert kind.get("required", False) is False
+        assert kind["schema"]["enum"] == ["individual", "team"]
+
     def test_created_endpoints_declare_201(self, openapi_document: dict[str, Any]) -> None:
         # NGFW/credential creates return 201; the contract must not claim 200.
         ngfw = openapi_document["paths"]["/api/v1/mission-control/ngfw/"]["post"]
@@ -632,6 +639,71 @@ def test_parameter_retirement_projects_only_its_exact_operation_and_rejects_rein
     assert projected == current
     with pytest.raises(RuntimeError, match="reintroduced"):
         contract.apply_accepted_retirements(json.dumps(base), json.dumps(base))
+
+
+def test_enum_value_retirement_projects_only_named_values_and_rejects_reintroduction(tmp_path, monkeypatch):
+    from copy import deepcopy
+
+    base = {
+        "paths": {
+            "/api/v1/administer/organizations/": {
+                "get": {"parameters": [{"name": "integration", "in": "query", "schema": {"enum": ["a", "b", "c"]}}]}
+            }
+        },
+        "components": {"schemas": {"ScopesEnum": {"enum": ["keep", "drop"]}, "OtherEnum": {"enum": ["drop"]}}},
+    }
+    current = deepcopy(base)
+    current["paths"]["/api/v1/administer/organizations/"]["get"]["parameters"][0]["schema"]["enum"] = ["a", "c"]
+    current["components"]["schemas"]["ScopesEnum"]["enum"] = ["keep"]
+    metadata = tmp_path / "retirements.json"
+    metadata.write_text(
+        json.dumps(
+            {
+                "api_major": "v1",
+                "retirements": [
+                    {
+                        "adr": "ADR-068",
+                        "issue": 2909,
+                        "schema_enum_values": [{"schema": "ScopesEnum", "values": ["drop"]}],
+                        "parameter_enum_values": [
+                            {
+                                "path": "/api/v1/administer/organizations/",
+                                "method": "get",
+                                "name": "integration",
+                                "in": "query",
+                                "values": ["b"],
+                            }
+                        ],
+                    }
+                ],
+            }
+        )
+    )
+    monkeypatch.setattr(contract, "retirement_path", lambda major=contract.API_MAJOR: metadata)
+    projected = json.loads(contract.apply_accepted_retirements(json.dumps(base), json.dumps(current)))
+    assert projected == current
+    with pytest.raises(RuntimeError, match="reintroduced"):
+        contract.apply_accepted_retirements(json.dumps(base), json.dumps(base))
+    reintroduced = deepcopy(current)
+    reintroduced["paths"]["/api/v1/administer/organizations/"]["get"]["parameters"][0]["schema"]["enum"] = ["a", "b"]
+    with pytest.raises(RuntimeError, match="reintroduced"):
+        contract.apply_accepted_retirements(json.dumps(base), json.dumps(reintroduced))
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"schema_enum_values": [{"schema": "ScopesEnum", "values": []}]},
+        {"schema_enum_values": [{"schema": "ScopesEnum", "values": ["drop"], "extra": True}]},
+        {"parameter_enum_values": [{"path": "relative", "method": "get", "name": "x", "in": "query", "values": ["b"]}]},
+    ],
+)
+def test_enum_value_retirement_rejects_inexact_metadata(tmp_path, monkeypatch, entry):
+    metadata = tmp_path / "retirements.json"
+    metadata.write_text(json.dumps({"api_major": "v1", "retirements": [{"adr": "ADR-068", "issue": 2909, **entry}]}))
+    monkeypatch.setattr(contract, "retirement_path", lambda major=contract.API_MAJOR: metadata)
+    with pytest.raises(RuntimeError, match="Invalid"):
+        contract.apply_accepted_retirements("{}", "{}")
 
 
 def test_lease_commands_preserve_published_request_media_types(openapi_document):

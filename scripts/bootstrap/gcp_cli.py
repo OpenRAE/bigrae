@@ -111,6 +111,11 @@ def add_lifecycle_subparsers(subparsers: argparse._SubParsersAction) -> None:
         "--allow-missing-range-images", action="store_true", help="Deploy the platform before range images exist"
     )
     deploy.add_argument(
+        "--allow-unreleased-tooling",
+        action="store_true",
+        help="Test deployments only: run committed tooling that is not the release revision; the evidence records it",
+    )
+    deploy.add_argument(
         "--reconcile-foundation-image-network", action="store_true", help="Run the narrow foundation reconcile"
     )
     deploy.add_argument("--no-smoke", action="store_true", help="Skip the advisory post-deploy smoke")
@@ -182,6 +187,7 @@ def _deploy_options(args: argparse.Namespace) -> DeployOptions:
         identity_bootstrap_facts=getattr(args, "identity_bootstrap_facts", ""),
         catalog_credential_file=getattr(args, "catalog_credential_file", ""),
         allow_missing_range_images=getattr(args, "allow_missing_range_images", False),
+        allow_unreleased_tooling=getattr(args, "allow_unreleased_tooling", False),
         reconcile_foundation_image_network=getattr(args, "reconcile_foundation_image_network", False),
         smoke=not getattr(args, "no_smoke", False),
         operator_password_env=getattr(args, "operator_password_env", ""),

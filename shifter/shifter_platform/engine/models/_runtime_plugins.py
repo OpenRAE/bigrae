@@ -123,3 +123,33 @@ class RuntimePluginInvocation(models.Model):
 
     def __str__(self) -> str:
         return f"Runtime plugin invocation {self.id} ({self.state})"
+
+
+class RuntimePluginValidation(models.Model):
+    """One admission request for an installed adapter's ``validate`` phase.
+
+    Admission records the request. The plugin launcher runs the isolated worker
+    and records its authorized result; admission only reads the result.
+    """
+
+    id = models.UUIDField(primary_key=True, editable=False)
+    installation = models.ForeignKey(RuntimePluginInstallation, on_delete=models.PROTECT)
+    input = models.JSONField()
+    result = models.JSONField(null=True)
+    state = models.CharField(max_length=16, default="pending", db_index=True)
+    expires_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        """Enforce legal lifecycle states."""
+
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(state__in=["pending", "validated", "failed"]),
+                name="runtime_plugin_validation_state",
+            ),
+        ]
+
+    def __str__(self) -> str:
+        return f"Runtime plugin validation {self.id} ({self.state})"

@@ -175,7 +175,7 @@ https://aws.amazon.com/marketplace/pp/prodview-fznsw3f7mq7to
 
 Ensure:
 - Security group allows SSH from your IP
-- Instance has public IP (default VPC) or you're using a bastion
+- Instance has public IP (default VPC) or you are using a bastion
 
 ### Build fails partway through
 
@@ -184,9 +184,7 @@ Check the EC2 console - Packer may leave a running instance. Terminate it manual
 ### Ubuntu desktop package failures
 
 The Ubuntu image intentionally installs minimal XFCE components with
-`--no-install-recommends`. Avoid replacing this with `xfce4-goodies` unless
-the added packages are tested in an EC2 bake; that dependency chain can pull
-hardware/peripheral package postinst scripts that fail under Packer.
+`--no-install-recommends`. Use `xfce4-goodies` only after an EC2 bake test. Its dependencies can introduce hardware/peripheral package post-install scripts that fail under Packer.
 
 ### Windows WinRM connection timeout
 

@@ -176,7 +176,7 @@ class TestDeployLock:
 
     def test_other_failures_and_break(self, tmp_path: Path):
         runner = FakeRunner().on(["gcloud", "storage", "cp"], ProcessResult(1, "", "permission denied"))
-        with pytest.raises(GcpCommandError, match="cannot create"):
+        with pytest.raises(GcpCommandError, match=r"cannot create the deployment lock .*: permission denied"):
             acquire_lock(runner, STORE, {}, command="gcp-deploy", run_id="r1", workdir=tmp_path)
         bad_generation = FakeRunner().on(["gcloud", "storage", "objects"], ProcessResult(0, "none"))
         with pytest.raises(GcpCommandError, match="generation"):

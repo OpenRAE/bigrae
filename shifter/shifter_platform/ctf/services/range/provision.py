@@ -28,7 +28,6 @@ if TYPE_CHECKING:
     from ctf.services.actors import EventActionAdmission
     from shared.credentials import CredentialContext
     from shared.identity_scope import PrincipalRef
-    from shared.model_access import OwnedReference
 
 logger = logging.getLogger(__name__)
 
@@ -164,7 +163,6 @@ def _claim_for_provisioning(
 ) -> CTFRangeLaunch:
     """Commit capacity, subject claim and immutable request in one transaction."""
     from ctf.services.authorization import assert_event_action
-    from ctf.services.model_access_sharing import participant_model_admission_subject
     from ctf.services.range.capacity import admit_range
     from ctf.services.range.launch_intents import launch_parameters, reserve_launch
     from management.services import resolve_principal_uuid
@@ -172,8 +170,7 @@ def _claim_for_provisioning(
     participant = CTFParticipant.objects.get(pk=participant_id)
     existing, principal_uuid = _participant_launch_snapshot(participant)
     owner = resolve_principal_uuid(principal_uuid)
-    subject = participant_model_admission_subject(participant)
-    parameters = _participant_launch_parameters(event, participant, owner, subject, existing)
+    parameters = _participant_launch_parameters(event, owner, existing)
     with transaction.atomic():
         locked_event = CTFEvent.objects.select_for_update().get(pk=event.pk)
         assert_event_action(event_admission, locked_event, "event.manage_ranges")
@@ -184,9 +181,7 @@ def _claim_for_provisioning(
             return replay
         # A completed old generation may have reached verified terminal cleanup.
         # The next claim gets a fresh immutable intent, never reuses that UUID.
-        if launch_parameters(locked_event, owner, subject, None) | {"model_scope": None} != parameters | {
-            "model_scope": None
-        }:
+        if launch_parameters(locked_event, owner) != parameters:
             raise CTFRangeError("Event changed during range authorization")
         admission = admit_range(event.pk, participant.pk)
         if admission is not None and admission["blocking"]:
@@ -284,18 +279,15 @@ def _participant_launch_snapshot(participant: CTFParticipant) -> tuple[CTFRangeL
 
 def _participant_launch_parameters(
     event: CTFEvent,
-    participant: CTFParticipant,
     owner: PrincipalRef,
-    subject: OwnedReference,
     existing: CTFRangeLaunch | None,
 ) -> dict[str, object]:
     """Retained undispatched intent keeps its exact plan; a new generation freezes current facts."""
     from ctf.services.range.launch_intents import launch_parameters
-    from ctf.services.range.model_allocation import project_event_model_scope
 
     if existing is not None and existing.dispatched_at is None:
         return existing.parameters
-    return launch_parameters(event, owner, subject, project_event_model_scope(event, participant.pk, subject))
+    return launch_parameters(event, owner)
 
 
 def _validate_participant_claim(participant: CTFParticipant, event: CTFEvent, owner: PrincipalRef) -> None:

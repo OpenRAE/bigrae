@@ -40,6 +40,28 @@ def docker(*args, check=True):
     return (result.stdout + result.stderr if args[0] == "logs" else result.stdout).strip()
 
 
+def test_built_gateway_uses_https_for_ubuntu_archives():
+    if os.environ.get("GUACAMOLE_NATIVE_INTEGRATION") != "1":
+        pytest.skip("set GUACAMOLE_NATIVE_INTEGRATION=1 for native image qualification")
+    image = os.environ.get("GUACAMOLE_EXTENSION_IMAGE")
+    if not image:
+        pytest.skip("set GUACAMOLE_EXTENSION_IMAGE to qualify the built gateway")
+    sources = docker(
+        "run",
+        "--rm",
+        "--network",
+        "none",
+        "--read-only",
+        "--entrypoint",
+        "cat",
+        image,
+        "/etc/apt/sources.list.d/ubuntu.sources",
+    )
+    archives = [urlparse(uri) for line in sources.splitlines() if line.startswith("URIs:") for uri in line.split()[1:]]
+    assert {archive.hostname for archive in archives} == {"archive.ubuntu.com", "security.ubuntu.com"}
+    assert all(archive.scheme == "https" for archive in archives)
+
+
 @pytest.fixture(scope="module")
 def native_gateway():
     if os.environ.get("GUACAMOLE_NATIVE_INTEGRATION") != "1":

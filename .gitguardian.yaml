@@ -2,22 +2,25 @@
 # GitGuardian configuration for Shifter cyber range
 # Ignore test files that contain mock credentials
 
-version: v1
+# ggshield 1.x reads only config version 2. Version 2 keeps the ignored
+# paths under `secret.ignored_paths`.
+version: 2
 
-paths-ignore:
-  # Test files contain mock/fake credentials for unit tests
-  - "**/tests/**"
-  - "**/test_*.py"
-  - "**/conftest.py"
-  # Shifter Platform test directory
-  - "shifter/shifter_platform/tests/**"
-  # Shifter Engine test directory
-  - "shifter/engine/provisioner/tests/**"
-  # Packer test directory
-  - "shifter/packer/tests/**"
-  # Bootstrap scripts test directory
-  - "scripts/bootstrap/tests/**"
-  # Check layer imports test directory
-  - "scripts/check_layer_imports/tests/**"
-  # Legacy path (may appear in git history)
-  - "pulumi-provisioner/tests/**"
+secret:
+  ignored_paths:
+    # Test files contain mock/fake credentials for unit tests
+    - "**/tests/**"
+    - "**/test_*.py"
+    - "**/conftest.py"
+    # Shifter Platform test directory
+    - "shifter/shifter_platform/tests/**"
+    # Shifter Engine test directory
+    - "shifter/engine/provisioner/tests/**"
+    # Packer test directory
+    - "shifter/packer/tests/**"
+    # Bootstrap scripts test directory
+    - "scripts/bootstrap/tests/**"
+    # Check layer imports test directory
+    - "scripts/check_layer_imports/tests/**"
+    # Legacy path (may appear in git history)
+    - "pulumi-provisioner/tests/**"

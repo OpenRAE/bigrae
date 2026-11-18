@@ -4,74 +4,53 @@ from __future__ import annotations
 
 import hashlib
 import re
+import tempfile
 from collections.abc import Iterator
 from contextlib import contextmanager
-from dataclasses import asdict
+from itertools import batched
 from pathlib import Path
-from typing import Any
+from typing import Any, BinaryIO
 from uuid import UUID, uuid4
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import F
 from django.utils import timezone
 
-from cms.models import ExperimentBatch, ExperimentEntry, RaesPackageSource, TrialArchiveDestination, TrialArchiveReceipt
+from cms.models import (
+    ExperimentBatch,
+    ExperimentEntry,
+    ExperimentSnapshot,
+    RaesPackageSource,
+    TrialArchiveDestination,
+    TrialArchiveReceipt,
+)
 from cms.scenarios.pack_validation import PackDigestError, verify_pack_digest
-from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.cloud import get_object_storage
 from shared.cloud.exceptions import CloudStorageError
 from shared.credentials import CredentialContext
+from shared.disposable_workers import WorkerProfileError
 from shared.exceptions import CMSError, ValidationError
 from shared.identity_scope import ResourceScope
 from shared.raes.experiment_admission import (
     ExperimentInputError,
+    InstallationLookups,
     compile_pack_experiment,
     encode_retained,
     experiment_archive_identity,
+    read_snapshots,
     validate_experiment_cleanup,
     validate_retained,
 )
 from shared.raes.experiment_pack_snapshot import stage_local_experiment_pack
 from shared.raes.object_source import stage_object_pack
 from shared.raes.package_loader import RaesPackageError, resolve_pack_root
-from workspaces.services import OrganizationAuthorizationError
+from shared.raes.participant_owner_replay import OwnerValidation
 
 from ._content_authority import content_scope, fence_content_scope, require_content_scope
+from ._experiment_authority import _UNAVAILABLE, _audit, _authorize, _fence
 from ._experiment_batch_records import ExperimentClaim, RetainedExperimentBatch
-from ._tenant_pack_authority import TenantPackAdmission, admit_tenant_pack, fence_tenant_pack
-
-_UNAVAILABLE = "Experiment operation unavailable"
-
-
-def _authorize(credential: CredentialContext, organization_uuid: UUID, operation: str) -> TenantPackAdmission:
-    """Authorize the native tenant operation without disclosing denial details."""
-    try:
-        return admit_tenant_pack(credential, organization_uuid, operation)
-    except OrganizationAuthorizationError:
-        raise CMSError(_UNAVAILABLE) from None
-
-
-def _fence(admission: TenantPackAdmission) -> None:
-    """Recheck credential and ancestry inside the current transaction."""
-    try:
-        fence_tenant_pack(admission)
-    except OrganizationAuthorizationError:
-        raise CMSError(_UNAVAILABLE) from None
-
-
-def _audit(admission: TenantPackAdmission, reference: UUID, disposition: str) -> None:
-    """Record opaque operational identifiers through the strict audit boundary."""
-    audit_log(
-        AuditEvent(
-            entity_type=AuditEntityType.EXPERIMENT,
-            entity_id=0,
-            entity_ref=str(reference),
-            action=AuditAction.UPDATE,
-            **principal_actor_fields(admission.credential.principal),
-            new_state={"organization_uuid": str(admission.organization_uuid), "disposition": disposition},
-        ),
-        strict=True,
-    )
+from ._tenant_pack_authority import TenantPackAdmission
 
 
 def _project(row: ExperimentBatch) -> RetainedExperimentBatch:
@@ -116,11 +95,15 @@ def list_experiment_entries(
             "state": row.state,
             "worker_ref": row.worker_ref or None,
             "collection_receipt_id": str(row.receipt_id) if row.receipt_id else None,
+            "run_status": row.receipt.run_status if row.receipt else None,
+            "data_complete": row.receipt.evidence_complete if row.receipt else None,
             "cleanup_recorded": bool(row.cleanup_receipt_json),
+            "attempt": row.replacement_ordinal or 0,
+            "replaces_attempt_id": str(row.replaces.token) if row.replaces else None,
         }
-        for row in ExperimentEntry.objects.filter(batch_id=batch_id, organization_uuid=organization_uuid).order_by(
-            "plan_entry_id"
-        )
+        for row in ExperimentEntry.objects.filter(batch_id=batch_id, organization_uuid=organization_uuid)
+        .select_related("receipt", "replaces")
+        .order_by("plan_entry_id", F("replacement_ordinal").asc(nulls_first=True))
     ]
 
 
@@ -186,6 +169,29 @@ def _source_unchanged(
     return all(getattr(current, name) == getattr(source, name) for name in fields)
 
 
+def _owner_validation(organization_uuid: UUID) -> OwnerValidation:
+    """Run backend participant owners in the organization's installed adapter."""
+    from engine.services import validate_participant_configurations
+
+    return lambda owner, family_digest, requests: validate_participant_configurations(
+        organization_uuid, owner=owner, family_digest=family_digest, requests=requests
+    )
+
+
+def _retain_snapshots(
+    row: ExperimentBatch, payload: dict[str, Any], snapshots: BinaryIO, written: list[tuple[str, int]]
+) -> None:
+    """Verify each written snapshot and insert it in small groups, because one snapshot can be more than 1 MB."""
+    try:
+        for group in batched(read_snapshots(payload, snapshots, written), 16):
+            ExperimentSnapshot.objects.bulk_create(
+                ExperimentSnapshot(batch=row, plan_entry_id=key, snapshot_json=snapshot.decode())
+                for key, snapshot in group
+            )
+    except ValueError:
+        raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
+
+
 def admit_experiment_batch(
     credential: CredentialContext,
     organization_uuid: UUID,
@@ -196,78 +202,89 @@ def admit_experiment_batch(
     concurrency: int,
     experiment_version: str | None = None,
 ) -> RetainedExperimentBatch:
-    """Approve apparatus and atomically retain a complete tenant-owned pack plan."""
-    operator = require_content_scope(credential, ResourceScope("installation"), "manage_content")
-    admission = _authorize(operator, organization_uuid, "manage_content")
-    source = RaesPackageSource.objects.filter(scenario_id=scenario_id, organization_uuid=organization_uuid).first()
-    if source is None or content_scope(source) != admission.scope:
-        raise CMSError(_UNAVAILABLE)
-    destination = _destination(organization_uuid)
-    try:
-        with _pack_snapshot(source) as root:
-            if not verify_pack_digest(root, source.package_digest):
-                raise ValueError("Registered pack digest changed")
-            payload = compile_pack_experiment(
-                root,
-                experiment_id=experiment_id,
-                authority=authority,
-                concurrency=concurrency,
-                experiment_version=experiment_version,
-            )
-    except (
-        ValueError,
-        OSError,
-        RaesPackageError,
-        PackDigestError,
-        ValidationError,
-        CloudStorageError,
-        ExperimentInputError,
-    ):
-        raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
-    payload.update(
-        organization_uuid=str(organization_uuid),
-        destination=destination,
-        source={"package_digest": source.package_digest, "package_version": source.package_version},
-    )
-    payload["resource_limits"]["pack_staging"] = {
-        "max_archive_bytes": settings.RAES_PACKAGE_MAX_ARCHIVE_BYTES,
-        "max_expanded_bytes": settings.RAES_PACKAGE_MAX_UNCOMPRESSED_BYTES,
-        "max_entries": settings.RAES_PACKAGE_MAX_ENTRIES,
-    }
-    try:
-        retained = encode_retained(payload)
-    except (ValueError, TypeError):
-        raise CMSError("Experiment retained inputs exceed supported limits") from None
-    digest = hashlib.sha256(retained.encode()).hexdigest()
-    operator = require_content_scope(operator, ResourceScope("installation"), "manage_content")
-    admission = _authorize(operator, organization_uuid, "manage_content")
-    with transaction.atomic():
-        fence_content_scope(operator, ResourceScope("installation"))
-        _fence(admission)
-        current = RaesPackageSource.objects.select_for_update().filter(pk=source.pk).first()
-        if (
-            not _source_unchanged(current, source, admission)
-            or _destination(organization_uuid, locked=True) != destination
-        ):
+    """Approve apparatus and atomically retain a complete tenant-owned pack plan.
+
+    Instantiated trial snapshots go to a temporary file, so memory does not grow with the number of trials.
+    """
+    with tempfile.TemporaryFile(prefix="experiment-snapshots-") as snapshots:
+        operator = require_content_scope(credential, ResourceScope("installation"), "manage_content")
+        admission = _authorize(operator, organization_uuid, "manage_content")
+        source = RaesPackageSource.objects.filter(scenario_id=scenario_id, organization_uuid=organization_uuid).first()
+        if source is None or content_scope(source) != admission.scope:
             raise CMSError(_UNAVAILABLE)
-        row, created = ExperimentBatch.objects.get_or_create(
-            organization_uuid=organization_uuid,
-            plan_id=payload["plan"]["plan_id"],
-            defaults={"retained_json": retained, "retained_digest": digest, "concurrency": concurrency},
+        destination = _destination(organization_uuid)
+        from engine.services import published_worker_profile
+
+        try:
+            with _pack_snapshot(source) as root:
+                if not verify_pack_digest(root, source.package_digest):
+                    raise ValueError("Registered pack digest changed")
+                payload, written = compile_pack_experiment(
+                    root,
+                    experiment_id=experiment_id,
+                    authority=authority,
+                    concurrency=concurrency,
+                    experiment_version=experiment_version,
+                    installation=InstallationLookups(_owner_validation(organization_uuid), published_worker_profile),
+                    snapshots=snapshots,
+                )
+        except WorkerProfileError:
+            raise CMSError("Experiment admission refused; publish the selected worker profile first") from None
+        except (
+            ValueError,
+            OSError,
+            RaesPackageError,
+            PackDigestError,
+            ValidationError,
+            CloudStorageError,
+            ExperimentInputError,
+        ):
+            raise CMSError("Experiment admission refused; verify installed inputs, versions and limits") from None
+        payload.update(
+            organization_uuid=str(organization_uuid),
+            destination=destination,
+            source={"package_digest": source.package_digest, "package_version": source.package_version},
         )
-        if row.retained_digest != digest:
-            raise CMSError("Experiment admission conflicts with retained inputs")
-        if created:
-            ExperimentEntry.objects.bulk_create(
-                [
-                    ExperimentEntry(
-                        batch=row, organization_uuid=organization_uuid, plan_entry_id=key, run_id=entry["run_id"]
-                    )
-                    for key, entry in payload["plan"]["entries"].items()
-                ]
+        payload["resource_limits"]["pack_staging"] = {
+            "max_archive_bytes": settings.RAES_PACKAGE_MAX_ARCHIVE_BYTES,
+            "max_expanded_bytes": settings.RAES_PACKAGE_MAX_UNCOMPRESSED_BYTES,
+            "max_entries": settings.RAES_PACKAGE_MAX_ENTRIES,
+        }
+        try:
+            retained = encode_retained(payload)
+        except (ValueError, TypeError):
+            raise CMSError("Experiment retained inputs exceed supported limits") from None
+        digest = hashlib.sha256(retained.encode()).hexdigest()
+        operator = require_content_scope(operator, ResourceScope("installation"), "manage_content")
+        admission = _authorize(operator, organization_uuid, "manage_content")
+        with transaction.atomic():
+            fence_content_scope(operator, ResourceScope("installation"))
+            _fence(admission)
+            current = RaesPackageSource.objects.select_for_update().filter(pk=source.pk).first()
+            if (
+                not _source_unchanged(current, source, admission)
+                or _destination(organization_uuid, locked=True) != destination
+            ):
+                raise CMSError(_UNAVAILABLE)
+            row, created = ExperimentBatch.objects.get_or_create(
+                organization_uuid=organization_uuid,
+                plan_id=payload["plan"]["plan_id"],
+                defaults={"retained_json": retained, "retained_digest": digest, "concurrency": concurrency},
             )
-            _audit(admission, row.id, "experiment-admitted")
-    return _project(row)
+            if row.retained_digest != digest:
+                raise CMSError("Experiment admission conflicts with retained inputs")
+            if created:
+                ExperimentEntry.objects.bulk_create(
+                    [
+                        ExperimentEntry(
+                            batch=row, organization_uuid=organization_uuid, plan_entry_id=key, run_id=entry["run_id"]
+                        )
+                        for key, entry in payload["plan"]["entries"].items()
+                    ]
+                )
+                _retain_snapshots(row, payload, snapshots, written)
+                _audit(admission, row.id, "experiment-admitted")
+        return _project(row)
 
 
 def _claim(row: ExperimentEntry) -> ExperimentClaim:
@@ -295,22 +312,19 @@ def claim_experiment_entry(
     """Serialize aggregate capacity, then conditionally claim one preallocated entry."""
     admission = _authorize(credential, organization_uuid, "manage_content")
     batch = _load(admission, batch_id)
-    expected = batch.inputs["plan"]["entries"].get(plan_entry_id)
-    if expected is None:
-        raise CMSError(_UNAVAILABLE)
     with transaction.atomic():
         _fence(admission)
-        parent = ExperimentBatch.objects.select_for_update().only("id", "concurrency").get(pk=batch_id)
+        parent = (
+            ExperimentBatch.objects.select_for_update()
+            .only("id", "concurrency", "dispatch_stopped_at")
+            .get(pk=batch_id)
+        )
         if (
             ExperimentEntry.objects.filter(batch=parent, cleanup_receipt_json="").exclude(state="pending").count()
             >= parent.concurrency
         ):
             return None
-        row = ExperimentEntry.objects.filter(
-            batch=parent, organization_uuid=organization_uuid, plan_entry_id=plan_entry_id, run_id=expected["run_id"]
-        ).first()
-        if row is None:
-            raise CMSError(_UNAVAILABLE)
+        row = _planned_entry(batch, organization_uuid, plan_entry_id)
         token = uuid4()
         if not ExperimentEntry.objects.filter(pk=row.pk, state="pending", token__isnull=True).update(
             token=token,
@@ -332,21 +346,25 @@ def recover_experiment_claim(
     """Recover the existing attempt for reconciliation, without authorizing redispatch."""
     admission = _authorize(credential, organization_uuid, "manage_content")
     batch = _load(admission, batch_id)
-    expected = batch.inputs["plan"]["entries"].get(plan_entry_id)
-    if expected is None:
-        raise CMSError(_UNAVAILABLE)
     with transaction.atomic():
         _fence(admission)
-        row = ExperimentEntry.objects.filter(
-            batch_id=batch_id,
-            batch__organization_uuid=organization_uuid,
-            organization_uuid=organization_uuid,
-            plan_entry_id=plan_entry_id,
-            run_id=expected["run_id"],
-        ).first()
-        if row is None:
-            raise CMSError(_UNAVAILABLE)
+        row = _planned_entry(batch, organization_uuid, plan_entry_id)
         return None if row.token is None else _claim(row)
+
+
+def _planned_entry(batch: RetainedExperimentBatch, organization_uuid: UUID, plan_entry_id: str) -> ExperimentEntry:
+    """Resolve the entry's latest attempt: the one that no fresh trial replaces."""
+    row = ExperimentEntry.objects.filter(
+        batch_id=batch.id,
+        batch__organization_uuid=organization_uuid,
+        organization_uuid=organization_uuid,
+        plan_entry_id=plan_entry_id,
+        replacements__isnull=True,
+    ).first()
+    expected = batch.inputs["plan"]["entries"].get(plan_entry_id)
+    if row is None or expected is None or expected["run_id"] != row.run_id:
+        raise CMSError(_UNAVAILABLE)
+    return row
 
 
 def _attempt(organization_uuid: UUID, token: UUID, *, locked: bool) -> ExperimentEntry:
@@ -418,13 +436,20 @@ def record_experiment_collection(
     receipt_id: UUID,
     *,
     run_version: str = "1",
+    scenario_sha256: str = "",
 ) -> None:
     """Join committed archive custody to this exact attempt, without asserting cleanup."""
     admission = _authorize(credential, organization_uuid, "manage_content")
     attempt = _attempt(organization_uuid, token, locked=False)
     batch = _load(admission, attempt.batch_id)
     try:
-        expected = asdict(experiment_archive_identity(batch.inputs, attempt.plan_entry_id, str(token), run_version))
+        expected = experiment_archive_identity(
+            batch.inputs,
+            attempt.plan_entry_id,
+            str(token),
+            run_version,
+            scenario_sha256=scenario_sha256,
+        ).as_record()
     except (ValueError, ValidationError):
         raise CMSError("Experiment collection identity is invalid") from None
     with transaction.atomic():

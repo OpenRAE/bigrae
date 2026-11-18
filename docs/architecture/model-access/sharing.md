@@ -1,5 +1,13 @@
 # Configurable sharing across ranges
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 This clarification to [#681](index.md) is part of the first model-access
 delivery, including GCP qualification. Operators must be able to share some
 or all configured model-access resources across a chosen collection of
@@ -298,3 +306,5 @@ expiry and cleanup. Include a user with ranges in two CTF events and a
 non-CTF range, a user group spanning authorized events, selected range sets
 and a deployment-wide policy. Prove one range can be revoked while its
 neighbors continue on the same provider identity and pool.
+
+<!-- vale on -->

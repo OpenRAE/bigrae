@@ -7,8 +7,6 @@ import { AuditPage } from "@/features/administer/AuditPage";
 import { CostPage } from "@/features/administer/CostPage";
 import { PlatformSettingsPage } from "@/features/administer/PlatformSettingsPage";
 import { AdaptersPage } from "@/features/administer/AdaptersPage";
-import { ModelAccessSharing } from "@/features/administer/ModelAccessSharing";
-import { ModelSourcesPage } from "@/features/administer/ModelSourcesPage";
 import { platformSettingsPath } from "@/features/administer/routes";
 import { AccountAdministrationEntry } from "@/features/administer/accounts/AccountAdministrationPage";
 import { PlatformAdministrationPage } from "@/features/administer/accounts/PlatformAdministrationPage";
@@ -149,6 +147,10 @@ export const router = createBrowserRouter(
             { path: "terminal", element: <CtfTerminalPage /> },
             { path: "terminal/:instanceUuid", element: <TerminalPage /> },
             { path: "scoreboard", element: <ScoreboardPage /> },
+            // Explicit boards of a team-mode event (#2968). Distinct keys reset
+            // the bracket filter when the user switches boards.
+            { path: "individual-scoreboard", element: <ScoreboardPage key="individual" kind="individual" /> },
+            { path: "team-scoreboard", element: <ScoreboardPage key="team" kind="team" /> },
             { path: "team", element: <TeamPage /> },
             { path: "account", element: <AccountPage /> },
             { path: "help", element: <HelpPage /> },
@@ -213,12 +215,6 @@ export const router = createBrowserRouter(
             { path: "cost", element: <CostPage />, handle: { permissionPolicy: "platform_admin" } },
             { path: "settings", element: <PlatformSettingsPage />, handle: { permissionPolicy: "lease_admin" } },
             { path: "adapters", element: <AdaptersPage />, handle: { permissionPolicy: "adapter_admin" } },
-            { path: "model-sources", element: <ModelSourcesPage />, handle: { permissionPolicy: "model_source_admin" } },
-            {
-              path: "model-access",
-              element: <ModelAccessSharing />,
-              handle: { permissionPolicy: "model_source_admin" },
-            },
             // Administrator audit / activity history (#1947, PLAT-240): a
             // deployment-global, policy-gated surface. Top-level (not workspace
             // scoped) because the audit store carries no per-row tenant scope.

@@ -1,11 +1,14 @@
 """Preparation is explicitly declared, bounded and confidential before host admission."""
 
+import io
 from types import SimpleNamespace
+from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
 from cryptography.fernet import Fernet
 from shifter_adapter_sdk import runtime, worker
+from shifter_adapter_sdk.runtime_sealing import seal_result
 
 
 @pytest.mark.parametrize("phase", ["validate", "configure", "verify", "cleanup"])
@@ -66,6 +69,40 @@ def request_payload():
             "provisioning_concerns": ["synthetic-values"],
         },
     }
+
+
+def test_large_secret_preparation_round_trips_with_the_original_invocation():
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    result = runtime.RuntimePlan(
+        protocol=request.protocol,
+        invocation_id=request.invocation_id,
+        input_digest=request.digest,
+        phase="prepare",
+        status="planned",
+        secret_payloads=[{"version_ref": f"nodes.synthetic.secret-{i}.v1", "value": "synthetic"} for i in range(2048)],
+    )
+    result.authorize(request)
+    key = Fernet.generate_key().decode()
+    sealed = seal_result(result.model_dump_json(), key)
+    assert len(result.model_dump_json().encode()) < runtime.MAX_PREPARATION_BYTES
+    assert runtime.parse_result(sealed, request, result_secret=key) == result
+    other = runtime.RuntimeInput.model_validate({**request_payload(), "invocation_id": str(uuid4())})
+    with pytest.raises(ValueError):
+        runtime.parse_result(sealed, other, result_secret=key)
+
+
+@pytest.mark.parametrize("count,value", [(2049, "synthetic"), (2048, "x" * 256)])
+def test_large_secret_preparation_still_enforces_count_and_total_bytes(count, value):
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    with pytest.raises(ValueError):
+        runtime.RuntimePlan(
+            protocol=request.protocol,
+            invocation_id=request.invocation_id,
+            input_digest=request.digest,
+            phase="prepare",
+            status="planned",
+            secret_payloads=[{"version_ref": f"nodes.synthetic.secret-{i}.v1", "value": value} for i in range(count)],
+        )
 
 
 def planned(request, **changes):
@@ -154,3 +191,53 @@ def test_missing_output_secret_never_prints_clear_preparation(monkeypatch, capsy
     captured = capsys.readouterr()
     assert "PRIVATE_SUPPLIED_VALUE" not in captured.out + captured.err
     assert not captured.out
+
+
+class _ShortOutput(io.BytesIO):
+    """A raw output stream that accepts only part of each write."""
+
+    def write(self, value):
+        return super().write(value[:65536])
+
+
+def test_large_encrypted_response_survives_unbuffered_short_writes(monkeypatch):
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    response = planned(
+        request,
+        secret_payloads=[{"version_ref": f"nodes.synthetic.version{i}", "value": "private" * 200} for i in range(80)],
+    )
+    key = Fernet.generate_key().decode()
+    monkeypatch.setenv("BIGRAE_PLUGIN_INPUT", request.model_dump_json())
+    monkeypatch.setenv(runtime.PREPARATION_OUTPUT_ENV, key)
+    monkeypatch.setattr(worker, "_load_plugin", lambda _manifest: SimpleNamespace(plan=lambda _request: response))
+    raw = _ShortOutput()
+    output = io.TextIOWrapper(raw, encoding="utf-8", write_through=True)
+    monkeypatch.setattr(worker.sys, "stdout", output)
+
+    assert worker.main() == 0
+    encoded = raw.getvalue()
+    assert len(encoded) > 65536
+    assert encoded.endswith(b"\n")
+    assert b"private" not in encoded
+    assert runtime.parse_result(encoded, request, result_secret=key) == response
+
+
+@pytest.mark.parametrize("failure", ["zero", "none", "write", "flush"])
+def test_output_failure_cannot_report_worker_success(monkeypatch, capsys, failure):
+    request = runtime.RuntimeInput.model_validate(request_payload())
+    monkeypatch.setenv("BIGRAE_PLUGIN_INPUT", request.model_dump_json())
+    monkeypatch.setenv(runtime.PREPARATION_OUTPUT_ENV, Fernet.generate_key().decode())
+    monkeypatch.setattr(worker, "_load_plugin", lambda _manifest: SimpleNamespace(plan=planned))
+    stream = Mock()
+    stream.write.side_effect = lambda value: len(value)
+    if failure in {"zero", "none"}:
+        stream.write.side_effect = None
+        stream.write.return_value = 0 if failure == "zero" else None
+    elif failure == "write":
+        stream.write.side_effect = OSError("private diagnostic")
+    else:
+        stream.flush.side_effect = OSError("private diagnostic")
+    monkeypatch.setattr(worker.sys, "stdout", SimpleNamespace(buffer=stream))
+
+    assert worker.main() == 2
+    assert capsys.readouterr().err == "plugin output unavailable\n"

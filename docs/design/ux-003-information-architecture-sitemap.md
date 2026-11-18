@@ -58,9 +58,9 @@ Persona and JTBD anchors come from the UX research artifact:
 1. One product, two primary modes. Shifter has a participant mode and an
    organizer/operator mode. A user may have access to both, but navigation must
    make the current mode explicit.
-2. Navigation visibility is not authorization. Links may be hidden for clarity,
-   but access must still be enforced by the existing view decorators, role
-   checks, and permission policies.
+2. Navigation visibility is not authorization. Links may be hidden for clarity.
+   The existing view decorators, role checks, and permission policies still
+   enforce access.
 3. Surface names should match user jobs and repository concepts. Do not rename a
    product surface unless the code ownership and documentation language can move
    with it.
@@ -111,6 +111,8 @@ sidebar, while organizer pages use the shared icon sidebar.
 | Challenge detail | `/ctf/challenges/<challenge_id>/` | Participant | Read challenge instructions, hints, files, and submit flags. |
 | Participant range | `/ctf/range/` | Participant | Access range status and participant resources. |
 | Scoreboard | `/ctf/scoreboard/` | Participant | Compare event scoring and rank. |
+| Individual scoreboard | `/ctf/individual-scoreboard/` | Participant | Compare participant rank in a team-mode event. |
+| Team scoreboard | `/ctf/team-scoreboard/` | Participant | Compare team rank in a team-mode event. |
 | Team | `/ctf/team/` | Participant | Inspect team membership and status. |
 | Join team | `/ctf/team/join/` | Participant | Join or create a team where event rules allow it. |
 | Help | `/ctf/help/` | Participant | Get CTF-specific help. |
@@ -354,9 +356,9 @@ The product should use one global frame for authenticated users:
 - A page header states the current object and primary actions.
 - Breadcrumbs appear on nested object pages, not on single-level dashboards.
 
-The existing left sidebar can evolve into this shared frame, but the source of
-navigation truth should be centralized in later implementation rather than
-hard-coded separately by each app.
+The existing left sidebar can evolve into this shared frame. Later
+implementation should centralize the source of navigation truth. Each app
+should not hard-code it separately.
 
 ### Mode Switching
 
@@ -377,6 +379,7 @@ only organizer access should not be forced through CTF participant pages.
 Use side navigation for durable surfaces that users revisit frequently:
 
 - Participant: Event Home, Challenges, Range, Scoreboard, Team, Help.
+- A team-mode event replaces Scoreboard with Individual scoreboard and Team scoreboard.
 - Organizer: Overview, Ranges, CTF Events, Assets, Terminal, Scenarios, Docs.
 
 Side navigation items must map to stable route names and permission policies.
@@ -392,8 +395,8 @@ purpose
 ```
 
 The SPA cohesive pass (#1368) extends this one contract with presentation
-fields so the shared shell can render navigation, breadcrumbs, contextual
-subnavigation, and mode switching from the same metadata. These additions
+fields. The shared shell uses the same metadata to render navigation,
+breadcrumbs, contextual subnavigation, and mode switching. These additions
 parameterize the single contract; they do not create app-local schemas:
 
 ```text
@@ -403,6 +406,7 @@ route_path        # SPA path
 icon_key          # lucide icon name
 active_context    # optional: range or event the surface reads or sets
 feature_flag      # optional rollout flag
+event_mode        # optional: solo or team event that shows the entry
 children          # optional nested or contextual entries
 ```
 
@@ -501,7 +505,7 @@ Use one canonical name per concept.
 ## SPA-Era Cohesive Update (#1368)
 
 The SPA cutover Phase 2 cohesive UX pass (#1368) re-derived the information
-architecture fresh from the personas and the current surfaces, then compared the
+architecture from the personas and the current surfaces. It then compared the
 result against this artifact. The companion design doc
 `docs/design/spa-cohesive-ux-1368.md` holds the use-case catalog, the layout and
 pattern system and rationale. This

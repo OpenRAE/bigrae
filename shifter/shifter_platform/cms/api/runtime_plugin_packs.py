@@ -36,6 +36,9 @@ class RuntimeTargetImageProfileSerializer(serializers.Serializer):
     machine_type = serializers.CharField(max_length=100, allow_blank=True, default="")
     disk_size_gb = serializers.IntegerField(min_value=1, max_value=16_384, allow_null=True, default=None)
     disk_type = serializers.CharField(max_length=100, allow_blank=True, default="")
+    nic_type = serializers.ChoiceField(choices=("", "GVNIC", "VIRTIO_NET"), default="")
+    disk_interface = serializers.ChoiceField(choices=("", "NVME", "SCSI"), default="")
+    enable_secure_boot = serializers.BooleanField(default=True)
     allow_public_web_egress = serializers.BooleanField(default=False)
     bootstrap_capability = serializers.CharField(max_length=64, default="standard")
     management_ssh_username = serializers.CharField(max_length=32, allow_blank=True, default="")
@@ -46,6 +49,12 @@ class RuntimeTargetImageProfileSerializer(serializers.Serializer):
     participant_readiness_manifest_sha256 = serializers.CharField(max_length=64, allow_blank=True, default="")
     domain_dns_name = serializers.CharField(max_length=253, allow_blank=True, default="")
     domain_netbios_name = serializers.CharField(max_length=15, allow_blank=True, default="")
+
+    def to_internal_value(self, data: object) -> dict[str, object]:
+        """Keep the administrator's boot policy a JSON boolean at the HTTP boundary."""
+        if isinstance(data, dict) and "enable_secure_boot" in data and type(data["enable_secure_boot"]) is not bool:
+            raise serializers.ValidationError({"enable_secure_boot": "Use a JSON boolean."})
+        return super().to_internal_value(data)
 
 
 class RuntimePluginBindingsSerializer(PreparationSerializer):

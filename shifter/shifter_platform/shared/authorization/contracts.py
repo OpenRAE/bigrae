@@ -78,6 +78,7 @@ class AuthorizationRequest:
     scope: ResourceScope
     credential: CredentialCeiling
     parent: TargetRef | None = None
+    temporary_participation: bool = False
 
     def __post_init__(self) -> None:
         if not isinstance(self.principal, PrincipalRef) or not isinstance(self.scope, ResourceScope):
@@ -94,6 +95,20 @@ class AuthorizationRequest:
             _validate_target_scope(self.parent, self.scope)
         if not self.credential.permits(self.action, self.target):
             raise AuthorizationContractError("Action exceeds credential ceiling")
+        _validate_temporary_participation(self)
+
+
+def _validate_temporary_participation(request: AuthorizationRequest) -> None:
+    """Confine the owning service's verified participation fact to one event."""
+    if not isinstance(request.temporary_participation, bool):
+        raise AuthorizationContractError("Invalid temporary participation")
+    if request.temporary_participation and (
+        request.principal.kind != "human"
+        or request.action != "event.participate"
+        or request.credential.target != request.target
+        or not request.credential.actions <= {"event.read", "event.participate"}
+    ):
+        raise AuthorizationContractError("Temporary participation must remain event scoped")
 
 
 class DecisionKind(StrEnum):

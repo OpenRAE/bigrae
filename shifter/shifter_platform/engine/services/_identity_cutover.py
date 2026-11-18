@@ -22,20 +22,6 @@ def identity_cutover_resource_disposition() -> tuple[int, int]:
     )
 
 
-def identity_cutover_contract_gaps() -> int:
-    """Count source revisions whose JSON uses a retired authority contract."""
-    from engine.models import ModelSourceRevision
-    from shared.model_access.sources import ModelSourceConfiguration
-
-    gaps = 0
-    for configuration in ModelSourceRevision.objects.values_list("configuration", flat=True).iterator():
-        try:
-            ModelSourceConfiguration.model_validate(configuration)
-        except ValueError:
-            gaps += 1
-    return gaps
-
-
 def pending_identity_cutover_work() -> tuple[int, int]:
     """Count pending Engine work and rows lacking a complete initiator reference."""
     from engine.models import (

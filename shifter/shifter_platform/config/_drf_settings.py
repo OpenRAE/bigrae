@@ -45,9 +45,8 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
     "REDOC_DIST": "SIDECAR",
-    # Scope the published contract to the SPA-facing surface (#1329). Apps whose
-    # SPA consumer has not landed (CTF, pending #1372) are dropped from schema
-    # generation; runtime routing is unaffected. See shared.api.schema.
+    # The current exclusion tuple is empty, including CTF. The existing hook
+    # affects schema generation only; shared.api.schema owns its configuration.
     "PREPROCESSING_HOOKS": ["shared.api.schema.exclude_unpublished_endpoints"],
     "ENUM_NAME_OVERRIDES": {
         "ParticipantPasswordKindEnum": ["generated", "set"],

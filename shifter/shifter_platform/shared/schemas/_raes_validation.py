@@ -52,10 +52,18 @@ _SECRET_KEY_FRAGMENTS = (
     "token",
     "transcript",
 )
+# A bearer credential is a token with a digit or token symbol; prose such as
+# "issue a bearer token" is not a credential.
 _SECRET_VALUE_RE = re.compile(
-    r"(-----BEGIN [A-Z ]*PRIVATE KEY-----|bearer\s+|x-amz-signature=|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})",
+    r"(-----BEGIN [A-Z ]*PRIVATE KEY-----|bearer\s+(?=[A-Za-z0-9._~+/-]*[0-9_~+/-])"
+    r"|x-amz-signature=|AKIA[0-9A-Z]{16}|ASIA[0-9A-Z]{16})",
     re.IGNORECASE,
 )
+
+
+# AWS documentation uses this access key ID as a placeholder; it authorizes
+# nothing. Synthetic scenario content uses it as a planted credential.
+_DOCUMENTED_EXAMPLE_KEYS = frozenset({"AKIAIOSFODNN7EXAMPLE"})
 
 
 class RaesRecordError(ValueError):
@@ -80,7 +88,7 @@ def _reject_secret_key(path: str, key: str, *, error_cls: type[Exception] = Raes
 
 def _reject_secret_value(path: str, value: str, *, error_cls: type[Exception] = RaesRecordError) -> None:
     """Reject string values that match high-confidence secret patterns."""
-    if _SECRET_VALUE_RE.search(value):
+    if any(match.group(0).upper() not in _DOCUMENTED_EXAMPLE_KEYS for match in _SECRET_VALUE_RE.finditer(value)):
         raise error_cls(f"secret-bearing payload value rejected at {path}")
 
 

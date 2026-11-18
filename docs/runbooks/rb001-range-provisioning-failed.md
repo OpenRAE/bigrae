@@ -3,6 +3,8 @@
 Applicability: GCP/GCE primary; AWS optional. Operator: range and platform
 operator. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A range remains pending or provisioning, the portal reports a failed launch,
@@ -26,9 +28,7 @@ or a provisioner Job finishes without the range becoming ready.
    ```
 
 3. Read bounded logs for those components and correlate only on the sanitized
-   request or operation ID. Confirm whether the launch intent was claimed, the
-   Job was admitted, a provider effect occurred, and a result reached the
-   Engine-owned inbox.
+   request or operation ID. Check whether the launch intent was claimed and the Job was admitted. Check for provider effects and a result in the Engine-owned inbox.
 4. For GCE, inventory instances and subnets by Shifter ownership labels and
    compare their request/operation ownership with durable Engine state. A Job
    failure alone does not prove that no cloud effects occurred.
@@ -50,6 +50,4 @@ result-inbox age, outbox backlog, and provider quota/throttling. Keep image IDs,
 runtime configuration, capacity, and admission policy in the protected deploy
 readback. See [retry-safe range operations](../features/retry-safe-range-operations.md).
 
-Escalate when an operation is active past its lease, the Job/result identities
-disagree, provider effects exist without durable ownership, or retry is not
-offered by the application service.
+Escalate if an operation exceeds its lease or the Job and result identities disagree. Also escalate unowned provider effects or an unavailable application retry.

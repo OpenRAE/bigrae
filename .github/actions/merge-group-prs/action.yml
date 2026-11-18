@@ -1,0 +1,84 @@
+name: Resolve merge group pull requests
+description: >-
+  List the queued pull requests that the current merge group contains. The
+  action reads the merge queue of the base branch through the GraphQL API and
+  fails when no queue entry has the merge group head commit (ADR-003-R9).
+
+inputs:
+  github-token:
+    description: Token that can read the repository pull requests.
+    required: true
+
+outputs:
+  prs:
+    description: >-
+      JSON array of the pull requests in the merge group, in queue order. Each
+      item has number, title, and headRefName.
+    value: ${{ steps.resolve.outputs.prs }}
+  pr-number:
+    description: Number of the pull request that the merge group was built for.
+    value: ${{ steps.resolve.outputs.pr-number }}
+  head-branch:
+    description: Head branch of that pull request.
+    value: ${{ steps.resolve.outputs.head-branch }}
+  base-branch:
+    description: Base branch of the merge queue.
+    value: ${{ steps.resolve.outputs.base-branch }}
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve merge group pull requests
+      id: resolve
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        BASE_REF: ${{ github.event.merge_group.base_ref }}
+        HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+        REPOSITORY: ${{ github.repository }}
+      run: |
+        set -euo pipefail
+        if [ "${GITHUB_EVENT_NAME}" != "merge_group" ]; then
+          echo "::error::This action runs only on merge_group events (event=${GITHUB_EVENT_NAME})"
+          exit 1
+        fi
+        branch="${BASE_REF#refs/heads/}"
+        # A merge group contains the queue entries in front of its own entry.
+        # Each entry has its own merge group commit, so the head commit
+        # identifies the entry. Entries in front of it are not yet merged.
+        entries="$(gh api graphql \
+          -f owner="${REPOSITORY%%/*}" \
+          -f name="${REPOSITORY#*/}" \
+          -f branch="${branch}" \
+          -f query='
+            query($owner: String!, $name: String!, $branch: String!) {
+              repository(owner: $owner, name: $name) {
+                mergeQueue(branch: $branch) {
+                  entries(first: 100) {
+                    nodes {
+                      position
+                      headCommit { oid }
+                      pullRequest { number title headRefName }
+                    }
+                  }
+                }
+              }
+            }' \
+          --jq '.data.repository.mergeQueue.entries.nodes')"
+        prs="$(jq -c --arg sha "${HEAD_SHA}" '
+          (map(select(.headCommit.oid == $sha)) | first) as $entry
+          | if $entry == null
+            then error("no merge queue entry has head commit " + $sha)
+            else map(select(.position <= $entry.position))
+              | sort_by(.position)
+              | map(.pullRequest)
+            end' <<<"${entries}")"
+        {
+          echo "prs=${prs}"
+          echo "pr-number=$(jq -r 'last.number' <<<"${prs}")"
+          echo "head-branch=$(jq -r 'last.headRefName' <<<"${prs}")"
+          echo "base-branch=${branch}"
+        } >> "${GITHUB_OUTPUT}"
+        # Log numbers only. A title is untrusted text and could hold a
+        # workflow command.
+        echo "Merge group pull requests: $(jq -r 'map("#\(.number)") | join(" ")' <<<"${prs}")"

@@ -52,8 +52,6 @@ class RaesGceApplyOptions:
     host_readiness_verifier: Callable[[list[dict[str, object]]], None] = verify_preconfigured_hosts
 
     runtime_plugin: Callable[..., None] | None = None
-    model_enrollment: Callable[..., None] | None = None
-    model_broker: dict[str, object] | None = None
     openvpn: RaesGceOpenVpn | None = None
     cloud_service_accounts: Mapping[str, str] | None = None
     before_provider_mutation: Callable[[], None] | None = None
@@ -77,5 +75,4 @@ class RaesGceApplyRuntime:
     host_readiness_verifier: Callable[[list[dict[str, object]]], None]
     allocated_network_cidrs: Sequence[tuple[str, str]] | None
     runtime_plugin: Callable[..., None] | None
-    model_enrollment: Callable[..., None] | None
     openvpn: RaesGceOpenVpn | None = None

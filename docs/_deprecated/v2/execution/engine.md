@@ -1,5 +1,13 @@
 # Shifter Engine
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ECS Fargate task that provisions and destroys range infrastructure using Pulumi.
 
 ## How It Works
@@ -218,3 +226,5 @@ ecs.run_task(
 - In prod: auto-cleanup on provision failure (`pulumi destroy`)
 - Errors logged to CloudWatch
 - SSM command failures propagate as SetupError exceptions
+
+<!-- vale on -->

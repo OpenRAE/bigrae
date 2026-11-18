@@ -91,7 +91,7 @@ def peer_routes(config: Ec2NetworkConfig, ec2: BaseClient) -> dict[str, str]:
     rows = _rows(ec2.describe_route_tables(RouteTableIds=[config.base_route_table_id]), "RouteTables")
     if not rows or rows[0].get("VpcId") != config.vpc_id:
         raise Ec2NetworkError("EC2 base routing belongs to a different network")
-    destinations = {*config.management_cidrs, *config.access_cidrs, *config.broker_cidrs}
+    destinations = {*config.management_cidrs, *config.access_cidrs}
     result = {}
     for destination in sorted(destinations):
         result[destination] = _peer_for_destination(rows[0].get("Routes", []), destination)

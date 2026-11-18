@@ -17,7 +17,6 @@ from mission_control.api._device_serializers import (
     NGFWListResponseSerializer,
 )
 from shared.api.closed_serializer import ClosedSerializer
-from shared.api.model_sources import ModelSourceSelectionField
 from shared.enums import ResourceStatus
 from shared.raes.projections import DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT
 
@@ -179,7 +178,6 @@ class RangePresentationSerializer(serializers.Serializer):
 class LaunchRangeSerializer(ClosedSerializer):
     """Validate range launch requests."""
 
-    model_sources = ModelSourceSelectionField(required=False)
     agents = serializers.DictField(child=serializers.IntegerField(min_value=1), required=False)
     agent_id = serializers.IntegerField(required=False, allow_null=True)
     scenario = serializers.CharField(required=False, default="basic", allow_blank=False, trim_whitespace=True)

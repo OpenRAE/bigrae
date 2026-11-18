@@ -29,6 +29,7 @@ variables {
   artifact_repository               = "shifter-test-openvpn"
   deploy_service_account_email      = "deploy@shifter-test.iam.gserviceaccount.com"
   provisioner_service_account_email = "provisioner@shifter-test.iam.gserviceaccount.com"
+  openfga_enabled                   = true
   min_vms                           = 2
   max_vms                           = 4
 }
@@ -135,6 +136,24 @@ run "servers_are_hardened_and_replaced_without_losing_capacity" {
   assert {
     condition     = one(google_compute_region_instance_group_manager.pool.update_policy).max_unavailable_fixed == 0
     error_message = "Server replacement must surge in new servers before removing old ones."
+  }
+
+  assert {
+    condition = strcontains(templatefile("${path.module}/cloud-init.yaml.tftpl", {
+      release_secret         = "projects/test/secrets/release"
+      server_secret          = "projects/test/secrets/server"
+      image_repository       = "us-central1-docker.pkg.dev/test/openvpn/openvpn"
+      image_repository_regex = "us-central1-docker\\.pkg\\.dev/test/openvpn/openvpn"
+      registry               = "us-central1-docker.pkg.dev"
+      endpoint               = "203.0.113.20"
+      portal_url             = "https://portal.example.com"
+      control_audience       = "https://portal.example.com/vpn-control"
+      max_clients            = 250
+      tunnel_network         = "100.96.0.0/22"
+      health_port            = 8080
+      openfga_enabled        = true
+    }), "-e OPENFGA_ENABLED=\"true\"")
+    error_message = "The pool container must receive the deployment's principal-authority posture."
   }
 }
 

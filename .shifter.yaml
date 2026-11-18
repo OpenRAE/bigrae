@@ -70,8 +70,8 @@ mcp_ops:
       return_mode: handle           # never return raw value to client
     ssm_named: {}
     ssm_arbitrary:
-      execute_default: false        # dry-run unless execute=true
-      two_phase: true               # plan_<name> -> execute_<name>
+      execute_default: false        # preview enforced by the two-phase wrapper
+      two_phase: true               # plan_<name> -> execute_<name>(plan_id)
     db_arbitrary:
       execute_default: false
       two_phase: true

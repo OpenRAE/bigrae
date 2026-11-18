@@ -1,8 +1,16 @@
 # Tenant model-source management
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 PLAT-202 / #2243 extends the existing model broker, allocation and sharing seams.
-See the [tenant guide](../../features/model-access.md) for the user flows and
-[preflight](source-management-preflight-2243.md) for the boundary assessment.
+See the tenant guide for the user flows and
+[preflight](../../_deprecated/architecture/model-access/source-management-preflight-2243.md) for the boundary assessment.
 
 ## Ownership and publication
 
@@ -130,3 +138,5 @@ provider transport, egress, Helm and tenant UI tests accompany the implementatio
 Full suites and PostgreSQL contention run in CI. Current live acceptance is GCP;
 other provider contract tests do not constitute live provider qualification.
 A configured source or compatibility probe never proves a complete live range.
+
+<!-- vale on -->

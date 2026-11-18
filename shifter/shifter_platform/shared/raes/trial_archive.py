@@ -16,9 +16,12 @@ from typing import IO, TYPE_CHECKING, cast
 if TYPE_CHECKING:
     from shared.raes.trial_archive_jsonl import StructuredTraceReader
 
-from shared.exceptions import ValidationError
+from pydantic import ValidationError as SchemaError
+from shifter_adapter_sdk.trial import TrialSeal
+
 from shared.raes.json_ingress import parse_bounded_json_object
-from shared.schemas._raes_validation import JsonObject, _reject_secret_value
+from shared.raes.trial_archive_paths import RECORD_ERRORS, TrialArchiveError, safe_archive_path
+from shared.schemas._raes_validation import JsonObject
 
 CHUNK_BYTES = 1024 * 1024
 MAX_ARCHIVE_BYTES = 16 * 1024**3
@@ -31,10 +34,9 @@ SEAL_NAME = "seal.json"
 CHECKSUMS_NAME = "checksums.sha256"
 _INVALID_INVENTORY_ENTRY = "Invalid sealed inventory entry"
 _SAFE_ID = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9._-]{0,127}\Z")
-
-
-class TrialArchiveError(ValidationError):
-    """Archive bytes cannot support a collection receipt."""
+#: LilRAE seals its own archives; BigRAE's seal carries a partial RAES run record.
+LILRAE_SEAL = "aptl.run-seal/v1"
+BIGRAE_SEAL = TrialSeal.model_fields["schema_version"].default
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,6 +51,8 @@ class TrialArchiveIdentity:
     plan_digest: str
     entry_digest: str
     run_version: str
+    #: The exact trial SDL digest; required for a LilRAE trial seal, absent otherwise.
+    scenario_sha256: str = ""
 
     def __post_init__(self) -> None:
         """Require bounded expected identifiers and explicit admission digests."""
@@ -58,6 +62,15 @@ class TrialArchiveIdentity:
         for digest in (self.plan_digest, self.entry_digest):
             if not isinstance(digest, str) or not re.fullmatch(r"sha256:[a-f0-9]{64}", digest):
                 raise TrialArchiveError("Expected archive digest is required")
+        if self.scenario_sha256 and not re.fullmatch(r"sha256:[a-f0-9]{64}", self.scenario_sha256):
+            raise TrialArchiveError("Expected scenario digest is invalid")
+
+    def as_record(self) -> dict[str, str]:
+        """Return the stored identity; an absent scenario digest keeps earlier records unchanged."""
+        record = {name: getattr(self, name) for name in self.__slots__}
+        if not self.scenario_sha256:
+            del record["scenario_sha256"]
+        return record
 
 
 @dataclass(frozen=True, slots=True)
@@ -71,22 +84,6 @@ class VerifiedTrialArchive:
     evidence_complete: bool
     gap_count: int
     plan_metadata: JsonObject | None = None
-
-
-def safe_archive_path(value: object) -> str:
-    """Reject aliases before using a name as an inventory key."""
-    if (
-        not isinstance(value, str)
-        or not value
-        or len(value) > 512
-        or "\\" in value
-        or ":" in value
-        or any(ord(char) < 32 for char in value)
-        or value.startswith("/")
-        or any(part in {"", ".", ".."} for part in value.split("/"))
-    ):
-        raise TrialArchiveError("Unsafe archive path")
-    return value
 
 
 class _BoundedReader(RawIOBase):
@@ -161,10 +158,9 @@ class _BoundedTarInfo(tarfile.TarInfo):
 def _read_member(
     source: IO[bytes], size: int, *, retain: bool, structured: StructuredTraceReader | None = None
 ) -> tuple[str, bytes]:
-    """Hash streamed artifact bytes while checking credentials and bounded metadata."""
+    """Read original artifact bytes and bounded format metadata."""
     digest = hashlib.sha256()
     retained = bytearray()
-    tail = b""
     remaining = size
     while remaining:
         chunk = source.read(min(CHUNK_BYTES, remaining))
@@ -172,10 +168,6 @@ def _read_member(
             raise TrialArchiveError("Truncated archive member")
         remaining -= len(chunk)
         digest.update(chunk)
-        # Use the existing high-confidence credential-value rules, not the
-        # sidecar field allowlist that intentionally excludes full traces.
-        _reject_secret_value("archive", (tail + chunk).decode("latin1"), error_cls=TrialArchiveError)
-        tail = chunk[-256:]
         if structured is not None:
             structured.feed(chunk)
         if retain:
@@ -364,7 +356,10 @@ def _declared_formats(marker: JsonObject, members: dict[str, tuple[int, str]]) -
         ):
             raise TrialArchiveError("Invalid archive format declaration")
         media_type = media_type.partition(";")[0].strip().lower()
-        if media_type in jsonl_types:
+        if role == "evidence-blob":
+            # Raw captures are kept by checksum; they are not metadata documents.
+            formats[safe_archive_path(row["path"])] = "binary"
+        elif media_type in jsonl_types:
             formats[safe_archive_path(row["path"])] = "jsonl"
         elif media_type == "application/json" or media_type.endswith("+json"):
             formats[safe_archive_path(row["path"])] = "json"
@@ -423,8 +418,13 @@ def _inventory(
     marker: JsonObject, members: dict[str, tuple[int, str]], documents: dict[str, bytes]
 ) -> dict[str, tuple[int, str]]:
     """Require a closed, exact inventory before any structured record joins."""
-    if marker.get("schema_version") != "aptl.run-seal/v1" or marker.get("seal_state") != "sealed":
+    if marker.get("schema_version") not in {LILRAE_SEAL, BIGRAE_SEAL} or marker.get("seal_state") != "sealed":
         raise TrialArchiveError("Unsupported sealed archive")
+    if marker["schema_version"] == BIGRAE_SEAL:
+        try:
+            TrialSeal.model_validate(marker)
+        except SchemaError:
+            raise TrialArchiveError("Invalid BigRAE trial seal") from None
     declared = {}
     for row in _sealed_rows(marker):
         name, identity = _inventory_entry(row)
@@ -474,7 +474,7 @@ def _validated_archive(
         return VerifiedTrialArchive(len(members), run_digest, *facts), documents, members, marker, formats
     except TrialArchiveError:
         raise
-    except (ValueError, TypeError, KeyError, AttributeError, RecursionError, OSError, EOFError, tarfile.TarError):
+    except RECORD_ERRORS:
         raise TrialArchiveError("Archive structure or record validation failed") from None
 
 

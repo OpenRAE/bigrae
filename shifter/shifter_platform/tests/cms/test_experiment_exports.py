@@ -328,7 +328,7 @@ def replacement_plan(exports):
     collect(exports)
     child = copy.deepcopy(root)
     child.pop("plan_digest")
-    child.update(plan_id="synthetic-replacement-plan", allocation=None, isolation_proof=None)
+    child.update(plan_id="synthetic-replacement-plan", allocation=None)
     child["profiles"].update(compiler_profile="trial-compiler-replacement-designed-v1", allocation_profile="none")
     entry = copy.deepcopy(original)
     entry.pop("entry_digest")

@@ -25,7 +25,12 @@ def bound_vpn_access(
     range without one must report none; anything else is a permanent contract
     violation, refused once rather than retried.
     """
-    from shared.remote_access import OpenVpnBindingError, bind_openvpn_realization, parse_openvpn_capability
+    from shared.remote_access import (
+        OpenVpnBindingError,
+        bind_openvpn_realization,
+        parse_openvpn_binding,
+        parse_openvpn_capability,
+    )
 
     from ._operation_apply_raes import RaesRealizedAccessError
 
@@ -41,8 +46,9 @@ def bound_vpn_access(
             if range_obj.owner_principal_uuid is not None
             else bind_openvpn_realization(realization, range_obj.user_id)
         )
+        parsed_binding = parse_openvpn_binding(binding)
     except OpenVpnBindingError:
         raise RaesRealizedAccessError("raes realized OpenVPN access is invalid") from None
-    if binding["target_ref"] != authorized.target_ref or binding["generation"] != str(row.request_id):
+    if parsed_binding.target_refs != authorized.target_refs or binding["generation"] != str(row.request_id):
         raise RaesRealizedAccessError("raes realized OpenVPN access does not match the authorized generation")
     return binding

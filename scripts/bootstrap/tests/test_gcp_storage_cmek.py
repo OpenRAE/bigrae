@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 from collections.abc import Sequence
 
@@ -13,6 +14,8 @@ from tests.gcp_test_support import FakeRunner
 
 BUCKET = "acme-assets"
 KEY = "projects/acme/locations/us-central1/keyRings/shifter-acme-gcs/cryptoKeys/assets"
+STATE_NAME = "raes/project-state/0123456789abcdef0123456789abcdef/default.tfstate"
+STATE_HASH = base64.b64encode(b"h" * 32).decode("ascii")
 OLD_KEY = "projects/acme/locations/us-central1/keyRings/other/cryptoKeys/old"
 
 
@@ -83,6 +86,8 @@ class FakeBucket:
         live = next(item for item in self.objects if item["name"] == name and "timeDeleted" not in item)
         if live["generation"] != match or generation != match:
             return ProcessResult(1, "", "PreconditionException: 412 At least one of the pre-conditions did not hold.")
+        if live.get("customerEncryption"):
+            return ProcessResult(1, "", "Source decryption key is required")
         self._write(name, f"{key}/cryptoKeyVersions/3")
         return ProcessResult(0)
 
@@ -124,6 +129,63 @@ class TestMigrateBucket:
         # The original generations stay as noncurrent residuals; they are never rewritten or deleted.
         assert report.noncurrent_residual == 3 and report.soft_deleted_residual == 2
         assert report.retained_residual == 0 and report.unaddressable_residual == 0
+
+    def test_preserves_native_lease_encrypted_state(self, capsys):
+        item = _live(STATE_NAME, "21")
+        item["customerEncryption"] = {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH}
+        bucket = FakeBucket([item, _live("ordinary.bin", "22", f"{KEY}/cryptoKeyVersions/1")])
+        report = migrate_bucket(bucket.runner(), BUCKET, KEY)
+        assert bucket.rewrites == []
+        assert bucket.objects[0] == item
+        assert report.customer_supplied_state == 1
+        assert report.customer_managed == 1 and report.rewritten == 0
+        output = capsys.readouterr().out
+        assert "1 native state objects retain customer-supplied keys" in output
+        assert STATE_NAME not in output and STATE_HASH not in output
+
+    @pytest.mark.parametrize(
+        "name, encryption",
+        [
+            ("ordinary.bin", {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH}),
+            (STATE_NAME.upper(), {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH}),
+            (
+                STATE_NAME.replace("0123456789abcdef0123456789abcdef", "f" * 31),
+                {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH},
+            ),
+            (STATE_NAME + ".backup", {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH}),
+            (
+                STATE_NAME.replace("default.tfstate", "other.tfstate"),
+                {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH},
+            ),
+            (STATE_NAME, {"encryptionAlgorithm": "AES128", "keySha256": STATE_HASH}),
+            (STATE_NAME, {"encryptionAlgorithm": "AES256", "keySha256": "not-base64"}),
+            (STATE_NAME, {"encryptionAlgorithm": "AES256", "keySha256": base64.b64encode(b"h" * 31).decode("ascii")}),
+            (STATE_NAME, {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH[:-2] + "F="}),
+            (STATE_NAME, {"encryptionAlgorithm": "AES256", "keySha256": 42}),
+            (STATE_NAME, "AES256"),
+        ],
+    )
+    def test_other_or_malformed_customer_encryption_fails_closed(self, name, encryption):
+        item = _live(name, "23")
+        item["customerEncryption"] = encryption
+        bucket = FakeBucket([item])
+        with pytest.raises(StorageMigrationError, match="1 live object"):
+            migrate_bucket(bucket.runner(), BUCKET, KEY)
+        assert bucket.objects == [item]
+
+    def test_a_native_state_path_alone_does_not_bypass_bucket_encryption(self):
+        item = _live(STATE_NAME, "24")
+        item["metadata"] = {"customerEncryption": {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH}}
+        bucket = FakeBucket([item])
+        report = migrate_bucket(bucket.runner(), BUCKET, KEY)
+        assert len(bucket.rewrites) == 1 and report.customer_supplied_state == 0
+        assert report.customer_managed == 1
+
+    def test_conflicting_state_encryption_metadata_is_not_accepted(self):
+        item = _live(STATE_NAME, "25", OLD_KEY)
+        item["customerEncryption"] = {"encryptionAlgorithm": "AES256", "keySha256": STATE_HASH}
+        with pytest.raises(StorageMigrationError, match="1 live object"):
+            migrate_bucket(FakeBucket([item]).runner(), BUCKET, KEY)
 
     def test_a_second_run_rewrites_nothing(self):
         bucket = FakeBucket([_live("a", "1", f"{KEY}/cryptoKeyVersions/1"), _noncurrent("a", "0")])

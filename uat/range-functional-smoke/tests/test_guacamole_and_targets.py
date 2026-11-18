@@ -128,22 +128,26 @@ class TestSessionUrlDecoding:
 
 
 class TestConnectionLevelEvidence:
-    """Only guacd's own ``ready`` opcode counts as a connected session."""
+    """Internal handshake or display text alone cannot qualify browser access."""
 
-    def test_ready_instruction_is_recognised(self):
-        assert guacamole.has_ready_instruction("5.ready,37.$260d01da-779b-4ee5-afaa-1c7ce6e50e00;")
+    def test_internal_ready_instruction_is_not_browser_evidence(self):
+        probe = guacamole.BrowserSynchronization()
+        assert probe.observe(guacamole.GuacamoleInstruction("ready", ("internal-id",))) is None
+        assert not probe.connected
 
     def test_error_instruction_is_not_a_connection(self):
-        stream = "5.error,31.Connection failed: no route,3.519;"
-        assert guacamole.is_error_instruction(stream)
-        assert not guacamole.has_ready_instruction(stream)
+        probe = guacamole.BrowserSynchronization()
+        with pytest.raises(guacamole.GuacamoleProtocolError, match="refused"):
+            probe.observe(guacamole.GuacamoleInstruction("error", ("Connection failed", "519")))
+        assert not probe.connected
 
     def test_the_word_ready_in_parameter_text_does_not_count(self):
-        """Length-prefixed matching stops connection text from faking success."""
-        assert not guacamole.has_ready_instruction("4.args,13.hostname-ready,6.status;")
+        probe = guacamole.BrowserSynchronization()
+        assert probe.observe(guacamole.GuacamoleInstruction("name", ("5.ready,36.fake;",))) is None
+        assert not probe.connected
 
     def test_an_empty_stream_is_not_a_connection(self):
-        assert not guacamole.has_ready_instruction("")
+        assert not guacamole.BrowserSynchronization().connected
 
 
 class TestTargetSelection:

@@ -1,5 +1,13 @@
 # Design System
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Visual language for the Shifter portal. Cyberpunk/circuit aesthetic aligned with Cortex branding.
 
 ## Brand Assets
@@ -234,3 +242,5 @@ Base unit: 0.5rem (8px)
 - Dark backgrounds only (dark blue or black)
 - Do not alter colors or proportions
 - Use transparent PNG versions for flexibility
+
+<!-- vale on -->

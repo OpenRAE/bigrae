@@ -20,7 +20,7 @@ _RANGE_UNAVAILABLE = "Range unavailable"
 _RANGE_READ = "range.read"
 
 
-PRIVATE_RANGE_FIELDS = ("range_spec", "model_launch_scope", "model_sources", "model_source_sponsorship")
+PRIVATE_RANGE_FIELDS = ("range_spec",)
 
 
 def list_scoped_ranges(
@@ -110,6 +110,18 @@ def get_scoped_range_by_request(
     )
     if row is None or row.request is None:
         raise CMSError(_RANGE_UNAVAILABLE)
+    spec = row.range_spec
+    if spec is None and row.owner_principal_uuid is not None:
+        from engine.services import get_principal_ready_range_instances
+
+        spec = {
+            "instances": get_principal_ready_range_instances(
+                row.owner_principal_uuid,
+                request_id=identifier,
+                cms_range_uuid=row.uuid,
+                workspace_id=row.workspace_id,
+            )
+        }
     ips = _resolve_runtime_ips(row.range_id)
     supported = _resolve_pause_resume_supported(row.range_id)
     return RangeContext(
@@ -119,7 +131,7 @@ def get_scoped_range_by_request(
         user_id=row.user_id,
         owner_principal_uuid=row.owner_principal_uuid,
         status=ResourceStatus(row.status),
-        instances=_instance_contexts_from_range_spec(row.range_spec, InstanceContext, ips),
+        instances=_instance_contexts_from_range_spec(spec, InstanceContext, ips),
         agent_name=row.agent.name if row.agent else None,
         pause_supported=supported,
         resume_supported=supported,

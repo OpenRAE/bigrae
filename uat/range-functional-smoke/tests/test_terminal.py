@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from urllib.parse import unquote, urlsplit
 
 import pytest
 
@@ -69,6 +70,21 @@ class TestOutputHandling:
 
 
 class TestFraming:
+    @pytest.mark.parametrize(
+        ("identifier", "encoded"),
+        [
+            ("provision.node.demo#0", "provision.node.demo%230"),
+            ("node?mode=one", "node%3Fmode%3Done"),
+            ("node/name", "node%2Fname"),
+            ("11111111-1111-1111-1111-111111111111", "11111111-1111-1111-1111-111111111111"),
+        ],
+    )
+    def test_ws_url_encodes_one_opaque_path_segment(self, identifier, encoded):
+        url = urlsplit(terminal.terminal_ws_url("https://p.example.com", identifier))
+        assert url.path == f"/ws/terminal/{encoded}/"
+        assert not url.query and not url.fragment
+        assert unquote(url.path.removeprefix("/ws/terminal/").removesuffix("/")) == identifier
+
     def test_input_frame_matches_the_consumer_contract(self, nonce):
         message = json.loads(terminal.input_frame(nonce))
         assert message["type"] == "input"

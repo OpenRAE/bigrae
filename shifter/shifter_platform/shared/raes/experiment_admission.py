@@ -6,13 +6,16 @@ import base64
 import hashlib
 import json
 import sys
+from collections.abc import Callable, Iterator
+from dataclasses import dataclass
+from functools import partial
 from importlib.metadata import version
 from pathlib import Path
-from typing import Any, Literal, cast
+from typing import Any, BinaryIO, Literal, cast
 from urllib.parse import urlsplit
 
-from pydantic import BaseModel, ConfigDict, Field
-from raes import canonical_sdl_bytes
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+from raes import canonical_sdl_bytes, canonical_sdl_digest
 from raes.canonical import canonical_instantiated_sdl_bytes
 from raes.participant_control_context import SDLControlContextConfigurationValidator, authored_control_context_bindings
 from raes.scenario import InstantiatedScenario
@@ -34,24 +37,59 @@ from raes_contracts.contracts import (
 )
 from raes_contracts.contracts.admitted_trial_plan_ingress import parse_admitted_trial_plan_json
 from raes_contracts.errors import RaesError
-from raes_contracts.json_ingress import StrictJsonIngressError, parse_bounded_json, parse_bounded_json_object
+from raes_contracts.json_ingress import parse_bounded_json_object
 from raes_contracts.participant_control_context import control_context_asset_reference
 from raes_contracts.realization_envelope import BackendRealizationEnvelopeModel
 from raes_env_packs import PackExperiment, load_pack_experiments, resolve_pack_artifact, validate_pack_content_manifest
 from raes_processor.trial_compiler import compile_admitted_trial_plan
 from raes_processor.trial_realization import instantiate_admitted_trial_entry
-from raes_processor.trial_scheduler import plan_batch_schedule
+from raes_processor.trial_scheduler import BatchSchedule, plan_batch_schedule
 
+from shared.audit.integrity import _SECRET_KEY_SUFFIXES, _SECRET_KEYS
+from shared.disposable_workers import WorkerHostProfile, WorkerProfileBinding
 from shared.raes.pack_delivery_inputs import pack_artifact_relative_path
+from shared.raes.participant_owner_replay import (
+    OwnerValidation,
+    ReplayedConfigurationValidator,
+)
+from shared.raes.participant_owner_replay import validation_requests as _validation_requests
 from shared.raes.trial_archive import TrialArchiveIdentity, safe_archive_path
-from shared.raes.trial_archive_records import reject_retained_credentials
+from shared.raes.worker_apparatus import (
+    ApparatusDeclaration,
+    require_worker_scenario,
+    worker_backend_manifest,
+    worker_realization_envelope,
+)
+from shared.schemas._raes_validation import _reject_secret_value
 
 ExperimentInputError = RaesError
+
+_REDACTED_VALUES: tuple[object, ...] = (None, "", False, "[REDACTED]", "<redacted>", "REDACTED", [], {})
+
+
+def _reject_operator_credentials(value: object) -> None:
+    """Refuse a credential in operator configuration or an owner report before SQL retention.
+
+    Scenario content is retained unchanged. This check applies only to operator-supplied documents.
+    """
+    if isinstance(value, dict):
+        for key, child in value.items():
+            normalized = key.lower().replace("-", "_")
+            secret = normalized in _SECRET_KEYS or normalized.endswith(_SECRET_KEY_SUFFIXES)
+            if secret and child not in _REDACTED_VALUES:
+                raise ValueError("Operator document contains a credential field")
+            _reject_operator_credentials(child)
+    elif isinstance(value, list):
+        for child in value:
+            _reject_operator_credentials(child)
+    elif isinstance(value, str):
+        _reject_secret_value("operator document", value, error_cls=ValueError)
+
 
 MAX_RETAINED_BYTES = 64 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
-SUPPORTED_DEPENDENCIES = {"raes": "10.7.2", "raes-env-packs": "7.2.2"}
+SUPPORTED_DEPENDENCIES = {"raes": "12.0.0", "raes-env-packs": "7.2.3"}
 
 
 class ParticipantAuthority(BaseModel):
@@ -67,16 +105,30 @@ class ExperimentAuthority(BaseModel):
 
     Only installation content administrators may submit this configuration.
     It is neither a portable scientific schema nor an execution permission.
+    The administrator supplies the backend manifest and realization envelope, or
+    omits both and supplies only the apparatus capture offers. Then BigRAE derives
+    both documents from the bound worker host profile.
     """
 
     model_config = ConfigDict(extra="forbid", strict=True)
     schema_version: Literal["bigrae.experiment-admission-authority/v1"]
-    backend: BackendManifestV2Model
+    backend: BackendManifestV2Model | None = None
     processor: ProcessorManifestV2Model
     participants: list[ParticipantAuthority] = Field(default_factory=list, max_length=256)
-    realization_envelope: BackendRealizationEnvelopeModel
+    realization_envelope: BackendRealizationEnvelopeModel | None = None
+    apparatus: ApparatusDeclaration | None = None
     execution_authority: TrialExecutionAuthorityModel
     max_concurrency: int = Field(default=200, ge=1, le=10000)
+    #: The published worker host profile that every trial of the batch uses.
+    worker_profile: str = Field(default="default", pattern=r"^[a-z][a-z0-9-]{0,62}$")
+
+    @model_validator(mode="after")
+    def _one_document_source(self) -> ExperimentAuthority:
+        """Refuse a partial document set; supplied documents carry their own apparatus claims."""
+        supplied = (self.backend is not None, self.realization_envelope is not None)
+        if supplied not in ((True, True), (False, False)) or all(supplied) == (self.apparatus is not None):
+            raise ValueError("Supply the backend and envelope with no apparatus declaration, or the declaration only")
+        return self
 
 
 def dependency_tuple() -> dict[str, str]:
@@ -111,28 +163,38 @@ def validate_retained(raw: str) -> dict[str, Any]:
         raise ValueError("Unsupported experiment dependency tuple")
     plan = parse_admitted_trial_plan_json(canonical_json_bytes(payload["plan"]))
     schedule = plan_batch_schedule(plan)
-    if set(payload["snapshots"]) != set(plan.entries):
+    if set(payload.get("snapshot_digests", payload.get("snapshots", {}))) != set(plan.entries):
         raise ValueError("Retained snapshot set differs from plan entries")
     limits = payload["resource_limits"]
-    _concurrency(
-        limits["requested_concurrency"], limits["configured_concurrency_ceiling"], schedule.admitted_parallelism_ceiling
-    )
+    _concurrency(limits["requested_concurrency"], limits["configured_concurrency_ceiling"], schedule)
     if limits["isolation_ceiling"] != schedule.admitted_parallelism_ceiling:
         raise ValueError("Retained isolation ceiling differs from plan")
     return payload
 
 
-def _concurrency(requested: int, configured: int, isolation: int) -> None:
-    """Keep requested concurrency inside both administrative and owner limits."""
-    if type(requested) is not int or not 1 <= requested <= min(configured, isolation):
-        raise ValueError("Requested concurrency exceeds configured or admitted limits")
+def _concurrency(requested: int, configured: int, schedule: BatchSchedule) -> None:
+    """Keep requested concurrency inside the administrative limit and the admitted plan bounds."""
+    floor, ceiling = schedule.admitted_parallelism_floor, schedule.admitted_parallelism_ceiling
+    if type(requested) is not int or not floor <= requested <= min(configured, ceiling):
+        raise ValueError("Requested concurrency is outside the configured or admitted limits")
 
 
-def _context(experiment: PackExperiment, authority: ExperimentAuthority) -> dict[str, Any]:
+def _documents_of(authority: ExperimentAuthority) -> tuple[BackendManifestV2Model, BackendRealizationEnvelopeModel]:
+    """Return the supplied or derived backend manifest and realization envelope."""
+    if authority.backend is None or authority.realization_envelope is None:
+        raise ValueError("Experiment apparatus documents are unresolved")
+    return authority.backend, authority.realization_envelope
+
+
+def _context(
+    experiment: PackExperiment, authority: ExperimentAuthority, owner_validation: OwnerValidation | None = None
+) -> dict[str, Any]:
     """Compose explicit owner manifests into the released compiler context."""
+    backend, envelope = _documents_of(authority)
+    owned: dict[tuple[str, str], list[dict[str, Any]]] = {}
     manifests = {}
     references = []
-    for kind, manifest in (("backend", authority.backend), ("processor", authority.processor)):
+    for kind, manifest in (("backend", backend), ("processor", authority.processor)):
         key = (kind, manifest.identity.name, manifest.identity.version, manifest.schema_version)
         manifests[key] = manifest
         references.append(
@@ -171,14 +233,25 @@ def _context(experiment: PackExperiment, authority: ExperimentAuthority) -> dict
         registry = manifest.configuration_registry
         if registry is not None:
             owner = (registry.owner.validator_id, registry.owner.validator_version)
-            # This is the published SDL owner adapter, never a pack-named import.
-            if owner != ("participant-config", "1"):
+            # The published SDL owner adapter runs here; any other owner runs in its
+            # installed adapter (``validate`` phase) and is replayed, never imported.
+            if owner == ("participant-config", "1"):
+                validators[owner] = SDLControlContextConfigurationValidator(experiment.family)
+            elif owner_validation is None:
                 raise ValueError("Unsupported participant configuration owner")
-            validators[owner] = SDLControlContextConfigurationValidator(experiment.family)
+            else:
+                owned.setdefault(owner, []).extend(
+                    _validation_requests(experiment, binding.participant_address, manifest)
+                )
+    if owner_validation is not None:
+        family_digest = canonical_sdl_digest(experiment.family).value
+        for owner, requests in owned.items():
+            results = owner_validation(f"{owner[0]}@{owner[1]}", family_digest, requests)
+            validators[owner] = ReplayedConfigurationValidator.from_results(requests, results)
     apparatus = AdmittedApparatusBindingModel(
         manifest_refs=references,
         participant_manifest_refs=participant_refs,
-        realization_envelope=authority.realization_envelope.identity,
+        realization_envelope=envelope.identity,
         capability_refs=sorted(experiment.experiment.apparatus_intent.required_capabilities),
     )
     return {
@@ -186,7 +259,7 @@ def _context(experiment: PackExperiment, authority: ExperimentAuthority) -> dict
         "apparatus_manifests": manifests,
         "participant_manifests": participants,
         "participant_configuration_validators": validators,
-        "realization_envelope": authority.realization_envelope,
+        "realization_envelope": envelope,
         "execution_authority": authority.execution_authority,
         "limits": TrialCompilationLimitsModel(),
     }
@@ -219,21 +292,6 @@ def _documents(root: Path, experiment: PackExperiment) -> dict[str, str]:
     return documents
 
 
-def _check_artifact_credentials(data: bytes, media_type: str) -> None:
-    """Apply existing credential rules to original bytes without altering their content."""
-    media_type = media_type.partition(";")[0].strip().lower()
-    if media_type == "application/json" or media_type.endswith("+json"):
-        try:
-            parsed = parse_bounded_json(data, max_bytes=MAX_DOCUMENT_BYTES, root="object", max_depth=64)
-        except StrictJsonIngressError as error:
-            if error.code != "invalid-root":
-                raise
-            parsed = parse_bounded_json(data, max_bytes=MAX_DOCUMENT_BYTES, root="array", max_depth=64)
-        reject_retained_credentials(parsed)
-    else:
-        reject_retained_credentials(data.decode("utf-8", errors="replace"))
-
-
 class _ArtifactCustody:
     """Cache exact inventory-bound input bytes under one aggregate retention budget."""
 
@@ -255,7 +313,7 @@ class _ArtifactCustody:
             raise ValueError("Referenced experiment artifact is not exactly installed")
         return relative, artifact_id
 
-    def _retain_bytes(self, relative: str, reference: ExperimentArtifactRefModel | str, media_type: str) -> int:
+    def _retain_bytes(self, relative: str, reference: ExperimentArtifactRefModel | str) -> int:
         """Verify and cache original bytes once, enforcing the aggregate byte limit."""
         if relative in self.payload:
             return 0
@@ -266,7 +324,6 @@ class _ArtifactCustody:
         )
         data = resolved.data
         self.total += len(data)
-        _check_artifact_credentials(data, media_type)
         retained = {
             "base64": base64.b64encode(data).decode("ascii"),
             "sha256": hashlib.sha256(data).hexdigest(),
@@ -280,7 +337,7 @@ class _ArtifactCustody:
         added = 0
         for reference in references:
             relative, artifact_id = self._reference(reference, exact_descriptor)
-            added += self._retain_bytes(relative, reference if exact_descriptor else artifact_id, reference.media_type)
+            added += self._retain_bytes(relative, reference if exact_descriptor else artifact_id)
             retained = self.payload[relative]
             if (
                 reference.checksum.algorithm != "sha256"
@@ -323,7 +380,7 @@ def validate_experiment_cleanup(inputs: dict[str, Any], entry_id: str, attempt_i
     """Validate a trusted owner's cleanup report against the retained trial authority."""
     try:
         parsed = parse_bounded_json_object(canonical_json_bytes(receipt), max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
-        reject_retained_credentials(parsed)
+        _reject_operator_credentials(parsed)
         plan = parse_admitted_trial_plan_json(canonical_json_bytes(inputs["plan"]))
         entry = plan.entries[entry_id]
         cleanup = plan.cleanup_plans[entry.execution_controls.cleanup_plan_ref]
@@ -341,6 +398,8 @@ def experiment_archive_identity(
     entry_id: str,
     attempt_id: str,
     run_version: str = "1",
+    *,
+    scenario_sha256: str = "",
 ) -> TrialArchiveIdentity:
     """Use the incumbent custody identity contract at both admission and collection."""
     plan = inputs["plan"]
@@ -355,6 +414,7 @@ def experiment_archive_identity(
         plan_digest=plan["plan_digest"],
         entry_digest=entry["entry_digest"],
         run_version=run_version,
+        scenario_sha256=scenario_sha256,
     )
 
 
@@ -371,6 +431,48 @@ def _select_experiment(root: Path, experiment_id: str, experiment_version: str |
     return candidates[0]
 
 
+@dataclass(frozen=True)
+class InstallationLookups:
+    """Installation callbacks that the shared compiler cannot import.
+
+    ``owner_validation`` runs backend participant owners. ``worker_profile`` returns
+    the published host profile of a name.
+    """
+
+    owner_validation: OwnerValidation | None = None
+    worker_profile: Callable[[str], WorkerHostProfile] | None = None
+
+
+def _bind_worker_apparatus(
+    configuration: ExperimentAuthority, worker_profile: Callable[[str], WorkerHostProfile] | None
+) -> tuple[ExperimentAuthority, dict[str, Any], Callable[[InstantiatedScenario], None] | None]:
+    """Bind the named host profile and derive absent apparatus documents from it.
+
+    Returns the configuration, the retained binding and derived documents, and the
+    check that each selected scenario fits the worker VMs. The check is ``None``
+    when the authority supplies its documents.
+    """
+    profile = None if worker_profile is None else worker_profile(configuration.worker_profile)
+    retained: dict[str, Any] = {}
+    if profile is not None:
+        binding = WorkerProfileBinding(name=configuration.worker_profile, digest=profile.digest)
+        retained["worker_profile"] = binding.model_dump(mode="json")
+    if configuration.backend is not None:
+        return configuration, retained, None
+    if profile is None:
+        raise ValueError("Derived apparatus documents require the bound worker profile")
+    apparatus = cast(ApparatusDeclaration, configuration.apparatus)
+    envelope = worker_realization_envelope(profile, apparatus)
+    backend = worker_backend_manifest(envelope, apparatus, len(profile.nodes))
+    retained["derived_apparatus"] = {
+        "backend": backend.model_dump(mode="json"),
+        "realization_envelope": envelope.model_dump(mode="json"),
+    }
+    configuration = configuration.model_copy(update={"backend": backend, "realization_envelope": envelope})
+    architecture = envelope.configuration.architecture
+    return configuration, retained, partial(require_worker_scenario, profile=profile, architecture=architecture)
+
+
 def compile_pack_experiment(
     root: Path,
     *,
@@ -378,23 +480,33 @@ def compile_pack_experiment(
     authority: object,
     concurrency: int,
     experiment_version: str | None = None,
-) -> dict[str, Any]:
-    """Compile one explicitly selected installed experiment and retain its inputs."""
+    installation: InstallationLookups,
+    snapshots: BinaryIO,
+) -> tuple[dict[str, Any], list[tuple[str, int]]]:
+    """Compile one explicitly selected installed experiment and retain its inputs.
+
+    The batch retains the exact binding of the selected worker host profile, and derived documents come from it.
+    The record keeps the digest of each instantiated snapshot. Each exact snapshot is written
+    to ``snapshots`` in plan order, so memory does not grow with the number of trials.
+    Return the record and the plan entry ID and size of each written snapshot.
+    """
     dependencies = dependency_tuple()
     encoded_authority = canonical_json_bytes(authority)
     parsed = parse_bounded_json_object(encoded_authority, max_bytes=MAX_AUTHORITY_BYTES, max_depth=64)
-    reject_retained_credentials(parsed)
-    configuration = ExperimentAuthority.model_validate(parsed)
+    _reject_operator_credentials(parsed)
+    configuration, apparatus, scenario_check = _bind_worker_apparatus(
+        ExperimentAuthority.model_validate(parsed), installation.worker_profile
+    )
     if type(concurrency) is not int or not 1 <= concurrency <= configuration.max_concurrency:
         raise ValueError("Requested concurrency exceeds configured limit")
     experiment = _select_experiment(root, experiment_id, experiment_version)
-    request = experiment.compilation_request(**_context(experiment, configuration))
+    request = experiment.compilation_request(**_context(experiment, configuration, installation.owner_validation))
     result = compile_admitted_trial_plan(request)
     if result.plan is None:
         raise ValueError("Experiment compilation refused the supplied combination")
     plan = result.plan
     schedule = plan_batch_schedule(plan)
-    _concurrency(concurrency, configuration.max_concurrency, schedule.admitted_parallelism_ceiling)
+    _concurrency(concurrency, configuration.max_concurrency, schedule)
     # The private staged tree is bounded and unchanged during this operation.
     custody = _ArtifactCustody(root)
     references = list(experiment.experiment.artifact_refs) + list(experiment.task.artifact_refs)
@@ -411,7 +523,7 @@ def compile_pack_experiment(
         "capture_specs": {key: item.model_dump(mode="json") for key, item in experiment.capture_specs.items()},
         "authority": parsed,
         "plan": plan.model_dump(mode="json"),
-        "snapshots": {},
+        "snapshot_digests": {},
         "resource_limits": {
             "requested_concurrency": concurrency,
             "configured_concurrency_ceiling": configuration.max_concurrency,
@@ -423,20 +535,43 @@ def compile_pack_experiment(
             "max_authority_bytes": MAX_AUTHORITY_BYTES,
         },
     }
+    payload.update(apparatus)
     retained_bytes = len(encode_retained(payload).encode())
+    written: list[tuple[str, int]] = []
     for entry in schedule.entries:
         experiment_archive_identity(payload, entry.plan_entry_id, "admission-validation")
         selected = instantiate_admitted_trial_entry(
             plan=plan, plan_entry_id=entry.plan_entry_id, family=experiment.family
         )
+        if scenario_check is not None:
+            scenario_check(selected)
         retained_bytes += custody.retain(
             _selected_control_context_artifacts(selected, plan.entries[entry.plan_entry_id]),
             exact_descriptor=True,
         )
         snapshot = canonical_instantiated_sdl_bytes(selected)
-        retained_bytes += len(snapshot) + len(entry.plan_entry_id.encode()) + 8
+        digest = snapshot_digest(snapshot)
+        retained_bytes += len(digest) + len(entry.plan_entry_id.encode()) + 8
         if retained_bytes > MAX_RETAINED_BYTES:
             raise ValueError("Experiment hydrated inputs exceed the byte limit")
-        payload["snapshots"][entry.plan_entry_id] = json.loads(snapshot)
-    reject_retained_credentials(payload)
-    return payload
+        payload["snapshot_digests"][entry.plan_entry_id] = digest
+        snapshots.write(snapshot)
+        written.append((entry.plan_entry_id, len(snapshot)))
+    return payload, written
+
+
+def read_snapshots(
+    payload: dict[str, Any], snapshots: BinaryIO, written: list[tuple[str, int]]
+) -> Iterator[tuple[str, bytes]]:
+    """Read back each written snapshot in plan order and verify it against its recorded digest."""
+    snapshots.seek(0)
+    for entry_id, size in written:
+        snapshot = snapshots.read(size)
+        if snapshot_digest(snapshot) != payload["snapshot_digests"][entry_id]:
+            raise ValueError("A written trial snapshot differs from its recorded digest")
+        yield entry_id, snapshot
+
+
+def snapshot_digest(snapshot: bytes) -> str:
+    """Return the prefixed SHA-256 digest that the record keeps for one snapshot."""
+    return "sha256:" + hashlib.sha256(snapshot).hexdigest()

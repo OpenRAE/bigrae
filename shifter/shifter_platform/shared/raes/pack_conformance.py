@@ -1,6 +1,6 @@
 """Structural pack conformance, separate from deployment readiness and inventory."""
 
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Any
 
@@ -42,9 +42,15 @@ class ContractValidationPort:
         raise RuntimeError("contract validation cannot dispatch")
 
 
-def validate_pack_contract(scenario_path: Path, request_id: str) -> None:
+def validate_pack_contract(
+    scenario_path: Path, request_id: str, *, parameters: Mapping[str, object] | None = None
+) -> None:
     """Compile the real SDL and validate backend structure without asserting supply."""
     scenario = load_scenario(scenario_path)
+    if parameters:
+        from raes.instantiate import instantiate_scenario
+
+        scenario = instantiate_scenario(scenario, parameters=dict(parameters))
     target = create_shifter_backend_target(port=ContractValidationPort(request_id), scenario=scenario)
     execution = RuntimeManager(target).plan(scenario)
     artifact_addresses = {

@@ -1,106 +1,92 @@
 # Range functional smoke (#987)
 
-Proves the two participant flows that no automated check covered before: an
-**interactive terminal that exchanges real data with a range host**, and a
-**Guacamole session that reaches a client-level connection**. Both run through
-the product boundary against a positively selected, known-up example range on a
-deployed tenant.
-
-On demand only. It is not in `deploy.yml`, gates no deploy, and takes no cloud
-role—the participant session is the only authority it acts with.
+This reference describes the harness's evidence and safety contracts.
+Use the [operator how-to guide](../../docs/qa/range-functional-smoke.md) to prepare, run, interpret, and recover a check.
+The harness drives a deployed tenant through its public participant interfaces.
+It takes no cloud role, provisions no range, and destroys no range.
+It is on demand and gates no deployment.
 
 ## Why it exists
 
-| Existing check | Live range | Terminal + Guacamole |
-| --- | --- | --- |
-| Built-image stack smoke (`scripts/stack-smoke/`, #922) | no | no, explicitly out of scope |
-| Post-deploy range smoke (`cms.post_deploy_smoke`, #218) | yes | no—TCP reachability only |
-| **This** | yes | yes |
+This explanation distinguishes reachability from usable access.
+A TCP probe cannot prove terminal execution or a Guacamole client session.
 
-The June 2026 failures that reached users—terminal SSH wiring, Guacamole
-bootstrap—sit precisely in that gap. A TCP probe to ports 22 and 3389 cannot
-see them.
+| Check | Live range | Terminal and Guacamole |
+| --- | --- | --- |
+| [Built-image stack smoke](../../scripts/stack-smoke/README.md) | No | Outside its scope |
+| Post-deploy range smoke | Yes | TCP reachability only |
+| This harness | Yes | Real participant exchange |
 
 ## What counts as a pass
 
-Every required check must pass; a missing, blocked, skipped, timed-out, or
-errored check is never a pass.
+Every required check must pass.
+A missing, blocked, skipped, timed-out, or errored check is never a pass.
 
 | Check | Sufficient evidence |
 | --- | --- |
-| `range_owned_ready` | the owner-scoped projection reports an active, ready range |
-| `target_selected` | the authored logical role resolves to an instance the portal offers a terminal for |
-| `terminal_socket_open` | the routed consumer accepted the socket |
-| `terminal_nonce_exchange` | **input produced matching output from the guest's own shell** |
-| `guacamole_bootstrap_accepted` | HTTP 202—queue admission only |
-| `guacamole_bootstrap_succeeded` | a signed URL was minted |
-| `guacamole_url_delivered` | the one-time URL was consumed by this client |
-| `guacamole_session_connected` | **guacd completed the handshake and opened the session** |
+| `range_owned_ready` | Owner-scoped projection reports an active, ready range |
+| `target_selected` | Authored logical role resolves to an instance offered for terminal access |
+| `terminal_socket_open` | Routed consumer accepted the socket |
+| `terminal_nonce_exchange` | Input produced matching output from the guest shell |
+| `guacamole_bootstrap_accepted` | HTTP 202 proves queue admission only |
+| `guacamole_bootstrap_succeeded` | The server minted a signed URL |
+| `guacamole_url_delivered` | This client consumed the one-time URL |
+| `guacamole_session_connected` | Browser tunnel identifier, display synchronization, and a later display update |
 
-The two bold rows are the ones that mean the product works. Bootstrap success
-proves only that the server minted a credential—accepting it as "Guacamole
-works" would preserve the exact gap this check exists to close.
+Only terminal exchange and the complete Guacamole protocol exchange prove the required access behavior.
+Bootstrap success alone proves credential issuance.
+The checker acknowledges synchronization and image data; the gateway consumes internal `ready` before opening the browser tunnel.
 
 ### The echo hazard
 
-An interactive shell echoes what it receives, so a naive `echo <nonce>` probe
-would match its own typed input and pass against a shell that never ran
-anything. The command is therefore split—`echo "SMOKE""<nonce>"`—so the
-echoed input contains `SMOKE""<nonce>` while only real output contains the
-joined `SMOKE<nonce>`. See `tests/test_terminal.py::TestEchoHazard`.
+A shell can echo input without executing it.
+The split command `echo "SMOKE""<nonce>"` distinguishes echoed input from the joined output `SMOKE<nonce>`.
+`tests/test_terminal.py::TestEchoHazard` protects this distinction.
 
 ## Running it
 
-```bash
-cd uat/range-functional-smoke
-uv sync --group dev
+Follow the [operator procedure](../../docs/qa/range-functional-smoke.md#running-it).
+The CLI accepts exactly one actor source:
 
-# Actor source 1: a session captured from a normal browser login (0600 file).
-uv run range-functional-smoke \
-  --origin https://gcp.shifter.keplerops.com \
-  --environment gcp-dev \
-  --session-file ~/.shifter/smoke.session
+- `--session-file`: a normal-login session key in a mode-0600 file.
+- `--email` with `--credential-env`: front-door Identity Platform password and enrolled TOTP login.
+  Secrets come from `SMOKE_PASSWORD`, `SMOKE_TOTP_SECRET`, and `SMOKE_API_KEY`, never arguments.
 
-# Actor source 2: the full front-door login for an operator-provisioned
-# credential. Secrets come from the environment, never argv.
-SMOKE_PASSWORD=... SMOKE_TOTP_SECRET=... SMOKE_API_KEY=... \
-uv run range-functional-smoke \
-  --origin https://gcp.shifter.keplerops.com \
-  --environment gcp-dev \
-  --email range-validator@example.com \
-  --credential-env
-```
+Use `uv run range-functional-smoke --help` for the complete current argument reference.
+`--origin` and `--environment` are required.
+The logical target role defaults to `attacker`; the Guacamole protocol defaults to `rdp`.
+The default terminal-exchange, bootstrap, and total deadlines are 45, 90, and 600 seconds.
+`--evidence` additionally writes the rendered report to a selected path.
+Exit status `0` means pass, `1` means failed checks, and `2` means invalid configuration or actor-source input.
 
-Exit code is `0` only on an overall pass. A production-looking target is refused
-unless `--allow-production` is passed, so a run cannot be aimed at production or
-a live event tenant by accident.
-
-**HTTPS is required.** The harness carries a replayable ID token, a live
-`sessionid` cookie (on HTTP *and* in the websocket handshake), and a signed
-Guacamole token in a tunnel query string—all stealable by a passive observer
-over `http`/`ws`. Plaintext is refused for the configured origin and for every
-server-returned URL alike; `--allow-plaintext-loopback` relaxes it for a
-loopback host only, never for a real one.
-
-Pace repeated runs: Identity Platform rate-limits TOTP sign-in and answers
-`QUOTA_EXCEEDED` when a credential is exercised in tight succession.
+Production-looking targets require `--allow-production`.
+HTTPS is required for the origin and server-returned URLs.
+`--allow-plaintext-loopback` permits HTTP/WebSocket plaintext only for a loopback fixture.
+The harness carries replayable session material and Guacamole tokens; plaintext would expose them.
+Pace repeated logins because Identity Platform can return `QUOTA_EXCEEDED`.
 
 ## Design boundaries
 
-- **The profile carries no connection material.** Only a logical selector (role,
-  protocol) crosses the boundary. Host, port, username, key, and password stay
-  inside the portal, because resolving them is part of what is under test.
-- **The example range is never destroyed.** It belongs to whoever created it.
-- **No auth bypass.** `/dev-login/` is a dev-only path (and disabled outside
-  `ENVIRONMENT=development`); no Admin-SDK custom token, no superuser, no
-  smoke-only session endpoint. Both actor sources are real logins.
-- **Evidence is bounded and non-secret.** No cookie, token, Guacamole URL,
-  private address, raw body, traceback, or terminal output reaches the report.
+The profile carries logical role and protocol selectors, not connection material.
+Host, port, user, key, and password resolution stay inside the portal.
+The existing example range belongs to its creator and is never destroyed by this harness.
+
+The harness uses no development-login, custom-token, superuser, or smoke-only authentication bypass.
+The product rechecks verified email and enrolled MFA for the Identity Platform session exchange.
+Development login's separate DEBUG/environment and direct-peer guards remain outside live qualification.
+
+Evidence excludes cookies, tokens, Guacamole URLs, private addresses, raw bodies, tracebacks, and terminal output.
+Run the harness only with operator authority for the selected tenant and actor.
+Do not alter authorization or transport policy to make a failed check pass.
 
 ## Tests
 
-`uv run pytest -q` covers the deterministic layers—profile safety, target
-selection, nonce matching, Guacamole state classification, TOTP derivation,
-redaction, and fail-closed verdict composition. The live executor targets a
-deployed tenant and is exercised by operator runs, never by mocking the app
-(ADR-019).
+Select targeted deterministic modules for the changed behavior, for example:
+
+```bash
+uv run pytest tests/test_terminal.py tests/test_guacamole_protocol.py -q
+```
+
+The test estate covers profile safety, target selection, nonce matching, Guacamole states, TOTP derivation, redaction, and verdict composition.
+CI owns the full harness suite.
+Operator runs against a deployed tenant establish live evidence; mocked application behavior cannot qualify that journey.

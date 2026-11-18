@@ -73,6 +73,11 @@ output "gke_cluster_location" {
   value       = module.platform_core.gke_cluster_location
 }
 
+output "gke_access_node_pool_name" {
+  description = "Name of the access node pool. Input to the event-capacity drift check."
+  value       = module.platform_core.gke_access_node_pool_name
+}
+
 output "artifact_registry_repositories" {
   description = "Artifact Registry repositories for the environment."
   value       = module.platform_core.artifact_registry_repositories
@@ -192,6 +197,11 @@ output "guacamole_database" {
 output "workload_service_accounts" {
   description = "Workload service accounts for the environment."
   value       = module.platform_core.workload_service_accounts
+}
+
+output "guacamole_controller_identity" {
+  description = "Public immutable identity of the browser gateway controller."
+  value       = module.platform_core.guacamole_controller_identity
 }
 
 # The GitHub OIDC provider + packer build service account (the CI auth identity)

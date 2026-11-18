@@ -1,5 +1,13 @@
 # Portal Development
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Local development setup for the Django portal.
 
 ## Prerequisites
@@ -139,3 +147,5 @@ The container inherits EC2 instance role permissions:
 - `secretsmanager:GetSecretValue` on `shifter-prod-portal-*` secrets
 - `s3:PutObject`, `s3:GetObject`, `s3:DeleteObject` on user storage bucket
 - No static IAM user credentials needed
+
+<!-- vale on -->

@@ -28,7 +28,7 @@ python3 scripts/adr_guard/adr_guard.py --changed --level fast
 
 4. If guardrail files changed, verify that one of these changed too:
    - `docs/adr/**`
-   - `shifter/shifter_platform/documentation/docs/technical/dev/adr-enforcement.md`
+   - `docs/technical/dev/adr-enforcement.md`
    - technical index pages linking to ADR enforcement docs
 
 5. If a temporary waiver is genuinely required:

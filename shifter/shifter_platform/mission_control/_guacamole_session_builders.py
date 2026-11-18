@@ -23,6 +23,8 @@ import logging
 from typing import TYPE_CHECKING, Any, Protocol
 from uuid import UUID
 
+from django.conf import settings
+
 from mission_control.guacamole_bootstrap import BootstrapFailure
 from shared.credentials import CredentialContext
 from shared.errors import classify_user_message
@@ -144,7 +146,7 @@ def _generate_rdp_url(
                 username=username,
                 connection_name=conn_info["connection_name"],
                 hostname=conn_info["private_ip"],
-                expires_minutes=5,
+                expires_minutes=settings.GUACAMOLE_SESSION_TTL_MINUTES,
                 rdp_username=conn_info.get("rdp_username"),
                 rdp_password=conn_info.get("rdp_password"),
                 sftp_root_directory=sftp_root_directory,
@@ -258,7 +260,7 @@ def _generate_ngfw_ssh_url(
                 port=ssh_conn.port,
                 ssh_username=ssh_conn.username,
                 ssh_private_key=ssh_conn.private_key,
-                expires_minutes=5,
+                expires_minutes=settings.GUACAMOLE_SESSION_TTL_MINUTES,
             )
         )
     except ValueError as e:
@@ -359,7 +361,7 @@ def _generate_range_ssh_url(
                 port=ssh_info["port"],
                 ssh_username=ssh_info["username"],
                 ssh_private_key=ssh_info["private_key"],
-                expires_minutes=5,
+                expires_minutes=settings.GUACAMOLE_SESSION_TTL_MINUTES,
             )
         )
     except ValueError as e:

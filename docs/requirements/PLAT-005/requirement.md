@@ -41,7 +41,7 @@ Externalized, per-deployment configuration is what makes the same application co
 - TESTS → TEST `scripts/adr_guard/tests/test_adr_guard.py` (PlatformRendersDeployTfvarsTests, verifies the AWS platform jobs render local.auto.tfvars before terraform runs)
 - IMPLEMENTS → ADR `ADR-011` (ADR-011-R7, AWS deploy workflows render deployment-owned tfvars from secrets; committed tfvars stay example baselines)
 - DOCUMENTS → DOCUMENTATION `docs/dev/deploy-secrets.md` (Deploy secrets / repository variables, AWS portal section documents TF_VARS_&lt;ENV&gt;_PORTAL and the CI render step)
-- DOCUMENTS → DOCUMENTATION `docs/architecture/aws-deploy-tfvars-preflight-1249.md` (Architecture preflight note for #1249, AWS deploy tfvars render design boundary and guardrails)
+- DOCUMENTS → DOCUMENTATION `docs/_deprecated/architecture/aws-deploy-tfvars-preflight-1249.md` (Architecture preflight note for #1249, AWS deploy tfvars render design boundary and guardrails)
 - DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#674` (PLAT-005: Per-Deployment Configuration)
 - IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#784` (ci: AWS platform deploy applies the example.com baseline instead of real per-deployment tfvars)
 - IMPLEMENTS → CONFIG `.github/workflows/_shifter-engine.yml` (Engine deploy workflow, fails fast with a clear error when the required ECS task-definition family is missing; gated first_deploy per-deployment bootstrap input)

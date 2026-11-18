@@ -49,6 +49,7 @@ from .checks.mcp_policy import (
     check_mcp_no_shell_exec,
     check_mcp_ops_tls_strict,
 )
+from .checks.merge_queue import check_dev_merge_queue
 from .checks.published_contract import (
     check_published_contract_snapshots_immutable,
 )
@@ -98,6 +99,7 @@ CHECKS = {
     "eks-cross-stack-sourcing": check_eks_cross_stack_sourcing,
     "repository-identity-literals": check_repository_identity_literals,
     "release-workflow-provenance": check_release_workflow,
+    "dev-merge-queue": check_dev_merge_queue,
 }
 CHECK_LEVELS = {
     "fast": [
@@ -133,6 +135,7 @@ CHECK_LEVELS = {
         "eks-cross-stack-sourcing",
         "repository-identity-literals",
         "release-workflow-provenance",
+        "dev-merge-queue",
     ],
     "ci": [
         "adr-registry",
@@ -168,6 +171,7 @@ CHECK_LEVELS = {
         "eks-cross-stack-sourcing",
         "repository-identity-literals",
         "release-workflow-provenance",
+        "dev-merge-queue",
     ],
     "all": list(CHECKS),
 }

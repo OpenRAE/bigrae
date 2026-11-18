@@ -39,7 +39,7 @@ class AccountSearchQuerySerializer(AccountPageQuerySerializer):
 class IntegrationOrganizationQuerySerializer(AccountPageQuerySerializer):
     """Select the integration whose organization grants are being discovered."""
 
-    integration = serializers.ChoiceField(choices=("adapters", "model_sources"))
+    integration = serializers.ChoiceField(choices=("adapters",))
 
 
 class WorkspacePageQuerySerializer(AccountSearchQuerySerializer):

@@ -1,5 +1,11 @@
 # Artifact preparation implementation
 
+This reference describes the implementation and its recorded verification limits.
+Use [artifact preparation operations](../../../docs/ops/artifact-preparation.md) for current installation and activation tasks.
+The historical statements below do not establish qualification of the current source revision.
+
+## Historical implementation status
+
 This profile passed qualification on `gcp-dev` for #1583. The isolated GCE build,
 independent disk scan, boot probe and cleanup passed, followed by private-pack
 preparation, inventory admission, reuse, ordinary range launch and destruction.

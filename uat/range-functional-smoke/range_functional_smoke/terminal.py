@@ -31,6 +31,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+from urllib.parse import quote
 
 #: Marker joined to the nonce. Alphanumeric so no shell quoting or ANSI
 #: sequence can split it, and distinctive enough not to occur in a prompt.
@@ -115,4 +116,4 @@ def terminal_ws_url(origin: str, instance_uuid: str) -> str:
     """Build the routed consumer URL for an instance, mirroring the browser path."""
     scheme = "wss" if origin.startswith("https://") else "ws"
     host = origin.split("://", 1)[1]
-    return f"{scheme}://{host}/ws/terminal/{instance_uuid}/"
+    return f"{scheme}://{host}/ws/terminal/{quote(instance_uuid, safe='')}/"

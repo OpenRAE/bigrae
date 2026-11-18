@@ -163,6 +163,29 @@ class StreamingCommandExecutor(Protocol):
 
 
 @runtime_checkable
+class FileOutputCommandExecutor(Protocol):
+    """Optional guest port: run a script and write its bounded stdout to a local file.
+
+    The guest is untrusted, so the transport stops the copy when the output
+    exceeds ``max_bytes`` or the deadline passes. Transports that cannot copy
+    output to a file do not implement it, and callers fail closed.
+    """
+
+    def run_command_to_file(
+        self,
+        instance_id: str,
+        script: str,
+        *,
+        output_path: str,
+        max_bytes: int,
+        timeout_seconds: int = 300,
+        document_name: str = "AWS-RunShellScript",
+    ) -> int:
+        """Execute ``script``, write its stdout to ``output_path``, and return the exit status."""
+        ...
+
+
+@runtime_checkable
 class ActionExecutor(Protocol):
     """Provider action-dispatch port.
 

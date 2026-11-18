@@ -11,7 +11,7 @@ from uuid import UUID
 
 from botocore.client import BaseClient
 from botocore.config import Config
-from shared.model_access.aws_session import bounded_aws_session
+from shared.aws_session import bounded_aws_session
 from shared.raes.operation_input import image_lookup_key
 from shared.range_instantiation_policy import (
     InstantiationPurpose,
@@ -22,7 +22,6 @@ from shared.range_instantiation_policy import (
 from ec2_guest_secrets import Ec2GuestSecrets
 from ec2_range_cleanup import Ec2CleanupScope, destroy_ec2_resources, inventory_ec2_resources
 from ec2_range_network import Ec2NetworkConfig, allocation_networks
-from model_enrollment import EnrollmentDelivery
 from provisioner_db_operation_input import RaesOperationRun
 from raes_ec2_apply import RaesEc2ApplyOptions, apply_raes_ec2_range, delete_ec2_guest_credentials
 from raes_ec2_image import Ec2ImageProfile, resolve_ec2_image
@@ -73,8 +72,8 @@ def _cidrs(name: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in value.split(",")) if value else ()
 
 
-def _network(scope: Ec2CleanupScope, enrollment: EnrollmentDelivery | None) -> Ec2NetworkConfig:
-    """Project deployment coordinates and admitted broker reachability."""
+def _network(scope: Ec2CleanupScope) -> Ec2NetworkConfig:
+    """Project deployment coordinates."""
     return Ec2NetworkConfig(
         environment=scope.environment,
         region=scope.region,
@@ -84,7 +83,6 @@ def _network(scope: Ec2CleanupScope, enrollment: EnrollmentDelivery | None) -> E
         base_route_table_id=os.environ["RANGE_ROUTE_TABLE_ID"],
         management_cidrs=_cidrs("PORTAL_NETWORK_CIDRS"),
         access_cidrs=_cidrs("ACCESS_NETWORK_CIDRS"),
-        broker_cidrs=_cidrs("MODEL_BROKER_GUEST_CIDRS") if enrollment is not None else (),
     )
 
 
@@ -122,14 +120,11 @@ def _release_failed_reservation(
 def provision_ec2_run(
     run: RaesOperationRun,
     plugin_plans: GuestPluginPlans | None = None,
-    enrollment: EnrollmentDelivery | None = None,
 ) -> dict[str, Any]:
     """Reserve portable addressing and execute the immutable native EC2 realization."""
     scope = _scope(run)
     assert_range_backend_egress_supported("ec2", run.input.egress_mode)
-    config = _network(scope, enrollment)
-    if enrollment is not None and not config.broker_cidrs:
-        raise ValueError("EC2 enrollment requires exact applied broker addresses")
+    config = _network(scope)
     plan = parse_plan(run.input.plan)
     networks = allocation_networks(plan)
     # The existing tenant allocator reserves portable /28 intent. Never replace
@@ -155,7 +150,6 @@ def provision_ec2_run(
                     allocated_cidrs=allocated,
                     egress_mode=run.input.egress_mode,
                     runtime_plugin=plugin_plans.execute if plugin_plans else None,
-                    model_enrollment=enrollment.execute if enrollment else None,
                 ),
                 delivery_bindings=run.input.binding_transport(),
                 access_bindings=run.input.access_binding_transport(),
@@ -168,7 +162,7 @@ def provision_ec2_run(
 
 
 def destroy_ec2_run(run: RaesOperationRun) -> dict[str, Any]:
-    """Cleanup does not load enabled plugins, current images, or broker settings."""
+    """Cleanup does not load enabled plugins or current images."""
     scope = _scope(run)
     plan = parse_plan(run.input.plan, cleanup_only=True)
     with _clients(scope) as (ec2, secrets):

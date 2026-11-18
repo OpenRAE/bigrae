@@ -15,7 +15,7 @@ from typing import Any, cast
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from shared.gcp_range_projects import GcpProjectBaseline
+from shared.gcp_range_projects import MAX_PROJECT_SECRETS, MAX_PROJECT_SERVICE_ACCOUNTS, GcpProjectBaseline
 from shared.gcp_runtime_plan import GcpProjectWork
 from shifter_adapter_sdk.runtime import canonical_digest
 
@@ -246,4 +246,9 @@ def _require_new_names(work: GcpProjectWork, baseline: GcpProjectBaseline) -> No
         raise ValueError(_FAILED)
     names = {name.rsplit("/", 1)[-1] for name in baseline.state.secrets}
     if names & set(work.secrets):
+        raise ValueError(_FAILED)
+    if (
+        len(work.accounts) + len(baseline.state.service_accounts) > MAX_PROJECT_SERVICE_ACCOUNTS
+        or len(work.secrets) + len(names) > MAX_PROJECT_SECRETS
+    ):
         raise ValueError(_FAILED)

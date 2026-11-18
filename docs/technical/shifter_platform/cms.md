@@ -1,95 +1,49 @@
 # BigRAE CMS
 
-Content and asset management.
+Reference for content registration, assets, and range intent.
 
 ## Responsibility
 
 - Scenario catalog (declarative templates)
 - Asset management (agents, credentials)
 - Range content tracking (scenario associations)
-- Config hydration for Engine
+- Validated range inputs for Engine
 
 CMS owns **what** gets deployed. Engine owns **how** it gets provisioned.
 
 ## Architecture
 
-```mermaid
-graph LR
-    MC[Mission Control] --> CMS
-    CMS --> Engine
-
-    subgraph CMS
-        Templates[Scenario Templates]
-        Loader[Template Loader]
-        Hydrator[Config Hydrator]
-    end
-
-    Templates --> Loader
-    Loader --> Hydrator
-    Hydrator -->|range_config| Engine
-```
+CMS owns registered content and desired range state.
+Engine owns resource generations, dispatch, and accepted results.
+Mission Control calls CMS services; external adapters use the independent SDK.
+See [lifecycle contracts](identity-lifecycle-contracts.md) for the data flows and trust boundaries.
 
 ## Scenario Templates
 
-Declarative YAML definitions in `cms/scenarios/templates/`.
+Current scenarios are registered RAES environment packs.
+The retired `cms/scenarios/templates/` format is not a supported authoring interface.
+Use [the scenario contract reference](../handbook/scenario-contract-transition.md) for versions and compatibility.
 
 ### Template Schema
 
-```yaml
-id: string                    # Unique identifier
-name: string                  # Display name
-description: string           # User-facing description
-enabled: boolean              # Available to users
-ngfw: boolean                 # Requires NGFW
-
-instances:
-  - name: string              # Instance display name
-    role: string              # attacker, victim, dc
-    os_type: string           # kali, windows, ubuntu, from_agent
-    xdr_agent: boolean        # Deploy XDR agent
-    join_domain: boolean      # Join AD domain (optional)
-    domain_controller: boolean # Is DC (optional)
-    ai_agent: boolean         # AI-assisted (optional)
-    dc_config:                # DC configuration (optional)
-      domain_name: string
-      netbios_name: string
-
-subnets:
-  - name: string              # Subnet name
-    instances: [string]       # Instance names in subnet
-    connected_to: [string]    # Subnets this subnet needs to reach (unidirectional)
-```
+The pinned RAES distribution owns authored SDL and compiled plans.
+`shared.raes` adapts that contract; CMS validates packs through `raes-env-packs`.
+Do not create a second local schema or rename retired payload keys to imply migration.
 
 ### Available Scenarios
 
-| ID | Name | Instances | NGFW |
-|----|------|-----------|------|
-| `basic` | Basic Range | attacker, victim | No |
-| `basic_ngfw` | Basic Range with NGFW | attacker, victim | Yes |
-| `ad_attack_lab` | AD Attack Lab | attacker, dc, victim | No |
-| `ad_attack_lab_ngfw` | AD Attack Lab with NGFW | attacker, dc, victim | Yes |
+The catalog is a scoped projection of registered sources and admitted capabilities.
+Use the scenario list and detail APIs for the current caller's visible catalog.
+The [public pack collection](https://github.com/OpenRAE/bigrae/blob/dev/shifter/environment-packs/README.md) identifies the shipped smoke examples.
+A source directory alone does not establish registration or launchability.
 
 ## Hydrated Range Config
 
-CMS hydrates templates with user-specific data before calling Engine.
-
-```python
-range_config = {
-    "scenario_id": "basic",
-    "subnet_index": 5,
-    "instances": [
-        {"role": "attacker", "os_type": "kali"},
-        {
-            "role": "victim",
-            "os_type": "ubuntu",
-            "agent": {
-                "s3_key": "agents/123/abc.deb",
-                "filename": "agent.deb",
-            }
-        }
-    ],
-}
-```
+CMS verifies source identity, resolves current authority, and compiles admitted RAES intent.
+Immutable operation inputs retain plan, artifact, access, and adapter bindings.
+Those bindings are facts, not permission grants.
+The provisioner consumes serialized data through its independent reader.
+It does not load application models or execute pack code in the portal.
 
 ## Models
 
@@ -135,9 +89,8 @@ canonical value type remains
 serializers only adapt that contract at their boundaries.
 
 `cms.services.resolve_mission_control_lease_policy()` reads the effective tenant
-policy and committed eligible-group memberships. Multiple configured groups are
-folded with minimum durations and logical-AND extension admission, then bounded
-by the tenant maximum. The resolver never reads provider claim copies,
+policy and committed eligible-group memberships. Multiple configured groups use minimum durations and logical-AND extension admission.
+The tenant maximum bounds the result. The resolver never reads provider claim copies,
 workspace/organization roles, CTF teams, or caller-supplied group selectors.
 
 Cold creation and warm claim resolve and snapshot the initial, increment,
@@ -146,25 +99,32 @@ assignment transaction. Engine and provider adapters receive only the persisted
 deadline effects and do not query policy. Extension admission re-resolves the
 live boolean switch, while the generation's duration fields remain immutable.
 
-The `/api/v1/administer/mission-control/lease-policy/` surface uses browser
-session authentication with CSRF, an active-superuser service recheck, complete
-replacement/reset commands, revision compare-and-set semantics, and strict audit
-in the same transaction as each mutation. API tokens and staff-only sessions are
-not sufficient. Reset advances a durable scope revision before removing the
+The `/api/v1/administer/mission-control/lease-policy/` surface requires current `installation.manage_lease_policy` authority.
+It accepts native credentials; browser sessions also require CSRF.
+Commands replace or reset a complete policy with revision compare-and-set checks.
+Strict audit commits in the mutation transaction.
+A staff or superuser flag alone grants no authority. Reset advances a durable scope revision before removing the
 override, preventing a stale command from matching a later policy incarnation.
 
 ## Internal Modules
 
+These modules implement the owning service; they are not external integration APIs.
+
 | Module | Purpose |
-|--------|---------|
-| `cms/scenarios/loader.py` | Template loading and validation |
-| `cms/scenarios/schema.py` | Pydantic models for templates |
-| `cms/scenarios/hydrator.py` | Config hydration logic |
-| `cms/assets/services.py` | Agent CRUD, storage quota |
+| --- | --- |
+| `cms/scenarios/pack_validation.py` | Released environment-pack validation and digest checks |
+| `cms/services/_content_ingestion.py` | Native registration, custody, and audit |
+| `cms/services/_scoped_range_launch.py` | Native launch admission and dispatch |
+| `cms/services/_scoped_uploads.py` | Scoped installer admission and finalization |
 
 ## Service Interface
 
-#### Agents
+These are abbreviated service signatures.
+Native entrypoints require a current `CredentialContext` and the applicable explicit content scope.
+Use `cms/services/__init__.py` and each exported function for complete typed arguments.
+A parameter named `user` does not permit a bare Django user to replace native proof.
+
+### Agents
 
 | Function | Purpose |
 |----------|---------|
@@ -173,20 +133,20 @@ override, preventing a stale command from matching a later policy incarnation.
 | `list_agents(user)` | Get user's agents |
 | `get_agent(user, agent_id)` | Get single agent |
 
-#### Credentials
+### Credentials
 
 | Function | Purpose |
 |----------|---------|
-| `create_credential(user, type, ...)` | Create credential (scm, authcode) |
+| `create_credential(user, credential_type_slug, ...)` | Create credential (scm, authcode) |
 | `delete_credential(user, credential_id)` | Delete credential |
 | `list_credentials(user)` | Get user's credentials (includes type) |
 | `get_credential(user, credential_id)` | Get single credential |
 
-#### Ranges
+### Ranges
 
 | Function | Purpose |
 |----------|---------|
-| `create_range(user, scenario_id, agent_id, ...)` | Hydrate template, call Engine |
+| `create_range(...)` | Admit scoped RAES intent and call Engine |
 | `destroy_range(user, range_id)` | Tear down range |
 | `list_ranges(user)` | Get user's ranges |
 | `get_range(user, range_id)` | Get single range |
@@ -194,7 +154,7 @@ override, preventing a stale command from matching a later policy incarnation.
 | `pause_range(user, range_id)` | Pause range |
 | `resume_range(user, range_id)` | Resume range |
 
-#### Uploads
+### Uploads
 
 | Function | Purpose |
 |----------|---------|
@@ -202,47 +162,53 @@ override, preventing a stale command from matching a later policy incarnation.
 | `complete_upload(user, upload_token)` | Verify and finalize upload |
 | `cancel_upload(user, upload_token)` | Clean up failed upload |
 
-Agent upload cancel is a state-mutating authenticated POST. Browser-session
-callers must satisfy Django/DRF CSRF validation: explicit cancel uses JSON with
-`X-CSRFToken`, and page-unload cleanup uses a form-encoded `sendBeacon()` body
-containing `upload_token` and `csrfmiddlewaretoken`. The signed upload token is
-validated by `cms.services.cancel_upload()` and matched to the current session
-upload lock before the lock is cleared. Empty, malformed, missing-token, stale,
-wrong-user, or expired-token cancel requests leave the lock in place; stale locks
-recover through the upload lock timeout.
+Agent upload cancel is an authenticated state-changing POST.
+Browser sessions require CSRF validation.
+The explicit JSON request uses `X-CSRFToken`.
+Page-unload cleanup can use a form-encoded `sendBeacon()` body with `upload_token` and `csrfmiddlewaretoken`.
+
+`cancel_upload` verifies the signed token against retained `AgentUpload` custody and current scope authority.
+An expired signed token can identify cleanup; it does not authorize upload finalization.
+Malformed tokens or mismatched identity, asset kind, and staging key fail without storage effects.
+Cancellation records `cancelled` and strict audit under the upload and budget locks.
+The existing cleanup worker removes exact recorded objects after URL expiry.
+Uncertain cleanup retains custody and its budget reservation.
 
 Per-file size limit. A single agent installer may be at most
 `AGENT_MAX_FILE_SIZE_MB` (default 2048, that is 2 GiB using binary MiB). This
-per-file ceiling is distinct from the per-user storage quota below. It is
-enforced at three trust boundaries against one policy helper
-(`cms.assets.validation.agent_max_file_size_bytes`), so the layers cannot drift:
-the SPA guards the picked file before initiation; `initiate_upload` rejects a
-declared `file_size` above the ceiling before any quota lookup or presigned URL
-is issued; and `complete_upload` re-checks the authoritative provider-reported
-object length against the current ceiling (independently of the token's declared
-size), deleting the object and rejecting even a stale or crafted token that was
-signed under a different cap. The presigned PUT also binds the declared length
-into the provider's signed request as defense in depth, but the finalization
-check is the authoritative boundary. The SPA reads the ceiling from the
-`max_file_size_bytes` field on the agent-list response so its client-side guard
-always matches the server value.
+per-file ceiling is distinct from the per-user storage quota below.
 
-#### User Quota
+One policy helper, `cms.assets.validation.agent_max_file_size_bytes`, supplies the per-file ceiling.
+The SPA checks the selected file before initiation.
+`initiate_upload` checks declared size before quota reservation or URL issuance.
+The presigned PUT binds that declared length.
+
+`complete_upload` requires provider-reported length to equal the retained declared size.
+It also applies the current size limit before catalog admission.
+An oversized or mismatched object is refused; retained cleanup removes only its recorded objects.
+Header inspection and copying bind to the observed provider object identity.
+The SPA reads `max_file_size_bytes` from the agent-list response.
+
+### User Quota
 
 | Function | Purpose |
 |----------|---------|
 | `get_storage_used(user)` | Check storage quota |
 
-The per-user storage quota (`AGENT_USER_STORAGE_QUOTA_MB`, default 5120, that is
-5 GiB) caps the total size of a user's active agents and is a separate policy from
-the per-file size limit above. A request may satisfy the per-file limit yet still
-be rejected because it would exceed the aggregate quota; a request over both
-receives the per-file decision first.
+`AGENT_USER_STORAGE_QUOTA_MB` defaults to 5120 MiB (5 GiB).
+Despite its retained name, native upload accounting applies it to the exact content scope.
+The budget includes installed agents, retained named files, and pending cleanup reservations.
+The scope budget lock serializes admission.
 
-#### Scenarios
+This aggregate limit is separate from the per-file ceiling.
+A request can satisfy one limit and exceed the other.
+The per-file check runs before the aggregate quota check.
+Cancellation does not release uncertain cleanup reservations.
+
+### Scenarios
 
 | Function | Purpose |
 |----------|---------|
 | `list_scenarios(user)` | Get available scenarios with metadata |
-| `get_scenario(scenario_id)` | Get single scenario template |
-| `validate_scenario_requirements(scenario_id, agent)` | Check agent meets requirements |
+| `get_scenario(...)` | Get a visible registered scenario |
+| `validate_scenario_requirements(...)` | Check selected scenario requirements |

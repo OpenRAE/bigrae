@@ -8,6 +8,7 @@ import tarfile
 from importlib.resources import files
 
 import pytest
+from raes_contracts.contract_seals import seal_payload
 from raes_contracts.contracts import AdmittedTrialPlanModel, ExperimentRunModel
 
 
@@ -18,7 +19,7 @@ def encoded(value):
 def records():
     """Use the released synthetic minimal plan; create a failed partial run."""
     path = files("raes_contracts").joinpath("_corpus/fixtures/plans/admitted-trial-plan-v1/valid/minimal.json")
-    plan = AdmittedTrialPlanModel.model_validate_json(path.read_bytes())
+    plan = AdmittedTrialPlanModel.model_validate(seal_payload(AdmittedTrialPlanModel, json.loads(path.read_bytes())))
     entry = next(iter(plan.entries.values()))
     run = ExperimentRunModel.model_validate(
         {
@@ -72,7 +73,7 @@ def records():
     return plan.model_dump(mode="json"), run.model_dump(mode="json")
 
 
-def archive_bytes(*, extra=None, omit=(), change=None, record_change=None, media_types=None):
+def archive_bytes(*, extra=None, omit=(), change=None, record_change=None, media_types=None, bigrae_seal=False):
     plan, run = records()
     if record_change:
         record_change(plan, run)
@@ -108,6 +109,15 @@ def archive_bytes(*, extra=None, omit=(), change=None, record_change=None, media
             "limitations": [{"code": "capture-loss", "detail": "Synthetic failure."}],
         },
     }
+    if bigrae_seal:
+        from shifter_adapter_sdk.trial import TrialSeal
+
+        marker = TrialSeal(
+            **{key: marker[key] for key in ("run_id", "run_version", "run_status", "outcome_status")},
+            run_record_digest=marker["run_record_digest"],
+            completeness={"complete": False, "limitations": ["Synthetic capture failure."]},
+            inventory=inventory,
+        ).model_dump(mode="json")
     members["seal.json"] = encoded(marker)
     if change:
         change(members, marker)
@@ -153,7 +163,43 @@ def test_collects_failed_partial_record_without_claiming_success(tmp_path):
     assert result.member_count == 4
 
 
-@pytest.mark.parametrize("fault", ["wrong-run", "corruption", "missing-chunk", "traversal", "secret"])
+def test_collects_bigrae_sealed_partial_record(tmp_path):
+    """#2861: a non-LilRAE apparatus seals a partial RAES run record with the BigRAE seal."""
+    from shared.raes.trial_archive import validate_trial_archive
+
+    path = tmp_path / "archive.tar.gz"
+    path.write_bytes(archive_bytes(bigrae_seal=True))
+    result = validate_trial_archive(path, expected())
+    assert (result.run_status, result.outcome_status, result.evidence_complete) == ("failed", "not-evaluated", False)
+
+
+def drop_record_state(plan, run):
+    del run["record_state"]
+
+
+def claim_lilrae_record(members, marker):
+    marker["sealed_contract_versions"] = ["lilrae-trial-record/v1"]
+    members["seal.json"] = encoded(marker)
+
+
+@pytest.mark.parametrize(
+    ("change", "record_change", "message"),
+    [
+        (None, drop_record_state, "must be partial"),
+        (claim_lilrae_record, None, "Invalid BigRAE trial seal"),
+        (lambda members, marker: members.update({"seal.json": encoded(marker | {"note": "x"})}), None, "Invalid"),
+    ],
+)
+def test_bigrae_seal_refuses_archival_records_and_other_contracts(tmp_path, change, record_change, message):
+    from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
+
+    path = tmp_path / "archive.tar.gz"
+    path.write_bytes(archive_bytes(bigrae_seal=True, change=change, record_change=record_change))
+    with pytest.raises(TrialArchiveError, match=message):
+        validate_trial_archive(path, expected())
+
+
+@pytest.mark.parametrize("fault", ["wrong-run", "corruption", "missing-chunk", "traversal"])
 def test_rejects_invalid_archive_before_collection(tmp_path, fault):
     from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
 
@@ -164,8 +210,6 @@ def test_rejects_invalid_archive_before_collection(tmp_path, fault):
             members["traces/chunk-1.bin"] = b"altered bytes"
 
     extra = {"../escape": b"unsafe"} if fault == "traversal" else {}
-    if fault == "secret":
-        extra = {"traces/credential.txt": b"Bearer synthetic-private-proof"}
     path = tmp_path / "archive.tar.gz"
     path.write_bytes(
         archive_bytes(extra=extra, omit=("traces/chunk-1.bin",) if fault == "missing-chunk" else (), change=change)
@@ -287,15 +331,12 @@ def test_large_trace_is_streamed_without_requiring_one_large_json_document(tmp_p
     assert trial_archive.validate_trial_archive(path, expected()).member_count == 5
 
 
-@pytest.mark.parametrize(
-    "fault", ["credential", "foreign-record", "foreign-attempt", "missing-byte", "bad-json", "oversized-line"]
-)
+@pytest.mark.parametrize("fault", ["foreign-record", "foreign-attempt", "missing-byte", "bad-json", "oversized-line"])
 def test_json_lines_are_validated_incrementally(tmp_path, monkeypatch, fault):
     from shared.raes import trial_archive
 
     monkeypatch.setattr(trial_archive, "MAX_JSON_BYTES", 32768)
     rows = {
-        "credential": b'{"password":"synthetic-excluded-value"}\n',
         "foreign-attempt": b'{"execution_attempt_id":"foreign-attempt"}\n',
         "foreign-record": encoded(evidence_record("foreign-run", checksum="0" * 64)) + b"\n",
         "missing-byte": b'{"uri":"missing.bin","checksum":{"algorithm":"sha256","value":"' + b"0" * 64 + b'"}}\n',
@@ -326,15 +367,12 @@ def test_json_lines_scientific_records_resolve_run_evidence_references(tmp_path)
     assert validate_trial_archive(path, expected()).member_count == 5
 
 
-@pytest.mark.parametrize(
-    "body",
-    [b'{"schema_version":"experiment-evidence-record/v1","invalid":true}', b'{"password":"synthetic-excluded-value"}'],
-)
-def test_oversized_json_cannot_bypass_record_or_credential_validation(tmp_path, monkeypatch, body):
+def test_oversized_json_cannot_bypass_record_validation(tmp_path, monkeypatch):
     from shared.raes import trial_archive
 
     monkeypatch.setattr(trial_archive, "MAX_JSON_BYTES", 32768)
     path = tmp_path / "archive.tar.gz"
+    body = b'{"schema_version":"experiment-evidence-record/v1","invalid":true}'
     path.write_bytes(archive_bytes(extra={"evidence/oversized.json": body + b" " * 40000}))
     with pytest.raises(trial_archive.TrialArchiveError):
         trial_archive.validate_trial_archive(path, expected())
@@ -375,7 +413,6 @@ def test_expected_contract_versions_and_digests_are_bound(tmp_path, binding):
             {"run_ref": {"ref_kind": "run", "ref_id": "foreign-run", "ref_version": "1"}},
         ),
         ("evidence/context.data", "application/x-ndjson", {"execution_attempt_id": "foreign-attempt"}),
-        ("evidence/context.data", "application/json", {"password": "synthetic-excluded-value"}),
     ],
 )
 def test_structured_inventory_declarations_and_bindings_are_authoritative(tmp_path, filename, media_type, record):
@@ -411,3 +448,132 @@ def test_json_array_trace_keeps_original_bytes_and_validates_nested_bindings(tmp
     )
     with pytest.raises(TrialArchiveError):
         validate_trial_archive(path, current)
+
+
+SCENARIO = "sha256:" + "5" * 64
+
+
+def trial_record_archive(
+    *,
+    run_id=None,
+    record_run_id=None,
+    attempt_id="attempt-a",
+    limitations=(),
+    scenario=SCENARIO,
+    extra=None,
+    run_status=None,
+):
+    """A LilRAE trial seal: a lab-start manifest and a trial record, no RAES plan."""
+    _plan, run = records()
+    run_id = run_id or run["run_id"]
+    members = {
+        "manifest.json": encoded({"schema_version": "aptl.run-record/v2", "run_id": run_id}),
+        "trial/record.json": encoded(
+            {
+                "schema_version": "lilrae-trial-record/v1",
+                "run_id": record_run_id or run_id,
+                "attempt_id": attempt_id,
+                "scenario_sha256": scenario,
+            }
+        ),
+        **(extra or {}),
+    }
+    marker = {
+        "schema_version": "aptl.run-seal/v1",
+        "run_id": run_id,
+        "run_version": run["run_version"],
+        "seal_state": "sealed",
+        "run_status": run_status or ("aborted" if limitations else "completed"),
+        "outcome_status": "not-evaluated",
+        "run_record_digest": "sha256:" + hashlib.sha256(members["manifest.json"]).hexdigest(),
+        "sealed_contract_versions": ["lilrae-trial-record/v1"],
+        "inventory": [
+            {
+                "path": name,
+                "size_bytes": len(raw),
+                "checksum": {"algorithm": "sha256", "value": hashlib.sha256(raw).hexdigest()},
+                "media_type": "application/json",
+                "role": "manifest" if name == "manifest.json" else "trial-record",
+            }
+            for name, raw in members.items()
+        ],
+        "completeness": {"complete": not limitations, "statement": "Every file.", "limitations": list(limitations)},
+    }
+    members["seal.json"] = encoded(marker)
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w:gz") as archive:
+        for name, raw in members.items():
+            info = tarfile.TarInfo(f"{run_id}/{name}")
+            info.size = len(raw)
+            archive.addfile(info, io.BytesIO(raw))
+    return output.getvalue()
+
+
+def test_lilrae_trial_seal_binds_the_expected_attempt(tmp_path):
+    from shared.raes.trial_archive import TrialArchiveError, validate_trial_archive
+
+    path = tmp_path / "archive.tar.gz"
+    path.write_bytes(trial_record_archive())
+    with pytest.raises(TrialArchiveError):
+        validate_trial_archive(path, expected())  # A trial seal needs the admitted scenario digest.
+    result = validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
+    assert (result.run_status, result.evidence_complete, result.plan_metadata) == ("completed", True, None)
+    path.write_bytes(trial_record_archive(limitations=[{"code": "partial-trial", "detail": "Stopped."}]))
+    partial = validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
+    assert (partial.run_status, partial.evidence_complete, partial.gap_count) == ("aborted", False, 1)
+    foreign = {"evidence/record.json": encoded({"run_id": expected().run_id, "execution_attempt_id": "attempt-b"})}
+    for wrong in (
+        trial_record_archive(attempt_id="attempt-b"),
+        trial_record_archive(record_run_id="other-run"),
+        trial_record_archive(scenario="sha256:" + "6" * 64),
+        trial_record_archive(extra=foreign),
+    ):
+        path.write_bytes(wrong)
+        with pytest.raises(TrialArchiveError):
+            validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
+
+
+def test_raw_capture_blobs_are_kept_by_checksum_not_parsed_as_documents():
+    from shared.raes.trial_archive import _declared_formats
+
+    rows = [
+        {"path": "trial/transcripts/agents.red.json", "media_type": "application/json", "role": "evidence-blob"},
+        {"path": "trial/audit/audit.log", "media_type": "application/octet-stream", "role": "evidence-blob"},
+        {"path": "evidence/records/a.json", "media_type": "application/json", "role": "evidence-record"},
+        {"path": "trial/soc/notes.bin", "media_type": "application/octet-stream", "role": "evidence-record"},
+    ]
+    formats = _declared_formats({"inventory": rows}, {row["path"]: (1, "x") for row in rows})
+    assert formats == {
+        "trial/transcripts/agents.red.json": "binary",
+        "trial/audit/audit.log": "binary",
+        "evidence/records/a.json": "json",
+        "trial/soc/notes.bin": "json",
+    }
+
+
+@pytest.mark.parametrize("filename", ["trial/participants/red.json", "trial/participants/red.jsonl"])
+def test_scenario_credentials_are_preserved_in_the_original_archive(tmp_path, filename):
+    from shared.raes.trial_archive import validate_trial_archive
+
+    path = tmp_path / "archive.tar.gz"
+    original = b'{"password":"scenario-fixture","note":"Bearer synthetic-private-proof"}'
+    path.write_bytes(trial_record_archive(extra={filename: original}))
+    before = path.read_bytes()
+    validate_trial_archive(path, expected(scenario_sha256=SCENARIO))
+    assert path.read_bytes() == before
+
+
+def test_run_record_only_intake_keeps_bytes_and_identity_and_reads_only_the_seal_status(tmp_path):
+    """Experiment dispatch reads a LilRAE run's status; it parses no other record."""
+    from shared.raes.trial_archive import TrialArchiveError
+    from shared.raes.trial_archive_run_record import validate_trial_run_record
+
+    path = tmp_path / "archive.tar.gz"
+    opaque = {"materialization/snapshot.b": b"name: not json\n"}
+    path.write_bytes(trial_record_archive(run_status="failed", extra=opaque))
+    result = validate_trial_run_record(path, expected())
+    assert (result.run_status, result.outcome_status) == ("failed", "not-evaluated")
+
+    path.write_bytes(trial_record_archive(run_id="another-run"))
+    with pytest.raises(TrialArchiveError):
+        validate_trial_run_record(path, expected())

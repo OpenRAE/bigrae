@@ -20,9 +20,7 @@ Packer needs a VPC and subnet to launch its builder instance, but it does **not*
 need the portal VPC. `vpc_id` and `subnet_id` in `variables.pkr.hcl` have no
 defaults; the committed `dev.pkrvars.hcl` ships only placeholders
 (`vpc-xxxx` / `subnet-xxxx`) so no live account id is tracked in the public repo.
-The real builder network is supplied at build time: the CI path reads the
-`PACKER_BUILD_{VPC,SUBNET}_ID_<ENV>` repository variables (below), and a local
-build takes them from an uncommitted operator override. Either way the build uses
+CI reads the builder network from `PACKER_BUILD_{VPC,SUBNET}_ID_<ENV>` repository variables. Local builds use an uncommitted operator override. Either way the build uses
 an existing general-purpose VPC/subnet, independent of the portal Terraform that
 has not been applied yet. The Portal stack consumes the AMIs only as SSM data
 sources, which is a soft, one-directional dependency.
@@ -58,10 +56,7 @@ public subnet with outbound internet egress.
 
 Since issue #1656 the base `build` job in `packer.yml` assumes a dedicated
 least-privilege image-pipeline role (`github_actions_image` in
-`platform/terraform/global/iam`) instead of the broad deploy role. That role
-trusts only the `dev`/`main` protected-branch OIDC subjects and can pass only the
-exact `shifter-<env>-range-range-instance` role to EC2, so a base-image
-verification instance can receive only the range role. The `check_tf_iam_role_naming`
+`platform/terraform/global/iam`) instead of the broad deploy role. That role trusts exact protected `dev`/`main` OIDC subjects. It may pass only `shifter-<env>-range-range-instance` to EC2. Base-image verification cannot select another role. The `check_tf_iam_role_naming`
 guardrail (ADR-004-R22) pins those invariants.
 
 The implementation PR ships the Terraform, workflow wiring, and guardrail but does
@@ -108,10 +103,7 @@ keeps its own deploy-role secret and is unaffected.
 The `Packer AMI Build` workflow (`.github/workflows/packer.yml`) is
 `workflow_dispatch` on a `self-hosted` runner. It builds one AMI type per run,
 extracts the AMI id from the build manifest, and writes
-`/shifter/ami/<type>` with `aws ssm put-parameter --overwrite`. The build runs
-only from a protected ref (`dev` or `main`); a dispatch from a feature branch is
-rejected before AWS authentication, because the job executes checked-out code and
-publishes SSM pointers. Since issue #1656 the base `build` job assumes a
+`/shifter/ami/<type>` with `aws ssm put-parameter --overwrite`. Builds require protected `dev` or `main` refs. Feature-branch dispatch is rejected before AWS authentication because the job executes checked-out code and publishes SSM pointers. Since issue #1656 the base `build` job assumes a
 dedicated least-privilege image-pipeline role, not the broad deploy role (see
 [Base-image build IAM role](#base-image-build-iam-role-one-time-cutover)).
 
@@ -130,18 +122,11 @@ committed placeholder without any live id entering the tree. A missing variable
 fails the build closed.
 
 For `kali`, `ubuntu`, and `windows` the workflow first runs a fresh-boot
-validation gate (issue #1633) before it seeds SSM. The gate boots the exact
-built AMI in a runtime-equivalent range subnet with the range instance profile,
-waits for the guest to register with SSM (registration requires the guest to
-resolve the regional SSM endpoint, so a successful registration is the durable
-proof that guest DNS works), resolves the endpoint through the guest system
-resolver, reboots, and confirms both again. The SSM parameter is overwritten
+validation gate (issue #1633) before it seeds SSM. The gate boots the exact AMI in a range-equivalent subnet with the range instance profile. It waits for SSM registration and verifies regional SSM DNS resolution through the guest resolver. It reboots and repeats both checks. Successful registration proves guest DNS resolution required by SSM. The SSM parameter is overwritten
 only after the gate passes; a failed candidate leaves the previous known-good id
 in place.
 
-The gate reads its subnet, security group, and instance profile from **trusted
-repository Actions variables**, not dispatch inputs, so the candidate's launch
-identity cannot be chosen at dispatch time. Set these once per account (Settings
+The gate reads subnet, security group, and instance profile from **trusted repository Actions variables**. Dispatch inputs cannot select the candidate's launch identity. Set these once per account (Settings
 -> Secrets and variables -> Actions -> Variables), suffixed by environment
 (`_DEV`):
 
@@ -189,9 +174,7 @@ aws ssm put-parameter --name /shifter/ami/kali --type String \
   --value "$AMI_ID" --overwrite --region us-east-2
 ```
 
-Repeat for `ubuntu` and `windows`. Do not build `dc` locally: `dc.pkr.hcl` is a
-generalized Windows image with the AD DS feature installed but not promoted, and
-publishing it to `/shifter/ami/dc` would corrupt the pre-promoted DC contract.
+Repeat for `ubuntu` and `windows`. Do not build `dc` locally for publication. `dc.pkr.hcl` installs AD DS without promoting the generalized Windows image. Publishing it to `/shifter/ami/dc` would break the pre-promoted DC contract.
 Seed `/shifter/ami/dc` from `dc-amis.json` instead:
 
 ```bash
@@ -206,27 +189,20 @@ aws ssm put-parameter --name /shifter/ami/dc --type String \
 Domain Controller (domain `internal.shifter`, NetBIOS `INTSHIFTER`). The AMI ids
 live in `shifter/packer/dc-amis.json`; no Packer source rebuilds them. Both the
 build workflow (`ami_type=dc`) and `packer-promote.yml` publish the checked-in id
-rather than a fresh build. Each reads `dc-amis.json` from a dedicated checkout of
-the protected `dev` ref and resolves it through the shared validator
-`shifter/packer/scripts/bake/resolve-dc-ami.sh`, which fails closed unless the id
-exists, is AMI-shaped, and names an image EC2 reports as `available` and owned by
-the target account; the prod promote job additionally runs only from a protected
-ref (`dev`/`main`). See issue #1656.
+rather than a fresh build.
 
-When you re-bake the pre-promoted DC (see
-[AMI management](../technical/platform_infrastructure/ami-management.md)), set the
-DC's DNS forwarders to the link-local AmazonProvidedDNS so external names such as
-the regional SSM endpoint resolve deterministically:
+Each publisher reads `dc-amis.json` from a dedicated protected-`dev` checkout. The shared `shifter/packer/scripts/bake/resolve-dc-ami.sh` validator checks presence and AMI syntax. EC2 must report the image `available` and owned by the target account.
+
+Production promotion additionally requires protected `dev` or `main`. See issue #1656.
+
+When rebaking a promoted DC, set its forwarders to link-local AmazonProvidedDNS. This supplies deterministic external resolution, including the regional SSM endpoint:
 
 ```powershell
 Set-DnsServerForwarder -IPAddress 169.254.169.253 -PassThru
 ```
 
 This is the DC-role equivalent of the `FallbackDNS` baked into the Linux guests.
-Do not apply the Linux or Windows-victim first-boot DNS reset to the DC: a
-promoted DC owns its own DNS (its client points at itself and the DNS Server role
-forwards outbound queries), so resetting the adapter to DHCP DNS would break
-domain resolution.
+Do not apply Linux or Windows-victim first-boot DNS reset to a promoted DC. Its client points at itself and its DNS Server forwards external queries. DHCP DNS reset would break domain resolution.
 
 ## Verify
 

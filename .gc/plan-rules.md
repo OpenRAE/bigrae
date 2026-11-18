@@ -25,11 +25,10 @@ architectural defaults, and Kubernetes-specific validators previously in
 - Plans that change the SonarCloud scan MUST keep scanner identity out of
   `sonar-project.properties`: the scan step consumes `SONAR_PROJECT_KEY` and
   `SONAR_ORGANIZATION` from non-secret repository variables, while shared
-  analysis configuration stays committed. The scan attempt MUST be gated on
-  the upstream `github.repository_id` and `github.repository_owner_id` from
-  `docs/adr/repository-identity.json` (ADR-069), never on either variable being
-  non-empty, so a missing or renamed variable fails loudly in the upstream
-  repository and forks skip deliberately. Preserve the `SONAR_TOKEN` secret boundary, PR
+  analysis configuration stays committed. The scan attempt MUST use the upstream `github.repository_id` and `github.repository_owner_id`
+  from `docs/adr/repository-identity.json` (ADR-069) as its gate.
+  A non-empty variable MUST NOT be the scan gate.
+  Missing or renamed variables must fail loudly upstream; forks skip deliberately. Preserve the `SONAR_TOKEN` secret boundary, PR
   `sonar.qualitygate.wait=true`, action SHA pinning, and same-delivery
   repository-variable activation/readback.
 - Plans that touch Terraform under `platform/terraform/` MUST pass
@@ -51,16 +50,13 @@ architectural defaults, and Kubernetes-specific validators previously in
 - Plans MUST NOT hand-edit `CHANGELOG.md` or add `changelog.d/` fragments.
   [release-please](https://github.com/googleapis/release-please) owns the
   product version and `CHANGELOG.md`, deriving both mechanically from the
-  Conventional Commit history on `main` via its release PR (ADR-042). The
-  plan's only changelog obligation is that the eventual PR title is a valid
-  Conventional Commit type and subject (enforced by `pr-title-lint.yml` on
-  feature PRs to `dev`); release-bearing changes use `feat`, `fix`, or `perf`,
-  or a breaking marker. See `docs/DEVELOPMENT_WORKFLOW.md`.
-- Plans that add a major platform feature MUST add it to the documentation
-  coverage manifest (`docs/adr/documentation-coverage.yaml`) with at least one
-  user doc and one technical doc; the `documentation-coverage` adr_guard check
-  (ADR-022-R1 / GEN-001) fails when a referenced doc is missing, deprecated, or
-  not linked from an `index.md`.
+  Conventional Commit history on `main` via its release PR (ADR-042). The eventual PR title MUST use a valid Conventional Commit type and subject.
+  `pr-title-lint.yml` enforces that shape on feature PRs to `dev`.
+  Release-bearing changes use `feat`, `fix`, `perf`, or a breaking marker. See `docs/DEVELOPMENT_WORKFLOW.md`.
+- Plans that add a major platform feature MUST add it to `docs/adr/documentation-coverage.yaml`.
+  The entry MUST include at least one user doc and one technical doc.
+  The `documentation-coverage` ADR guard enforces ADR-022-R1 / GEN-001.
+  It fails for missing or deprecated references, or missing links from an `index.md`.
 - Changes to guardrail files (`.github/workflows/**`, `.github/CODEOWNERS`,
   `.github/pull_request_template.md`, `.github/copilot-instructions.md`,
   `.github/dependabot.yml`, `.pre-commit-config.yaml`,
@@ -69,7 +65,7 @@ architectural defaults, and Kubernetes-specific validators previously in
   `.kube-linter.yaml`, `.claude/settings.json`, `.claude/hooks/**`,
   `scripts/adr_guard/**`, `release-please-config.json`, `docs/adr/**`) MUST
   stay documented in the ADR enforcement docs or registry.
-# Private scenario boundary
+## Private scenario boundary
 
 Plans and all generated issue, PR, review, and completion metadata MUST describe
 generic platform behavior using synthetic examples. They MUST NOT disclose

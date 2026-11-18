@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING
 from django.db import transaction
 from django.utils import timezone
 from shifter_adapter_sdk.runtime import InspectionInput, InspectionResult, PluginManifest, RuntimeInput
+from shifter_adapter_sdk.validation import ValidationInput
 
 from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log
 from shared.cloud.exceptions import CloudTaskError
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
-def _pull_secret(row: RuntimePluginInstallation, request: InspectionInput | RuntimeInput) -> str:
+def _pull_secret(row: RuntimePluginInstallation, request: InspectionInput | RuntimeInput | ValidationInput) -> str:
     """Create a per-invocation immutable image-pull secret, never mount it in a pod."""
     if not row.registry_credentials:
         return ""
@@ -56,7 +57,9 @@ def _file_secret(request: RuntimeInput, material: dict[str, bytes]) -> str:
     )
 
 
-def _owned_secret(request: InspectionInput | RuntimeInput, name: str, secret_type: str, data: dict[str, str]) -> str:
+def _owned_secret(
+    request: InspectionInput | RuntimeInput | ValidationInput, name: str, secret_type: str, data: dict[str, str]
+) -> str:
     """Create or verify an immutable Secret owned by this exact reserved Job."""
     batch, core, _, api_exception = load_kubernetes_api()
     job_name = plugin_task_ref(request).split("/", 1)[1]

@@ -1,4 +1,4 @@
-"""Staff-session-only read API for durable audit events."""
+"""Native policy audit reads and the retained legacy controller implementation."""
 
 from __future__ import annotations
 
@@ -199,7 +199,7 @@ _POLICY_AUDIT_SCHEMA_AUTH: list[dict[str, list[str]]] = [{"ApiTokenAuth": []}, {
     retrieve=extend_schema(auth=_POLICY_AUDIT_SCHEMA_AUTH),  # type: ignore[arg-type]
 )
 class PolicyAuditLogViewSet(AuditLogViewSet):
-    """S8 policy-aware audit API, prepared without changing current routing."""
+    """List and retrieve audit events under current native policy."""
 
     authentication_classes = [ApiTokenAuthentication, SessionAuthentication]
     permission_classes = [IsAuthenticatedSessionOrApiToken]

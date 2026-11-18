@@ -47,8 +47,6 @@ if TYPE_CHECKING:
 
     from cms.models import RaesPackageSource, Request
     from shared.enums import RangeSource
-    from shared.model_access import OwnedReference
-    from shared.model_access.reservation import ModelLaunchScope
     from shared.range_instantiation_policy import BackendAdmission
     from shared.schemas.range import RangeContext
 
@@ -194,7 +192,6 @@ def create_raes_native_range(
     range_source: RangeSource | None = None,
     workspace_uuid: str | UUID | None = None,
     scope: ResourceScope | None = None,
-    model_sources: dict | None = None,
     event_options: NativeEventLaunchOptions | None = None,
 ) -> RangeContext:
     """Launch a registered RAES package through the native provisioning path.
@@ -219,11 +216,10 @@ def create_raes_native_range(
                 scope=scope,
                 range_source=range_source,
                 workspace_uuid=workspace_uuid,
-                model_sources=model_sources,
                 event=event_options or NativeEventLaunchOptions(),
             ),
         )
-    if scope is not None or model_sources or event_options is not None:
+    if scope is not None or event_options is not None:
         raise CMSError("Range launch scope unavailable")
     return _create_raes_native_range_impl(
         user,
@@ -242,9 +238,6 @@ def _create_raes_native_range_impl(  # NOSONAR -- mirrors the stable launch serv
     instantiation_purpose: InstantiationPurpose,
     workspace_uuid: str | UUID | None = None,
     enforced_deadline: datetime | None = None,
-    model_admission_subject: OwnedReference | None = None,
-    model_launch_scope: ModelLaunchScope | None = None,
-    model_sources: dict | None = None,
     content_authorizer: User | None = None,
     ctf_policy_workspace_id: int | None = None,
 ) -> RangeContext:
@@ -291,9 +284,6 @@ def _create_raes_native_range_impl(  # NOSONAR -- mirrors the stable launch serv
             workspace_id=cms_request.workspace_id,
             range_source=range_source.value,
             range_spec=None,
-            model_launch_scope=model_launch_scope.model_dump(mode="json") if model_launch_scope else None,
-            model_sources=model_sources or {},
-            model_package_digest=source.package_digest,
             expires_at=lease.expires_at,
             maximum_expires_at=lease.maximum_expires_at,
             extension_days=lease.extension_days,
@@ -345,39 +335,6 @@ def _create_raes_native_range_impl(  # NOSONAR -- mirrors the stable launch serv
     except ValueError as exc:
         raise CMSError(str(exc)) from exc
 
-    from django.conf import settings
-
-    from cms.services._model_source_selection import resolve_launch_sources
-    from shared.model_access import ContractError
-    from shared.model_access.sources import ModelSourceSelection
-    from workspaces.services import OrganizationAuthorizationError, WorkspaceAuthorizationError
-
-    try:
-        model_sources = ModelSourceSelection.model_validate(model_sources or {}).model_dump(mode="json")
-        resolve_launch_sources(
-            user, workspace_id, model_sources, catalog=getattr(settings, "MODEL_ACCESS_CATALOG", None)
-        )
-    except (ValueError, ContractError, WorkspaceAuthorizationError, OrganizationAuthorizationError):
-        raise CMSError(
-            "Selected model sources are unavailable. Refresh the selection and try again.",
-            details={"code": "model-source-unavailable"},
-        ) from None
-
-    # PLAT-202: required model access is a fail-closed admission decision enforced
-    # here, before any dispatch (cold, warm-claim, or non-user), so every launch
-    # family is gated once. Distinct from the best-effort capacity path: a required
-    # denial or indeterminate outcome refuses the launch rather than proceeding. A
-    # scenario with no authored model need passes through unchanged.
-    from cms.services._model_admission import assert_launch_model_access
-
-    assert_launch_model_access(
-        user=user,
-        scenario_id=scenario,
-        egress_mode=egress_mode,
-        subject=model_admission_subject,
-        package_digest=source.package_digest,
-    )
-
     _request_id, _cms_request, range_instance, egress_mode = _reserve_active_range_slot(
         user,
         range_source,
@@ -389,19 +346,6 @@ def _create_raes_native_range_impl(  # NOSONAR -- mirrors the stable launch serv
     )
 
     try:
-        # PLAT-202/#2119: _reserve_active_range_slot resolves egress under the
-        # workspace lock, and that authoritative posture — not the earlier
-        # preliminary read — is what dispatch uses. Re-run the model gate against
-        # it so a posture change between admission and reservation cannot dispatch
-        # a required-model range with an incompatible egress. A denial here is
-        # released and marked FAILED by the surrounding handler.
-        assert_launch_model_access(
-            user=user,
-            scenario_id=scenario,
-            egress_mode=egress_mode,
-            subject=model_admission_subject,
-            package_digest=source.package_digest,
-        )
         if content_authorizer is None:
             _dispatch_raes_package(request_id, user, source, backend_admission, workspace_id, egress_mode)
         else:

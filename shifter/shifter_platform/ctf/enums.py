@@ -352,6 +352,17 @@ class ScoreboardVisibility(StrEnum):
         return [(member.value, member.name.title()) for member in cls]
 
 
+class ScoreboardKind(StrEnum):
+    """Board a participant scoreboard read selects (#2968).
+
+    INDIVIDUAL: Participant rankings; available for every event.
+    TEAM: Team rankings; available only for a team-mode event.
+    """
+
+    INDIVIDUAL = "individual"
+    TEAM = "team"
+
+
 class LiveNotificationKind(StrEnum):
     """Live notification kinds an event can select (CTF-802, ADR-072).
 
@@ -476,6 +487,7 @@ __all__ = [
     "RecoveryStrategy",
     "ScheduledTaskStatus",
     "ScheduledTaskType",
+    "ScoreboardKind",
     "ScoreboardVisibility",
     "ScoringMode",
     "SpareRangeStatus",

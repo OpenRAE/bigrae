@@ -1,6 +1,8 @@
 # Terraform
 
-Infrastructure layout and local Terraform commands.
+This reference describes current Terraform ownership and contributor command syntax.
+Use [Install on Google Cloud](../../getting-started/install-gcp.md) for operator installation.
+Use [deployment configuration and recovery](../../dev/deployment-configuration.md) for state selection and historical cleanup.
 
 ## Directory Structure
 
@@ -16,19 +18,18 @@ platform/terraform/
 │   │   │   ├── main.tf
 │   │   │   ├── backend.tf
 │   │   │   └── terraform.tfvars
+│   │   ├── eks/              # EKS control plane and workload identities
 │   │   └── range/            # Range VPC infrastructure
 │   │       ├── main.tf
 │   │       ├── backend.tf
 │   │       └── terraform.tfvars
-│   ├── prod/                 # Same structure as dev
-│   └── proof/                # Same structure as dev
+│   └── prod/                # Retained AWS roots
 ├── modules/                  # Reusable modules
 │   ├── portal/
-│   │   ├── alb/              # Application Load Balancer, WAF
 │   │   ├── backup-alerts/    # Backup failure alerting
 │   │   ├── cognito/          # User pool, OIDC
-│   │   ├── ctfd/             # CTFd host and networking
-│   │   ├── ec2/              # Portal instances
+│   │   ├── eks/              # Cluster, ingress, Guacamole, and workload identities
+│   │   ├── eks-provisioner-env/ # Range and data-plane runtime metadata
 │   │   ├── messaging/        # SNS/SQS for events
 │   │   ├── rds/              # PostgreSQL database
 │   │   ├── redis/            # ElastiCache Redis
@@ -38,16 +39,12 @@ platform/terraform/
 │   │   └── vpc/              # Portal VPC, subnets, inspection firewall
 │   ├── range/
 │   │   └── vpc/              # Range VPC, Network Firewall
-│   ├── engine-provisioner/   # ECS task for Shifter Engine
 │   ├── engine-state/         # Engine state bucket and DynamoDB runtime locks
-│   ├── guacamole/            # Browser-based RDP
 │   ├── log-aggregation/      # Centralized logging
 │   └── ecr/                  # Container registries
 └── global/                   # Cross-environment resources
     ├── iam/                  # GitHub OIDC, roles
     ├── github-runner/        # Self-hosted runners (+ runner-health)
-    ├── tssummit/             # Technical Summit event stack
-    ├── tssummit-ranges/      # Technical Summit event ranges
     └── dev-box/              # Windows dev instance
 ```
 
@@ -56,10 +53,14 @@ GCP work lives in a parallel tree so it cannot collide with the AWS deploy path:
 ```
 platform/terraform/gcp/
 ├── environments/
-│   └── gcp-dev/             # GCP control-plane foundation for gcp-dev
+│   └── platform/            # Shared execution root
 └── modules/
     └── platform-core/       # VPC, GKE, Cloud SQL, Memorystore, Artifact Registry, Pub/Sub, GCS, ingress IP, Cloud Armor, optional DNS, secrets
 ```
+
+Current source retains only the shared GCP execution directory.
+An operator deployment keeps values in its private bundle.
+Contributor CI would need an explicitly authorized target and value source.
 
 The GCP control plane is packaged separately as a Helm chart:
 
@@ -99,6 +100,11 @@ locks. It is not the Terraform backend lock.
 
 ## Working Locally
 
+Obtain authority for the selected deployment before an apply, import, destroy, or state change.
+Use the original private backend inputs and review the saved plan.
+State and plan files can contain secrets; keep them in owner-only private storage.
+These contributor examples do not authorize production changes.
+
 ### Initialize
 
 ```bash
@@ -117,9 +123,9 @@ terraform validate
 `scripts/bootstrap/deploy.py gcp-deploy` creates and hardens the GCS backend
 bucket `${project_id}-terraform-state` before it runs `terraform init`, for an
 operator and for CI. A deployment that runs without GitHub keeps its Terraform
-values in its deployment input bundle. The committed `gcp-dev` tfvars file
-carries the public edge and operator-access settings of that CI-deployed
-environment:
+values in its deployment input bundle. Retained environment tfvars provide contributor examples.
+No GCP target is currently selectable in `deploy.yml`.
+A deployment bundle can contain these public edge and operator-access settings:
 
 ```hcl
 public_hostname             = "shifter.example.com"
@@ -152,20 +158,13 @@ AWS_PROFILE=$PANW_SHIFTER_DEV_PROFILE terraform apply
 
 ### RDS Change Application
 
-RDS changes that AWS can apply during a deploy (instance class, storage
-size, engine version, and dynamic parameter-group fields) must not be
-treated as complete until AWS reports no pending modifications for the
-affected instance. For dev-only RDS resources, prefer explicit
+An RDS apply is incomplete while AWS reports pending modifications for the affected instance. This includes instance class, storage, engine, and dynamic parameter changes. For dev-only RDS resources, prefer explicit
 `apply_immediately` module inputs that default to applying intended changes
 during the current deploy. Production must keep change timing deliberate:
 either pass an explicit maintenance-window choice through the same module
 surface or use a separate reviewed change flow.
 
-`apply_immediately` does NOT remediate every RDS change. Static
-parameter-group fields and major version upgrades still require an instance
-reboot to take effect, and modify-class operations can still leave
-`PendingModifiedValues` populated until the underlying maintenance action
-completes. The post-apply check will surface that residual state, but it does
+`apply_immediately` does NOT remediate every RDS change. Static parameters and major version upgrades can require a reboot. Class changes can retain `PendingModifiedValues` until maintenance completes. Plan that completion explicitly. The post-apply check will surface that residual state, but it does
 not by itself drive a reboot. When you change one of those fields, plan a
 follow-up reboot (or a maintenance-window-gated path) explicitly.
 
@@ -207,23 +206,17 @@ and the `.local`/`.auto.tfvars` values win. AWS portal CI deploy workflows
 render `local.auto.tfvars` from GitHub secrets; see
 [`docs/dev/deploy-secrets.md`](../../dev/deploy-secrets.md).
 
-The AWS portal deploy job derives its single-instance vs. ASG path from the
-applied Terraform state, not from a GitHub Actions variable. The portal roots
-export `enable_autoscaling`, `ec2_instance_id`, and `asg_name`; the deploy
-workflow reads those outputs before updating the portal image. In
-single-instance mode it also verifies that exactly one running EC2 instance is
-tagged for the portal before sending the SSM deploy command. In ASG mode it
-refreshes the Terraform-named ASG and verifies the new image tag on every
-in-service instance after the refresh.
+Current AWS application workloads deploy through the isolated EKS lifecycle and shared Helm chart.
+The portal root supplies persistent services; it does not run the application containers.
+Retired `enable_autoscaling`, `ec2_instance_id`, and `asg_name` portal deployment recipes are historical.
+Use [EKS operations](../../ops/portal-eks-operations.md) for deployment and recovery.
 
 ### In Cloud Secret Managers (Runtime)
 
 Database passwords, API keys, and runtime signing keys are stored in the cloud
 secret manager and accessed at runtime. For the current `gcp-dev` slice,
 Terraform seeds the app, DB, and Guacamole runtime bundles needed for first
-boot. GCP no longer relies on a separately managed OIDC runtime secret; it
-provisions Identity Platform directly and bootstrap seeds the first operator
-account for the secure portal path. The secure portal flow uses browser-side
+boot. GCP provisions Identity Platform directly. Bootstrap seeds the first provider account. There is no separate OIDC runtime secret for this path. The secure portal flow uses browser-side
 Google auth and app-side verified-token exchange rather than server-side
 password handling in Django.
 
@@ -370,8 +363,8 @@ terraform init
 
 ## Don'ts
 
-- Don't use `terraform apply -auto-approve` locally
-- Don't hardcode values that vary by environment
-- Don't store state locally (use the existing remote backend for the target environment)
-- Don't skip `terraform plan` review
-- Don't apply prod changes without PR review
+- do not use `terraform apply -auto-approve` locally
+- do not hardcode values that vary by environment
+- do not store state locally (use the existing remote backend for the target environment)
+- do not skip `terraform plan` review
+- do not apply prod changes without PR review

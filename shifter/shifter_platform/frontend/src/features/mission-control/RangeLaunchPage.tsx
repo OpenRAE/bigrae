@@ -3,8 +3,6 @@ import { Link, useNavigate } from "react-router";
 
 import { Loader2 } from "lucide-react";
 
-import { ModelSourcePicker } from "@/components/ModelSourcePicker";
-import type { ModelSourceSelection } from "@/api/model-sources";
 
 import { describeMutationError } from "@/api/errors";
 import { useAgents, useLaunchRange, useLaunchWorkspaces, useScenarios } from "@/api/mission-control";
@@ -24,11 +22,11 @@ interface FormErrors {
   agent?: string;
 }
 
-/** Require both a scenario and an agent to be selected before launching. */
-function validateLaunchForm(scenarioId: string, agentId: string): FormErrors {
+/** Require a scenario and any agent upload that its contract needs. */
+function validateLaunchForm(scenarioId: string, agentId: string, requiresAgent: boolean): FormErrors {
   const errors: FormErrors = {};
   if (!scenarioId) errors.scenario = "Select a scenario to launch.";
-  if (!agentId) errors.agent = "Select an agent to launch.";
+  if (requiresAgent && !agentId) errors.agent = "Select an agent to launch.";
   return errors;
 }
 
@@ -39,6 +37,14 @@ function FieldError({ id, message }: Readonly<{ id: string; message?: string }>)
       {message}
     </p>
   );
+}
+
+/** Only an explicit no-agent contract permits launch without an upload. */
+function needsAgent(scenario: ScenarioListItem | undefined): boolean {
+  const requirements = scenario?.agent_requirements;
+  return !(requirements?.requires_windows === false
+    && requirements.requires_linux === false
+    && requirements.has_from_agent === false);
 }
 
 interface LaunchOptionsFormProps {
@@ -52,9 +58,6 @@ interface LaunchOptionsFormProps {
   onSubmit: (event: FormEvent) => void;
   onCancel: () => void;
   isPending: boolean;
-  modelSources: ModelSourceSelection;
-  onModelSourcesChange: (value: ModelSourceSelection) => void;
-  workspace: string;
 }
 
 /** The scenario/agent picker form, once options have loaded successfully. */
@@ -68,7 +71,7 @@ function LaunchOptionsForm({
   errors,
   onSubmit,
   onCancel,
-  isPending, modelSources, onModelSourcesChange, workspace,
+  isPending,
 }: Readonly<LaunchOptionsFormProps>) {
   const selectedScenario = scenarioList.find((scenario) => scenario.id === scenarioId);
 
@@ -101,7 +104,7 @@ function LaunchOptionsForm({
             <FieldError id="f-scenario-e" message={errors.scenario} />
           </div>
 
-          <div className="flex flex-col gap-2">
+          {needsAgent(selectedScenario) ? <div className="flex flex-col gap-2">
             <Label htmlFor="f-agent">Agent</Label>
             <Select value={agentId} onValueChange={onAgentIdChange}>
               <SelectTrigger
@@ -121,8 +124,7 @@ function LaunchOptionsForm({
               </SelectContent>
             </Select>
             <FieldError id="f-agent-e" message={errors.agent} />
-          </div>
-          <ModelSourcePicker scenario={scenarioId} workspace={workspace} value={modelSources} onChange={onModelSourcesChange} disabled={isPending} />
+          </div> : null}
         </CardContent>
         <CardFooter className="justify-end gap-2">
           <Button type="button" variant="ghost" onClick={onCancel}>
@@ -170,15 +172,7 @@ function LaunchOptionsSection({ optionsError, optionsLoading, ...formProps }: Re
   return <LaunchOptionsForm {...formProps} />;
 }
 
-/**
- * Launch-a-range form (#1370). Mirrors the legacy `static/js/dashboard.js`
- * launch flow but only the simple single-agent path
- * (`LaunchRangeSerializer.agent_id`): every scenario returned by
- * `useScenarios()` is already launchable (the backend's
- * `list_launchable_scenarios` filters that), and the SPA does not yet
- * replicate the legacy from-agent/Windows/Linux OS-map UI, so a scenario plus
- * one agent is always sufficient here.
- */
+/** Launch an authorized scenario in the selected workspace. */
 export function RangeLaunchPage() {
   const navigate = useNavigate();
   const [workspace, setWorkspace] = useState("");
@@ -190,7 +184,6 @@ export function RangeLaunchPage() {
   const [scenarioId, setScenarioId] = useState("");
   const [agentId, setAgentId] = useState("");
   const [errors, setErrors] = useState<FormErrors>({});
-  const [modelSources, setModelSources] = useState<ModelSourceSelection>({ aliases: [] });
 
   const scenarioList = scenarios.data?.scenarios ?? [];
   const agentList = agents.data?.agents ?? [];
@@ -202,12 +195,13 @@ export function RangeLaunchPage() {
 
   function onSubmit(event: FormEvent) {
     event.preventDefault();
-    const nextErrors = validateLaunchForm(scenarioId, agentId);
+    const requiresAgent = needsAgent(scenarioList.find((scenario) => scenario.id === scenarioId));
+    const nextErrors = validateLaunchForm(scenarioId, agentId, requiresAgent);
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length > 0) return;
 
     launch.mutate(
-      { scenario: scenarioId, agent_id: Number(agentId), ...(workspace ? { workspace_uuid: workspace } : {}), ...(modelSources.aliases.length ? { model_sources: modelSources } : {}) },
+      { scenario: scenarioId, ...(requiresAgent ? { agent_id: Number(agentId) } : { agents: {} }), ...(workspace ? { workspace_uuid: workspace } : {}) },
       { onSuccess: () => navigate(missionControlDashboardPath()) },
     );
   }
@@ -222,7 +216,7 @@ export function RangeLaunchPage() {
         <span className="text-foreground">Launch</span>
       </nav>
 
-      <PageHeader title="Launch a range" description="Choose a scenario and an agent to start a new range." />
+      <PageHeader title="Launch a range" description="Choose a workspace and a scenario to start a range." />
 
       {serverError ? (
         <Alert variant="destructive" className="mb-4">
@@ -249,7 +243,6 @@ export function RangeLaunchPage() {
               setWorkspace(event.target.value);
               setScenarioId("");
               setAgentId("");
-              setModelSources({ aliases: [] });
             }}
           >
             {launchWorkspaces.data.personal_available ? <option value="">Personal workspace</option> : null}
@@ -267,15 +260,13 @@ export function RangeLaunchPage() {
         scenarioList={scenarioList}
         agentList={agentList}
         scenarioId={scenarioId}
-        onScenarioIdChange={(value) => { setScenarioId(value); setModelSources({ aliases: [] }); }}
+        onScenarioIdChange={setScenarioId}
         agentId={agentId}
         onAgentIdChange={setAgentId}
         errors={errors}
         onSubmit={onSubmit}
         onCancel={() => navigate(missionControlDashboardPath())}
         isPending={launch.isPending}
-        modelSources={modelSources} onModelSourcesChange={setModelSources}
-        workspace={workspace}
       />
     </div>
   );

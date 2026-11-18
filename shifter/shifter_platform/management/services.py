@@ -20,11 +20,8 @@ from shared.audit import (
 )
 from shared.constants import USER_CANNOT_BE_NONE
 from shared.log_sanitize import safe_log_fingerprint, safe_log_value
-from shared.model_access import AuthorityInvalidation, AuthorityState, OwnedReference
-from shared.model_access.authority_port import invalidate_authority, suppress_authority_invalidation_signals
 
 from . import identity_cutover as _identity_cutover
-from . import model_access_authority as _model_access_authority
 from . import personal_credentials as _personal_credentials
 from . import policy as _policy
 from . import principals as _principals
@@ -69,16 +66,7 @@ resolve_service_credential = _principals.resolve_service_credential
 resolve_service_credential_reference = _principals.resolve_service_credential_reference
 set_service_contact = _principals.set_service_contact
 
-ModelAccessGroupEligibilityView = _model_access_authority.ModelAccessGroupEligibilityView
-ModelAccessGroupScope = _model_access_authority.ModelAccessGroupScope
-ModelAccessIdentityAuthorityError = _model_access_authority.ModelAccessIdentityAuthorityError
-is_platform_operator = _model_access_authority.is_platform_operator
-model_access_principals_for_users = _model_access_authority.model_access_principals_for_users
-model_access_user_references_for_principals = _model_access_authority.model_access_user_references_for_principals
-resolve_model_access_group = _model_access_authority.resolve_model_access_group
-resolve_model_access_users = _model_access_authority.resolve_model_access_users
-resolve_model_preparation_user = _model_access_authority.resolve_model_preparation_user
-set_model_access_group_eligibility = _model_access_authority.set_model_access_group_eligibility
+is_platform_operator = _policy.is_platform_operator
 
 USER_PK_REQUIRED_MSG = "user must have a primary key"
 if TYPE_CHECKING:
@@ -197,20 +185,7 @@ def mark_user_deleted(
             # session or re-login. Converge them here.
             if user.is_active:
                 user.is_active = False
-                with suppress_authority_invalidation_signals():
-                    user.save(update_fields=["is_active"])
-
-            invalidate_authority(
-                AuthorityInvalidation(
-                    deployment_id=None,
-                    authority_refs=(
-                        OwnedReference(owner="management", reference=f"operator:{user.pk}"),
-                        OwnedReference(owner="management", reference=f"user:{user.pk}"),
-                    ),
-                    state=AuthorityState.REVOKED,
-                    reason="user-deleted",
-                )
-            )
+                user.save(update_fields=["is_active"])
 
             # Audit log user deletion inside the atomic boundary.
             audit_log(

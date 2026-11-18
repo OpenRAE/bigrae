@@ -44,6 +44,9 @@ class TestProtocolStructuralTyping:
             def download_object(self, bucket, key, dest_path, *, max_bytes, expected_identity=None):
                 return {"content_length": 0, "etag": ""}
 
+            def upload_new_object(self, bucket, key, source_path):
+                pass
+
         assert isinstance(FakeStorage(), ObjectStorage)
 
     def test_secrets_store_satisfied_by_conforming_class(self):

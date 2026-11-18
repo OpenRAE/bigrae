@@ -27,6 +27,8 @@ from shifter_adapter_sdk.runtime import (
 
 from shared.runtime_file_inputs import RuntimeFileBinding
 
+RUNTIME_PLUGIN_PLANNING_SECONDS = 30 * 60
+
 _GCE_IMAGE_REF = re.compile(r"^projects/[a-z0-9][-a-z0-9.:]*/global/images/[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$")
 _GCE_MACHINE_IMAGE_REF = re.compile(
     r"^projects/[a-z0-9][-a-z0-9.:]*/global/machineImages/[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?$"
@@ -35,6 +37,8 @@ _AWS_AMI = re.compile(r"^ami-(?:[0-9a-f]{8}|[0-9a-f]{17})$")
 _MACHINE_TYPE = re.compile(r"^[a-z][a-z0-9-]{1,30}(?:\.[a-z0-9]{1,20})?$")
 _LOCAL_USER = re.compile(r"^[A-Za-z_][A-Za-z0-9_-]{0,31}$")
 _CONTAINER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,127}$")
+GceNicType = Literal["", "GVNIC", "VIRTIO_NET"]
+GceDiskInterface = Literal["", "NVME", "SCSI"]
 
 
 class RuntimeTargetImageProfile(ClosedModel):
@@ -46,6 +50,9 @@ class RuntimeTargetImageProfile(ClosedModel):
     machine_type: Annotated[str, Field(max_length=100)] = ""
     disk_size_gb: Annotated[int, Field(strict=True, ge=1, le=16_384)] | None = None
     disk_type: Annotated[str, Field(max_length=100)] = ""
+    nic_type: GceNicType = Field(default="", exclude_if=lambda value: not value)
+    disk_interface: GceDiskInterface = Field(default="", exclude_if=lambda value: not value)
+    enable_secure_boot: bool = Field(default=True, strict=True, exclude_if=lambda value: value is True)
     allow_public_web_egress: bool = Field(default=False, strict=True)
     bootstrap_capability: Annotated[str, Field(max_length=64)] = "standard"
     management_ssh_username: Annotated[str, Field(max_length=32)] = ""
@@ -62,6 +69,7 @@ class RuntimeTargetImageProfile(ClosedModel):
         """Reject provider image details that cannot be realized safely."""
         if self.machine_type and not _MACHINE_TYPE.fullmatch(self.machine_type):
             raise ValueError("image profile machine type is invalid")
+        _validate_hardware_override(self)
         for value in (self.management_ssh_username, self.participant_username):
             if value and not _LOCAL_USER.fullmatch(value):
                 raise ValueError("image profile usernames must be local OS usernames")
@@ -70,6 +78,13 @@ class RuntimeTargetImageProfile(ClosedModel):
         else:
             _validate_gcp_image_profile(self)
         return self
+
+
+def _validate_hardware_override(profile: RuntimeTargetImageProfile) -> None:
+    """Keep guest hardware overrides within the GCP boot-image contract."""
+    selected = profile.nic_type or profile.disk_interface or not profile.enable_secure_boot
+    if selected and (profile.provider != "gcp" or profile.image_kind != "image"):
+        raise ValueError("GCE hardware overrides require a GCP boot image")
 
 
 def _participant_profile(profile: RuntimeTargetImageProfile) -> tuple[str, str, str, str]:
@@ -312,8 +327,8 @@ class RuntimeApparatusPin(ClosedModel):
         """Require exact SDK apparatus scope and forbid substrate authority."""
         if self.manifest.protocol != "bigrae.runtime-plugin/v2" or self.manifest.required_files:
             raise ValueError("Apparatus software requires its supported SDK protocol")
-        if self.bindings.file_assets or self.bindings.image_profiles or self.manifest.model_bindings:
-            raise ValueError("Apparatus software cannot replace admitted substrate or model authority")
+        if self.bindings.file_assets or self.bindings.image_profiles:
+            raise ValueError("Apparatus software cannot replace admitted substrate authority")
         self.bindings.validate_manifest(self.manifest)
         if len(self.model_dump_json().encode()) > 32768:
             raise ValueError("Apparatus binding exceeds its bound")

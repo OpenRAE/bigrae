@@ -151,3 +151,24 @@ describe("visibleNavGroups", () => {
     expect(settingsEntries[0].external).toBeFalsy();
   });
 });
+
+describe("event-mode scoreboard entries (#2968)", () => {
+  const participant = bootstrap({ permissions: { ...STAFF_BOOTSTRAP.permissions, is_ctf_participant: true } });
+  const entries = (context?: { teamMode: boolean }) =>
+    visibleNavGroups("participant", participant, context)[0].entries.map((entry) => [entry.surface, entry.routePath]);
+
+  it("shows an individual and a team scoreboard entry in a team-mode event", () => {
+    const visible = entries({ teamMode: true });
+    expect(visible).toContainEqual(["Individual scoreboard", "/ctf/individual-scoreboard/"]);
+    expect(visible).toContainEqual(["Team scoreboard", "/ctf/team-scoreboard/"]);
+    expect(visible.map(([surface]) => surface)).not.toContain("Scoreboard");
+  });
+
+  it("shows the single scoreboard entry in a solo event or without event context", () => {
+    for (const visible of [entries({ teamMode: false }), entries()]) {
+      expect(visible).toContainEqual(["Scoreboard", "/ctf/scoreboard/"]);
+      expect(visible.map(([surface]) => surface)).not.toContain("Individual scoreboard");
+      expect(visible.map(([surface]) => surface)).not.toContain("Team scoreboard");
+    }
+  });
+});

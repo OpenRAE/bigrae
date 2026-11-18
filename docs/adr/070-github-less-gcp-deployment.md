@@ -58,10 +58,12 @@ tracks the AWS path.
    Trivy gate. The only accepted exposures are time-boxed vendor-binary entries
    in `platform/deployer/gcp/trivyignore.yaml`. Each entry stops applying on its
    expiry date.
-   The deployer builds `gke-gcloud-auth-plugin` from a pinned upstream commit
-   with a digest-pinned Go toolchain. Go verifies the module checksums. The
-   plugin has no scan exceptions. Return to the Google binary when it passes
-   the blocking deployer scan without plugin-specific exceptions.
+   The deployer builds `gke-gcloud-auth-plugin`, `kubectl`, `helm`, and `oras`
+   from pinned upstream release commits with a digest-pinned Go toolchain. It
+   raises `golang.org/x/net` with each project's own dependency tooling where no
+   vendor build has the fix. Go verifies the module checksums. These tools have
+   no scan exceptions. Return to a vendor binary when it passes the blocking
+   deployer scan without exceptions.
 2. **One deploy implementation serves every deploy.** `deploy.py gcp-deploy` is
    the deploy for the first install and for each update. An operator runs it from
    the deployer image or from a clean checkout of the release revision. The GCP
@@ -91,7 +93,11 @@ tracks the AWS path.
    only on the identity of its own purpose. GitHub federation is optional: an
    empty `purpose_contexts` creates no Workload Identity pool or provider. CI uses
    `--identity ambient`, because federation already gives each job its purpose
-   identity.
+   identity. The release scanner may hold only
+   `roles/serviceusage.serviceUsageConsumer` at project scope, on its configured
+   deployment project (#2789). This permits quota use; it grants no access to
+   stored evidence or images. Its data access remains at repository, bucket,
+   and object-prefix scope. The trust checker rejects other project roles.
 5. **The command runs the ADR-037 gates and fails closed.** Before rollout, the
    release-scan identity scans each exact digest for HIGH and CRITICAL findings.
    Every operator rollout scans, also with `--stage rollout`. CI scans in its
@@ -107,7 +113,13 @@ tracks the AWS path.
    release-evidence bucket, not to Actions artifacts.
 6. **Release tooling runs one deploy at a time.** In operator mode, `gcp-deploy`
    and `gcp-destroy` run only from tooling whose source revision equals the
-   release revision. Every operator stage needs the release manifest. Before any
+   release revision. Exception (#2689): `gcp-deploy --allow-unreleased-tooling`
+   accepts tooling at another clean commit, only when `settings.deployment_tier`
+   is `test`. A production deployment and a CI run refuse the flag. Each such run
+   stores `tooling-override.json` with the release and tooling revisions under
+   the `deployments/` prefix of the release-evidence bucket, before any change.
+   The flag is never the default, and it does not change the release-image
+   gates. Every operator stage needs the release manifest. Before any
    change, it checks the tooling revision and verifies the release images. A lock object in the deployment config bucket allows one
    deploy or destroy at a time. Generation preconditions create and remove the
    lock. CI keeps its workflow concurrency group and uses `--lock external`.
@@ -133,7 +145,7 @@ tracks the AWS path.
    `refs/heads/dev` or `refs/heads/main`. The import holds the deployment lock,
    reuses an unchanged image, and writes `range-images.json`. A mirror changes
    only the transport. No BigRAE deployment creates image-build resources. The
-   [guest image design](../architecture/gcp-guest-images.md) records the
+   [guest image design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-guest-images.md) records the
    components.
 9. **The release registry is public.** One release serves every deployment.
    A deployment trusts a release only through the provenance policy of

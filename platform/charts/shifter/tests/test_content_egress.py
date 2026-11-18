@@ -6,15 +6,16 @@ import json
 import subprocess
 from pathlib import Path
 
+import pytest
 import yaml
 
 CHART = Path(__file__).resolve().parents[1]
 PRIVATE_RANGES = {"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16", "169.254.0.0/16", "127.0.0.0/8", "100.64.0.0/10"}
 
 
-def _docs(tmp_path):
+def _docs(tmp_path, provider="gcp"):
     values = {
-        "provider": {"name": "gcp"},
+        "provider": {"name": provider},
         "network": {
             "providerApiCidrs": ["199.36.153.8/30"],
             "privateServiceCidrs": ["10.60.0.0/24"],
@@ -80,7 +81,7 @@ def test_proxy_has_no_identity_and_only_public_https_egress(tmp_path):
                 {
                     "podSelector": {
                         "matchExpressions": [
-                            {"key": "app.kubernetes.io/component", "operator": "In", "values": ["portal", "ctf-scheduler"]}
+                            {"key": "app.kubernetes.io/component", "operator": "In", "values": ["portal", "ctf-scheduler", "guacamole-client"]}
                         ]
                     }
                 }
@@ -96,8 +97,9 @@ def test_proxy_has_no_identity_and_only_public_https_egress(tmp_path):
     assert PRIVATE_RANGES <= set(block["except"])
 
 
-def test_only_the_portal_and_ctf_scheduler_may_use_the_proxy(tmp_path):
-    docs = _docs(tmp_path)
+@pytest.mark.parametrize("provider", ["gcp", "aws"])
+def test_only_named_platform_callers_may_use_the_proxy(tmp_path, provider):
+    docs = _docs(tmp_path, provider)
     clients = set()
     for doc in docs:
         if doc["kind"] != "Deployment" or doc["metadata"]["namespace"] != "shifter-platform":
@@ -105,7 +107,10 @@ def test_only_the_portal_and_ctf_scheduler_may_use_the_proxy(tmp_path):
         labels = doc["spec"]["template"]["metadata"]["labels"]
         if "allow-ctf-content-egress-clients" in _policies_for(docs, labels):
             clients.add(labels["app.kubernetes.io/component"])
-    assert clients == {"portal", "ctf-scheduler"}
+    expected = {"portal", "ctf-scheduler"}
+    if provider == "gcp":
+        expected.add("guacamole-client")
+    assert clients == expected
 
 
 def test_runtime_env_routes_ctf_egress_through_the_proxy(tmp_path):

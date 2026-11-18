@@ -3,6 +3,8 @@
 Applicability: GCP Pub/Sub lifecycle events primary; AWS SQS queues optional.
 Operator: platform owner. Verified: 2026-10-23.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 The lifecycle dead-letter subscription grows, an event consumer falls behind,

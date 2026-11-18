@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+import json
+import re
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -295,3 +299,30 @@ def test_a_sql_budget_above_the_default_connection_limit_is_rejected():
 
     with pytest.raises(ValueError, match="default max_connections"):
         GcpSharedServiceCapacityProfile.model_validate(data)
+
+
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_TERRAFORM_PROFILE_RULES = (
+    "platform/terraform/gcp/environments/platform/variables.tf",
+    "platform/terraform/gcp/modules/platform-core/variables.tf",
+)
+_TERRAFORM_PROFILE_REGEX = re.compile(r'regex\("([^"]+)",\s*var\.shared_service_capacity_profile\)')
+
+
+@pytest.mark.parametrize("relative_path", _TERRAFORM_PROFILE_RULES)
+def test_terraform_rule_accepts_every_catalog_profile(relative_path):
+    """#2961: Terraform validation must accept every authored profile."""
+    source = (_REPO_ROOT / relative_path).read_text(encoding="utf-8")
+    match = _TERRAFORM_PROFILE_REGEX.search(source)
+    assert match, f"{relative_path} has no shared_service_capacity_profile regex"
+    rule = re.compile(match.group(1))
+    rejected = sorted(p for p in CAPACITY_PROFILES if not rule.fullmatch(p))
+    assert rejected == [], f"{relative_path} rejects {rejected}"
+
+
+def test_chart_schema_accepts_every_catalog_profile():
+    """#2961: the chart values schema must accept every authored profile."""
+    schema = json.loads((_REPO_ROOT / "platform/charts/shifter/values.schema.json").read_text(encoding="utf-8"))
+    rule = re.compile(schema["properties"]["capacityProfile"]["properties"]["id"]["pattern"])
+    rejected = sorted(p for p in CAPACITY_PROFILES if not rule.fullmatch(p))
+    assert rejected == [], f"chart schema rejects {rejected}"

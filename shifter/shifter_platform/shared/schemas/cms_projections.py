@@ -12,7 +12,7 @@ S3 object/header inspection for uploads, and RAES package-source validation for
 scenarios. A ``TypedDict`` annotation is not a
 validator, an authorization check, a serializer, or a response allowlist; every
 existing runtime gate remains authoritative. See
-``docs/architecture/typed-cms-service-projections-preflight-317.md``.
+``docs/_deprecated/architecture/typed-cms-service-projections-preflight-317.md``.
 
 This module is shared-native and stdlib-only: it must not import ``cms`` or the
 RAES implementation packages.

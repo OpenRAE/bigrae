@@ -1,5 +1,13 @@
 # Cases Menu: Architectural Design
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Overview
 
 The Cases feature introduces automated attack simulation to Shifter using Atomic Red Team (ART) as the underlying execution framework. Users select high-level attack scenarios from a curated menu; Shifter handles all orchestration automatically.
@@ -477,3 +485,5 @@ class Migration(migrations.Migration):
 - [MITRE ATT&CK Framework](https://attack.mitre.org/)
 - Shifter Engine: `shifter-engine/components/setup_orchestrator.py`
 - Sidebar pattern: `portal/templates/partials/icon_sidebar.html`
+
+<!-- vale on -->

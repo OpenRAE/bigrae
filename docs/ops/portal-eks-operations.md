@@ -2,10 +2,11 @@
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/188>
 Ownership and security model: [AWS EKS backend bundle](../technical/platform_infrastructure/aws-eks-bundle.md)
-Region: `us-east-2` (all AWS Portal resources)
+Example region: `us-east-2`; use the selected deployment's actual region.
 
-This runbook is the operator procedure for running the Portal on EKS: how to
-monitor it, scale it, deploy to it, troubleshoot it, and roll it back. It covers
+AWS release installation is planned; these procedures cover configured contributor deployments.
+
+Use these how-to procedures to monitor, scale, deploy, troubleshoot, and recover the portal on EKS. It covers
 the AWS EKS platform compute path only. Range and target delivery (the VMs
 inside a range) remain ECS/VM behind the ADR-039 range adapter and are out of
 scope here.
@@ -13,9 +14,7 @@ scope here.
 ## Scope and status
 
 Under [ADR-044](../adr/README.md), EKS plus the `platform/charts/shifter` Helm
-chart is the canonical AWS platform compute path. New AWS deployments use EKS;
-the older EC2 Auto Scaling Group (ASG) portal path is a retained compatibility
-path with separate Terraform state and a controlled cutover. In CI the ASG
+chart is the canonical AWS platform compute path. New AWS contributor deployments use EKS. The earlier portal ASG path has separate Terraform state and requires a controlled cutover. In CI the ASG
 deploy lane is disabled (`inputs.environment == '__legacy-disabled__'` in
 `.github/workflows/_shifter-platform.yml`); the active AWS deploy lane is the
 `eks-deploy` job in the same workflow. For an ASG-to-EKS or EKS-to-ASG
@@ -99,8 +98,7 @@ Inspect live state rather than assuming committed defaults are active.
   a shell with cluster access:
 
   ```console
-  kubectl -n shifter-platform exec deploy/portal-web -- \
-    curl -sS -o /dev/null -w '%{http_code}\n' http://localhost:8000/health/
+  curl --fail --silent --show-error https://<portal-hostname>/health/
   ```
 
   The public response is intentionally coarse. Do not expose raw provider error
@@ -145,8 +143,7 @@ it through the deploy path (a Helm upgrade) so the change is durable and matches
 the committed source of truth.
 
 `kubectl scale deploy/portal-web --replicas=<n>` is a transient override for an
-incident. The next Helm apply reconciles it back to the values file, so record
-any manual change and fold it into the values file if it should persist.
+incident. The next Helm apply restores the values file settings. Record any approved temporary change. Update the source values if the change must persist.
 
 ### Nodes (cluster-autoscaler)
 
@@ -186,12 +183,7 @@ refresh (that is the legacy ASG path).
   release. Runtime secret values are hydrated in-process from Secrets Manager by
   the entrypoint; they never enter Helm values, ConfigMaps, or process
   arguments.
-- **Verify a deploy completed.** Deploy succeeds only after every managed add-on
-  is `ACTIVE`, controller and chart rollouts complete, the admission policy
-  rejects a non-launcher provisioner Job, live Deployment and Job probes observe
-  the default-deny NetworkPolicy, each workload ServiceAccount receives its
-  expected IRSA role and cannot assume a sibling role, and HTTPS `/health/`
-  succeeds. Spot-check the workload rollout directly:
+- **Verify a deploy completed.** Deployment requires every managed add-on `ACTIVE` and all controller/chart rollouts complete. Admission must deny a non-launcher provisioner Job. Live Deployment and Job probes must confirm default-deny NetworkPolicy. Each workload ServiceAccount must receive its expected IRSA role and be denied sibling roles. HTTPS `/health/` must succeed. Spot-check the workload rollout directly:
 
   ```console
   kubectl -n shifter-platform rollout status deploy/portal-web
@@ -256,28 +248,27 @@ NetworkPolicy allowance rather than an application bug.
 ### Roll back a platform release
 
 For a bad chart or image release, roll the Helm release back to the previous
-revision:
+revision through the normal `eks-deploy` lifecycle.
+Use its exact verified images and compatible configuration.
+Read release history in the Helm metadata namespace:
 
 ```console
-helm -n shifter-platform history shifter
-helm -n shifter-platform rollback shifter <previous-revision>
+helm -n shifter-system history shifter
 ```
+
+Application rollback requires schema compatibility.
+Atomic Helm recovery does not reverse database, policy, identity, or Terraform changes.
+Obtain data-owner approval before any data or schema recovery.
 
 Do not destroy the EKS Terraform root as a way to stop workloads.
 
 ### Recover the channel layer (Redis)
 
 The channel layer runs on Redis, so recovery means restoring a known-good Redis
-backend, not switching backends. If a release broke Redis connectivity or
-configuration, roll the platform release back (see
-[Roll back a platform release](#roll-back-a-platform-release)) or correct the
-Redis configuration, then confirm cross-process delivery: a WebSocket message
-published on one `portal-web` pod reaches a client connected to another pod.
+backend, not switching backends. For a release-induced Redis failure, select the previous compatible release or correct configuration through the deployment lifecycle. Then verify cross-process delivery. A message published on one `portal-web` pod must reach a client on another.
 
 Do not switch to `CHANNEL_LAYER_BACKEND=in_memory` as a production rollback.
-In-memory Channels is process-local, so it cannot fan out across replicas, or
-even across the multiple ASGI workers inside a single pod; it is retained only
-for local development and tests. Keep Redis enabled even when the fleet is
+In-memory Channels is process-local. It cannot distribute messages across replicas or multiple ASGI workers in one pod. It remains limited to local development and tests. Keep Redis enabled even when the fleet is
 reduced to one replica; a single-replica Redis posture is the safer,
 event-representative configuration. With an explicit `redis` posture, a missing
 `REDIS_HOST` fails closed at startup rather than silently degrading, which is the
@@ -285,11 +276,5 @@ intended behavior.
 
 ### Roll back to the legacy ASG compatibility path
 
-An EKS-to-ASG rollback is a controlled traffic cutover, not an in-place move, and
-the legacy and EKS control planes must never run concurrently against the shared
-queues, outboxes, schedulers, and reconciliation state. Follow
-[Migrate an AWS deployment from ECS to EKS](../how-to/aws-ecs-to-eks-migration.md),
-whose rollback section applies symmetrically: stop the EKS consumer set, confirm
-it is quiescent, restore the previous traffic target, then start the legacy
-consumer set. Retire either platform root only after the observation window,
+An EKS-to-ASG rollback requires a controlled traffic cutover. The control planes must never run concurrently against shared queues, outboxes, schedulers, or reconciliation state. Follow [the migration rollback procedure](../how-to/aws-ecs-to-eks-migration.md). Stop EKS consumers and confirm they have stopped. Restore the previous traffic target, then start legacy consumers. Retire either platform root only after the observation window,
 recovery evidence, queue and outbox reconciliation, and operator approval.

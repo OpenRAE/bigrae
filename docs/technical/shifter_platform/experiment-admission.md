@@ -1,5 +1,7 @@
 # Experiment admission service contract
 
+Reference for retained experiment inputs and admission service operations.
+
 The public `cms.services` facade owns organization admission and operational persistence.
 The `shared.raes.experiment_admission` module wraps the released experiment APIs.
 It does not define a scientific schema or enumerate factors.
@@ -28,18 +30,32 @@ Every write checks local credential state and SQL ancestry inside its transactio
 A claim token is also the execution attempt identity.
 It does not replace authorization.
 The entry's run identity comes from the retained RAES plan.
+A fresh trial for a failed entry keeps that entry's run identity.
+
+Admission also retains the name and digest of the batch's worker host profile (`worker_profile` in the authority, default `default`).
+It refuses a profile that the worker policy does not publish.
+An authority without `backend` and `realization_envelope` gets both documents derived from that profile and its `apparatus` declaration (`shared.raes.worker_apparatus`).
+The batch retains them as `derived_apparatus`.
+The derived backend manifest admits at most one node for each VM of the profile.
+Admission refuses a selected scenario unless it has one Linux compute node of the hosts' architecture for each VM.
+
 Scheduling order cannot allocate another run or change a trial's scientific inputs.
 One initial attempt is supported per entry.
+A fresh trial for a failed entry is a new pending entry row that names the attempt it replaces.
+Each attempt has at most one fresh trial.
 If a claim response is lost, an operator with organization `manage_content` authority can recover the same token by batch and entry.
+
 Recovery does not allocate another attempt, release capacity, or authorize redispatch.
 Reconcile the existing worker and verify cleanup before releasing capacity; claims never expire into automatic redispatch.
 
-The future dispatcher must validate live capacity, provider quotas, worker isolation, and cleanup before resource use.
+[Experiment dispatch](experiment-dispatch.md) validates worker capacity, isolation, and cleanup before resource use.
 The batch lock enforces requested concurrency for active claims.
 An observed terminal disposition remains active until an authorized caller records verified cleanup.
+
 The released RAES validator checks the cleanup receipt against the retained plan and exact attempt identity.
 Only successful cleanup releases capacity.
 The caller must verify the owner's actual cleanup evidence before submitting its receipt.
+
 Collection records archive custody only and does not release dispatch capacity.
 This conservative rule prevents evidence collection from authorizing overlapping resources.
 
@@ -48,20 +64,43 @@ Then call `record_experiment_collection` with its committed receipt UUID.
 The service checks all identities, plan and entry digests, receipt state, expiry, and pinned destination.
 Receipt presence does not declare scientific success or resource cleanup.
 
+## Participant configuration owners
+
+The released SDL owner (`participant-config` version 1) runs in the admission process.
+Each other owner runs in the organization's installed adapter that declares it (`participant.validate`).
+That installation must be ready and use `bigrae.runtime-plugin/v2`.
+
+CMS records a request with the family digest and the experiment's configuration requests.
+The plugin launcher runs that adapter's isolated worker and records its result.
+CMS admits only the configurations and context selections that the owner returns.
+CMS replays those results in the compiler and never imports owner code.
+A missing adapter or a refusal prevents admission.
+
 ## Persistence
 
 `ExperimentBatch` stores the complete retained JSON record and its SHA-256 digest.
-The record includes original input text, the expanded family, hydrated snapshots, and complete owner documents.
+The record includes original input text, the expanded family, and complete owner documents.
+For each plan entry, the record keeps the SHA-256 digest of the instantiated snapshot.
+`ExperimentSnapshot` stores the exact snapshot of each plan entry in a separate row.
+Thus, the size of the record does not increase with the number of trials.
 It also includes the RAES plan, normalized participant configurations, capture specifications, and dependency tuple.
+
 Referenced local artifact bytes are verified through the released env-packs resolver and retained as base64.
 The released control-context pin helper joins selected configuration and authored SDL assets to their exact descriptors.
 Selected content uses absolute `raes-environment-pack:` locators and exact inventory descriptors.
+
 The published artifact resolver verifies the original bytes before retention.
+Admission retains scenario content, snapshots, and artifacts unchanged, including planted credentials.
+Admission refuses a credential field or credential value in the operator authority.
+Cleanup validation refuses a credential in the owner's cleanup receipt.
 Unavailable or changed selected content prevents admission.
 Original documents and referenced artifacts each have a separate 16 MiB aggregate bound.
+
 Destination and resource limits are pinned at admission.
 Database triggers forbid changes to batch inputs and entry identities.
 Tenant plan identity and entry/run uniqueness constraints prevent ambiguous reloads.
+A fresh-trial row stores the attempt it replaces and its ordinal.
+
 Operational changes cannot replace scientific inputs.
 Immutable service projections live in the private `_experiment_batch_records` module; callers use the public `cms.services` facade.
 
@@ -74,15 +113,18 @@ Public errors contain no authoring input, provider payload, or parser details.
 
 ## Dependency tuple
 
-The executable tuple is Python 3.14, Django 6.0, RAES 10.7.2, and raes-env-packs 7.2.2.
+The executable tuple is Python 3.14, Django 6.0, RAES 12.0.0, and raes-env-packs 7.2.3.
 Reload refuses an unsupported RAES/env-packs tuple.
 Portable plan and configuration versions remain subject to their owner validators.
+
 Current compiler limits are 10000 coordinates, domain values, and product outputs, plus a 32 MiB sealed plan.
 The complete retained record has a separate 64 MiB bound.
 There is no silent study reduction or consumer-owned partitioning.
+
 The released typed factorial profile accepts fixed nuisance selections and seeded allocation.
 Unsupported sampling combinations fail through the owner validator.
 Local pack staging uses the existing package byte and member bounds.
+
 Their defaults are 1 GiB expanded bytes and 20000 members.
 Provision temporary disk for one expanded pack and, for object-backed packs, its bounded compressed archive.
 
@@ -90,7 +132,7 @@ The synthetic installed-package fixture comes from the MIT-licensed env-packs 7.
 Its license remains beside the fixture.
 Tests use published manifests and no private pack content.
 
-See the [architecture](../../architecture/experiment-admission-design-2742.md) and [operator instructions](../../how-to/admit-pack-experiments.md).
+See the [architecture](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/experiment-admission-design-2742.md) and [operator instructions](../../how-to/admit-pack-experiments.md).
 
 ## Result organization
 
@@ -98,7 +140,7 @@ The authenticated `experiment_batch export` operation reads retained admission
 inputs and the complete operational entry inventory through CMS services.
 It does not claim, start, retry or replace an entry. Assignment metadata is
 reported separately from observed start times and scientific outcomes.
-See [the result export design](../../architecture/experiment-result-exports.md)
+See [the result export design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/experiment-result-exports.md)
 for the manifest, CSV/JSON indexes and explicit size limits.
 
 Result indexes retain condition, block, replicate, plan-entry, run-version and

@@ -35,7 +35,8 @@ from shared.errors import classify_user_message
 if TYPE_CHECKING:
     from shared.credentials import CredentialContext
 
-_REMOTE_ACCESS_ACTIONS = ("range.access", *scope_actions("access_devices"))
+_DEVICE_ACCESS_ACTIONS = scope_actions("access_devices")
+_REMOTE_ACCESS_ACTIONS = ("range.access", "event.participate", *_DEVICE_ACCESS_ACTIONS)
 
 
 class GuacamoleRDPURLView(MissionControlReadAPIView):
@@ -99,7 +100,7 @@ class GuacamoleRangeSSHURLView(MissionControlReadAPIView):
 class GuacamoleNGFWSSHURLView(MissionControlReadAPIView):
     """Queue Guacamole URL bootstrap for NGFW SSH access."""
 
-    required_actions = _REMOTE_ACCESS_ACTIONS
+    required_actions = _DEVICE_ACCESS_ACTIONS
 
     permission_classes = [IsAuthenticatedSessionOrApiToken, HasMissionControlActor]
 

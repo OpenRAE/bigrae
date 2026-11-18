@@ -136,6 +136,9 @@ const emptyImageProfile = (): AdapterTargetImageProfile => ({
   machine_type: "",
   disk_size_gb: null,
   disk_type: "",
+  nic_type: "",
+  disk_interface: "",
+  enable_secure_boot: true,
   allow_public_web_egress: false,
   bootstrap_capability: "standard",
   management_ssh_username: "",
@@ -293,7 +296,8 @@ function TargetImageProfile({ name, value, onChange }: Readonly<{
           onChange={(event) => update({ provider: event.target.value as "gcp" | "aws", image_kind: BOOT_IMAGE_KIND,
             bootstrap_capability: "standard", participant_container_name: "", participant_username: "",
             participant_readiness_contract: "", participant_readiness_manifest_sha256: "",
-            domain_dns_name: "", domain_netbios_name: "", allow_public_web_egress: false })}>
+            domain_dns_name: "", domain_netbios_name: "", allow_public_web_egress: false,
+            nic_type: "", disk_interface: "", enable_secure_boot: true })}>
           <option value="gcp">Google Cloud</option><option value="aws">AWS</option>
         </select>
       </div>
@@ -302,6 +306,7 @@ function TargetImageProfile({ name, value, onChange }: Readonly<{
         <select id={`plugin-image-kind-${name}`} value={value.image_kind} className="block w-full rounded border bg-background p-2"
           onChange={(event) => { const machine = event.target.value === MACHINE_IMAGE_KIND; update({
             image_kind: machine ? MACHINE_IMAGE_KIND : BOOT_IMAGE_KIND,
+            nic_type: "", disk_interface: "", enable_secure_boot: true,
             bootstrap_capability: machine ? PRECONFIGURED_HOST_CAPABILITY : "standard",
             participant_readiness_contract: machine ? PARTICIPANT_READINESS_CONTRACT : "",
             participant_container_name: "", participant_username: "", participant_readiness_manifest_sha256: "",
@@ -324,6 +329,29 @@ function TargetImageProfile({ name, value, onChange }: Readonly<{
           onChange={(event) => update({ disk_size_gb: event.target.value ? Number(event.target.value) : null })} /></div>
       <ProfileInput id={`plugin-disk-type-${name}`} label={`Disk type for ${name}`} value={value.disk_type}
         onChange={(disk_type) => update({ disk_type })} />
+      {value.provider === "gcp" && value.image_kind === BOOT_IMAGE_KIND ? <>
+        <div className="space-y-1">
+          <Label htmlFor={`plugin-nic-type-${name}`}>Network interface for {name}</Label>
+          <select id={`plugin-nic-type-${name}`} value={value.nic_type ?? ""}
+            className="block w-full rounded border bg-background p-2"
+            onChange={(event) => update({ nic_type: event.target.value as AdapterTargetImageProfile["nic_type"] })}>
+            <option value="">Provider default</option><option value="GVNIC">gVNIC</option><option value="VIRTIO_NET">VirtioNet</option>
+          </select>
+        </div>
+        <div className="space-y-1">
+          <Label htmlFor={`plugin-disk-interface-${name}`}>Boot disk interface for {name}</Label>
+          <select id={`plugin-disk-interface-${name}`} value={value.disk_interface ?? ""}
+            className="block w-full rounded border bg-background p-2"
+            onChange={(event) => update({ disk_interface: event.target.value as AdapterTargetImageProfile["disk_interface"] })}>
+            <option value="">Provider default</option><option value="NVME">NVMe</option><option value="SCSI">SCSI</option>
+          </select>
+        </div>
+        <div className="flex items-center gap-2 sm:col-span-2">
+          <input id={`plugin-secure-boot-${name}`} type="checkbox" checked={value.enable_secure_boot ?? true}
+            onChange={(event) => update({ enable_secure_boot: event.target.checked })} />
+          <Label htmlFor={`plugin-secure-boot-${name}`}>Enable Secure Boot for {name}</Label>
+        </div>
+      </> : null}
       {value.provider === "gcp" ? <div className="flex items-center gap-2 sm:col-span-2">
         <input id={"plugin-public-web-egress-" + name} type="checkbox" checked={value.allow_public_web_egress ?? false}
           onChange={(event) => update({ allow_public_web_egress: event.target.checked })} />

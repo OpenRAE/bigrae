@@ -1,5 +1,12 @@
 # Model-access implementation and dependency ledger
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker design and delivery evidence below; preserve its original contract and issue history. -->
+<!-- vale off -->
+
 Design: [#681 / PLAT-202](index.md). Created and verified 2026-09-06.
 The full capability remains tracked by [#681](https://github.com/Brad-Edwards/bigrae/issues/681).
 The design PR references it without a closing keyword.
@@ -175,3 +182,5 @@ This change does not mutate requirement status or fabricate IMPLEMENTS/TESTS
 links. Requirement management and actual implementation/test traceability
 remain in the Ground Control MCP workflow when implementation starts.
 Repository requirement snapshots are not edited as a substitute for that API.
+
+<!-- vale on -->

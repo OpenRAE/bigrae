@@ -1,5 +1,13 @@
 # CTF Audit - 2026-03-23
 
+> **Applicability** Dated audit reference, 2026-03-23. The audit names no exact source revision.
+> Its original worktree cannot be reconstructed from this record alone.
+> Findings and test counts below are historical evidence, not a current defect or delivery assessment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 This audit reviews the current `ctf` implementation against:
 
 - implementation quality
@@ -65,3 +73,5 @@ I ran `./.venv/bin/pytest tests/ctf -q -n 0` from `shifter/shifter_platform`.
 - `164` errors occurred during setup because PostgreSQL was unavailable in this environment
 
 That means the audit is source-backed, but runtime confidence for DB-backed paths is lower than I would want for a final signoff.
+
+<!-- vale on -->

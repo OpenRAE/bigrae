@@ -1,5 +1,13 @@
 # Audit Rubric
 
+> **Applicability** Dated audit reference, 2026-03-23. The audit names no exact source revision.
+> Its original worktree cannot be reconstructed from this record alone.
+> Findings and test counts below are historical evidence, not a current defect or delivery assessment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 This rubric was derived from the repo's strongest existing patterns, especially the CMS-to-engine range creation flow and the shared-schema/logging setup.
 
 ## Rating Scale
@@ -83,3 +91,5 @@ The reference pattern for "high quality" in this repo remains the CMS hydration 
 - logs and exceptions are centralized
 
 The CTF subsystem was assessed against that standard rather than against a generic Django app bar.
+
+<!-- vale on -->

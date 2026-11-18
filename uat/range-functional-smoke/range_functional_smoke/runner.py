@@ -307,7 +307,7 @@ class Runner:
                 open_timeout=deadline,
                 close_timeout=5,
             ) as tunnel:
-                outcome = await asyncio.wait_for(self._await_ready(tunnel), timeout=deadline)
+                outcome = await asyncio.wait_for(self._await_connected(tunnel), timeout=deadline)
         except TimeoutError:
             outcome = "no ready instruction before the deadline"
         except Exception as exc:  # noqa: BLE001  # stage boundary: an authored FAILED check keeps only the close code
@@ -318,24 +318,24 @@ class Runner:
             self.results.record(
                 CheckCode.GUACAMOLE_SESSION_CONNECTED,
                 Status.PASSED,
-                "guacd completed the handshake and opened the session",
+                "browser tunnel completed acknowledged display synchronization",
                 _ms(started),
             )
             return
         self.results.record(CheckCode.GUACAMOLE_SESSION_CONNECTED, Status.FAILED, str(outcome), _ms(started))
 
     @staticmethod
-    async def _await_ready(tunnel) -> object:
-        """Read the protocol stream until guacd says ``ready`` (or errors)."""
-        stream = ""
-        while len(stream) < 65536:
-            frame = await tunnel.recv()
-            stream += frame if isinstance(frame, str) else frame.decode("utf-8", "replace")
-            if guacamole.has_ready_instruction(stream):
+    async def _await_connected(tunnel) -> bool:
+        """Follow the browser protocol through two acknowledged display updates."""
+        parser = guacamole.GuacamoleInstructionParser()
+        synchronization = guacamole.BrowserSynchronization()
+        while True:
+            for instruction in parser.feed(await tunnel.recv()):
+                reply = synchronization.observe(instruction)
+                if reply is not None:
+                    await tunnel.send(reply)
+            if synchronization.connected:
                 return True
-            if guacamole.is_error_instruction(stream):
-                return "guacd returned an error instruction instead of opening the session"
-        return "protocol stream ended without a ready instruction"
 
     def _block_remaining_guacamole_checks(self, *_codes: CheckCode) -> None:
         self.results.record(CheckCode.GUACAMOLE_BOOTSTRAP_SUCCEEDED, Status.BLOCKED, "bootstrap was never accepted")

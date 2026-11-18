@@ -3,6 +3,11 @@ name: Deploy
 # Single entry point - prevents race conditions by enforcing dependency order
 on:
   pull_request:
+  # The `dev` merge queue runs the required PR Gate on each merge group
+  # (ADR-003-R9). A required context that does not report on the merge group
+  # blocks the queue.
+  merge_group:
+    types: [checks_requested]
   push:
     # Validation only. Env deploys are now manual (workflow_dispatch below);
     # pushing dev/main runs quality/pre-commit but never a provider deploy.
@@ -94,6 +99,11 @@ jobs:
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: filter
         with:
+          # A merge group has no pull request payload. Compare the merge group
+          # commit with its base commit. Both inputs are empty on other events,
+          # so pull_request and push keep the default comparison.
+          base: ${{ github.event.merge_group.base_sha }}
+          ref: ${{ github.event.merge_group.head_sha }}
           filters: |
             # Fail-closed signal for an empty or undetermined changed-file set
             # (#2024). GitHub's PR "list files" API is eventually consistent and
@@ -233,6 +243,8 @@ jobs:
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: quality_non_docs
         with:
+          base: ${{ github.event.merge_group.base_sha }}
+          ref: ${{ github.event.merge_group.head_sha }}
           predicate-quantifier: every
           filters: |
             non_docs:
@@ -245,6 +257,8 @@ jobs:
       - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36 # v3.0.2
         id: quality_guardrails
         with:
+          base: ${{ github.event.merge_group.base_sha }}
+          ref: ${{ github.event.merge_group.head_sha }}
           filters: |
             guardrail_docs:
               - '.github/pull_request_template.md'
@@ -304,6 +318,7 @@ jobs:
     name: Pre-commit
     if: |
       github.event_name == 'pull_request' ||
+      github.event_name == 'merge_group' ||
       github.ref == 'refs/heads/dev' ||
       github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -343,12 +358,18 @@ jobs:
   quality:
     name: Quality
     needs: changes
-    # Run Quality on PRs, direct pushes (dev/main), and every manual deploy
-    # dispatch (the safety gate before an apply) unless the diff is provably
+    # The reusable workflow's SonarCloud job reads the merge queue entry on
+    # merge_group runs, and a called job cannot exceed the caller's scopes.
+    permissions:
+      contents: read
+      pull-requests: read
+    # Run Quality on PRs, merge groups, direct pushes (dev/main), and every
+    # manual deploy dispatch (the safety gate before an apply) unless the diff is provably
     # ordinary docs-only. Deploy jobs tolerate a skipped Quality via
     # `(needs.quality.result == 'success' || ... == 'skipped')`.
     if: |
       (github.event_name == 'pull_request' ||
+       github.event_name == 'merge_group' ||
        github.event_name == 'push' ||
        github.event_name == 'workflow_dispatch') &&
       (needs.changes.outputs.quality_relevant == 'true' ||
@@ -395,7 +416,7 @@ jobs:
   accessibility:
     name: Accessibility
     needs: changes
-    if: ${{ always() && github.event_name == 'pull_request' }}
+    if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     permissions:
       contents: read
     runs-on: ubuntu-latest
@@ -439,12 +460,13 @@ jobs:
   # individual Quality / * checks: those are only created when the
   # `quality` job runs (it is conditional on quality-relevant paths), so
   # requiring them directly leaves branch protection waiting forever on
-  # PRs that touch none of those paths. Scoped to pull_request events, so
-  # it never runs on manual deploys or main pushes.
+  # PRs that touch none of those paths. Scoped to pull_request and
+  # merge_group events, so it never runs on manual deploys or branch pushes.
+  # The `dev` merge queue requires it on each merge group (ADR-003-R9).
   pr-gate:
     name: PR Gate
     needs: [changes, precommit, quality, accessibility]
-    if: ${{ always() && github.event_name == 'pull_request' }}
+    if: ${{ always() && (github.event_name == 'pull_request' || github.event_name == 'merge_group') }}
     runs-on: ubuntu-latest
     steps:
       - name: Assert required PR jobs passed

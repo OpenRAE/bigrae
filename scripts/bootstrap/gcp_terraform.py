@@ -6,7 +6,7 @@ private directory, in Terraform precedence order:
 
 1. ``terraform.tfvars`` and then ``terraform.tfvars.json``: the operator's Terraform values;
 2. ``settings.auto.tfvars``: the root-config bridge (range egress, dynamic-secret
-   project, telemetry, broker, capacity) from ``installation.render.render_tfvars``;
+   project, telemetry, capacity) from ``installation.render.render_tfvars``;
 3. ``zz-deployment.auto.tfvars.json``: the values that the root config owns (project,
    region, environment, public hostname, managed TLS, and the deployment settings).
 

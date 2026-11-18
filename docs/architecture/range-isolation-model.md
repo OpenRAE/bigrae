@@ -7,14 +7,14 @@ split-horizon containment (#1172) is implemented in
 `platform/terraform/modules/range/vpc/dns_resolver.tf` and documented below.
 
 The preflight artifact is
-[range-isolation-placement-preflight-959.md](range-isolation-placement-preflight-959.md).
+[../_deprecated/architecture/range-isolation-placement-preflight-959.md](../_deprecated/architecture/range-isolation-placement-preflight-959.md).
 The configurable egress allowlist layered on top of this base is ADR-017 /
 [range-egress-ip-allowlist.md](range-egress-ip-allowlist.md); this document does
 not duplicate that contract. The DNS egress hardening preflight for issue #1172
 is
-[range-dns-egress-resolver-preflight-1172.md](range-dns-egress-resolver-preflight-1172.md).
+[../_deprecated/architecture/range-dns-egress-resolver-preflight-1172.md](../_deprecated/architecture/range-dns-egress-resolver-preflight-1172.md).
 The commercial self-serve zero-egress posture preflight for issue #1171 is
-[range-zero-egress-preflight-1171.md](range-zero-egress-preflight-1171.md).
+[../_deprecated/architecture/range-zero-egress-preflight-1171.md](../_deprecated/architecture/range-zero-egress-preflight-1171.md).
 
 ## Topology in one paragraph
 
@@ -124,7 +124,7 @@ Firewall policy, so a host cannot bypass the split-horizon resolver by dialing
 CloudWatch with the same KMS/retention conventions as firewall logs.
 
 Issue #1172 tracks this posture; the preflight rationale is in
-[range-dns-egress-resolver-preflight-1172.md](range-dns-egress-resolver-preflight-1172.md).
+[../_deprecated/architecture/range-dns-egress-resolver-preflight-1172.md](../_deprecated/architecture/range-dns-egress-resolver-preflight-1172.md).
 
 ## Cross-range and participant isolation
 

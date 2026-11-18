@@ -8,20 +8,22 @@ Documentation: [openrae.github.io/bigrae](https://openrae.github.io/bigrae/).
 
 ## Install
 
-BigRAE installs on GCP from a published release. The install needs no GitHub
-account, no fork, and no repository checkout. AWS support comes in an upcoming
-release.
+The GCP installation route uses a verified release container.
+It needs no GitHub account, fork, or repository checkout.
+The latest published release checked on 2026-11-09, `v4.1.1`, predates the deployer image.
+Select an eligible later release before using the current installation procedure.
+Current GCP and AWS backend source does not establish published-release support.
 
 1. Select a release (see [Releases](#releases)).
-2. Follow [Install BigRAE on GCP](docs/technical/handbook/gcp-first-run.md).
+2. Follow [Install on Google Cloud](docs/getting-started/install-gcp.md).
    You need a GCP project with billing on, a domain that you control, Docker,
-   the `gcloud` CLI, ORAS, and cosign.
+   the `gcloud` CLI, Git, ORAS, and cosign.
 3. [Launch your first range](docs/getting-started/quickstart.md).
 
 ## Releases
 
 A release is a [GitHub release](https://github.com/OpenRAE/bigrae/releases)
-`vX.Y.Z` of `main`. Each release publishes these images to the public registry
+`vX.Y.Z` of `main`. The GCP release workflow publishes these images to the public registry
 `ghcr.io/openrae/bigrae`, with signed build provenance:
 
 - the deployer image `deployer-gcp`, which holds the install commands, the
@@ -35,16 +37,16 @@ the changes in each release.
 
 ## Documentation
 
-- [Get started](docs/getting-started/index.md): install, first range, and key
-  concepts.
-- [GitHub-less GCP deployment guide](docs/technical/handbook/gcp-github-less-deployment.md):
-  release, install, update, mirror, and teardown in full detail.
-- [Architecture handbook](docs/technical/architecture.md): system context,
-  components, authority, lifecycle, and package boundaries.
+| Purpose | Start here |
+| --- | --- |
+| Tutorials | [Launch your first range](docs/getting-started/quickstart.md) on an installed GCP tenant. |
+| How-to guides | [Feature tasks](docs/features/index.md) and [troubleshooting](docs/how-to/troubleshooting.md). |
+| Reference | [FAQ](docs/reference/faq.md) and [technical contracts](docs/technical/shifter_platform/index.md). |
+| Explanation | [Key concepts](docs/getting-started/concepts.md) and [architecture handbook](docs/technical/architecture.md). |
 
-The documentation is in `docs/`. The
-[documentation site](https://openrae.github.io/bigrae/) publishes it from
-`main` (ADR-038).
+[Get started](docs/getting-started/index.md) links the installation and learning routes.
+The [GCP deployment guide](docs/technical/handbook/gcp-github-less-deployment.md) owns full operator procedures.
+The [documentation site](https://openrae.github.io/bigrae/) publishes `docs/` from `main` under ADR-038.
 
 ## Develop
 
@@ -57,22 +59,28 @@ From the repository root:
 uv sync --project shifter/shifter_platform
 uv sync --project shifter/installation
 npm ci --prefix shifter/shifter_platform/frontend
-pre-commit install
+pre-commit install --hook-type pre-commit --hook-type commit-msg
 ```
 
 Use [local development setup](docs/technical/dev/local-setup.md) and
 [contribution guidance](CONTRIBUTING.md) for the development workflow.
 To deploy a development environment from your own fork with GitHub Actions,
-on AWS or GCP, see [developer environment setup](docs/technical/dev/setup.md).
+use the selectable `aws-dev` target in [developer environment setup](docs/technical/dev/setup.md).
 
 ## Test and document
 
-Run tests for the packages you change, for example:
+Use targeted tests for changed behavior during development, for example:
 
 ```shell
-make test-platform
-make test-provisioner
-make policy
+(cd shifter/shifter_platform && TEST_DB_BACKEND=sqlite uv run pytest tests/config/test_dev_auth.py -n0 --no-cov)
+```
+
+Full-package commands such as `make test-platform` and `make test-provisioner` are recorded in the command matrix for CI reproduction.
+They are not the normal local editing checklist.
+`make policy` runs the repository policy checks; it is not a full test suite.
+Build the documentation locally without publishing:
+
+```shell
 uv run --with-requirements docs/requirements.txt mkdocs build --strict
 ```
 

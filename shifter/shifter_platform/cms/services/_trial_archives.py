@@ -33,12 +33,15 @@ from shared.raes.trial_archive import (
     safe_archive_path,
     validate_trial_archive,
 )
+from shared.raes.trial_archive_run_record import validate_trial_run_record
 from workspaces.services import OrganizationAuthorizationError
 
 from ._content_authority import fence_content_scope, require_content_scope
 from ._tenant_pack_authority import TenantPackAdmission
 from ._tenant_pack_authority import admit_tenant_pack as _admit_tenant_pack
 from ._tenant_pack_authority import fence_tenant_pack as _fence_tenant_pack
+
+_ARCHIVE_UNAVAILABLE = "Archive unavailable"
 
 
 def _admit(
@@ -125,7 +128,7 @@ def _identity_digest(expected: TrialArchiveIdentity) -> str:
     # Digests bind admission, but changing them cannot evade a committed
     # scientific identity's conflict check. Run versions are scientific identity.
     """Bind scientific identity independently of admission digest changes."""
-    identity = {key: value for key, value in asdict(expected).items() if key not in {"plan_digest", "entry_digest"}}
+    identity = {key: value for key, value in expected.as_record().items() if key not in {"plan_digest", "entry_digest"}}
     return hashlib.sha256(json.dumps(identity, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
@@ -140,7 +143,7 @@ def _reserve(admission: TenantPackAdmission, expected: TrialArchiveIdentity) -> 
         row = TrialArchiveTransfer.objects.create(
             id=transfer_id,
             organization_uuid=admission.organization_uuid,
-            expected=asdict(expected),
+            expected=expected.as_record(),
             identity_digest=_identity_digest(expected),
             bucket=destination.bucket,
             object_key=f"{destination.prefix}/trial-archives/{transfer_id}.tar.gz",
@@ -260,7 +263,12 @@ def _publish(
 
 
 def intake_trial_archive(
-    credential: CredentialContext, organization_uuid: UUID, expected: TrialArchiveIdentity, source: BinaryIO
+    credential: CredentialContext,
+    organization_uuid: UUID,
+    expected: TrialArchiveIdentity,
+    source: BinaryIO,
+    *,
+    run_record_only: bool = False,
 ) -> TrialArchiveCollection:
     """Return a receipt only after all original bytes verify at the destination."""
     if not isinstance(expected, TrialArchiveIdentity):
@@ -273,7 +281,8 @@ def intake_trial_archive(
         with tempfile.TemporaryDirectory(prefix="trial-archive-") as temporary:
             source_path, downloaded = Path(temporary) / "source", Path(temporary) / "verified"
             transfer.archive_bytes, transfer.archive_digest = _snapshot(source, source_path)
-            facts = validate_trial_archive(source_path, expected)
+            validate = validate_trial_run_record if run_record_only else validate_trial_archive
+            facts = validate(source_path, expected)
             transfer.plan_metadata = facts.plan_metadata
             transfer.save(update_fields=["archive_bytes", "archive_digest", "plan_metadata", "updated_at"])
             prior = _prior(transfer)
@@ -375,7 +384,7 @@ def retrieve_trial_archive(
         .first()
     )
     if receipt is None or not _view(receipt).worker_copy_disposable:
-        raise CMSError("Archive unavailable")
+        raise CMSError(_ARCHIVE_UNAVAILABLE)
     try:
         with tempfile.TemporaryDirectory(prefix="trial-retrieve-", dir=target.parent) as temporary:
             staged = Path(temporary) / "archive"
@@ -385,7 +394,7 @@ def retrieve_trial_archive(
                 _fence(fresh)
                 current = TrialArchiveReceipt.objects.select_for_update().get(pk=receipt.id)
                 if not _view(current).worker_copy_disposable:
-                    raise CMSError("Archive unavailable")
+                    raise CMSError(_ARCHIVE_UNAVAILABLE)
                 # Link with exclusive destination creation: no arbitrary local
                 # path replacement, and no partial output on a failed download.
                 _audit(admission.credential, organization_uuid, receipt.id, AuditAction.DOWNLOAD, "archive-retrieved")

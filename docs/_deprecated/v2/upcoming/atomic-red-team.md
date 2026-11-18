@@ -1,5 +1,13 @@
 # Atomic Red Team Integration
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Design for automated attack execution using Atomic Red Team. Enables "Case as Outcome" workflows where users receive XDR/XSIAM cases without manual range interaction.
 
 ## Use Case
@@ -533,3 +541,5 @@ Test in dev environment with real instances:
 - [Atomic Red Team GitHub](https://github.com/redcanaryco/atomic-red-team)
 - [ATT&CK Framework](https://attack.mitre.org/)
 - [SetupPlan pattern](../execution/engine.md#plans-architecture)
+
+<!-- vale on -->

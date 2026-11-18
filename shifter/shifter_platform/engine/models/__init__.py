@@ -33,27 +33,6 @@ from ._cleanup_verification import CleanupVerificationOutcome, RangeCleanupVerif
 from ._feature_artifacts import AcquiredFeatureArtifact
 from ._gcp_range_projects import GcpRangeProject, GcpRangeProjectUse
 from ._launch import InterruptState, ProvisionerLaunchIntent, ProvisionerLaunchStatus, RangeCancellationAuthority
-from ._model_allocation import (
-    ModelAliasAssignment,
-    ModelAllocation,
-    ModelAllocationAuthority,
-    ModelCapacityDraw,
-    ModelCapacityReservation,
-    ModelLaunchPreparationRecord,
-    ModelOptionalAbsence,
-    ModelPendingGrant,
-    ModelQuotaIdentity,
-    ModelQuotaReading,
-)
-from ._model_budget import (
-    ModelBudgetAccount,
-    ModelBudgetPosting,
-    ModelDispatchLease,
-    ModelReconciliationObligation,
-    ModelRequestReservation,
-)
-from ._model_credentials import ModelAccessCredential
-from ._model_sources import ModelSource, ModelSourceRegistry, ModelSourceRevision
 from ._operation_io import (
     OperationInput,
     OperationResultDisposition,
@@ -85,15 +64,7 @@ from ._runtime_plugins import (
     RuntimePluginInvocation,
     RuntimePluginPackBinding,
     RuntimePluginRangeBinding,
-)
-from ._sharing import (
-    AllocationGroup,
-    MembershipProjection,
-    SharingAuthorityFence,
-    SharingBindingRecord,
-    SharingBindingRevision,
-    SharingPoolRecord,
-    SharingPoolRevision,
+    RuntimePluginValidation,
 )
 from ._subnet import Subnet, SubnetAllocation
 from ._vpn_profile import VpnAccessProfile, VpnCrlState
@@ -102,7 +73,6 @@ from ._warm_pool import WarmRangeGeneration
 
 __all__ = [
     "AcquiredFeatureArtifact",
-    "AllocationGroup",
     "App",
     "CapacityAssessment",
     "CapacityDeclaration",
@@ -115,26 +85,6 @@ __all__ = [
     "Instance",
     "Instantiation",
     "InterruptState",
-    "MembershipProjection",
-    "ModelAccessCredential",
-    "ModelAliasAssignment",
-    "ModelAllocation",
-    "ModelAllocationAuthority",
-    "ModelBudgetAccount",
-    "ModelBudgetPosting",
-    "ModelCapacityDraw",
-    "ModelCapacityReservation",
-    "ModelDispatchLease",
-    "ModelLaunchPreparationRecord",
-    "ModelOptionalAbsence",
-    "ModelPendingGrant",
-    "ModelQuotaIdentity",
-    "ModelQuotaReading",
-    "ModelReconciliationObligation",
-    "ModelRequestReservation",
-    "ModelSource",
-    "ModelSourceRegistry",
-    "ModelSourceRevision",
     "OperationInput",
     "OperationResultDisposition",
     "OperationResultInbox",
@@ -165,11 +115,7 @@ __all__ = [
     "RuntimePluginInvocation",
     "RuntimePluginPackBinding",
     "RuntimePluginRangeBinding",
-    "SharingAuthorityFence",
-    "SharingBindingRecord",
-    "SharingBindingRevision",
-    "SharingPoolRecord",
-    "SharingPoolRevision",
+    "RuntimePluginValidation",
     "Subnet",
     "SubnetAllocation",
     "VpnAccessProfile",
@@ -178,9 +124,18 @@ __all__ = [
     "VpnSessionEndReason",
     "VpnSessionState",
     "WarmRangeGeneration",
+    "WorkerHostIdentity",
     "WorkerHostObservation",
     "WorkerPolicyRecord",
     "WorkerRetirementHold",
+    "WorkerTrial",
 ]
 
-from ._disposable_worker import DisposableWorker, WorkerHostObservation, WorkerPolicyRecord, WorkerRetirementHold
+from ._disposable_worker import (
+    DisposableWorker,
+    WorkerHostIdentity,
+    WorkerHostObservation,
+    WorkerPolicyRecord,
+    WorkerRetirementHold,
+)
+from ._worker_trial import WorkerTrial

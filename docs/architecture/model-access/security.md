@@ -1,5 +1,13 @@
 # Model-access security design
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 Proposed security contract for [#681](index.md), ADR-059 through ADR-061.
 This document defines required tests; it does not assert that they have run.
 
@@ -54,7 +62,7 @@ where IAM cannot constrain a specific publisher model.
 
 Model projects/accounts have explicit tenant/deployment access and billing
 ownership and are not dynamically created per range. Under
-[#2243](source-management-preflight-2243.md), a dedicated model project is
+[#2243](../../_deprecated/architecture/model-access/source-management-preflight-2243.md), a dedicated model project is
 optional: Vertex may use the platform project. Broker and invocation identities
 remain distinct, and effective IAM must deny invocation principals access to
 platform data and unrelated resources even when they reside in the same
@@ -243,3 +251,5 @@ approval in that policy; regional intent cannot be widened under load.
 No real scenario secrets are used in qualification prompts. Evidence exports
 remain deployment-scoped, protected and body-free; application audit does
 not claim zero provider retention or a billing invoice guarantee.
+
+<!-- vale on -->

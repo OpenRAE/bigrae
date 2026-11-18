@@ -96,12 +96,18 @@ class TestCreateMinting:
         "access",
         [
             pytest.param((), id="no-participant-access"),
-            pytest.param(_access() + _access("provision.node.other"), id="two-target-nodes"),
         ],
     )
-    def test_a_launch_without_a_single_target_mints_nothing(self, access):
+    def test_a_launch_without_a_target_mints_nothing(self, access):
         range_obj = _create(deadline=_deadline(), access=access)
         assert range_obj.remote_access_capability is None
+
+    def test_a_launch_mints_the_exact_participant_target_set(self):
+        range_obj = _create(deadline=_deadline(), access=_access() + _access("provision.node.other"))
+        assert range_obj.remote_access_capability["target_refs"] == [
+            "provision.node.kali#0",
+            "provision.node.other#0",
+        ]
 
     def test_a_launch_without_a_deadline_mints_nothing(self):
         range_obj = _create(deadline=None)

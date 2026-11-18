@@ -1,8 +1,7 @@
 # Scenario Verification Plugins
 
-BigRAE's scenario-verification package provides a neutral contract for
-discovering an installed verification plugin, running its checks through an
-injected transport, and rendering one redacted report. Core ships no
+This how-to guide uses the independent adapter SDK verification API.
+The API discovers an installed plugin, runs its checks through an injected transport, and renders one redacted report. Core ships no
 per-scenario adapters, answer material, target topology, concrete runner, or
 plugin dependency.
 
@@ -12,8 +11,10 @@ or built-in scenario CLI.
 
 ## Public v1 surface
 
-Import public types from `shared.scenario_verification`, not its internal
-modules.
+Import public types from `bigrae_adapter_sdk.verification`.
+The removed `shared.scenario_verification` package is not an integration API.
+Install a reviewed local SDK wheel before running these examples.
+See [SDK candidate builds](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_adapter_sdk/README.md#building-sdk-candidates).
 
 | Surface | Public names | Purpose |
 | --- | --- | --- |
@@ -37,11 +38,12 @@ API version fails before any adapter runs.
 
 ## Publish a plugin factory
 
-An installed distribution registers exactly one or more factories in the fixed
-entry-point group:
+Register one or more factories in the canonical entry-point group.
+The legacy `shifter.scenario_verification.adapters` group remains discoverable.
+Declare one group for each selection to avoid ambiguity:
 
 ```toml
-[project.entry-points."shifter.scenario_verification.adapters"]
+[project.entry-points."bigrae.scenario_verification.adapters"]
 synthetic = "synthetic_verification:plugin"
 ```
 
@@ -50,7 +52,7 @@ The referenced callable takes no arguments and returns a
 scenario id, target, topology, answer, or credential:
 
 ```python
-from shared.scenario_verification import (
+from bigrae_adapter_sdk.verification import (
     API_VERSION,
     AdapterContext,
     AdapterDeclaration,
@@ -111,7 +113,7 @@ metadata in `ENTRY_POINT_GROUP`; it does not import candidates. Select by exact
 distribution name, installed version, and entry-point name:
 
 ```python
-from shared.scenario_verification import (
+from bigrae_adapter_sdk.verification import (
     PluginSelection,
     discover_plugins,
     load_plugin,
@@ -153,16 +155,14 @@ The operator owns the concrete `Runner`. Its `run` method receives:
 
 It returns a bounded `ExecResult(exit_code, stdout, stderr, duration_ms)`.
 `stdout` and `stderr` are available to the selected adapter in memory but are
-never report fields. The concrete runner must validate its target namespace,
-constrain output before buffering, avoid broad inherited environments, and
-terminate or cancel remote work when the run budget expires. It raises
+never report fields. The concrete runner must validate targets and bound output before buffering. It must constrain inherited environments and terminate or cancel remote work when the run budget expires. It raises
 `RunnerExecutionError` for a transport fault and `TimeoutError` for a command
 timeout; raw transport messages never enter the report.
 
 Build `Binding` values from operator-controlled non-secret configuration:
 
 ```python
-from shared.scenario_verification import Binding
+from bigrae_adapter_sdk.verification import Binding
 
 bindings = (
     Binding(name="synthetic.primary", target_id="target-a"),
@@ -191,7 +191,7 @@ normally omit it.
 ```python
 import time
 
-from shared.scenario_verification import (
+from bigrae_adapter_sdk.verification import (
     AdapterContext,
     aggregate_exit_code,
     render_human,

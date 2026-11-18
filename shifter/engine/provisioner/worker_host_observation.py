@@ -55,7 +55,7 @@ def worker_observations_fragment(result: dict[str, object], targets: tuple[str, 
             raise ValueError("Worker management address is not private")
         if instance.get("asset_type") != "gce_vm" or instance.get("os") != "linux":
             raise ValueError("Worker host observation backend is unsupported")
-        vm = observe_gce_worker_identity(instance, clients)
+        vm, hardware = observe_gce_worker_identity(instance, clients)
         binding = access[member]
         output = run_guest_probe(
             GuestProbeRequest(
@@ -70,11 +70,11 @@ def worker_observations_fragment(result: dict[str, object], targets: tuple[str, 
                 max_output_bytes=4096,
             )
         )
-        observations[member] = _safe_observation(output, vm)
+        observations[member] = _safe_observation(output, vm, hardware)
     return {"worker_observations": validate_worker_observations(observations)}
 
 
-def _safe_observation(output: str, vm: dict[str, str]) -> dict[str, object]:
+def _safe_observation(output: str, vm: dict[str, str], hardware: dict[str, object]) -> dict[str, object]:
     """Discard raw guest identities and reject any unexpected probe response."""
     payload = decode_message(output, limit=4096)
     if not isinstance(payload, dict) or set(payload) != {"machine_id", "daemon_id", "docker_version", "daemon_count"}:
@@ -85,5 +85,6 @@ def _safe_observation(output: str, vm: dict[str, str]) -> dict[str, object]:
         "daemon_identity": canonical_digest(_guest_identity(payload["daemon_id"])),
         "docker_version": payload["docker_version"],
         "daemon_count": payload["daemon_count"],
+        "hardware": hardware,
         "observed_at": datetime.now(UTC).isoformat(),
     }

@@ -79,8 +79,10 @@ class ParticipantVpnProfileView(APIView):
                     status_code=status.HTTP_400_BAD_REQUEST,
                 )
             credential, participant, range_instance_id = _vpn_profile_actor(request, source=source)
-            _admit_vpn_delivery_rate(credential.principal.uuid if credential else _actor(request).pk)
+            actor_id = credential.principal.uuid if credential else _actor(request).pk
+            _admit_vpn_delivery_rate(actor_id, consume=False)
             profile = _participant_profile(participant, credential)
+            _admit_vpn_delivery_rate(actor_id, consume=True)
             audit_vpn_profile_download(
                 actor_id=None if credential else _actor(request).pk,
                 **({"principal": credential.principal} if credential else {}),
@@ -123,12 +125,15 @@ def _vpn_profile_actor(request: Request, *, source: bool) -> tuple[CredentialCon
     return credential, participant, participant.range_instance_id
 
 
-def _admit_vpn_delivery_rate(actor_id: UUID | int) -> None:
-    """Apply the existing credential-delivery budget before reading private VPN material."""
+def _admit_vpn_delivery_rate(actor_id: UUID | int, *, consume: bool) -> None:
+    """Check capacity first, then consume only for a profile ready to deliver."""
     from ctf.views._access import _check_credential_delivery_rate_limit
+    from shared.credential_delivery import credential_delivery_available
 
     try:
-        allowed = _check_credential_delivery_rate_limit(actor_id)
+        allowed = (
+            _check_credential_delivery_rate_limit(actor_id) if consume else credential_delivery_available(actor_id)
+        )
     except Exception as exc:
         logger.exception("CTF VPN profile delivery rate limiter unavailable")
         raise _CtfApiError(

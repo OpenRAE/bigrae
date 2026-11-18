@@ -15,7 +15,7 @@ Related artifacts:
 - `docs/design/ux-003-oss-shifter-research-personas.md` (personas and JTBD).
 - `docs/design/spa-design-system-foundation-1299.md` (the locked Apple-dark
   Tailwind v4 plus shadcn/ui system).
-- `docs/architecture/spa-cohesive-ux-preflight-1368.md` (binding guardrails).
+- `docs/_deprecated/architecture/spa-cohesive-ux-preflight-1368.md` (binding guardrails).
 
 ## Purpose and Scope
 
@@ -163,7 +163,7 @@ notifications, invitations, flags, and challenge files.
 | Demo operator | Run a customer event and see which teams are blocked and whether ranges are healthy | `pain-fragmented-operational-state` across event, range, and participant pages | event, participant, and range views | Reads exist; the operator dashboard aggregates event health for #1372 |
 | Demo operator | Intervene before frustration spreads by seeing participant progress and blockers | Progress is spread across pages | participant and scoreboard views | Present participant progress in the detail and list patterns |
 | Trainer | Manage challenges, brackets, scoring, and communications for a cohort | Each is a separate admin flow | challenge, bracket, scoreboard, and notification views | Function-based `api_*` views exist; confirm shapes for #1372 |
-| Organizer | Perform destructive actions such as force-delete safely | Destructive actions are easy to confuse with routine edits | force-delete and delete views | Route destructive actions through the confirmation pattern |
+| Organizer | Perform destructive actions such as force-delete safely | Users can confuse destructive actions with routine edits | force-delete and delete views | Route destructive actions through the confirmation pattern |
 
 ### Admin (Shifter Admin)
 

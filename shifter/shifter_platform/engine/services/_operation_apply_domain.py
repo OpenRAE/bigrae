@@ -447,6 +447,10 @@ def apply_validated_result(row: OperationResultInbox) -> tuple[str, str]:
             from ._vpn_pki_results import apply_vpn_pki_result
 
             disposition = apply_vpn_pki_result(row, payload)
+        elif row.resource == "worker-trial":
+            from ._worker_trials import apply_worker_trial_result
+
+            disposition = apply_worker_trial_result(row, payload)
         else:
             target = _lock_and_authorize(row, step)
             disposition = (

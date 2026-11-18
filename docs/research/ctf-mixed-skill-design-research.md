@@ -1,5 +1,13 @@
 # CTF Design Research: Mixed-Skill Audiences
 
+> **Applicability** Dated research reference, compiled 2026-03-18.
+> The original citations, quantities, estimates, and qualifications remain unchanged.
+> This documentation review did not reproduce the studies or establish current product behavior.
+> See the [current architecture](../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Research compiled 2026-03-18. Focused on CTF events designed for participants ranging from complete beginners through experts, with emphasis on 4-hour event constraints.
 
 ---
@@ -405,3 +413,5 @@ For a government/national security audience (split the difference):
 9. **Expect 80% of solves to come from Easy/Normal challenges** (Dragos data). Design accordingly.
 
 10. **First blood bonuses should be small** to avoid demoralizing beginners when experts sweep early points.
+
+<!-- vale on -->

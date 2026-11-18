@@ -10,10 +10,11 @@ if TYPE_CHECKING:
 from dataclasses import dataclass
 from uuid import UUID
 
-from shared.authorization import AuthorizationRequest, TargetRef, resolve_authorization_event_scope
+from shared.authorization import TargetRef, resolve_authorization_event_scope
 from shared.authorization.policy import require_authorization, scope_parent
 from shared.credentials import CredentialContext, resolve_credential_scope, resolve_current_credential
 from shared.identity_scope import ResourceScope
+from shared.range_access_authority import range_action_request
 
 from ._common import EngineError
 
@@ -124,8 +125,14 @@ def require_native_range_action(credential: CredentialContext, request_uuid: UUI
         if resolve_credential_scope(target) != projection.scope:
             raise ValueError("Range projection changed")
         require_authorization(
-            AuthorizationRequest(
-                current.principal, action, target, projection.scope, current.ceiling, parent=projection.parent
+            range_action_request(
+                current,
+                action,
+                range_uuid=projection.public_uuid,
+                request_uuid=projection.request_uuid,
+                owner_uuid=projection.owner_principal_uuid,
+                scope=projection.scope,
+                parent=projection.parent,
             )
         )
         row = (
@@ -157,15 +164,20 @@ def authorized_instance_range(
             raise ValueError("Missing guest identifier")
         identifier = instance_uuid
         selected = {"cms_range_uuid": range_uuid} if range_uuid is not None else {}
-        candidates = tuple(
-            Range.objects.select_related("request")
-            .filter(
-                provisioned_instances__contains=[{"uuid": identifier}],
-                status=Range.Status.READY,
-                **selected,
-            )
-            .only("id", "request__request_id")[:2]
+        query = Range.objects.select_related("request").filter(
+            provisioned_instances__contains=[{"uuid": identifier}],
+            status=Range.Status.READY,
+            **selected,
         )
+        candidate_query = (
+            query if range_uuid is not None else query.filter(owner_principal_uuid=credential.principal.uuid)
+        )
+        candidates = tuple(candidate_query.only("id", "request__request_id")[:2])
+        if range_uuid is None and not candidates:
+            # Retain unambiguous administrator access to another principal's
+            # range while keeping repeated authored guest identifiers from
+            # making every participant's own range ambiguous.
+            candidates = tuple(query.only("id", "request__request_id")[:2])
         if len(candidates) != 1 or candidates[0].request is None:
             raise ValueError("Missing guest binding")
         return require_native_range_action(credential, candidates[0].request.request_id, "range.access")

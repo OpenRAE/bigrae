@@ -1,40 +1,47 @@
 # BigRAE documentation
 
-BigRAE is a self-service cyber-range platform for authorized purple, red, and
-blue team exercises and CTF events. It installs on GCP from a published
-release. AWS support comes in an upcoming release.
+BigRAE provides cyber ranges for authorized purple, red, and blue team exercises and CTF events.
+Use the route that matches your task.
 
-New to BigRAE? Start with [Get started](getting-started/index.md):
+## Start here
 
-1. [Install BigRAE on GCP](technical/handbook/gcp-first-run.md).
-2. [Launch your first range](getting-started/quickstart.md).
+1. Read [Get started](getting-started/index.md) to install or join a deployment.
+2. Follow [Launch your first range](getting-started/quickstart.md) on an installed GCP tenant.
+
+The current GCP install procedure requires a release with a verified deployer image.
+The latest published release checked on 2026-11-09, `v4.1.1`, has no such image.
+[Check release eligibility](getting-started/install-gcp.md#3-select-and-verify-a-release) before running deployment commands.
+GCP and AWS backend source is separate from published-release and live deployment evidence.
 
 ## Use BigRAE
 
-| Section | Read this when |
-|---|---|
-| [Getting started](getting-started/index.md) | You are new and want the install path, the first range, and the key concepts. |
-| [How-to guides](how-to/index.md) | You want step-by-step guides for specific tasks. |
-| [Features](features/index.md) | You need details on agents, ranges, the terminal, credentials, NGFW, or CTF. |
-| [Scenarios](scenarios/index.md) | You are running a specific scenario. |
-| [Reference](reference/index.md) | You need the FAQ or support pointers. |
+| Purpose | Destination |
+| --- | --- |
+| Tutorials | [First range](getting-started/quickstart.md): launch, inspect, and clean up a Linux exercise. |
+| How-to guides | [Features](features/index.md) and [task guides](how-to/index.md): complete a known task. |
+| Reference | [FAQ](reference/faq.md) and [technical contracts](technical/shifter_platform/index.md): find exact behavior. |
+| Explanation | [Key concepts](getting-started/concepts.md) and [architecture](technical/architecture.md): understand objects and boundaries. |
+
+Use the [scenario catalog guide](scenarios/index.md) to inspect installed content and realizability.
+Use [pack installation](scenarios/index.md#install-a-content-pack) for administrator-approved content uploads.
 
 ## Deploy and operate on GCP
 
 | Doc | Read this when |
 |---|---|
-| [Install BigRAE on GCP](technical/handbook/gcp-first-run.md) | You install a new deployment from a published release. |
-| [GitHub-less GCP deployment guide](technical/handbook/gcp-github-less-deployment.md) | You need the full detail of the release, the bundle, install, update, mirror, and teardown. |
-| [RB023: GCP deployment](runbooks/rb023-gcp-deployment.md) | An install, update, or teardown fails. |
-| [GCP tenant standup gotchas](dev/gcp-tenant-standup-gotchas.md) | You hit a known deploy problem. |
+| [Install on Google Cloud](getting-started/install-gcp.md) | You install a new deployment from a published release. |
+| [GCP deployment handbook](technical/handbook/gcp-github-less-deployment.md) | You need the lifecycle commands, the bundle, the deploy stages, the lock, the evidence, a mirror, or the retained resources after teardown. |
+| [RB023: GCP deployment](runbooks/rb023-gcp-deployment.md) | An install, update, or teardown fails, or you hit a known deploy problem. |
+| [Contributor GCP releases and test deploys](dev/gcp-contributor-deploy.md) | You publish a release, deploy from a checkout, or test deploy tooling. |
+| [Retained GCP CI deploy adapter](dev/gcp-ci-adapter.md) | You need the GitHub CI inputs of the retained GCP CI adapter. |
 | [GCP range-cell deploy](dev/gcp-range-cell-deploy.md) | You configure the GCE range backend and its images. |
 | [Deployment configuration and recovery](dev/deployment-configuration.md) | You need how the deploy renders its Terraform inputs and recovers state. |
 | [Native CTF scenario content](dev/ctf-scenario-content.md) | You are publishing and binding private, digest-pinned native challenges to a scenario. |
 | [GCP event capacity profiles](ops/gcp-event-capacity.md) | You are scaling a GCP tenant for an event, running the p30 public-path gate, checking drift, or scaling down. |
+| [GCP operator credential](ops/gcp-operator-credential.md) | You need an operator credential file and no portal session can issue one. |
 | [GCP native identity](ops/gcp-native-identity.md) | You are enabling native SQL, separating policy administration or qualifying live renewal and authority. |
 | [GCP range audit telemetry](ops/gcp-range-audit-telemetry.md) | You are changing GCP range flow, NAT, or Vertex AI audit logging, or reading the deploy readback. |
 | [Operations runbooks](runbooks/index.md) | You are diagnosing or recovering a deployed BigRAE environment. |
-| [Model-access operations design](ops/model-access.md) | You are implementing or reviewing planned model access, budgets, revocation, migration, and recovery under #681. |
 
 ## Develop and govern
 

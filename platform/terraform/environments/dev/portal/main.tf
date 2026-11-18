@@ -89,8 +89,8 @@ data "aws_caller_identity" "current" {}
 #
 # These keys are intentionally separate from `engine-state` (Pulumi state) and
 # from each other, so a future revoke/rotate of one boundary does not collapse
-# the others. See docs/architecture/secrets-manager-cmk-preflight.md and
-# docs/architecture/s3-bucket-hardening-preflight.md.
+# the others. See docs/_deprecated/architecture/secrets-manager-cmk-preflight.md and
+# docs/_deprecated/architecture/s3-bucket-hardening-preflight.md.
 
 resource "aws_kms_key" "secrets_manager" {
   description             = "CMK for portal Secrets Manager secrets (CKV_AWS_149) — see #213"

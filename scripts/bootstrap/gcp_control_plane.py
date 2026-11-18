@@ -502,15 +502,11 @@ class GcpRenderArtifacts:
     """Installation-render artifacts threaded from validated root config into Helm values.
 
     Grouped so ``render_gcp_helm_values`` stays within the parameter budget (S107): the
-    model-access catalog/env feed the model broker, and the Mission Control lease policy
-    env (#27) merges into the runtime ConfigMap.
+    Mission Control lease policy env (#27) merges into the runtime ConfigMap.
     """
 
-    model_access_catalog_json: str = ""
-    model_access_env: str = ""
     mission_control_lease_env: str = ""
     range_telemetry_env: str = ""
-    model_broker_runtime: dict | None = None
     openfga_settings: dict | None = None
     capacity_profile_id: str = "gcp-shared-v1-p10"
 
@@ -540,7 +536,6 @@ def render_gcp_helm_values(
     ``image_identities`` names the exact verified release digests (#2571).
     """
     from installation.capacity_profiles_gcp import resolve_capacity_profile
-    from installation.gcp_model_broker import project_model_broker
 
     artifacts = render_artifacts or GcpRenderArtifacts()
     service_accounts = _get_output_value(outputs, "workload_service_accounts")
@@ -573,13 +568,6 @@ def render_gcp_helm_values(
     # the range-access egress policy unrendered.
     range_access_cidrs = _unique_nonempty_strings([str(_get_output_value(outputs, "range_network_cidr")).strip()])
 
-    broker = project_model_broker(
-        outputs.get("model_broker", {}).get("value"),
-        catalog_json=artifacts.model_access_catalog_json,
-        model_access_env=artifacts.model_access_env,
-        runtime_settings=artifacts.model_broker_runtime,
-    )
-    runtime_env.update(broker.get("enrollment_env", {}))
     images = _helm_image_values(image_identities)
     acquirer = service_accounts.get("artifact-acquirer") if isinstance(service_accounts, Mapping) else None
     if acquirer:
@@ -588,7 +576,6 @@ def render_gcp_helm_values(
         runtime_env["FEATURE_ARTIFACT_JOB_IMAGE"] = images["platform"]
     values: dict[str, object] = {
         "releaseNamespace": "shifter-system",
-        "modelBroker": broker,
         "capabilities": {"featureArtifactAcquisition": bool(acquirer)},
         "featureArtifactAcquisition": _gcp_feature_artifact_acquisition_values(acquirer),
         "serviceAccounts": _helm_service_account_values(service_accounts),

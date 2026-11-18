@@ -1,6 +1,8 @@
 # GCP Terraform
 
-This tree provisions the GCP control plane for Shifter.
+This reference describes the GCP Terraform roots and their ownership.
+For installation, use [Install on Google Cloud](../../../docs/getting-started/install-gcp.md).
+Use the [compatibility reference](../../../docs/technical/platform_infrastructure/deployment-compatibility.md) before selecting a release.
 
 ## Roots
 
@@ -19,7 +21,7 @@ Current scope:
 
 - project service enablement
 - VPC-native GKE foundation
-- dedicated peered range VPC reserved for future Compute Engine range subnets
+- dedicated peered range VPC for provisioner-owned Compute Engine range subnets
 - Cloud SQL PostgreSQL control-plane database over private IP
 - shared Cloud SQL databases for the portal and Guacamole client
 - Memorystore Redis for channel-layer and worker coordination
@@ -46,10 +48,10 @@ Security posture:
 - GKE Binary Authorization is enabled (`PROJECT_SINGLETON_POLICY_ENFORCE`) so cluster admission enforces the project's Binary Authorization policy.
 - The public application edge is protected with a baseline Cloud Armor policy.
 - The GDC workstation and cluster hosts are expected to be private-only and accessed through IAP by bootstrap.
-- Platform and range VPCs carry explicit `google_compute_firewall` policy (ADR-008-R4): range ingress is deny-by-default with a single allow rule sourced from `local.portal_network_cidrs` on `var.range_provisioner_ports`; the platform VPC blocks world-open SSH/RDP and allows only Google LB health-check ranges to the GKE nodes. Operator break-glass SSH is gated on `var.operator_admin_cidrs` (empty in dev).
+- Platform and range VPCs carry explicit `google_compute_firewall` policy (ADR-008-R4): range ingress denies by default. Its allow rule uses `local.portal_network_cidrs` and `var.range_provisioner_ports`. Platform rules block world-open SSH/RDP and admit Google load-balancer health checks to GKE nodes. Operator break-glass SSH is gated on `var.operator_admin_cidrs` (empty in dev).
 - Cloud SQL deletion protection is on by default (`var.cloud_sql_deletion_protection`, default `true`); the platform control-plane database cannot be destroyed without an explicit, environment-root override.
-- Memorystore Redis runs on the STANDARD_HA tier with `auth_enabled = true` and `transit_encryption_mode = "SERVER_AUTHENTICATION"` (ADR-008-R6). The AUTH token lives in a `redis` Secret Manager bundle and is hydrated by the runtime entrypoint just like the DB/app secrets - never in the runtime ConfigMap, generated env, or process argv. Django Channels reads `REDIS_TLS` / `REDIS_PASSWORD` and uses a `rediss://` channels_redis URL host; the helper fails closed if TLS is enabled without a hydrated password.
-- Each Terraform-owned GCS bucket uses a customer-managed key from `modules/gcs-cmek` (ADR-008-R5): one key ring for each owner and location, one 90-day rotating key for each bucket role, and a grant to the Storage service agent before the bucket uses the key. `gcp-deploy` and `gcp-foundation` rewrite the live objects that do not use the key. See the [GCS CMEK design](../../../docs/architecture/gcp-gcs-cmek-design-2564.md). The Terraform state bucket keeps Google-managed encryption, because bootstrap creates it before Terraform runs.
+- Memorystore Redis runs on the STANDARD_HA tier with `auth_enabled = true` and `transit_encryption_mode = "SERVER_AUTHENTICATION"` (ADR-008-R6). The runtime entrypoint hydrates the Redis AUTH token from its Secret Manager bundle. It never enters the runtime ConfigMap, generated environment output, or process arguments. Django Channels reads `REDIS_TLS` / `REDIS_PASSWORD` and uses a `rediss://` channels_redis URL host; the helper fails closed if TLS is enabled without a hydrated password.
+- Each Terraform-owned GCS bucket uses a customer-managed key from `modules/gcs-cmek` (ADR-008-R5): one key ring per owner/location and one 90-day rotating key per bucket role. The Storage service agent receives its grant before the bucket uses the key. `gcp-deploy` and `gcp-foundation` rewrite the live objects that do not use the key. See the [GCS CMEK design](../../../docs/architecture/gcp-gcs-cmek-design-2564.md). The Terraform state bucket keeps Google-managed encryption, because bootstrap creates it before Terraform runs.
 - `gcp-deploy` sets `public_hostname` from `deployment.domain` and sets
   `enable_managed_tls = true`. Before Terraform apply, it reads
   `gke_master_authorized_cidrs` from the Terraform values of the deployment.
@@ -61,19 +63,19 @@ Security posture:
 
 ## Deployment-scoped range-secret project
 
-Every GCP deployment requires a pre-existing Secret Manager project dedicated
-to ephemeral range credentials. Set `settings.dynamic_secret_project_id` in the
-deployment `shifter.yaml`; `shifter-config render` carries that single value to
-Terraform, Terraform publishes it to the runtime as
-`GCP_DYNAMIC_SECRET_PROJECT_ID`, and every dynamic writer uses it. The project
-must not hold platform bundles, Terraform state, application data, or another
-deployment's secrets. The cloud/bootstrap owner creates and retires the project;
-application Terraform enables Secret Manager and owns only its workload IAM and
-DATA_READ audit configuration.
+Set `settings.dynamic_secret_project_id` explicitly in `bigrae.yaml`.
+The supported single-project topology sets it equal to `project_id`.
+An operator can instead select a separate pre-existing project for range credentials.
+The field does not create a project.
 
-The deploy identity needs enough authority in that project to enable the Secret
-Manager API, define the two Shifter custom roles, maintain project IAM members,
-and configure Secret Manager audit logging. Runtime authority is narrower:
+The parser validates this value and `bigrae-config render` projects it to Terraform.
+Terraform publishes `GCP_DYNAMIC_SECRET_PROJECT_ID` for dynamic writers.
+The following separation and migration instructions apply when a separate project is selected.
+Keep that dedicated project free of platform bundles, state, application data, and other deployments' secrets.
+The cloud/bootstrap owner creates and retires it.
+Application Terraform owns Secret Manager enablement, workload IAM, and DATA_READ audit configuration.
+
+The deploy identity needs API enablement, custom-role management, project IAM membership, and Secret Manager audit-configuration authority in the selected project. Runtime authority is narrower:
 
 - provisioner: unconditioned `secretmanager.secrets.create` on the dedicated
   project parent, because Google authorizes create before the secret exists;
@@ -84,28 +86,20 @@ and configure Secret Manager audit logging. Runtime authority is narrower:
   `...-dynamic-participant-` prefix;
 - range hosts: accessor only on their individual secret.
 
-The create-only parent grant can create an arbitrary empty container in this
-single-purpose project, but it cannot add/read versions, change IAM, or delete
-an out-of-prefix object. It cannot create in the platform project. Monitor
-Secret Manager resource/quota usage and have only the bootstrap/operator cleanup
-identity remove abandoned out-of-prefix containers; do not grant the runtime
-provisioner list or broad cleanup authority.
+The create-only parent grant can create arbitrary empty Secret containers in the selected project. It cannot add/read versions, change IAM, or delete out-of-prefix resources. With a separate dynamic-secret project, it cannot create in the platform project. Monitor Secret Manager resource and quota use. Only the bootstrap/operator cleanup identity may remove abandoned out-of-prefix containers. Do not grant provisioner list or broad cleanup authority.
 
-Creation reconciliation also fails closed when it finds any exact legacy or
-canonical read-location container whose first version has not appeared after
-the bounded concurrency wait. It does not skip an empty legacy container and
-mint a competing canonical guest credential or VPN profile, nor publish a
-second value into a container that an in-flight provisioner may own. Retry
-first; if the container remains empty, use audit/job evidence to prove no
-creator is active, delete that exact container with the bootstrap/operator
-cleanup identity, and retry the range operation.
+Creation reconciliation rejects exact legacy or canonical read-location containers without a first version after the bounded concurrency wait. It never skips an empty legacy container to create a competing credential or VPN profile. It never publishes a second value beside an active creator.
+
+Retry first. For a persistently empty container, prove the creator has stopped using audit and Job evidence. The bootstrap/operator cleanup identity may then delete that exact container.
+
+Retry the range operation afterward.
 
 Canonical naming also requires an explicit `ENVIRONMENT` value in the runtime
 and rejects values outside the lowercase, single-hyphen deployment grammar.
 There is no implicit `dev` namespace: missing or malformed configuration fails
 before creating a container.
 
-Operator-created inputs are separate. Declare supported GDC/Vertex references
+Operator-created inputs are separate. Declare supported GDC references
 once in `settings.provisioner_static_secret_refs` as full, versionless
 `projects/<project>/secrets/<id>` names. The rendered Terraform map deduplicates
 those names for exact per-secret provisioner IAM, and the Terraform output feeds
@@ -120,12 +114,8 @@ apply; there is no project-wide fallback.
    broad provisioner grant.
 2. **Cut over:** pre-create the dedicated project, grant the deploy identity the
    control-plane permissions above, change only `dynamic_secret_project_id`, and
-   apply. New secrets use canonical names in the dedicated project. Existing
-   legacy references are read first and remain deletable; an unavailable new
-   project fails closed and never creates back in the platform project.
-3. **Verify:** create and destroy a disposable range, verify participant access,
-   and run `scripts/gcp/probe_range_secret_permissions.py` with the real
-   provisioner, portal, range-host pool, worker, launcher, and node identities.
+   apply. New secrets use canonical names in the dedicated project. Existing legacy references remain readable and deletable. An unavailable new project fails closed; creation never falls back to the platform project.
+3. **Verify:** create and destroy a disposable range, then verify participant access. Run `scripts/gcp/probe_range_secret_permissions.py` with actual provisioner, portal, range-host pool, worker, launcher, and node identities.
    The script is plan-only unless
    `--execute` is supplied and cleans its probe secrets with the operator
    identity.
@@ -134,14 +124,9 @@ apply; there is no project-wide fallback.
    teardown check both exact locations, so revocation remains generation-bound.
    Do not copy payloads or rotate a live range merely to rename its reference.
 5. **Contract:** after the legacy inventory is empty, remove the migration-only
-   legacy IAM resources and lookup paths in a contract release. Retire the old
-   project only after independent inventory and audit-log confirmation; Terraform
-   destroy deliberately does not delete either project or live dynamic secrets.
+   legacy IAM resources and lookup paths in a contract release. Retire the old project only after independent inventory and audit-log confirmation. Terraform destroy deletes neither project nor live dynamic secrets.
 
-Preview the live probe matrix without cloud mutations, then add `--execute` only
-from an operator session that can impersonate the listed service accounts and
-create/delete cleanup secrets in the dynamic, platform, and unrelated control
-projects:
+Preview the probe matrix first. Add `--execute` only with approved service-account impersonation and probe-secret creation/deletion authority in the dynamic, platform, and unrelated control projects:
 
 ```bash
 python3 scripts/gcp/probe_range_secret_permissions.py \
@@ -160,69 +145,56 @@ python3 scripts/gcp/probe_range_secret_permissions.py \
 
 The probe suppresses provider stderr and payload output. It records a run
 correlation ID, principal, permission, resource class, fingerprinted resource,
-result, and elapsed propagation time. It proves allowed canonical lifecycle and
-participant reads; denied platform-project creation and unrelated-resource
-lifecycle; portal read partition and mutation denial; assigned host
-per-secret access with peer-secret negatives; and no dynamic-secret read by
-workers, launcher, or the GKE node identity. Its `finally` cleanup uses the
+result, and elapsed propagation time. It verifies allowed canonical lifecycle and participant reads.
+
+It checks denied platform-project creation and unrelated-resource lifecycle in separate-project mode. It also checks portal partition/mutation denial and assigned-host access with peer-host denial. Workers, launchers, and GKE nodes must not read dynamic secrets.
+
+Its `finally` cleanup uses the
 operator identity in both projects, so even an unexpectedly allowed negative
 create does not leave a probe container.
 
 ### Capacity and cost envelope (checked 2026-09-07)
 
+The provider quota and price references were rechecked on 2026-11-09.
+The earlier per-version access-limit claim was incorrect; those limits apply to version modifications.
+Use actual project quotas and billing rates for approval.
+
 Recalculate this section against the linked Google sources and the deployment's
 actual metrics before cut-over. The checked-in default bounds the range-host
 identity pool at 24 concurrent slots. A conservative planning
 case of 10 one-version dynamic secrets per active range therefore gives 240
-active versions. A full 24-range create wave is approximately 528 Secret Manager
-writes (24 × (10 create + 10 add-version + 2 per-secret IAM writes)), leaving
-only 72 requests of the current 600-write/minute project quota for retries and
-reconcile. Do not overlap that wave with a full drain (another 240 deletes);
+active versions. A 24-range wave requires approximately 528 writes: `24 × (10 create + 10 add-version + 2 per-secret IAM writes)`. Under a 600-write/minute quota, 72 requests remain for retries and reconciliation. Do not overlap that wave with a full drain (another 240 deletes);
 pace or batch provisioning when the measured shape exceeds this envelope.
 
 Current Secret Manager limits are 90,000 access, 600 other read, and 600 write
-requests per minute per project. A global secret version is additionally soft
-limited to 1 access/second and 60 accesses/minute, so a burst against one
-participant credential can throttle well before the project quota; the portal's
-300-second successful-read cache reduces but does not remove that risk. See
+requests per minute per project. Global secret-version enable, disable, and destroy operations have soft limits of 1 request/second and 60 requests/minute per version. These are modification limits, not access limits. Global `AddSecretVersion` and `UpdateSecret` operations allow 2 requests/second and 120 requests/minute per secret. The portal caches successful reads for 300 seconds, but project access quotas still apply. See
 [Secret Manager quotas](https://cloud.google.com/secret-manager/quotas).
 
-At the current US list price, automatic replication counts as one location,
-active versions beyond the billing account's first six cost $0.06/version-month,
-and accesses beyond the first 10,000 cost $0.03 per 10,000. If those free tiers
+Automatic replication counts as one billing location. Active versions beyond the first six cost $0.06/version-month in the US example. Accesses beyond the first 10,000 cost $0.03 per 10,000. If those free tiers
 are otherwise unused, 240 active versions plus 200,000 monthly accesses is
 `(240 - 6) × $0.06 + (200,000 - 10,000) / 10,000 × $0.03 = $14.61/month`.
 Management operations are currently free. This excludes audit-log storage and
 other GCP services; use the [Secret Manager pricing](https://cloud.google.com/secret-manager/pricing)
 page and billing-account currency for rollout approval.
 
-DATA_READ audit logs are disabled by Google by default; this stack enables them.
-At current Cloud Logging pricing, the first 50 GiB/project/month of non-network
-log storage is free, then ingestion is $0.50/GiB, and retention beyond 30 days
-is $0.01/GiB-month. Measure the probe and a representative range-access hour,
-project monthly volume from that evidence, and set the sink/retention budget;
-do not estimate log size from request count alone. See
+DATA_READ audit logs are disabled by Google by default; this stack enables them. The Cloud Logging US example includes 50 GiB/project/month of non-network log storage. Additional ingestion costs $0.50/GiB.
+
+Retention beyond 30 days costs $0.01/GiB-month. Measure probe traffic and a representative hour of range access. Project monthly volume and set the sink/retention budget.
+
+Do not estimate bytes from request counts alone. See
 [Cloud Logging pricing](https://cloud.google.com/products/observability/pricing)
 and [Secret Manager audit logging](https://cloud.google.com/secret-manager/docs/audit-logging).
 
-Range guests reach Vertex through a keyless, predict-only identity attached via
-Workload Identity (ADR-064): no per-range service-account keys are created, so the
-10-key-per-principal limit no longer bounds range concurrency. The identity is
+Range guests use attached, keyless, predict-only Workload Identity for Vertex (ADR-064). No per-range service-account keys are created. The ten-key-per-principal limit therefore does not bound concurrency. The identity is
 least privilege (`aiplatform.endpoints.predict` plus host telemetry) and is
 attached only when the model broker is not the guest path. Enabling a specific
 model (for example Claude in Vertex Model Garden) is a one-time provider-console
 step.
 
-Secret deletion blocks fresh Secret Manager reads after IAM propagation, but
-already delivered guest credentials, cached portal values, downloaded VPN
-profiles, minted OAuth tokens, and service-account keys have separate revocation
-windows. The rollout owner must record the observed permission-probe propagation
+Deleting a secret blocks fresh reads after IAM propagation. Delivered credentials, cached portal values, downloaded VPN profiles, minted OAuth tokens, and service-account keys have separate revocation windows. The rollout owner must record the observed permission-probe propagation
 time, allow five minutes for the portal cache, and revoke the guest material.
 A downloaded VPN profile stops working when the portal refuses its session,
-within one pool heartbeat (#2480). The extra project also consumes
-the organization's project quota and requires billing/API/audit-policy authority;
-verify those deployment-specific limits rather than assuming project creation is
-available.
+within one pool heartbeat (#2480). A separate project consumes organization project quota and needs billing, API, and audit-policy authority. Check those deployment-specific limits before requesting creation.
 
 See also Google's
 [IAM resource attributes](https://cloud.google.com/iam/docs/conditions-attribute-reference)
@@ -268,8 +240,7 @@ To enable email:
    unset ESP_API_KEY
    ```
 
-   `printf` is a shell builtin, so the key passes through the variable and stdin
-   only - it is never exposed in `ps` output or shell history. Alternatively,
+   `printf` is a shell builtin. The value travels through the shell variable and stdin, outside process arguments and shell history. Alternatively,
    write the JSON to a `chmod 600` file and pass it with `--data-file=<path>`.
 
 The deploy renderer (`scripts/gcp/render_runtime_env.py`) emits `EMAIL_BACKEND`,

@@ -1,10 +1,18 @@
 # Private model broker runtime (M05)
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 Issue [#2122](https://github.com/Brad-Edwards/bigrae/issues/2122) completes the
 existing standalone broker and Engine control boundary. This is a local runtime
 contract, not a cloud, load, restore or full PLAT-202 qualification record.
 [ADR-059](../../adr/059-range-model-access-broker.md), the
-[preflight](broker-preflight-2122.md) and [security design](security.md) retain
+[preflight](../../_deprecated/architecture/model-access/broker-preflight-2122.md) and [security design](security.md) retain
 their authority and qualification requirements.
 
 ## Ownership and closed routes
@@ -82,3 +90,5 @@ test service reachable there. Do not relax production subnet verification to
 accommodate host NAT. These tests prove neither a cloud load balancer's source
 preservation nor effective IAM, provider invoices, supported cohort size or live
 revocation. Record that evidence through the existing qualification procedures.
+
+<!-- vale on -->

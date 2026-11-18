@@ -399,6 +399,88 @@ class TestScoreboardApi:
         resp = _json(authenticated_organizer_client, "get", "api_scoreboard", kwargs={"event_id": uuid4()})
         assert resp.status_code == 404
 
+    def test_default_kind_keeps_team_rows_for_a_team_event(
+        self, authenticated_organizer_client: Client, ctf_participant_team: CTFParticipant
+    ):
+        resp = _json(
+            authenticated_organizer_client,
+            "get",
+            "api_scoreboard",
+            kwargs={"event_id": ctf_participant_team.event_id},
+        )
+        assert resp.status_code == 200
+        assert [row["name"] for row in resp.json()["rankings"]] == ["Test Team"]
+
+    def test_individual_kind_returns_participant_rows_for_a_team_event(
+        self, authenticated_organizer_client: Client, ctf_participant_team: CTFParticipant
+    ):
+        resp = _json(
+            authenticated_organizer_client,
+            "get",
+            "api_scoreboard",
+            kwargs={"event_id": ctf_participant_team.event_id},
+            query="?kind=individual",
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["team_mode"] is True
+        assert [row["name"] for row in body["rankings"]] == ["Team Participant"]
+        assert body["rankings"][0]["participant_id"] == str(ctf_participant_team.id)
+
+    def test_team_kind_returns_team_rows_for_a_team_event(
+        self, authenticated_organizer_client: Client, ctf_participant_team: CTFParticipant
+    ):
+        resp = _json(
+            authenticated_organizer_client,
+            "get",
+            "api_scoreboard",
+            kwargs={"event_id": ctf_participant_team.event_id},
+            query="?kind=team",
+        )
+        assert resp.status_code == 200
+        assert [row["name"] for row in resp.json()["rankings"]] == ["Test Team"]
+
+    def test_team_kind_is_unavailable_for_a_solo_event(
+        self, authenticated_organizer_client: Client, ctf_participant: CTFParticipant
+    ):
+        resp = _json(
+            authenticated_organizer_client,
+            "get",
+            "api_scoreboard",
+            kwargs={"event_id": ctf_participant.event_id},
+            query="?kind=team",
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "scoreboard_kind_unavailable"
+
+    @pytest.mark.parametrize("query", ["?kind=everyone", "?kind=individual&kind=team", "?kind="])
+    def test_invalid_kind_is_rejected_without_echo(
+        self, authenticated_organizer_client: Client, ctf_participant_team: CTFParticipant, query: str
+    ):
+        resp = _json(
+            authenticated_organizer_client,
+            "get",
+            "api_scoreboard",
+            kwargs={"event_id": ctf_participant_team.event_id},
+            query=query,
+        )
+        assert resp.status_code == 400
+        assert resp.json()["error"]["code"] == "invalid_scoreboard_kind"
+        assert "everyone" not in resp.content.decode()
+
+    @pytest.mark.parametrize("kind", ["individual", "team"])
+    def test_hidden_scoreboard_withholds_rows_for_each_kind(
+        self, client: Client, ctf_participant_team: CTFParticipant, kind: str
+    ):
+        event = ctf_participant_team.event
+        event.scoreboard_visibility = "hidden"
+        event.save(update_fields=["scoreboard_visibility"])
+        resp = _json(client, "get", "api_scoreboard", kwargs={"event_id": event.id}, query=f"?kind={kind}")
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["scoreboard_hidden"] is True
+        assert body["rankings"] == []
+
     def test_timeline_get(self, authenticated_organizer_client: Client, ctf_participant: CTFParticipant):
         resp = _json(
             authenticated_organizer_client, "get", "api_score_timeline", kwargs={"participant_id": ctf_participant.id}

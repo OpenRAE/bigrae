@@ -7,7 +7,7 @@
 # this namespace) as its only capability. no-new-privileges stops it regaining
 # any other.
 # base image: alpine:3.22
-FROM alpine@sha256:5291449c3df73caf6ed85e649dec1b9e818b39a5d8c871e97afc13e9cd5e8fa8
+FROM alpine@sha256:bfe7ceb9f09ec0566c48fb93356e45a47a00be5a1dd14fa5b909e7709c66b034
 
 # CI sets the source URL from the running repository (ADR-069).
 # A local build leaves the label empty.

@@ -10,7 +10,6 @@ _INSTALLATION_MANAGE_CLOUD_AUTHORITY = "installation.manage_cloud_authority"
 _READ = scope_actions("read_content", installation=True)
 _WRITE = scope_actions("manage_content", installation=True)
 _PREPARE = scope_actions("prepare_content", installation=True)
-_MODELS = ("organization.manage_model_sources",)
 _ADAPTERS = ("organization.manage_adapters",)
 
 API_OPERATION_POLICY: dict[str, OperationPolicy] = {
@@ -40,21 +39,6 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     ),
     "cms_catalog_retrieve": OperationPolicy(_READ, "scope", "catalog_entry", selector="persisted_source_scope"),
     "cms_catalog_packs_create": OperationPolicy(_WRITE, "scope", "content_parent", selector="validated_parent"),
-    "cms_model_source_options_retrieve": OperationPolicy(_READ, "scope", "content_parent", selector="validated_parent"),
-    "cms_organizations_model_ranges_retrieve": OperationPolicy(
-        _MODELS, "organization", "organization_range_collection"
-    ),
-    "cms_organizations_model_sources_retrieve": OperationPolicy(
-        _MODELS, "organization", "organization_source_collection"
-    ),
-    "cms_organizations_model_sources_create": OperationPolicy(_MODELS, "organization", "organization"),
-    "cms_organizations_model_sources_update": OperationPolicy(_MODELS, "organization", "model_source"),
-    "cms_organizations_model_sources_retire_credentials_create": OperationPolicy(
-        _MODELS, "organization", "model_source"
-    ),
-    "cms_organizations_model_sources_available_retrieve": OperationPolicy(
-        _MODELS, "organization", "organization_source_collection"
-    ),
     "cms_organizations_packs_create": OperationPolicy(("organization.manage_content",), "organization", "organization"),
     "cms_organizations_packs_removal_create": OperationPolicy(
         ("organization.manage_content",), "organization", "organization_pack", selector="persisted_source_scope"
@@ -84,9 +68,6 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "cms_raes_image_mappings_disable_create": OperationPolicy(
         (_INSTALLATION_PREPARE_CONTENT,), "installation", "image_mapping"
     ),
-    "cms_ranges_model_access_retrieve": OperationPolicy(("range.read",), "range", "range_request"),
-    "cms_ranges_model_access_update": OperationPolicy(("range.manage",), "range", "range_request"),
-    "cms_ranges_model_access_revoke_create": OperationPolicy(("range.manage",), "range", "range_request"),
     "api_v1_cms_range_workspace_rebind": OperationPolicy(
         scope_actions("manage_range_scope"), "scope", "range_source_and_destination", selector="both_scopes"
     ),

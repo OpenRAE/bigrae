@@ -96,6 +96,7 @@ _GCE_RANGE_ENV_KEYS = (
     "GCP_RANGE_PRIVATE_GOOGLE_ACCESS",
     "GCP_RANGE_HOST_MGMT_SSH_PORT",
     "GCP_RANGE_PREPROVISIONED_FIREWALLS",
+    "GCP_RANGE_SHARED_GUEST_FIREWALLS",
 )
 
 _PROVISIONER_STATIC_SECRET_KEYS = frozenset(
@@ -107,6 +108,33 @@ _PROVISIONER_STATIC_SECRET_KEYS = frozenset(
     }
 )
 _FULL_SECRET_REF_RE = re.compile(r"^projects/[^/]+/secrets/[^/]+$")
+
+
+def _gateway_runtime_values(outputs: dict[str, object], *, project_id: str, site_url: str) -> dict[str, str]:
+    """Bind gateway control only to its existing native workload identity."""
+    identity = _value(outputs, "guacamole_controller_identity")
+    accounts = _value(outputs, "workload_service_accounts")
+    if not isinstance(identity, dict) or set(identity) != {"email", "unique_id"} or not isinstance(accounts, dict):
+        raise ValueError("GCP gateway controller identity metadata is incomplete")
+    email, subject = identity["email"], identity["unique_id"]
+    if (
+        not isinstance(email, str)
+        or email != accounts.get("guacamole-client")
+        or not email.endswith(f"@{project_id}.iam.gserviceaccount.com")
+        or not isinstance(subject, str)
+        or not subject.isascii()
+        or not subject.isdecimal()
+    ):
+        raise ValueError("GCP gateway controller identity does not match its workload")
+    endpoint = site_url + "/api/v1/mission-control/guacamole/control/authority/"
+    return {
+        "GUACAMOLE_CONTROL_URL": endpoint,
+        "GUACAMOLE_CONTROL_AUDIENCE": endpoint,
+        "GUACAMOLE_CONTROL_IDENTITY": "google",
+        "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL": email,
+        "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID": subject,
+        "GUACAMOLE_CONTROLLER_ROLE_ARN": "",
+    }
 
 
 def _provisioner_static_secret_values(outputs: dict[str, object]) -> dict[str, str]:
@@ -247,29 +275,6 @@ def _project_from_self_link(self_link: object) -> str:
 
 
 _ENGINE_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
-_MODEL_ACCESS_CATALOG_PATH = "/etc/shifter/model-access/catalog.json"
-
-
-def _model_access_runtime_values() -> dict[str, str]:
-    """Render only activation and the mounted catalog identity, never its body."""
-    enabled = os.environ.get("MODEL_ACCESS_ENABLED", "false").strip().lower()
-    path = os.environ.get("MODEL_ACCESS_CATALOG_PATH", "").strip()
-    digest = os.environ.get("MODEL_ACCESS_CATALOG_DIGEST", "").strip()
-    if enabled not in {"true", "false"}:
-        raise ValueError("MODEL_ACCESS_ENABLED must be true or false")
-    if bool(path) != bool(digest) or (enabled == "true" and not path):
-        raise ValueError("model access requires catalog path and digest together")
-    if path and path != _MODEL_ACCESS_CATALOG_PATH:
-        raise ValueError("model access catalog path must be the fixed mounted artifact path")
-    if digest and not _ENGINE_DIGEST_RE.fullmatch(digest):
-        raise ValueError("model access catalog digest must be sha256:<64 lowercase hex>")
-    return {
-        "MODEL_ACCESS_ENABLED": enabled,
-        "MODEL_ACCESS_CATALOG_PATH": path,
-        "MODEL_ACCESS_CATALOG_DIGEST": digest,
-    }
-
-
 _OPENVPN_POOL_KEYS = (
     "RANGE_OPENVPN_ENDPOINT",
     "RANGE_OPENVPN_POOL_CIDRS",
@@ -316,7 +321,7 @@ def _policy_json_runtime_values(key: str) -> dict[str, str]:
 
     The deploy pipeline validates the policy from ``shifter.yaml`` with its shared type
     (``installation.render``) and exports it into this render process's environment
-    (mirroring how the model-access and warm-pool env lines are injected). This producer
+    (mirroring how the warm-pool env line is injected). This producer
     re-serializes it to canonical compact JSON without rebuilding the policy parser. An
     absent value is omitted so the runtime consumer applies its canonical defaults; a
     present but blank or malformed value fails closed rather than shipping an
@@ -344,6 +349,47 @@ def _mission_control_lease_runtime_values() -> dict[str, str]:
     Absent -> the Django runtime applies the canonical 30/30/365 defaults.
     """
     return _policy_json_runtime_values("MISSION_CONTROL_LEASE_POLICY_JSON")
+
+
+#: The capacity partition that disposable experiment workers draw from.
+WORKER_CAPACITY_PARTITION = "gce-workers"
+
+
+def _capacity_planning_runtime_values(project_id: str, region: str) -> dict[str, str]:
+    """Declare this deployment's GCE worker partition; reservations admit its demand.
+
+    Worker creation requires capacity planning and a partition for this exact
+    project, region and backend. The budgets are enforcing database reservations;
+    each worker draws one instance and ``GCP_WORKER_VCPU`` vCPUs.
+    """
+    raw_vcpu = os.environ.get("GCP_WORKER_VCPU", "8").strip()
+    if not raw_vcpu.isdecimal() or not 1 <= int(raw_vcpu) <= 360:
+        raise ValueError("GCP_WORKER_VCPU must be an integer from 1 to 360")
+    metrics = [
+        {
+            "name": name,
+            "dimension": name,
+            "unit": "count",
+            "partition": WORKER_CAPACITY_PARTITION,
+            "source": "db_reservation",
+            "freshness_seconds": 900,
+            "enforcement": "enforcing",
+            "per_range_cost": cost,
+        }
+        for name, cost in (("instances", 1), ("vcpu", int(raw_vcpu)))
+    ]
+    partition = {
+        "name": WORKER_CAPACITY_PARTITION,
+        "provider": "gcp",
+        "account": project_id,
+        "region": region,
+        "backend": "gce",
+    }
+    catalog = {"partitions": [partition], "metrics": metrics}
+    return {
+        "CAPACITY_PLANNING_ENABLED": "true",
+        "CAPACITY_PLANNING_CATALOG": json.dumps(catalog, sort_keys=True, separators=(",", ":")),
+    }
 
 
 def _range_telemetry_runtime_values() -> dict[str, str]:
@@ -451,7 +497,7 @@ def render_env(outputs: dict[str, object], *, engine_image: str) -> str:
     # probes (DB / cache / storage). The ingress IP is intentionally not an
     # accepted application host outside that path. localhost / 127.0.0.1 stay
     # for in-pod probes and port-forward debugging. See issue #477 and
-    # `docs/architecture/portal-health-readiness-preflight-477.md`.
+    # `docs/_deprecated/architecture/portal-health-readiness-preflight-477.md`.
     allowed_hosts = ",".join(_unique([public_hostname, "localhost", "127.0.0.1"]))
 
     bootstrap_staff_emails = ",".join(_csv_env("PLATFORM_BOOTSTRAP_STAFF_EMAILS"))
@@ -615,19 +661,14 @@ def render_env(outputs: dict[str, object], *, engine_image: str) -> str:
     # Optional transactional-email runtime env (PLAT-002, #671). Absent ->
     # console backend; present -> SendGrid/Mailgun via anymail with the API key
     # hydrated from Secret Manager by the entrypoint.
+    values.update(_gateway_runtime_values(outputs, project_id=real_project, site_url=site_url))
     values.update(_email_runtime_values(outputs))
     values.update(_optional_gce_range_values())
     values.update(_ctf_content_runtime_values(outputs))
-    # Populated from validated broker projection after this common renderer;
-    # empty values revoke stale coordinates when the broker is disabled.
-    values["MODEL_BROKER_GUEST_URL"] = ""
-    values["MODEL_BROKER_GUEST_VIP"] = ""
-    values["MODEL_ENROLLMENT_CONTROL_URL"] = ""
-    values["MODEL_ENROLLMENT_CA_PEM_B64"] = ""
-    values.update(_model_access_runtime_values())
     values.update(_openvpn_runtime_values(outputs))
     values.update(_mission_control_lease_runtime_values())
     values.update(_range_telemetry_runtime_values())
+    values.update(_capacity_planning_runtime_values(real_project, range_network_region))
     # These references originate in the same validated shifter.yaml map that
     # drives per-secret Terraform IAM. Apply them last so a process-local env
     # override cannot decouple runtime lookup from its exact IAM grant.

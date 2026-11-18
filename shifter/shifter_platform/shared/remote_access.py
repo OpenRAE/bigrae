@@ -10,12 +10,15 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
-from typing import Protocol
+from typing import Protocol, cast
 from uuid import UUID
 
 OPENVPN_CAPABILITY_VERSION = "openvpn-capability-v1"
+OPENVPN_MULTI_CAPABILITY_VERSION = "openvpn-capability-v2"
 OPENVPN_BINDING_VERSION = "openvpn-binding-v1"
 OPENVPN_PRINCIPAL_BINDING_VERSION = "openvpn-binding-v2"
+OPENVPN_MULTI_BINDING_VERSION = "openvpn-binding-v3"
+OPENVPN_MULTI_PRINCIPAL_BINDING_VERSION = "openvpn-binding-v4"
 OPENVPN_PROFILE_VERSION = "openvpn-profile-v1"
 OPENVPN_PROFILE_MEDIA_TYPE = "application/x-openvpn-profile"
 OPENVPN_PROFILE_MAX_BYTES = 64 * 1024
@@ -47,9 +50,11 @@ _BINDING_KEYS = {
     "ready",
 }
 _CAPABILITY_KEYS = {"version", "channel", "target_ref", "teardown_at"}
+_MULTI_CAPABILITY_KEYS = {"version", "channel", "target_refs", "teardown_at"}
 # What the provisioner realized for one generation. Ownership is deliberately
 # absent: the Engine binds the owner from its locked range row (ADR-043).
 _REALIZATION_KEYS = {"generation", "target_ref", "endpoint", "port", "secret_ref"}
+_MULTI_REALIZATION_KEYS = {"generation", "target_refs", "endpoint", "port", "secret_ref"}
 OPENVPN_CAPABILITY_MAX_WINDOW = timedelta(days=397)
 _HOST_RE = re.compile(
     r"(?=.{1,253}\Z)"
@@ -63,6 +68,7 @@ _NO_ARGUMENT_DIRECTIVES = frozenset({"client", "nobind", "persist-key", "persist
 _ONE_ARGUMENT_DIRECTIVES = {
     "dev": frozenset({"tun"}),
     "proto": frozenset({"udp", "udp4"}),
+    "mssfix": frozenset({"1300"}),
     "resolv-retry": frozenset({"infinite"}),
     "remote-cert-tls": frozenset({"server"}),
     "verb": frozenset({"3"}),
@@ -141,7 +147,7 @@ class OpenVpnBinding:
 
     generation: UUID
     owner_user_id: int | None
-    target_ref: str
+    target_refs: tuple[str, ...]
     endpoint: str
     port: int
     secret_ref: str
@@ -151,22 +157,41 @@ class OpenVpnBinding:
     profile_version: str = OPENVPN_PROFILE_VERSION
     owner_principal_uuid: UUID | None = None
 
+    @property
+    def target_ref(self) -> str:
+        """Return the sole authorized target for a legacy single-target binding."""
+        if len(self.target_refs) != 1:
+            raise OpenVpnBindingError("binding does not authorize exactly one target")
+        return self.target_refs[0]
+
 
 @dataclass(frozen=True)
 class OpenVpnCapability:
     """Server-issued authorization to provision one generation-bound VPN edge."""
 
-    target_ref: str
+    target_refs: tuple[str, ...]
     teardown_at: datetime
     channel: str = "openvpn"
     version: str = OPENVPN_CAPABILITY_VERSION
 
+    @property
+    def target_ref(self) -> str:
+        """Return the sole authorized target for a legacy single-target capability."""
+        if len(self.target_refs) != 1:
+            raise OpenVpnBindingError("capability does not authorize exactly one target")
+        return self.target_refs[0]
+
     def as_dict(self) -> dict[str, object]:
         """Return the canonical JSON representation persisted by Engine."""
+        target_field = (
+            {"target_ref": self.target_ref}
+            if self.version == OPENVPN_CAPABILITY_VERSION
+            else {"target_refs": list(self.target_refs)}
+        )
         return {
             "version": self.version,
             "channel": self.channel,
-            "target_ref": self.target_ref,
+            **target_field,
             "teardown_at": self.teardown_at.isoformat().replace("+00:00", "Z"),
         }
 
@@ -198,6 +223,16 @@ def _require_target_ref(value: object) -> str:
         raise OpenVpnBindingError("target_ref must be an instance UUID or an RAES member key") from exc
 
 
+def _require_target_refs(value: object) -> tuple[str, ...]:
+    """Return a bounded, canonical, duplicate-free target collection."""
+    if not isinstance(value, list) or not 2 <= len(value) <= 64:
+        raise OpenVpnBindingError("target_refs must contain 2 to 64 targets")
+    targets = tuple(_require_target_ref(item) for item in value)
+    if targets != tuple(sorted(set(targets))):
+        raise OpenVpnBindingError("target_refs must be sorted and unique")
+    return targets
+
+
 def _require_exact_keys(value: object, expected: set[str], label: str) -> dict[str, object]:
     """Require a dict with exactly the expected keys; reject extensions."""
     if not isinstance(value, dict):
@@ -226,14 +261,18 @@ def _require_utc_datetime(value: object, field: str) -> datetime:
 
 def parse_openvpn_capability(value: object) -> OpenVpnCapability:
     """Parse the exact server-issued provisioning authorization shape."""
-    value = _require_exact_keys(value, _CAPABILITY_KEYS, "capability")
-    if value["version"] != OPENVPN_CAPABILITY_VERSION:
+    multi = isinstance(value, dict) and value.get("version") == OPENVPN_MULTI_CAPABILITY_VERSION
+    value = _require_exact_keys(value, _MULTI_CAPABILITY_KEYS if multi else _CAPABILITY_KEYS, "capability")
+    if value["version"] not in {OPENVPN_CAPABILITY_VERSION, OPENVPN_MULTI_CAPABILITY_VERSION}:
         raise OpenVpnBindingError("unsupported capability version")
     if value["channel"] != "openvpn":
         raise OpenVpnBindingError("capability channel must be openvpn")
     return OpenVpnCapability(
-        target_ref=_require_target_ref(value["target_ref"]),
+        target_refs=_require_target_refs(value["target_refs"])
+        if multi
+        else (_require_target_ref(value["target_ref"]),),
         teardown_at=_require_utc_datetime(value["teardown_at"], "teardown_at"),
+        version=OPENVPN_MULTI_CAPABILITY_VERSION if multi else OPENVPN_CAPABILITY_VERSION,
     )
 
 
@@ -244,9 +283,17 @@ def build_openvpn_capability(target_ref: object, teardown_at: datetime) -> dict[
     normalized_teardown = _require_utc_datetime(teardown_at.isoformat(), "teardown_at")
     if normalized_teardown.microsecond:
         normalized_teardown = normalized_teardown.replace(microsecond=0) + timedelta(seconds=1)
+    if isinstance(target_ref, (list, tuple, set, frozenset)):
+        raw_targets = cast("list[object] | tuple[object, ...] | set[object] | frozenset[object]", target_ref)
+        targets = tuple(sorted({_require_target_ref(item) for item in raw_targets}))
+    else:
+        targets = (_require_target_ref(target_ref),)
+    if not targets or len(targets) > 64:
+        raise OpenVpnBindingError("capability must authorize 1 to 64 targets")
     capability = OpenVpnCapability(
-        target_ref=_require_target_ref(target_ref),
+        target_refs=targets,
         teardown_at=normalized_teardown,
+        version=OPENVPN_CAPABILITY_VERSION if len(targets) == 1 else OPENVPN_MULTI_CAPABILITY_VERSION,
     )
     validate_openvpn_capability_window(capability)
     return capability.as_dict()
@@ -321,7 +368,12 @@ def _require_secret_ref(value: object) -> str:
 
 def _require_binding_versions(value: dict[str, object]) -> None:
     """Reject bindings whose version, channel, or profile version differ."""
-    if value["version"] not in {OPENVPN_BINDING_VERSION, OPENVPN_PRINCIPAL_BINDING_VERSION}:
+    if value["version"] not in {
+        OPENVPN_BINDING_VERSION,
+        OPENVPN_PRINCIPAL_BINDING_VERSION,
+        OPENVPN_MULTI_BINDING_VERSION,
+        OPENVPN_MULTI_PRINCIPAL_BINDING_VERSION,
+    }:
         raise OpenVpnBindingError("unsupported binding version")
     if value["channel"] != "openvpn":
         raise OpenVpnBindingError("channel must be openvpn")
@@ -331,16 +383,22 @@ def _require_binding_versions(value: dict[str, object]) -> None:
 
 def parse_openvpn_binding(value: object) -> OpenVpnBinding:
     """Parse the exact non-secret OpenVPN binding shape; reject extensions."""
-    source = isinstance(value, dict) and value.get("version") == OPENVPN_PRINCIPAL_BINDING_VERSION
-    keys = (_BINDING_KEYS - {"owner_user_id"}) | {"owner_principal_uuid"} if source else _BINDING_KEYS
+    version = value.get("version") if isinstance(value, dict) else None
+    source = version in {OPENVPN_PRINCIPAL_BINDING_VERSION, OPENVPN_MULTI_PRINCIPAL_BINDING_VERSION}
+    multi = version in {OPENVPN_MULTI_BINDING_VERSION, OPENVPN_MULTI_PRINCIPAL_BINDING_VERSION}
+    keys = (_BINDING_KEYS - {"target_ref"}) | {"target_refs"} if multi else _BINDING_KEYS
+    if source:
+        keys = (keys - {"owner_user_id"}) | {"owner_principal_uuid"}
     value = _require_exact_keys(value, keys, "binding")
     _require_binding_versions(value)
     return OpenVpnBinding(
         generation=_require_uuid(value["generation"], "generation"),
         owner_user_id=None if source else _require_owner_user_id(value["owner_user_id"]),
         owner_principal_uuid=_require_uuid(value["owner_principal_uuid"], "owner_principal_uuid") if source else None,
-        version=OPENVPN_PRINCIPAL_BINDING_VERSION if source else OPENVPN_BINDING_VERSION,
-        target_ref=_require_target_ref(value["target_ref"]),
+        version=str(version),
+        target_refs=_require_target_refs(value["target_refs"])
+        if multi
+        else (_require_target_ref(value["target_ref"]),),
         endpoint=_require_endpoint(value["endpoint"]),
         port=_require_port(value["port"]),
         secret_ref=_require_secret_ref(value["secret_ref"]),
@@ -350,10 +408,16 @@ def parse_openvpn_binding(value: object) -> OpenVpnBinding:
 
 def parse_openvpn_realization(value: object) -> dict[str, object]:
     """Parse the exact owner-free gateway realization a provisioner reports."""
-    value = _require_exact_keys(value, _REALIZATION_KEYS, "realization")
+    multi = isinstance(value, dict) and "target_refs" in value
+    value = _require_exact_keys(value, _MULTI_REALIZATION_KEYS if multi else _REALIZATION_KEYS, "realization")
+    targets = (
+        {"target_refs": list(_require_target_refs(value["target_refs"]))}
+        if multi
+        else {"target_ref": _require_target_ref(value["target_ref"])}
+    )
     return {
         "generation": str(_require_uuid(value["generation"], "generation")),
-        "target_ref": _require_target_ref(value["target_ref"]),
+        **targets,
         "endpoint": _require_endpoint(value["endpoint"]),
         "port": _require_port(value["port"]),
         "secret_ref": _require_secret_ref(value["secret_ref"]),
@@ -365,8 +429,9 @@ def bind_openvpn_realization(
 ) -> dict[str, object]:
     """Bind a realized gateway to the range owner and return the canonical binding."""
     realized = parse_openvpn_realization(realization)
+    multi = "target_refs" in realized
     binding: dict[str, object] = {
-        "version": OPENVPN_BINDING_VERSION,
+        "version": OPENVPN_MULTI_BINDING_VERSION if multi else OPENVPN_BINDING_VERSION,
         "channel": "openvpn",
         "owner_user_id": owner_user_id,
         "profile_version": OPENVPN_PROFILE_VERSION,
@@ -377,7 +442,10 @@ def bind_openvpn_realization(
         if owner_user_id is not None or not owner_principal_uuid.int:
             raise OpenVpnBindingError("invalid principal binding")
         binding.pop("owner_user_id")
-        binding.update(version=OPENVPN_PRINCIPAL_BINDING_VERSION, owner_principal_uuid=str(owner_principal_uuid))
+        binding.update(
+            version=OPENVPN_MULTI_PRINCIPAL_BINDING_VERSION if multi else OPENVPN_PRINCIPAL_BINDING_VERSION,
+            owner_principal_uuid=str(owner_principal_uuid),
+        )
     parse_openvpn_binding(binding)
     return binding
 
@@ -466,6 +534,10 @@ def validate_openvpn_profile_for_endpoint(profile: str, endpoint: str, port: int
     }
     if not required_directives.issubset(seen_directives) or seen_blocks != _INLINE_BLOCKS:
         raise OpenVpnBindingError("profile is missing required directives or inline credentials")
+    if "mssfix" not in seen_directives:
+        encoded = f"mssfix 1300\n{profile}".encode()
+        if len(encoded) > OPENVPN_PROFILE_MAX_BYTES:
+            raise OpenVpnBindingError("profile exceeds the maximum size")
     return encoded
 
 

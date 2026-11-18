@@ -1,5 +1,13 @@
 # Terminal UI: Multi-Terminal Agentic Features
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Summary
 
 Add features for automated/scripted purple team scenarios: command broadcast, input multiplexing, and quick actions.
@@ -149,3 +157,5 @@ Unified log view showing output from all terminals.
 ## Labels
 
 `enhancement`, `terminal`, `agentic`, `purple-team`
+
+<!-- vale on -->

@@ -131,7 +131,7 @@ rows:
     category: ACES schema/profile gap
     aces_target: aces-sdl 0.23 public domain identity, DC binding, domain-join relation, account-domain anchor, semantic validation, supported_domain_profiles capability, and domain_topology_plan_diagnostics gate
     shifter_owner: upstream ACES contract; shared.aces admission and separate provisioner backstop
-    validation_evidence: docs/architecture/aces-domain-topology-preflight-1606.md; shifter/shifter_platform/tests/shared/aces/test_domain_topology_admission.py; shifter/engine/provisioner/tests/test_aces_plan.py
+    validation_evidence: docs/_deprecated/architecture/aces-domain-topology-preflight-1606.md; shifter/shifter_platform/tests/shared/aces/test_domain_topology_admission.py; shifter/engine/provisioner/tests/test_aces_plan.py
     next_issue_kind: none
     candidate_issue_title: "#1606: Consume released ACES domain topology without a Shifter dialect"
     notes: >-
@@ -258,7 +258,7 @@ rows:
     category: ACES schema/profile gap
     aces_target: ACES behavior-history and evidence records carrying artifact refs, digests, provenance, capture profile, retention class, and redaction status
     shifter_owner: future ACES-backed experiment design, shared.script_context, shared.uploads, shared.cloud, shared.audit
-    validation_evidence: "docs/architecture/aces-participant-runtime-history-evidence-preflight-1289.md plus future #1289 implementation tests and ADR-027 removal evidence"
+    validation_evidence: "docs/_deprecated/architecture/aces-participant-runtime-history-evidence-preflight-1289.md plus future #1289 implementation tests and ADR-027 removal evidence"
     next_issue_kind: implementation-candidate
     candidate_issue_title: "#1289: Capture participant runtime history and evidence"
     notes: Evidence records are reference-oriented. Rendered commands, prompt bodies, script bodies, transcript bodies, terminal streams, token URLs, SSH keys, RDP passwords, CTF flags, provider payloads, and presigned URLs stay out of ACES records.
@@ -456,7 +456,7 @@ rows:
     category: validation gate
     aces_target: ACES backend manifest and conformance CLI
     shifter_owner: shifter/shifter_platform/shared/aces/manifest.py (provisioning-only manifest source, #1261); future Shifter ACES backend adapter
-    validation_evidence: aces conformance backend --profile provisioning-only; tests/shared/aces/test_backend_manifest_publication.py (#1261); tests/shared/aces/test_backend_conformance_gate.py (#1263); docs/architecture/aces-backend-conformance-gate-preflight-1263.md
+    validation_evidence: aces conformance backend --profile provisioning-only; tests/shared/aces/test_backend_manifest_publication.py (#1261); tests/shared/aces/test_backend_conformance_gate.py (#1263); docs/_deprecated/architecture/aces-backend-conformance-gate-preflight-1263.md
     next_issue_kind: implementation-candidate
     candidate_issue_title: "#1263: Add Shifter ACES backend conformance gate"
     notes: >-
@@ -476,7 +476,7 @@ rows:
 
   - id: validation.aces-live-backend-path
     surface: validation
-    legacy_source: docs/architecture/aces-runtime-target-backend-manifest-preflight-1233.md
+    legacy_source: docs/_deprecated/architecture/aces-runtime-target-backend-manifest-preflight-1233.md
     legacy_field: Shifter portal/CMS/engine/task-runner/provisioner launch path and ACES operation receipt/status/snapshot evidence
     category: validation gate
     aces_target: live or controlled Shifter ACES provisioning-only backend validation through the normal backend path
@@ -500,7 +500,7 @@ rows:
 
   - id: validation.participant-runtime-conformance
     surface: validation
-    legacy_source: docs/architecture/aces-runtime-target-backend-manifest-preflight-1233.md; future Shifter backend manifest
+    legacy_source: docs/_deprecated/architecture/aces-runtime-target-backend-manifest-preflight-1233.md; future Shifter backend manifest
     legacy_field: backend capability claim and participant-runtime conformance gate
     category: validation gate
     aces_target: ACES participant-runtime lifecycle/history/evidence contract conformance

@@ -83,7 +83,7 @@ def test_ctf_profile_access_validates_cms_ownership_and_delegates_to_engine(sett
     with boto3_secrets(make_secrets_client(PROFILE)):
         result = get_ctf_openvpn_profile(user, cms_range.pk)
 
-    assert result.content == PROFILE.encode()
+    assert result.content == f"mssfix 1300\n{PROFILE}".encode()
 
 
 def test_membership_removal_revokes_vpn_before_secret_resolution(settings):

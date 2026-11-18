@@ -5,10 +5,10 @@ artifact only when the pack author permits the exact installed materialization
 profile, specification and fixed inputs. A missing image does not start a build.
 Ordinary launch resolves admitted inventory and never waits for a builder.
 
-BigRAE maintains the [contained GCE profile](../../shifter/packer/preparation/PROFILE.md),
+BigRAE maintains the [contained GCE profile](https://github.com/OpenRAE/bigrae/blob/dev/shifter/packer/preparation/PROFILE.md),
 its worker, build contexts and independent verification code. The maintained
-[HTTP specimen](../../shifter/environment-packs/preparation-http-smoke/) demonstrates a pack
-that selects that profile. The [qualification record](../../shifter/packer/preparation/QUALIFICATION.md)
+[HTTP specimen](https://github.com/OpenRAE/bigrae/tree/dev/shifter/environment-packs/preparation-http-smoke) demonstrates a pack
+that selects that profile. The [qualification record](https://github.com/OpenRAE/bigrae/blob/dev/shifter/packer/preparation/QUALIFICATION.md)
 distinguishes physical image checks from tenant workflow evidence.
 
 ## Separate permissions
@@ -33,14 +33,14 @@ Use the platform management commands from the deployed software version in an
 operator environment with tenant database access. Rendering needs no cloud
 credentials. Activation needs the operator's Google Application Default
 Credentials and Kubernetes access as well as the application actor. Do not give
-the running controller broad IAM administration or cluster administration just
+the running controller broad IAM administration or cluster administration
 to run activation. Resolve runtime secrets through the deployment's existing
 secret mechanism; never place their values in installation JSON or arguments.
 
 The operator supplies an `installation.json` matching
-[`PreparationInstallation`](../../shifter/shifter_platform/shared/cloud/preparation_installation.py).
+[`PreparationInstallation`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/shared/cloud/preparation_installation.py).
 Its nested `grant` matches
-[`PreparationGrantConfiguration`](../../shifter/shifter_platform/shared/preparation_grant.py).
+[`PreparationGrantConfiguration`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/shared/preparation_grant.py).
 The principal fields are:
 
 | Field | Meaning |
@@ -62,10 +62,7 @@ The principal fields are:
 | `input_images` | Additional concrete input images requiring cloud image-use access; private publisher IAM remains the publisher's responsibility |
 | `controller_secret_ids` | Secret names for `DB_SECRET_ID`, `APP_SECRET_ID`, `REDIS_SECRET_ID`; optional startup secret references are explicitly controlled |
 
-The controller name derives from the scope digest. The generated installation
-has four separate Workload Identity bindings, role-specific Compute permissions,
-a private VPC without internet routes, NAT or peering, one contained HTTP probe
-firewall, restricted Pods, bounded Jobs, admission policy and network policies.
+The controller name derives from the scope digest. The generated installation has four separate Workload Identity bindings and role-specific Compute permissions. Its private VPC has no internet routes, NAT, or peering. Controls include one contained HTTP probe firewall, restricted Pods, bounded Jobs, admission policy, and network policies.
 Build and scanner guests receive neither service accounts nor external IPs.
 The controller reads provider state and three named platform secrets; workers
 receive no database credentials or Secret Manager payload permission.
@@ -98,20 +95,22 @@ named secret grants, Kubernetes admission/RBAC/isolation, and controller rollout
 Rendering or applying a document alone never activates a grant. Organization
 administrators retain their authority over inherited IAM and cluster policy.
 
-A change to cloud or worker authority uses a new namespace and dedicated identities/network.
-Retain the earlier installation while its operations require cleanup. This
+A change to cloud or worker authority uses a new namespace and dedicated identities/network. Retain the earlier installation while its operations require cleanup. This
 includes changes to approved worker/verifier image sets; do not retarget a
-running installation's identities. For a platform-controller release update,
+running installation's identities.
+
+For a platform-controller release update,
 change only `controller_image`, render/apply the Kubernetes resources, and rerun
 grant activation. Readback verifies the actual rollout and refreshes the audited
 installation proof while the worker grant and existing operation inputs remain
 immutable. Controller upgrades cannot change IAM, network, worker pins or trust.
+
 New adapter versions using already-approved images can share an installation.
 
 ## Add private content and executable adapters
 
 Private packs can be installed after tenant setup. The optional Terraform module
-[`raes-package-storage`](../../platform/terraform/gcp/modules/raes-package-storage/)
+[`raes-package-storage`](https://github.com/OpenRAE/bigrae/tree/dev/platform/terraform/gcp/modules/raes-package-storage)
 creates the pack bucket:
 
 - uniform access, enforced public-access prevention and versioning;
@@ -150,7 +149,7 @@ exports are staged under the registered scenario name before the same upstream
 identity, inventory and digest checks; archive paths never choose that name.
 
 An adapter manifest follows
-[`AdapterManifest`](../../shifter/shifter_platform/shared/raes/preparation_contract.py).
+[`AdapterManifest`](https://github.com/OpenRAE/bigrae/blob/dev/shifter/shifter_platform/shared/raes/preparation_contract.py).
 It contains `protocol: shifter.artifact-preparation/v1`, a stable `adapter_id`,
 immutable `version`, `backend: gce`, `worker_image`, `verifier_image`,
 `verification_contract: shifter.gce-raw-disk/v1`, required permissions, and

@@ -1,5 +1,13 @@
 # Durable model allocations
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 Issue #2120 implements Engine-owned quota allocation and non-usable pending
 grants. It extends ADR-047 assessments with exact-integer model reservations
 and draws, joined to the existing operation-input and launch-intent transaction.
@@ -134,3 +142,5 @@ tests cover atomic outbox rollback, warm claims, resume, explicit spare authorit
 provider-pool restrictions, snapshot-bound refresh, optional absence and
 installer/runtime schema parity. These are local and synthetic results, not
 live provider, broker or billing qualification.
+
+<!-- vale on -->

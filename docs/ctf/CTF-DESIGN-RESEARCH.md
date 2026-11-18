@@ -1,5 +1,13 @@
 # CTF Design Research: Best Practices for Cybersecurity Competitions
 
+> **Applicability** Research and estimation reference. The original scope and assumptions apply to the retained text below.
+> Recommendations and estimates are not measured platform capacity or implemented behavior.
+> This documentation review did not reproduce the external studies or run an event capacity test.
+> See the [current architecture](../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Research compiled March 2026. Sources from SANS, Hack The Box, TryHackMe, CTFd, PicoCTF,
 DEFCON, Dragos, Anthropic, and CTF organizer communities.
 
@@ -545,3 +553,5 @@ For competitive events, 10-25% penalty per hint tier is common.
 
 All sources used in this research are listed at the end of this document for reference.
 See the companion response for full URL list.
+
+<!-- vale on -->

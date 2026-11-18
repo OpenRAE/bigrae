@@ -22,6 +22,8 @@ from config import (
     GCERangeCellConfig,
     GCERangeImageProfile,
 )
+from gcp_range_cell_escape_checks import find_cross_range_leaks
+from gcp_range_cell_firewall import SHARED_GUEST_TAG, SHARED_VPN_CHANNEL_TAGS, isolation_firewall_name
 from gcp_range_cell_types import GceEgressPolicy
 from raes_access import RealizedAccessBinding
 from raes_gce_image import resolve_gce_image_from_runtime_profile
@@ -37,7 +39,6 @@ def _config(
     network_mode: str = "vpc-per-range",
     network_id: str = "",
     service_account_email: str = "",
-    model_broker_vip: str = "",
 ) -> GCERangeCellConfig:
     return GCERangeCellConfig(
         project_id="proj-1",
@@ -47,7 +48,6 @@ def _config(
         network_id=network_id,
         portal_network_cidrs=("203.0.113.0/24",),
         service_account_email=service_account_email,
-        model_broker_vip=model_broker_vip,
     )
 
 
@@ -413,30 +413,6 @@ class TestInstances:
         config = _config(service_account_email="sh-range-host@proj-1.iam.gserviceaccount.com")
         plan = build_raes_range_cell_plan("req-1", 7, _plan((_node(),), (_network(),)), _resolver(), config)
         assert plan["instances"][0]["attach_service_account"] is True
-
-    def test_configured_broker_without_range_admission_keeps_direct_identity(self):
-        """A deployment broker endpoint alone cannot switch a range away from direct Vertex."""
-        config = _config(
-            service_account_email="sh-range-host@proj-1.iam.gserviceaccount.com",
-            model_broker_vip="10.60.0.10",
-        )
-        plan = build_raes_range_cell_plan("req-1", 7, _plan((_node(),), (_network(),)), _resolver(), config)
-        assert plan["instances"][0]["attach_service_account"] is True
-
-    def test_admitted_broker_leaves_guests_identity_less(self):
-        """ADR-059/ADR-064: only a range-admitted broker path suppresses guest cloud identity."""
-        config = _config(
-            service_account_email="sh-range-host@proj-1.iam.gserviceaccount.com",
-            model_broker_vip="10.60.0.10",
-        )
-        options = RaesGcePlanOptions(
-            config=config,
-            egress_policy=GceEgressPolicy(
-                model_broker={"contract_version": "model-broker-egress/v1", "vip": "10.60.0.10", "port": 443}
-            ),
-        )
-        plan = build_raes_range_cell_plan("req-1", 7, _plan((_node(),), (_network(),)), _resolver(), options)
-        assert plan["instances"][0]["attach_service_account"] is False
 
     def test_count_fans_out_to_distinct_instances_and_ips(self):
         node = _node(count=3)
@@ -861,6 +837,27 @@ class TestVpnPoolFirewall:
         assert "vpn_gateway" not in plan
         assert not any(instance["uuid"].endswith("vpn-gateway") for instance in plan["instances"])
 
+    def test_multi_target_pool_rules_keep_each_nodes_ports_separate(self):
+        plan = self._build(
+            remote_access=RaesGceVpnAccess(
+                target_refs=("node.a#0", "node.b#0"),
+                pool_cidrs=self._POOL,
+            ),
+            access=self._access(("ssh",), "node.a") + self._access(("rdp",), "node.b"),
+        )
+
+        rules = {
+            rule["name"]: rule
+            for rule in plan["firewalls"]
+            if rule["name"]
+            in {
+                vpn_pool_firewall_name(7, "node.a#0"),
+                vpn_pool_firewall_name(7, "node.b#0"),
+            }
+        }
+        assert rules[vpn_pool_firewall_name(7, "node.a#0")]["allowed"] == [{"IPProtocol": "tcp", "ports": ["22"]}]
+        assert rules[vpn_pool_firewall_name(7, "node.b#0")]["allowed"] == [{"IPProtocol": "tcp", "ports": ["3389"]}]
+
     def test_a_range_without_remote_access_admits_no_pool(self):
         plan = self._build(remote_access=None)
         assert not [rule for rule in plan["firewalls"] if "vpn" in rule["name"]]
@@ -957,3 +954,101 @@ class TestRangeAuditTelemetry:
 
         assert "router_nat" not in plan and "shared_nat" not in plan
         assert subnetwork_resource(plan, plan["subnets"][0])["log_config"]["enable"] is True
+
+
+class TestSharedGuestFirewalls:
+    """The shared-guest layout keeps one range-scaled rule and today's reachability."""
+
+    _POOL = ("10.49.0.0/24",)
+
+    @staticmethod
+    def _config(*, shared: bool = True) -> GCERangeCellConfig:
+        return GCERangeCellConfig(
+            project_id="proj-1",
+            region="us-east1",
+            zone="us-east1-b",
+            network_mode="shared-vpc",
+            network_id="projects/proj-1/global/networks/range",
+            portal_network_cidrs=("203.0.113.0/24",),
+            access_network_cidrs=("198.51.100.0/24",),
+            linux=GCERangeImageProfile(source_image="projects/x/global/images/ubuntu-1"),
+            shared_guest_firewalls=shared,
+        )
+
+    def _build(self, *, networks=None, nodes=None, shared=True, teardown=False, ssh_port=22):
+        networks = networks or (_network(),)
+        nodes = nodes or (
+            _node(services=(RaesPlanServicePort(port=443, protocol="tcp"),)),
+            _node(address="node.b", name="peer"),
+        )
+        return build_raes_range_cell_plan(
+            "11111111-2222-3333-4444-555555555555",
+            7,
+            _plan(nodes, networks),
+            _resolver(GCERangeImageProfile(source_image="projects/x/global/images/kali-1", host_ssh_port=ssh_port)),
+            RaesGcePlanOptions(
+                config=self._config(shared=shared),
+                access_bindings=TestVpnPoolFirewall._access(("rdp",), "node.a"),
+                allocated_network_cidrs=tuple(
+                    (network.address, f"10.90.{index}.0/24") for index, network in enumerate(networks)
+                ),
+                remote_access=RaesGceVpnAccess("node.a#0", self._POOL),
+                include_all_firewall_layouts=teardown,
+            ),
+        )
+
+    def test_a_single_subnet_range_creates_only_its_isolation_rule(self):
+        plan = self._build()
+
+        assert [rule["name"] for rule in plan["firewalls"]] == [isolation_firewall_name(7)]
+        rule = plan["firewalls"][0]
+        assert rule["direction"] == "INGRESS"
+        assert rule["source_ranges"] == ["10.90.0.0/24"]
+        assert rule["allowed"] == [{"IPProtocol": "all"}]
+        for instance in plan["instances"]:
+            assert rule["target_tags"][0] in instance["tags"]
+            assert SHARED_GUEST_TAG in instance["tags"]
+        assert find_cross_range_leaks(plan, range_network_cidr="10.90.0.0/16") == []
+
+    def test_only_the_authorized_target_carries_its_channel_tag(self):
+        plan = self._build()
+
+        target = next(instance for instance in plan["instances"] if instance["uuid"] == "node.a#0")
+        other = next(instance for instance in plan["instances"] if instance["uuid"] == "node.b#0")
+        assert SHARED_VPN_CHANNEL_TAGS["rdp"] in target["tags"]
+        assert SHARED_VPN_CHANNEL_TAGS["ssh"] not in target["tags"]
+        assert not set(SHARED_VPN_CHANNEL_TAGS.values()) & set(other["tags"])
+
+    def test_an_uncovered_management_port_keeps_a_management_rule(self):
+        plan = self._build(ssh_port=2200)
+
+        names = [rule["name"] for rule in plan["firewalls"]]
+        assert names[0] == isolation_firewall_name(7)
+        mgmt = next(rule for rule in plan["firewalls"] if rule["name"].endswith("mgmt"))
+        assert mgmt["source_ranges"] == ["203.0.113.0/24"]
+        assert mgmt["allowed"] == [{"IPProtocol": "tcp", "ports": ["22", "2200"]}]
+
+    def test_a_multi_subnet_range_keeps_the_per_range_layout(self):
+        nodes = (_node(), _node(address="node.b", name="peer", networks=("net.b",)))
+        plan = self._build(networks=(_network(), _network("net.b", name="dmz", cidr="10.0.1.0/24")), nodes=nodes)
+
+        names = {rule["name"] for rule in plan["firewalls"]}
+        assert isolation_firewall_name(7) not in names
+        assert vpn_pool_firewall_name(7) in names
+        assert not any(SHARED_GUEST_TAG in instance["tags"] for instance in plan["instances"])
+
+    def test_the_per_range_layout_is_unchanged_when_disabled(self):
+        shared_off = self._build(shared=False)
+
+        names = {rule["name"] for rule in shared_off["firewalls"]}
+        assert isolation_firewall_name(7) not in names
+        assert vpn_pool_firewall_name(7) in names
+        assert any(name.endswith("egress-deny") for name in names)
+
+    def test_teardown_names_the_rules_of_both_layouts(self):
+        shared = {rule["name"] for rule in self._build(shared=True)["firewalls"]}
+        legacy = {rule["name"] for rule in self._build(shared=False)["firewalls"]}
+
+        for enabled in (True, False):
+            teardown = {rule["name"] for rule in self._build(shared=enabled, teardown=True)["firewalls"]}
+            assert teardown == shared | legacy

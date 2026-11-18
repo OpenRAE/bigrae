@@ -56,7 +56,7 @@ def test_shifter_worker_pins_websocket_keepalive() -> None:
     rather than the bare ``uvicorn_worker.UvicornWorker`` so the ALB never silently
     reaps an otherwise-idle terminal/notification/RDP WebSocket: Uvicorn sends
     protocol PING frames at ``ws_ping_interval`` < the ALB ``idle_timeout``. The
-    preflight (docs/architecture/aws-long-lived-connection-drain-preflight-931.md)
+    preflight (docs/_deprecated/architecture/aws-long-lived-connection-drain-preflight-931.md)
     forbids assuming Uvicorn's default ping is active in the built Gunicorn worker
     path, so the interval/timeout are pinned in ``CONFIG_KWARGS`` and this test
     fails closed if they ever drop out.

@@ -54,14 +54,14 @@ ADR-053.
 
 - **The pack is the universal unit.** "Add an image to the catalog," "import a
   scenario pack," and "author a scenario" are the same operation: register a
-  pack. The in-box packs are simply the tenant's default registered content,
+  pack. The in-box packs are the tenant's default registered content,
   seeded through the same path; they are not a privileged path and are not a
   BigRAE-shipped distribution catalog.
 
 - **Import is source-agnostic and entitlement-blind.** The ingestion path is
   identical for packs from any origin, whether upstream-published, private, or
   self-authored. The platform never asks how the operator obtained a pack. Adding
-  content is *just a content update*; how the operator got it is out of scope.
+  content is *only a content update*; how the operator got it is out of scope.
 
 - **Repo pack identity is byte-bound at ingestion and use.** A repository
   `package_ref` identifies a containment-checked pack root. Registration uses
@@ -115,7 +115,7 @@ canonical digests without revising CMS registrations. If runtime references do
 change, use the existing fenced registration update and trusted conformance
 process, accounting for old pods and rollback images before removing paths.
 
-See the [environment-pack consolidation preflight](environment-pack-consolidation-preflight-2550.md)
+See the [environment-pack consolidation preflight](../_deprecated/architecture/environment-pack-consolidation-preflight-2550.md)
 for the source/runtime boundary, validation layers and routing constraints.
 
 ## Tenant pack removal (ADR-034-R13, #2520)
@@ -137,7 +137,7 @@ Organization-less packs stay operator-managed.
 - Acquired feature artifacts and adapter installations are shared resources.
   Removal does not delete them.
 
-See the [tenant pack removal preflight](tenant-pack-removal-preflight-2520.md)
+See the [tenant pack removal preflight](../_deprecated/architecture/tenant-pack-removal-preflight-2520.md)
 for the decisions, reference rules and concurrency constraints.
 
 ## Consequences

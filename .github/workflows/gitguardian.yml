@@ -1,0 +1,68 @@
+name: GitGuardian
+
+# `GitGuardian scan` is a required context on `dev`, and `dev` merges through a
+# merge queue (ADR-003-R9). The job scans the new commits of each pull request,
+# merge group, and protected-branch push with ggshield. The GitGuardian App does
+# not report on merge group commits, so this job produces the context.
+on:
+  pull_request:
+    branches:
+      - dev
+      - main
+  merge_group:
+    types: [checks_requested]
+  push:
+    branches:
+      - dev
+      - main
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gitguardian-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  scan:
+    name: GitGuardian scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
+
+      # ggshield reads .gitguardian.yaml for the ignored paths. A missing API
+      # key makes ggshield fail, so the context does not pass without a scan.
+      - name: Scan new commits for secrets
+        env:
+          GITGUARDIAN_API_KEY: ${{ secrets.GITGUARDIAN_API_KEY }}
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          MERGE_GROUP_HEAD_SHA: ${{ github.event.merge_group.head_sha }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          HEAD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          case "${EVENT_NAME}" in
+            pull_request) range="${PR_BASE_SHA}..${PR_HEAD_SHA}" ;;
+            merge_group) range="${MERGE_GROUP_BASE_SHA}..${MERGE_GROUP_HEAD_SHA}" ;;
+            push)
+              if [ "${PUSH_BEFORE_SHA}" = "0000000000000000000000000000000000000000" ]; then
+                range="${HEAD_SHA}~1..${HEAD_SHA}"
+              else
+                range="${PUSH_BEFORE_SHA}..${HEAD_SHA}"
+              fi
+              ;;
+            *)
+              echo "::error::Unsupported event: ${EVENT_NAME}"
+              exit 1
+              ;;
+          esac
+          uvx --from 'ggshield==1.56.1' ggshield secret scan commit-range "${range}"

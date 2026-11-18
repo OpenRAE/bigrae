@@ -64,8 +64,6 @@ def _verify_raes_apply(
     """Complete guest realization and return verified range observations."""
     verified = set(_realize_directory(plan, raes_plan, instance_outputs, runtime))
     verified.update(_realize_content_delivery(raes_plan, instance_outputs, delivery_bindings, runtime))
-    if runtime.model_enrollment is not None:
-        runtime.model_enrollment(raes_plan, instance_outputs)
     if runtime.runtime_plugin is not None:
         runtime.runtime_plugin(raes_plan, instance_outputs)
     runtime.host_readiness_verifier(instance_outputs)

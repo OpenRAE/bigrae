@@ -34,6 +34,7 @@ FULL_DEPLOYMENT = {
         "project_id": "acme-range-cells",
         "host_identity_pool_size": 24,
         "private_google_access": False,
+        "shared_guest_firewalls": True,
         "image_key_profiles": {"windows": {"image": "projects/acme-shifter/global/images/win"}},
     },
     "participant_openvpn": {"enabled": True},
@@ -46,6 +47,7 @@ FULL_DEPLOYMENT = {
     },
     "post_deploy_smoke": {"user_email": "smoke@example.com"},
     "release_trust": {"github_repository_id": "1234", "github_owner_id": "5678"},
+    "deployment_tier": "test",
 }
 
 
@@ -58,6 +60,8 @@ class TestDeploymentSettings:
         assert settings.operator_bootstrap is None
         assert settings.post_deploy_smoke.user_email == ""
         assert settings.release_trust is None
+        # #2689: a deployment is production unless its bundle says test.
+        assert settings.deployment_tier == "production"
 
     def test_full_deployment_inputs_project_onto_runtime_and_terraform(self):
         settings = GcpBackendSettings.model_validate(_settings(**FULL_DEPLOYMENT))
@@ -65,11 +69,13 @@ class TestDeploymentSettings:
         assert env == {
             "GCP_RANGE_BACKEND": "gce",
             "GCP_RANGE_HOST_IDENTITY_POOL_SIZE": "24",
+            "GCP_WORKER_VCPU": "8",
             "RANGE_OPENVPN_ENABLED": "true",
             "RANGE_NETWORK_ZONE": "us-central1-a",
             "RANGE_NETWORK_ZONES": "us-central1-a,us-east1-b",
             "GCP_RANGE_CELL_PROJECT_ID": "acme-range-cells",
             "GCP_RANGE_PRIVATE_GOOGLE_ACCESS": "false",
+            "GCP_RANGE_SHARED_GUEST_FIREWALLS": "true",
             "GCP_RANGE_IMAGE_KEY_PROFILES_JSON": json.dumps(
                 FULL_DEPLOYMENT["range_cells"]["image_key_profiles"], sort_keys=True, separators=(",", ":")
             ),
@@ -83,6 +89,8 @@ class TestDeploymentSettings:
             "openvpn_pool_enabled": True,
             "range_host_identity_pool_size": 24,
             "range_network_zones": ["us-central1-a", "us-east1-b"],
+            "range_shared_guest_firewalls": True,
+            "range_private_google_access": False,
             "ctf_content_bucket_name": "acme-ctf-content",
         }
         assert settings.release_trust is not None
@@ -93,6 +101,7 @@ class TestDeploymentSettings:
         assert env == {
             "GCP_RANGE_BACKEND": "gce",
             "GCP_RANGE_HOST_IDENTITY_POOL_SIZE": "0",
+            "GCP_WORKER_VCPU": "8",
             "RANGE_OPENVPN_ENABLED": "false",
         }
         disabled = GcpOperatorBootstrapSettings(enabled=False, staff_emails=["a@example.com"])
@@ -124,6 +133,7 @@ class TestDeploymentSettings:
             {"release_trust": {"github_repository_id": "0123", "github_owner_id": "5"}},
             {"release_trust": {"github_repository_id": "123"}},
             {"participant_openvpn": {"enabled": True, "extra": 1}},
+            {"deployment_tier": "staging"},
         ],
     )
     def test_invalid_deployment_inputs_fail_closed(self, overrides: dict[str, object]):
@@ -140,3 +150,4 @@ class TestDeploymentSettings:
         rebuilt = GcpBackendSettings.from_root_settings(root_settings)
         assert rebuilt.range_cells.zone == "us-central1-a"
         assert rebuilt.post_deploy_smoke.user_email == "smoke@example.com"
+        assert rebuilt.deployment_tier == "test"

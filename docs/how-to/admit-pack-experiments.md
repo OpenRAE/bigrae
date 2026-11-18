@@ -2,7 +2,10 @@
 
 Admission retains an installed pack's trial plan and exact scientific inputs.
 It creates no VM and makes no model call.
-Remote dispatch is a separate operation.
+[Dispatch](run-experiment-batches.md) is a separate operation.
+
+Run the commands in an operator-prepared application environment.
+Use the installed revision and approved credential files.
 
 ## Prepare the inputs
 
@@ -11,14 +14,37 @@ Remote dispatch is a separate operation.
 3. Obtain a native bearer credential with installation and organization `manage_content` authority.
 4. Save the credential in an owner-only file with mode `0600`.
 5. Obtain approved backend, processor, participant, realization-envelope, and execution-authority documents from their owners.
+6. If a participant manifest names a backend configuration owner, install the adapter that declares that owner.
+   Wait until the installation is ready.
 
 The apparatus authority document contains `schema_version`, `backend`, `processor`, `participants`, `realization_envelope`, and `execution_authority`.
 Its schema version is `bigrae.experiment-admission-authority/v1`.
 Each participant contains `participant_address` and its owner-supplied `manifest`.
+
+The optional `worker_profile` field names the published worker host profile for every trial of the batch. It defaults to `default`.
+Admission records that profile's name and digest, and refuses a profile that is not published.
+
+For a disposable worker trial, you can omit `backend` and `realization_envelope`.
+Then supply `apparatus`, the declaration that the installed apparatus plugin publishes.
+Its schema version is `bigrae.apparatus-declaration/v1`.
+
+The declaration states what the apparatus realizes on the worker host: operating systems, content types, account features, concern claims, realization support, capture offers, and optional participant, time, and orchestration capabilities.
+BigRAE derives both documents from the bound worker host profile and the declaration, and retains them with the batch.
+BigRAE states the worker VM: its substrate, CPU architecture, image, and size. The declaration cannot claim those concerns.
+Supply both documents with no declaration, or the declaration only. Admission refuses any other set.
+
+A derived admission has these requirements:
+
+- Each selected scenario has one Linux compute node with the profile's CPU architecture.
+- The processor manifest names the `shifter-disposable-worker` backend.
+- A destroy obligation is `best-effort`, with probe references of the form `absence:<name>`.
+  BigRAE writes no receipt for a failed worker cleanup, so it refuses a `required` cleanup obligation.
+
 The optional `max_concurrency` field defaults to 200.
 Its supported configuration range is 1 through 10000.
 Installation authority approves these documents for this admission.
 The pack cannot approve apparatus or load executable validators.
+
 Selected prompt assets must include their actual bytes in the installed pack's verified artifact inventory.
 Their absolute `raes-environment-pack:` locators and complete descriptors must match that inventory.
 Admission refuses missing, changed, or unavailable selected content.
@@ -53,14 +79,16 @@ It reads the immutable retained inputs without loading the source pack or alloca
 
 ## Understand the limits
 
-Requested concurrency must fit both the approved ceiling and the sealed plan's isolation ceiling.
-Current RAES compiler output has a serial ceiling.
+Requested concurrency must fit both the approved ceiling and the sealed plan's admitted parallelism ceiling.
+The SDL `trial_parallelism` value sets the admitted parallelism ceiling.
+A plan without `trial_parallelism` has a serial ceiling of one.
 A configured ceiling of 200 grants no cloud capacity or provider quota.
-A future dispatcher must obtain current capacity before starting a worker.
+[Dispatch](run-experiment-batches.md) obtains current worker capacity before it starts a worker.
 
 The released compiler bounds coordinates, domain values, and product outputs at 10000 each.
 The plan limit is 32 MiB.
 The complete retained record limit is 64 MiB.
+
 Original documents and referenced local artifacts each have a 16 MiB aggregate limit.
 The authority document limit is 4 MiB.
 Oversized studies fail without partial admission.
@@ -91,12 +119,16 @@ members, counts, collection completeness, and missing or incomplete data.
 Missing archive versions remain visible even when an earlier version of the
 same attempt was collected.
 The indexes include every expected entry and the known run versions and attempts.
+
 Read collection status, capture completeness and scientific outcome separately.
 A failed trial can have a completely collected archive. An assigned worker does
-not establish a start or scientific outcome. Unknown values remain null in JSON
+not establish a start or scientific outcome.
+
+Unknown values remain null in JSON
 and empty in CSV; nested CSV fields contain JSON. CSV text that can start a
-spreadsheet formula is prefixed with an apostrophe. Original archive bytes remain
-unchanged. Repeating the command with unchanged inputs produces the same file
+spreadsheet formula is prefixed with an apostrophe. Original archive bytes remain unchanged.
+
+Repeating the command with unchanged inputs produces the same file
 content. Repeat it after new archives arrive to update the inventory.
 
 Exports are limited to 10000 expected entries, 10000 experiment archive inventory

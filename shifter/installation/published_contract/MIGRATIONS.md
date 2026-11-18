@@ -24,6 +24,13 @@ default to `null`; bundle authors may add them when their lifecycle is available
 through a structured, shell-free argv command whose executable is declared in
 `required_tools`.
 
+## Contract version 1 GCP gateway authority outputs (issue #2793)
+
+The GCP generated runtime inventory adds the browser gateway control endpoint,
+audience, provider identity, service account email and immutable subject. The
+AWS role field is empty on GCP. These are generated deployment outputs. The
+settings schema and version-1 frozen snapshot remain unchanged.
+
 ## Changing the contract
 
 - **Additive change** (new optional field, new enum value, new backend): edit
@@ -43,6 +50,15 @@ through a structured, shell-free argv command whose executable is declared in
 
 Run `shifter-config contract check` to verify drift, compatibility, and registry
 conformance locally before pushing.
+
+## Contract version 2
+
+Issue #2909 removes the bespoke model broker and model-access control.
+These settings are removed from the AWS and GCP settings schemas: `model_broker` and `model_broker_runtime`.
+The shared `settings.model_access` block is also removed.
+The `model-broker` process role and the broker, model-access, and enrollment runtime outputs are removed.
+A configuration that still sets a removed block fails validation with the unknown-field error.
+To migrate, delete these blocks from the configuration. Every supported deployment keeps them disabled.
 
 ## Contract version 1
 

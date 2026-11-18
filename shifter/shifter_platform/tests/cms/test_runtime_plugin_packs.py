@@ -164,6 +164,50 @@ def test_admin_binds_a_prepromoted_directory_image(pack_api):
     assert profile["domain_dns_name"] == "example.test"
 
 
+def test_admin_hardware_profile_survives_the_public_binding_api(pack_api):
+    client, base, installed, source, _root = pack_api
+    target = client.get(base + "example/").json()["targets"][0]["address"]
+    hardware = {
+        "provider": "gcp",
+        "image_ref": "projects/example/global/images/arm-guest-v1",
+        "machine_type": "c4a-standard-2",
+        "disk_type": "hyperdisk-balanced",
+        "nic_type": "GVNIC",
+        "disk_interface": "NVME",
+        "enable_secure_boot": False,
+    }
+    response = client.post(
+        base + "example/",
+        {
+            "installation_id": str(installed.id),
+            "pack_digest": source.package_digest,
+            "bindings": {"targets": {"server": target}, "image_profiles": {"server": hardware}},
+        },
+        format="json",
+    )
+    assert response.status_code == 200, response.content
+    returned = response.json()["bindings"]["image_profiles"]["server"]
+    retained = RuntimePluginPackBinding.objects.get(pack_id="example").bindings["image_profiles"]["server"]
+    for key, value in hardware.items():
+        assert returned[key] == value
+        assert retained[key] == value
+
+
+@pytest.mark.parametrize("value", ["false", 0, 1, None])
+def test_http_boot_choice_rejects_ambiguous_values(value):
+    from cms.api.runtime_plugin_packs import RuntimeTargetImageProfileSerializer
+
+    serializer = RuntimeTargetImageProfileSerializer(
+        data={
+            "provider": "gcp",
+            "image_ref": "projects/example/global/images/guest-v1",
+            "enable_secure_boot": value,
+        }
+    )
+    assert not serializer.is_valid()
+    assert "enable_secure_boot" in serializer.errors
+
+
 def test_pack_access_and_configuration_require_tenant_admin_even_for_staff(pack_api):
     client, base, installed, source, _root = pack_api
     outsider = User.objects.create_user(username="outsider-staff", is_staff=True)

@@ -82,18 +82,22 @@ class TestGuacamoleClientReadiness:
 
         assert "token=token123" in url
         assert mock_open.call_count == 1
+        # The enclosing exchange must cover native identity and authority callbacks.
+        assert mock_open.call_args.kwargs["timeout"] == 30.0
         assert sleeps == []
 
     def test_retries_on_http_503_then_succeeds(self, sleeps):
+        error = _http_error(503, "Service Unavailable")
         with patch(URLOPEN) as mock_open:
             ok = mock_open.return_value
             ok.__enter__.return_value = _ok_response()
-            mock_open.side_effect = [_http_error(503, "Service Unavailable"), ok]
+            mock_open.side_effect = [error, ok]
 
             url = _client(retry_attempts=3, retry_base_delay_ms=10).create_ssh_url(_req())
 
         assert "token=token123" in url
         assert mock_open.call_count == 2
+        assert error.closed
         assert len(sleeps) == 1
 
     def test_retries_on_urlerror_then_succeeds(self, sleeps):

@@ -136,8 +136,7 @@ The workflow does these steps:
 
 `platform/deployer/gcp/trivyignore.yaml` holds the only accepted deployer
 exposures. Each entry is a HIGH finding in a vendor binary that no vendor build
-fixes yet: `gcloud-crc32c`, `helm`, `kubectl`, `oras`, and `trivy`. Each entry
-expires on 2026-11-30. After that
+fixes yet. The only entry is for `gcloud-crc32c`. It expires on 2026-11-30. After that
 date, the gate blocks each release until the tools are updated. The file does
 not apply to the control-plane image gate.
 
@@ -149,10 +148,13 @@ GitHub API.
 
 The deployer image is the GitHub-less execution unit. It holds the repository
 subset that the commands read and pinned tools: Terraform 1.17.1, Helm
-v3.22.1, kubectl v1.34.13, Trivy 0.76.1, ORAS 1.3.6, the Google Cloud CLI
+v3.22.1, kubectl v1.34.13, Trivy 0.76.2, ORAS 1.3.6, the Google Cloud CLI
 591.0.0, and `gke-gcloud-auth-plugin`. The image builds the plugin from an
 exact `kubernetes/cloud-provider-gcp` commit with a pinned Go image, because
-the newest Google build uses a Go release with a CRITICAL finding (#2618). A
+the newest Google build uses a Go release with a CRITICAL finding (#2618).
+It builds Helm, kubectl, and ORAS from their release commits the same way. No
+vendor build of the plugin, Helm, or kubectl has `golang.org/x/net` 0.62.0
+(CVE-2026-78661), and the ORAS build uses an older Go release. A
 provider mirror holds the Terraform providers of each root. Docker `FROM` stages are digest-pinned. Each
 downloaded tool is verified against a SHA-256 value that the reviewed
 Dockerfile pins; the build does not fetch the checksum from the download
@@ -205,7 +207,7 @@ has one home outside GitHub.
 | `GCP_REGION` | `settings.region` |
 | `GCP_PUBLIC_HOSTNAME` | `deployment.domain` |
 | `SHIFTER_CONFIG_GCP_DEV` | `bigrae.yaml` |
-| `SHIFTER_CONFIG_OVERLAY_JSON` | `model-broker-overlay.template.json` |
+| `SHIFTER_CONFIG_OVERLAY_JSON` | Removed with the model broker (#2909). |
 | `GCP_IDENTITY_ALLOWED_EMAIL_DOMAIN` | Terraform value `identity_allowed_email_domain` |
 | `GCP_MASTER_AUTHORIZED_CIDRS` | Not read. The operator sets the Terraform value `gke_master_authorized_cidrs`. The CI adapter sets `[]`. |
 | `GCP_BOOTSTRAP_ADMIN_EMAIL` | `settings.operator_bootstrap.admin_email` |
@@ -591,3 +593,13 @@ lists the steps.
 Review checks STE sentence length, one word for one meaning, and that every
 statement matches the code. The updated documents are listed in issue #2571
 and in the pull request.
+
+### Release scanner quota consumption (#2789)
+
+The release-scan identity holds `roles/serviceusage.serviceUsageConsumer` on its
+deployment project. This permits the quota-billed API calls used to create scan
+evidence when the operator selects that project as the quota project. The grant
+exists only when the scanner is enabled. Evidence read access and its create-only
+`release-scans/` write boundary remain unchanged; this role adds no storage mutation
+permission. The foundation contract tests check the exact project, role and member,
+and check that disabling the scanner removes this grant.

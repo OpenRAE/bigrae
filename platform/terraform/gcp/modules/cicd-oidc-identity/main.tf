@@ -556,6 +556,16 @@ resource "google_storage_bucket_iam_member" "validate_evidence_writer" {
   }
 }
 
+# Quota-billed Storage API calls require consumption on the selected project.
+# The evidence writer keeps its separate create-only prefix grant (#2789).
+resource "google_project_iam_member" "release_scan_quota_consumer" {
+  depends_on = [google_service_account.release_scan]
+  count      = local.release_scan_enabled ? 1 : 0
+  project    = var.project_id
+  role       = "roles/serviceusage.serviceUsageConsumer"
+  member     = "serviceAccount:${local.service_account_emails.release_scan}"
+}
+
 resource "google_storage_bucket_iam_member" "release_scan_evidence_writer" {
   depends_on = [google_service_account.release_scan]
   count      = local.release_scan_enabled ? 1 : 0

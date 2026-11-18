@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import ipaddress
 import os
+from dataclasses import dataclass
 
 from config import GCERangeCellConfig
-from gcp_range_cell_model_broker import admitted_broker_destination, broker_firewall_name
 from gcp_range_cell_naming import _network_tag, _short_resource_name
 from gcp_range_cell_types import (
     DEFAULT_GCE_EGRESS_POLICY,
@@ -25,6 +25,11 @@ from gcp_range_cell_types import (
 _GOOGLE_PRIVATE_API_VIP_CIDR = "199.36.153.8/30"  # NOSONAR
 
 _UNIVERSAL_IPV4_CIDR = "0.0.0.0/0"
+
+# Shared-guest firewall layout: the range VPC Terraform keys its fixed rules by
+# these tags, so the names must match platform/terraform/gcp/modules/range/vpc.
+SHARED_GUEST_TAG = "shifter-range-guest"
+SHARED_VPN_CHANNEL_TAGS = {"ssh": "shifter-range-vpn-ssh", "rdp": "shifter-range-vpn-rdp"}
 
 # The TCP port each participant channel is served on: the same pair the
 # access-workload ingress rule opens (portal terminal SSH, Guacamole RDP).
@@ -284,6 +289,40 @@ def _egress_rules(
             "denied": [{"IPProtocol": "all"}],
         },
     ]
+    rules.extend(
+        _optional_egress_lanes(
+            range_id, range_tag, egress_allow_cidrs, allow_public_web_egress, public_web_destinations
+        )
+    )
+    if config.private_google_access:
+        rules.append(_googleapis_egress_rule(range_id, range_tag))
+    return rules
+
+
+def _googleapis_egress_rule(range_id: int, range_tag: str) -> FirewallPlan:
+    """Private Google Access needs an explicit TLS route through egress deny.
+
+    This network capability supplies no guest credentials.
+    """
+    return {
+        "name": _short_resource_name("shifter-r", range_id, "egress-googleapis"),
+        "direction": "EGRESS",
+        "priority": 1100,
+        "target_tags": [range_tag],
+        "destination_ranges": [_GOOGLE_PRIVATE_API_VIP_CIDR],
+        "allowed": [{"IPProtocol": "tcp", "ports": ["443"]}],
+    }
+
+
+def _optional_egress_lanes(
+    range_id: int,
+    range_tag: str,
+    egress_allow_cidrs: list[str],
+    allow_public_web_egress: bool,
+    public_web_destinations: list[str],
+) -> list[FirewallPlan]:
+    """Render the configured allow-CIDR lane and the sanctioned public-web lane."""
+    rules: list[FirewallPlan] = []
     if egress_allow_cidrs:
         rules.append(
             {
@@ -311,20 +350,6 @@ def _egress_rules(
                 "allowed": [{"IPProtocol": "tcp", "ports": ["80", "443"]}],
             }
         )
-    if config.private_google_access:
-        # Private Google Access needs an explicit TLS route through egress deny.
-        # This network capability supplies no guest credentials. Model access
-        # uses the separately admitted broker endpoint and enrollment contract.
-        rules.append(
-            {
-                "name": _short_resource_name("shifter-r", range_id, "egress-googleapis"),
-                "direction": "EGRESS",
-                "priority": 1100,
-                "target_tags": [range_tag],
-                "destination_ranges": [_GOOGLE_PRIVATE_API_VIP_CIDR],
-                "allowed": [{"IPProtocol": "tcp", "ports": ["443"]}],
-            }
-        )
     return rules
 
 
@@ -339,6 +364,58 @@ def _public_web_egress(
         include_optional_cleanup or any(instance["profile"].allow_public_web_egress for instance in instances)
     )
     return enabled, _ipv4_complement(denied_networks) if enabled else []
+
+
+@dataclass(frozen=True)
+class _ResolvedBoundaries:
+    """Validated firewall inputs shared by the per-range and shared layouts."""
+
+    range_tag: str
+    portal_network_cidrs: list[str]
+    access_network_cidrs: list[str]
+    egress_allow_cidrs: list[str]
+    allow_public_web_egress: bool
+    public_web_destinations: list[str]
+
+
+def _resolve_boundaries(
+    range_id: int,
+    config: GCERangeCellConfig,
+    instance_plans: list[InstancePlan],
+    include_optional_cleanup: bool,
+    egress_policy: GceEgressPolicy,
+) -> _ResolvedBoundaries:
+    """Validate the boundary CIDRs and resolve the optional egress lanes once."""
+    deny_general_egress = (egress_policy.mode or "status-quo").strip().lower() in {"none", "deny-all"}
+    portal_network_cidrs = _validated_boundary_cidrs("portal_network_cidrs", config.portal_network_cidrs)
+    access_network_cidrs = _validated_boundary_cidrs("access_network_cidrs", config.access_network_cidrs)
+    _reject_overlapping_boundaries(access_network_cidrs, portal_network_cidrs)
+    # A no-general-egress range (none/deny-all) opens no public-web lane and no
+    # configured allow-CIDR lane, regardless of instance profiles or deployment
+    # config.
+    egress_allow_cidrs = (
+        [] if deny_general_egress else _validated_boundary_cidrs("egress_allow_cidrs", config.egress_allow_cidrs)
+    )
+    # ADR-056-R2/R4: one denied-network inventory drives both the operator
+    # allow-CIDR overlap check and the public-web egress complement, so a
+    # sanctioned egress lane can never name an internal/management/metadata
+    # destination.
+    denied_networks = _denied_egress_networks(config)
+    _reject_denied_egress_overlap(egress_allow_cidrs, denied_networks)
+    allow_public_web_egress, public_web_destinations = _public_web_egress(
+        deny_general_egress,
+        instance_plans,
+        include_optional_cleanup,
+        denied_networks,
+    )
+    return _ResolvedBoundaries(
+        range_tag=_network_tag(range_id),
+        portal_network_cidrs=portal_network_cidrs,
+        access_network_cidrs=access_network_cidrs,
+        egress_allow_cidrs=egress_allow_cidrs,
+        allow_public_web_egress=allow_public_web_egress,
+        public_web_destinations=public_web_destinations,
+    )
 
 
 def build_firewall_plan(
@@ -362,68 +439,95 @@ def build_firewall_plan(
     defense in depth; it is not, by itself, the ``none`` no-NAT guarantee.
     """
     bypass = os.environ.get("GCP_RANGE_PREPROVISIONED_FIREWALLS", "").strip().lower() in {"1", "true", "yes"}
-    broker_destination = admitted_broker_destination(
-        egress_policy,
-        config,
-        subnet_plans,
-        instance_plans or [],
-        bypass,
-    )
     if bypass:
         return []
-    deny_general_egress = (egress_policy.mode or "status-quo").strip().lower() in {"none", "deny-all"}
-    range_tag = _network_tag(range_id)
-    subnet_cidrs = [subnet["cidr"] for subnet in subnet_plans]
-    portal_network_cidrs = _validated_boundary_cidrs("portal_network_cidrs", config.portal_network_cidrs)
-    access_network_cidrs = _validated_boundary_cidrs("access_network_cidrs", config.access_network_cidrs)
-    _reject_overlapping_boundaries(access_network_cidrs, portal_network_cidrs)
-    # A no-general-egress range (none/deny-all) opens no public-web lane and no
-    # configured allow-CIDR lane, regardless of instance profiles or deployment
-    # config.
-    egress_allow_cidrs = (
-        [] if deny_general_egress else _validated_boundary_cidrs("egress_allow_cidrs", config.egress_allow_cidrs)
-    )
-    # ADR-056-R2/R4: one denied-network inventory drives both the operator
-    # allow-CIDR overlap check and the public-web egress complement, so a
-    # sanctioned egress lane can never name an internal/management/metadata
-    # destination.
-    denied_networks = _denied_egress_networks(config)
-    _reject_denied_egress_overlap(egress_allow_cidrs, denied_networks)
-    allow_public_web_egress, public_web_destinations = _public_web_egress(
-        deny_general_egress,
-        instance_plans or [],
-        include_optional_cleanup,
-        denied_networks,
-    )
+    boundaries = _resolve_boundaries(range_id, config, instance_plans or [], include_optional_cleanup, egress_policy)
     firewalls = _subnet_ingress_rules(range_id, subnet_plans)
     firewalls.extend(
         _boundary_ingress_rules(
-            range_id, range_tag, access_network_cidrs, portal_network_cidrs, config, instance_plans or []
+            range_id,
+            boundaries.range_tag,
+            boundaries.access_network_cidrs,
+            boundaries.portal_network_cidrs,
+            config,
+            instance_plans or [],
         )
     )
     firewalls.extend(
         _egress_rules(
             range_id,
-            range_tag,
-            subnet_cidrs,
-            egress_allow_cidrs,
-            allow_public_web_egress,
-            public_web_destinations,
+            boundaries.range_tag,
+            [subnet["cidr"] for subnet in subnet_plans],
+            boundaries.egress_allow_cidrs,
+            boundaries.allow_public_web_egress,
+            boundaries.public_web_destinations,
             config,
         )
     )
-    if broker_destination is not None:
-        firewalls.append(
-            {
-                "name": broker_firewall_name(range_id),
-                "direction": "EGRESS",
-                "priority": 900,
-                "target_tags": [range_tag],
-                "destination_ranges": [broker_destination],
-                "allowed": [{"IPProtocol": "tcp", "ports": ["443"]}],
-            }
-        )
     return firewalls
 
 
-__all__ = ["build_firewall_plan"]
+def isolation_firewall_name(range_id: int) -> str:
+    """Return the one range-scaled ingress rule name of the shared layout."""
+    return _short_resource_name("shifter-r", range_id, "isolation")
+
+
+def build_shared_firewall_plan(
+    range_id: int,
+    subnet_plans: list[SubnetPlan],
+    config: GCERangeCellConfig,
+    *,
+    instance_plans: list[InstancePlan] | None = None,
+    include_optional_cleanup: bool = False,
+    egress_policy: GceEgressPolicy = DEFAULT_GCE_EGRESS_POLICY,
+) -> list[FirewallPlan]:
+    """Render the range-scaled rules of the shared-guest firewall layout.
+
+    The range VPC Terraform owns fixed rules keyed by ``SHARED_GUEST_TAG`` for
+    participant access, intra-network egress, the default egress deny and, when
+    enabled, Private Google Access, plus the OpenVPN channel rules keyed by
+    ``SHARED_VPN_CHANNEL_TAGS``. The existing platform provisioner rule covers
+    management SSH. Each range then needs one isolation rule: ingress from its own
+    subnet CIDRs to its own tag. The network-wide ingress deny blocks every other
+    range, because no other rule admits a range subnet as a source.
+
+    A host whose management port the shared rules do not cover, and an enabled
+    allow-CIDR or public-web lane, keep their per-range rule.
+    """
+    instances = instance_plans or []
+    boundaries = _resolve_boundaries(range_id, config, instances, include_optional_cleanup, egress_policy)
+    firewalls: list[FirewallPlan] = [
+        {
+            "name": isolation_firewall_name(range_id),
+            "direction": "INGRESS",
+            "priority": 1000,
+            "target_tags": [boundaries.range_tag],
+            "source_ranges": [subnet["cidr"] for subnet in subnet_plans],
+            "allowed": [{"IPProtocol": "all"}],
+        }
+    ]
+    shared_ports = {"22", str(config.host_mgmt_ssh_port)}
+    extra_ports = sorted({str(instance["ssh_port"]) for instance in instances} - shared_ports, key=int)
+    if extra_ports and boundaries.portal_network_cidrs:
+        firewalls.append(
+            _management_rule(range_id, boundaries.range_tag, boundaries.portal_network_cidrs, ["22", *extra_ports])
+        )
+    firewalls.extend(
+        _optional_egress_lanes(
+            range_id,
+            boundaries.range_tag,
+            boundaries.egress_allow_cidrs,
+            boundaries.allow_public_web_egress,
+            boundaries.public_web_destinations,
+        )
+    )
+    return firewalls
+
+
+__all__ = [
+    "SHARED_GUEST_TAG",
+    "SHARED_VPN_CHANNEL_TAGS",
+    "build_firewall_plan",
+    "build_shared_firewall_plan",
+    "isolation_firewall_name",
+]

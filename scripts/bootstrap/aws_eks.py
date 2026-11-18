@@ -30,11 +30,7 @@ if str(_SHIFTER_PACKAGE_ROOT) not in sys.path:
     sys.path.insert(0, str(_SHIFTER_PACKAGE_ROOT))
 
 from installation.loader import load_root_config  # noqa: E402
-from installation.render import (  # noqa: E402
-    render_mission_control_lease_env,
-    render_model_access_catalog,
-    render_model_access_env,
-)
+from installation.render import render_mission_control_lease_env  # noqa: E402
 from installation.runtime_inventory import (  # noqa: E402
     AWS_EKS_REQUIRED_RUNTIME_ENV_KEYS,
     AWS_RENDERER_OWNED_RUNTIME_ENV_KEYS,
@@ -340,7 +336,6 @@ def _runtime_env(config: RootConfig, outputs: Mapping[str, object]) -> dict[str,
         # Per-pod migrations made the launcher's startup exceed its liveness window
         # under DB load and crash-loop; the migration Job overrides this to "" (#1826).
         "SKIP_MIGRATIONS": "1",
-        **_rendered_env_values(render_model_access_env(config)),
         **_rendered_env_values(render_mission_control_lease_env(config)),
         "SITE_URL": f"https://{domain}",
     }
@@ -425,10 +420,6 @@ def _validate_terraform_inputs(
         raise ValueError("the protected EKS Terraform input region does not match shifter.yaml")
     if payload["domain_name"] != config.deployment.domain:
         raise ValueError("the protected EKS Terraform input domain does not match shifter.yaml")
-    from installation.aws_model_broker import AwsModelBrokerSettings, validate_aws_broker_intent
-
-    if AwsModelBrokerSettings.model_validate(payload.get("model_broker", {})) != validate_aws_broker_intent(config):
-        raise ValueError("protected Terraform broker input differs from shifter.yaml")
     return resolved
 
 
@@ -1173,26 +1164,6 @@ def render_aws_values(
             terraform_outputs, roles, domain=config.deployment.domain, ca_bundle=rds_ca_bundle
         )
     )
-    from installation.aws_model_broker import project_aws_model_broker
-
-    broker = project_aws_model_broker(
-        terraform_outputs.get("model_broker", {}).get("value"),
-        config=config,
-        catalog_json=render_model_access_catalog(config),
-        model_access_env=render_model_access_env(config),
-        account_id=_aws_account_id(terraform_outputs),
-    )
-    if broker["enabled"] and broker["provisioner_subject"] != roles["provisioner"]:
-        raise ValueError("broker enrollment identity differs from the provisioner workload")
-    runtime_env.update(
-        {
-            "MODEL_BROKER_GUEST_URL": "",
-            "MODEL_BROKER_GUEST_CIDRS": "",
-            "MODEL_ENROLLMENT_CONTROL_URL": "",
-            "MODEL_ENROLLMENT_CA_PEM_B64": "",
-            **broker.get("enrollment_env", {}),
-        }
-    )
     native_values = aws_native_identity.chart_values(
         config.settings,
         terraform_outputs,
@@ -1203,7 +1174,6 @@ def render_aws_values(
     return {
         "provider": {"name": "aws"},
         **native_values,
-        "modelBroker": broker,
         "deployment": {"name": config.deployment.name, "profile": config.deployment.profile},
         "capabilities": {
             "kubernetesJobLauncher": True,
@@ -1220,9 +1190,7 @@ def render_aws_values(
         "network": {
             "enabled": True,
             "ingressSourceCidrs": _cidr_output(terraform_outputs, "ingress_source_cidrs"),
-            "providerApiCidrs": sorted(
-                set(_cidr_output(terraform_outputs, "provider_api_cidrs") + broker.get("endpoint_cidrs", []))
-            ),
+            "providerApiCidrs": sorted(set(_cidr_output(terraform_outputs, "provider_api_cidrs"))),
             # Carve the cluster service CIDR out of the wildcard provider-API (443)
             # egress so the broad AWS-API allow cannot also reach the in-cluster
             # Kubernetes API (kubernetes.default ClusterIP). Only the launcher

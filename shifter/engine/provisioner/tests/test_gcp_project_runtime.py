@@ -7,7 +7,13 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 import pytest
-from shared.gcp_range_projects import GcpProjectBaseline, GcpSecretState, GcpServiceAccountState
+from shared.gcp_range_projects import (
+    MAX_PROJECT_SECRETS,
+    MAX_PROJECT_SERVICE_ACCOUNTS,
+    GcpProjectBaseline,
+    GcpSecretState,
+    GcpServiceAccountState,
+)
 from shared.gcp_runtime_plan import GcpProjectWork
 
 import gcp_project_runtime as runtime
@@ -276,6 +282,35 @@ def test_two_cycles_restore_baseline_and_regrant_to_new_account_incarnation(proj
         assert project.provider.current.digest == project.baseline.state.digest
         project.work.lease = project.work.lease.model_copy(update={"lease_id": uuid4(), "source_operation_id": uuid4()})
     assert observed_ids[0] != observed_ids[1]
+
+
+@pytest.mark.parametrize("kind", ["accounts", "secrets"])
+def test_combined_inventory_capacity_is_checked_before_any_provider_effect(project, kind):
+    selected = deepcopy(project.work)
+    if kind == "secrets":
+        name = f"projects/{selected.lease.project_number}/secrets/baseline-extra"
+        project.baseline.state.secrets[name] = GcpSecretState(resource={"name": name}, policy={}, versions={})
+        template = next(iter(selected.secrets.values()))
+        for index in range(MAX_PROJECT_SECRETS - len(selected.secrets)):
+            selected.secrets[f"overflow-{index}"] = deepcopy(template)
+    else:
+        email = f"baseline-extra@{selected.lease.project_id}.iam.gserviceaccount.com"
+        project.baseline.state.service_accounts[email] = GcpServiceAccountState(
+            resource={"email": email}, policy={}, user_keys=[]
+        )
+        template = next(iter(selected.accounts.values()))
+        for index in range(MAX_PROJECT_SERVICE_ACCOUNTS - len(selected.accounts)):
+            name = f"overflow-{index}"
+            selected.accounts[f"{name}@{selected.lease.project_id}.iam.gserviceaccount.com"] = {
+                **template,
+                "account_id": name,
+            }
+    selected.lease = selected.lease.model_copy(
+        update={"baseline": selected.lease.baseline.model_copy(update={"state_digest": project.baseline.state.digest})}
+    )
+    with pytest.raises(ValueError, match="realization failed"):
+        project.make(selected)
+    assert project.provider.calls == []
 
 
 @pytest.mark.parametrize("change", ["account-incarnation", "secret-incarnation"])

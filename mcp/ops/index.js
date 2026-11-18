@@ -9,7 +9,7 @@
 // in `tools/*`, request shapes in `schemas.js`, AWS execution in
 // `aws.js`, DB/tunnel lifecycle in `db.js`, range reconciliation in
 // `reconcile.js`, and GitHub Actions dispatch in `github-actions.js`.
-// See docs/architecture/mcp-ops-modularization-preflight-690.md.
+// See docs/_deprecated/architecture/mcp-ops-modularization-preflight-690.md.
 //
 // The entrypoint guard at the bottom keeps importing this module
 // (e.g. from tool-surface.test.js) side-effect-free: no server, no

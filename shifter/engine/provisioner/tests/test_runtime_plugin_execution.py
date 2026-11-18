@@ -171,7 +171,7 @@ def test_guest_nonzero_exit_logs_only_bounded_result_fields(run, database, guest
 def test_pending_planning_has_a_deadline_and_never_executes_guests(run, database, guest, monkeypatch):
     for row in database.rows.values():
         row[0] = "pending"
-    clock = iter([0, 1, 601])
+    clock = iter([0, 1, execution.RUNTIME_PLUGIN_PLANNING_SECONDS + 1])
     monkeypatch.setattr(execution.time, "monotonic", lambda: next(clock))
     wait = MagicMock()
     monkeypatch.setattr(execution.time, "sleep", wait)

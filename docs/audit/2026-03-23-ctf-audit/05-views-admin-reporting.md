@@ -1,5 +1,13 @@
 # Chunk Report: Views, Admin Surfaces, Reporting
 
+> **Applicability** Dated audit reference, 2026-03-23. The audit names no exact source revision.
+> Its original worktree cannot be reconstructed from this record alone.
+> Findings and test counts below are historical evidence, not a current defect or delivery assessment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 Status: `Partial`
 
 ## What Still Looks Good
@@ -107,3 +115,5 @@ Highest-value surface fixes:
 2. Add click-through solve-history behavior to scoreboard rows or narrow the requirement.
 3. Recompute challenge solve rate against total event participants.
 4. Decide whether flag format and submission-history visibility are event-level features or challenge-level conveniences, then align the model and UI.
+
+<!-- vale on -->

@@ -18,7 +18,7 @@ from shared.cloud.runtime_plugins import interrupt_plugin, launch_plugin, observ
 from shared.operation_envelope import validate_operation_envelope
 from shared.raes.operation_input import RaesOperationInput, parse_raes_operation_input
 from shared.runtime_file_inputs import RuntimeFileBinding, load_file_input_material
-from shared.runtime_plugin_binding import runtime_plugin_requests
+from shared.runtime_plugin_binding import RUNTIME_PLUGIN_PLANNING_SECONDS, runtime_plugin_requests
 from shared.runtime_plugin_preparation import RuntimePreparation
 
 from ._runtime_plugin_cleanup import preparation_cleanup_payload
@@ -65,7 +65,7 @@ def queue_runtime_plugin_plans(envelope: dict[str, Any]) -> None:
             phase=request.phase,
             input=request.model_dump(mode="json"),
             input_digest=request.digest,
-            expires_at=timezone.now() + timedelta(minutes=10),
+            expires_at=timezone.now() + timedelta(seconds=RUNTIME_PLUGIN_PLANNING_SECONDS),
         )
         if request.phase == "prepare" and retained is not None and retained.state == "prepared":
             row.state = "planned"

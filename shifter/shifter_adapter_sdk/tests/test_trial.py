@@ -1,0 +1,150 @@
+"""The worker trial-control contract accepts only exact, bounded verb data."""
+
+import json
+
+import pytest
+from shifter_adapter_sdk.runtime import PluginManifest
+from shifter_adapter_sdk.trial import (
+    MAX_TRIAL_OUTPUT_BYTES,
+    TrialExport,
+    TrialInput,
+    TrialPeers,
+    TrialSeal,
+    TrialStatus,
+    parse_trial_output,
+)
+
+_MANIFEST = {
+    "plugin_id": "example.trial",
+    "version": "1.0",
+    "distribution": "example-trial",
+    "entry_point": "example",
+    "worker_image": "registry.example.test/adapters/example@sha256:" + "a" * 64,
+    "required_bindings": ["worker"],
+}
+
+
+def test_trial_control_requires_the_apparatus_protocol_and_configure():
+    manifest = PluginManifest(
+        protocol="bigrae.runtime-plugin/v2",
+        capabilities=["guest.configure", "guest.verify", "trial.control"],
+        **_MANIFEST,
+    )
+    assert "trial.control" in manifest.capabilities
+    with pytest.raises(ValueError, match="trial control"):
+        PluginManifest(
+            protocol="bigrae.runtime-plugin/v1",
+            capabilities=["guest.configure", "guest.verify", "trial.control"],
+            **_MANIFEST,
+        )
+    with pytest.raises(ValueError, match="trial control"):
+        PluginManifest(
+            protocol="bigrae.runtime-plugin/v2",
+            capabilities=["guest.verify", "trial.control"],
+            **_MANIFEST,
+        )
+
+
+def test_trial_input_binds_identity_deadline_and_digests():
+    value = TrialInput(
+        run_id="run-1",
+        attempt_id="0f0e0d0c-0b0a-4908-8706-050403020100",
+        deadline="2026-11-08T12:00:00Z",
+        unit_sha256="b" * 64,
+        scenario_sha256="c" * 64,
+    )
+    assert TrialInput.model_validate_json(value.model_dump_json()) == value
+    for field, bad in (
+        ("deadline", "2026-11-08T12:00:00+00:00"),
+        ("run_id", "../x"),
+        ("unit_sha256", "B" * 64),
+        ("scenario_sha256", "C" * 64),
+    ):
+        with pytest.raises(ValueError):
+            TrialInput.model_validate({**value.model_dump(), field: bad})
+
+
+def test_status_output_is_consistent_and_bounded():
+    running = parse_trial_output(
+        b'{"run_id":"run-1","attempt_id":"a-1","state":"running","sealed":false}\n', TrialStatus
+    )
+    assert running.state == "running" and running.exit_code is None
+    exited = parse_trial_output(
+        json.dumps(
+            {"run_id": "run-1", "attempt_id": "a-1", "state": "exited", "sealed": True, "exit_code": 0}
+        ).encode(),
+        TrialStatus,
+    )
+    assert exited.sealed
+    for invalid in (
+        b'{"run_id":"run-1","attempt_id":"a-1","state":"running","sealed":true}',
+        b'{"run_id":"run-1","attempt_id":"a-1","state":"exited","sealed":false}',
+        b'{"run_id":"run-1","run_id":"run-2","attempt_id":"a-1","state":"running","sealed":false}',
+        b'{"run_id":"run-1","attempt_id":"a-1","state":"running","sealed":false,"extra":1}',
+        b"x" * (MAX_TRIAL_OUTPUT_BYTES + 1),
+    ):
+        with pytest.raises(ValueError):
+            parse_trial_output(invalid, TrialStatus)
+
+
+def test_export_output_names_one_file_without_a_path():
+    value = parse_trial_output(
+        json.dumps(
+            {"run_id": "run-1", "attempt_id": "a-1", "file": "run-1.tar", "sha256": "d" * 64, "size_bytes": 10}
+        ).encode(),
+        TrialExport,
+    )
+    assert value.file == "run-1.tar"
+    for file in ("../run.tar", "/tmp/run.tar", "sub/run.tar"):
+        with pytest.raises(ValueError):
+            TrialExport.model_validate({**value.model_dump(), "file": file})
+
+
+def test_peer_hosts_pin_one_ed25519_host_key_for_at_most_three_other_vms():
+    peer = {"address": "10.0.0.3", "host_public_key": "ssh-ed25519 AAAAC3Nz"}
+    value = TrialPeers.model_validate_json(json.dumps({"peers": {"nodes.victim": peer}}))
+    assert str(value.peers["nodes.victim"].address) == "10.0.0.3"
+    for bad in (
+        {"peers": {}},
+        {"peers": {f"nodes.n{index}": peer for index in range(4)}},
+        {"peers": {"nodes.victim": peer | {"host_public_key": "ssh-rsa AAAAB3Nz"}}},
+        {"peers": {"nodes.victim": peer | {"address": "victim.internal"}}},
+    ):
+        with pytest.raises(ValueError):
+            TrialPeers.model_validate(bad)
+
+
+def _seal(**changes):
+    member = {
+        "path": "manifest.json",
+        "size_bytes": 2,
+        "checksum": {"algorithm": "sha256", "value": "a" * 64},
+        "media_type": "application/json",
+        "role": "manifest",
+    }
+    return {
+        "run_id": "run-1",
+        "run_version": "1",
+        "run_status": "completed",
+        "outcome_status": "not-evaluated",
+        "run_record_digest": "sha256:" + "a" * 64,
+        "completeness": {"complete": True, "limitations": []},
+        "inventory": [member],
+    } | changes
+
+
+def test_seal_names_its_owner_and_only_the_raes_run_record_contract():
+    seal = TrialSeal.model_validate(_seal())
+    dumped = seal.model_dump(mode="json")
+    assert dumped["schema_version"] == "bigrae.trial-seal/v1"
+    assert dumped["sealed_contract_versions"] == ["experiment-run/v1"]
+    for changes in (
+        {"sealed_contract_versions": ["lilrae-trial-record/v1"]},
+        {"schema_version": "aptl.run-seal/v1"},
+        {"completeness": {"complete": True, "limitations": ["capture lost"]}},
+        {"completeness": {"complete": False, "limitations": []}},
+        {"inventory": []},
+        {"run_record_digest": "a" * 64},
+    ):
+        with pytest.raises(ValueError):
+            TrialSeal.model_validate(_seal(**changes))

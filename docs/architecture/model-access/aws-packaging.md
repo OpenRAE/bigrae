@@ -1,5 +1,13 @@
 # AWS model broker deployment
 
+> **Historical record.** Issue #2909 removed the broker and its model-access control subsystem ([ADR-068](../../adr/068-model-access-broker-parked.md)).
+> This document describes code that no longer exists. It does not describe current behavior.
+> See the [current handbook](../../technical/architecture.md) and the [removal design](broker-removal-preflight-2909.md).
+
+<!-- Retained broker contract below. Preserve its exact obligations, examples, and source-bound evidence. -->
+<!-- vale off -->
+
+
 The EKS installer accepts closed `settings.model_broker` intent and a separate
 `settings.model_broker_runtime` provider/accounting binding. Transport and IAM
 metadata enter Terraform; public CA trust and versioned Kubernetes Secret
@@ -78,3 +86,5 @@ explicitly disable that protection before destroying the load balancer. It uses
 TCP passthrough for guest TLS, so AWS NLB access logging is unavailable (AWS only
 logs TLS listeners); broker request metadata and VPC flow logs remain the audit
 surfaces. See the narrowly scoped ADR-004-R11 scanner exception.
+
+<!-- vale on -->

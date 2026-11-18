@@ -12,12 +12,10 @@ from __future__ import annotations
 # Keep this set scoped to that renderer: its contract test asserts exact equality.
 GCP_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
-        "MODEL_BROKER_GUEST_URL",
-        "MODEL_BROKER_GUEST_VIP",
-        "MODEL_ENROLLMENT_CONTROL_URL",
-        "MODEL_ENROLLMENT_CA_PEM_B64",
         "ACCESS_NETWORK_CIDRS",
         "APP_SECRET_ID",
+        "CAPACITY_PLANNING_CATALOG",
+        "CAPACITY_PLANNING_ENABLED",
         "AUDIT_DEPLOYMENT_SCOPE",
         # The GCE external Application Load Balancer appends two X-Forwarded-For
         # hops, so the renderer sets the trusted hop count (#2617).
@@ -58,6 +56,12 @@ GCP_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
         "GOOGLE_CLOUD_PROJECT",
         "GUACAMOLE_API_BASE_URL",
         "GUACAMOLE_BASE_URL",
+        "GUACAMOLE_CONTROL_URL",
+        "GUACAMOLE_CONTROL_AUDIENCE",
+        "GUACAMOLE_CONTROL_IDENTITY",
+        "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_EMAIL",
+        "GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID",
+        "GUACAMOLE_CONTROLLER_ROLE_ARN",
         "GUACAMOLE_POSTGRESQL_DATABASE",
         "GUACAMOLE_POSTGRESQL_HOSTNAME",
         "GUACAMOLE_POSTGRESQL_PORT",
@@ -73,9 +77,6 @@ GCP_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
         "IDENTITY_SESSION_IDLE_SECONDS",
         "IDENTITY_SESSION_RECHECK_SECONDS",
         "IDENTITY_PLATFORM_TOTP_DISPLAY_NAME",
-        "MODEL_ACCESS_CATALOG_DIGEST",
-        "MODEL_ACCESS_CATALOG_PATH",
-        "MODEL_ACCESS_ENABLED",
         "PORTAL_NETWORK_CIDRS",
         "QUEUE_CMS_CONSUMER_ID",
         "QUEUE_CMS_PUBLISHER_ID",
@@ -206,10 +207,6 @@ GCP_SECRET_RUNTIME_ENV_KEYS: frozenset[str] = frozenset()
 GCP_PROVISIONER_FORWARDED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
         "DB_AUTH_MODE",
-        "MODEL_BROKER_GUEST_URL",
-        "MODEL_BROKER_GUEST_VIP",
-        "MODEL_ENROLLMENT_CONTROL_URL",
-        "MODEL_ENROLLMENT_CA_PEM_B64",
         "ACCESS_NETWORK_CIDRS",
         "RANGE_OPENVPN_ENDPOINT",
         "RANGE_OPENVPN_ISSUER_SECRET_ID",

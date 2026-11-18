@@ -9,7 +9,7 @@ This is a distinct contract family from the durable bus payloads in
 not the same thing as the ``range.status`` ``group_send`` payload consumed by
 ``RangeStatusConsumer.range_status``. Static typing only; the channel layer
 still delivers plain dicts. See
-``docs/architecture/typed-event-contracts-preflight-296.md``.
+``docs/_deprecated/architecture/typed-event-contracts-preflight-296.md``.
 """
 
 from __future__ import annotations

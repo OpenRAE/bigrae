@@ -12,7 +12,7 @@
 // EXPECTED_<PROFILE> in this file (the same maintenance contract as
 // `mcp/ngfw/tool-surface.test.js`).
 //
-// See `docs/architecture/mcp-ops-privileged-surface-preflight-777.md`
+// See `docs/_deprecated/architecture/mcp-ops-privileged-surface-preflight-777.md`
 // § "Phase 6 Preflight (#1202)" for the architecture rationale.
 
 import { after, before, describe, it } from "node:test";

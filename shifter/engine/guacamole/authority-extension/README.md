@@ -1,5 +1,7 @@
 # Guacamole session authority
 
+This reference describes the native session lease and its qualification boundary.
+
 This add-on targets Apache Guacamole 1.6.0's supported authentication-provider
 decoration API. JSON authentication remains responsible for authenticating the
 signed payload. The portal remains responsible for application policy. The
@@ -37,9 +39,10 @@ Google's SDK into the extension, with its namespace relocated to avoid Guacamole
 library conflicts. Third-party licenses and notices remain in the jar. Apache's
 entrypoint hook installs the jar after runtime-home generation.
 
-CI compiles with Java warnings treated as errors, runs JUnit and native local
-SSH/SFTP/RDP qualification, checks bytecode with SpotBugs/Find Security Bugs, and
-feeds JaCoCo coverage to the existing Sonar gate. The narrow SSRF scanner
+The parent image uses HTTPS for the existing official Ubuntu archives and retains the security-package upgrade.
+Native qualification checks the built image's archive configuration before the session tests.
+
+CI treats Java warnings as errors and runs JUnit plus native local SSH/SFTP/RDP qualification. SpotBugs/Find Security Bugs checks bytecode. JaCoCo coverage feeds the existing Sonar gate. The narrow SSRF scanner
 disposition documents the immutable administrator-configured origin; it does
 not exempt caller-controlled URLs or weaken redirect refusal.
 

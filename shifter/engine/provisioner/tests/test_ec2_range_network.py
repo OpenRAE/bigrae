@@ -20,7 +20,6 @@ def config():
         base_route_table_id="rtb-00000000000000000",
         management_cidrs=("10.42.0.0/24",),
         access_cidrs=("10.42.1.0/24",),
-        broker_cidrs=("10.42.2.10/32",),
     )
 
 
@@ -82,10 +81,7 @@ def test_plan_uses_reserved_subnet_without_rewriting_authored_topology():
         for rule in group.ingress
         if rule["IpProtocol"] == "tcp"
     )
-    assert {item["CidrIp"] for rule in group.egress for item in rule.get("IpRanges", [])} == {
-        "10.50.1.0/28",
-        "10.42.2.10/32",
-    }
+    assert {item["CidrIp"] for rule in group.egress for item in rule.get("IpRanges", [])} == {"10.50.1.0/28"}
     assert "0.0.0.0/0" not in str(group)
 
 
@@ -110,11 +106,6 @@ def test_security_groups_do_not_claim_to_implement_ordered_deny_acls():
         build(plan)
 
 
-def test_none_posture_refuses_broker_exception():
-    with pytest.raises(Ec2NetworkError):
-        build(mode="none")
-
-
-def test_guest_cannot_share_a_subnet_with_management_or_broker():
+def test_guest_cannot_share_a_subnet_with_management():
     with pytest.raises(Ec2NetworkError):
         build(cfg=replace(config(), management_cidrs=("10.50.1.0/28",)))

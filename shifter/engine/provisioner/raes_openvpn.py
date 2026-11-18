@@ -67,7 +67,7 @@ class RaesOpenVpn:
 
     def plan_access(self) -> RaesGceVpnAccess:
         """Return the pool firewall inputs for this range."""
-        return RaesGceVpnAccess(target_ref=self.remote_access.target_ref, pool_cidrs=self.pool_cidrs)
+        return RaesGceVpnAccess(target_refs=self.remote_access.target_refs, pool_cidrs=self.pool_cidrs)
 
     def publish(self) -> dict[str, object]:
         """Mint and store the generation's profile; return the owner-free realization."""
@@ -85,7 +85,7 @@ def vpn_access_names(remote_access: RaesRemoteAccess | None) -> RaesGceVpnAccess
     """Return the pool firewall inputs destroy and inventory need: the rule name only."""
     if remote_access is None:
         return None
-    return RaesGceVpnAccess(target_ref=remote_access.target_ref)
+    return RaesGceVpnAccess(target_refs=remote_access.target_refs)
 
 
 def _member_refs(raes_plan: RaesPlan) -> tuple[str, ...]:
@@ -106,8 +106,8 @@ def prepare_raes_openvpn(
     if not openvpn_access_enabled() or endpoint is None:
         raise RaesRealizationError("This range requests OpenVPN access, but no shared OpenVPN pool is deployed")
     member_refs = _member_refs(raes_plan)
-    if member_refs.count(remote_access.target_ref) != 1:
-        raise RaesRealizationError("OpenVPN capability must identify exactly one range member")
+    if any(member_refs.count(target_ref) != 1 for target_ref in remote_access.target_refs):
+        raise RaesRealizationError("OpenVPN capability targets must each identify exactly one range member")
     pool_cidrs = _pool_cidrs()
     if not pool_cidrs:
         # An ingress rule without a source would admit every address.

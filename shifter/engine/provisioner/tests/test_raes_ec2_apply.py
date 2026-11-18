@@ -57,7 +57,6 @@ def setup(monkeypatch):
         secrets=secrets,
         allocated_cidrs={"net.lan": "10.50.1.0/28"},
         execution_builder=Mock(return_value=context),
-        model_enrollment=lambda *args: order.append("enrollment"),
         runtime_plugin=lambda *args: order.append("plugin"),
         host_readiness_verifier=lambda outputs, **_kwargs: order.append("readiness"),
         composition_verifier=lambda plan, outputs: (
@@ -81,11 +80,11 @@ def launch(options, plan=None):
     )
 
 
-def test_enrollment_precedes_plugin_and_ready_requires_independent_guest_observations(monkeypatch):
+def test_plugin_precedes_readiness_and_ready_requires_independent_guest_observations(monkeypatch):
     options, order, cleanup, _, _ = setup(monkeypatch)
     result = launch(options)
     # Preconfigured-host readiness runs once the plugin has started the participant container (#2527).
-    assert order == ["network", "guest", "enrollment", "plugin", "readiness", "composition", "os", "substrate"]
+    assert order == ["network", "guest", "plugin", "readiness", "composition", "os", "substrate"]
     assert result["compute_substrates"] == [{"instance_key": "node.host#0", "value": "virtual-machine"}]
     # Each realized instance carries its authored subnet name so the terminal-ready
     # member projection parses (non-empty subnet_name is required, #1710).

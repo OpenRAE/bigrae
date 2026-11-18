@@ -10,6 +10,8 @@ This runbook covers a failed `gcp-deploy`, `gcp-release-scan`, `gcp-smoke`,
 `gcp-foundation`. A CI deployment runs the same commands. Its job log shows the
 same messages.
 
+Use the [shared operating contract](index.md#shared-operating-contract) before investigation or recovery.
+
 ## Symptom
 
 A lifecycle command stops with a status other than 0:
@@ -26,7 +28,7 @@ messages identify the stage:
 
 | Stage | Messages |
 | --- | --- |
-| Inputs | `required tools are missing from PATH`; `deployment inputs must include bigrae.yaml`; `deployment inputs must include terraform.tfvars or terraform.tfvars.json`; `range-images.json role ... must be projects/<project>/global/images/[family/]<name>`; `the deploy tooling revision does not match the release revision`; `the deploy tooling has local changes`; `a release manifest is required`; `settings.release_trust is required to verify release provenance`; `derived ... identity ... is not a valid service account` |
+| Inputs | `required tools are missing from PATH`; `deployment inputs must include bigrae.yaml`; `deployment inputs must include terraform.tfvars or terraform.tfvars.json`; `range-images.json role ... must be projects/<project>/global/images/[family/]<name>`; `the deploy tooling revision does not match the release revision`; `the deploy tooling has local changes`; `--allow-unreleased-tooling requires settings.deployment_tier: test`; `a release manifest is required`; `settings.release_trust is required to verify release provenance`; `derived ... identity ... is not a valid service account` |
 | Lock | `the deployment lock is held by <command> run <run id> (started <time>)` |
 | Infrastructure | `settings.operator_bootstrap is required`; `settings.operator_bootstrap.admin_password_secret_ref is required`; `the operator password secret has an empty latest version`; `cannot read the operator password from Secret Manager`; `GCP operator email must use the ... domain`; `terraform apply failed with exit status <n>` |
 | Preconditions | `Required GCE range-cell input ... is not set`; `Range guest image not imported`; `Range guest image check failed` |
@@ -56,6 +58,19 @@ Keep certificate and hostname verification enabled.
 Record the command, the deployment name, the release revision, and the last
 `Running:` line. Run the checks through the deployer image of the release, as
 the guide describes, or from a clean checkout of the release revision.
+
+A test cycle can run for several hours. The gcloud user credentials and the
+Application Default Credentials (ADC) can expire during that time. Then the
+next gcloud call fails with `Reauthentication failed. cannot prompt during
+non-interactive execution`. Before each deploy or destroy, check both
+credentials.
+
+Read-only command:
+
+```bash
+CLOUDSDK_CORE_ACCOUNT=<operator> gcloud auth print-access-token > /dev/null
+gcloud auth application-default print-access-token > /dev/null
+```
 
 1. Check the tools and the bundle. The preflight renders the Terraform values
    and makes no change.
@@ -112,7 +127,11 @@ the guide describes, or from a clean checkout of the release revision.
 
 6. For a rollout failure, read the cluster state through Connect Gateway as the
    deploy identity. Use a separate `KUBECONFIG`, and unset both variables when
-   you finish.
+   you finish. The deploy command uses its own private `KUBECONFIG`, so your
+   kubeconfig contexts do not change its context.
+   `gcloud container clusters get-credentials` writes the private control-plane
+   endpoint, which the workstation cannot reach when
+   `gke_master_authorized_cidrs = []`. Use the fleet membership credentials instead.
 
    Read-only command:
 
@@ -127,6 +146,11 @@ the guide describes, or from a clean checkout of the release revision.
    kubectl -n shifter-platform rollout status deploy/<deployment> --timeout=60s
    kubectl -n shifter-platform get events --sort-by=.lastTimestamp
    ```
+
+   For a denied Job create, read the GKE audit log for `jobs.create` in the
+   jobs namespace. Check a policy change with `kubectl apply --dry-run=server`.
+   For a smoke failure, read the `worker-provisioner-launcher` logs and the
+   provisioner Job pods in the jobs namespace.
 
 7. For a Helm failure that rolled back, read the container logs from Cloud
    Logging. The atomic rollback deletes the failed pods, so `kubectl logs` has
@@ -191,25 +215,51 @@ release. Use the guide for each step that changes the deployment.
   holder stopped, run the next command with `--break-lock`
   ([Deployment lock](../technical/handbook/gcp-github-less-deployment.md#deployment-lock)).
   The command removes the lock with no prompt.
+- **Credentials:** For `Reauthentication failed`, run `gcloud auth login` or
+  `gcloud auth application-default login` again. Then run the stopped command
+  again. Use `--break-lock` only if the stopped run held the deployment lock.
+  The commands use the active gcloud account to impersonate the purpose
+  identities. A change of the active account in another shell can break the
+  next gcloud call, for example the lock release after a destroy. Pin the
+  account for each run with `CLOUDSDK_CORE_ACCOUNT=<operator>`.
+- **Foundation:** `roles/editor` is not enough for `gcp-install` or
+  `gcp-foundation`. Editor creates the service accounts and buckets, but it
+  cannot set IAM policy, create custom roles, or change the audit
+  configuration. The apply then stops partway with `403` errors. Get
+  `roles/owner`, or `roles/resourcemanager.projectIamAdmin`,
+  `roles/iam.roleAdmin`, and `roles/iam.serviceAccountAdmin`, and run the same
+  command again. It continues from the resources that it created.
 - **Infrastructure:** Fix the operator password secret or the operator email
   ([Create the initial secrets](../technical/handbook/gcp-github-less-deployment.md#create-the-initial-secrets)).
   A failed Terraform apply does not roll back. Fix the cause in the Terraform
   values, publish them, and deploy again
   ([Update and roll back](../technical/handbook/gcp-github-less-deployment.md#update-and-roll-back)).
-  Do not remove a Terraform state lock while an apply can still run. When you
-  know that the apply stopped, run `terraform force-unlock` with the generation
-  number of the lock object as the lock ID, not the ID in the lock info:
+  Do not remove a Terraform state lock while an apply can still run. After confirming the apply has stopped, use `terraform force-unlock`. Its lock ID is the lock-object generation number. The ID inside the lock information is different:
   `gcloud storage objects describe gs://<project>-terraform-state/shifter/<environment>/platform-core/default.tflock --format='value(generation)'`.
   A node pool that stays `RUNNING_WITH_ERROR` after a zone stockout fails the
-  apply; follow the stockout entry in
-  [the GCP tenant standup gotchas](../dev/gcp-tenant-standup-gotchas.md).
-- **Preconditions:** Set `settings.range_cells.zone` and import the range
-  images with `gcp-images`. For `Range guest image check failed`, the deploy
+  apply; see [GCE stockout on the provisioner node pool](#gce-stockout-on-the-provisioner-node-pool).
+- **Preconditions:** The GCE range precondition gate requires
+  `settings.range_cells.zone`, the `linux` role in `range-images.json`, and the
+  Terraform output `range_host_service_account_email`. The `dc` role is
+  optional, because a content pack supplies its own domain controller. Do not
+  set the range host identity; the command reads it from the Terraform output.
+  Each image in `range-images.json` must exist in the range project. A release
+  that pins base images supplies them; for an older release, import the images
+  with `gcp-images --store` before the first deploy. For `Range guest image check failed`, the deploy
   identity could not read an image; the message names the reason, for example
   a missing `compute.images.get` permission. For a deliberate platform-first bring-up, deploy
   with `--allow-missing-range-images`.
+  If other base guest images already exist in the project, record them with
+  `gcp-config set-range-image`. Record `linux` and `kali`; record `dc` only
+  when the selected release includes it. The deploy imports only when a role
+  named by the release is missing from the bundle.
+  If an interrupted first installation imported verified images before it
+  wrote `range-images.json`, retain those images. Record their exact native
+  references with `gcp-config set-range-image`. Then resume
+  `gcp-deploy --first-install` with the same release and store. Image readback
+  and the release checks still apply.
 - **Images:** Make the release packages public
-  ([Publish a release](../technical/handbook/gcp-github-less-deployment.md#publish-a-release)),
+  ([Make new release packages public](../dev/gcp-contributor-deploy.md#make-new-release-packages-public)),
   or deploy from a mirror with `--release-source`.
 - **Scan:** Deploy a release whose images have no HIGH or CRITICAL finding with
   a fix. Read the raw report under `release-scans/`. There is no bypass.
@@ -240,10 +290,20 @@ release. Use the guide for each step that changes the deployment.
   that account. Otherwise sign in, issue a content credential, and deploy
   again with `--catalog-credential-file <private 0600 file>`.
 - **Certificate:** Point the DNS A record of the hostname at the ingress
-  address, with no proxy. Then deploy again without `--first-install`
+  address, with no proxy. The load balancer must serve the certificate
+  challenge, so keep the record unproxied. Then deploy again without `--first-install`
   ([First install](../technical/handbook/gcp-github-less-deployment.md#first-install)).
   When the certificate does not appear, check that `deployment.domain` names
-  the hostname.
+  the hostname. In a Cloudflare-managed zone, check for stale records from a
+  prior deployment. A retained CNAME to a removed load balancer blocks the new
+  A record. First issuance can take longer than one deploy run. The domain
+  status can show `FailedNotVisible` for a while after the A record resolves,
+  because Google checks the record again on its own schedule. In one standup it
+  changed to `ACTIVE` about 45 minutes after the record resolved. No action is
+  needed while the hostname resolves to the ingress address and the load
+  balancer answers on port 80. A destroy releases the
+  `shifter-<environment>-platform-ip` address, so a reinstall can get a
+  different address ([Tear down](../technical/handbook/gcp-github-less-deployment.md#tear-down)).
 - **Smoke (exit status 3):** The deployment is current. Find the cause in the
   smoke output, then run `gcp-smoke` again
   ([Smoke and exit status](../technical/handbook/gcp-github-less-deployment.md#smoke-and-exit-status)).
@@ -253,27 +313,49 @@ release. Use the guide for each step that changes the deployment.
   ([Upgrade a deployment to bucket keys](../technical/handbook/gcp-github-less-deployment.md#upgrade-a-deployment-to-bucket-keys)).
   For a missing grant or a disabled key version, follow
   [Repair key access](../technical/handbook/gcp-github-less-deployment.md#repair-key-access).
-  For live objects that stay unmigrated, find the writer that sets its own
-  key or the identity that can not rewrite objects, fix it, and run the
-  command again. A second run rewrites only the objects that remain. Do not
+  For unmigrated live objects, identify the writer that selects its own key or the identity without rewrite permission. Fix that cause, then retry. A second run rewrites only the objects that remain. Do not
   remove a bucket default key to restore access.
 - **Teardown:** Pass the exact deployment name to `--confirm`. Use the deployer
   image of the release that the deployment runs. After a failed destroy, run
   `gcp-destroy` again
   ([Tear down](../technical/handbook/gcp-github-less-deployment.md#tear-down)).
+  GCP may report Cloud SQL, Memorystore, or GKE deleted before Service Networking
+  and load-balancer dependencies observe the release. `gcp-destroy` retries the
+  idempotent Terraform destroy with bounded backoff for this convergence; do not
+  delete the reported dependency manually or remove it from state.
 
-To roll back, deploy the deployer image of an earlier verified release.
+To roll back application code, deploy an earlier verified release only when its schema remains compatible.
+Helm rollback does not reverse database, identity, policy, or Terraform changes.
+Use [RB015](rb015-database-migrations.md) before a rollback that affects data.
+
+## GCE stockout on the provisioner node pool
+
+The regional cluster places one provisioner node per zone. A zone stockout for `provisioner_machine_type` can leave a pool `RUNNING_WITH_ERROR`. The apply fails after the roughly 35-minute node-pool timeout, even when other pools succeed. The stockout is
+machine-type and zone specific.
+
+Confirm an alternative type has capacity in all
+of the cluster's zones (the `access` pool already proves `e2-standard-8`
+availability), then set `provisioner_machine_type` to that type of the same
+size class (`e2-standard-8` is the same 8 vCPU / 32 GB shape as
+`n2-standard-8`). The pool runs only the provisioner launcher and the
+Terraform provisioner Jobs, so a smaller E2 type, for example `e2-standard-4`,
+also works. After a stockout, the pool stays `RUNNING_WITH_ERROR` and the apply
+fails at the node-pool timeout.
+
+Publish the new type in the bundle and run the
+deploy again; Terraform replaces the pool. Set it in the bundle's Terraform values (`terraform.tfvars`
+or `terraform.tfvars.json`). The retained CI adapter sets it in its committed
+`environments/<environment>/terraform.tfvars`.
+
+There is no node-zone tfvar. Pinning GKE node zones requires a reviewed module change, not an operator override.
 
 ## Prevention
 
 Deploy only verified releases by digest. Keep the bundle in the config bucket,
 not in a repository. Keep the evidence bucket retention lock. Do not disable or
-destroy a bucket key version while data uses it. After an upgrade, run
-`gcp-foundation` before `gcp-deploy`. Run the preflight
+destroy a bucket key version while data uses it.
+
+For a foundation change, run `gcp-foundation` before `gcp-deploy`. Run the preflight
 before each change. Run one lifecycle command at a time for each deployment.
 
-Escalate when a release fails its provenance check, when the scan finds a
-HIGH or CRITICAL finding with no fixed release, when the state of a lock holder
-is unknown, when a Terraform state lock remains after a stopped run, or when a
-teardown would remove a resource outside the selected deployment, or when a
-bucket key version is destroyed or scheduled for destruction.
+Escalate a failed provenance check or a HIGH or CRITICAL finding without a fixed release. Escalate unknown lock ownership or a Terraform lock after a stopped run. Also escalate teardown outside the selected deployment or a key version that is destroyed or scheduled for destruction.

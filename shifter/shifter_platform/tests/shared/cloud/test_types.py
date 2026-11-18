@@ -65,6 +65,9 @@ class TestProtocolStructuralTyping:
             def get_task_status(self, cluster, task_id):
                 return None
 
+            def delete_completed_task(self, cluster, task_ref, expected_identity):
+                pass
+
             def interrupt_task(self, cluster, task_ref, expected_identity, grace_seconds=None):
                 return ""
 
@@ -91,12 +94,6 @@ class TestProtocolStructuralTyping:
         class FakeSecrets:
             def get_secret(self, secret_id):
                 return ""
-
-            def create_owned_secret(self, source_id, version_id, value):
-                return "synthetic-owned-secret"
-
-            def retire_owned_secret(self, source_id, version_id):
-                return None
 
         assert isinstance(FakeSecrets(), SecretsStore)
 

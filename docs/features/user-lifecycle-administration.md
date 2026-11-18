@@ -1,88 +1,68 @@
 # User lifecycle administration
 
-User lifecycle administration lets an administrator manage the state of a user
-account across its life on a shared deployment: activate, deactivate, suspend and
-reinstate an account, trigger a password reset, and reassign a departing user's
-owned resources to a replacement. It extends the existing **Administer → Users**
-surface and its detail page.
+Manage human accounts through **Administer > Platform > Users**.
+You need current `installation.manage_principals` authority and the matching credential ceiling.
+The server rechecks authority for each request.
+A staff flag or legacy Django model permission alone does not supply it.
 
 ## Access
 
-- The actions are visible only to staff accounts and only when the
-  `administer_spa` rollout flag is on.
-- Lifecycle transitions and password reset require the Django `auth.change_user`
-  permission; soft delete requires `auth.delete_user`. A staff session alone is
-  not sufficient, and the server rechecks the permission on every request.
-- Transfer ownership is a root-level offboarding action and requires a superuser
-  session, not merely `auth.change_user`.
-- The buttons a page shows are advisory. The server derives the actions that
-  apply to each account and reauthorizes every request, so a hidden or disabled
-  control is never the only thing standing between a caller and an action.
+1. Open **Administer > Platform**.
+2. Open **Users**.
+3. Use **Search users** to find the account.
+4. Select the user.
+5. Check its principal UUID and lifecycle state before an action.
+
+Select **Include deleted users** when a soft-deleted account must be inspected.
+The page shows actions applicable to that account; each request still requires authorization.
 
 ## Account states
 
-An account is always in exactly one lifecycle state, shown on the user detail
-page:
+| State | Meaning |
+| --- | --- |
+| Active | The account can sign in when its other identity checks pass. |
+| Suspended | Sign-in is blocked temporarily; assignments and resources remain. |
+| Deactivated | Sign-in is blocked for reversible offboarding. |
+| Deleted | The account is soft-deleted and excluded from the default list. |
 
-- **Active**: the account can sign in.
-- **Suspended**: a temporary security hold. The account cannot sign in, but its
-  assignments and owned resources are retained. Reinstate the account to lift the
-  suspension.
-- **Deactivated**: a reversible offboarding block. The account cannot sign in.
-  It is distinct from deletion and from suspension, and it is reversible by
-  activating the account.
-- **Deleted**: the account has been soft-deleted. It cannot sign in and does not
-  appear in the default user list. This is not a permanent erasure and does not
-  anonymize the account or unbind its identity.
-
-Suspending, deactivating, or deleting an account signs the user out, blocks
-subsequent sign-in, and revokes the account's live API tokens. Reactivating an
-account restores sign-in only; it does not restore revoked tokens.
-
-The platform protects against locking itself out: you cannot suspend,
-deactivate, or delete your own account, a non-superuser cannot change the state
-of a superuser account, and the last active superuser cannot be disabled.
+Select the required state action and **Confirm identity change**.
+Suspension, deactivation, and deletion invalidate sessions and revoke live API tokens.
+Reactivation restores sign-in eligibility, not revoked tokens.
+Self-lockout and last-active-superuser protections remain enforced.
+Soft deletion does not permanently erase or anonymize the account.
 
 ## Password reset
 
-The **Reset password** action emails the user a link to set a new password using
-the platform's standard reset flow. It is available only for local accounts with
-a usable password and a valid email address:
+Select **Reset password**, then **Confirm identity change**, for an eligible local account.
+The platform emails a reset link and reports the delivery result.
+It never displays that link in the interface.
+A configured mail provider is required.
+Provider-bound accounts reset credentials at their identity provider.
+Temporary event accounts use the separate participant password flow.
 
-- A provider-bound account (one that signs in through the identity provider)
-  resets its credential at that provider, not here.
-- A temporary event account keeps its own event-scoped credential flow.
-
-The action returns only whether the request was accepted. The reset link is
-delivered by email only and is never shown in the interface. If the mail provider
-does not accept the message, the action reports that the email could not be
-delivered. Try the action again later. If the deployment has no mail provider,
-the action reports that password reset delivery is unavailable.
+Only the account owner's browser session can change that account's recovery email.
+Another administrator can request a reset and edit other permitted profile metadata.
 
 ## Transfer ownership
 
-The **Transfer ownership** action reassigns a departing user's owned resources to
-a replacement account during offboarding. You choose the replacement account and
-which kinds of resource to transfer:
+Use offboarding when a departing user's eligible resources need another owner.
+The replacement must satisfy each resource's membership and authority checks.
 
-- **Ranges**: the departing user's ranges move to the replacement, keeping their
-  workspace scope. A range whose participant VPN credential is still live is
-  reported as blocked rather than transferred; destroy that range's generation
-  and provision a replacement instead.
-- **Workspaces**: workspaces the departing user owns move to the replacement,
-  provided the replacement already holds a membership in the workspace. A
-  workspace the replacement is not a member of is reported as blocked and is
-  never silently rehomed. Personal workspaces are never transferred.
+1. Open the departing user's detail.
+2. Enter **Replacement user ID**.
+3. Select the resource kinds to transfer.
+4. Review the transfer and confirm it.
+5. Inspect both successful and blocked counts.
 
-The result summarizes how many resources were transferred and how many were
-blocked. Transfer moves ownership only. It does not remove memberships, change
-roles, move stored credentials or agents, or rewrite the historical record of
-who did what.
+Transferred ranges keep their workspace scope.
+A range with a live participant VPN credential is blocked; use the approved destruction and replacement procedure.
+Workspace transfer requires an existing eligible member and excludes personal workspaces.
+Blocked resources are not silently reassigned.
+The transfer does not move stored installers, source credentials, or historical actor records.
 
 ## What these actions do not do
 
-- They do not permanently erase or anonymize an account.
-- They do not delete or disable the account at the identity provider.
-- They do not recall a VPN profile a user already downloaded or tear down a
-  remote session (SSH, RDP, or a desktop gateway) that was already established;
-  those are governed by their own credential and session lifecycles.
+Lifecycle administration does not delete an external identity-provider account.
+It does not recall a downloaded credential or prove cloud cleanup.
+Ongoing remote access follows the [continuing-access contract](content-range-authority.md).
+See [account administration reference](../technical/shifter_platform/account-administration.md) for exact request and permission rules.

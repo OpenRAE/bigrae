@@ -11,6 +11,21 @@ updated_at: 2026-05-19T07:24:40.283404Z
 
 # GEN-2003: Conformance with PANW open-source contributor rules
 
+## Current source evidence
+
+This reference retains the original requirement and its ACTIVE status.
+The repository now belongs to OpenRAE. Its current reporting policies are `SUPPORT.md` and `SECURITY.md`.
+Those pages do not contain the verbatim vendor templates required by clauses 1 and 2.
+Their links below document current source; they do not prove those clauses are implemented.
+
+The current README route also does not prove every section required by clause 5.
+The contribution template and Contributor Covenant remain preserved separately.
+No normative statement or policy exception is changed by this source review.
+
+<!-- Preserve the requirement statement and rationale as the existing normative record. Current evidence above and traceability below remain checked. -->
+<!-- vale off -->
+<!-- ste-disable -->
+
 ## Statement
 
 The repository SHALL conform to the rules published in [`PaloAltoNetworks/.github/docs/community-rules.md`](https://github.com/PaloAltoNetworks/.github/blob/master/docs/community-rules.md). Specifically:
@@ -29,12 +44,15 @@ The repository SHALL conform to the rules published in [`PaloAltoNetworks/.githu
 
 PANW publishes a documented set of community rules for any repository under the `PaloAltoNetworks` org. Shifter is moving to that org; conforming proactively avoids per-repo retrofit churn and matches the polish-tier of every actively maintained PANW OSS repo. PR PaloAltoNetworks/shifter#1204 (#762) + cleanup PaloAltoNetworks/shifter#1206 implement most of the items above; this requirement encodes the contract so future drift is caught and so the conformance posture is auditable when PSIRT/OSPO reviews the eventual `PaloAltoNetworks/shifter` repo.
 
+<!-- ste-enable -->
+<!-- vale on -->
+
 ## Traceability
 
-- IMPLEMENTS → DOCUMENTATION `SECURITY.md` (PANW org SECURITY.md V0.0.1 block, verbatim, satisfies clause 2)
-- IMPLEMENTS → DOCUMENTATION `SUPPORT.md` (Community Supported canonical text from PANW community-rules, satisfies clause 1)
+- DOCUMENTS → DOCUMENTATION `SECURITY.md` (Current private-reporting policy; the verbatim vendor block in clause 2 is absent)
+- DOCUMENTS → DOCUMENTATION `SUPPORT.md` (Current community-support procedure; the verbatim canonical message in clause 1 is absent)
 - IMPLEMENTS → DOCUMENTATION `CODE_OF_CONDUCT.md` (Contributor Covenant v1.4 from PANW org, satisfies clause 3)
 - IMPLEMENTS → DOCUMENTATION `CONTRIBUTING.md` (PANW org CONTRIBUTING.md verbatim + Shifter-specific addendum, satisfies clause 4)
-- IMPLEMENTS → DOCUMENTATION `README.md` (README structure following PANW README.example.md, satisfies clause 5)
+- DOCUMENTS → DOCUMENTATION `README.md` (Current reader entry; not proof of every section required by clause 5)
 - IMPLEMENTS → CODE_FILE `.github/workflows/pr-title-lint.yml` (PR title lint enforcing conventional-commit shape, satisfies clause 8)
-- IMPLEMENTS → DOCUMENTATION `LICENSE` (License file (clause 6, currently "all rights reserved"; pending PANW-legal swap to MIT))
+- IMPLEMENTS → DOCUMENTATION `LICENSE` (Current MIT license; clause 6)

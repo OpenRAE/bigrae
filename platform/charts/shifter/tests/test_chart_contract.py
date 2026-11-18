@@ -66,9 +66,15 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2719: only the plugin file-input admission policy and Secret object quota change.
 # Regenerated for #2718: optional sealed result key in the same invocation Secret; only plugin admission changes.
 # Regenerated for #2716: generation-bound registered-project capture/verification; only provisioner admission changes.
+# Regenerated for #2793: GCP gateway HTTPS uses the existing content CONNECT proxy.
+# Regenerated for #2834/#2837 integration: retain the two session-cleanup
+# gateway rules, maintenance CPU limits, and large-plan result-worker memory.
+# Regenerated for #2904 after giving guacd a writable FreeRDP home.
+# Regenerated for #2909: the removed model broker drops its job env and network policy exclusions.
+# Regenerated for #2960: provisioner jobs may carry GCP_RANGE_SHARED_GUEST_FIREWALLS.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "0528a8c4bec27346e40b961ea74fe9b533100ebdcbac54314aa8fd4acccf741b",
-    "gcp-dev": "3defac47c89fdd6aa1eda621f27b87193892a4907b8d1dea4b958deb3bd68af9",
+    "gcp-prod": "477420aebfe9110c9f3261dbca528884eb1bab1617bb841669245ad96fb1010f",
+    "gcp-dev": "b53f70428141acc960327ed3d380c9a3362df76ec7c1b03582cade06ad834772",
 }
 
 
@@ -102,6 +108,62 @@ def _identity(document: dict[str, object]) -> tuple[str, str]:
 
 
 class BackendNeutralChartContractTests(unittest.TestCase):
+    def test_session_cleanup_has_only_the_gateway_api_network_path(self):
+        for profile in ("gcp-dev", "gcp-prod", "aws-dev"):
+            with self.subTest(profile=profile):
+                _, documents = _render(VALUES_FILES[profile])
+                policies = {
+                    doc["metadata"]["name"]: doc
+                    for doc in documents
+                    if doc["kind"] == "NetworkPolicy"
+                }
+                ingress = policies["allow-bootstrap-pruner-to-guacamole-client"]
+                egress = policies["allow-bootstrap-pruner-egress-to-guacamole-client"]
+                self.assertEqual(
+                    ingress["metadata"]["namespace"], egress["metadata"]["namespace"]
+                )
+                for policy, direction, component, peer, peer_field in (
+                    (
+                        ingress,
+                        "Ingress",
+                        "guacamole-client",
+                        "guacamole-bootstrap-prune",
+                        "from",
+                    ),
+                    (
+                        egress,
+                        "Egress",
+                        "guacamole-bootstrap-prune",
+                        "guacamole-client",
+                        "to",
+                    ),
+                ):
+                    self.assertEqual(
+                        policy["spec"],
+                        {
+                            "podSelector": {
+                                "matchLabels": {
+                                    "app.kubernetes.io/component": component
+                                }
+                            },
+                            "policyTypes": [direction],
+                            direction.lower(): [
+                                {
+                                    peer_field: [
+                                        {
+                                            "podSelector": {
+                                                "matchLabels": {
+                                                    "app.kubernetes.io/component": peer
+                                                }
+                                            }
+                                        }
+                                    ],
+                                    "ports": [{"protocol": "TCP", "port": 8080}],
+                                }
+                            ],
+                        },
+                    )
+
     def test_guacamole_uses_dedicated_identity_and_common_authority_configuration(self):
         _, documents = _render(VALUES_FILES["gcp-dev"])
         deployment = next(doc for doc in documents if _identity(doc) == ("Deployment", "guacamole-client"))
@@ -111,10 +173,38 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         self.assertEqual(len(accounts), 1)
         env = {value["name"]: value for value in pod["containers"][0]["env"]}
         self.assertEqual(env["OPENFGA_ENABLED"]["value"], "true")
+        self.assertEqual(env["JAVA_OPTS"]["value"], "-Dhttps.proxyHost=content-egress -Dhttps.proxyPort=3128")
         for name in ("GUACAMOLE_CONTROL_URL", "GUACAMOLE_CONTROL_AUDIENCE"):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
             self.assertEqual(ref["name"], "platform-runtime")
             self.assertEqual(ref["key"], name)
+
+    def test_guacd_has_a_writable_freerdp_home(self) -> None:
+        _, documents = _render(VALUES_FILES["gcp-dev"])
+        deployment = next(doc for doc in documents if _identity(doc) == ("Deployment", "guacd"))
+        pod = deployment["spec"]["template"]["spec"]
+        container = pod["containers"][0]
+        env = {value["name"]: value["value"] for value in container["env"]}
+        mounts = {value["name"]: value["mountPath"] for value in container["volumeMounts"]}
+        volumes = {value["name"]: value for value in pod["volumes"]}
+
+        self.assertEqual(env["HOME"], "/home/guacd")
+        self.assertEqual(mounts["freerdp-config"], "/home/guacd")
+        self.assertEqual(volumes["freerdp-config"]["emptyDir"]["sizeLimit"], "16Mi")
+        self.assertTrue(container["securityContext"]["readOnlyRootFilesystem"])
+
+    def test_gcp_gateway_reaches_public_control_only_through_the_existing_proxy(self):
+        _, documents = _render(VALUES_FILES["gcp-dev"])
+        policies = {doc["metadata"]["name"]: doc for doc in documents if doc["kind"] == "NetworkPolicy"}
+        boundary = policies["content-egress-boundary"]["spec"]
+        callers = boundary["ingress"][0]["from"][0]["podSelector"]["matchExpressions"][0]["values"]
+        self.assertEqual(set(callers), {"portal", "ctf-scheduler", "guacamole-client"})
+        clients = policies["allow-ctf-content-egress-clients"]["spec"]
+        self.assertEqual(set(clients["podSelector"]["matchExpressions"][0]["values"]), set(callers))
+        self.assertEqual(clients["egress"], [{
+            "to": [{"podSelector": {"matchLabels": {"app.kubernetes.io/component": "content-egress"}}}],
+            "ports": [{"protocol": "TCP", "port": 3128}],
+        }])
 
     def test_range_access_selects_smoke_without_broadening_destinations(self) -> None:
         for profile in ("gcp-dev", "gcp-prod"):
@@ -522,32 +612,6 @@ class BackendNeutralChartContractTests(unittest.TestCase):
                     expected,
                     f"{profile} render drifted from the frozen GCP byte contract",
                 )
-
-    def test_enrollment_schema_accepts_both_cloud_endpoint_contracts(self) -> None:
-        common = {
-            "MODEL_BROKER_GUEST_URL": "https://models.example.test",
-            "MODEL_ENROLLMENT_CONTROL_URL": "https://model-access-control.shifter-platform.svc:8444",
-            "MODEL_ENROLLMENT_CA_PEM_B64": "ZXhhbXBsZQ==",
-        }
-        endpoints = {
-            "gcp-dev": {"MODEL_BROKER_GUEST_VIP": "10.40.0.25"},
-            "aws-dev": {"MODEL_BROKER_GUEST_CIDRS": "10.40.1.0/24,10.40.2.0/24"},
-        }
-        with tempfile.TemporaryDirectory() as temporary:
-            overlay = Path(temporary) / "enrollment.json"
-            for profile, endpoint in endpoints.items():
-                with self.subTest(profile=profile):
-                    overlay.write_text(json.dumps({"modelBroker": {"enrollment_env": {**common, **endpoint}}}))
-                    # Real Helm schema validation must accept the exact projection
-                    # emitted by each cloud adapter before deployment can proceed.
-                    _render(VALUES_FILES[profile], overlay)
-                    overlay.write_text(json.dumps({"modelBroker": {"enrollment_env": {
-                        **common, **endpoint, "UNDECLARED_SETTING": "unexpected",
-                    }}}))
-                    rejected = _helm("template", "contract-test", str(CHART_DIR),
-                                     "-f", str(VALUES_FILES[profile]), "-f", str(overlay), check=False)
-                    self.assertNotEqual(rejected.returncode, 0)
-                    self.assertIn("UNDECLARED_SETTING", rejected.stderr)
 
     def test_security_and_default_deny_are_preserved_for_every_profile(self) -> None:
         for profile, values_file in VALUES_FILES.items():

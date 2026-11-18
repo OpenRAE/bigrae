@@ -43,8 +43,7 @@ inputs. The command does these steps in this order:
 4. It publishes the policy bundles and the datastore logins as named
    Kubernetes Secrets, through standard input only.
 5. It creates the Guacamole and OpenFGA databases and the runtime SQL logins.
-   On the first deploy, it then applies Terraform again to create the rotation
-   schedules, because Secrets Manager tests each new schedule at once.
+   On first deployment, it applies Terraform again to create rotation schedules. Secrets Manager tests each new schedule immediately.
 6. It runs the identity cutover ceremony, migrations and the release. The
    policy servers restart in each deploy, so republished credentials take effect.
 7. It runs catalog setup.

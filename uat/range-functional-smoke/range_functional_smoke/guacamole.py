@@ -25,6 +25,7 @@ from __future__ import annotations
 import base64
 from dataclasses import dataclass, field
 from urllib.parse import parse_qs, urlencode, urljoin, urlparse
+from uuid import UUID
 
 from range_functional_smoke.profile import ProfileError, Protocol, require_secure_url
 
@@ -112,13 +113,46 @@ class GuacamoleInstructionParser:
             elements.append(value)
             position = end + 1
             if delimiter == ";":
-                if not elements[0]:
-                    raise GuacamoleProtocolError("Guacamole instruction has no opcode")
                 return GuacamoleInstruction(elements[0], tuple(elements[1:])), position
 
 
 def _is_ascii_decimal(value: str) -> bool:
     return bool(value) and value.isascii() and value.isdecimal()
+
+
+@dataclass
+class BrowserSynchronization:
+    """Acknowledge browser traffic and require progress beyond the first update."""
+
+    tunnel_open: bool = False
+    last_sync: str | None = None
+    connected: bool = False
+
+    def observe(self, instruction: GuacamoleInstruction) -> str | None:
+        """Return a protocol acknowledgement without retaining display contents."""
+        opcode, args = instruction.opcode, instruction.args
+        if opcode in {"error", "disconnect"}:
+            raise GuacamoleProtocolError("Guacamole session refused or disconnected")
+        if opcode == "" and len(args) == 1:
+            try:
+                UUID(args[0])
+            except ValueError:
+                raise GuacamoleProtocolError("Invalid browser tunnel identifier") from None
+            self.tunnel_open = True
+        elif opcode == "sync":
+            return self._synchronize(args)
+        elif opcode == "blob":
+            if len(args) != 2 or not _is_ascii_decimal(args[0]):
+                raise GuacamoleProtocolError("Invalid browser image stream")
+            return encode_instruction("ack", args[0], "OK", "0")
+        return None
+
+    def _synchronize(self, args: tuple[str, ...]) -> str:
+        if not self.tunnel_open or len(args) not in {1, 2} or not all(_is_ascii_decimal(arg) for arg in args):
+            raise GuacamoleProtocolError("Invalid browser display synchronization")
+        self.connected = self.last_sync is not None and self.last_sync != args[0]
+        self.last_sync = args[0]
+        return encode_instruction("sync", args[0])
 
 
 def bootstrap_path(protocol: Protocol) -> str:
@@ -257,20 +291,3 @@ def tunnel_ws_url(target: SessionTarget) -> str:
     scheme = "wss" if base.startswith("https://") else "ws"
     base = f"{scheme}://{base.split('://', 1)[1]}"
     return f"{base}/websocket-tunnel?{urlencode(connect_params(target))}"
-
-
-def has_ready_instruction(stream: str) -> bool:
-    """True when the Guacamole protocol stream carries a ``ready`` instruction.
-
-    ``ready`` is guacd's own signal that the handshake completed and the remote
-    session is open — the bounded client-level connection evidence the check
-    requires. Instructions are length-prefixed (``5.ready,37.$uuid;``), so the
-    opcode is matched with its length prefix rather than as a bare substring,
-    which cannot be spoofed by connection-parameter text.
-    """
-    return "5.ready," in (stream or "")
-
-
-def is_error_instruction(stream: str) -> bool:
-    """True when guacd answered the handshake with an ``error`` instruction."""
-    return "5.error," in (stream or "")

@@ -1,5 +1,13 @@
 # Ethics
 
+> **Applicability** Historical reference. The text below preserves an earlier description, proposal, or example.
+> It is not current operating guidance. An exact source or deployment baseline is not consistently recorded.
+> The retained file history alone cannot reproduce that environment.
+> See the [current architecture](../../technical/architecture.md) for present boundaries and supported guidance.
+
+<!-- Preserved source-bound record below. Excluded from Vale to retain original wording and evidence. -->
+<!-- vale off -->
+
 ## Why Build This
 
 Agentic AI cyberattack capabilities are not theoretical. They exist, they're documented, and they're proliferating.
@@ -33,3 +41,5 @@ All victim infrastructure is ephemeral, isolated, and owned by the user. All eff
 Agents are not people. The **human** using the platform is responsible for the actions of the agents. This can include civil and criminal liability. You have been warned.
 
 ## Prior Work
+
+<!-- vale on -->

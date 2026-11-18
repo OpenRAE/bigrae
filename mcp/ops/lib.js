@@ -346,7 +346,7 @@ const BLOCKED_MANAGE_COMMANDS = new Set([
 // whitespace, CR/LF, ...) fails to match and is rejected. Optional leading
 // dashes support flags (`--deploy`, `-v2`) and `=` supports `--flag=value`.
 // The supported language is "Django management command argv", not a shell
-// grammar — see docs/architecture/mcp-ops-manage-command-ssm-boundary-preflight-1176.md.
+// grammar — see docs/_deprecated/architecture/mcp-ops-manage-command-ssm-boundary-preflight-1176.md.
 const SAFE_MANAGE_TOKEN = /^-{0,2}[A-Za-z0-9][A-Za-z0-9._=-]*$/;
 
 // Thrown when a management command carries shell-control syntax. Deliberately

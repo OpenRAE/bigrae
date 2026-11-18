@@ -229,7 +229,7 @@ def test_partial_policy_binding_and_collapsed_migration_duties_are_rejected(tmp_
 
 
 def test_policy_administration_network_is_separate_from_runtime_clients(tmp_path):
-    from test_model_broker import selected
+    from policy_selectors import selected
 
     result = _render(tmp_path, "values-gcp-dev.yaml")
     assert result.returncode == 0, result.stderr

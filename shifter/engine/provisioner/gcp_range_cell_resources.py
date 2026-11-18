@@ -13,7 +13,7 @@ import math
 from collections.abc import Mapping
 from typing import Any, cast
 
-from config import GCERangeCellConfig
+from config import GCERangeCellConfig, GCERangeImageProfile
 from gcp_range_cell_naming import (
     _disk_type_self_link,
     _label_value,
@@ -238,6 +238,33 @@ def _metadata_items(
     return items
 
 
+def _boot_disk_resource(profile: GCERangeImageProfile, zone: str) -> ComputeResource:
+    """Render an owned image-backed boot disk with its selected interface."""
+    disk: ComputeResource = {
+        "boot": True,
+        "auto_delete": True,
+        "initialize_params": {
+            "source_image": profile.source_image,
+            "disk_size_gb": int(profile.disk_size_gb),
+            "disk_type": _disk_type_self_link(zone, profile.disk_type),
+        },
+    }
+    if profile.disk_interface:
+        disk["interface"] = profile.disk_interface
+    return disk
+
+
+def _network_interface_resource(instance: InstancePlan) -> ComputeResource:
+    """Render the selected guest subnet, address, and NIC type."""
+    interface: ComputeResource = {
+        "subnetwork": instance["subnetwork_link"],
+        "network_i_p": instance["private_ip"],
+    }
+    if instance["profile"].nic_type:
+        interface["nic_type"] = instance["profile"].nic_type
+    return interface
+
+
 def instance_resource(
     plan: RangeCellPlan,
     instance: InstancePlan,
@@ -278,12 +305,7 @@ def instance_resource(
                 composition_script=composition_script,
             )
         },
-        "network_interfaces": [
-            {
-                "subnetwork": instance["subnetwork_link"],
-                "network_i_p": instance["private_ip"],
-            }
-        ],
+        "network_interfaces": [_network_interface_resource(instance)],
         "deletion_protection": False,
         "can_ip_forward": False,
     }
@@ -292,19 +314,9 @@ def instance_resource(
     # A machine image supplies its captured disks; a custom image needs an
     # explicitly owned boot disk with the same host hardening.
     if not profile.source_machine_image:
-        body["disks"] = [
-            {
-                "boot": True,
-                "auto_delete": True,
-                "initialize_params": {
-                    "source_image": profile.source_image,
-                    "disk_size_gb": int(profile.disk_size_gb),
-                    "disk_type": _disk_type_self_link(plan["zone"], profile.disk_type),
-                },
-            }
-        ]
+        body["disks"] = [_boot_disk_resource(profile, plan["zone"])]
         body["shielded_instance_config"] = {
-            "enable_secure_boot": True,
+            "enable_secure_boot": profile.enable_secure_boot,
             "enable_vtpm": True,
             "enable_integrity_monitoring": True,
         }

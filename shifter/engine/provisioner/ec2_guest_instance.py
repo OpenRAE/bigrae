@@ -12,7 +12,7 @@ from typing import Any
 from uuid import UUID
 
 from botocore.client import BaseClient
-from shared.model_access.network import RFC1918_IPV4_NETWORKS
+from shared.network import RFC1918_IPV4_NETWORKS
 from shared.raes.image_policy import validate_management_ssh_username
 
 from config import BOOTSTRAP_PRECONFIGURED_MACHINE_HOST, BOOTSTRAP_PREPROMOTED_DC

@@ -3,7 +3,9 @@
 ``gcp-deploy`` stands up or updates one GCP deployment from a published release:
 
 1. load and validate the deployment input bundle (config bucket or directory);
-2. check that the tooling revision equals the release revision (operator mode);
+2. check that the tooling revision equals the release revision (operator mode). A test
+   deployment may run other committed tooling with ``--allow-unreleased-tooling``, and
+   the release evidence records each such run (#2689);
 3. take the deployment lock;
 4. run the infrastructure stage as the deploy identity;
 5. import the release images into the deployment registry;
@@ -18,6 +20,7 @@ CI runs the same stages in separate jobs (``--stage``) with ``--identity ambient
 from __future__ import annotations
 
 import dataclasses
+import json
 import os
 import secrets
 import shutil
@@ -39,9 +42,15 @@ from gcp_deploy_stages import (
     require_tools,
     rollout_stage,
 )
-from gcp_evidence import EvidenceRun
+from gcp_evidence import EvidenceRun, evidence_prefix, store_evidence
 from gcp_identity import PurposeIdentities
-from gcp_inputs import DeploymentInputs, is_gcs_url, load_deployment_inputs, resolve_operator_password
+from gcp_inputs import (
+    DeploymentInputs,
+    is_gcs_url,
+    load_deployment_inputs,
+    resolve_operator_password,
+    write_private_file,
+)
 from gcp_lock import DeployLock, acquire_lock, break_lock, release_lock
 from gcp_process import ProcessRunner, scoped_environment
 from gcp_smoke import SMOKE_FAILED_EXIT_STATUS, run_smoke
@@ -54,6 +63,7 @@ if TYPE_CHECKING:
 STAGES = ("all", "infrastructure", "rollout")
 DEFAULT_RELEASE_MANIFEST_ENV = "BIGRAE_RELEASE_MANIFEST"
 SOURCE_REVISION_ENV = "BIGRAE_SOURCE_REVISION"
+TOOLING_OVERRIDE_EVIDENCE = "tooling-override.json"
 
 
 class GcpDeployError(RuntimeError):
@@ -80,6 +90,7 @@ class DeployOptions:
     identity_bootstrap_facts: str = ""
     catalog_credential_file: str = ""
     allow_missing_range_images: bool = False
+    allow_unreleased_tooling: bool = False
     reconcile_foundation_image_network: bool = False
     smoke: bool = True
     operator_password_env: str = ""
@@ -147,17 +158,77 @@ def tooling_revision(repo_root: Path) -> tuple[str, bool]:
     return head.stdout.strip(), clean
 
 
-def check_tooling_revision(source_revision: str, *, repo_root: Path | None = None) -> None:
-    """Require tooling that equals the verified release revision with no local changes."""
+def check_tooling_revision(
+    source_revision: str, *, repo_root: Path | None = None, allow_unreleased: bool = False
+) -> str:
+    """Require unmodified tooling at the release revision and return the tooling revision.
+
+    ``allow_unreleased`` accepts unmodified tooling at another commit (#2689). The
+    caller allows it only for a test deployment and records the run.
+    """
     revision, clean = tooling_revision(repo_root or get_repo_root())
-    if revision != source_revision:
+    if revision != source_revision and not allow_unreleased:
         raise GcpDeployError(
             "the deploy tooling revision does not match the release revision; run the release's deployer image "
             "or a checkout of the release revision"
         )
     if not clean:
         raise GcpDeployError("the deploy tooling has local changes; run the release tooling unmodified")
-    info("Deploy tooling matches the release revision")
+    if revision == source_revision:
+        info("Deploy tooling matches the release revision")
+    else:
+        warn(f"Deploy tooling {revision} is not the release revision {source_revision} (--allow-unreleased-tooling)")
+    return revision
+
+
+def allows_unreleased_tooling(options: DeployOptions, inputs: DeploymentInputs) -> bool:
+    """Return True when this run may use tooling at another commit; refuse it outside a test deployment."""
+    if not options.allow_unreleased_tooling:
+        return False
+    if not operator_mode(options.identity_mode):
+        raise GcpDeployError("--allow-unreleased-tooling applies only to an operator run (--identity impersonate)")
+    if inputs.settings.deployment_tier != "test":  # type: ignore[attr-defined]
+        raise GcpDeployError(
+            "--allow-unreleased-tooling requires settings.deployment_tier: test; a production deployment refuses it"
+        )
+    return True
+
+
+def record_tooling_override(
+    runner: ProcessRunner,
+    options: DeployOptions,
+    inputs: DeploymentInputs,
+    manifest: GcpReleaseManifest,
+    tooling: str,
+    run_id: str,
+    workdir: Path,
+) -> None:
+    """Store the record of a run with unreleased tooling in the release evidence, before any change.
+
+    The caller runs this as the deploy identity, which may create objects under ``deployments/``.
+    """
+    record = {
+        "schema_version": 1,
+        "event": "unreleased-deploy-tooling",
+        "deployment": inputs.environment,
+        "deployment_tier": inputs.settings.deployment_tier,  # type: ignore[attr-defined]
+        "release_version": manifest.version,
+        "release_revision": manifest.source_revision,
+        "tooling_revision": tooling,
+        "stage": options.stage,
+        "run_id": run_id,
+        "attempt": options.attempt,
+        "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),
+    }
+    path = write_private_file(workdir / TOOLING_OVERRIDE_EVIDENCE, json.dumps(record, sort_keys=True) + "\n")
+    store_evidence(
+        runner,
+        {},
+        bucket=evidence_bucket(options, inputs.project_id),
+        prefix=evidence_prefix("deployments", manifest.source_revision, run_id, options.attempt),
+        files=[path],
+    )
+    info("Recorded the unreleased deploy tooling in the release evidence")
 
 
 def load_manifest(path: str) -> GcpReleaseManifest:
@@ -388,11 +459,17 @@ def _operator_gates(
     trust: ReleaseTrust,
     env: Mapping[str, str | None],
     release_source: str,
-) -> None:
-    """Prove that the tooling is the release revision and that the release images verify (ADR-070-R6)."""
-    check_tooling_revision(manifest.source_revision)
+    *,
+    allow_unreleased: bool = False,
+) -> str:
+    """Prove that the tooling is the release revision and that the release images verify (ADR-070-R6).
+
+    Return the tooling revision. With ``allow_unreleased`` the tooling may be another commit.
+    """
+    tooling = check_tooling_revision(manifest.source_revision, allow_unreleased=allow_unreleased)
     with scoped_environment(env):
         _verify(runner, source_images(manifest, release_source), trust)
+    return tooling
 
 
 def _infrastructure(
@@ -463,11 +540,19 @@ def run_deploy(options: DeployOptions, *, runner: ProcessRunner | None = None) -
         deploy_env = identities.env("deploy")
         manifest, trust = _release(options, inputs)
         header(f"GCP deploy: {inputs.environment} ({options.stage})")
+        allow_unreleased = allows_unreleased_tooling(options, inputs)
         if operator_mode(options.identity_mode):
             # Before any change, every operator stage proves that its tooling is
             # the release revision and that the release images verify against the
-            # deployment trust anchor (ADR-070-R6).
-            _operator_gates(runner, *_required_release(manifest, trust), deploy_env, options.release_source)
+            # deployment trust anchor (ADR-070-R6). A test deployment may run other
+            # committed tooling; the release evidence records that run (#2689).
+            release, release_anchor = _required_release(manifest, trust)
+            tooling = _operator_gates(
+                runner, release, release_anchor, deploy_env, options.release_source, allow_unreleased=allow_unreleased
+            )
+            if tooling != release.source_revision:
+                with scoped_environment(deploy_env):
+                    record_tooling_override(runner, options, inputs, release, tooling, run_id, workdir)
         lock = acquire_deploy_lock(runner, options, inputs, deploy_env, "gcp-deploy", run_id)
         if operator_mode(options.identity_mode):
             inputs = import_release_base_images(runner, options, inputs, manifest, trust)

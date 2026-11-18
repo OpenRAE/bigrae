@@ -19,16 +19,31 @@ from typing import Any, cast
 from shared.cloud.exceptions import CloudTaskError
 
 from ._client import load_kubernetes_api
-from ._interrupt import _is_reserved_intent, interrupt_job
+from ._interrupt import _is_reserved_intent, _pods_gone, interrupt_job
 from ._output import read_task_output
 from ._profile import KubernetesTaskProfile
 from ._run_task_flow import _build_run_context, _run_task
 from ._secrets import _build_secret_name as _build_secret_name_impl
 from ._status import _build_status_payload, _read_job_status
 from ._types import _KubernetesApis, _TaskLaunchRequest
-from .naming import parse_job_task_id
+from .naming import build_idempotent_job_name, parse_job_task_id
 
 logger = logging.getLogger(__name__)
+
+_TASK_CLEANUP_IDENTITY_MISMATCH = "Task cleanup identity mismatch"
+
+
+def _require_absent_task(
+    core_api: object, namespace: str, job_name: str, expected: dict[str, Any], api_exception: type[Exception]
+) -> None:
+    """Missing Job metadata cannot hide a still-running owned pod."""
+    identity, container = expected.get("task_identity"), expected.get("container_name")
+    if not isinstance(identity, str) or not identity or not isinstance(container, str) or not container:
+        raise CloudTaskError(_TASK_CLEANUP_IDENTITY_MISMATCH)
+    if build_idempotent_job_name(container, identity) != job_name:
+        raise CloudTaskError(_TASK_CLEANUP_IDENTITY_MISMATCH)
+    if not _pods_gone(core_api, namespace, job_name, api_exception):
+        raise CloudTaskError("Task cleanup absence is not verified")
 
 
 class KubernetesTaskRunner:
@@ -153,18 +168,20 @@ class KubernetesTaskRunner:
 
         The result must be read first. Background propagation prevents a broken
         garbage collector from leaving the Job itself stuck against namespace
-        quota while its owned Pod and Secrets are reclaimed.
+        quota while its owned Pod and Secrets are reclaimed. A missing Job needs
+        its canonical reservation name and no owned pods before it is accepted.
         """
         namespace, job_name = parse_job_task_id(task_ref, cluster) if task_ref else ("", "")
         if namespace != cluster or not job_name:
-            raise CloudTaskError("Task cleanup identity mismatch")
+            raise CloudTaskError(_TASK_CLEANUP_IDENTITY_MISMATCH)
         try:
-            batch_api, _core_api, client_lib, api_exception = self._load_kubernetes_api()
+            batch_api, core_api, client_lib, api_exception = self._load_kubernetes_api()
             job = _read_job_status(batch_api, namespace, job_name, api_exception)
             if job is None:
+                _require_absent_task(core_api, namespace, job_name, expected_identity, api_exception)
                 return
             if not _is_reserved_intent(job, job_name, expected_identity):
-                raise CloudTaskError("Task cleanup identity mismatch")
+                raise CloudTaskError(_TASK_CLEANUP_IDENTITY_MISMATCH)
             status = getattr(job, "status", None)
             if not (getattr(status, "succeeded", 0) or getattr(status, "failed", 0)):
                 raise CloudTaskError("Task cleanup requires terminal evidence")

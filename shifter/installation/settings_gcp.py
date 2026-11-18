@@ -19,7 +19,7 @@ The shared cross-backend ``range_egress`` policy is intentionally *absent* here,
 :mod:`installation.range_egress` (verbatim, non-secret CIDR diagnostics, #775), and the
 loader (:mod:`installation.loader`) strips it out of ``settings`` before validating the
 backend model and validates it separately for every backend. See
-``docs/architecture/gcp-backend-bundle-migration-preflight-729.md``.
+``docs/_deprecated/architecture/gcp-backend-bundle-migration-preflight-729.md``.
 """
 
 from __future__ import annotations
@@ -31,8 +31,6 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from shared.gcp_range_telemetry import GcpRangeTelemetryPolicy
 
 from .capacity_profiles_gcp import CapacityProfileId, resolve_capacity_profile
-from .gcp_model_broker import GcpModelBrokerSettings
-from .model_broker_runtime import ModelBrokerRuntimeSettings
 from .settings_gcp_deploy import (
     CTF_CONTENT_BUCKET_PATTERN,
     GcpOperatorBootstrapSettings,
@@ -206,8 +204,6 @@ class GcpBackendSettings(BaseModel):
             "change reduces coverage and cost as documented in docs/dev/gcp-range-cell-deploy.md."
         ),
     )
-    model_broker: GcpModelBrokerSettings = Field(default_factory=GcpModelBrokerSettings)
-    model_broker_runtime: ModelBrokerRuntimeSettings | None = None
 
     # Deployment inputs that GitHub Environment variables and secrets held before #2571.
     # A GitHub-less deployment keeps them here, in the Terraform values, or in Secret
@@ -236,6 +232,13 @@ class GcpBackendSettings(BaseModel):
     release_trust: GcpReleaseTrustSettings | None = Field(
         default=None,
         description="Repository identity that signs release provenance. The deploy command requires it.",
+    )
+    deployment_tier: Literal["production", "test"] = Field(
+        default="production",
+        description=(
+            "Deployment tier (#2689). Only a test deployment accepts gcp-deploy --allow-unreleased-tooling. "
+            "The default is production."
+        ),
     )
 
     @model_validator(mode="after")

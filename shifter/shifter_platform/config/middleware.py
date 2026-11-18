@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 # Paths that bypass ``ALLOWED_HOSTS`` enforcement so AWS ALB / GCP ingress
 # health probes (which arrive with the load balancer's internal IP as the
 # ``Host`` header) admit to the real ``CoarseHealthCheckView``. See issue
-# #477 and ``docs/architecture/portal-health-readiness-preflight-477.md``.
+# #477 and ``docs/_deprecated/architecture/portal-health-readiness-preflight-477.md``.
 _HEALTH_PATHS = frozenset({"/health", "/health/"})
 
 # Host substituted for the request's ``HTTP_HOST`` on health-probe paths.
@@ -162,7 +162,7 @@ class HealthCheckMiddleware:
     status code, or body.
 
     Per the issue #477 preflight at
-    ``docs/architecture/portal-health-readiness-preflight-477.md``, this
+    ``docs/_deprecated/architecture/portal-health-readiness-preflight-477.md``, this
     bypass stays path-scoped and admission-only. Non-health paths are
     unaffected.
     """

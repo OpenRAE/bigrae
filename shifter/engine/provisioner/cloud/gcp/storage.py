@@ -118,6 +118,18 @@ class GCPObjectStorage:
             logger.exception("object_exists: failed bucket=%s key=%s", bucket, key)
             raise CloudStorageError(f"Failed to check GCS object existence: {e}") from e
 
+    def upload_new_object(self, bucket: str, key: str, source_path: str) -> None:
+        logger.debug("upload_new_object: bucket=%s key=%s", bucket, safe_log_value(key))
+        google_exceptions = import_google_module("google.api_core.exceptions")
+        try:
+            client = self._get_client()
+            client.bucket(bucket).blob(key).upload_from_filename(source_path, if_generation_match=0)
+        except google_exceptions.PreconditionFailed as e:
+            raise ObjectPreconditionError("GCS object already exists") from e
+        except Exception as e:
+            logger.exception("upload_new_object: failed bucket=%s", bucket)
+            raise CloudStorageError(f"Failed to upload GCS object: {type(e).__name__}") from e
+
     def delete_object(self, bucket: str, key: str) -> None:
         logger.debug("delete_object: bucket=%s key=%s", bucket, key)
         try:

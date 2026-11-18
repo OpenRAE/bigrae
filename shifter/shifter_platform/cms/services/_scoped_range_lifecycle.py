@@ -72,21 +72,6 @@ def run_scoped_range_lifecycle(
             raise CMSError(_RANGE_UNAVAILABLE)
         op = PAUSE_OP if operation == "pause" else RESUME_OP
         _assert_lifecycle_supported(snapshot, op)
-        if operation == "resume":
-            from ._model_allocation import needs_model_preparation, prepare_model_access_for_dispatch
-
-            if needs_model_preparation(snapshot.request.request_id):
-                from engine.services import resolve_model_access_range_views
-
-                (range_view,) = resolve_model_access_range_views(request_uuids=(snapshot.request.request_id,))
-                prepare_model_access_for_dispatch(
-                    snapshot.request.request_id,
-                    range_id=range_view.range_uuid,
-                    renew=True,
-                    credential=credential,
-                    authority_action=authority_action,
-                    authority_target=authority_target,
-                )
         prepared = prepare_range_lifecycle(
             credential,
             snapshot.request.request_id,

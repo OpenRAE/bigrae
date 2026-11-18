@@ -11,17 +11,11 @@ move.
    keys. Do not add imports, moved blocks, or shared ownership.
 3. Validate `bigrae.yaml` with `backend: aws` and prepare an attested image
    file containing only `repository@sha256:<digest>` values.
-4. Apply the environment's `platform/terraform/global/iam` stack, then verify
-   the deploy role can manage only the scoped EKS/OIDC resources and can pass
-   the bounded `shifter-<env>-eks-*` roles only to EKS.
+4. Apply the matching `platform/terraform/global/iam` stack. Verify bounded EKS/OIDC management and `iam:PassRole` for only `shifter-<env>-eks-*` roles passed to EKS.
 5. Prepare the EKS input with explicit compatible add-on versions and distinct
    edge-client/provider-API CIDRs. Apply EKS prerequisites without directing
    production traffic to EKS.
-6. Verify private placement, every managed add-on `ACTIVE`, effective
-   exact-role IRSA (including sibling-role denial), strict NetworkPolicy on
-   Deployment and Job pods, fail-closed admission denial,
-   certificate/WAF/ALB-source restrictions, restricted chart render, and HTTPS
-   health.
+6. Verify private placement and every managed add-on `ACTIVE`. Test exact-role IRSA, sibling-role denial, Deployment/Job NetworkPolicy, and fail-closed admission. Check certificate, WAF, ALB sources, restricted rendering, and HTTPS health.
 
 ## Serialized cutover
 

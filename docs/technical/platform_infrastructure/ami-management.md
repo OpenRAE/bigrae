@@ -50,10 +50,7 @@ Domain Controller uses a manually created AMI with AD DS already promoted.
 
 **Critical:** The prebaked DC's Administrator password must match the
 environment's domain password in AWS Secrets Manager (`shifter-{env}-portal-dc-domain`).
-That secret is Terraform-managed—`terraform apply` for the portal stack
-generates the value (`random_password.dc_domain_password` in the
-portal Terraform root) and seeds it—so the AMI build reads the value
-from Secrets Manager rather than choosing one. Victims use the same password
+The portal Terraform root generates and seeds `random_password.dc_domain_password`. The AMI build reads that managed value from Secrets Manager instead of selecting another password. Victims use the same password
 for domain join. The value must never be committed to `terraform.tfvars`,
 workflow YAML, or any other tracked file.
 
@@ -74,21 +71,16 @@ Workflow: `.github/workflows/packer.yml`
 | dc | Read the id from `dc-amis.json` (trusted `dev` provenance, validated), update dev SSM |
 
 The `kali`, `ubuntu`, and `windows` builds bake a deterministic AmazonProvidedDNS
-upstream into the guest (issue #1633) so DNS is race-free from first boot. Before
-the build overwrites `/shifter/ami/<type>`, a validation gate boots the exact
-candidate AMI in a range-equivalent subnet and requires it to register with SSM
-and resolve the regional SSM endpoint on a fresh boot and after a reboot. A
-failed candidate leaves the previous known-good id in place. The gate reads its
-subnet, security group, and instance profile from trusted repository Actions
-variables (`PACKER_VERIFY_*_<ENV>`), not dispatch inputs; they are described in
-the [AWS AMI seeding runbook](../../dev/aws-ami-seeding-runbook.md).
+upstream into the guest (issue #1633) so DNS is race-free from first boot. Before changing `/shifter/ami/<type>`, the validation gate boots the exact candidate in a range-equivalent subnet. It requires SSM registration and regional SSM DNS resolution on fresh boot and after reboot.
+
+A
+failed candidate leaves the previous known-good id in place. The gate reads subnet, security group, and instance profile from trusted `PACKER_VERIFY_*_<ENV>` repository variables. Dispatch inputs do not select them.
+
+See the [AMI seeding runbook](../../dev/aws-ami-seeding-runbook.md).
 
 The base `build` job assumes a dedicated least-privilege image-pipeline IAM role
 (`github_actions_image` in `platform/terraform/global/iam`, issue #1656), not the
-broad deploy role. Its OIDC trust is pinned to the `dev`/`main` protected-branch
-subjects, and its `iam:PassRole` is scoped to exactly the
-`shifter-<env>-range-range-instance` role passed to EC2, so the verification
-instance can receive only the range role. The role ARN is wired to the
+broad deploy role. OIDC trust permits exact protected `dev`/`main` subjects. `iam:PassRole` permits only the `shifter-<env>-range-range-instance` EC2 role. The verification instance cannot receive another role. The role ARN is wired to the
 `AWS_IMAGE_ROLE_ARN_<ENV>` secret (see the runbook cutover); the
 `check_tf_iam_role_naming` guardrail (ADR-004-R22) pins the exact-subject and
 exact-range-role invariants. `bake-scenario` keeps its own separate role.
@@ -104,11 +96,7 @@ Workflow: `.github/workflows/packer-promote.yml`
 
 `packer-promote.yml` handles only kali, ubuntu, windows, and dc.
 
-Both DC publishers read `dc-amis.json` from a dedicated checkout of the protected
-`dev` ref (never the dispatched/build ref or a runner leftover) and resolve it
-through one shared validator, `shifter/packer/scripts/bake/resolve-dc-ami.sh`,
-which fails closed unless the id exists, matches the AMI shape, and names an
-image EC2 reports as `available` and owned by the target account. The prod
+Both DC publishers read `dc-amis.json` from a dedicated protected-`dev` checkout. They never use the dispatched ref, build ref, or runner leftovers. The shared `shifter/packer/scripts/bake/resolve-dc-ami.sh` validator checks presence and AMI syntax. EC2 must report the image `available` and owned by the target account. The prod
 promote job also runs only from a protected ref (`dev`/`main`). See issue #1656.
 
 ## Updating AMIs
@@ -134,9 +122,7 @@ To create a new DC AMI:
 4. Set the domain Administrator password to the value already seeded in
    `shifter-{env}-portal-dc-domain` (Terraform-managed; read it from Secrets
    Manager, do not invent one), see `dev/secrets.md`
-5. Set the DC's DNS forwarders to the link-local AmazonProvidedDNS so external
-   names such as the regional SSM endpoint resolve deterministically (issue
-   #1633): `Set-DnsServerForwarder -IPAddress 169.254.169.253 -PassThru`. This is
+5. Set DC DNS forwarders to link-local AmazonProvidedDNS. This makes external names, including the regional SSM endpoint, resolve deterministically (issue #1633): `Set-DnsServerForwarder -IPAddress 169.254.169.253 -PassThru`. This is
    the DC-role equivalent of the `FallbackDNS` baked into the Linux guests. Do
    not reset the DC's adapter to DHCP DNS: a promoted DC points its client at
    itself and forwards outbound queries, so a DHCP reset would break domain
@@ -183,10 +169,7 @@ stored in AWS SSM `/shifter/ami/*`.
   for the exact candidate. Only after validation passes, it publishes the image
   to the release registry with signed build provenance (#2668). No promotion
   step exists.
-- Image types: `ubuntu`, `kali`, `dc-prebaked` (published as `dc`). **Kali** has no
-  public GCP image and the official genericcloud disk is not GCE-bootable, so
-  its builder converts Google's `debian-12` base into Kali Rolling in its first
-  provisioning script; see `shifter/packer/gcp/README.md`.
+- Image types: `ubuntu`, `kali`, `dc-prebaked` (published as `dc`). **Kali** uses a GCE-native `debian-12` base converted to Kali Rolling by the first provisioning script. The official genericcloud disk lacks required GCE guest integration. See `shifter/packer/gcp/README.md`.
 - Agent trigger: the `build_gce_image` MCP ops tool (`infra_mutation`),
   parallel to `build_ami`.
 
@@ -201,4 +184,4 @@ stored in AWS SSM `/shifter/ami/*`.
 - **VM-Series NGFW** - OVA image stored in GCS, bootstrapped via GCS bucket.
 - **Control-plane containers** - Built once for each release by `release-gcp.yml` and pushed to the release registry; `gcp-deploy` copies them into the deployment Artifact Registry. A CI deploy through `_gcp-dev.yml` builds them directly into the deployment Artifact Registry.
 
-See [GDC Provisioning](gdc-provisioning) for details.
+See [GDC Provisioning](gdc-provisioning.md) for details.
