@@ -193,15 +193,27 @@ variable "access_machine_type" {
 }
 
 variable "web_node_count" {
-  description = "Desired size for the web node pool."
+  description = "Minimum nodes per zone in the web node pool (also used as the initial count)."
   type        = number
   default     = 1
 }
 
+variable "web_max_node_count" {
+  description = "Maximum nodes per zone in the web node pool."
+  type        = number
+  default     = 10
+}
+
 variable "worker_node_count" {
-  description = "Desired size for the worker node pool."
+  description = "Minimum nodes per zone in the workers node pool (also used as the initial count)."
   type        = number
   default     = 1
+}
+
+variable "worker_max_node_count" {
+  description = "Maximum nodes per zone in the workers node pool."
+  type        = number
+  default     = 5
 }
 
 variable "provisioner_node_count" {

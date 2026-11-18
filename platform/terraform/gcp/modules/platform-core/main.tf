@@ -467,7 +467,9 @@ module "portal_gke" {
   provisioner_machine_type                  = var.provisioner_machine_type
   access_machine_type                       = var.access_machine_type
   web_node_count                            = var.web_node_count
+  web_max_node_count                        = var.web_max_node_count
   worker_node_count                         = var.worker_node_count
+  worker_max_node_count                     = var.worker_max_node_count
   provisioner_node_count                    = var.provisioner_node_count
   provisioner_max_node_count                = var.provisioner_max_node_count
   access_node_count                         = var.access_node_count
