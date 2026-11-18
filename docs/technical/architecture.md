@@ -250,13 +250,15 @@ the requested session. The gateway sends HTTPS through the existing
 and keeps the default denial of direct public egress.
 
 GCP shared-VPC range cells use per-range subnet/tag firewall policy and explicit
-NAT membership. The optional shared-guest layout moves the access, egress and OpenVPN rules
-to fixed tag-keyed rules and keeps one isolation rule for each range. Guests have no external NIC. Any attached identity is
+NAT membership. Guests have no external NIC. Any attached identity is
 participant-visible and must have no management or cross-range authority;
 keyless, predict-only model access follows ADR-064. GDC VM Runtime and scenario
 Pods are operator validation paths, not participant containment boundaries.
 See [GCP deployment](../dev/gcp-range-cell-deploy.md) for exact supported modes
 and image prerequisites. GCE does not support the NGFW range capability.
+
+The optional shared-guest layout moves the range access, egress and OpenVPN
+rules to fixed tag-keyed rules. Each range then keeps one isolation rule.
 
 The platform namespace denies public egress. Under ADR-006-R3, designated
 egress proxies are the only exception: they admit DNS names on port 443, reject
