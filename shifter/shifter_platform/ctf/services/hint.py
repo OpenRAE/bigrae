@@ -10,7 +10,7 @@ from typing import Any
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
-from django.db.models import QuerySet, Sum
+from django.db.models import Q, QuerySet
 
 from ctf.enums import EventCapability
 from ctf.exceptions import CTFNotFoundError, CTFStateError, CTFValidationError
@@ -184,6 +184,26 @@ def get_hints(challenge_id: UUID) -> QuerySet[CTFHint]:
     return CTFHint.objects.filter(challenge_id=challenge_id).order_by("order", "created_at")
 
 
+def _hint_usage_scope(participant: CTFParticipant) -> Q:
+    """Select the hint usages that count for a participant.
+
+    In a team-mode event, a hint that any teammate unlocked counts for the whole
+    team, so a team cannot unlock a hint on one account and solve on another for
+    full points. The team is recorded at unlock time, so leaving the team later
+    does not remove the penalty.
+    """
+    scope = Q(participant_id=participant.pk)
+    if participant.event.team_mode and participant.team_id:
+        scope |= Q(team_id=participant.team_id)
+    return scope
+
+
+def _distinct_penalty(usages: QuerySet[CTFHintUsage]) -> int:
+    """Sum each unlocked hint's penalty once, capped at 100."""
+    rows = usages.order_by().values_list("hint_id", "hint__penalty").distinct()
+    return min(sum(penalty for _hint_id, penalty in rows), 100)
+
+
 def use_hint(
     participant_id: UUID,
     hint_id: UUID,
@@ -259,9 +279,9 @@ def use_hint(
 
     assert_participant_can_compete(participant)
 
-    # Check if already unlocked (idempotent)
-    existing = CTFHintUsage.objects.filter(participant=participant, hint=hint).first()
-    if existing:
+    # Check if already unlocked by the participant or, in team mode, the team (idempotent)
+    scope = _hint_usage_scope(participant)
+    if CTFHintUsage.objects.filter(scope, hint=hint).exists():
         total = get_total_hint_penalty(participant_id, hint.challenge_id)
         return {
             "text": hint.text,
@@ -277,10 +297,7 @@ def use_hint(
         order__lt=hint.order,
     )
     unlocked_ids = set(
-        CTFHintUsage.objects.filter(
-            participant=participant,
-            hint__challenge=hint.challenge,
-        ).values_list("hint_id", flat=True)
+        CTFHintUsage.objects.filter(scope, hint__challenge=hint.challenge).values_list("hint_id", flat=True)
     )
     for preceding in preceding_hints:
         if preceding.id not in unlocked_ids:
@@ -304,7 +321,8 @@ def use_hint(
     already_unlocked = False
     try:
         with transaction.atomic():
-            CTFHintUsage.objects.create(participant=participant, hint=hint)
+            team = participant.team if participant.event.team_mode else None
+            CTFHintUsage.objects.create(participant=participant, hint=hint, team=team)
     except IntegrityError:
         existing_after = CTFHintUsage.objects.filter(participant=participant, hint=hint).first()
         if existing_after is None:
@@ -343,9 +361,11 @@ def get_unlocked_hints(participant_id: UUID, challenge_id: UUID) -> list[CTFHint
     Returns:
         List of unlocked CTFHint instances, ordered by reveal order.
     """
+    participant = CTFParticipant.objects.select_related("event").filter(pk=participant_id).first()
+    if participant is None:
+        return []
     unlocked_ids = CTFHintUsage.objects.filter(
-        participant_id=participant_id,
-        hint__challenge_id=challenge_id,
+        _hint_usage_scope(participant), hint__challenge_id=challenge_id
     ).values_list("hint_id", flat=True)
 
     return list(CTFHint.objects.filter(id__in=unlocked_ids).order_by("order", "created_at"))
@@ -361,13 +381,20 @@ def get_total_hint_penalty(participant_id: UUID, challenge_id: UUID) -> int:
     Returns:
         Total penalty percentage (sum of unlocked hint penalties, capped at 100).
     """
-    total = (
-        CTFHintUsage.objects.filter(
-            participant_id=participant_id,
-            hint__challenge_id=challenge_id,
-        )
-        .aggregate(total=Sum("hint__penalty"))
-        .get("total")
-    ) or 0
+    participant = CTFParticipant.objects.select_related("event").filter(pk=participant_id).first()
+    if participant is None:
+        return 0
+    return _distinct_penalty(
+        CTFHintUsage.objects.filter(_hint_usage_scope(participant), hint__challenge_id=challenge_id)
+    )
 
-    return min(total, 100)
+
+def hint_penalties_for_solvers(challenge_id: UUID, participant_ids: list[UUID]) -> dict[UUID, int]:
+    """Return each solver's hint penalty on one challenge, with the team scope applied."""
+    participants = CTFParticipant.objects.select_related("event").filter(pk__in=participant_ids)
+    return {
+        participant.pk: _distinct_penalty(
+            CTFHintUsage.objects.filter(_hint_usage_scope(participant), hint__challenge_id=challenge_id)
+        )
+        for participant in participants
+    }

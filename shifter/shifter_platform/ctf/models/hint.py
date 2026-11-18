@@ -71,6 +71,7 @@ class CTFHintUsage(CTFBaseModel):
 
     Attributes:
         participant: The participant who unlocked the hint.
+        team: The participant's team at unlock time, in a team-mode event.
         hint: The hint that was unlocked.
         unlocked_at: When the hint was unlocked.
     """
@@ -80,6 +81,14 @@ class CTFHintUsage(CTFBaseModel):
         on_delete=models.CASCADE,
         related_name="hint_usages",
         help_text="Participant who unlocked the hint",
+    )
+    team = models.ForeignKey(
+        "CTFTeam",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="hint_usages",
+        help_text="Team of the participant at unlock time; the penalty applies to the whole team",
     )
     hint = models.ForeignKey(
         CTFHint,
