@@ -16,7 +16,7 @@ Canonical Terraform surface: `platform/terraform/modules/portal/s3/`
 
 ## Scope
 
-This note covers the **portal user-uploads** bucket only — presigned browser
+This note covers the **portal user-uploads** bucket only—presigned browser
 PUT uploads for ephemeral agent and user files. It does not cover:
 
 - Log-aggregation buckets (`platform/terraform/modules/log-aggregation/`)
@@ -75,7 +75,7 @@ CRR remains deferred as an accepted risk for this bucket.
 
 4. **Operational cost.** CRR requires a destination bucket (second region),
    replication IAM role, cross-region KMS key policy coordination, and ongoing
-   replicated storage charges — disproportionate for disposable uploads.
+   replicated storage charges—disproportionate for disposable uploads.
 
 5. **Existing regional resilience.** Portal compute (ASG/EC2), RDS Multi-AZ
    (prod), and other durable tiers have their own HA posture. S3 CRR for uploads
@@ -94,9 +94,9 @@ Re-evaluate CRR when any of the following become true:
 
 Changes belong in Terraform only:
 
-- `platform/terraform/modules/portal/s3/` — replication configuration,
+- `platform/terraform/modules/portal/s3/`—replication configuration,
   versioning toggle, replication role
-- Portal env roots — destination region/bucket/KMS inputs via existing tfvars
+- Portal env roots—destination region/bucket/KMS inputs via existing tfvars
   overlay conventions
 
 Do not add app-level replication abstractions. Do not broaden portal EC2,

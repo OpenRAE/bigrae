@@ -65,7 +65,7 @@ GitHub reported eight open CodeQL alerts on `main` at inspection time. They are
 not treated as eight exploitable release defects; each current data flow is
 resolved in the candidate and remains `fixed-pending-rescan`:
 
-| Alert(s) | Path | Candidate resolution |
+| Alerts | Path | Candidate resolution |
 | --- | --- | --- |
 | 1176 | `workspaces/services/_memberships.py` | Fingerprint the role at the log sink. |
 | 1169, 1112 | `mission_control/api/guacamole.py` | Return an authored bootstrap message and classify persisted failure text. |
@@ -103,7 +103,7 @@ does not replace the four OCI scans or guest SBOM review.
 | --- | --- | --- |
 | #94 | Closed through PR #2101 (`9b4517081c40ce31f488a612f0276915d9dcc297`). The server-owned byte limit is enforced before presign and at finalization; signed Content-Length, authoritative object HEAD, oversize cleanup, bounded inspection, and immutable-copy tests cover the supported GCP path. | Source mechanism `captured`; selected-commit tests and deployed path still required. |
 | #1645 | The universal-shared-password premise is no longer current. PR #1933 (`e9888dae876855e90e2a27a9a2cfe6cb933002af`) and current tests prove unique CSPRNG credentials by default, one-time reset/display, hash-only persistence, session/API-token invalidation, audit redaction, and force-change state. | The GCP adoption baseline selects generated credentials. The encrypted event-local shared-password override remains an explicit organizer policy and is excluded from deployment config, Terraform, bootstrap defaults, and the adoption profile. |
-| #1621 / #1646 | PRs #1623 and #1685 established protected-ref validation and evidence-bound promotion; #1699/PR #2145 added purpose identities and strict run/evidence/image-ID verification. This candidate adds an immutable build-identity/source record and binds an externally produced read-only-disk SBOM through evidence schema 3. | Source mechanism `captured`; protected selected-commit build/validation/promotion runs remain required. Open issue state is context, not a release veto. |
+| #1621 / #1646 | PRs #1623 and #1685 established protected-ref validation and evidence-bound promotion; #1699/PR #2145 added purpose identities and strict run/evidence/image-ID verification. This candidate adds an immutable build-identity/source record and binds an externally produced read-only disk SBOM through evidence schema 3. | Source mechanism `captured`; protected selected-commit build/validation/promotion runs remain required. Open issue state is context, not a release veto. |
 | #1699 | Closed through PR #2145 (`f6f0b7b340cd3dd81f9de8b3bd49368ad5e2e774`). Build, validate, promote, deploy, and destroy use distinct subjects and accounts. This candidate adds a sixth isolated release-scan subject/account, repository-scoped read grants, and object-prefix-conditioned evidence access; build alone creates immutable build-source records, validation can only read those records and create validation records, and promotion remains read-only. Deploy/destroy role sets are independently derived; neither receives broad Compute Admin or Storage Admin. Compute lifecycle is limited to network/security roles; storage mutation is condition-bound to the deterministic assets, audit-log, and GDC-image buckets, while workload-IAM administration is granted only on the exact state and configured external content buckets. Destroy does not receive Service Usage Admin. | Source mechanism `captured`; live effective-permission and denied-path proof remains unresolved and blocks release. |
 | #1752 | Original alerts 1117/1164 were fixed through PR #1754. The newer CSP alert 1165 is separately addressed above. | `fixed-pending-rescan`. |
 | #1756 / #1758 | Merged fixes are identified above; their open state does not supersede native Sonar evidence. | `fixed-pending-rescan`. |
@@ -125,7 +125,7 @@ does not replace the four OCI scans or guest SBOM review.
 All current GCP Checkov decisions are inline on the exact resource and paired
 with `docs/adr/exceptions.yaml`; the prior global GCP skip list is removed.
 
-| Owner | Finding(s) and affected artifact | Rationale / compensating verification | Expiry |
+| Owner | Findings and affected artifact | Rationale / compensating verification | Expiry |
 | --- | --- | --- | --- |
 | `@Brad-Edwards` | CKV_GCP_6, CKV_GCP_79, CKV_GCP_109, and CKV_GCP_111, portal Cloud SQL instance | `ssl_mode=ENCRYPTED_ONLY` supersedes legacy `require_ssl`; the supported PostgreSQL major is an explicit migration decision; error-statement and all-statement logging are excluded because queries can contain participant data or credentials, while connection, severity, duration, lock-wait, and pgaudit logging remain enabled. Blocking Checkov, Terraform validation, and release tests. | 2027-03-11 |
 | `@Brad-Edwards` | CKV_GCP_12, CKV_GCP_21, CKV_GCP_65, portal GKE cluster | Dataplane V2 enforces NetworkPolicy; labels are caller-supplied through the module contract; human RBAC groups are intentionally absent in favor of IAM Connect Gateway and KSA/GSA. | 2027-03-11 |

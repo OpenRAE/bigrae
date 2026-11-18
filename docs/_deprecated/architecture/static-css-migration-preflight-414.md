@@ -157,7 +157,7 @@ into the global theme without rewriting every template.
 - Do not create duplicate theme systems. The deprecated `xdr-theme.css` /
   `xdr-sidebar.css` references in experiments are not backed by files in the
   current static tree and should not be copied forward as a pattern.
-- Do not use `style` attributes for initial hidden state just because existing
+- Do not use `style` attributes for initial hidden state only because existing
   JS later writes `style.display`; fix the state contract deliberately.
 - Do not move template-condition semantics into CSS. CSS may style
   `status-ready`; it must not decide whether the current user can see a control.

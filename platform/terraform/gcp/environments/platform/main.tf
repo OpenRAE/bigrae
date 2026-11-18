@@ -81,6 +81,8 @@ module "platform_core" {
   access_node_count                  = var.access_node_count
   access_node_max_count              = var.access_node_max_count
   openvpn_pool_enabled               = var.openvpn_pool_enabled
+  range_shared_guest_firewalls       = var.range_shared_guest_firewalls
+  range_private_google_access        = var.range_private_google_access
   openvpn_pool_subnet_cidr           = var.openvpn_pool_subnet_cidr
   openvpn_pool_machine_type          = var.vpn_pool_machine_type
   openvpn_pool_min_vms               = var.vpn_pool_min_vms

@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useCtfCurrentEvent, useCtfScoreboard } from "@/api/ctf";
 import { ApiError } from "@/api/errors";
-import type { CtfScoreboard } from "@/api/types";
+import type { CtfScoreboard, CtfScoreboardKind } from "@/api/types";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,13 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { rankingKey, rankingNumber, rankingString } from "./format";
 
 const ALL = "all";
+
+/** Page header for each board; `default` is the event's own board (#2968). */
+const HEADERS: Record<CtfScoreboardKind | "default", { title: string; description: string }> = {
+  default: { title: "Scoreboard", description: "Event rankings" },
+  individual: { title: "Individual scoreboard", description: "Participant rankings" },
+  team: { title: "Team scoreboard", description: "Team rankings" },
+};
 
 function ScoreboardTable({ rows, teamMode }: Readonly<{ rows: Record<string, unknown>[]; teamMode: boolean }>) {
   if (rows.length === 0) {
@@ -50,9 +57,15 @@ function ScoreboardTable({ rows, teamMode }: Readonly<{ rows: Record<string, unk
 
 function ScoreboardContent({
   data,
+  kind,
   bracket,
   onBracketChange,
-}: Readonly<{ data: CtfScoreboard; bracket: string; onBracketChange: (value: string) => void }>) {
+}: Readonly<{
+  data: CtfScoreboard;
+  kind?: CtfScoreboardKind;
+  bracket: string;
+  onBracketChange: (value: string) => void;
+}>) {
   if (data.scoreboard_hidden) {
     return (
       <Alert>
@@ -86,17 +99,27 @@ function ScoreboardContent({
         ) : null}
       </div>
       <Card className="overflow-hidden py-0">
-        <ScoreboardTable rows={rows} teamMode={Boolean(data.team_mode)} />
+        <ScoreboardTable rows={rows} teamMode={kind ? kind === "team" : Boolean(data.team_mode)} />
       </Card>
     </>
   );
 }
 
-export function ScoreboardPage() {
+/**
+ * Participant scoreboard. Without `kind` it shows the event's default board;
+ * with `kind` it shows that board (#2968). A solo event has no team board.
+ */
+export function ScoreboardPage({ kind }: Readonly<{ kind?: CtfScoreboardKind }>) {
   const [bracket, setBracket] = useState<string>(ALL);
   const eventQuery = useCtfCurrentEvent();
   const eventId = eventQuery.data?.event.id ?? "";
-  const scoreboard = useCtfScoreboard(eventId, bracket === ALL ? undefined : bracket, Boolean(eventId));
+  const noTeamBoard = kind === "team" && eventQuery.isSuccess && !eventQuery.data.event.team_mode;
+  const scoreboard = useCtfScoreboard(
+    eventId,
+    bracket === ALL ? undefined : bracket,
+    Boolean(eventId) && !noTeamBoard,
+    kind,
+  );
 
   const loading = eventQuery.isLoading || (Boolean(eventId) && scoreboard.isLoading);
 
@@ -106,6 +129,13 @@ export function ScoreboardPage() {
       <Alert>
         <AlertTitle>No active event</AlertTitle>
         <AlertDescription>Join an event to see its scoreboard.</AlertDescription>
+      </Alert>
+    );
+  } else if (noTeamBoard) {
+    body = (
+      <Alert>
+        <AlertTitle>No team scoreboard</AlertTitle>
+        <AlertDescription>This event does not use teams.</AlertDescription>
       </Alert>
     );
   } else if (loading) {
@@ -118,12 +148,12 @@ export function ScoreboardPage() {
       </Alert>
     );
   } else {
-    body = <ScoreboardContent data={scoreboard.data} bracket={bracket} onBracketChange={setBracket} />;
+    body = <ScoreboardContent data={scoreboard.data} kind={kind} bracket={bracket} onBracketChange={setBracket} />;
   }
 
   return (
     <>
-      <PageHeader title="Scoreboard" description="Event rankings" />
+      <PageHeader {...HEADERS[kind ?? "default"]} />
       {body}
     </>
   );

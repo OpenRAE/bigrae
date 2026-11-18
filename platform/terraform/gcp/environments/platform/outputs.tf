@@ -73,6 +73,11 @@ output "gke_cluster_location" {
   value       = module.platform_core.gke_cluster_location
 }
 
+output "gke_access_node_pool_name" {
+  description = "Name of the access node pool. Input to the event-capacity drift check."
+  value       = module.platform_core.gke_access_node_pool_name
+}
+
 output "artifact_registry_repositories" {
   description = "Artifact Registry repositories for the environment."
   value       = module.platform_core.artifact_registry_repositories

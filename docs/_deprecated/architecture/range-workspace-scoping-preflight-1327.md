@@ -73,7 +73,7 @@ a second advisory lock or reach into `workspaces.models` from CMS.
 
 Engine create remains defense in depth. Both cyberscript and RAES idempotent
 create paths must treat a replay carrying a different `workspace_id` as a
-binding conflict, just as they already reject conflicting backend,
+binding conflict, in the same way as they already reject conflicting backend,
 participant-access, and remote-access intent. Silently reusing the first range
 for a differently scoped replay is a cross-tenant bug.
 
@@ -270,8 +270,8 @@ scenario contracts, or branch separately in cyberscript and RAES.
   or guest configuration.
 - Do not translate all `IntegrityError`s into quota or active-range conflicts.
   Match named constraints and propagate unrelated persistence failures.
-- Do not vary point-read error bodies by "range absent", "wrong owner",
-  "workspace absent", "membership revoked", or "role denied".
+- Do not vary point-read error bodies by "range absent," "wrong owner,"
+  "workspace absent," "membership revoked," or "role denied."
 
 ## Non-goals and implementation boundaries
 

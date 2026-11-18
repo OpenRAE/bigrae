@@ -190,7 +190,7 @@ Re-enabling requires all of these to be true:
 - App startup currently registers experiment notification types in
   `ExperimentsConfig.ready()`. Registration alone is cheap, but it can make tests
   look enabled even when publishing is disabled. Tests must assert DB rows and
-  channel sends, not just registry contents.
+  channel sends, not only registry contents.
 - Existing direct experiment websocket frontend code is already a consumer of
   `/ws/experiment-status/<id>/`. Adding a shared notification frontend on the same
   page can double-deliver status changes unless the implementation deliberately

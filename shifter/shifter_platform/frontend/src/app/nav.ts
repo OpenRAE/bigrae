@@ -30,6 +30,14 @@ export type NavAudience = "participant" | "organizer" | "both" | "system";
 
 export type NavGroupName = "Participate" | "Operate" | "Author" | "Administer";
 
+/** Event mode that shows an entry; an entry without one shows in every event. */
+export type NavEventMode = "solo" | "team";
+
+/** Advisory event presentation facts for nav filtering (not authorization). */
+export interface NavContext {
+  readonly teamMode: boolean;
+}
+
 /**
  * Advisory permission policy keys. The shell maps each to bootstrap flags in
  * `isNavEntryVisible`; the backend endpoints remain the authority.
@@ -89,6 +97,8 @@ export interface NavEntry {
   readonly iconKey: NavIconKey;
   /** Optional active range/event context this surface reads. */
   readonly activeContext?: "range" | "event";
+  /** Optional event mode that shows this entry (advisory, #2968). */
+  readonly eventMode?: NavEventMode;
   /** True when the entry links to a legacy Django route via full-page nav. */
   readonly external?: boolean;
   /** Optional nested/contextual entries. */
@@ -112,6 +122,7 @@ interface EntrySpec {
   permissionPolicy: PermissionPolicy;
   audience: NavAudience;
   activeContext?: "range" | "event";
+  eventMode?: NavEventMode;
   external?: boolean;
   children?: EntrySpec[];
 }
@@ -135,6 +146,7 @@ function toEntry(mode: UxMode, group: NavGroupName, spec: EntrySpec): NavEntry {
     routePath: spec.routePath,
     iconKey: spec.iconKey,
     ...(spec.activeContext ? { activeContext: spec.activeContext } : {}),
+    ...(spec.eventMode ? { eventMode: spec.eventMode } : {}),
     ...(spec.external ? { external: true } : {}),
     ...(spec.children ? { children: spec.children.map((child) => toEntry(mode, group, child)) } : {}),
   };
@@ -177,7 +189,9 @@ export const NAV_GROUPS: readonly NavGroup[] = [
       { surface: "Event Home", routeName: "ctf:dashboard", purpose: "Event entry point with current participant state.", routePath: "/ctf/", iconKey: "home", activeContext: "event" },
       { surface: "Challenges", routeName: "ctf:challenges", purpose: "Browse available challenges and progression.", routePath: "/ctf/challenges/", iconKey: "flag" },
       { surface: "Range", routeName: "ctf:range", purpose: "Access range status and participant resources.", routePath: "/ctf/range/", iconKey: "server", activeContext: "range" },
-      { surface: "Scoreboard", routeName: "ctf:scoreboard", purpose: "Compare event scoring and rank.", routePath: "/ctf/scoreboard/", iconKey: "trophy" },
+      { surface: "Scoreboard", routeName: "ctf:scoreboard", purpose: "Compare event scoring and rank.", routePath: "/ctf/scoreboard/", iconKey: "trophy", eventMode: "solo" },
+      { surface: "Individual scoreboard", routeName: "ctf:individual_scoreboard", purpose: "Compare participant rank in a team-mode event.", routePath: "/ctf/individual-scoreboard/", iconKey: "trophy", eventMode: "team" },
+      { surface: "Team scoreboard", routeName: "ctf:team_scoreboard", purpose: "Compare team rank in a team-mode event.", routePath: "/ctf/team-scoreboard/", iconKey: "trophy", eventMode: "team" },
       { surface: "Team", routeName: "ctf:team", purpose: "Inspect team membership and status.", routePath: "/ctf/team/", iconKey: "users" },
       { surface: "Inbox", routeName: "ctf:participant_inbox", purpose: "Read and acknowledge event messages.", routePath: "/ctf/inbox/", iconKey: "inbox", activeContext: "event" },
       { surface: "Help", routeName: "ctf:help", purpose: "Get CTF-specific help.", routePath: "/ctf/help/", iconKey: "help-circle" },
@@ -337,9 +351,15 @@ export function permissionAllows(policy: PermissionPolicy, bootstrap: Bootstrap)
   }
 }
 
-/** True when an entry should be shown by its advisory permission policy. */
-export function isNavEntryVisible(entry: NavEntry, bootstrap: Bootstrap): boolean {
-  return permissionAllows(entry.permissionPolicy, bootstrap);
+/** True when an entry's event mode matches the context; no context means a solo event. */
+function eventModeAllows(eventMode: NavEventMode | undefined, context: NavContext | undefined): boolean {
+  if (!eventMode) return true;
+  return (eventMode === "team") === (context?.teamMode ?? false);
+}
+
+/** True when an entry should be shown by its advisory permission policy and event mode. */
+export function isNavEntryVisible(entry: NavEntry, bootstrap: Bootstrap, context?: NavContext): boolean {
+  return permissionAllows(entry.permissionPolicy, bootstrap) && eventModeAllows(entry.eventMode, context);
 }
 
 /**
@@ -347,15 +367,15 @@ export function isNavEntryVisible(entry: NavEntry, bootstrap: Bootstrap): boolea
  * each group's entries (and any children) filtered by advisory visibility, and
  * empty groups dropped.
  */
-export function visibleNavGroups(mode: UxMode, bootstrap: Bootstrap): NavGroup[] {
+export function visibleNavGroups(mode: UxMode, bootstrap: Bootstrap, context?: NavContext): NavGroup[] {
   return NAV_GROUPS.filter((group) => group.mode === mode)
     .map((group) => ({
       ...group,
       entries: group.entries
-        .filter((entry) => isNavEntryVisible(entry, bootstrap))
+        .filter((entry) => isNavEntryVisible(entry, bootstrap, context))
         .map((entry) => ({
           ...entry,
-          children: entry.children?.filter((child) => isNavEntryVisible(child, bootstrap)),
+          children: entry.children?.filter((child) => isNavEntryVisible(child, bootstrap, context)),
         })),
     }))
     .filter((group) => group.entries.length > 0);

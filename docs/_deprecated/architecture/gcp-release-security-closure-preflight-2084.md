@@ -142,7 +142,7 @@ historical issue claim relevant to the release gets its own row with:
   `release-exception`, or `unresolved`;
 - the code change, rescan, SBOM/reachability proof, test, or bounded review that
   supports that disposition; and
-- for a release exception, owner, rationale, exact affected artifact(s), expiry,
+- for a release exception, owner, rationale, exact affected artifacts, expiry,
   compensating control, and regression/verification tests.
 
 These are labels in a human review record, not a new application or workflow

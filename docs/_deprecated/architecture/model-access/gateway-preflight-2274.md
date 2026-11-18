@@ -1,4 +1,4 @@
-# AI gateway replacement preflight — #2274
+# AI gateway replacement preflight—#2274
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../../technical/architecture.md) and accepted, superseding ADRs.
 

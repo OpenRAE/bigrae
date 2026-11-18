@@ -200,6 +200,10 @@ module "range_vpc" {
   range_egress_allowed_cidrs = var.range_egress_allowed_cidrs
   range_network_zones        = var.range_network_zones
   nat_logs                   = var.range_telemetry.nat_logs
+  shared_guest_firewalls     = var.range_shared_guest_firewalls
+  range_network_cidr         = var.range_network_cidr
+  access_network_cidrs       = compact([var.gke_access_pods_cidr])
+  private_google_access      = var.range_private_google_access
 
   depends_on = [module.project_services]
 }
@@ -437,6 +441,7 @@ module "vpn_pool" {
   cpu_target_pct                    = var.openvpn_pool_cpu_target_pct
   vpc_flow_logs                     = var.range_telemetry.vpc_flow_logs
   nat_logs                          = var.range_telemetry.nat_logs
+  shared_guest_firewalls            = var.range_shared_guest_firewalls
 
   depends_on = [module.project_services]
 }

@@ -54,7 +54,7 @@ Windows `/C:/Users/Administrator/Downloads`.
   shell commands, process argv, Terraform commands, logs, error bodies, or a
   browser query string outside the encrypted Guacamole JSON-auth payload.
 - Keep existing secret handling: RDP passwords and SFTP SSH keys are read
-  just-in-time through `engine.secrets`; only secret references cross the
+  on-demand through `engine.secrets`; only secret references cross the
   provisioner result/persistence boundary. Do not move secret reads to image
   config, state parsers, Mission Control, or client code.
 - Preserve the Guacamole bootstrap error envelope and logging taint breaks.

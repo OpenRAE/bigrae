@@ -56,7 +56,7 @@ The supplied issue's older description is not the current wire contract:
 `NotificationType` on legacy `CTFNotification`, communication `NoticeKind`
 (including email-template selection), the shared bus registration name and a
 domain occurrence kind are different concepts. Do not extend a retired enum or
-add an email template just to recognize a browser notice. Use the existing closed
+add an email template only to recognize a browser notice. Use the existing closed
 communication contracts; extend only the discriminator whose actual owner needs
 the new behavior. `AppConfig.ready` is transport wiring, not a communication
 trigger/audience/channel extension registry (ADR-051-R11).
@@ -145,7 +145,7 @@ multi-tab/racing sends can duplicate hints. Replay takes only the first
 `WEBSOCKET_NOTIFICATION_MAX_REPLAY` pending rows per subscription and has no
 pagination/drain protocol. TTL expiration can discard hints. Offline guarantees
 therefore come from retained snapshots/receipts and authenticated inbox
-reconciliation, not a promise of exactly-once or unlimited socket replay.
+reconciliation, not a promise of exactly once or unlimited socket replay.
 
 `api/ctfInbox.ts` already reconciles on focus/network reconnect, cross-tab hints
 and a bounded poll. The CTF socket hook currently opens once per event and has
@@ -200,7 +200,7 @@ and delivery traceability unchanged during preflight; any later issue/PR uses
 Non-goals: implementing CTF-802 here; enabling a live deployment; a second socket,
 outbox, inbox, retry worker or scheduler; resuming retired `CTFNotification`
 writes; changing scoring/ranking or organizer visibility; email/push/SMS opt-in;
-new RAES or extension contracts; a browser ACK protocol or exactly-once claim;
+new RAES or extension contracts; a browser ACK protocol or exactly once claim;
 unbounded replay; and unrelated configuration/identity redesign. The following
 implementation owns source notices, correct recipient-visible rank changes,
 reference delivery/UI behavior, and a complete supported opt-in with retention.

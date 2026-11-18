@@ -105,6 +105,7 @@ def destroy_raes_range_cell(
             allocated_network_cidrs=resolved_options.allocated_network_cidrs,
             reconstruct_for_teardown=resolved_options.reconstruct_without_allocation,
             remote_access=resolved_options.remote_access,
+            include_all_firewall_layouts=True,
         ),
     )
     # The pool ingress rule, when the range has OpenVPN access, is part of

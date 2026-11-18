@@ -1,4 +1,4 @@
-# Vertex invocation and usage adapter preflight — #2124 / M07
+# Vertex invocation and usage adapter preflight—#2124 / M07
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../../technical/architecture.md) and accepted, superseding ADRs.
 
@@ -39,7 +39,7 @@ Treat it as the incumbent to harden, not as acceptance evidence:
   process-local credit, mutate a dispatched hold, estimate from characters or
   reserve the paid call before obtaining the smaller bound.
 - `_vertex_headers()` obtains a fresh impersonated credential for every upstream
-  operation. M07 requires bounded, early-expiring, in-memory token reuse with
+  operation. M07 requires bounded, early expiring, in-memory token reuse with
   single-flight refresh, keyed by the complete approved identity/authentication
   target. The cache is an availability optimization only: it never caches grant
   authority, accounting decisions or provider responses; tokens never cross the

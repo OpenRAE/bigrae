@@ -10,7 +10,7 @@ Its documentation correction preserves the runtime boundaries described here.
 **Owner:** [Brad Edwards](https://github.com/Brad-Edwards), assigned through
 [CODEOWNERS](https://github.com/Brad-Edwards/bigrae/blob/dev/.github/CODEOWNERS).
 
-**Source review:** 2026-11-12 at `e0a536d6d7e4149cb05d63d1d6c6705c7f29f3d1`.
+**Source review:** 2026-11-18 at `83503439645a0f731d930c6211e9110565b9e871`.
 This explanation describes source boundaries, not live deployment qualification.
 The 2026-11-04 review covered native provider account lookup (#2771) and registered-project IAM requests (#2773), after one-command GCP installation (#2679).
 
@@ -256,6 +256,9 @@ keyless, predict-only model access follows ADR-064. GDC VM Runtime and scenario
 Pods are operator validation paths, not participant containment boundaries.
 See [GCP deployment](../dev/gcp-range-cell-deploy.md) for exact supported modes
 and image prerequisites. GCE does not support the NGFW range capability.
+
+The optional shared-guest layout moves the range access, egress and OpenVPN
+rules to fixed tag-keyed rules. Each range then keeps one isolation rule.
 
 The platform namespace denies public egress. Under ADR-006-R3, designated
 egress proxies are the only exception: they admit DNS names on port 443, reject

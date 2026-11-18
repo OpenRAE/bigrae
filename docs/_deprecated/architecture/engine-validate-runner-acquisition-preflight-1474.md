@@ -8,7 +8,7 @@ Status: pre-implementation guidance
 Date: 2026-07-13
 
 Issue: GitHub #1474, "Engine 'Validate' deploy job flakes on GitHub-hosted
-runner acquisition".
+runner acquisition."
 
 This issue is requirement-free. The GitHub issue title, body, and acceptance
 criteria are the shipping contract. This note is intentionally not an
@@ -100,7 +100,7 @@ Security layers the intended design must satisfy:
 - Secret-handling surface: no rendered tfvars, AWS/GCP credentials, GitHub
   registration tokens, task-definition JSON, or environment dumps should be
   logged, uploaded, passed as build args, or printed for this fix.
-- Supply-chain action surface: any new third-party action in a workflow that is
+- Supply chain action surface: any new third-party action in a workflow that is
   self-hosted or otherwise cloud-credentialed must be pinned to a full commit
   SHA under ADR-037-R1. Prefer no new action for runner retry/fallback.
 - OS/runtime exposure: self-hosted Docker builds run against a persistent Docker
@@ -174,7 +174,7 @@ Out of scope unless separate evidence requires it:
   acquisition-time cancellation class is independently handled.
 - Do not route pull-request Docker builds onto self-hosted runners. If PR image
   validation is needed later, keep it hosted or add a separate trusted design.
-- Do not move the #555 hosted pytest gate to self-hosted just because
+- Do not move the #555 hosted pytest gate to self-hosted only because
   `validate` moves.
 - Do not add another workflow, runner pool, schema, exception hierarchy,
   logging framework, or deploy router for one scheduling decision.

@@ -12,7 +12,8 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from ctf.api._base import _canonical_error_response
-from ctf.api.serializers import PublicScoreboardResponseSerializer
+from ctf.api.serializers import PublicScoreboardQuerySerializer, PublicScoreboardResponseSerializer
+from ctf.enums import ScoreboardKind
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -37,17 +38,41 @@ def _scoreboard_access_allowed(event: CTFEvent, request: Request) -> bool:
         return False
 
 
+class _KindRejectedError(Exception):
+    """A rejected ``kind`` selector, carrying its authored public error."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(code)
+        self.code = code
+        self.message = message
+
+
+def _selected_kind(event: CTFEvent, request: Request) -> ScoreboardKind:
+    """Resolve the board to read; an absent selector keeps the event default (#2968)."""
+    values = request.query_params.getlist("kind")
+    if not values:
+        return ScoreboardKind.TEAM if event.team_mode else ScoreboardKind.INDIVIDUAL
+    query = PublicScoreboardQuerySerializer(data={"kind": values[0]})
+    if len(values) > 1 or not query.is_valid():
+        raise _KindRejectedError("invalid_scoreboard_kind", "Invalid scoreboard kind")
+    kind = ScoreboardKind(query.validated_data["kind"])
+    if kind is ScoreboardKind.TEAM and not event.team_mode:
+        raise _KindRejectedError("scoreboard_kind_unavailable", "This event has no team scoreboard")
+    return kind
+
+
 class PublicScoreboardView(APIView):
     """Public event scoreboard read surface."""
 
     versioning_class = None
     permission_classes = [permissions.AllowAny]
 
-    @extend_schema(responses=PublicScoreboardResponseSerializer)
+    @extend_schema(parameters=[PublicScoreboardQuerySerializer], responses=PublicScoreboardResponseSerializer)
     def get(self, request: Request, event_id: UUID) -> JsonResponse | Response:
         """Return the public scoreboard payload for an event."""
         from ctf.exceptions import CTFError, CTFNotFoundError
         from ctf.services import get_event
+        from shared.api.errors import api_error_response
 
         try:
             event = get_event(event_id)
@@ -56,17 +81,20 @@ class PublicScoreboardView(APIView):
             return _canonical_error_response(request, response) or response
 
         try:
+            kind = _selected_kind(event, request)
             allowed = _scoreboard_access_allowed(event, request)
+        except _KindRejectedError as rejected:
+            result = api_error_response(request=request, code=rejected.code, message=rejected.message, status_code=400)
         except CTFError:
-            from shared.api.errors import api_error_response
-
-            return api_error_response(
+            result = api_error_response(
                 request=request, code="scoreboard_unavailable", message="Scoreboard unavailable", status_code=503
             )
-        return _scoreboard_payload(event, request, allowed)
+        else:
+            result = _scoreboard_payload(event, request, allowed, kind)
+        return result
 
 
-def _scoreboard_payload(event: CTFEvent, request: Request, allowed: bool) -> JsonResponse:
+def _scoreboard_payload(event: CTFEvent, request: Request, allowed: bool, kind: ScoreboardKind) -> JsonResponse:
     """Project admitted rankings or the published empty scoreboard shape."""
     from ctf.services.scoring import get_scoreboard, get_team_scoreboard
     from ctf.views import _parsing
@@ -87,18 +115,9 @@ def _scoreboard_payload(event: CTFEvent, request: Request, allowed: bool) -> Jso
     freeze_at = event.scoreboard_freeze_at if event.is_scoreboard_frozen else None
     bracket_param = request.query_params.get("bracket")
     brackets, _selected_bracket, bracket_id = _parsing._resolve_bracket_filter(event.id, bracket_param)
-    rankings = (
-        get_team_scoreboard(event.id, freeze_at=freeze_at)
-        if event.team_mode
-        else get_scoreboard(event.id, freeze_at=freeze_at)
-    )
-    bracket_rankings = None
-    if bracket_id:
-        bracket_rankings = (
-            get_team_scoreboard(event.id, freeze_at=freeze_at, bracket_id=bracket_id)
-            if event.team_mode
-            else get_scoreboard(event.id, freeze_at=freeze_at, bracket_id=bracket_id)
-        )
+    read_board = get_team_scoreboard if kind is ScoreboardKind.TEAM else get_scoreboard
+    rankings = read_board(event.id, freeze_at=freeze_at)
+    bracket_rankings = read_board(event.id, freeze_at=freeze_at, bracket_id=bracket_id) if bracket_id else None
 
     return JsonResponse(
         {

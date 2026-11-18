@@ -8,6 +8,11 @@ output "gke_cluster_location" {
   value       = google_container_cluster.platform.location
 }
 
+output "gke_access_node_pool_name" {
+  description = "Name of the access node pool. Input to the event-capacity drift check."
+  value       = google_container_node_pool.access.name
+}
+
 output "workload_identity_pool" {
   description = "GKE Workload Identity pool."
   value       = google_container_cluster.platform.workload_identity_config[0].workload_pool

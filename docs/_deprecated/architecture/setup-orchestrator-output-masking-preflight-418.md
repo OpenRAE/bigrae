@@ -67,7 +67,7 @@ Out of scope unless needed to close a proven leak on the setup path:
 | Setup output logging | `_SetupOrchestratorLoggingMixin._log_step_success`, `_log_step_failure`, and `_mask_sensitive_output` | All `SetupOrchestrator` stdout/stderr log lines pass through this path. Do not add per-call `replace()` logic. |
 | Secret source list | `_SetupOrchestratorLoggingMixin.SENSITIVE_ENV_VARS` and `SENSITIVE_CONTEXT_KEY_PARTS` | Add names or key heuristics here only. Keep ordering longest-first to prevent partial replacement artifacts. |
 | Runtime contracts | `executors.base.CommandResult`, `orchestrators._setup_types.StepResult`, `SetupResult`, `SetupError` | Preserve raw return payloads and existing failure asymmetry: transport/PAN-OS hard failures raise, exit-nonzero exhaustion returns a failed `StepResult`. |
-| Plan context ownership | `SetupPlan.get_context()` in `plans/dc_setup.py`, `plans/domain_join.py`, and `plans/set_local_password.py` | Reuse existing context keys; do not add parallel DTOs or schemas just to identify secret values. |
+| Plan context ownership | `SetupPlan.get_context()` in `plans/dc_setup.py`, `plans/domain_join.py`, and `plans/set_local_password.py` | Reuse existing context keys; do not add parallel DTOs or schemas only to identify secret values. |
 | Secret transport | `DC_DOMAIN_PASSWORD` task env, AWS SSM SecureString substitution for per-instance RDP passwords, provider secret stores for GCP/GDC | Do not move secrets into process argv, user data, Terraform output logs, or generated docs. |
 | Provisioner log sanitization | `shifter/engine/provisioner/log_redact.py` | Use it for non-secret log-injection safety and identifier fingerprinting. It does not replace value masking for actual stdout/stderr secret material. |
 | Platform log sanitization | `shifter/shifter_platform/shared/log_sanitize.py` and `config.logging.ECSFormatter` | Platform/Django logs keep their existing sanitizer and formatter; do not import platform logging helpers into the provisioner. |
@@ -156,7 +156,7 @@ temporary setup credential, local to the setup logging boundary.
   validation; the orchestrator owns logging of execution output.
 - Do not mutate raw `CommandResult`/`StepResult` payloads unless a later issue
   explicitly changes the artifact-retention contract.
-- Do not create a provisioner-to-platform import just to share
+- Do not create a provisioner-to-platform import only to share
   `shared.log_sanitize`; the provisioner already has `log_redact`.
 - Do not add broad regexes that redact ordinary status words, hostnames, or
   IDs. Prefer exact secret values from env/context so logs remain useful.

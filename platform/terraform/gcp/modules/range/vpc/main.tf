@@ -278,3 +278,91 @@ resource "google_compute_firewall" "range_egress_allow_allowlist" {
     ports    = ["443"]
   }
 }
+
+# Shared-guest firewall layout. These fixed rules replace the per-range access,
+# egress and deny rules, so a range creates only its isolation rule. The tag
+# value must match SHARED_GUEST_TAG in shifter/engine/provisioner/gcp_range_cell_firewall.py.
+locals {
+  shared_guest_tag = "shifter-range-guest"
+}
+
+resource "terraform_data" "shared_guest_firewall_inputs" {
+  count = var.shared_guest_firewalls ? 1 : 0
+
+  lifecycle {
+    precondition {
+      condition     = can(cidrhost(var.range_network_cidr, 0)) && length(var.access_network_cidrs) > 0
+      error_message = "shared_guest_firewalls needs range_network_cidr and at least one access_network_cidrs entry."
+    }
+  }
+}
+
+resource "google_compute_firewall" "shared_guest_access" {
+  count = var.shared_guest_firewalls ? 1 : 0
+
+  name          = "${var.name_prefix}-range-guest-access"
+  project       = var.project_id
+  network       = google_compute_network.range.name
+  description   = "Participant SSH and RDP from the access workloads (portal, guacd) to every shared-guest range host."
+  direction     = "INGRESS"
+  priority      = 900
+  target_tags   = [local.shared_guest_tag]
+  source_ranges = var.access_network_cidrs
+
+  allow {
+    protocol = "tcp"
+    ports    = ["22", "3389"]
+  }
+}
+
+resource "google_compute_firewall" "shared_guest_egress_internal" {
+  count = var.shared_guest_firewalls ? 1 : 0
+
+  name               = "${var.name_prefix}-range-guest-egress-internal"
+  project            = var.project_id
+  network            = google_compute_network.range.name
+  description        = "Guest egress inside the range network. Each range's isolation rule admits ingress only from its own subnet."
+  direction          = "EGRESS"
+  priority           = 1000
+  target_tags        = [local.shared_guest_tag]
+  destination_ranges = [var.range_network_cidr]
+
+  allow {
+    protocol = "all"
+  }
+}
+
+resource "google_compute_firewall" "shared_guest_egress_deny" {
+  count = var.shared_guest_firewalls ? 1 : 0
+
+  name               = "${var.name_prefix}-range-guest-egress-deny"
+  project            = var.project_id
+  network            = google_compute_network.range.name
+  description        = "Default guest egress deny below every allow."
+  direction          = "EGRESS"
+  priority           = 65534
+  target_tags        = [local.shared_guest_tag]
+  destination_ranges = ["0.0.0.0/0"]
+
+  deny {
+    protocol = "all"
+  }
+}
+
+resource "google_compute_firewall" "shared_guest_egress_googleapis" {
+  count = var.shared_guest_firewalls && var.private_google_access ? 1 : 0
+
+  name               = "${var.name_prefix}-range-guest-egress-googleapis"
+  project            = var.project_id
+  network            = google_compute_network.range.name
+  description        = "Private Google Access TLS route through the guest egress deny. It supplies no guest credentials."
+  direction          = "EGRESS"
+  priority           = 1100
+  target_tags        = [local.shared_guest_tag]
+  destination_ranges = ["199.36.153.8/30"]
+
+  allow {
+    protocol = "tcp"
+    ports    = ["443"]
+  }
+}

@@ -34,7 +34,7 @@ or redesign user lifecycle semantics.
   `UserProfile.deleted_at` and does not reset a future Cognito first-login flow.
 - Resolve the Cognito pool from non-secret deployment metadata such as the
   Terraform `cognito_user_pool_id` output, or from an explicit operator
-  override. Do not fetch or print the Cognito client-secret bundle just to find
+  override. Do not fetch or print the Cognito client-secret bundle only to find
   the pool id.
 - Require an explicit credential selection surface: `--profile` or
   `AWS_PROFILE`, with the existing local `.env` profile names only as a

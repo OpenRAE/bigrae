@@ -7,7 +7,7 @@ Status: implemented; updated after live Connect Gateway qualification
 
 Date: 2026-07-27
 
-Issue: GitHub #1638, "Add GCP post-deploy range smoke (parity with AWS #1422)".
+Issue: GitHub #1638, "Add GCP post-deploy range smoke (parity with AWS #1422)."
 
 This issue is requirement-free. The GitHub issue title, body, and acceptance
 criteria are the shipping contract. This note is intentionally not an
@@ -128,7 +128,7 @@ Security layers:
 Maintainability layers:
 
 - Reuse `_gcp-dev.yml` as the only GCP deploy workflow. Do not add a second GCP
-  deploy workflow or a post-deploy sidecar workflow just to run smoke.
+  deploy workflow or a post-deploy sidecar workflow only to run smoke.
 - Reuse the workflow/test pattern already used for AWS smoke:
   workflow-as-data invariants under `shifter/shifter_platform/tests/platform/`
   and the repo-wide `actionlint` / ADR guard.

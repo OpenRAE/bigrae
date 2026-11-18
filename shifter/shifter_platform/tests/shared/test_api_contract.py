@@ -220,6 +220,13 @@ class TestPublishedContract:
         assert set(scoreboard["required"]) == expected
         assert set(scoreboard["properties"]) == expected
 
+    def test_public_scoreboard_declares_the_optional_kind_selector(self, openapi_document: dict[str, Any]) -> None:
+        operation = openapi_document["paths"]["/api/v1/ctf/events/{event_id}/scoreboard/"]["get"]
+        (kind,) = [param for param in operation["parameters"] if param["name"] == "kind"]
+        assert kind["in"] == "query"
+        assert kind.get("required", False) is False
+        assert kind["schema"]["enum"] == ["individual", "team"]
+
     def test_created_endpoints_declare_201(self, openapi_document: dict[str, Any]) -> None:
         # NGFW/credential creates return 201; the contract must not claim 200.
         ngfw = openapi_document["paths"]["/api/v1/mission-control/ngfw/"]["post"]

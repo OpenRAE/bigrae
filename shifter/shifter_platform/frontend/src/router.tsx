@@ -147,6 +147,10 @@ export const router = createBrowserRouter(
             { path: "terminal", element: <CtfTerminalPage /> },
             { path: "terminal/:instanceUuid", element: <TerminalPage /> },
             { path: "scoreboard", element: <ScoreboardPage /> },
+            // Explicit boards of a team-mode event (#2968). Distinct keys reset
+            // the bracket filter when the user switches boards.
+            { path: "individual-scoreboard", element: <ScoreboardPage key="individual" kind="individual" /> },
+            { path: "team-scoreboard", element: <ScoreboardPage key="team" kind="team" /> },
             { path: "team", element: <TeamPage /> },
             { path: "account", element: <AccountPage /> },
             { path: "help", element: <HelpPage /> },

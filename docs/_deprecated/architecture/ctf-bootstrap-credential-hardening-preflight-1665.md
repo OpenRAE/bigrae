@@ -4,7 +4,7 @@
 
 
 Issue: GitHub #1665, "CTF temporary participant accounts fall back to a
-shared hardcoded bootstrap password".
+shared hardcoded bootstrap password."
 
 This note records the architecture boundary for the focused security fix. It
 is not an implementation plan. GitHub issue #1665 is the authoritative
@@ -171,7 +171,7 @@ The implementation must consider these existing surfaces together:
 - Do not let reset mutate the password and only later discover that the source
   is unavailable. Resolve and validate first; password, force-change flag, and
   token revocation remain one transaction.
-- Do not let missing-source errors escape adapters as 500s. The reset JSON
+- Do not let missing-source errors escape adapters as HTTP 500 responses. The reset JSON
   adapter currently handles a narrower exception set than account creation;
   whichever existing CTF error class the resolver uses must be mapped by every
   HTML, legacy JSON, bulk-import, and DRF caller. Participant detail should show

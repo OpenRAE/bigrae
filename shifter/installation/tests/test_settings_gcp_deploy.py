@@ -34,6 +34,7 @@ FULL_DEPLOYMENT = {
         "project_id": "acme-range-cells",
         "host_identity_pool_size": 24,
         "private_google_access": False,
+        "shared_guest_firewalls": True,
         "image_key_profiles": {"windows": {"image": "projects/acme-shifter/global/images/win"}},
     },
     "participant_openvpn": {"enabled": True},
@@ -74,6 +75,7 @@ class TestDeploymentSettings:
             "RANGE_NETWORK_ZONES": "us-central1-a,us-east1-b",
             "GCP_RANGE_CELL_PROJECT_ID": "acme-range-cells",
             "GCP_RANGE_PRIVATE_GOOGLE_ACCESS": "false",
+            "GCP_RANGE_SHARED_GUEST_FIREWALLS": "true",
             "GCP_RANGE_IMAGE_KEY_PROFILES_JSON": json.dumps(
                 FULL_DEPLOYMENT["range_cells"]["image_key_profiles"], sort_keys=True, separators=(",", ":")
             ),
@@ -87,6 +89,8 @@ class TestDeploymentSettings:
             "openvpn_pool_enabled": True,
             "range_host_identity_pool_size": 24,
             "range_network_zones": ["us-central1-a", "us-east1-b"],
+            "range_shared_guest_firewalls": True,
+            "range_private_google_access": False,
             "ctf_content_bucket_name": "acme-ctf-content",
         }
         assert settings.release_trust is not None

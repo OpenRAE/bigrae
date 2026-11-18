@@ -98,7 +98,7 @@ deployment contracts.
   logs, screenshots, or generated artifacts.
 - Error-envelope surface: expected Guacamole mint/bootstrap failures should use
   the existing `BootstrapFailure` / pollable JSON shape with bounded,
-  non-sensitive messages. Engine validation remains sanitized 400s. A browser
+  non-sensitive messages. Engine validation remains sanitized HTTP 400 responses. A browser
   redirect to Guacamole login is a failed first-click outcome, not an acceptable
   degraded success path.
 - Logging and observability surface: use task IDs, log stream names, target
@@ -180,7 +180,7 @@ The acceptance run must use fresh browser sessions and real Portal auth/session
 paths. If the selected architecture pins `guacamole-client` to one task, "all
 guacamole-client tasks" means the sole configured task; if multiple client
 tasks remain configured, the test must prove 20/20 cold first-click connects
-across those tasks, not just across portal instances.
+across those tasks, not only across portal instances.
 
 ## Gotchas And Anti-Patterns
 
@@ -251,7 +251,7 @@ that can drift back:
   the literal `1` in the module** (`platform/terraform/modules/guacamole/ecs.tf`),
   not wired to a per-environment input. AWS prod deploys render
   `local.auto.tfvars` from secrets, so pinning only the checked-in tfvars
-  baseline is defeatable — a generated value of `2` would reconcile the service
+  baseline is defeatable—a generated value of `2` would reconcile the service
   back to multiple client tasks. Moving the invariant to the module boundary
   means no input (committed or generated) can scale the client tier above one
   task. `var.guacamole_client_desired_count` is retained for input compatibility
@@ -264,7 +264,7 @@ that can drift back:
 - AWS: the `guacamole-client` autoscaling target and policy were removed from
   `platform/terraform/modules/guacamole/ecs.tf`. The single
   `guacamole_enable_autoscaling` flag (and the `autoscaling_*` capacity bounds)
-  now governs **guacd only** — the per-connection capacity tier. The client tier
+  now governs **guacd only**—the per-connection capacity tier. The client tier
   can no longer be scaled to N>1, which is what would silently re-introduce the
   token/task affinity failure during an event.
 - GCP: `guacamoleClient.replicas` is pinned to `1` in
@@ -282,6 +282,6 @@ that can drift back:
 
 Future multi-client mode remains an explicit, validated change (a shared
 Guacamole token/session store, or a mint path bound to the same load-balancer
-target as the browser session) — not an implicit consequence of a replica
+target as the browser session)—not an implicit consequence of a replica
 count. The live 20/20 cold first-click acceptance run is performed at/after
 deploy against the production surface.
