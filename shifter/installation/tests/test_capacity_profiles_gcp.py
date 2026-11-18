@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import re
+from pathlib import Path
+
 import pytest
 from pydantic import ValidationError
 
@@ -22,6 +25,18 @@ def test_catalog_has_all_versioned_event_sizes():
         "gcp-shared-v1-p300",
         "gcp-shared-v1-p500",
     }
+
+
+_TERRAFORM_GCP = Path(__file__).resolve().parents[3] / "platform" / "terraform" / "gcp"
+
+
+@pytest.mark.parametrize("variables_file", ["environments/platform/variables.tf", "modules/platform-core/variables.tf"])
+def test_terraform_accepts_every_capacity_profile(variables_file):
+    """Terraform validation admits every supported profile (#2961)."""
+    source = (_TERRAFORM_GCP / variables_file).read_text(encoding="utf-8")
+    block = source.split('variable "shared_service_capacity_profile"', 1)[1]
+    pattern = re.search(r'regex\("([^"]+)", var\.shared_service_capacity_profile\)', block).group(1)
+    assert [p for p in CAPACITY_PROFILES if not re.fullmatch(pattern, p)] == []
 
 
 @pytest.mark.parametrize(
