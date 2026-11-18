@@ -19,6 +19,7 @@ DriftInputError = _MODULE.DriftInputError
 collect_live_state = _MODULE.collect_live_state
 compare_capacity_state = _MODULE.compare_capacity_state
 render_drift_report = _MODULE.render_drift_report
+main = _MODULE.main
 
 
 def _desired() -> dict:
@@ -132,6 +133,7 @@ def test_live_state_requires_capacity_profile_label_on_every_provider_resource(m
             sql_instance="sql",
             redis_instance="redis",
             cluster="cluster",
+            access_node_pool="shifter-x-access",
             namespace="namespace",
         )
 
@@ -147,6 +149,7 @@ def test_live_state_uses_effective_autoscaling_minimum_for_access_capacity(monke
         sql_instance="sql",
         redis_instance="redis",
         cluster="cluster",
+        access_node_pool="shifter-x-access",
         namespace="namespace",
     )
 
@@ -163,6 +166,7 @@ def _live(monkeypatch, extra: list[dict], **kwargs) -> dict:
         sql_instance="sql",
         redis_instance="redis",
         cluster="cluster",
+        access_node_pool="shifter-x-access",
         namespace="namespace",
         **kwargs,
     )
@@ -205,3 +209,88 @@ def test_incomplete_pool_evidence_fails_closed(monkeypatch):
     pool = [{"instanceTemplate": "t"}, {"autoscalingPolicy": {}}, {"properties": {}}]
     with pytest.raises(DriftInputError, match="OpenVPN pool"):
         _live(monkeypatch, pool, vpn_pool="shifter-x-vpn")
+
+
+def test_live_state_reads_the_terraform_named_access_pool(monkeypatch):
+    calls: list[list[str]] = []
+    responses = iter(_live_responses())
+
+    def _record(argv: list[str]) -> dict:
+        calls.append(argv)
+        return next(responses)
+
+    monkeypatch.setattr(_MODULE, "_run_json", _record)
+    collect_live_state(
+        {},
+        project="project",
+        region="region",
+        sql_instance="sql",
+        redis_instance="redis",
+        cluster="cluster",
+        access_node_pool="shifter-x-access",
+        namespace="namespace",
+    )
+
+    describe = next(argv for argv in calls if argv[:4] == ["gcloud", "container", "node-pools", "describe"])
+    assert describe[4] == "shifter-x-access"
+
+
+def _live_argv(desired: Path, *extra: str) -> list[str]:
+    return [
+        "--desired",
+        str(desired),
+        "--project",
+        "project",
+        "--region",
+        "region",
+        "--sql-instance",
+        "sql",
+        "--redis-instance",
+        "redis",
+        "--cluster",
+        "cluster",
+        *extra,
+    ]
+
+
+@pytest.fixture
+def desired_file(tmp_path, monkeypatch) -> Path:
+    desired = tmp_path / "desired.json"
+    desired.write_text('{"profile_id": "gcp-shared-v1-p30", "terraform": {}, "kubernetes": {}}', encoding="utf-8")
+    monkeypatch.setattr(_MODULE, "_run_json", lambda _argv: pytest.fail("a live read ran on invalid input"))
+    return desired
+
+
+def test_live_inspection_requires_the_access_pool_name(desired_file, capsys):
+    assert main(_live_argv(desired_file)) == 2
+    assert "--access-node-pool" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("pool", ["--flags-file=/tmp/x", " "])
+def test_live_inspection_rejects_option_shaped_or_blank_pool_names(desired_file, capsys, pool):
+    assert main(_live_argv(desired_file, f"--access-node-pool={pool}")) == 2
+    assert "resource names" in capsys.readouterr().err
+
+
+def test_cli_forwards_the_access_pool_name_to_the_read_command(desired_file, monkeypatch):
+    calls: list[list[str]] = []
+    responses = iter(_live_responses())
+
+    def _record(argv: list[str]) -> dict:
+        calls.append(argv)
+        return next(responses)
+
+    monkeypatch.setattr(_MODULE, "_run_json", _record)
+    assert main(_live_argv(desired_file, "--access-node-pool", "tenant-b-access")) == 0
+
+    describe = next(argv for argv in calls if argv[:4] == ["gcloud", "container", "node-pools", "describe"])
+    assert describe[4:] == [
+        "tenant-b-access",
+        "--cluster",
+        "cluster",
+        "--project",
+        "project",
+        "--region",
+        "region",
+        "--format=json",
+    ]

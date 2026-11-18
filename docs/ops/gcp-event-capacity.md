@@ -88,16 +88,32 @@ request increases ahead of the event:
    and the OpenVPN pool (when enabled) to stabilize. Guacamole client replicas must remain exactly one; portal and
    guacd are the horizontally scaled workloads.
 
-5. Prove the effective state matches the selected profile:
+5. Read the access node pool name from the tenant's Terraform state.
+   Use a new, empty Terraform metadata directory:
+
+   ```sh
+   export TF_DATA_DIR="$(mktemp -d)"
+   root=platform/terraform/gcp/environments/platform
+   terraform -chdir="$root" init -reconfigure \
+     -backend-config="bucket=<project>-terraform-state" \
+     -backend-config="prefix=shifter/<environment>/platform-core"
+   access_node_pool="$(terraform -chdir="$root" output -raw gke_access_node_pool_name)"
+   ```
+
+   Read only this output. The full output set contains sensitive values.
+
+6. Prove the effective state matches the selected profile:
 
    ```sh
    uv run python scripts/gcp/check_event_capacity_drift.py \
      --desired /tmp/shifter-event-capacity.json \
      --project <project> --region <region> --cluster <cluster> \
+     --access-node-pool "$access_node_pool" \
      --sql-instance <sql-instance> --redis-instance <redis-instance> \
      --vpn-pool <vpn-instance-group>
    ```
 
+   The current `kubectl` context must point to the same cluster.
    When participant OpenVPN is enabled, pass `--vpn-pool` with Terraform output `openvpn_pool.instance_group`. The check compares machine type, minimum and maximum server counts, and CPU target. Without it the pool fields
    are skipped. Exit 0 and `capacity drift: none` are required. Exit 1 is real drift. Exit 2
    means evidence was missing or malformed and is also a stop condition.
