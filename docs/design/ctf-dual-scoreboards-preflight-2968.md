@@ -38,6 +38,7 @@ Declare both entries in `frontend/src/app/nav.ts`; do not build another sidebar 
 The shell currently receives bootstrap, which deliberately excludes active-event summaries.
 Use the existing `useCtfCurrentEvent` projection to supply minimal event presentation context to navigation filtering.
 Keep event reads conditional on participant mode and reuse their Query cache.
+
 Do not add event state to bootstrap, a global store, or a second context/provider solely for these links.
 Show the team entry from the event's mode, independently of whether the viewer has an assigned team.
 Hidden publication still produces the existing hidden screen; navigation does not grant ranking access.
