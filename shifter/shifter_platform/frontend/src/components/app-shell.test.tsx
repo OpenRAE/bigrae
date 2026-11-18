@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router";
 import { axe } from "vitest-axe";
 
@@ -11,6 +12,9 @@ let currentBootstrap: Bootstrap = STAFF_BOOTSTRAP;
 vi.mock("@/app/bootstrap-context", () => ({
   useBootstrapContext: () => currentBootstrap,
 }));
+vi.mock("@/api/client", () => ({ apiFetch: vi.fn() }));
+
+import { apiFetch } from "@/api/client";
 
 import { ModeProvider } from "@/app/mode";
 
@@ -18,19 +22,33 @@ import { AppShell } from "./app-shell";
 
 function renderShell(bootstrap: Bootstrap = STAFF_BOOTSTRAP) {
   currentBootstrap = bootstrap;
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(
-    <MemoryRouter>
-      <ModeProvider bootstrap={bootstrap}>
-        <AppShell>
-          <h1>Page content</h1>
-        </AppShell>
-      </ModeProvider>
-    </MemoryRouter>,
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <ModeProvider bootstrap={bootstrap}>
+          <AppShell>
+            <h1>Page content</h1>
+          </AppShell>
+        </ModeProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
   );
+}
+
+const PARTICIPANT_BOOTSTRAP: Bootstrap = {
+  ...STAFF_BOOTSTRAP,
+  permissions: { ...STAFF_BOOTSTRAP.permissions, is_ctf_participant: true },
+  modes: { participant: true, operator: false, default: "participant" },
+};
+
+function mockCurrentEvent(teamMode: boolean) {
+  vi.mocked(apiFetch).mockResolvedValue({ event: { id: "e1", team_mode: teamMode }, participant: { id: "p1" } });
 }
 
 beforeEach(() => {
   currentBootstrap = STAFF_BOOTSTRAP;
+  vi.mocked(apiFetch).mockReset();
 });
 
 describe("AppShell", () => {
@@ -73,6 +91,30 @@ describe("AppShell", () => {
       modes: { participant: true, operator: true, default: "operator" },
     });
     expect(screen.getByRole("group", { name: "Mode" })).toBeInTheDocument();
+  });
+
+  it("shows the individual and team scoreboard entries in a team-mode event (#2968)", async () => {
+    mockCurrentEvent(true);
+    renderShell(PARTICIPANT_BOOTSTRAP);
+    expect(await screen.findByRole("link", { name: "Individual scoreboard" })).toHaveAttribute(
+      "href",
+      "/ctf/individual-scoreboard/",
+    );
+    expect(screen.getByRole("link", { name: "Team scoreboard" })).toHaveAttribute("href", "/ctf/team-scoreboard/");
+    expect(screen.queryByRole("link", { name: "Scoreboard" })).not.toBeInTheDocument();
+  });
+
+  it("shows the single scoreboard entry in a solo event", async () => {
+    mockCurrentEvent(false);
+    renderShell(PARTICIPANT_BOOTSTRAP);
+    await waitFor(() => expect(vi.mocked(apiFetch)).toHaveBeenCalledWith("/ctf/me/event/", expect.anything()));
+    expect(await screen.findByRole("link", { name: "Scoreboard" })).toHaveAttribute("href", "/ctf/scoreboard/");
+    expect(screen.queryByRole("link", { name: "Team scoreboard" })).not.toBeInTheDocument();
+  });
+
+  it("reads no CTF event in operator mode", () => {
+    renderShell();
+    expect(vi.mocked(apiFetch)).not.toHaveBeenCalled();
   });
 
   it("has no axe violations", async () => {

@@ -16636,7 +16636,13 @@ export interface operations {
     };
     ctf_events_scoreboard_retrieve: {
         parameters: {
-            query?: never;
+            query?: {
+                /**
+                 * @description * `individual` - individual
+                 *     * `team` - team
+                 */
+                kind?: "individual" | "team";
+            };
             header?: never;
             path: {
                 event_id: string;

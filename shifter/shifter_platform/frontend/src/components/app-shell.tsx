@@ -28,6 +28,7 @@ import {
 import { useBootstrapContext } from "@/app/bootstrap-context";
 import { useMode } from "@/app/mode";
 import { visibleNavGroups, type NavEntry, type NavIconKey, type UxMode } from "@/app/nav";
+import { useCtfCurrentEvent } from "@/api/ctf";
 import { getCsrfToken } from "@/api/csrf";
 import { ShifterMark } from "@/components/logo";
 import { Button } from "@/components/ui/button";
@@ -164,7 +165,10 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
   const { mode } = useMode();
   const location = useLocation();
   const [dark, setDark] = useState(() => document.documentElement.classList.contains("dark"));
-  const groups = visibleNavGroups(mode, bootstrap);
+  // Advisory event context for event-mode nav entries (#2968). Shares the CTF
+  // workspace's current-event query; operator mode reads no CTF event.
+  const ctfEvent = useCtfCurrentEvent(mode === "participant" && bootstrap.permissions.is_ctf_participant);
+  const groups = visibleNavGroups(mode, bootstrap, { teamMode: Boolean(ctfEvent.data?.event.team_mode) });
 
   // Route-change focus management (AA): move focus to the main region on
   // navigation so keyboard and screen-reader users land in the new content,

@@ -84,6 +84,8 @@ The same rule applies when the last member leaves.
 ## Scoreboard
 
 Open **Scoreboard** for the permitted standings.
+In a team-mode event, open **Individual scoreboard** for participant standings.
+Open **Team scoreboard** for team standings.
 An open scoreboard refreshes every **15 seconds**.
 The organizer can hide it or freeze results near event end.
 Do not infer final standings from a frozen display.

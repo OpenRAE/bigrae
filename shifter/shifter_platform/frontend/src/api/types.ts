@@ -1,5 +1,5 @@
 /** Shared types re-exported from the generated OpenAPI schema. */
-import type { components } from "./schema";
+import type { components, operations } from "./schema";
 
 export type ContentScopeOption = components["schemas"]["ContentScopeOption"];
 export type ContentScopePage = components["schemas"]["ContentScopePage"];
@@ -190,6 +190,9 @@ export type CtfSubmissionList = components["schemas"]["SubmissionListResponse"];
 export type CtfRangeStatus = components["schemas"]["RangeStatusResponse"];
 export type CtfRangeAccess = components["schemas"]["RangeAccessResponse"];
 export type CtfScoreboard = components["schemas"]["PublicScoreboardResponse"];
+export type CtfScoreboardKind = NonNullable<
+  NonNullable<operations["ctf_events_scoreboard_retrieve"]["parameters"]["query"]>["kind"]
+>;
 
 /**
  * CTF organizer workspace domain types (#1372), re-exported from the generated

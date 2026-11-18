@@ -13,7 +13,7 @@ An approved design does not establish production activation or live qualificatio
 | Content and range authority | [Authority proposal](content-range-authority-2319-proposal.md) and [gateway revalidation](guacamole-gateway-revalidation-2319-proposal.md) describe the approved boundaries |
 | Communications | [Console boundaries](ctf-communications-console-boundaries-2052.md) and [participant inbox](ctf-participant-inbox-boundaries-2053.md) specialize the communication design |
 | Email | [Ledger templates](ctf-ledger-email-template-boundaries-580.md) and [recipient time zones](ctf-recipient-time-zone-582.md) record accepted design constraints |
-| Scoreboards | [Refresh design](ctf-scoreboard-refresh-576.md) explains the 30-second update boundary |
+| Scoreboards | [Refresh design](ctf-scoreboard-refresh-576.md) explains the 30-second update boundary; [dual-scoreboard design](ctf-dual-scoreboards-2968.md) adds the individual and team boards; its [preflight](ctf-dual-scoreboards-preflight-2968.md) records selection and access boundaries |
 | Visual examples | [Design-system artifacts](design-system/README.md) describe the HTML/CSS reference examples and their limits |
 | UX research | [Research personas](ux-003-oss-shifter-research-personas.md) and [information architecture](ux-003-information-architecture-sitemap.md) retain their dated research context |
 
