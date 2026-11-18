@@ -89,6 +89,7 @@ def collect_live_state(
     sql_instance: str,
     redis_instance: str,
     cluster: str,
+    access_node_pool: str,
     namespace: str,
     vpn_pool: str | None = None,
 ) -> dict[str, object]:
@@ -114,7 +115,7 @@ def collect_live_state(
             "container",
             "node-pools",
             "describe",
-            "access",
+            access_node_pool,
             "--cluster",
             cluster,
             "--project",
@@ -334,6 +335,13 @@ def _read_object(path: str) -> dict[str, object]:
     return payload
 
 
+def _require_resource_names(*names: str | None) -> None:
+    """Reject blank or option-shaped names before they reach a positional gcloud argument."""
+    for name in names:
+        if name is not None and (not name.strip() or name.startswith("-")):
+            raise DriftInputError("resource names must be non-blank and must not start with '-'")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Report drift from an authored GCP shared-service capacity profile")
     parser.add_argument("--desired", required=True, help="Sanitized desired-state JSON rendered from the catalog")
@@ -343,6 +351,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--sql-instance")
     parser.add_argument("--redis-instance")
     parser.add_argument("--cluster")
+    parser.add_argument("--access-node-pool", help="Access node pool name; Terraform output gke_access_node_pool_name")
     parser.add_argument("--namespace", default="shifter-platform")
     parser.add_argument("--vpn-pool", help="OpenVPN pool instance group name, when the tenant deploys the pool")
     return parser
@@ -355,11 +364,20 @@ def main(argv: list[str] | None = None) -> int:
         if args.observed:
             observed = _read_object(args.observed)
         else:
-            required = (args.project, args.region, args.sql_instance, args.redis_instance, args.cluster)
+            required = (
+                args.project,
+                args.region,
+                args.sql_instance,
+                args.redis_instance,
+                args.cluster,
+                args.access_node_pool,
+            )
             if not all(required):
                 raise DriftInputError(
-                    "live inspection requires --project, --region, --sql-instance, --redis-instance, and --cluster"
+                    "live inspection requires --project, --region, --sql-instance, --redis-instance, --cluster, "
+                    "and --access-node-pool"
                 )
+            _require_resource_names(args.sql_instance, args.redis_instance, args.access_node_pool, args.vpn_pool)
             observed = collect_live_state(
                 desired,
                 project=args.project,
@@ -367,6 +385,7 @@ def main(argv: list[str] | None = None) -> int:
                 sql_instance=args.sql_instance,
                 redis_instance=args.redis_instance,
                 cluster=args.cluster,
+                access_node_pool=args.access_node_pool,
                 namespace=args.namespace,
                 vpn_pool=args.vpn_pool,
             )
