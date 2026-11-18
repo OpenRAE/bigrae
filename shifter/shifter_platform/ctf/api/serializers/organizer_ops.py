@@ -26,6 +26,7 @@ class ParticipantSummarySerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)
     name = serializers.CharField(read_only=True)
     email = serializers.CharField(read_only=True)
+    username = serializers.CharField(read_only=True, allow_null=True)
     status = serializers.CharField(read_only=True)
     role = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(read_only=True)

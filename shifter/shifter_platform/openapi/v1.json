@@ -26864,6 +26864,11 @@
             "readOnly": true,
             "nullable": true
           },
+          "participant_shared_password_set": {
+            "type": "boolean",
+            "description": "Report whether an event-shared initial password is set, never its value.",
+            "readOnly": true
+          },
           "range_config": {
             "type": "object",
             "additionalProperties": {},
@@ -26998,6 +27003,7 @@
           "name",
           "organization",
           "owner",
+          "participant_shared_password_set",
           "public_registration_enabled",
           "public_registration_url",
           "range_config",
@@ -27493,6 +27499,12 @@
                 "maxLength": 0
               }
             ]
+          },
+          "participant_password_override": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Event-shared initial participant password for new accounts. An empty value turns it off.",
+            "maxLength": 128
           }
         },
         "required": [
@@ -30406,6 +30418,11 @@
             "type": "string",
             "readOnly": true
           },
+          "username": {
+            "type": "string",
+            "readOnly": true,
+            "nullable": true
+          },
           "status": {
             "type": "string",
             "readOnly": true
@@ -30443,7 +30460,8 @@
           "role",
           "status",
           "team_name",
-          "total_score"
+          "total_score",
+          "username"
         ]
       },
       "ParticipantTeam": {

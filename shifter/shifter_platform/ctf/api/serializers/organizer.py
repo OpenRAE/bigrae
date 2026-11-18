@@ -159,6 +159,7 @@ class EventDetailSerializer(_EventAccessProjectionMixin, serializers.Serializer)
     max_participants = serializers.IntegerField(read_only=True, allow_null=True)
     team_mode = serializers.BooleanField(read_only=True)
     team_size_limit = serializers.IntegerField(read_only=True, allow_null=True)
+    participant_shared_password_set = serializers.SerializerMethodField()
     range_config = serializers.DictField(read_only=True)
     range_spinup_minutes = serializers.IntegerField(read_only=True)
     submission_cooldown_seconds = serializers.IntegerField(read_only=True)
@@ -188,6 +189,10 @@ class EventDetailSerializer(_EventAccessProjectionMixin, serializers.Serializer)
             organization_id=event.organization_id,
             workspace_id=event.workspace_id,
         )
+
+    def get_participant_shared_password_set(self, event: CTFEvent) -> bool:
+        """Report whether an event-shared initial password is set, never its value."""
+        return bool(event.participant_password_override)
 
     def get_account(self, event: CTFEvent) -> str | None:
         """Return the event's public account identity."""
@@ -284,6 +289,14 @@ class EventWriteSerializer(ClosedSerializer):
     logo_url = serializers.URLField(required=False, allow_blank=True, max_length=500)
     visible_os_types = serializers.ListField(child=serializers.CharField(max_length=32), required=False, max_length=16)
     theme_color = serializers.RegexField(r"^#[0-9a-fA-F]{6}$", required=False, allow_blank=True)
+    participant_password_override = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        write_only=True,
+        trim_whitespace=False,
+        max_length=128,
+        help_text="Event-shared initial participant password for new accounts. An empty value turns it off.",
+    )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         """Accept at most one explicit event parent; omission selects a human's individual account."""

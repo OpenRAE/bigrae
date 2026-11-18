@@ -55,6 +55,8 @@ interface FormState {
   rating_visibility: string;
   scoring_mode: string;
   live_notifications: LiveNotificationKind[];
+  participant_shared_password: string;
+  disable_participant_shared_password: boolean;
 }
 
 const EMPTY: FormState = {
@@ -86,6 +88,8 @@ const EMPTY: FormState = {
   rating_visibility: "public",
   scoring_mode: "standard",
   live_notifications: LIVE_NOTIFICATION_OPTIONS.map((option) => option.kind),
+  participant_shared_password: "",
+  disable_participant_shared_password: false,
 };
 
 function fromEvent(event: CtfEventDetail): FormState {
@@ -122,7 +126,16 @@ function fromEvent(event: CtfEventDetail): FormState {
     live_notifications: LIVE_NOTIFICATION_OPTIONS.map((option) => option.kind).filter((kind) =>
       (event.live_notifications ?? []).includes(kind),
     ),
+    participant_shared_password: "",
+    disable_participant_shared_password: false,
   };
+}
+
+/** The write-only shared password: turn it off, set a new value, or leave it unchanged. */
+function sharedPasswordPayload(state: FormState): Pick<CtfEventWrite, "participant_password_override"> {
+  if (state.disable_participant_shared_password) return { participant_password_override: "" };
+  if (state.participant_shared_password) return { participant_password_override: state.participant_shared_password };
+  return {};
 }
 
 function intOrNull(value: string): number | null {
@@ -190,6 +203,7 @@ function toPayload(state: FormState): CtfEventWrite {
     rating_visibility: state.rating_visibility,
     scoring_mode: state.scoring_mode,
     live_notifications: state.live_notifications,
+    ...sharedPasswordPayload(state),
   };
 }
 

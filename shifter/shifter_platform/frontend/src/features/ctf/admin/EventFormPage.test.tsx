@@ -213,3 +213,50 @@ describe("EventFormPage (live notifications)", () => {
     });
   });
 });
+
+describe("EventFormPage (shared participant password, #2975)", () => {
+  function routeEdit(event: Record<string, unknown>) {
+    routeApi((path, options) => {
+      if (path === "/ctf/scenario-options/") return { scenarios: [] };
+      if (path === "/ctf/events/e1/" && options?.method === "PUT") return { id: "e1", name: "Spring CTF", status: "registration" };
+      if (path === "/ctf/events/e1/") return event;
+      return {};
+    });
+    renderRoute(<EventFormPage mode="edit" />, {
+      path: "/ctf/admin/events/:eventId/edit",
+      initialEntries: ["/ctf/admin/events/e1/edit"],
+    });
+  }
+
+  function putBody() {
+    return mockApi.mock.calls.find(([p, o]) => p === "/ctf/events/e1/" && o?.method === "PUT")?.[1]?.body as
+      | Record<string, unknown>
+      | undefined;
+  }
+
+  it("sends a new shared password and omits the field when it is left blank", async () => {
+    routeEdit({ ...EVENT, participant_shared_password_set: false });
+    const user = setupUser();
+
+    await user.type(await screen.findByLabelText("Shared initial participant password (optional)"), "Venue-Entry-2026");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => expect(putBody()).toMatchObject({ participant_password_override: "Venue-Entry-2026" }));
+  });
+
+  it("leaves a set password unchanged unless the organizer disables it", async () => {
+    routeEdit({ ...EVENT, participant_shared_password_set: true });
+    const user = setupUser();
+
+    await screen.findByText(/A shared password is set now/);
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await waitFor(() => expect(putBody()).toBeDefined());
+    expect(putBody()).not.toHaveProperty("participant_password_override");
+
+    mockApi.mockClear();
+    routeEdit({ ...EVENT, participant_shared_password_set: true });
+    await user.click((await screen.findAllByRole("checkbox", { name: "Disable the event shared participant password" })).at(-1)!);
+    await user.click(screen.getAllByRole("button", { name: "Save changes" }).at(-1)!);
+    await waitFor(() => expect(putBody()).toMatchObject({ participant_password_override: "" }));
+  });
+});
