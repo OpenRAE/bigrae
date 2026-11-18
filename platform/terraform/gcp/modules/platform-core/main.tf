@@ -469,6 +469,7 @@ module "portal_gke" {
   web_node_count                            = var.web_node_count
   worker_node_count                         = var.worker_node_count
   provisioner_node_count                    = var.provisioner_node_count
+  provisioner_max_node_count                = var.provisioner_max_node_count
   access_node_count                         = var.access_node_count
   access_node_max_count                     = var.access_node_max_count
   node_service_account_email                = module.portal_iam.node_service_account_email

@@ -78,6 +78,7 @@ module "platform_core" {
   web_node_count                     = var.web_node_count
   worker_node_count                  = var.worker_node_count
   provisioner_node_count             = var.provisioner_node_count
+  provisioner_max_node_count         = var.provisioner_max_node_count
   access_node_count                  = var.access_node_count
   access_node_max_count              = var.access_node_max_count
   openvpn_pool_enabled               = var.openvpn_pool_enabled

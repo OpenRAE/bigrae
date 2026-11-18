@@ -249,6 +249,11 @@ resource "google_container_node_pool" "provisioner" {
   cluster    = google_container_cluster.platform.name
   node_count = var.provisioner_node_count
 
+  autoscaling {
+    min_node_count = var.provisioner_node_count
+    max_node_count = var.provisioner_max_node_count
+  }
+
   management {
     auto_repair  = true
     auto_upgrade = true

@@ -205,9 +205,15 @@ variable "worker_node_count" {
 }
 
 variable "provisioner_node_count" {
-  description = "Desired size for the provisioner node pool."
+  description = "Minimum nodes per zone in the provisioner node pool (also used as the initial count)."
   type        = number
-  default     = 1
+  default     = 2
+}
+
+variable "provisioner_max_node_count" {
+  description = "Maximum nodes per zone in the provisioner node pool."
+  type        = number
+  default     = 5
 }
 
 variable "access_node_count" {
