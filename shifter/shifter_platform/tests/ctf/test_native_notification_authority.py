@@ -79,6 +79,26 @@ def test_restricted_scoreboard_ignores_legacy_flags_when_native_read_is_denied(
     assert response.json()["scoreboard_hidden"] is True
 
 
+@pytest.mark.parametrize("query", ["", "?kind=individual"])
+def test_restricted_scoreboard_reports_unavailable_authority(ctf_event, organizer_user, monkeypatch, query):
+    ctf_event.scoreboard_visibility = "participants"
+    ctf_event.save(update_fields=["scoreboard_visibility"])
+    provider = configured_authorization_provider()
+    check = provider.check
+
+    def unavailable(request):
+        if request.action == "event.read":
+            return AuthorizationDecision(DecisionKind.EVALUATOR_ERROR, "evaluator_unavailable")
+        return check(request)
+
+    monkeypatch.setattr(provider, "check", unavailable)
+    client = Client()
+    client.force_login(organizer_user)
+    response = call_json(client, "get", "api_scoreboard", kwargs={"event_id": ctf_event.pk}, query=query)
+    assert response.status_code == 503
+    assert response.json()["error"]["code"] == "scoreboard_unavailable"
+
+
 def test_current_native_human_recipients_need_no_group_and_services_are_not_browser_users(
     ctf_event,
     organizer_credential,

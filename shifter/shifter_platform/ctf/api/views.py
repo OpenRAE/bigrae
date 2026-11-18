@@ -82,16 +82,16 @@ class PublicScoreboardView(APIView):
 
         try:
             kind = _selected_kind(event, request)
-        except _KindRejectedError as rejected:
-            return api_error_response(request=request, code=rejected.code, message=rejected.message, status_code=400)
-
-        try:
             allowed = _scoreboard_access_allowed(event, request)
+        except _KindRejectedError as rejected:
+            result = api_error_response(request=request, code=rejected.code, message=rejected.message, status_code=400)
         except CTFError:
-            return api_error_response(
+            result = api_error_response(
                 request=request, code="scoreboard_unavailable", message="Scoreboard unavailable", status_code=503
             )
-        return _scoreboard_payload(event, request, allowed, kind)
+        else:
+            result = _scoreboard_payload(event, request, allowed, kind)
+        return result
 
 
 def _scoreboard_payload(event: CTFEvent, request: Request, allowed: bool, kind: ScoreboardKind) -> JsonResponse:
