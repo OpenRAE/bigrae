@@ -82,7 +82,7 @@ CI; do not leave a test-only or prose-only guardrail.
   permission contract; do not widen the base principal to make both jobs look
   uniform.
 - Scope the base principal's OIDC trust to `aud = sts.amazonaws.com` and the
-  repository's effective exact protected subject(s), not `repo:...:*`. Verify
+  repository's effective exact protected subjects, not `repo:...:*`. Verify
   the repository's live subject format before rollout: GitHub subjects differ
   for branch jobs and jobs that reference an Environment, and repositories may
   use immutable owner/repository IDs or a customized subject. Do not copy a

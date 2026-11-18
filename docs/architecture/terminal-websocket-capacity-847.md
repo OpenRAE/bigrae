@@ -39,7 +39,7 @@ gathered during or after the event (see Follow-ups).
 
 | Defect | Before | After |
 | --- | --- | --- |
-| Idle busy-loop | `_read_ssh_output` polled `receive(timeout=0.1)`, waking every idle session ~10x/second; on shell EOF the empty-read loop spun at full speed until `is_connected` flipped. | Poll interval is `TERMINAL_READ_POLL_SECONDS` (default 30s). EOF is detected via `SSHConnection.at_eof()` and breaks promptly. Output latency is unchanged: bytes are delivered as soon as they arrive. |
+| Idle busy-loop | `_read_ssh_output` polled `receive(timeout=0.1)`, waking every idle session ~10x/second; on shell EOF the empty-read loop spun at full speed until `is_connected` flipped. | Poll interval is `TERMINAL_READ_POLL_SECONDS` (default 30 seconds). EOF is detected via `SSHConnection.at_eof()` and breaks promptly. Output latency is unchanged: bytes are delivered as soon as they arrive. |
 | No concurrency bound | Unlimited sessions per process; a flood or reconnect storm could exhaust file descriptors and the event loop. | `_TerminalSessionRegistry` enforces `TERMINAL_MAX_SESSIONS` (process) and `TERMINAL_MAX_SESSIONS_PER_USER`. Over-cap connects are rejected before any SSH work with close code `4503` (`SERVICE_UNAVAILABLE`). |
 | Leaked sessions | A session lived until the client disconnected; abandoned tabs and dropped clients held resources indefinitely. | Idle sessions close after `TERMINAL_IDLE_TIMEOUT_SECONDS`; all sessions close after `TERMINAL_MAX_SESSION_SECONDS`. |
 
@@ -103,13 +103,13 @@ Per-session cost:
 | --- | --- |
 | File descriptors | ~2 (client websocket + SSH TCP socket) |
 | `asyncio` tasks | 1 read task |
-| Memory | asyncssh connection + channel buffers, order of 10s to low 100s of KB |
+| Memory | asyncssh connection + channel buffers, order of tens to low hundreds of KB |
 | DB writes | 2 audit rows over the session lifecycle (connect, disconnect); no per-keystroke writes |
-| Idle event-loop wakeups | `1 / TERMINAL_READ_POLL_SECONDS` (≈0.033/s at the 30s default) |
+| Idle event-loop wakeups | `1 / TERMINAL_READ_POLL_SECONDS` (≈0.033/s at the 30-second default) |
 
-Idle scheduler load is the dominant win. At 200 idle sessions the old 0.1s poll
+Idle scheduler load is the dominant win. At 200 idle sessions the old 0.1-second poll
 generated ~2000 wakeups/second of pure idle overhead on the single event loop;
-the 30s poll generates ~6.7/second, roughly a 300x reduction. That headroom is
+the 30-second poll generates ~6.7/second, roughly a 300x reduction. That headroom is
 what keeps non-terminal HTTP, range-status websockets, and Guacamole URL
 bootstrap responsive while terminals are open.
 
@@ -181,7 +181,7 @@ These need evidence from a real event or environment and are deliberately not in
 this change:
 
 1. AWS ALB idle timeout. The portal ALB sets no `idle_timeout`
-   (`platform/terraform/modules/portal/alb/main.tf`), so the AWS default of 60s
+   (`platform/terraform/modules/portal/alb/main.tf`), so the AWS default of 60 seconds
    applies. An idle terminal is dropped by the load balancer well before the
    in-process idle timeout. The in-process limits cannot fix a load-balancer
    drop. Options: raise the ALB `idle_timeout`, or add a client or server

@@ -241,7 +241,7 @@ experience can inform the button interaction.
    signing keys, endpoints, routes, and secret references do not enter argv,
    process listings, task definitions, Kubernetes Job specs, ConfigMaps, shell
    command strings, or Terraform plans/state. Existing pinned-image,
-   least-privilege workload identity, non-root/read-only-root, dropped
+   least-privilege workload identity, non-root/read-only root, dropped
    capabilities, admission, bounded workspace, and cleanup rules remain in
    force.
 9. **Network enforcement.** The range adapter validates request ownership,
@@ -268,7 +268,7 @@ experience can inform the button interaction.
 12. **Provider parity and release evidence.** AWS Terraform and every GCP
     live-fire backend currently admitted for CTF must run an identical
     provider-neutral conformance fixture plus disposable real-provider tests
-    using a standard OpenVPN client. Evidence proves handshake, only-Kali
+    using a standard OpenVPN client. Evidence proves handshake, Kali-only
     reachability, denied other-range/member/platform/metadata paths, pause and
     resume behavior, teardown revocation/deletion, replay, rotation, and no
     secret leakage. GDC's validation-only posture is not a parity substitute.

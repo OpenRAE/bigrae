@@ -52,7 +52,7 @@ accepted requirement asks for one.
 - Release notes are not documentation. `changelog.d/` fragments explain what
   changed in a release; they do not satisfy GEN-001 user or technical docs.
 - ADRs are for durable architecture decisions and enforceable guardrails. Do not
-  create or edit ADR registry entries just to record that documentation exists.
+  create or edit ADR registry entries only to record that documentation exists.
   Use ADR files only when the implementation changes architecture policy or
   enforcement.
 
@@ -110,7 +110,7 @@ accepted requirement asks for one.
   script, keep it repo-native, argv-array based, and ensure diagnostics print
   file paths or slug names only, not document bodies or secret-like strings.
 - Error-envelope surface: invalid docs requests should keep returning 404
-  messages such as "Document not found" or "Invalid path". Do not surface
+  messages such as "Document not found" or "Invalid path." Do not surface
   absolute paths, traceback text, raw Markdown, secrets, or renderer internals in
   user-visible errors.
 - Observability surface: docs rendering currently has no bespoke logging or

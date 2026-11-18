@@ -225,7 +225,7 @@ The design is split into these implementation issues:
   absent until after dispatch in request-based flows.
 - Do not store ACES receipts/status/snapshots in `RangeInstance.range_spec`,
   `Range.provisioned_instances`, `ExperimentRun.metadata`, `AuditLog.new_state`,
-  or event payload JSON just because those fields already accept JSON.
+  or event payload JSON only because those fields already accept JSON.
 - Do not add a parallel ACES status enum, event bus, websocket channel,
   exception hierarchy, API envelope, audit table, or scenario/runtime schema.
 - Do not conflate ACES operation status with Shifter `ResourceStatus`, CTF

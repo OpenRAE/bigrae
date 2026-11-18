@@ -169,7 +169,7 @@ closed mapping in `shared.range_instantiation_policy`.
 8. **Kubernetes admission/runtime.** GCP Jobs still pass
    `_GCP_PROVISIONER_ENV_KEYS`, `sensitive_env` splitting, ConfigMap equality,
    the base/Helm `restrict-provisioner-jobs` policies, pinned image and service
-   account checks, drop-ALL/non-root/read-only-root posture, and ephemeral
+   account checks, drop-ALL/non-root/read-only root posture, and ephemeral
    Secret cleanup. No policy env key means no admission-manifest change.
 9. **Secret handling.** Backend and purpose contain no secret. GDC kubeconfig
    material remains behind `GDC_ACCESS_SECRET_ID` in Secret Manager and a

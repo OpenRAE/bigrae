@@ -54,14 +54,14 @@ ADR-053.
 
 - **The pack is the universal unit.** "Add an image to the catalog," "import a
   scenario pack," and "author a scenario" are the same operation: register a
-  pack. The in-box packs are simply the tenant's default registered content,
+  pack. The in-box packs are the tenant's default registered content,
   seeded through the same path; they are not a privileged path and are not a
   BigRAE-shipped distribution catalog.
 
 - **Import is source-agnostic and entitlement-blind.** The ingestion path is
   identical for packs from any origin, whether upstream-published, private, or
   self-authored. The platform never asks how the operator obtained a pack. Adding
-  content is *just a content update*; how the operator got it is out of scope.
+  content is *only a content update*; how the operator got it is out of scope.
 
 - **Repo pack identity is byte-bound at ingestion and use.** A repository
   `package_ref` identifies a containment-checked pack root. Registration uses

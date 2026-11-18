@@ -8,7 +8,7 @@ Status: pre-implementation guidance
 Date: 2026-06-14
 
 Issue: GitHub #921, "test: workflow-gating test suite for deploy.yml
-(catches #781-class defects)".
+(catches #781-class defects)."
 
 This issue is requirement-free. The GitHub issue title, body, and acceptance
 criteria are the shipping contract. This note is intentionally not an
@@ -70,7 +70,7 @@ replace the deploy workflows' runtime verification.
 - Upstream deploy dependencies must fail closed. For deploy jobs that can run
   after `always()`, an upstream deploy dependency is acceptable only when its
   result is `success` or `skipped`; `failure`, `cancelled`, and absent checks
-  are not equivalent to "blocked correctly".
+  are not equivalent to "blocked correctly."
 - Pull requests must not reach deploy jobs that run on `self-hosted`. Plan-only
   PR paths may validate static infrastructure intent, but no PR event should
   gain a path to a job that assumes privileged runner, cloud, or environment
@@ -89,7 +89,7 @@ replace the deploy workflows' runtime verification.
 | Quality wiring | `.github/workflows/_quality.yml` existing lint/test job shapes | Add the suite as a normal Quality job with `contents: read`, no secrets, and no cloud permissions. |
 | Existing architecture checks | `scripts/adr_guard/adr_guard.py`, `scripts/adr_guard/tests/test_adr_guard.py`, ADR-003-R2, ADR-003-R3, ADR-003-R4 | Build beside these checks rather than duplicating their exact narrow assertions; update ADR docs only when the new suite becomes a named architecture guardrail. |
 | YAML dependency precedent | `_quality.yml` `uv run --python 3.11 --with 'pyyaml==6.0.2'` for ADR guard | Reuse the pinned PyYAML runner pattern unless the implementation creates a package-local `pyproject.toml` for the suite. |
-| Workflow docs | `docs/adr/index.yaml`, `shifter/shifter_platform/documentation/docs/technical/dev/adr-enforcement.md`, existing `docs/architecture/*preflight*.md` notes | Keep operator and ADR-enforcement docs in sync if the implementation changes guardrail semantics, not just test files. |
+| Workflow docs | `docs/adr/index.yaml`, `shifter/shifter_platform/documentation/docs/technical/dev/adr-enforcement.md`, existing `docs/architecture/*preflight*.md` notes | Keep operator and ADR-enforcement docs in sync if the implementation changes guardrail semantics, not only test files. |
 
 ## Cross-Cutting Layers
 
@@ -110,7 +110,7 @@ Security layers the intended design must satisfy:
 - Config-shape layer: PyYAML or an equivalent safe loader is the parser gate.
   The suite should fail on malformed or missing expected workflow keys rather
   than silently treating absent jobs, filters, `needs`, or `if:` blocks as
-  "not applicable".
+  "not applicable."
 - Workflow-policy layer: `actionlint` remains the syntax policy gate, while the
   new suite evaluates semantic gating. Do not make actionlint success a proxy
   for branch/event/path correctness.

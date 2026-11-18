@@ -23,7 +23,7 @@ The original evidence no longer describes the tree literally:
 
 Those splits are useful, but file count alone does not satisfy the issue. Broad
 exception conversion remains distributed across the extracted modules, some
-modules are kept just below the repository's size limit, and the provisioner
+modules are kept slightly below the repository's size limit, and the provisioner
 still conflates guest command execution with AWS control-plane actions. The
 remaining work must improve responsibility and type boundaries without changing
 public behavior accidentally.
@@ -193,7 +193,7 @@ The intended design crosses all of the following layers:
 6. **OS and task exposure.** `engine.launch_intents` continues to accept only a
    closed `list[str]` grammar containing opaque identifiers. TaskRunner adapters
    use argv arrays, not shell strings. Container non-root identity, root-owned
-   application code, GCP read-only-root/drop-capability settings, and bounded
+   application code, GCP read-only root/drop-capability settings, and bounded
    writable workspaces remain unchanged. Command logging is safe only while the
    grammar stays secret-free.
 7. **Error envelopes.** Canonical DRF routes use

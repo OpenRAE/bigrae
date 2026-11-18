@@ -3,7 +3,7 @@
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../technical/architecture.md) and accepted, superseding ADRs.
 
 
-Status: decision record — documented, not fixed (retained rollback path)
+Status: decision record—documented, not fixed (retained rollback path)
 
 Date: 2026-07-31
 
@@ -51,9 +51,9 @@ controlled rollback only, and the two paths must not be conflated (ADR-044).
   or `prod`.
 - The active portal path is the `eks-deploy` job, which `needs: build` and
   deploys the exact portal image `@sha256` digest produced by that build (it
-  renders the just-built `PORTAL_IMAGE_DIGEST` into the bundle inputs). Build
+  renders the newly built `PORTAL_IMAGE_DIGEST` into the bundle inputs). Build
   precedes deploy and the deploy names the exact built digest, so the EKS path
-  is digest-first and has no dependency on a pre-existing `latest` tag — the
+  is digest-first and has no dependency on a pre-existing `latest` tag—the
   first-image ordering hazard cannot occur there.
 
 The hazard therefore only affects the retained ASG path, which today is
@@ -72,7 +72,7 @@ expected to be healthy:
 1. Build and push a portal image to the environment's ECR repository.
 2. Set the `image-tag` (and, for digest-pinned deploys, `image-digest`)
    parameters under `/shifter/<env>/portal/` to that real image before, or
-   promptly after, the first Portal apply — do not rely on the `latest`
+   promptly after, the first Portal apply—do not rely on the `latest`
    default.
 3. If instances have already bootstrap-failed, run the SSM deploy path
    (`scripts/portal-deploy/deploy_portal.sh`) against them, or replace them,

@@ -298,14 +298,14 @@ The backend-bundle contract is published as a committed, versioned JSON artifact
 downstream backend-bundle authors and tooling can build against it without reading
 Shifter internals (issue #1323, ADR-011-R8).
 
-- `shifter/installation/published_contract/backend-bundle-contract.json` — the published
+- `shifter/installation/published_contract/backend-bundle-contract.json`—the published
   artifact: the contract version, the supported versions, the `BackendBundle` JSON schema,
   and the registered backends. It is **generated** from `contract.py` and `registry.py`;
   never hand-edit it.
-- `shifter/installation/published_contract/backend-bundle-contract.v<N>.json` — the
+- `shifter/installation/published_contract/backend-bundle-contract.v<N>.json`—the
   immutable frozen snapshot of contract version `N`; the breaking-change gate compares the
   current artifact against the current version's snapshot, and `export` never overwrites one.
-- `shifter/installation/published_contract/MIGRATIONS.md` — the per-version changelog and
+- `shifter/installation/published_contract/MIGRATIONS.md`—the per-version changelog and
   migration notes, and the procedure for changing the contract.
 
 The published version is the backend `contract_version`
@@ -322,15 +322,15 @@ uv run --project shifter/installation shifter-config contract check
 The `installation` test lane enforces three gates, so the published contract cannot fall
 behind the code or break silently:
 
-- **drift** — the committed artifact must equal the freshly generated one;
-- **breaking change** — a backward-incompatible shape change (removed field, removed enum
+- **drift**—the committed artifact must equal the freshly generated one;
+- **breaking change**—a backward-incompatible shape change (removed field, removed enum
   value, newly required field) versus the current version's immutable frozen snapshot
   requires an explicit `contract_version` bump and a migration note;
-- **registry conformance** — every published backend record validates against the published
+- **registry conformance**—every published backend record validates against the published
   JSON schema.
 
 A new backend bundle (for example a deferred Azure bundle) is written against this
-published artifact — the JSON schema and the `aws`/`gcp` reference entries — plus a
+published artifact—the JSON schema and the `aws`/`gcp` reference entries—plus a
 registry entry and a worked `examples/` config. Authors do not need to read Shifter
 runtime internals.
 
@@ -347,7 +347,7 @@ against the schema with any Draft 2020-12 validator.
 validator: it runs the published schema **and** the full `BackendBundle` contract, so it
 additionally enforces the cross-collection invariants JSON Schema cannot express (unique
 record names, every validation check's executable listed in `required_tools`). A bundle it
-accepts cannot be one the internal contract would reject, closing the supply-chain gap where
+accepts cannot be one the internal contract would reject, closing the supply chain gap where
 a hostile bundle passes a public validator that omits Shifter's custom validators.
 
 ## Source Of Truth

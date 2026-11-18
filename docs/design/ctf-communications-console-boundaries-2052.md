@@ -71,7 +71,7 @@ child of that campaign. Default-latest release could send another tab's edit.
 Preserve campaign plus `occurrence_key` across uncertain release responses;
 existing replay checks reject changed meaning. Draft creation lacks release's
 idempotency guarantee: reconcile a lost create response before creating and
-releasing a replacement. Never create a new campaign just to retry release.
+releasing a replacement. Never create a new campaign only to retry release.
 
 Choose atomic admission across all target events and requested channels. Invalid
 authority, scope, revision, source, dependency or capacity must leave no partial
