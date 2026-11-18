@@ -46,9 +46,13 @@ resource "google_sql_database_instance" "platform" {
   deletion_protection = var.cloud_sql_deletion_protection
 
   settings {
-    tier                        = var.cloud_sql_tier
-    availability_type           = var.cloud_sql_availability_type
+    tier              = var.cloud_sql_tier
+    availability_type = var.cloud_sql_availability_type
+    # Terraform grows the disk to the profile floor. With auto-resize on, the
+    # provider removes a smaller configured size from the plan, so a larger
+    # live disk is kept and never replaced (#2965).
     disk_size                   = var.cloud_sql_disk_size_gb
+    disk_autoresize             = true
     disk_type                   = "PD_SSD"
     deletion_protection_enabled = var.cloud_sql_deletion_protection
 
@@ -112,13 +116,6 @@ resource "google_sql_database_instance" "platform" {
     }
 
     user_labels = var.common_labels
-  }
-
-  # Cloud SQL may grow an auto-resized disk but cannot shrink it. Reconciling
-  # the configured floor after growth would otherwise plan a destructive
-  # replacement of the deletion-protected production database.
-  lifecycle {
-    ignore_changes = [settings[0].disk_size]
   }
 }
 

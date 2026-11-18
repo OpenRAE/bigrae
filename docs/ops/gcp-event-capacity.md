@@ -80,7 +80,8 @@ request increases ahead of the event:
    `SHIFTER_CONFIG_GCP_DEV` secret and dispatches `deploy.yml`. The deploy
    renders the Terraform bridge itself. It applies the profile's pod counts,
    resources, autoscaler bounds, and Guacamole connection ceiling, so a tier
-   change takes full effect. Do not edit a node pool, Deployment, HPA,
+   change takes full effect. Terraform also grows the Cloud SQL disk to the
+   profile minimum; it does not shrink a larger disk. Do not edit a node pool, Deployment, HPA,
    BackendConfig, Cloud SQL instance, or Redis instance by hand. The p30
    minimums themselves carry the event; autoscaling is supplemental headroom.
 

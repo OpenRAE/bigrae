@@ -30,3 +30,33 @@ run "native_login_flag_and_dedicated_policy_database" {
     error_message = "The policy datastore must be separate from application tables on the shared instance."
   }
 }
+
+# The provider drops a disk decrease from the plan only while auto-resize is on.
+# Without it, a profile scale-down or an auto-resized disk forces replacement (#2965).
+run "terraform_grows_disk_and_never_shrinks_it" {
+  command = plan
+  assert {
+    condition     = google_sql_database_instance.platform.settings[0].disk_autoresize == true
+    error_message = "Disk auto-resize must stay on so that the provider never plans a disk shrink."
+  }
+  assert {
+    condition     = google_sql_database_instance.platform.settings[0].disk_size == var.cloud_sql_disk_size_gb
+    error_message = "Terraform must request the capacity profile disk floor."
+  }
+}
+
+# An existing instance must grow when a larger profile raises the floor (#2965).
+run "existing_instance_at_small_profile_floor" {
+  command = apply
+}
+
+run "larger_profile_grows_existing_disk" {
+  command = plan
+  variables {
+    cloud_sql_disk_size_gb = 600
+  }
+  assert {
+    condition     = google_sql_database_instance.platform.settings[0].disk_size == 600
+    error_message = "A larger capacity profile must grow the disk of an existing instance."
+  }
+}

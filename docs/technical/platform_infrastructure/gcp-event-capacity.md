@@ -13,6 +13,9 @@ consumers:
 - Drift: an allowlisted desired-state document compared with live provider and
 Kubernetes observations. Missing observations fail closed; raw cloud payloads
 and secrets are not emitted. Cloud SQL disk capacity is a minimum because storage cannot shrink. Drift accepts a larger retained disk after profile scale-down, but rejects undersized disks.
+Terraform manages the disk size. A deploy grows the disk to the profile minimum.
+The module keeps disk auto-resize on, so the provider never plans a decrease or a replacement.
+The [Cloud SQL disk floor design](../../architecture/cloud-sql-disk-floor-design-2965.md) records the provider behavior.
 
 The installation setting `shared_service_capacity_profile` is the only selector.
 Provider, deployment, traffic, and gate profiles remain distinct concepts.

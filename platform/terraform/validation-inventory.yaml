@@ -346,9 +346,9 @@ modules:
     tracking: "#1597"
   - path: platform/terraform/gcp/modules/portal/cloud-sql
     owner: "@Brad-Edwards"
-    contract: deferred
-    reason: "Contract-test rollout tracked in #1597."
-    tracking: "#1597"
+    contract: terraform_test
+    test: tests/native_identity.tftest.hcl
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/portal/gcs
     owner: "@Brad-Edwards"
     contract: terraform_test
