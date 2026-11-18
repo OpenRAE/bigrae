@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from pathlib import Path
 
@@ -27,7 +28,8 @@ def test_catalog_has_all_versioned_event_sizes():
     }
 
 
-_TERRAFORM_GCP = Path(__file__).resolve().parents[3] / "platform" / "terraform" / "gcp"
+_REPO = Path(__file__).resolve().parents[3]
+_TERRAFORM_GCP = _REPO / "platform" / "terraform" / "gcp"
 
 
 @pytest.mark.parametrize("variables_file", ["environments/platform/variables.tf", "modules/platform-core/variables.tf"])
@@ -36,6 +38,13 @@ def test_terraform_accepts_every_capacity_profile(variables_file):
     source = (_TERRAFORM_GCP / variables_file).read_text(encoding="utf-8")
     block = source.split('variable "shared_service_capacity_profile"', 1)[1]
     pattern = re.search(r'regex\("([^"]+)", var\.shared_service_capacity_profile\)', block).group(1)
+    assert [p for p in CAPACITY_PROFILES if not re.fullmatch(pattern, p)] == []
+
+
+def test_helm_schema_accepts_every_capacity_profile():
+    """The chart values schema admits every supported profile (#2961)."""
+    schema = json.loads((_REPO / "platform" / "charts" / "shifter" / "values.schema.json").read_text(encoding="utf-8"))
+    pattern = schema["properties"]["capacityProfile"]["properties"]["id"]["pattern"]
     assert [p for p in CAPACITY_PROFILES if not re.fullmatch(pattern, p)] == []
 
 
