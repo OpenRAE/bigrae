@@ -23,6 +23,7 @@ import type {
   CtfRangeStatus,
   CtfRateChallengeResult,
   CtfScoreboard,
+  CtfScoreboardKind,
   CtfSubmissionList,
   CtfSubmitFlagResult,
   CtfTeam,
@@ -66,7 +67,8 @@ export const ctfKeys = {
   analytics: (eventId: string) => ["ctf", "analytics", eventId] as const,
   submissions: () => ["ctf", "submissions"] as const,
   rangeStatus: () => ["ctf", "range-status"] as const,
-  scoreboard: (eventId: string, bracketId?: string) => ["ctf", "scoreboard", eventId, bracketId ?? null] as const,
+  scoreboard: (eventId: string, bracketId?: string, kind?: CtfScoreboardKind) =>
+    ["ctf", "scoreboard", eventId, bracketId ?? null, kind ?? null] as const,
   organizerScoreboard: (eventId: string, bracketId?: string) =>
     ["ctf", "organizer-scoreboard", eventId, bracketId ?? null] as const,
   // Organizer read keys (distinct namespaces from the participant reads above).
@@ -91,9 +93,10 @@ export const ctfKeys = {
   webhooks: (eventId: string) => ["ctf", "webhooks", eventId] as const,
 };
 
-export function useCtfCurrentEvent() {
+export function useCtfCurrentEvent(enabled = true) {
   return useQuery({
     queryKey: ctfKeys.currentEvent(),
+    enabled,
     queryFn: ({ signal }) => apiFetch<CtfCurrentEvent>(`${BASE}/me/event/`, { signal }),
   });
 }
@@ -143,14 +146,19 @@ export function useCtfRangeStatus() {
   });
 }
 
-export function useCtfScoreboard(eventId: string, bracketId?: string, enabled = true) {
+/**
+ * Public participant scoreboard. `kind` selects the individual or team board
+ * (#2968); without it the server returns the event's default board.
+ */
+export function useCtfScoreboard(eventId: string, bracketId?: string, enabled = true, kind?: CtfScoreboardKind) {
+  const query = { ...(bracketId ? { bracket: bracketId } : {}), ...(kind ? { kind } : {}) };
   return useQuery({
-    queryKey: ctfKeys.scoreboard(eventId, bracketId),
+    queryKey: ctfKeys.scoreboard(eventId, bracketId, kind),
     enabled: enabled && Boolean(eventId),
     queryFn: ({ signal }) =>
       apiFetch<CtfScoreboard>(`${BASE}/events/${eventId}/scoreboard/`, {
         signal,
-        query: bracketId ? { bracket: bracketId } : undefined,
+        query: Object.keys(query).length > 0 ? query : undefined,
       }),
     ...SCOREBOARD_REFRESH,
   });

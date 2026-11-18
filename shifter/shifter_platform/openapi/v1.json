@@ -13463,6 +13463,19 @@
               "format": "uuid"
             },
             "required": true
+          },
+          {
+            "in": "query",
+            "name": "kind",
+            "schema": {
+              "enum": [
+                "individual",
+                "team"
+              ],
+              "type": "string",
+              "minLength": 1
+            },
+            "description": "* `individual` - individual\n* `team` - team"
           }
         ],
         "tags": [

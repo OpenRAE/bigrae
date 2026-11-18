@@ -19,7 +19,7 @@ The shipping work should first measure the native CTF request paths under
 realistic event load, then decide whether the measured bottleneck requires a
 design change. The decision may be "no app-side design change yet" if the
 evidence supports that. Do not add cached/materialized leaderboard state,
-background recomputation, push updates, or new metrics infrastructure just
+background recomputation, push updates, or new metrics infrastructure only
 because those are plausible fixes.
 
 The measured native paths are:
@@ -120,7 +120,7 @@ not a rewrite of scoring semantics.
   return rank.
 - `participant_dashboard` calls both `calculate_score()` and
   `get_participant_rank()`. Do not call dashboard latency "scoreboard only" or
-  "submission only".
+  "submission only."
 - `api_submit_flag` verifies the flag before creating the submission row. A
   high wrong-answer rate can make CPU the bottleneck even with few correct
   submissions.

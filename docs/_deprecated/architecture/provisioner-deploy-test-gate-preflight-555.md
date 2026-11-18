@@ -8,7 +8,7 @@ Status: pre-implementation guidance
 Date: 2026-06-28
 
 Issue: GitHub #555, "Architecture review: restore a blocking test gate for
-provisioner deploys".
+provisioner deploys."
 
 This issue is requirement-free. The GitHub issue title, body, and acceptance
 criteria are the shipping contract. This note is intentionally not an

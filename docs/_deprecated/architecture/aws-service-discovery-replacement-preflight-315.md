@@ -39,7 +39,7 @@ instances.
   The portal roots already expose `guacamole_ecs_cluster_name`,
   `guacd_service_name`, and `guacamole_client_service_name`; do not duplicate
   the naming formula in workflow shell as the primary contract.
-- Move non-trivial replacement handling out of ad hoc workflow shell if the fix
+- Move complex replacement handling out of ad hoc workflow shell if the fix
   grows beyond a few lines. The repo already has unit-testable deploy helpers
   with injected command runners; prefer that shape over another inline parser.
 - Scaling an ECS service to zero is an out-of-band mutation. The implementation

@@ -8,7 +8,7 @@ Status: pre-implementation guidance
 Date: 2026-06-24
 
 Issue: GitHub #218, "Add post-deploy smoke test with auto-issue creation on
-failure".
+failure."
 
 This issue is requirement-free. The GitHub issue title, body, and acceptance
 criteria are the shipping contract. This note is intentionally not an
@@ -118,7 +118,7 @@ the duration free.
   or Kubernetes changes, if any, must pass the repo-native TFLint,
   kube-linter, and kubeconform checks.
 - Network and OS exposure: the smoke must not open security groups,
-  NetworkPolicies, firewall rules, or ingress just to make a runner-origin port
+  NetworkPolicies, firewall rules, or ingress only to make a runner-origin port
   probe work. If a raw SSH/RDP/WinRM probe is used, name the vantage point
   explicitly and do not confuse it with portal-mediated access.
 - Error-envelope surface: return fixed/sanitized failure classes in automation

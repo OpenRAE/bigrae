@@ -9,7 +9,7 @@ Date: 2026-05-14
 
 Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/1249>
 
-Requirement: PLAT-005 — Per-Deployment Configuration
+Requirement: PLAT-005—Per-Deployment Configuration
 
 ## Scope Boundary
 

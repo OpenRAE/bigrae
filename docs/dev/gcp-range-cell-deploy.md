@@ -188,6 +188,7 @@ image outside that flow.
 | None | `GCP_RANGE_HOST_SERVICE_ACCOUNT_EMAIL` | not read | Keyless guest identity provides default-on direct Vertex access (ADR-064). It combines a predict-only role with host telemetry and uses Workload Identity without key material. The deploy takes it from the Terraform output `range_host_service_account_email`; set no variable. When the model broker is the guest path (`MODEL_BROKER_GUEST_VIP` set) guests stay identity-less instead. |
 | `settings.range_cells.host_identity_pool_size` | `GCP_RANGE_HOST_IDENTITY_POOL_SIZE` | machine-image hosts | Number of Terraform-created `sh-range-host-<slot>` identities. Must equal `range_host_identity_pool_size`; zero disables preconfigured machine-image hosts. |
 | `settings.range_cells.private_google_access` | `GCP_RANGE_PRIVATE_GOOGLE_ACCESS` | no | Set `true` so no-external-IP guests reach approved Google APIs (including Vertex for default-on model access) over Private Google Access. Leave it `false` when the model broker is enabled: broker-enrolled ranges refuse to provision with Private Google Access on. |
+| `settings.range_cells.shared_guest_firewalls` | `GCP_RANGE_SHARED_GUEST_FIREWALLS` | no | Set `true` to use the shared-guest firewall layout. See "Shared-guest firewall layout" below. Defaults to `false`. |
 | `settings.participant_openvpn.enabled` | `RANGE_OPENVPN_ENABLED` | no | Set `true` to give participants an OpenVPN profile for their range's single participant-access target (ADR-039-R10). Projected onto `settings.participant_openvpn.enabled`. It also deploys the shared OpenVPN server pool (#2480): Terraform `openvpn_pool_enabled` follows this setting, and `gcp-deploy` creates the pool PKI and release record. Apply `global/cicd-oidc` first so the deploy identity holds the conditioned pool role. Defaults to `false`. See "Participant OpenVPN access" in `docs/dev/gcp-range-cell-deploy.md`. |
 
 By default, guests use keyless, predict-only Vertex identities (ADR-064). Operators must enable each required model in its region and satisfy effective IAM and quota prerequisites. When the ADR-059 broker is enabled
@@ -268,6 +269,32 @@ private var file that loads after the operator's values.
 `bigrae.yaml` contains secret references, not values. It remains the authoritative deployment configuration. Store it as the protected CI payload rather than maintaining a second allowlist. Do **not** also set
 `range_egress_mode` / `range_egress_allowed_cidrs` in the Terraform values;
 that re-introduces the drift this flow removes.
+
+### Shared-guest firewall layout
+
+By default each range creates its own access, management, egress, deny, service,
+and OpenVPN rules. A range with three hosts uses about 11 of the project's
+firewall rules, so a large event can reach the firewall quota. Set
+`settings.range_cells.shared_guest_firewalls: true` to use the shared layout:
+
+- Terraform creates fixed rules keyed by the `shifter-range-guest` tag: participant
+  SSH and RDP from the access workloads, egress inside the range network, the
+  default egress deny, and, when `private_google_access` is `true`, the Google
+  API egress rule.
+- The OpenVPN pool module creates one rule for each participant channel, keyed by
+  `shifter-range-vpn-ssh` and `shifter-range-vpn-rdp`.
+- The existing `range-allow-platform-provisioner` rule covers management SSH.
+- The provisioner tags each host with the guest tag, and each authorized OpenVPN
+  target with the tag of its channel.
+- Each single-subnet range creates one isolation rule. It admits ingress only
+  from the range's own subnet to the range's own tag. The network-wide ingress
+  deny blocks traffic from every other range.
+
+A range keeps a per-range rule for an allow-CIDR or public-web egress lane and
+for a management port other than 22 or `GCP_RANGE_HOST_MGMT_SSH_PORT`. A
+multi-subnet range keeps the per-range layout, because its cross-subnet traffic
+is limited to authored service ports. Teardown deletes the rules of both layouts,
+so ranges created before the change are cleaned up.
 
 ### Range audit telemetry
 

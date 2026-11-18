@@ -78,6 +78,11 @@ output "gke_cluster_location" {
   value       = module.portal_gke.gke_cluster_location
 }
 
+output "gke_access_node_pool_name" {
+  description = "Name of the access node pool. Input to the event-capacity drift check."
+  value       = module.portal_gke.gke_access_node_pool_name
+}
+
 output "artifact_registry_repositories" {
   description = "Artifact Registry repositories by logical image role."
   value       = module.portal_artifact_registry.artifact_registry_repositories

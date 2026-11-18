@@ -71,9 +71,10 @@ AWS_DEV_WAF_ACL_ARN = (
 # gateway rules, maintenance CPU limits, and large-plan result-worker memory.
 # Regenerated for #2904 after giving guacd a writable FreeRDP home.
 # Regenerated for #2909: the removed model broker drops its job env and network policy exclusions.
+# Regenerated for #2960: provisioner jobs may carry GCP_RANGE_SHARED_GUEST_FIREWALLS.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "217da28f1f44680fbc160344d4e09bde6c7904214c2d2031a264254fca6ac4ac",
-    "gcp-dev": "5da6c16dde1a8153d958267a1d65bfd9af3cd735615431b45a882e7a3190bd89",
+    "gcp-prod": "477420aebfe9110c9f3261dbca528884eb1bab1617bb841669245ad96fb1010f",
+    "gcp-dev": "b53f70428141acc960327ed3d380c9a3362df76ec7c1b03582cade06ad834772",
 }
 
 

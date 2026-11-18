@@ -284,6 +284,17 @@ banned, deleted and unregistered rows do not qualify. Ordinary participant
 credentials also require current participation policy. Public publication and
 hidden scoreboards keep their separate publication rules.
 
+### Individual and team scoreboards
+
+The public scoreboard read accepts an optional `kind` selector: `individual` or `team`.
+Without `kind`, a team event returns team rows and a solo event returns individual rows.
+`kind=team` on a solo event returns 400 `scoreboard_kind_unavailable`.
+An unknown or repeated value returns 400 `invalid_scoreboard_kind`.
+Publication, freeze, and bracket rules apply to both boards.
+
+A team event shows the **Individual scoreboard** and **Team scoreboard** sidebar entries.
+See the [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-dual-scoreboards-2968.md).
+
 ### Scoreboard refresh
 
 The SPA participant and organizer scoreboard hooks poll their API read every

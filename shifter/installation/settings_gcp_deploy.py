@@ -68,6 +68,13 @@ class GcpRangeCellSettings(_ClosedModel):
         default=None,
         description="Private Google Access on range subnets (GCP_RANGE_PRIVATE_GOOGLE_ACCESS). Null keeps the default.",
     )
+    shared_guest_firewalls: bool = Field(
+        default=False,
+        description=(
+            "Shared-guest range firewall layout (GCP_RANGE_SHARED_GUEST_FIREWALLS). Fixed tag-keyed rules replace "
+            "the per-range set, so each single-subnet range creates one isolation rule."
+        ),
+    )
     image_key_profiles: dict[str, Any] = Field(
         default_factory=dict,
         description=(
@@ -202,6 +209,8 @@ def deployment_runtime_env(
         env["GCP_RANGE_CELL_PROJECT_ID"] = range_cells.project_id
     if range_cells.private_google_access is not None:
         env["GCP_RANGE_PRIVATE_GOOGLE_ACCESS"] = _bool_text(range_cells.private_google_access)
+    if range_cells.shared_guest_firewalls:
+        env["GCP_RANGE_SHARED_GUEST_FIREWALLS"] = _bool_text(range_cells.shared_guest_firewalls)
     if range_cells.image_key_profiles:
         env["GCP_RANGE_IMAGE_KEY_PROFILES_JSON"] = json.dumps(
             range_cells.image_key_profiles, sort_keys=True, separators=(",", ":")
@@ -224,6 +233,10 @@ def deployment_terraform_values(
         "range_host_identity_pool_size": range_cells.host_identity_pool_size,
         "range_network_zones": list(range_cells.zones),
     }
+    if range_cells.shared_guest_firewalls:
+        values["range_shared_guest_firewalls"] = True
+    if range_cells.private_google_access is not None:
+        values["range_private_google_access"] = range_cells.private_google_access
     if ctf_content_bucket:
         values["ctf_content_bucket_name"] = ctf_content_bucket
     return values

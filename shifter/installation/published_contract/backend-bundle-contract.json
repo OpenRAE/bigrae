@@ -4332,6 +4332,12 @@
                 "title": "Project Id",
                 "type": "string"
               },
+              "shared_guest_firewalls": {
+                "default": false,
+                "description": "Shared-guest range firewall layout (GCP_RANGE_SHARED_GUEST_FIREWALLS). Fixed tag-keyed rules replace the per-range set, so each single-subnet range creates one isolation rule.",
+                "title": "Shared Guest Firewalls",
+                "type": "boolean"
+              },
               "worker_vcpu": {
                 "default": 8,
                 "description": "vCPUs that one disposable worker draws from the gce-workers budget (GCP_WORKER_VCPU).",

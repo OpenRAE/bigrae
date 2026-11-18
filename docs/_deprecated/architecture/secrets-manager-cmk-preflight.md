@@ -4,7 +4,7 @@
 
 
 Issue: GitHub #52, "fix: dev provisioner destroys silently failing on KMS
-Decrypt deny".
+Decrypt deny."
 
 This note records the architecture boundary for AWS Secrets Manager secrets
 encrypted with the portal-owned CMK. It is not an implementation plan.

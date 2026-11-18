@@ -153,7 +153,7 @@ scenario content. The implementation must not require manual edits to
 - Terminal/Guacamole surface: `Range.resolve_active_for_instance`,
   `get_rdp_connection_info`, `get_ssh_connection_info`, and Guacamole bootstrap
   status must reject the old range after recovery. A stale old instance UUID
-  cannot keep resolving just because the engine row still belongs to the user.
+  cannot keep resolving only because the engine row still belongs to the user.
 - Audit/observability surface: record actor, event, participant, old range,
   replacement range, request id, strategy, disposition, phase, and outcome as
   low-cardinality structured context. Do not use audit JSON as a workflow state
@@ -242,7 +242,7 @@ Usually out of scope:
   participant identity.
 - Do not set `CTFParticipant.range_instance_id` to the new range while the old
   `engine.Range` remains `ready` and participant-owned.
-- Do not mark a forensics-retained range as `ready` just because EC2 resources
+- Do not mark a forensics-retained range as `ready` only because EC2 resources
   still exist. "Retained" is not "participant accessible."
 - Do not bypass `cms.services.create_range` by cloning `RangeInstance` JSON or
   writing Engine rows directly for rebuilds.

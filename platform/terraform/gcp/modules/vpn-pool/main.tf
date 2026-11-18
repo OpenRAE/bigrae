@@ -434,3 +434,24 @@ resource "google_compute_firewall" "pool_egress_deny" {
     protocol = "all"
   }
 }
+
+# Shared-guest firewall layout: the pool reaches only hosts that the provisioner
+# tags as authorized OpenVPN targets, on that host's participant channel. The tag
+# values must match SHARED_VPN_CHANNEL_TAGS in
+# shifter/engine/provisioner/gcp_range_cell_firewall.py.
+resource "google_compute_firewall" "pool_guest_channel" {
+  for_each = var.shared_guest_firewalls ? { ssh = "22", rdp = "3389" } : {}
+
+  name          = "${local.name}-guest-${each.key}"
+  project       = var.project_id
+  network       = var.network_name
+  direction     = "INGRESS"
+  priority      = 900
+  target_tags   = ["shifter-range-vpn-${each.key}"]
+  source_ranges = [var.subnet_cidr]
+
+  allow {
+    protocol = "tcp"
+    ports    = [each.value]
+  }
+}

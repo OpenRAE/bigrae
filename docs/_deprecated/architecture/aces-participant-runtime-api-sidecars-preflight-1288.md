@@ -229,7 +229,7 @@ Future implementation must evaluate changes against:
 - Do not conflate `CTFParticipant`, Django `User`, `RangeInstance`,
   `engine.Range`, ACES participant implementation records, ACES runtime records,
   access channels, and backend execution targets.
-- Do not overload `AcesOperationRecord` with non-operation participant data just
+- Do not overload `AcesOperationRecord` with non-operation participant data only
   to avoid a sidecar migration.
 - Do not create duplicate ACES schemas, status enums, exception hierarchies,
   token scopes, API envelopes, event buses, websocket topics, terminal session

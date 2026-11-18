@@ -12,7 +12,7 @@ Tracking issue: <https://github.com/Brad-Edwards/bigrae/issues/307>
 This note is intentionally not an implementation plan. Issue #307 is
 requirement-free; its title, body, and expected behavior are the contract. The
 invariant (resolved 2026-07-13, see below) is **at most one active range per
-`(user_id, range_source)`** — a same-source admission guard that fixes the
+`(user_id, range_source)`**—a same-source admission guard that fixes the
 reported duplicate-Mission-Control-range bug while preserving #450's deliberate
 Mission Control + CTF coexistence.
 

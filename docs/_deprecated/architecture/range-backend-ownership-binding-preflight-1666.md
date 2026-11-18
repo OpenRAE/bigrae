@@ -140,7 +140,7 @@ events, or provider output/state JSON.
    bounded workspaces, and cleanup rules remain in force.
 6. **Kubernetes admission/runtime.** `GCPTaskRunner` still supplies the pinned
    image, canonical args/env, launcher identity, ephemeral sensitive-env Secret,
-   four writable volumes, non-root/drop-ALL/read-only-root security context, and
+   four writable volumes, non-root/drop-ALL/read-only root security context, and
    deterministic Job identity. Base and Helm admission policies stay
    equivalent. A needless env addition would have to pass all those validators.
 7. **Secret handling.** Backend and purpose are public enum values. DB password

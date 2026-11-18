@@ -90,7 +90,7 @@ Verification:
 image URLs in the event logo and in Markdown: event rules, challenge descriptions
 and solutions, event pages and announcements. The platform therefore copies each
 external image into its own storage when the organizer saves the content. This
-is the pattern of Discourse "download remote images to local". The policy keeps
+is the pattern of Discourse "download remote images to local." The policy keeps
 `img-src 'self' data:`.
 
 ### Components

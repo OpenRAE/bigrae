@@ -64,7 +64,7 @@ revision, even with identical pack bytes. `cms.services.register_pack` compares
 retry. Its existing explicit update requires `expected_package_digest` to match
 the current row and a **different registration version**; changing the path and
 leaving the version unchanged fails. Preserve the canonical digest when bytes
-are unchanged. Do not mutate `pack.yaml` just to force a different digest.
+are unchanged. Do not mutate `pack.yaml` only to force a different digest.
 
 Reuse `PackRegistrationRequest` and the service's locked replacement, scope
 checks, strict audit and conformance reset. Bootstrap then re-establishes release

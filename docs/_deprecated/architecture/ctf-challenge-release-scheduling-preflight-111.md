@@ -117,7 +117,7 @@ The seam is the scheduled task metadata and handler contract:
 - service hook: one helper that synchronizes pending release tasks after
   organizer-owned challenge writes.
 
-This leaves room for future batch releases, manual organizer "release now", or
+This leaves room for future batch releases, manual organizer "release now," or
 release notifications without changing participant authorization policy or
 creating a new scheduler.
 

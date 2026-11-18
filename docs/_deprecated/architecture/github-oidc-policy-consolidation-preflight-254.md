@@ -30,7 +30,7 @@ logging frameworks for this issue.
 
 - Treat this as policy packing, not permission expansion. Each service action
   should move to exactly one consolidated policy by ownership category; do not
-  add wildcard actions, wildcard resources, new services, or new principals just
+  add wildcard actions, wildcard resources, new services, or new principals only
   because a category is being renamed.
 - Preserve the GitHub OIDC trust contract: `aud = sts.amazonaws.com`,
   `sub = repo:${var.github_org}/${var.github_repo}:*`, and the same

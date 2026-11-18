@@ -141,3 +141,35 @@ describe.each(BOARDS)("$board scoreboard refresh (#576)", ({ path, useBoard }) =
     expect(result.current.data).toEqual(AFTER);
   });
 });
+
+describe("participant scoreboard kind (#2968)", () => {
+  it("sends the selected kind and caches each board separately", async () => {
+    mockApi.mockImplementation(async (_path?: string, options?: { query?: Record<string, unknown> }) =>
+      options?.query?.kind === "team" ? AFTER : BEFORE,
+    );
+    const individual = renderHook(() => useCtfScoreboard("e1", undefined, true, "individual"), { wrapper });
+    const team = renderHook(() => useCtfScoreboard("e1", undefined, true, "team"), { wrapper });
+    await elapse(0);
+
+    expect(individual.result.current.data).toEqual(BEFORE);
+    expect(team.result.current.data).toEqual(AFTER);
+    expect(mockApi).toHaveBeenCalledWith(
+      "/ctf/events/e1/scoreboard/",
+      expect.objectContaining({ query: { kind: "individual" } }),
+    );
+    expect(mockApi).toHaveBeenCalledWith(
+      "/ctf/events/e1/scoreboard/",
+      expect.objectContaining({ query: { kind: "team" } }),
+    );
+  });
+
+  it("sends the bracket and the kind together", async () => {
+    mockApi.mockResolvedValue(BEFORE);
+    renderHook(() => useCtfScoreboard("e1", "b1", true, "individual"), { wrapper });
+    await elapse(0);
+    expect(mockApi).toHaveBeenCalledWith(
+      "/ctf/events/e1/scoreboard/",
+      expect.objectContaining({ query: { bracket: "b1", kind: "individual" } }),
+    );
+  });
+});

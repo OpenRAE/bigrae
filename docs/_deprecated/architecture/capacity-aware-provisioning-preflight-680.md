@@ -1,4 +1,4 @@
-# Capacity-Aware Provisioning Preflight — Issue 680
+# Capacity-Aware Provisioning Preflight—Issue 680
 
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../technical/architecture.md) and accepted, superseding ADRs.
 
@@ -133,7 +133,7 @@ policy.
 
 Capacity readers require separate least-privilege, read-only identities per
 target partition. Do not expand the CTF scheduler, portal, worker, or
-provisioner identity to broad compute, secret, or cross-account privileges just
+provisioner identity to broad compute, secret, or cross-account privileges only
 to inspect headroom. Cross-account AWS reads require a constrained read role;
 cross-project GCP reads require narrowly scoped project/API permissions. No
 credential, quota payload, raw provider response, account identifier where

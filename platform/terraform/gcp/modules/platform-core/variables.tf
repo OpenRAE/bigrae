@@ -233,8 +233,8 @@ variable "shared_service_capacity_profile" {
   default     = "gcp-shared-v1-p10"
 
   validation {
-    condition     = can(regex("^gcp-shared-v[1-9][0-9]*-p(10|30|50|100)$", var.shared_service_capacity_profile))
-    error_message = "shared_service_capacity_profile must be a versioned authored GCP p10/p30/p50/p100 profile."
+    condition     = can(regex("^gcp-shared-v[1-9][0-9]*-p(10|30|50|100|200|300|500)$", var.shared_service_capacity_profile))
+    error_message = "shared_service_capacity_profile must be a versioned authored GCP p10/p30/p50/p100/p200/p300/p500 profile."
   }
 }
 
@@ -656,4 +656,16 @@ variable "openvpn_pool_cpu_target_pct" {
   description = "Pool autoscaler CPU target in percent (capacity profile)."
   type        = number
   default     = 30
+}
+
+variable "range_shared_guest_firewalls" {
+  description = "Use the shared-guest range firewall layout: fixed tag-keyed rules here and one isolation rule per range (GCP_RANGE_SHARED_GUEST_FIREWALLS)."
+  type        = bool
+  default     = false
+}
+
+variable "range_private_google_access" {
+  description = "Private Google Access on range subnets (GCP_RANGE_PRIVATE_GOOGLE_ACCESS). With the shared-guest layout it adds the shared Google API egress rule."
+  type        = bool
+  default     = false
 }

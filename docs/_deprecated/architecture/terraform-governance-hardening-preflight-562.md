@@ -8,7 +8,7 @@ Status: pre-implementation guidance
 Date: 2026-06-27
 
 Issue: GitHub #562, "Architecture review: remove dev-only IAM and placeholder
-alert config from Terraform".
+alert config from Terraform."
 
 This is requirement-free guidance. The GitHub issue is the shipping contract.
 This note records repository-wide boundaries and guardrails only; it is not an
@@ -125,7 +125,7 @@ The required seams are:
   guardrails.
 - Do not conflate `budget_alert_email`, portal `alarm_email`, SES sender
   domains, CTF user emails, and workflow notification addresses.
-- Do not commit real operational email addresses just to satisfy "real
+- Do not commit real operational email addresses only to satisfy "real
   recipients"; configure them out of band and keep committed examples synthetic.
 - Do not widen workflow path filters, weaken Checkov, remove ADR exceptions, or
   skip `adr_guard` to get this through CI.

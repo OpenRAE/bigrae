@@ -90,3 +90,12 @@ run "shared_pool_pod_range_contract" {
     error_message = "Web, worker, and runtime-plugin pools must explicitly use the primary pod range so GKE cannot assign them to a dedicated access or provisioner range."
   }
 }
+
+run "access_pool_name_output_contract" {
+  command = plan
+
+  assert {
+    condition     = output.gke_access_node_pool_name == "${var.name_prefix}-access"
+    error_message = "The access node pool name output must match the pool Terraform creates, because the event-capacity drift check reads that pool."
+  }
+}

@@ -62,7 +62,7 @@ replace table-shaped integration with operation-shaped contracts:
    source of domain truth.
 
 The delivery model is at-least-once with idempotent application, not
-exactly-once. A unique result identity plus the operation generation and a
+exactly once. A unique result identity plus the operation generation and a
 payload digest must distinguish a harmless replay from the same identity
 arriving with different content. Unknown contract versions, stale generations,
 wrong resource ownership, invalid state transitions, and conflicting replays
@@ -303,8 +303,8 @@ file needs no edit:
 - Do not add an internal HTTP callback merely to avoid SQL unless its
   cross-cloud workload authentication, authorization, replay, availability,
   and error-envelope costs are explicitly accepted in a later ADR.
-- Do not edit historical grant migrations, retain unused grants “just in
-  case,” or declare completion while the runtime principal can still mutate
+- Do not edit historical grant migrations, retain unused grants as a
+  precaution, or declare completion while the runtime principal can still mutate
   Django-owned tables.
 - Do not remove the DB path before crash-after-cloud-mutation recovery,
   rolling-version compatibility, retention, worker liveness, and DLQ ownership

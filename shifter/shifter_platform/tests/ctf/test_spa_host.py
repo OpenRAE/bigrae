@@ -16,6 +16,8 @@ pytestmark = pytest.mark.django_db
         "/ctf/",
         "/ctf/challenges/",
         "/ctf/team/join/",
+        "/ctf/individual-scoreboard/",
+        "/ctf/team-scoreboard/",
         "/ctf/admin/",
         "/ctf/admin/events/create/",
         "/ctf/admin/events/00000000-0000-4000-8000-000000000001/participants/import/",

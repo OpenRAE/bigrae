@@ -268,7 +268,7 @@ not partially switch before S8.
 6. **Database enforcement.** Unique and check constraints protect account type,
    public identity, default uniqueness, principal kind/user shape, exact provider
    tuple uniqueness, and membership/scope cardinality. Cross-row ancestry and
-   exactly-one defaults are service/migration invariants under locks. Model
+   exactly one defaults are service/migration invariants under locks. Model
    `clean()` or `save()` alone is insufficient because bulk writes bypass it.
    Provider identity fields have no ordinary update path; database-level
    immutability protection should follow the repository's existing audit/cutover

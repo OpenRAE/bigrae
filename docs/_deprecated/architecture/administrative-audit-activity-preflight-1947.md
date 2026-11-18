@@ -82,7 +82,7 @@ that one contract rather than add another query path.
 - Opt out of the global `SearchFilter` and `OrderingFilter` unless the endpoint
   explicitly defines truthful, indexed fields for them. The generated contract
   must not advertise inert `search`/`ordering` parameters. Do not add an
-  unindexed free-text scan across `context` or JSON state just to satisfy a
+  unindexed free-text scan across `context` or JSON state only to satisfy a
   search-box design; structured actor/entity/time/action filters are the
   authoritative search surface.
 - Keep pagination on the canonical DRF page shape for v1 compatibility and use
@@ -231,7 +231,7 @@ engine.
   permission class, exception hierarchy, audit writer, or redaction vocabulary.
 - Do not treat `is_staff`, workspace role, organization role, model permission,
   CTF organizer status, token scope, and cloud IAM as interchangeable kinds of
-  "admin".
+  "admin."
 - Do not use current actor/entity names as historical truth, require referenced
   rows to still exist, or add cross-domain FKs/joins to the generic audit model.
 - Do not silently accept malformed IDs/dates, invert a time range, advertise
