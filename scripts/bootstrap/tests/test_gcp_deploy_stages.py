@@ -85,6 +85,7 @@ def recorder(monkeypatch, chart):
     monkeypatch.setattr("gcp_terraform.terraform_context", record("terraform_context", lambda *a, **k: object()))
     monkeypatch.setattr("gcp_terraform.terraform_outputs", record("terraform_outputs", lambda *a, **k: outputs))
     monkeypatch.setattr("gcp_terraform.kms_adoption_variables", lambda *a, **k: {})
+    monkeypatch.setattr("gcp_terraform.cloud_sql_disk_variables", lambda *a, **k: {})
     monkeypatch.setattr("gcp_storage_cmek.migrate_buckets", record("migrate_buckets", lambda *a, **k: []))
     monkeypatch.setattr("gcp_helm.render_chart", record("render_chart", lambda *a, **k: chart))
     monkeypatch.setattr("gcp_helm.build_values", record("build_values", lambda *a, **k: {}))
@@ -140,10 +141,11 @@ class TestInfrastructureStage:
         monkeypatch.setattr("gcp_storage_cmek.migrate_buckets", lambda runner, buckets, **k: seen.append(buckets))
         adopted = []
         monkeypatch.setattr("gcp_terraform.kms_adoption_variables", lambda *a, **k: {"adopt_storage_kms": "true"})
+        monkeypatch.setattr("gcp_terraform.cloud_sql_disk_variables", lambda *a, **k: {"cloud_sql_disk_size_gb": "600"})
         monkeypatch.setattr("gcp_terraform.terraform_apply", lambda *a, variables=None, **k: adopted.append(variables))
         infrastructure_stage(FakeRunner(), inputs, operator_password="pw", reconcile_foundation=False)
         assert seen == [outputs["storage_cmek_buckets"]["value"]]
-        assert adopted == [{"adopt_storage_kms": "true"}]
+        assert adopted == [{"adopt_storage_kms": "true", "cloud_sql_disk_size_gb": "600"}]
 
     def test_read_infrastructure_changes_nothing(self, inputs, recorder):
         order, outputs = recorder
