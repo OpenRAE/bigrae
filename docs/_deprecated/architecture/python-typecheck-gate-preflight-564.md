@@ -32,7 +32,7 @@ Keep these concepts separate:
    pre-commit wiring.
 5. Runtime validation and behavior: Django settings, schema validation,
    service boundaries, persistence, logging, and error envelopes must not
-   change just to make mypy pass.
+   change only to make mypy pass.
 
 ## Architecture Decisions
 

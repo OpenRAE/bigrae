@@ -313,7 +313,7 @@ must be followed by reconciliation through authored source.
   `shifter.yaml`, or let Terraform and Helm finish on different profile ids.
 - Do not claim Guacamole success from HTTP 202, bootstrap `succeeded`, URL
   delivery, WebSocket upgrade, or guacd `ready` without display synchronization
-  and a sustained, continuously-read tunnel.
+  and a sustained, continuously read tunnel.
 - Do not reuse `/dev-login/`, one admin session, or one participant session for
   all virtual users in the acceptance gate.
 - Do not log, serialize, or report signed Guacamole URLs/tokens, actor secrets,
@@ -321,7 +321,7 @@ must be followed by reconciliation through authored source.
   state, or private target addresses.
 - Do not raise `guacamoleClient.replicas` above one, route terminal/Guacamole
   bytes through Redis, or mistake Redis channel-layer metrics for tunnel load.
-- Do not use average CPU, `/health`, ready replicas, or “no HTTP 500s” as the
+- Do not use average CPU, `/health`, ready replicas, or “no HTTP 500 responses” as the
   sole gate. Tail latency, tunnel drops, restarts, pool pressure, backend health,
   and metric completeness are independent evidence.
 - Do not use HPA scale-out during the gate to compensate for an under-sized

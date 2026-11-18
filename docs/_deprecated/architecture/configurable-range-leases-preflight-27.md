@@ -150,7 +150,7 @@ terminal cleanup/recovery and operator visibility rather than claim this policy
 repairs all historical orphans. Keep cleanup workers running when extensions
 are disabled. Repeated successful extension requests may each consume one
 increment up to the cap; do not introduce a new idempotency protocol or assume
-exactly-once HTTP delivery. UI refresh after mutation should reuse existing
+exactly once HTTP delivery. UI refresh after mutation should reuse existing
 query invalidation and error handling.
 
 Required implementation evidence builds on `tests/config`,

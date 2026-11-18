@@ -96,7 +96,7 @@ graph are narrow:
 Layer/import helpers stay together; K8s render/security helpers stay together;
 deploy textual checks share their workflow constants and block readers; secret,
 generated-artifact, and identifier checks share only their safe repository-file
-inventory and redaction conventions. Family-specific constants and validators
+inventory and redaction conventions. Per-family constants and validators
 belong to the family that owns them.
 
 One package-wide predicate must answer whether a selected path changes ADR guard
@@ -149,13 +149,13 @@ refactor into an unreviewed closure of that separate workflow gap.
 | CLI input shape | `argparse` remains the only CLI parser. Check names are selected from the explicit registry; `--all`, `--changed`, and `--files` stay mutually exclusive; normalized paths continue to be passed as repository-relative strings. Do not add import/module names as user-selectable execution targets. |
 | ADR/config shape | ADR index and exceptions retain their JSON-in-`.yaml` standard-library parsing and current shape validators. Layer policy retains its canonical YAML data. Ruff config retains `tomllib`. Workflow and K8s parsing retain `yaml.safe_load`/`safe_load_all`. Quality ownership retains `contract.py` as its only schema validator. |
 | Secret handling | `no-plaintext-secrets-in-tfvars`, `no-populated-secret-env-files`, generated-artifact, live-identifier, and Mission Control flag checks must continue to report path, line/kind, and remediation without echoing matched values. No package initializer may read environment files or configuration eagerly. |
-| Environment binding | Preserve the narrow meanings of `ADR_GUARD_BASE_REF` and `GITHUB_BASE_REF` as read-only git-reference selectors and `ADR_GUARD_SNAPSHOT_ENFORCE` as the CI fail-closed switch. The workflow evaluator's child environment remains restricted to `PATH`, `GITHUB_REF`, and a temporary `GITHUB_OUTPUT`. Do not add family-specific env flags. |
+| Environment binding | Preserve the narrow meanings of `ADR_GUARD_BASE_REF` and `GITHUB_BASE_REF` as read-only git-reference selectors and `ADR_GUARD_SNAPSHOT_ENFORCE` as the CI fail-closed switch. The workflow evaluator's child environment remains restricted to `PATH`, `GITHUB_REF`, and a temporary `GITHUB_OUTPUT`. Do not add per-family env flags. |
 | OS/process exposure | Git and Helm continue through fixed argv arrays, bounded timeouts where currently present, explicit `cwd`/`-C`, captured output, and no shell. `_dw_evaluate_env` is the one existing constrained exception: it evaluates the repository's static `Set environment` workflow body via `bash -c` with literal event/branch inputs, an explicit minimal environment, no secrets, no tracing, and a temporary output file. Do not generalize it into a shell helper or feed CLI/config/secret text into it. |
 | Filesystem/persistence | Checks read the checkout and, where necessary, git metadata. They do not write repository state, databases, caches, audit logs, or cloud state. The workflow evaluator's temporary `GITHUB_OUTPUT` remains process-local and is removed with its temporary directory. Moved modules must use the supplied `repo_root` and must not scan home directories or paths derived from their new depth. |
 | Error envelope | Expected malformed repository input remains a deterministic `Violation` or the existing bounded `_DwShapeError` translated by its owning check. Text and JSON output shapes and exit codes stay unchanged. Do not add a package-wide exception hierarchy, per-family serialization, stack traces in normal violations, or a catch-all in `main()` that converts programmer defects into false policy results. |
 | Observability | The observable signal is deterministic stdout plus the pre-commit/CI exit status. There is no logger, metric, event, or durable audit surface to preserve or create. Diagnostics must retain check name, ADR rule, repository-relative path, and redaction. |
 | Dependency/runtime | Python 3.11 remains required because of `tomllib`; CI and the test lane retain their pinned `uv`/PyYAML setup; the dependency-bearing K8s hook retains PyYAML. Module import must remain side-effect free and must not require Helm unless a selected K8s check reaches chart rendering. |
-| Exception policy | `docs/adr/exceptions.yaml` remains the only waiver mechanism, with owner, reason, expiry, and optional path/check scope. Filtering occurs centrally after check execution so extraction cannot produce family-specific bypass behavior. |
+| Exception policy | `docs/adr/exceptions.yaml` remains the only waiver mechanism, with owner, reason, expiry, and optional path/check scope. Filtering occurs centrally after check execution so extraction cannot produce per-family bypass behavior. |
 
 ## Compatibility And Test Guardrails
 

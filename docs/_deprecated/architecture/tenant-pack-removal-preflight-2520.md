@@ -158,7 +158,7 @@ pending progress across partial deletion, process death, timeout and audit failu
 Retry exact captured keys idempotently; do not reopen admission after bytes have
 been removed. Completed removal means all owned archives are absent and the
 completion audit is durable. A pending result must say cleanup is pending; never
-return completed success just because a callback was queued. Repeated authorized
+return completed success only because a callback was queued. Repeated authorized
 requests must reach the tombstone to resume or return the same completed result.
 
 Reuse the durable claim/fence/retry conventions in

@@ -100,7 +100,7 @@ provider client.
   object key, size, filename, OS, or agent type.
 - Object metadata surface: `head_object` / `verify_s3_object_exists` remains the
   size and identity capture gate. The captured identity must flow into the later
-  provider precondition; it is not just diagnostic metadata.
+  provider precondition; it is not only diagnostic metadata.
 - Object content surface: header inspection still uses bounded range reads via
   `read_object_header` and `UPLOAD_INSPECTION_MAX_HEADER_BYTES`. Do not download
   full installer objects into Django memory to solve the race.

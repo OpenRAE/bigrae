@@ -64,7 +64,7 @@ The evidence bundle required to widen the claim, in order:
    backend's `ParticipantRuntime` protocol implementation -- `initialize`,
    `reset`, `restart`, `terminate`, and the `status`/`results`/`history`
    observation methods -- actually round-trips through `RuntimeSnapshot.participant_episode_results`
-   and `participant_episode_history`, not just that the manifest text parses.
+   and `participant_episode_history`, not only that the manifest text parses.
 
 The claim is an output of contract support plus conformance evidence. It is
 never a feature flag, a config toggle, or a documentation update by itself --

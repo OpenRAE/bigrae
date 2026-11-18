@@ -83,7 +83,7 @@ Remote-access output is limited to readiness and non-secret binding metadata: in
 UUID, protocol, address/port, username when non-secret, and a secret *reference* when a
 credential is required. Passwords, private keys, Guacamole tokens/URLs, kubeconfigs,
 and provider access tokens never cross this interface. Guacamole session construction
-and just-in-time secret resolution remain in the existing Engine/Mission Control access
+and on-demand secret resolution remain in the existing Engine/Mission Control access
 services. A scenario declares a logical member target and access channel; the platform
 resolves the concrete provider address and rejects foreign or non-member targets rather
 than accepting an arbitrary scenario-supplied hostname.

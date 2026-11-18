@@ -87,7 +87,7 @@ Trial controls must preserve host resource-generation and provisioning-observati
 Do not reuse a completed provision operation as a mutable trial command channel or let trial results restore a retired host's READY state.
 Start needs a durable, attempt-bound remote acceptance record that repeated calls inspect instead of starting another process.
 A timeout or missing acknowledgement remains uncertain until that exact worker and attempt are inspected.
-Database claims, deterministic Job names, and a PID alone do not establish exactly-once guest execution.
+Database claims, deterministic Job names, and a PID alone do not establish exactly once guest execution.
 
 Use short SQL transactions and the existing batch lock/conditional claim pattern.
 Persist each external-effect intent before I/O; fence its result against current attempt, worker, operation, and generation afterwards.

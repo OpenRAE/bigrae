@@ -143,7 +143,7 @@ mutable working tree an acceptable deployment surface.
 
 ## Gotchas, Anti-Patterns, And Non-Goals
 
-- Do not create separate "built-in", "marketplace", "licensed", "private",
+- Do not create separate "built-in," "marketplace," "licensed," "private,"
   or "author-created" import endpoints, schemas, tables, permissions, audit
   events, exceptions, or bootstrap code paths.
 - Do not conflate operator authorization to register content with entitlement

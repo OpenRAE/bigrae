@@ -3,7 +3,7 @@
 > **Historical implementation record.** This issue-scoped preflight is not current-system authority. See the [current-state handbook](../technical/architecture.md) and accepted, superseding ADRs.
 
 
-Issue: GitHub #962, "[MEDIUM] No CMEK encryption on GCS buckets".
+Issue: GitHub #962, "[MEDIUM] No CMEK encryption on GCS buckets."
 
 This note records the architecture boundary for either remediating GCS bucket
 encryption with customer-managed keys or accepting Google-managed encryption as
@@ -169,7 +169,7 @@ If the implementation changes `.github/workflows/_gcp-dev.yml`, also run
 `actionlint`. If it changes `scripts/bootstrap/deploy.py`, run the bootstrap
 test subset covering GCP control-plane/bootstrap behavior.
 
-## Outcome — accepted Google-managed encryption (2026-05-11)
+## Outcome—accepted Google-managed encryption (2026-05-11)
 
 Landed alongside #959, #960, and #963. The architectural decision recorded
 in ADR-008-R5 (`docs/adr/index.yaml`) is the implementation record:

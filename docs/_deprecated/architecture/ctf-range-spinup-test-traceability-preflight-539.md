@@ -42,11 +42,11 @@ coverage.
   knob, task metadata value, or UI-only setting for the same lead time.
 - Reuse `CTFScheduledTask` with `ScheduledTaskType.SPIN_UP_RANGES` as the durable
   background-work record. Do not add Celery/RQ, a cron table, a process-local
-  queue, or a new scheduler task type just to detect event-start delay.
+  queue, or a new scheduler task type only to detect event-start delay.
 - Keep throttling in `provision_event_ranges_throttled()` and pacing in
   `compute_throttle_delay()`. The scheduler handler may pass event/task context
   and callbacks, but it must not copy the participant loop.
-- Treat "delay" as distinct from "provisioning failure". Existing
+- Treat "delay" as distinct from "provisioning failure." Existing
   `notify_organizer_provision_failure()` covers failed participants; a
   not-yet-complete-by-start notice should use the CTF notification service and
   its own explicit notification semantics rather than reusing
@@ -143,7 +143,7 @@ duplicating the range loop, or creating another scheduler abstraction.
 
 ## Gotchas
 
-- `range_spinup_minutes=0` is valid and means "start at event start". Decide
+- `range_spinup_minutes=0` is valid and means "start at event start." Decide
   deliberately whether this should send an immediate delay notice; do not treat
   the zero-lead-time case as an accidental infrastructure delay by default.
 - A scheduler process can start late and claim `SPIN_UP_RANGES` after
@@ -157,7 +157,7 @@ duplicating the range loop, or creating another scheduler abstraction.
   id yet. Use the existing range-service semantics when computing remaining or
   delayed work.
 - Failure notification and delay notification can both apply to the same run.
-  Do not suppress failure reporting just because a delay notice was sent.
+  Do not suppress failure reporting only because a delay notice was sent.
 - `CTFBaseModel.save()` calls `full_clean()`. Heartbeat updates and idempotence
   markers should avoid unnecessary full-object validation churn in long loops.
 - SQLite-backed tests cannot prove PostgreSQL advisory/row-lock behavior. Keep

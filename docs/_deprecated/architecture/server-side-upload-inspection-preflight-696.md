@@ -4,7 +4,7 @@
 
 
 Issue #696 closes the upload validation gap for direct-to-S3 uploads by making
-backend finalization verify object content, not just client-side checks or S3
+backend finalization verify object content, not only client-side checks or S3
 metadata. This is a validation-boundary change, not a new upload workflow.
 
 ## Boundary
