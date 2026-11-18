@@ -316,8 +316,13 @@ class TestPrerequisites:
                 request.full_url, 404 if request.get_method() == "GET" else 403, "x", None, None
             )
 
-        with pytest.raises(PrerequisiteError, match="initializeAuth"):
-            ensure_identity_platform(self._runner(), {}, project_id=PROJECT, opener=failing)
+        times = iter([0.0, 300.0, 601.0])
+        waits = []
+        with pytest.raises(PrerequisiteError, match="init HTTP 403"):
+            ensure_identity_platform(
+                self._runner(), {}, project_id=PROJECT, opener=failing, sleep=waits.append, clock=lambda: next(times)
+            )
+        assert waits == [15]
 
         def down(request, timeout):
             raise urllib_error.URLError("down")
@@ -328,6 +333,39 @@ class TestPrerequisites:
             ensure_identity_platform(
                 FakeRunner().on(["gcloud", "auth"], ProcessResult(0, "")), {}, project_id=PROJECT, opener=down
             )
+
+    def test_identity_platform_waits_for_a_pending_grant(self):
+        """A 403 from initializeAuth is retried until the new grant takes effect (#2958)."""
+        posts = iter([403, 403, 200])
+        waits = []
+
+        def opener(request, timeout):
+            if request.get_method() == "GET":
+                raise urllib_error.HTTPError(request.full_url, 404, "nf", None, None)
+            status = next(posts)
+            if status != 200:
+                raise urllib_error.HTTPError(request.full_url, status, "x", None, None)
+            return _Resp()
+
+        ensure_identity_platform(
+            self._runner(), {}, project_id=PROJECT, opener=opener, sleep=waits.append, clock=lambda: 0.0
+        )
+        assert waits == [15, 15]
+
+    def test_identity_platform_does_not_retry_other_errors(self):
+        posts = []
+
+        def opener(request, timeout):
+            if request.get_method() == "GET":
+                raise urllib_error.HTTPError(request.full_url, 404, "nf", None, None)
+            posts.append(request.full_url)
+            raise urllib_error.HTTPError(request.full_url, 400, "x", None, None)
+
+        with pytest.raises(PrerequisiteError, match="init HTTP 400"):
+            ensure_identity_platform(
+                self._runner(), {}, project_id=PROJECT, opener=opener, sleep=pytest.fail, clock=lambda: 0.0
+            )
+        assert len(posts) == 1
 
     def test_state_bucket_is_created_hardened_and_cleaned(self):
         policy = {"bindings": [{"role": "roles/storage.objectViewer", "members": ["allUsers"]}]}

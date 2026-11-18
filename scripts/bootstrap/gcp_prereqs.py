@@ -13,6 +13,7 @@ Each step is idempotent and runs as the selected purpose identity.
 from __future__ import annotations
 
 import json
+import time
 from collections.abc import Callable, Mapping
 from urllib import error as urllib_error
 from urllib import parse as urllib_parse
@@ -24,6 +25,10 @@ from gcp_process import ProcessRunner
 STATE_RETENTION_SECONDS = 30 * 24 * 60 * 60
 _IDENTITY_TOOLKIT = "https://identitytoolkit.googleapis.com"
 _SERVICE_USAGE = "https://serviceusage.googleapis.com"
+# A first install grants the Identity Platform role just before this step. IAM applies a
+# new grant after a delay of "typically 2 minutes, potentially 7 minutes or longer" (#2958).
+_GRANT_WAIT_SECONDS = 600
+_GRANT_POLL_SECONDS = 15
 _PUBLIC_BINDINGS = (
     ("allUsers", "roles/storage.objectViewer"),
     ("allAuthenticatedUsers", "roles/storage.objectViewer"),
@@ -86,8 +91,13 @@ def ensure_identity_platform(
     *,
     project_id: str,
     opener: Opener = urllib_request.urlopen,
+    sleep: Callable[[float], None] | None = None,
+    clock: Callable[[], float] | None = None,
 ) -> None:
-    """Initialize Identity Platform once; ``initializeAuth`` is not idempotent."""
+    """Initialize Identity Platform once; ``initializeAuth`` is not idempotent.
+
+    A 403 changes nothing, so it is retried until a new grant takes effect (#2958).
+    """
     runner.run(["gcloud", "services", "enable", "identitytoolkit.googleapis.com", "--project", project_id], env=env)
     token = access_token(runner, env)
     status = _google_api(
@@ -97,14 +107,22 @@ def ensure_identity_platform(
         info("Identity Platform already provisioned")
         return
     info(f"Identity Platform config absent (HTTP {status}); initializing")
-    init_status = _google_api(
-        f"{_IDENTITY_TOOLKIT}/v2/projects/{project_id}/identityPlatform:initializeAuth",
-        token=token,
-        project_id=project_id,
-        method="POST",
-        body=b"{}",
-        opener=opener,
-    )
+    # Read the time functions at call time, so a test that replaces them does not wait.
+    now = clock or time.monotonic
+    deadline = now() + _GRANT_WAIT_SECONDS
+    while True:
+        init_status = _google_api(
+            f"{_IDENTITY_TOOLKIT}/v2/projects/{project_id}/identityPlatform:initializeAuth",
+            token=token,
+            project_id=project_id,
+            method="POST",
+            body=b"{}",
+            opener=opener,
+        )
+        if init_status != 403 or now() >= deadline:
+            break
+        info("Waiting for the Identity Platform grant on the deploy identity to take effect")
+        (sleep or time.sleep)(_GRANT_POLL_SECONDS)
     if init_status != 200:
         raise PrerequisiteError(
             f"Identity Platform initializeAuth failed (config HTTP {status}, init HTTP {init_status})"
