@@ -37,6 +37,21 @@ Redis, and external HTTPS load-balancer evidence; bounded `kubectl get` and
 `gcloud compute backend-services get-health` reads supply effective readiness
 and backend health. No missing signal is converted to zero.
 
+## Access node pool identity
+
+Terraform owns the physical name of the access node pool, `<name_prefix>-access`.
+The `gke_access_node_pool_name` output carries `google_container_node_pool.access.name`
+from the GKE module through `platform-core` to the platform root.
+
+The drift checker does not make or find the pool name.
+Live inspection requires `--access-node-pool`.
+The checker passes that value unchanged to the read-only `gcloud container node-pools describe` command.
+The checker rejects a blank resource name or a name that starts with `-` before it runs a command.
+Offline inspection with `--observed` needs no pool name.
+
+The `access` role label, placement label, and taint are scheduling contracts.
+They are separate from the physical pool name.
+
 The binding architecture analysis is
 [GCP shared-service event capacity preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/_deprecated/architecture/gcp-shared-service-event-capacity-preflight-1816.md).
 The operator procedure is [GCP event capacity profiles](../../ops/gcp-event-capacity.md).
