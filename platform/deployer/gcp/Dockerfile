@@ -64,18 +64,37 @@ RUN uv export --project scripts/bootstrap --frozen --no-dev --no-emit-project \
     echo "/opt/bigrae/lib" > /opt/bigrae/venv/lib/python3.12/site-packages/bigrae-lib.pth
 
 # ---------------------------------------------------------------------------
+# Terraform from the commit of its release tag, built with a fixed Go toolchain.
+# Every HashiCorp build of Terraform 1.17 uses a Go standard library before
+# 1.26.11 / 1.27.4 (CVE-2026-97054). Return to the vendor binary when one
+# passes the image scan without exceptions.
+# ---------------------------------------------------------------------------
+# base image: golang:1.27.4-trixie
+FROM golang@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d AS terraform-source
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local
+ARG TERRAFORM_VERSION=1.17.1
+# The commit that tag v1.17.1 points to.
+ARG TERRAFORM_COMMIT=ff6329e4c2a159b46ec2b73d36bfa3d0ef6560c9
+WORKDIR /src
+RUN git init -q . && \
+    git fetch -q --depth 1 https://github.com/hashicorp/terraform.git \
+      "refs/tags/v${TERRAFORM_VERSION}:refs/tags/v${TERRAFORM_VERSION}" && \
+    test "$(git rev-parse "v${TERRAFORM_VERSION}^{commit}")" = "${TERRAFORM_COMMIT}" && \
+    git checkout -q "${TERRAFORM_COMMIT}" && \
+    go build -trimpath -ldflags "-s -w -X github.com/hashicorp/terraform/version.dev=no" -o /out/terraform . && \
+    /out/terraform version | head -n 1 | grep -Fx "Terraform v${TERRAFORM_VERSION}"
+
+# ---------------------------------------------------------------------------
 # Pinned tools. Each download is checked against the SHA-256 below. Bump a
 # version and its SHA-256 together, from the vendor's published checksum.
 # ---------------------------------------------------------------------------
 # base image: python:3.12-slim-trixie
 FROM python@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf AS tools
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-# Keep each tool at the latest release of its line (Terraform 1.17, Trivy).
+# Keep Trivy at the latest release of its line. Terraform builds from source above.
 # Older releases carry fixable HIGH and CRITICAL findings in their compiled Go
 # dependencies. The kubectl, Helm, and ORAS stages below build from source.
-ARG TERRAFORM_VERSION=1.17.1
-# From terraform_1.17.1_SHA256SUMS (signature checked with HashiCorp key C874011F0AB405110D02105534365D9472D7468F).
-ARG TERRAFORM_SHA256=4638628058e71a55212b1c563712eac03b902128f40740f3dc8174df12135061
 ARG TRIVY_VERSION=0.76.2
 ARG TRIVY_SHA256=bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
 RUN apt-get update && \
@@ -84,16 +103,13 @@ RUN apt-get update && \
 WORKDIR /downloads
 RUN fetch() { curl --proto '=https' --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 -fsSL -o "$1" "$2"; } && \
     mkdir -p /out/bin && \
-    fetch "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
-      "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
-    echo "${TERRAFORM_SHA256}  terraform_${TERRAFORM_VERSION}_linux_amd64.zip" | sha256sum -c - && \
-    unzip -j "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" terraform -d /out/bin && \
     fetch "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
       "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" && \
     echo "${TRIVY_SHA256}  trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | sha256sum -c - && \
     tar -xzf "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -C /out/bin trivy && \
     chmod 0755 /out/bin/* && \
     rm -rf /downloads/*
+COPY --from=terraform-source /out/terraform /out/bin/terraform
 
 # ---------------------------------------------------------------------------
 # Terraform provider mirror. Each root initializes against its committed lock
@@ -117,7 +133,7 @@ RUN find /opt/bigrae/platform/terraform/gcp -name .terraform.lock.hcl -printf '%
 # source with fixed Go and golang.org/x/net so the deployer scan needs no
 # exceptions for them. No vendor build of the first three has golang.org/x/net
 # 0.62.0 (CVE-2026-78661) yet. The ORAS v1.3.6 vendor build uses a Go standard
-# library before 1.27.3 (CVE-2026-111943). Each stage pins the Go image and the commit of an
+# library before 1.27.4 (CVE-2026-111943, CVE-2026-97054). Each stage pins the Go image and the commit of an
 # upstream release tag, raises golang.org/x/net with the project's own
 # dependency tooling, and go.sum and the checksum database verify each module.
 # The kubectl, Helm, and ORAS stages fetch the release tag, so the Go build info
@@ -125,8 +141,8 @@ RUN find /opt/bigrae/platform/terraform/gcp -name .terraform.lock.hcl -printf '%
 # pins current. Return to the vendor binaries when they pass the deployer scan
 # without exceptions.
 # ---------------------------------------------------------------------------
-# base image: golang:1.27.3-trixie
-FROM golang@sha256:c65ecfe613b539ac74c62a4c3b2c27e8f8a6076384c8f27e8a3c0f3be17cc385 AS go-source
+# base image: golang:1.27.4-trixie
+FROM golang@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d AS go-source
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
 ARG GOLANG_X_NET_VERSION=v0.62.0
 ENV CGO_ENABLED=0 GOTOOLCHAIN=local

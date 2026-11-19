@@ -1,3 +1,25 @@
+# ---------------------------------------------------------------------------
+# Terraform from the commit of its release tag, built with a fixed Go toolchain.
+# Every HashiCorp build of Terraform 1.17 uses a Go standard library before
+# 1.26.11 / 1.27.4 (CVE-2026-97054). Return to the vendor binary when one
+# passes the image scan without exceptions.
+# ---------------------------------------------------------------------------
+# base image: golang:1.27.4-trixie
+FROM golang@sha256:f18c3d73a184fb0582828510722e723b63a93f7188d11dd223d9be6f6880e65d AS terraform-source
+SHELL ["/bin/bash", "-o", "pipefail", "-c"]
+ENV CGO_ENABLED=0 GOTOOLCHAIN=local
+ARG TERRAFORM_VERSION=1.17.1
+# The commit that tag v1.17.1 points to.
+ARG TERRAFORM_COMMIT=ff6329e4c2a159b46ec2b73d36bfa3d0ef6560c9
+WORKDIR /src
+RUN git init -q . && \
+    git fetch -q --depth 1 https://github.com/hashicorp/terraform.git \
+      "refs/tags/v${TERRAFORM_VERSION}:refs/tags/v${TERRAFORM_VERSION}" && \
+    test "$(git rev-parse "v${TERRAFORM_VERSION}^{commit}")" = "${TERRAFORM_COMMIT}" && \
+    git checkout -q "${TERRAFORM_COMMIT}" && \
+    go build -trimpath -ldflags "-s -w -X github.com/hashicorp/terraform/version.dev=no" -o /out/terraform . && \
+    /out/terraform version | head -n 1 | grep -Fx "Terraform v${TERRAFORM_VERSION}"
+
 # base image: python:3.12-slim-trixie
 FROM python@sha256:78387bc3881b8273120a12ebe6c1ab22b018ccc2c9adf565ae1ac9b536e184ea
 
@@ -13,10 +35,11 @@ LABEL maintainer="Shifter maintainers" \
       org.opencontainers.image.licenses="MIT" \
       org.opencontainers.image.authors="Shifter maintainers"
 
-# Install Terraform CLI (pinned version). The provisioner is Terraform-based;
-# it never imports Pulumi or shells out to the Pulumi CLI, so no Pulumi binary
-# is installed (removing it also drops the go-git CVE it embedded).
-ARG TERRAFORM_VERSION=1.17.1
+# Terraform CLI, built from source in the terraform-source stage above. The
+# provisioner is Terraform-based; it never imports Pulumi or shells out to the
+# Pulumi CLI, so no Pulumi binary is installed (removing it also drops the
+# go-git CVE it embedded).
+COPY --from=terraform-source /out/terraform /usr/local/bin/terraform
 
 # kubectl and the KubeVirt `virt` plugin (virtctl, installed as `kubectl-virt`)
 # drive GDC VM Runtime guest start/stop for range pause/resume (issue #614,
@@ -58,16 +81,7 @@ RUN apt-get update && \
       curl --proto '=https' --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 -fsSL \
         -o "${out}" "${url}"; \
     } && \
-    # Install Terraform, integrity-verified against HashiCorp's published
-    # SHA256SUMS before extraction (ADR-037-R3). The archive is saved under the
-    # exact name the checksum manifest references so `sha256sum -c` matches.
-    fetch "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" \
-      "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_amd64.zip" && \
-    fetch terraform_SHA256SUMS \
-      "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_SHA256SUMS" && \
-    grep "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" terraform_SHA256SUMS | sha256sum -c - && \
-    unzip "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" -d /usr/local/bin && \
-    rm "terraform_${TERRAFORM_VERSION}_linux_amd64.zip" terraform_SHA256SUMS && \
+    terraform version | head -n 1 | grep -Fx "Terraform v1.17.1" && \
     # Install kubectl and the KubeVirt virt plugin (virtctl) as kubectl-virt ONLY
     # for GDC VM Runtime deployments (INSTALL_KUBEVIRT=true). kubectl is verified
     # against dl.k8s.io's published hash. KubeVirt publishes no release checksums

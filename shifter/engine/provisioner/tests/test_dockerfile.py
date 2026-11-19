@@ -178,10 +178,18 @@ class TestDockerfileNonRootUser:
         assert "--proto '=https' --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20" in helper.group(1)
         # Every download goes through the helper, so each one retries.
         downloads = re.findall(r"^\s*(\w+) \S+ \\?\s*\"https://", content, re.MULTILINE)
-        assert len(downloads) == 5
+        assert len(downloads) == 3
         assert set(downloads) == {"fetch"}
         instructions = "\n".join(line for line in content.splitlines() if not line.lstrip().startswith("#"))
         assert len(re.findall(r"\bcurl -", instructions)) == 1
+
+    def test_builds_terraform_from_the_verified_release_commit(self):
+        """Terraform comes from its tagged commit with a fixed Go toolchain (CVE-2026-97054)."""
+        content = _read_dockerfile()
+        assert "AS terraform-source" in content
+        assert 'test "$(git rev-parse "v${TERRAFORM_VERSION}^{commit}")" = "${TERRAFORM_COMMIT}"' in content
+        assert "COPY --from=terraform-source /out/terraform /usr/local/bin/terraform" in content
+        assert "releases.hashicorp.com/terraform" not in content
 
     def test_bakes_terraform_provider_mirror(self):
         content = _read_dockerfile()
