@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -94,6 +95,25 @@ def test_p300_carries_the_live_event_autoscaling_and_worker_values():
     assert profile.portal.web_workers == 6
     assert profile.helm_projection()["runtimeEnv"]["PORTAL_WEB_WORKERS"] == "6"
     assert resolve_capacity_profile("gcp-shared-v1-p200").portal.web_workers == 4
+
+
+def test_p300_carries_the_live_event_openfga_values():
+    profile = resolve_capacity_profile("gcp-shared-v1-p300")
+    helm = profile.helm_projection()
+    kubernetes = cast(dict[str, object], profile.desired_state()["kubernetes"])
+
+    assert (profile.openfga.replicas, profile.openfga.timeout_ms) == (4, 5000)
+    assert helm["openfga"] == {"replicas": 4}
+    assert cast(dict[str, str], helm["runtimeEnv"])["OPENFGA_TIMEOUT_MS"] == "5000"
+    assert kubernetes["deployment/openfga.spec.replicas"] == 4
+    assert kubernetes["configmap/platform-runtime.data.OPENFGA_TIMEOUT_MS"] == "5000"
+
+
+@pytest.mark.parametrize("profile_id", ["gcp-shared-v1-p10", "gcp-shared-v1-p200", "gcp-shared-v1-p500"])
+def test_other_tiers_keep_the_chart_and_runtime_openfga_defaults(profile_id):
+    profile = resolve_capacity_profile(profile_id)
+
+    assert (profile.openfga.replicas, profile.openfga.timeout_ms) == (2, 1500)
 
 
 def test_unknown_profile_fails_closed():

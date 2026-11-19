@@ -111,6 +111,13 @@ class GuacamoleClientCapacity(_ClosedModel):
     absolute_tunnel_connections: int = Field(ge=1, le=1000)
 
 
+class OpenFgaCapacity(_ClosedModel):
+    """OpenFGA runtime server replicas and the portal's per-check timeout."""
+
+    replicas: int = Field(ge=1)
+    timeout_ms: int = Field(ge=100, le=10_000)
+
+
 class CloudSqlCapacity(_ClosedModel):
     """Cloud SQL sizing, availability, connection, and utilization limits."""
 
@@ -204,6 +211,7 @@ class GcpSharedServiceCapacityProfile(_ClosedModel):
     portal: PortalCapacity
     guacd: GuacdCapacity
     guacamole_client: GuacamoleClientCapacity
+    openfga: OpenFgaCapacity
     cloud_sql: CloudSqlCapacity
     redis: RedisCapacity
     access_nodes: AccessNodeCapacity
@@ -262,7 +270,9 @@ class GcpSharedServiceCapacityProfile(_ClosedModel):
                 "PORTAL_WEB_WS_PING_INTERVAL": str(self.timeouts.websocket_ping_interval_seconds),
                 "PORTAL_WEB_WS_PING_TIMEOUT": str(self.timeouts.websocket_ping_timeout_seconds),
                 "PORTAL_WEB_GRACEFUL_TIMEOUT": str(self.timeouts.process_graceful_timeout_seconds),
+                "OPENFGA_TIMEOUT_MS": str(self.openfga.timeout_ms),
             },
+            "openfga": {"replicas": self.openfga.replicas},
             "services": {
                 "portal": {
                     "backendConfig": {
@@ -308,6 +318,7 @@ class GcpSharedServiceCapacityProfile(_ClosedModel):
                 kubernetes[f"{resource_prefix}.cpu"] = quantity.cpu
                 kubernetes[f"{resource_prefix}.memory"] = quantity.memory
 
+        kubernetes["deployment/openfga.spec.replicas"] = self.openfga.replicas
         kubernetes[
             "deployment/guacamole-client.spec.template.spec.containers.guacamole-client.env."
             "POSTGRESQL_ABSOLUTE_MAX_CONNECTIONS"
@@ -384,6 +395,12 @@ _TIER_SIZES: dict[int, tuple[int, int, int, int, str, Literal["ZONAL", "REGIONAL
 _AUTOSCALING_MAXIMUMS: dict[int, tuple[int, int]] = {300: (100, 72)}
 _PORTAL_WEB_WORKERS: dict[int, int] = {300: 6}
 
+# On 2026-11-19 at p300 load, OpenFGA checks that took longer than 1.5 s failed
+# closed, and the Guacamole authority renewal ended live sessions. OpenFGA was
+# not CPU bound. p300 runs 4 OpenFGA servers and gives each check 5 s.
+_OPENFGA_REPLICAS: dict[int, int] = {300: 4}
+_OPENFGA_TIMEOUT_MS: dict[int, int] = {300: 5000}
+
 # guacamole-client stays at exactly one replica (#928 token affinity), and every
 # participant's display stream passes through it, so the larger tiers give that
 # single pod more CPU and memory instead of more replicas.
@@ -435,6 +452,10 @@ def _build_profile(count: Literal[10, 30, 50, 100, 200, 300, 500]) -> GcpSharedS
         guacamole_client=GuacamoleClientCapacity(
             resources=_resources(*_GUACAMOLE_CLIENT_RESOURCES.get(count, _GUACAMOLE_CLIENT_DEFAULT_RESOURCES)),
             absolute_tunnel_connections=count,
+        ),
+        openfga=OpenFgaCapacity(
+            replicas=_OPENFGA_REPLICAS.get(count, 2),
+            timeout_ms=_OPENFGA_TIMEOUT_MS.get(count, 1500),
         ),
         cloud_sql=CloudSqlCapacity(
             tier=sql_tier,

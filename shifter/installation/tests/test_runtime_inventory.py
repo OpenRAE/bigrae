@@ -133,6 +133,7 @@ def test_cloud_provider_is_a_generated_runtime_env_key():
 def test_capacity_runtime_keys_have_a_distinct_projection_inventory():
     assert {
         "GUACAMOLE_BOOTSTRAP_WORKERS",
+        "OPENFGA_TIMEOUT_MS",
         "PORTAL_WEB_GRACEFUL_TIMEOUT",
         "PORTAL_WEB_WORKERS",
         "PORTAL_WEB_WS_PING_INTERVAL",
