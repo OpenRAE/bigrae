@@ -7,13 +7,10 @@ coarse response contract while reflecting the configured runtime dependencies.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-import uuid
-from typing import Protocol
+import threading
+from typing import Any
 
-from asgiref.sync import async_to_sync
-from channels.layers import get_channel_layer
 from django.conf import settings
 from health_check.backends import HealthCheck as HealthCheckPluginBase
 from health_check.exceptions import ServiceUnavailable
@@ -30,17 +27,6 @@ __all__ = [
 _logger = logging.getLogger(__name__)
 _REDIS_CHANNEL_LAYER = "channels_redis.core.RedisChannelLayer"
 _PROBE_TIMEOUT_SECONDS = 2.0
-HealthCheckMessage = dict[str, str]
-
-
-class ChannelLayerProbe(Protocol):
-    """Minimal Channels layer protocol needed by the Redis readiness probe."""
-
-    async def new_channel(self, prefix: str = "specific") -> str: ...
-
-    async def send(self, channel: str, message: HealthCheckMessage) -> None: ...
-
-    async def receive(self, channel: str) -> HealthCheckMessage: ...
 
 
 def channel_layer_uses_redis() -> bool:
@@ -62,7 +48,7 @@ class ChannelLayerRedisHealthCheck(HealthCheckPluginBase):
             self.add_error(ServiceUnavailable("Channel layer Redis unavailable"))
 
     def _probe(self) -> bool:
-        return async_to_sync(_probe_configured_channel_layer)()
+        return _ping_configured_redis()
 
 
 class AuditLogDegradedHealthCheck(HealthCheckPluginBase):
@@ -92,20 +78,40 @@ def register_channel_layer_redis_health_check() -> None:
     plugin_dir.register(ChannelLayerRedisHealthCheck)
 
 
-async def _probe_configured_channel_layer() -> bool:
-    """Run a bounded round trip against the configured default channel layer."""
-    layer = get_channel_layer()
-    if layer is None:
-        raise ServiceUnavailable("Default channel layer is unavailable")
-    await asyncio.wait_for(_round_trip(layer), timeout=_PROBE_TIMEOUT_SECONDS)
+_redis_client_lock = threading.Lock()
+_redis_client: Any = None
+
+
+def _configured_redis_client() -> Any:
+    """Return one process-wide client for the first configured channel-layer host.
+
+    The probe uses its own connection pool. It must not send and receive through
+    the shared channel layer. A concurrent WebSocket receive() on that layer makes
+    channels_redis raise "Two event loops are trying to receive() on one channel
+    layer at once!", so the probe failed while Redis was healthy.
+    """
+    global _redis_client
+    with _redis_client_lock:
+        if _redis_client is None:
+            import redis
+
+            host = settings.CHANNEL_LAYERS["default"]["CONFIG"]["hosts"][0]
+            if isinstance(host, dict):
+                options = {key: value for key, value in host.items() if key != "address"}
+                address = host["address"]
+            else:
+                options, address = {}, host
+            _redis_client = redis.Redis.from_url(
+                address,
+                socket_timeout=_PROBE_TIMEOUT_SECONDS,
+                socket_connect_timeout=_PROBE_TIMEOUT_SECONDS,
+                **options,
+            )
+        return _redis_client
+
+
+def _ping_configured_redis() -> bool:
+    """Send PING to the channel-layer Redis on the probe's own connection."""
+    if not _configured_redis_client().ping():
+        raise ServiceUnavailable("Channel layer Redis did not answer PING")
     return True
-
-
-async def _round_trip(layer: ChannelLayerProbe) -> None:
-    """Send and receive a unique health-check message through ``layer``."""
-    channel = await layer.new_channel("health.check")
-    message = {"type": "health.check", "id": uuid.uuid4().hex}
-    await layer.send(channel, message)
-    received = await layer.receive(channel)
-    if received != message:
-        raise ServiceUnavailable("Default channel layer returned an unexpected health-check response")
