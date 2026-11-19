@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from typing import Any
     from uuid import UUID
 
-    from engine.models import ProvisionerLaunchIntent, VpnAccessProfile
+    from engine.models import ProvisionerLaunchIntent, VpnAccessProfile, VpnCrlState
 
 
 _VPN_CLEANUP_UNAVAILABLE = "VPN cleanup unavailable"
@@ -52,19 +52,31 @@ def _vpn_operation_workload(payload: dict[str, Any], operation_id: UUID | str, i
     return provisioner_workload(command_from_payload({**payload, "operation_id": str(operation_id)}), str(intent_id))
 
 
+def _reserve_crl_revision(operation: str) -> VpnCrlState:
+    """Lock the CRL state and select the revision that this operation publishes."""
+    from engine.models import VpnCrlState
+
+    VpnCrlState.objects.get_or_create(pk=1)
+    crl = VpnCrlState.objects.select_for_update().get(pk=1)
+    # A refresh publishes the pending revision. It adds a revision only to
+    # renew a list that is already published, because publication accepts
+    # only a higher revision.
+    if operation != "refresh-crl" or crl.requested_revision == crl.published_revision:
+        crl.requested_revision += 1
+        crl.save(update_fields=["requested_revision"])
+    return crl
+
+
 def queue_vpn_operation(profile: VpnAccessProfile, operation: str) -> None:
     """Commit a reference-only immutable input with the existing launch intent."""
-    from engine.models import OperationInput, ProvisionerLaunchIntent, VpnAccessProfile, VpnCrlState
+    from engine.models import OperationInput, ProvisionerLaunchIntent, VpnAccessProfile
 
     from ._launch_authority import authority_envelope_fields
 
     with transaction.atomic():
         if operation == "purge":
             assert_vpn_revocation_published(profile)
-        crl, _created = VpnCrlState.objects.get_or_create(pk=1)
-        crl = VpnCrlState.objects.select_for_update().get(pk=1)
-        crl.requested_revision += 1
-        crl.save(update_fields=["requested_revision"])
+        crl = _reserve_crl_revision(operation)
         operation_id, intent_id = uuid4(), uuid4()
         fields = {field.name: getattr(profile, field.name) for field in RecordedAuthorityFields._meta.fields}
         if operation != "issue":
