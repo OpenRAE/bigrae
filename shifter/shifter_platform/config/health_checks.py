@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any
+from typing import Any, cast
 
 from django.conf import settings
 from health_check.backends import HealthCheck as HealthCheckPluginBase
@@ -89,25 +89,42 @@ def _configured_redis_client() -> Any:
     the shared channel layer. A concurrent WebSocket receive() on that layer makes
     channels_redis raise "Two event loops are trying to receive() on one channel
     layer at once!", so the probe failed while Redis was healthy.
+
+    ``config._channels`` emits a TLS host as a dict (``address`` plus redis-py
+    SSL options) and a plain host as a ``(host, port)`` pair; a URL string is
+    also accepted.
     """
     global _redis_client
     with _redis_client_lock:
         if _redis_client is None:
-            import redis
-
-            host = settings.CHANNEL_LAYERS["default"]["CONFIG"]["hosts"][0]
-            if isinstance(host, dict):
-                options = {key: value for key, value in host.items() if key != "address"}
-                address = host["address"]
-            else:
-                options, address = {}, host
-            _redis_client = redis.Redis.from_url(
-                address,
-                socket_timeout=_PROBE_TIMEOUT_SECONDS,
-                socket_connect_timeout=_PROBE_TIMEOUT_SECONDS,
-                **options,
-            )
+            _redis_client = _build_redis_client(_first_channel_layer_host())
         return _redis_client
+
+
+def _first_channel_layer_host() -> object:
+    """Return the first ``hosts`` entry of the default Redis channel layer."""
+    channel_layers = cast(dict[str, dict[str, Any]], getattr(settings, "CHANNEL_LAYERS", {}))
+    hosts = channel_layers["default"]["CONFIG"]["hosts"]
+    return hosts[0]
+
+
+def _build_redis_client(host: object) -> Any:
+    """Build a redis-py client for one channels_redis host entry."""
+    import redis
+
+    timeout = _PROBE_TIMEOUT_SECONDS
+    if isinstance(host, dict):
+        options = {key: value for key, value in host.items() if key != "address"}
+        return redis.Redis.from_url(
+            str(host["address"]), socket_timeout=timeout, socket_connect_timeout=timeout, **options
+        )
+    if isinstance(host, str):
+        return redis.Redis.from_url(host, socket_timeout=timeout, socket_connect_timeout=timeout)
+    if isinstance(host, (tuple, list)) and len(host) == 2:
+        return redis.Redis(
+            host=str(host[0]), port=int(host[1]), db=0, socket_timeout=timeout, socket_connect_timeout=timeout
+        )
+    raise ServiceUnavailable("Unsupported channel-layer Redis host entry")
 
 
 def _ping_configured_redis() -> bool:

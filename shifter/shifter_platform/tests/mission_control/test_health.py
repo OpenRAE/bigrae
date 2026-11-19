@@ -329,6 +329,34 @@ def test_redis_probe_client_accepts_a_url_host(fake_redis, settings):
     assert set(calls[0][1]) == {"socket_timeout", "socket_connect_timeout"}
 
 
+@pytest.mark.usefixtures("fake_redis")
+def test_redis_probe_client_accepts_a_plain_host_and_port(settings, monkeypatch):
+    """The non-TLS channel layer emits a ``(host, port)`` pair (``config._channels``)."""
+    import redis
+
+    from config.health_checks import _PROBE_TIMEOUT_SECONDS, _ping_configured_redis
+
+    built: list[dict] = []
+
+    def fake_init(self, **options):
+        built.append(options)
+
+    monkeypatch.setattr(redis.Redis, "__init__", fake_init)
+    monkeypatch.setattr(redis.Redis, "ping", lambda self: True)
+    settings.CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] = [("redis", 6379)]
+
+    assert _ping_configured_redis() is True
+    assert built == [
+        {
+            "host": "redis",
+            "port": 6379,
+            "db": 0,
+            "socket_timeout": _PROBE_TIMEOUT_SECONDS,
+            "socket_connect_timeout": _PROBE_TIMEOUT_SECONDS,
+        }
+    ]
+
+
 def test_concurrent_redis_probes_all_pass_and_share_one_client(fake_redis):
     """Concurrent health checks must not refuse each other (the old shared-layer defect)."""
     from concurrent.futures import ThreadPoolExecutor
