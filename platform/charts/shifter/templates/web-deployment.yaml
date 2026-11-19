@@ -85,12 +85,17 @@ spec:
               port: http
             initialDelaySeconds: 20
             periodSeconds: 15
+            timeoutSeconds: 5
+          # Liveness checks only that the server accepts connections. The
+          # dependency checks in /health/ stay on readiness, so a dependency
+          # fault takes a pod out of service without restarting it.
           livenessProbe:
-            httpGet:
-              path: /health/
+            tcpSocket:
               port: http
             initialDelaySeconds: 60
             periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
           resources:
             {{- toYaml .Values.portal.resources | nindent 12 }}
       volumes:

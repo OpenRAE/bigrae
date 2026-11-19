@@ -449,7 +449,10 @@ services:
         checkIntervalSec: 15
         timeoutSec: 5
         healthyThreshold: 1
-        unhealthyThreshold: 2
+        # The channel-layer Redis check in /health/ can fail falsely when it
+        # runs at the same time as WebSocket traffic. Five failures in a row
+        # keep a working pod in the load balancer.
+        unhealthyThreshold: 5
   guacamoleClient:
     annotations: {}
     backendConfig:

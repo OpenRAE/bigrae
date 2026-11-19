@@ -295,8 +295,9 @@ when GKE creates the backend.
 
 The load balancer closes a WebSocket when it reaches the backend timeout, also
 when the session is active. The GCP capacity profiles set the portal and
-Guacamole backend timeouts to 8 hours. Guacamole ends a session after 480 minutes
-without activity (`API_SESSION_TIMEOUT`).
+Guacamole backend timeouts to 8 hours. Guacamole ends a session with no open
+connection after 15 minutes (`API_SESSION_TIMEOUT`). A session with an open
+connection does not time out.
 
 The portal's WebSocket opening deadline is 30 seconds, including access checks
 and SSH setup. The gateway authority HTTP read deadline is 10 seconds, which

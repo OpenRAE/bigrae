@@ -373,9 +373,16 @@ _TIER_SIZES: dict[int, tuple[int, int, int, int, str, Literal["ZONAL", "REGIONAL
     50: (8, 4, 4, 12, "db-custom-8-30720", "REGIONAL", 12, 350),
     100: (14, 8, 6, 20, "db-custom-16-61440", "REGIONAL", 20, 650),
     200: (26, 16, 12, 24, "db-custom-32-122880", "REGIONAL", 32, 800),
-    300: (38, 24, 18, 36, "db-custom-48-184320", "REGIONAL", 48, 800),
+    300: (68, 48, 18, 36, "db-custom-48-184320", "REGIONAL", 48, 800),
     500: (62, 40, 28, 57, "db-custom-64-245760", "REGIONAL", 80, 800),
 }
+
+# The p300 values match the live event tenant on 2026-11-19. With 38 portal
+# replicas, Guacamole authority checks queued behind slow requests and sessions
+# failed. The access-node bounds were not changed with these values, so the
+# CPU-limit headroom note above does not apply to p300.
+_AUTOSCALING_MAXIMUMS: dict[int, tuple[int, int]] = {300: (100, 72)}
+_PORTAL_WEB_WORKERS: dict[int, int] = {300: 6}
 
 # guacamole-client stays at exactly one replica (#928 token affinity), and every
 # participant's display stream passes through it, so the larger tiers give that
@@ -393,17 +400,21 @@ def _build_profile(count: Literal[10, 30, 50, 100, 200, 300, 500]) -> GcpSharedS
     portal_replicas, guacd_replicas, access_nodes, access_max, sql_tier, sql_ha, redis_gb, sql_budget = _TIER_SIZES[
         count
     ]
+    portal_max, guacd_max = _AUTOSCALING_MAXIMUMS.get(
+        count,
+        (max(portal_replicas + 2, portal_replicas * 2), max(guacd_replicas + 2, guacd_replicas * 2)),
+    )
     return GcpSharedServiceCapacityProfile(
         profile_id=cast(CapacityProfileId, f"gcp-shared-v1-p{count}"),
         participant_count=count,
         portal=PortalCapacity(
             replicas=portal_replicas,
             resources=_resources("500m", "2Gi", "2", "4Gi"),
-            web_workers=4,
+            web_workers=_PORTAL_WEB_WORKERS.get(count, 4),
             bootstrap_workers=4,
             autoscaling=AutoscalingPolicy(
                 min_replicas=portal_replicas,
-                max_replicas=max(portal_replicas + 2, portal_replicas * 2),
+                max_replicas=portal_max,
                 cpu_utilization_pct=65,
                 scale_down_stabilization_seconds=900,
             ),
@@ -416,7 +427,7 @@ def _build_profile(count: Literal[10, 30, 50, 100, 200, 300, 500]) -> GcpSharedS
             resources=_resources("500m", "2Gi", "2", "4Gi"),
             autoscaling=AutoscalingPolicy(
                 min_replicas=guacd_replicas,
-                max_replicas=max(guacd_replicas + 2, guacd_replicas * 2),
+                max_replicas=guacd_max,
                 cpu_utilization_pct=65,
                 scale_down_stabilization_seconds=900,
             ),
