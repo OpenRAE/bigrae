@@ -447,7 +447,9 @@ def _build_profile(count: Literal[10, 30, 50, 100, 200, 300, 500]) -> GcpSharedS
         vpn_pool=_vpn_pool(count),
         timeouts=TimeoutCapacity(
             portal_backend_seconds=3600,
-            guacamole_backend_seconds=3600,
+            # The load balancer closes a WebSocket at this age even when it is active.
+            # Eight hours covers a full event day of one RDP or SSH session.
+            guacamole_backend_seconds=28800,
             websocket_ping_interval_seconds=30,
             websocket_ping_timeout_seconds=30,
             process_graceful_timeout_seconds=300,

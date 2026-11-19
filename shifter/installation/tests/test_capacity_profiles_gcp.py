@@ -246,7 +246,7 @@ def test_p30_helm_projection_carries_real_resources_autoscaling_and_backends():
     }
     assert helm["services"] == {
         "portal": {"backendConfig": {"timeoutSec": 3600, "connectionDraining": {"drainingTimeoutSec": 300}}},
-        "guacamoleClient": {"backendConfig": {"timeoutSec": 3600, "connectionDraining": {"drainingTimeoutSec": 300}}},
+        "guacamoleClient": {"backendConfig": {"timeoutSec": 28800, "connectionDraining": {"drainingTimeoutSec": 300}}},
     }
 
 
