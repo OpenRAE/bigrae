@@ -101,6 +101,10 @@ spec:
               value: "true"
             - name: OPENID_ENABLED
               value: "false"
+            # Idle limit of a Guacamole session in minutes. It matches the
+            # 8-hour guacamole-client load balancer timeout.
+            - name: API_SESSION_TIMEOUT
+              value: "480"
           envFrom:
             - secretRef:
                 name: {{ .Values.guacamoleRuntimeSecret.name }}

@@ -173,6 +173,7 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         self.assertEqual(len(accounts), 1)
         env = {value["name"]: value for value in pod["containers"][0]["env"]}
         self.assertEqual(env["OPENFGA_ENABLED"]["value"], "true")
+        self.assertEqual(env["API_SESSION_TIMEOUT"]["value"], "480")
         self.assertEqual(env["JAVA_OPTS"]["value"], "-Dhttps.proxyHost=content-egress -Dhttps.proxyPort=3128")
         for name in ("GUACAMOLE_CONTROL_URL", "GUACAMOLE_CONTROL_AUDIENCE"):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
