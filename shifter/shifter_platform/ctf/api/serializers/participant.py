@@ -81,6 +81,9 @@ class ParticipantChallengeListItemSerializer(serializers.Serializer):
     difficulty = serializers.CharField(read_only=True, allow_blank=True)
     order = serializers.IntegerField(read_only=True)
     solved = serializers.BooleanField(read_only=True)
+    team_solved = serializers.BooleanField(
+        read_only=True, help_text="True when any member of the participant's team has solved it (team mode)."
+    )
     tags = serializers.ListField(child=serializers.CharField(), read_only=True)
     topics = serializers.ListField(child=serializers.CharField(), read_only=True)
 
@@ -178,6 +181,9 @@ class ParticipantChallengeDetailSerializer(serializers.Serializer):
     max_attempts = serializers.IntegerField(read_only=True)
     attempt_limit_mode = serializers.CharField(read_only=True)
     solved = serializers.BooleanField(read_only=True)
+    team_solved = serializers.BooleanField(
+        read_only=True, help_text="True when any member of the participant's team has solved it (team mode)."
+    )
     attempt_count = serializers.IntegerField(read_only=True)
     attempts_remaining = serializers.IntegerField(read_only=True, allow_null=True)
     timeout_retry_after = serializers.IntegerField(read_only=True, allow_null=True)

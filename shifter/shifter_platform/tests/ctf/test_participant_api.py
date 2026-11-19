@@ -141,6 +141,77 @@ class TestParticipantChallengeList:
         assert names == {ctf_challenge.name}
 
 
+class TestParticipantTeamSolvedState:
+    """A teammate's solve shows as ``team_solved`` on the browse list and the detail page."""
+
+    def test_teammate_solve_marks_team_solved_not_solved(
+        self, authenticated_participant_client, ctf_participant_team, participant_user, ctf_event_team, ctf_team
+    ):
+        _activate(participant_user, ctf_event_team)
+        challenge = CTFChallenge.objects.create(
+            event=ctf_event_team,
+            name="Team Challenge",
+            description="solve it",
+            category=ChallengeCategory.WEB.value,
+            points=100,
+            difficulty=ChallengeDifficulty.EASY.value,
+        )
+        teammate = CTFParticipant.objects.create(
+            event=ctf_event_team,
+            email="teammate@test.com",
+            name="Teammate",
+            team=ctf_team,
+            status=ParticipantStatus.ACTIVE.value,
+            registered_at=timezone.now(),
+        )
+        CTFSubmission.objects.create(
+            participant=teammate,
+            challenge=challenge,
+            submitted_flag="FLAG{correct}",
+            is_correct=True,
+            points_awarded=challenge.points,
+            attempt_number=1,
+            ip_address="192.168.1.2",
+        )
+
+        listed = call_json(authenticated_participant_client, "get", "api_participant_challenges")
+        detail = call_json(
+            authenticated_participant_client,
+            "get",
+            "api_participant_challenge_detail",
+            kwargs={"challenge_id": challenge.id},
+        )
+
+        assert listed.status_code == 200
+        item = next(entry for entry in listed.json() if entry["id"] == str(challenge.id))
+        assert item["solved"] is False
+        assert item["team_solved"] is True
+        assert detail.status_code == 200
+        assert detail.json()["solved"] is False
+        assert detail.json()["team_solved"] is True
+
+    def test_solo_event_never_reports_team_solved(
+        self, authenticated_participant_client, ctf_participant, participant_user, ctf_event, ctf_challenge
+    ):
+        _activate(participant_user, ctf_event)
+        CTFSubmission.objects.create(
+            participant=ctf_participant,
+            challenge=ctf_challenge,
+            submitted_flag="FLAG{correct}",
+            is_correct=True,
+            points_awarded=ctf_challenge.points,
+            attempt_number=1,
+            ip_address="192.168.1.1",
+        )
+
+        response = call_json(authenticated_participant_client, "get", "api_participant_challenges")
+
+        assert response.status_code == 200
+        item = response.json()[0]
+        assert item["solved"] is True
+        assert item["team_solved"] is False
+
+
 class TestParticipantTeam:
     """``GET /api/v1/ctf/me/team/``."""
 
