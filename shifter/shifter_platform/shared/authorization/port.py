@@ -52,6 +52,15 @@ class AuthorizationProviderBindingError(RuntimeError):
     """No unique runtime authorization provider factory is available."""
 
 
+class AuthorizationUnavailable(PermissionError):
+    """The authorization evaluator could not decide, so access stays denied.
+
+    Owning services raise this bounded denial only for an evaluator outage. A
+    caller that renews an active grant can then retry later instead of revoking
+    it. Every other caller handles it as the ``PermissionError`` that it is.
+    """
+
+
 AuthorizationProviderFactory = Callable[[], AuthorizationProvider]
 _provider_factory: AuthorizationProviderFactory | None = None
 

@@ -7,9 +7,10 @@ from uuid import UUID
 
 from cms.exceptions import CMSError
 from cms.models import App
+from shared.authorization import AuthorizationUnavailable
 from workspaces.services import resolve_resource_scope, resource_scope_from_ids
 
-from ._content_authority import fence_content_scope, require_content_scope
+from ._content_authority import ContentAuthorityError, fence_content_scope, require_content_scope
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -22,6 +23,9 @@ if TYPE_CHECKING:
 
 
 _DEVICE_UNAVAILABLE = "Device unavailable"
+_DEVICE_ACCESS_UNAVAILABLE = "Device access unavailable"
+# The existing CMS code for an authorization evaluator outage.
+_AUTHORITY_UNAVAILABLE_CODE = "authority-unavailable"
 
 
 def _device_rows(*, for_destruction: bool = False) -> QuerySet[App]:
@@ -167,8 +171,14 @@ def admit_device_remote_authority(credential: CredentialContext, identifier: UUI
         fields = admit_native_device_access(current, identifier)
         _assert_device_remote_projection(snapshot, fields, scope)
         return fields
+    except AuthorizationUnavailable:
+        raise CMSError(_DEVICE_ACCESS_UNAVAILABLE, details={"code": _AUTHORITY_UNAVAILABLE_CODE}) from None
+    except ContentAuthorityError as exc:
+        if exc.details.get("code") == _AUTHORITY_UNAVAILABLE_CODE:
+            raise CMSError(_DEVICE_ACCESS_UNAVAILABLE, details={"code": _AUTHORITY_UNAVAILABLE_CODE}) from None
+        raise CMSError(_DEVICE_ACCESS_UNAVAILABLE) from None
     except Exception:  # noqa: BLE001  # fail-closed authority boundary; the cause stays out of the chain
-        raise CMSError("Device access unavailable") from None
+        raise CMSError(_DEVICE_ACCESS_UNAVAILABLE) from None
 
 
 def _assert_device_remote_projection(row: App, fields: dict[str, object], scope: ResourceScope) -> None:

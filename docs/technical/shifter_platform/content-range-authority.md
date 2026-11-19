@@ -303,6 +303,12 @@ The local monotonic lease is 90 seconds and renewals run every 15 seconds.
 Denial or expiry permanently invalidates that native session. Guacamole's
 one-minute native eviction cadence remains part of the shutdown bound.
 
+During an authorization evaluator outage, the renewal endpoint returns HTTP 503,
+not a denial. The gateway keeps the current lease deadline and retries, so a
+short outage does not end the session. An outage that continues past the lease
+deadline still ends it. Session creation and URL delivery still refuse access
+during an outage.
+
 Local
 synthetic native SSH/SFTP qualification measured guest closure at 73.02 seconds
 after denial and 120.03 seconds during an unavailable control service. Those

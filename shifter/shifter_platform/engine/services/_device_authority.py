@@ -11,6 +11,7 @@ from django.core.exceptions import ObjectDoesNotExist
 
 from shared.authorization import AuthorizationRequest
 from shared.authorization.policy import require_authorization, scope_parent
+from shared.authorization.port import AuthorizationProviderBindingError, AuthorizationUnavailable
 from shared.credentials import CredentialContext, resolve_current_credential, resolve_local_credential
 from shared.identity_scope import ResourceScope
 from shared.log_sanitize import safe_log_value
@@ -360,6 +361,9 @@ def admit_native_device_access(credential: CredentialContext, identifier: UUID |
         if binding != device_binding_digest(latest):
             raise ValueError("Device access changed")
         return {**credential_reference_fields(current), **_device_remote_authority_fields(latest)}
+    except AuthorizationProviderBindingError:
+        # An evaluator outage stays a denial, but a renewal caller can retry it.
+        raise AuthorizationUnavailable("Device access unavailable") from None
     except Exception:  # noqa: BLE001  # fail-closed device authority; only bounded denial escapes
         raise PermissionError("Device access unavailable") from None
 
