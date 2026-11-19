@@ -10,6 +10,8 @@ import java.util.concurrent.*;
 /** Google SDK metadata identity; no service account keys or application tokens. */
 final class GoogleGatewayIdentity implements GatewayControl.Identity, AutoCloseable {
     private final IdTokenCredentials credentials;
+    /** Callers that can wait for the token at once; above the renewal worker count. */
+    static final int QUEUE_CAPACITY = 64;
     private final ThreadPoolExecutor worker;
 
     GoogleGatewayIdentity(String audience) {
@@ -29,7 +31,10 @@ final class GoogleGatewayIdentity implements GatewayControl.Identity, AutoClosea
 
     GoogleGatewayIdentity(IdTokenCredentials credentials) {
         this.credentials = credentials;
-        worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(1), task -> {
+        // One thread refreshes the token. Renewal workers call assertion() in
+        // parallel, so callers wait in a queue instead of being rejected. Each
+        // caller still stops waiting after three seconds.
+        worker = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(QUEUE_CAPACITY), task -> {
             Thread thread = new Thread(task, "shifter-guacamole-workload-identity");
             thread.setDaemon(true);
             return thread;
