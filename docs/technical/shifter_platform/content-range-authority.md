@@ -316,9 +316,9 @@ seconds during a control outage, within its 85/165-second test bounds.
 
 The bounded registry admits at most 2048 decorated contexts. All admitted contexts receive
 a renewal queue slot, with at most 16 simultaneous control requests. The
-512-context concurrency test covers admission, queue capacity and renewal; the
-worker-bound test verifies that 16 slow control requests run in parallel;
-the blocked-worker test verifies local expiry independently of control progress.
+512-context concurrency test covers admission, queue capacity and renewal.
+The worker-bound test verifies that 16 slow control requests run in parallel.
+The blocked-worker test verifies local expiry independently of control progress.
 These component checks do not establish a 512-tunnel production shutdown bound.
 
 The image builds the pinned 1.6.0 extension and installs it through Apache's
