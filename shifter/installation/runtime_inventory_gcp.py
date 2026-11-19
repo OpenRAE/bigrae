@@ -116,6 +116,7 @@ GCP_GENERATED_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
 GCP_CAPACITY_RUNTIME_ENV_KEYS: frozenset[str] = frozenset(
     {
         "GUACAMOLE_BOOTSTRAP_WORKERS",
+        "OPENFGA_TIMEOUT_MS",
         "PORTAL_WEB_GRACEFUL_TIMEOUT",
         "PORTAL_WEB_WORKERS",
         "PORTAL_WEB_WS_PING_INTERVAL",

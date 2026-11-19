@@ -52,6 +52,10 @@ def create_rdp_connection_params(req: RDPConnectionParams) -> dict[str, str]:
         "ignore-cert": "true" if req.ignore_cert else "false",
         "security": req.security,
         "resize-method": "display-update",
+        # The RDP graphics pipeline forces 32-bit color and overrides
+        # color-depth. Turn it off so sessions use 16-bit color and less
+        # bandwidth.
+        "disable-gfx": "true",
         # Clipboard support
         "disable-copy": "false",
         "disable-paste": "false",

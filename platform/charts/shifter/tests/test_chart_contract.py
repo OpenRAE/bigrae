@@ -72,9 +72,11 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2904 after giving guacd a writable FreeRDP home.
 # Regenerated for #2909: the removed model broker drops its job env and network policy exclusions.
 # Regenerated for #2960: provisioner jobs may carry GCP_RANGE_SHARED_GUEST_FIREWALLS.
+# Regenerated for the live event settings: portal TCP liveness and a 5 s readiness
+# timeout, portal BackendConfig unhealthyThreshold 5, and API_SESSION_TIMEOUT 15.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "596c4ba546ce9ef08ce74e9affb10a21b60bfdc4fab828fc8ded20387a523d66",
-    "gcp-dev": "6dfbea3a00062ffd7230843f7a0fef3c15350db776fd3103aaefb1a5928ab16d",
+    "gcp-prod": "8991256ee52e3558e4d5275656c61235c134f96760c4731130f4e3865a9bcb7a",
+    "gcp-dev": "2992446967983038b900b9069fb271e1109b50e303a3c4a4b0ff796dc9f85f20",
 }
 
 
@@ -173,7 +175,7 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         self.assertEqual(len(accounts), 1)
         env = {value["name"]: value for value in pod["containers"][0]["env"]}
         self.assertEqual(env["OPENFGA_ENABLED"]["value"], "true")
-        self.assertEqual(env["API_SESSION_TIMEOUT"]["value"], "480")
+        self.assertEqual(env["API_SESSION_TIMEOUT"]["value"], "15")
         self.assertEqual(env["JAVA_OPTS"]["value"], "-Dhttps.proxyHost=content-egress -Dhttps.proxyPort=3128")
         for name in ("GUACAMOLE_CONTROL_URL", "GUACAMOLE_CONTROL_AUDIENCE"):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
