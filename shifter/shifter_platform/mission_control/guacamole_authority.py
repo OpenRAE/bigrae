@@ -9,6 +9,7 @@ from uuid import UUID
 from django.utils import timezone
 
 from cms.services import admit_device_remote_authority, admit_range_remote_authority
+from shared.authorization import AuthorizationUnavailable
 from shared.credentials import CredentialContext
 from shared.exceptions import CMSError
 from shared.operation_authority import credential_reference_from_record
@@ -20,8 +21,16 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 
+_AUTHORITY_UNAVAILABLE_CODE = "authority-unavailable"
+
+
 def renew_gateway_authority(bootstrap_id: object) -> bool:
-    """Resolve an opaque gateway binding against its original recorded proof."""
+    """Resolve an opaque gateway binding against its original recorded proof.
+
+    Raises ``AuthorizationUnavailable`` when the authorization evaluator cannot
+    decide. The gateway then keeps its local lease deadline and retries, so an
+    outage does not revoke an active session at once.
+    """
     from .models import GuacamoleBootstrapRequest
 
     identifier = _bootstrap_reference(bootstrap_id)
@@ -36,11 +45,23 @@ def renew_gateway_authority(bootstrap_id: object) -> bool:
         or (row.is_expired and (row.status == "running" or row.delivered_at is None))
     ):
         return False
-    return authorize_bootstrap(row)
+    return _reauthorize(row)
 
 
 def authorize_bootstrap(row: GuacamoleBootstrapRequest, credential: CredentialContext | None = None) -> bool:
-    """Reauthorize the original exact proof, with no creator impersonation."""
+    """Reauthorize the original exact proof; an evaluator outage also denies."""
+    try:
+        return _reauthorize(row, credential)
+    except AuthorizationUnavailable:
+        return False
+
+
+def _reauthorize(row: GuacamoleBootstrapRequest, credential: CredentialContext | None = None) -> bool:
+    """Reauthorize the original exact proof, with no creator impersonation.
+
+    Raises ``AuthorizationUnavailable`` for an evaluator outage, so that callers
+    can tell it from a revocation. Every other failure returns False.
+    """
     if row.authority_kind != "principal" or row.protocol not in {"range_ssh", "rdp", "ngfw_ssh"}:
         return False
     try:
@@ -59,6 +80,13 @@ def authorize_bootstrap(row: GuacamoleBootstrapRequest, credential: CredentialCo
             admit(credential, row.target_id, **context)
         return _authority_fields_match(row, fields)
     except (ValueError, CMSError, PermissionError) as exc:
+        if _authority_unavailable(exc):
+            logger.warning(
+                "Guacamole bootstrap authority unavailable: bootstrap_id=%s exc_type=%s",
+                row.pk,
+                type(exc).__name__,
+            )
+            raise AuthorizationUnavailable("Remote access authority unavailable") from None
         # Expected denial: a revoked credential, removed authority, or changed target.
         logger.warning(
             "Guacamole bootstrap reauthorization denied: bootstrap_id=%s exc_type=%s",
@@ -109,14 +137,27 @@ def revalidate_guacamole_sessions(*, client: GuacamoleClient | None = None, limi
     terminated = 0
     for row in rows:
         expired_handoff = row.delivered_at is None and row.is_expired
-        if not expired_handoff and not row.termination_pending and authorize_bootstrap(row):
-            GuacamoleBootstrapRequest.objects.filter(pk=row.pk).update(updated_at=timezone.now())
-            continue
+        if not expired_handoff and not row.termination_pending:
+            try:
+                allowed = _reauthorize(row)
+            except AuthorizationUnavailable:
+                # An evaluator outage is not a revocation; check this session again next cycle.
+                continue
+            if allowed:
+                GuacamoleBootstrapRequest.objects.filter(pk=row.pk).update(updated_at=timezone.now())
+                continue
         gateway = client or _bind_guacamole_client("Remote access", require_signing_key=False)
         terminated += terminate_bootstrap(
             row, gateway, only_undelivered=expired_handoff and not row.termination_pending
         )
     return terminated
+
+
+def _authority_unavailable(exc: Exception) -> bool:
+    """Return whether an owning service reported an evaluator outage, not a denial."""
+    if isinstance(exc, AuthorizationUnavailable):
+        return True
+    return isinstance(exc, CMSError) and exc.details.get("code") == _AUTHORITY_UNAVAILABLE_CODE
 
 
 def _bootstrap_reference(bootstrap_id: object) -> UUID | None:

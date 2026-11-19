@@ -12,6 +12,7 @@ from uuid import UUID
 
 from shared.authorization import TargetRef, resolve_authorization_event_scope
 from shared.authorization.policy import require_authorization, scope_parent
+from shared.authorization.port import AuthorizationProviderBindingError, AuthorizationUnavailable
 from shared.credentials import CredentialContext, resolve_credential_scope, resolve_current_credential
 from shared.identity_scope import ResourceScope
 from shared.range_access_authority import range_action_request
@@ -149,6 +150,9 @@ def require_native_range_action(credential: CredentialContext, request_uuid: UUI
         if row is None or project_range_authority(request_uuid) != projection:
             raise ValueError("Range projection changed")
         return row
+    except AuthorizationProviderBindingError:
+        # An evaluator outage stays a denial, but a renewal caller can retry it.
+        raise AuthorizationUnavailable(_RANGE_UNAVAILABLE) from None
     except Exception:  # noqa: BLE001  # fail-closed range authority; only bounded denial escapes
         raise PermissionError(_RANGE_UNAVAILABLE) from None
 
@@ -181,5 +185,7 @@ def authorized_instance_range(
         if len(candidates) != 1 or candidates[0].request is None:
             raise ValueError("Missing guest binding")
         return require_native_range_action(credential, candidates[0].request.request_id, "range.access")
+    except AuthorizationUnavailable:
+        raise AuthorizationUnavailable("Instance unavailable") from None
     except Exception:  # noqa: BLE001  # fail-closed authority check; every failure is one bounded denial
         raise PermissionError("Instance unavailable") from None
