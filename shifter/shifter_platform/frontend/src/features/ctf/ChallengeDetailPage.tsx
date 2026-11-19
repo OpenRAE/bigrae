@@ -27,10 +27,10 @@ function ChallengeMeta({ challenge }: Readonly<{ challenge: CtfChallengeDetail }
       {challenge.difficulty ? <span>{titleCase(challenge.difficulty)}</span> : null}
       <span>· {challenge.points} pts</span>
       {challenge.attempts_remaining === null ? null : <span>· {challenge.attempts_remaining} attempts left</span>}
-      {challenge.solved ? (
+      {challenge.solved || challenge.team_solved ? (
         <Badge variant="secondary" className="gap-1">
           <CheckCircle2 className="size-3" aria-hidden="true" />
-          Solved
+          {challenge.solved ? "Solved" : "Solved by your team"}
         </Badge>
       ) : null}
     </div>
@@ -295,6 +295,37 @@ function FlagSubmission({ challenge }: Readonly<{ challenge: CtfChallengeDetail 
 
   const disabled = submit.isPending || !flag.trim();
 
+  return (
+    <>
+      {challenge.team_solved ? <TeamSolvedNotice /> : null}
+      <FlagForm flag={flag} setFlag={setFlag} submit={submit} disabled={disabled} />
+    </>
+  );
+}
+
+function TeamSolvedNotice() {
+  return (
+    <Alert className="mt-6">
+      <AlertTitle>Solved by your team</AlertTitle>
+      <AlertDescription>
+        A teammate captured this flag, and your team has the points. You can still submit it for your individual
+        score.
+      </AlertDescription>
+    </Alert>
+  );
+}
+
+function FlagForm({
+  flag,
+  setFlag,
+  submit,
+  disabled,
+}: Readonly<{
+  flag: string;
+  setFlag: (value: string) => void;
+  submit: ReturnType<typeof useSubmitFlag>;
+  disabled: boolean;
+}>) {
   return (
     <Card className="mt-6">
       <CardContent>

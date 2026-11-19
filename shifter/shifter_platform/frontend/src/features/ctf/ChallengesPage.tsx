@@ -59,10 +59,10 @@ function ChallengeCard({ challenge }: Readonly<{ challenge: CtfChallengeListItem
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium">{challenge.name}</span>
-        {challenge.solved ? (
+        {challenge.solved || challenge.team_solved ? (
           <Badge variant="secondary" className="gap-1">
             <CheckCircle2 className="size-3" aria-hidden="true" />
-            Solved
+            {challenge.solved ? "Solved" : "Solved by your team"}
           </Badge>
         ) : null}
       </div>
@@ -161,7 +161,7 @@ function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfCha
 export function ChallengesPage() {
   const query = useCtfChallenges();
   const total = query.data?.length ?? 0;
-  const solved = query.data?.filter((challenge) => challenge.solved).length ?? 0;
+  const solved = query.data?.filter((challenge) => challenge.solved || challenge.team_solved).length ?? 0;
 
   return (
     <>

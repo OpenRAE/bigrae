@@ -22,6 +22,7 @@ function challenge(overrides: Record<string, unknown> = {}) {
     difficulty: "easy",
     order: 0,
     solved: false,
+    team_solved: false,
     ...overrides,
   };
 }
@@ -41,6 +42,13 @@ describe("ChallengesPage", () => {
     expect(screen.getByRole("heading", { name: "Web" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Pwn" })).toBeInTheDocument();
     expect(screen.getByText("Solved")).toBeInTheDocument();
+  });
+
+  it("shows a teammate's solve as solved by your team", async () => {
+    mockApi.mockResolvedValue([challenge({ team_solved: true })]);
+    renderRoute(<ChallengesPage />);
+    expect(await screen.findByText("Solved by your team")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 solved")).toBeInTheDocument();
   });
 
   it("renders authored mission categories in numeric mission order", async () => {

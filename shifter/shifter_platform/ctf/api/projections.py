@@ -91,6 +91,7 @@ def participant_challenge_list(participant: CTFParticipant) -> list[dict[str, An
     solved_ids = set(
         get_participant_submissions(participant.id).filter(is_correct=True).values_list("challenge_id", flat=True)
     )
+    team_solved_ids = _team_solved_challenge_ids(participant)
     return [
         {
             "id": str(challenge.id),
@@ -100,11 +101,33 @@ def participant_challenge_list(participant: CTFParticipant) -> list[dict[str, An
             "difficulty": challenge.difficulty,
             "order": challenge.order,
             "solved": challenge.id in solved_ids,
+            "team_solved": challenge.id in team_solved_ids,
             "tags": [tag.name for tag in challenge.tags.all()],
             "topics": [topic.name for topic in challenge.topics.all()],
         }
         for challenge in challenges
     ]
+
+
+def _team_solved_challenge_ids(participant: CTFParticipant, challenge_id: Any = None) -> set[Any]:
+    """Return the challenge ids that any member of the participant's team has solved.
+
+    A teammate's solve counts once for the team score, so the browse list and the
+    detail page show it. The set is empty outside team mode or for an unteamed
+    participant. The participant's own solves are included.
+    """
+    from ctf.models import CTFSubmission
+
+    if not participant.event.team_mode or participant.team_id is None:
+        return set()
+    qs = CTFSubmission.objects.filter(
+        participant__team_id=participant.team_id,
+        participant__event_id=participant.event_id,
+        is_correct=True,
+    )
+    if challenge_id is not None:
+        qs = qs.filter(challenge_id=challenge_id)
+    return set(qs.values_list("challenge_id", flat=True).distinct())
 
 
 def participant_team(participant: CTFParticipant) -> dict[str, Any] | None:
@@ -187,6 +210,7 @@ def participant_challenge_detail(
         "max_attempts": challenge.max_attempts,
         "attempt_limit_mode": event.attempt_limit_mode,
         "solved": is_solved,
+        "team_solved": bool(_team_solved_challenge_ids(participant, challenge.id)),
         "attempt_count": attempt_count,
         "attempts_remaining": attempts_remaining,
         "timeout_retry_after": timeout_retry_after,

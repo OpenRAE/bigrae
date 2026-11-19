@@ -29493,6 +29493,11 @@
             "type": "boolean",
             "readOnly": true
           },
+          "team_solved": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "True when any member of the participant's team has solved it (team mode)."
+          },
           "attempt_count": {
             "type": "integer",
             "readOnly": true
@@ -29605,6 +29610,7 @@
           "solution",
           "solved",
           "tags",
+          "team_solved",
           "timeout_retry_after",
           "topics",
           "total_hint_penalty",
@@ -29676,6 +29682,11 @@
             "type": "boolean",
             "readOnly": true
           },
+          "team_solved": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "True when any member of the participant's team has solved it (team mode)."
+          },
           "tags": {
             "type": "array",
             "items": {
@@ -29700,6 +29711,7 @@
           "points",
           "solved",
           "tags",
+          "team_solved",
           "topics"
         ]
       },

@@ -6796,6 +6796,8 @@ export interface components {
             readonly max_attempts: number;
             readonly attempt_limit_mode: string;
             readonly solved: boolean;
+            /** @description True when any member of the participant's team has solved it (team mode). */
+            readonly team_solved: boolean;
             readonly attempt_count: number;
             readonly attempts_remaining: number | null;
             readonly timeout_retry_after: number | null;
@@ -6835,6 +6837,8 @@ export interface components {
             readonly difficulty: string;
             readonly order: number;
             readonly solved: boolean;
+            /** @description True when any member of the participant's team has solved it (team mode). */
+            readonly team_solved: boolean;
             readonly tags: string[];
             readonly topics: string[];
         };
