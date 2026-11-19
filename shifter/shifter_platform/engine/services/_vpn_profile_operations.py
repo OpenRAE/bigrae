@@ -63,8 +63,12 @@ def queue_vpn_operation(profile: VpnAccessProfile, operation: str) -> None:
             assert_vpn_revocation_published(profile)
         crl, _created = VpnCrlState.objects.get_or_create(pk=1)
         crl = VpnCrlState.objects.select_for_update().get(pk=1)
-        crl.requested_revision += 1
-        crl.save(update_fields=["requested_revision"])
+        # A refresh publishes the pending revision. It adds a revision only to
+        # renew a list that is already published, because publication accepts
+        # only a higher revision.
+        if operation != "refresh-crl" or crl.requested_revision == crl.published_revision:
+            crl.requested_revision += 1
+            crl.save(update_fields=["requested_revision"])
         operation_id, intent_id = uuid4(), uuid4()
         fields = {field.name: getattr(profile, field.name) for field in RecordedAuthorityFields._meta.fields}
         if operation != "issue":

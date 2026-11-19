@@ -227,8 +227,26 @@ def _refresh_vpn_crl() -> None:
         if candidate is not None and _pki_operation_finished(candidate):
             with transaction.atomic():
                 candidate = VpnAccessProfile.objects.select_for_update().get(pk=candidate.pk)
-                if _pki_operation_finished(candidate):
+                # The state lock serializes this check with queue_vpn_operation.
+                VpnCrlState.objects.select_for_update().get(pk=1)
+                if _pki_operation_finished(candidate) and not _crl_refresh_in_flight():
                     queue_vpn_operation(candidate, "refresh-crl")
+
+
+def _crl_refresh_in_flight() -> bool:
+    """Find a queued CRL refresh that has no accepted terminal result yet."""
+    from django.db.models import Exists, OuterRef
+
+    from engine.models import OperationResultInbox, VpnAccessProfile
+
+    finished = OperationResultInbox.objects.filter(
+        operation_id=OuterRef("provisioner_operation_id"), result_kind="TERMINAL_SUCCESS", disposition="APPLIED"
+    )
+    return (
+        VpnAccessProfile.objects.filter(provisioner_operation="refresh-crl", secret_removed_at__isnull=True)
+        .exclude(Exists(finished))
+        .exists()
+    )
 
 
 def _issuance_unconfirmed(profile: VpnAccessProfile) -> bool:
