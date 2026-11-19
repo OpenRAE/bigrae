@@ -36,6 +36,29 @@ class GoogleGatewayIdentityTest {
         }
     }
 
+    @Test void renewalWorkersCallingAtOnceAllReceiveTheAssertion() throws Exception {
+        String token = token();
+        IdTokenCredentials credentials = GoogleGatewayIdentity.credentials("synthetic-control",
+            (audience, options) -> IdToken.create(token));
+        int callers = GatewayRenewals.RENEWAL_WORKERS * 2;
+        CountDownLatch start = new CountDownLatch(1);
+        AtomicInteger failures = new AtomicInteger();
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(callers);
+        try (GoogleGatewayIdentity identity = new GoogleGatewayIdentity(credentials)) {
+            java.util.List<java.util.concurrent.Future<?>> calls = new java.util.ArrayList<>();
+            for (int caller = 0; caller < callers; caller++) calls.add(pool.submit(() -> {
+                start.await();
+                try { assertEquals("Bearer " + token, identity.assertion()); }
+                catch (IOException unavailable) { failures.incrementAndGet(); }
+                return null;
+            }));
+            start.countDown();
+            for (java.util.concurrent.Future<?> call : calls) call.get(10, TimeUnit.SECONDS);
+            assertEquals(0, failures.get(), "Concurrent renewal workers must wait for the token, not be refused");
+        }
+        finally { pool.shutdownNow(); }
+    }
+
     @Test void providerFailuresNeverExposeTheIdentityAssertionInExceptions() {
         IdTokenCredentials credentials = IdTokenCredentials.newBuilder().setTargetAudience("synthetic-control")
             .setIdTokenProvider((audience, options) -> { throw new IOException("SYNTHETIC_SENSITIVE_PROVIDER_RESPONSE"); }).build();
