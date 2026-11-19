@@ -31,6 +31,7 @@
 # - The source comes from the pinned upstream commit, not the build context.
 # - The protocol libraries are pinned to the versions in the guacd 1.6.0 image.
 # - The Alpine base image is pinned by digest.
+# - guacd allows 15 minutes of client silence (GUACD_TIMEOUT), not 15 seconds.
 # - The image pre-creates /var/lib/guacamole/drive for RDP file transfer.
 #
 
@@ -308,6 +309,14 @@ COPY --from=libwebsockets ${PREFIX_DIR} ${PREFIX_DIR}
 
 # Use guacamole-server source from build context
 COPY --from=source / ${BUILD_DIR}
+
+# Let a browser stay silent for up to 15 minutes before guacd ends its
+# connection. The upstream value is 15 seconds, which ends sessions in browser
+# tabs that are in the background, where the browser slows the keep-alive.
+ARG GUACD_TIMEOUT_MS=900000
+RUN sed -i "s/^#define GUACD_TIMEOUT 15000$/#define GUACD_TIMEOUT ${GUACD_TIMEOUT_MS}/" \
+        ${BUILD_DIR}/src/guacd/proc.h && \
+    grep -q "^#define GUACD_TIMEOUT ${GUACD_TIMEOUT_MS}$" ${BUILD_DIR}/src/guacd/proc.h
 
 RUN ${BUILD_DIR}/src/guacd-docker/bin/autobuild.sh "GUACAMOLE_SERVER" "${BUILD_DIR}"
 
