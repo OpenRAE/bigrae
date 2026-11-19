@@ -73,8 +73,8 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for #2909: the removed model broker drops its job env and network policy exclusions.
 # Regenerated for #2960: provisioner jobs may carry GCP_RANGE_SHARED_GUEST_FIREWALLS.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "c206af1e1a26c4524e5bedbe72657dc29d21d6495ed18ea5e21dba76d7d1cda8",
-    "gcp-dev": "b53f70428141acc960327ed3d380c9a3362df76ec7c1b03582cade06ad834772",
+    "gcp-prod": "596c4ba546ce9ef08ce74e9affb10a21b60bfdc4fab828fc8ded20387a523d66",
+    "gcp-dev": "6dfbea3a00062ffd7230843f7a0fef3c15350db776fd3103aaefb1a5928ab16d",
 }
 
 
@@ -173,6 +173,7 @@ class BackendNeutralChartContractTests(unittest.TestCase):
         self.assertEqual(len(accounts), 1)
         env = {value["name"]: value for value in pod["containers"][0]["env"]}
         self.assertEqual(env["OPENFGA_ENABLED"]["value"], "true")
+        self.assertEqual(env["API_SESSION_TIMEOUT"]["value"], "480")
         self.assertEqual(env["JAVA_OPTS"]["value"], "-Dhttps.proxyHost=content-egress -Dhttps.proxyPort=3128")
         for name in ("GUACAMOLE_CONTROL_URL", "GUACAMOLE_CONTROL_AUDIENCE"):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
