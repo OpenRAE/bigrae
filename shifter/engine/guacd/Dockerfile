@@ -51,7 +51,7 @@ ARG BUILD_ARCHITECTURE
 # default, this is detected automatically.
 ARG BUILD_JOBS
 
-# The directory that will house the guacamole-server source during the build 
+# The directory that will house the guacamole-server source during the build
 ARG BUILD_DIR=/tmp/guacamole-server
 
 # FreeRDP version (default to version 2)
