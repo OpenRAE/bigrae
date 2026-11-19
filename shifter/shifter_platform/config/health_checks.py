@@ -9,12 +9,15 @@ from __future__ import annotations
 
 import logging
 import threading
-from typing import Any, cast
+from typing import TYPE_CHECKING, cast
 
 from django.conf import settings
 from health_check.backends import HealthCheck as HealthCheckPluginBase
 from health_check.exceptions import ServiceUnavailable
 from health_check.plugins import plugin_dir
+
+if TYPE_CHECKING:
+    import redis
 
 __all__ = [
     "AuditLogDegradedHealthCheck",
@@ -79,10 +82,10 @@ def register_channel_layer_redis_health_check() -> None:
 
 
 _redis_client_lock = threading.Lock()
-_redis_client: Any = None
+_redis_client: redis.Redis | None = None
 
 
-def _configured_redis_client() -> Any:
+def _configured_redis_client() -> redis.Redis:
     """Return one process-wide client for the first configured channel-layer host.
 
     The probe uses its own connection pool. It must not send and receive through
@@ -103,12 +106,12 @@ def _configured_redis_client() -> Any:
 
 def _first_channel_layer_host() -> object:
     """Return the first ``hosts`` entry of the default Redis channel layer."""
-    channel_layers = cast(dict[str, dict[str, Any]], getattr(settings, "CHANNEL_LAYERS", {}))
+    channel_layers = cast(dict[str, dict[str, dict[str, list[object]]]], getattr(settings, "CHANNEL_LAYERS", {}))
     hosts = channel_layers["default"]["CONFIG"]["hosts"]
     return hosts[0]
 
 
-def _build_redis_client(host: object) -> Any:
+def _build_redis_client(host: object) -> redis.Redis:
     """Build a redis-py client for one channels_redis host entry."""
     import redis
 
