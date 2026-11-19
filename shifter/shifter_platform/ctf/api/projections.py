@@ -20,6 +20,8 @@ from ctf.services.challenge import get_available_challenges
 from ctf.services.submission import get_participant_submissions
 
 if TYPE_CHECKING:
+    from uuid import UUID
+
     from ctf.models import CTFChallenge, CTFEvent, CTFParticipant
     from shared.credentials import CredentialContext
 
@@ -109,7 +111,7 @@ def participant_challenge_list(participant: CTFParticipant) -> list[dict[str, An
     ]
 
 
-def _team_solved_challenge_ids(participant: CTFParticipant, challenge_id: Any = None) -> set[Any]:
+def _team_solved_challenge_ids(participant: CTFParticipant, challenge_id: UUID | None = None) -> set[UUID]:
     """Return the challenge ids that any member of the participant's team has solved.
 
     A teammate's solve counts once for the team score, so the browse list and the
