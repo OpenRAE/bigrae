@@ -86,29 +86,15 @@ RUN git init -q . && \
     /out/terraform version | head -n 1 | grep -Fx "Terraform v${TERRAFORM_VERSION}"
 
 # ---------------------------------------------------------------------------
-# Pinned tools. Each download is checked against the SHA-256 below. Bump a
-# version and its SHA-256 together, from the vendor's published checksum.
+# Pinned tools.
 # ---------------------------------------------------------------------------
 # base image: python:3.12-slim-trixie
 FROM python@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf AS tools
 SHELL ["/bin/bash", "-o", "pipefail", "-c"]
-# Keep Trivy at the latest release of its line. Terraform builds from source above.
-# Older releases carry fixable HIGH and CRITICAL findings in their compiled Go
-# dependencies. The kubectl, Helm, and ORAS stages below build from source.
-ARG TRIVY_VERSION=0.76.2
-ARG TRIVY_SHA256=bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates curl unzip && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
-WORKDIR /downloads
-RUN fetch() { curl --proto '=https' --retry 5 --retry-delay 3 --retry-all-errors --connect-timeout 20 -fsSL -o "$1" "$2"; } && \
-    mkdir -p /out/bin && \
-    fetch "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" \
-      "https://github.com/aquasecurity/trivy/releases/download/v${TRIVY_VERSION}/trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" && \
-    echo "${TRIVY_SHA256}  trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" | sha256sum -c - && \
-    tar -xzf "trivy_${TRIVY_VERSION}_Linux-64bit.tar.gz" -C /out/bin trivy && \
-    chmod 0755 /out/bin/* && \
-    rm -rf /downloads/*
+# The vendor builds of Terraform and Trivy use a Go standard library before
+# 1.27.4 (CVE-2026-97054), so both build from source: Terraform in the
+# terraform-source stage above and Trivy in the trivy stage below. This stage
+# collects Terraform for the provider mirror.
 COPY --from=terraform-source /out/terraform /out/bin/terraform
 
 # ---------------------------------------------------------------------------
@@ -198,6 +184,20 @@ RUN git init -q . && \
     install -D -m 0755 bin/helm /out/helm && \
     /out/helm version --template '{{.Version}}' | grep -Fx "${HELM_VERSION}"
 
+FROM go-source AS trivy
+# The commit that tag v0.76.2 points to. The vendor build uses a Go standard
+# library before 1.27.4 (CVE-2026-97054); the fixed Go toolchain is the only change.
+ARG TRIVY_VERSION=v0.76.2
+ARG TRIVY_COMMIT=3f6334d223b52188324af3b9923b4249cd206652
+RUN git init -q . && \
+    git fetch -q --depth 1 https://github.com/aquasecurity/trivy.git \
+      "refs/tags/${TRIVY_VERSION}:refs/tags/${TRIVY_VERSION}" && \
+    test "$(git rev-parse "${TRIVY_VERSION}^{commit}")" = "${TRIVY_COMMIT}" && \
+    git checkout -q "${TRIVY_COMMIT}" && \
+    go build -trimpath -ldflags "-s -w -X github.com/aquasecurity/trivy/pkg/version/app.ver=${TRIVY_VERSION#v}" \
+      -o /out/trivy ./cmd/trivy && \
+    /out/trivy --version | head -n 1 | grep -Fx "Version: ${TRIVY_VERSION#v}"
+
 FROM go-source AS oras
 # The commit that tag v1.3.6 points to. The ORAS Makefile sets the version
 # from the tag. The fixed Go toolchain is the only change.
@@ -243,16 +243,22 @@ COPY --from=gke-auth-plugin /out/gke-gcloud-auth-plugin /opt/google-cloud-sdk/bi
 
 # Remove pip from the base Python and from the bundled Python of the SDK. The
 # image installs its dependencies at build time and runs no package manager.
-# The vendored packages of these pip copies carry known findings.
+# The vendored packages of these pip copies carry known findings. Remove the
+# optional gcloud-crc32c helper too: every vendor build uses a Go standard
+# library before 1.27.4 (CVE-2026-97054), and gcloud storage computes CRC32C
+# without it. Restore it when a vendor build passes the scan.
 RUN python3 -m pip uninstall --yes --no-input pip && \
     find /opt/google-cloud-sdk/platform/bundledpythonunix -depth -path '*/site-packages/*' -type d \
       \( -name pip -o -name 'pip-*.dist-info' \) -exec rm -rf {} + && \
     rm -f /opt/google-cloud-sdk/platform/bundledpythonunix/bin/pip* && \
-    test -z "$(find /usr/local/lib /opt/google-cloud-sdk/platform/bundledpythonunix -path '*/site-packages/pip' -print -quit)"
+    test -z "$(find /usr/local/lib /opt/google-cloud-sdk/platform/bundledpythonunix -path '*/site-packages/pip' -print -quit)" && \
+    rm -f /opt/google-cloud-sdk/bin/gcloud-crc32c && \
+    test ! -e /opt/google-cloud-sdk/bin/gcloud-crc32c
 COPY --from=tools /out/bin/ /usr/local/bin/
 COPY --from=kubectl /out/kubectl /usr/local/bin/kubectl
 COPY --from=helm /out/helm /usr/local/bin/helm
 COPY --from=oras /out/oras /usr/local/bin/oras
+COPY --from=trivy /out/trivy /usr/local/bin/trivy
 COPY --from=python-deps /opt/bigrae/venv /opt/bigrae/venv
 COPY --from=providers /opt/bigrae/terraform-providers /opt/bigrae/terraform-providers
 COPY --from=providers /opt/bigrae/terraform-roots /opt/bigrae/terraform-roots
