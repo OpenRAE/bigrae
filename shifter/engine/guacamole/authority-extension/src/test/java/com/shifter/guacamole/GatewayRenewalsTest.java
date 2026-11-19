@@ -56,6 +56,34 @@ class GatewayRenewalsTest {
             assertTrue(renewed.await(5, TimeUnit.SECONDS), "Admitted sessions must not be skipped by queue saturation");
         }
     }
+    @Test void capacityAcceptsTheEventLoadAndRejectsAnythingAboveTheBound() {
+        GatewayRenewals.Control allow = id -> true;
+        assertThrows(IllegalArgumentException.class,
+            () -> new GatewayRenewals(allow, () -> 0, Duration.ofSeconds(90), GatewayRenewals.MAX_CAPACITY + 1));
+        assertThrows(IllegalArgumentException.class, () -> new GatewayRenewals(allow, () -> 0, Duration.ofSeconds(90), 0));
+        new GatewayRenewals(allow, () -> 0, Duration.ofSeconds(90), GatewayRenewals.MAX_CAPACITY).close();
+    }
+
+    @Test void renewalsRunInParallelUpToTheWorkerBound() throws Exception {
+        AtomicBoolean renewing = new AtomicBoolean();
+        CountDownLatch concurrent = new CountDownLatch(GatewayRenewals.RENEWAL_WORKERS);
+        CountDownLatch unblock = new CountDownLatch(1);
+        try (GatewayRenewals renewals = new GatewayRenewals(id -> {
+            if (renewing.get()) {
+                concurrent.countDown();
+                try { unblock.await(5, TimeUnit.SECONDS); }
+                catch (InterruptedException interrupted) { throw new java.io.IOException(); }
+            }
+            return true;
+        }, () -> 0, Duration.ofSeconds(90), GatewayRenewals.MAX_CAPACITY)) {
+            for (int session = 0; session < GatewayRenewals.RENEWAL_WORKERS * 2; session++) renewals.admit(UUID.randomUUID());
+            renewing.set(true);
+            renewals.renew();
+            assertTrue(concurrent.await(2, TimeUnit.SECONDS), "Slow control calls must not serialize renewals");
+            unblock.countDown();
+        }
+    }
+
     @Test void deniedInitialAuthorityCannotCreateASession() throws Exception {
         try (GatewayRenewals renewals = new GatewayRenewals(id -> false, () -> 0, Duration.ofSeconds(90), 1)) {
             assertThrows(Exception.class, () -> renewals.admit(UUID.randomUUID()));

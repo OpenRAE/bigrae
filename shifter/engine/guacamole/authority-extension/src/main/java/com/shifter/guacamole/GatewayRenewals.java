@@ -8,6 +8,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.io.IOException;
 
 final class GatewayRenewals implements AutoCloseable {
+    /** Largest number of concurrent sessions one gateway admits. */
+    static final int MAX_CAPACITY = 2048;
+    /** Parallel control calls; each call can take most of a second under event load. */
+    static final int RENEWAL_WORKERS = 16;
     interface Control extends AutoCloseable {
         boolean authorize(UUID bootstrap) throws IOException;
         default void close() {}
@@ -27,12 +31,12 @@ final class GatewayRenewals implements AutoCloseable {
     }
 
     GatewayRenewals(Control control, LongSupplier clock, Duration lifetime, int capacity) {
-        if (capacity < 1 || capacity > 512) throw new IllegalArgumentException("Invalid gateway capacity");
+        if (capacity < 1 || capacity > MAX_CAPACITY) throw new IllegalArgumentException("Invalid gateway capacity");
         this.control = control;
         this.clock = clock;
         this.lifetime = lifetime;
         this.capacity = new Semaphore(capacity);
-        workers = new ThreadPoolExecutor(4, 4, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(capacity), task -> {
+        workers = new ThreadPoolExecutor(RENEWAL_WORKERS, RENEWAL_WORKERS, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(capacity), task -> {
             Thread thread = new Thread(task, "shifter-guacamole-renewal");
             thread.setDaemon(true);
             return thread;
