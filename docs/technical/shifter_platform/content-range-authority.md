@@ -314,9 +314,10 @@ That
 fixture measured transport closure at 33.80 seconds after denial and 138.89
 seconds during a control outage, within its 85/165-second test bounds.
 
-The bounded registry admits at most 512 decorated contexts. All admitted contexts receive
-a renewal queue slot, with at most four simultaneous control requests. The
-512-context concurrency test covers admission, queue capacity and renewal;
+The bounded registry admits at most 2048 decorated contexts. All admitted contexts receive
+a renewal queue slot, with at most 16 simultaneous control requests. The
+512-context concurrency test covers admission, queue capacity and renewal; the
+worker-bound test verifies that 16 slow control requests run in parallel;
 the blocked-worker test verifies local expiry independently of control progress.
 These component checks do not establish a 512-tunnel production shutdown bound.
 
