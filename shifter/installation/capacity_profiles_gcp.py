@@ -397,8 +397,10 @@ _PORTAL_WEB_WORKERS: dict[int, int] = {300: 6}
 
 # On 2026-11-19 at p300 load, OpenFGA checks that took longer than 1.5 s failed
 # closed, and the Guacamole authority renewal ended live sessions. OpenFGA was
-# not CPU bound. p300 runs 4 OpenFGA servers and gives each check 5 s.
-_OPENFGA_REPLICAS: dict[int, int] = {300: 4}
+# not CPU bound. p300 gives each check 5 s. On 2026-11-20, checks still timed
+# out at 5 s under a steady 250-300 requests/s across 4 servers with a 1-CPU
+# limit each, while OpenFGA's own reads stayed fast (p99 17 ms). p300 runs 8.
+_OPENFGA_REPLICAS: dict[int, int] = {300: 8}
 _OPENFGA_TIMEOUT_MS: dict[int, int] = {300: 5000}
 
 # guacamole-client stays at exactly one replica (#928 token affinity), and every
