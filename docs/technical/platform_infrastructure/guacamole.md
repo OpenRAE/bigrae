@@ -234,7 +234,8 @@ credentials retain their event-only ceiling; this check grants no range access.
 The Account root has no separate deactivate operation. Identity disable and
 workspace archival are the supported state changes above.
 
-The gateway renews every 15 seconds and retains a 90-second monotonic lease.
+The gateway renews each lease 15 seconds after its last renewal attempt and
+retains a 90-second monotonic lease.
 A failed renewal cannot extend the deadline. Denial or expiry permanently
 invalidates the decorated native context. Apache's one-minute eviction cadence
 and guest transport shutdown remain part of the disconnect time. The separate
