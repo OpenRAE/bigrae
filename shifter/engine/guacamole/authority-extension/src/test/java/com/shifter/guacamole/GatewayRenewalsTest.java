@@ -105,9 +105,20 @@ class GatewayRenewalsTest {
         }
     }
 
-    private static void awaitCount(CountingControl control, UUID bootstrap, int expected) throws InterruptedException {
+    /** Wait up to five seconds for a condition that a renewal worker sets. */
+    private static void awaitTrue(java.util.function.BooleanSupplier condition) {
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-        while (control.count(bootstrap) < expected && System.nanoTime() < deadline) Thread.sleep(5);
+        while (!condition.getAsBoolean() && System.nanoTime() < deadline)
+            java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(5));
+    }
+
+    /** Give already submitted renewal tasks time to run before a negative check. */
+    private static void settle() {
+        java.util.concurrent.locks.LockSupport.parkNanos(TimeUnit.MILLISECONDS.toNanos(50));
+    }
+
+    private static void awaitCount(CountingControl control, UUID bootstrap, int expected) {
+        awaitTrue(() -> control.count(bootstrap) >= expected);
         assertEquals(expected, control.count(bootstrap));
     }
 
@@ -125,7 +136,7 @@ class GatewayRenewalsTest {
             clock.set(interval);
             renewals.renew();
             awaitCount(control, early, 1);
-            Thread.sleep(50);
+            settle();
             assertEquals(0, control.count(late), "A lease admitted later must not renew in the same tick");
             clock.set(interval + 5 * second);
             renewals.renew();
@@ -143,14 +154,14 @@ class GatewayRenewalsTest {
             AuthorityLease lease = renewals.admit(session);
             clock.set(interval - 1);
             renewals.renew();
-            Thread.sleep(50);
+            settle();
             assertEquals(0, control.count(session), "A new lease must wait one interval before its first renewal");
             clock.set(interval);
             renewals.renew();
             awaitCount(control, session, 1);
             clock.set(interval + TimeUnit.SECONDS.toNanos(1));
             renewals.renew();
-            Thread.sleep(50);
+            settle();
             assertEquals(1, control.count(session), "Ticks inside the interval must not renew again");
             clock.set(2 * interval);
             renewals.renew();
@@ -167,8 +178,7 @@ class GatewayRenewalsTest {
             deny.set(true);
             clock.set(GatewayRenewals.RENEWAL_INTERVAL.toNanos());
             renewals.renew();
-            long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
-            while (lease.isValid() && System.nanoTime() < deadline) Thread.sleep(5);
+            awaitTrue(() -> !lease.isValid());
             assertFalse(lease.isValid());
         }
     }
