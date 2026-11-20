@@ -179,8 +179,10 @@ def participant_challenge_detail(
     from ctf.services.challenge import check_prerequisites_met
     from ctf.services.hint import get_hints, get_total_hint_penalty, get_unlocked_hints
     from ctf.services.participant.play import (
+        challenge_points_lost,
         compute_attempt_state,
         compute_hint_purchase_info,
+        hint_point_costs,
         resolve_target_connection_info,
     )
 
@@ -192,6 +194,7 @@ def participant_challenge_detail(
     unlocked_ids = {hint.id for hint in get_unlocked_hints(participant.id, challenge.id)}
     total_hint_penalty = get_total_hint_penalty(participant.id, challenge.id)
     hint_purchase = compute_hint_purchase_info(event, challenge, all_hints, unlocked_ids, total_hint_penalty)
+    hint_costs = hint_point_costs(event, challenge, all_hints)
     next_hint = hint_purchase["next_hint"]
 
     prereqs_met, unmet = check_prerequisites_met(challenge.id, participant.id)
@@ -221,6 +224,7 @@ def participant_challenge_detail(
                 "id": str(hint.id),
                 "order": hint.order,
                 "penalty": hint.penalty,
+                "cost_points": hint_costs[hint.id],
                 "unlocked": hint.id in unlocked_ids,
                 "text": hint.text if hint.id in unlocked_ids else None,
             }
@@ -230,6 +234,7 @@ def participant_challenge_detail(
         "next_hint_cost": hint_purchase["next_hint_cost"],
         "points_after_next_hint": hint_purchase["points_after_next_hint"],
         "total_hint_penalty": total_hint_penalty,
+        "total_hint_penalty_points": challenge_points_lost(event, challenge, total_hint_penalty),
         "files": [
             {
                 "id": str(challenge_file.id),
