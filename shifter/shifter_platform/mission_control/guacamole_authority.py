@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from typing import TYPE_CHECKING
 from uuid import UUID
 
@@ -123,8 +124,17 @@ def terminate_bootstrap(
     )
 
 
-def revalidate_guacamole_sessions(*, client: GuacamoleClient | None = None, limit: int = 100) -> int:
-    """A bounded native controller cycle, including idle and output-only access."""
+def revalidate_guacamole_sessions(
+    *,
+    client: GuacamoleClient | None = None,
+    limit: int = 100,
+    progress: Callable[[], None] | None = None,
+) -> int:
+    """A bounded native controller cycle, including idle and output-only access.
+
+    ``progress`` runs after each row so a caller can report liveness during a
+    long cycle; each reauthorization can take most of a second under load.
+    """
     from .guacamole_session import _bind_guacamole_client
     from .models import GuacamoleBootstrapRequest
 
@@ -136,6 +146,8 @@ def revalidate_guacamole_sessions(*, client: GuacamoleClient | None = None, limi
     )
     terminated = 0
     for row in rows:
+        if progress is not None:
+            progress()
         expired_handoff = row.delivered_at is None and row.is_expired
         if not expired_handoff and not row.termination_pending:
             try:

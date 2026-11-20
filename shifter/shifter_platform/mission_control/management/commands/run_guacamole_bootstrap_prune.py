@@ -14,7 +14,11 @@ Usage:
     python manage.py run_guacamole_bootstrap_prune --poll-interval 30 --batch-size 200
 
 Health monitoring:
-    Touches /tmp/guacamole-bootstrap-prune-heartbeat after each poll cycle.
+    Touches /tmp/guacamole-bootstrap-prune-heartbeat at startup, after each
+    revalidated session and each prune batch, and every
+    ``_HEARTBEAT_REFRESH_SECONDS`` while it waits between cycles. A cycle that
+    revalidates many sessions can take minutes, so a heartbeat only after each
+    cycle let the liveness probe kill the worker before its first cycle ended.
 """
 
 from __future__ import annotations
@@ -42,6 +46,7 @@ HEARTBEAT_FILE = Path(tempfile.gettempdir()) / "guacamole-bootstrap-prune-heartb
 
 _DEFAULT_POLL_INTERVAL = 60
 _DEFAULT_BATCH_SIZE = 500
+_HEARTBEAT_REFRESH_SECONDS = 30
 
 
 class Command(BaseCommand):
@@ -80,6 +85,7 @@ class Command(BaseCommand):
             batch_size,
         )
 
+        self._touch_heartbeat()
         while not self.shutdown:
             try:
                 self._prune_cycle(batch_size)
@@ -90,10 +96,13 @@ class Command(BaseCommand):
 
             self._touch_heartbeat()
 
-            # Sleep in short increments so we respond to signals quickly.
-            for _ in range(poll_interval):
+            # Sleep in short increments so we respond to signals quickly, and
+            # refresh the heartbeat so a long poll interval cannot look stale.
+            for elapsed in range(poll_interval):
                 if self.shutdown:
                     break
+                if elapsed % _HEARTBEAT_REFRESH_SECONDS == 0:
+                    self._touch_heartbeat()
                 time.sleep(1)
 
         self._cleanup_heartbeat()
@@ -102,10 +111,11 @@ class Command(BaseCommand):
     def _prune_cycle(self, batch_size: int) -> int:
         """Drain expired rows in bounded batches; return the total deleted."""
         total = 0
-        revalidate_guacamole_sessions(limit=batch_size)
+        revalidate_guacamole_sessions(limit=batch_size, progress=self._touch_heartbeat)
         while not self.shutdown:
             deleted = prune_expired_bootstrap_requests(batch_size=batch_size)
             total += deleted
+            self._touch_heartbeat()
             if deleted < batch_size:
                 break
         if total:
