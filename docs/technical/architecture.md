@@ -299,6 +299,12 @@ Guacamole backend timeouts to 8 hours. Guacamole ends a session with no open
 connection after 15 minutes (`API_SESSION_TIMEOUT`). A session with an open
 connection does not time out.
 
+The `guacamole-bootstrap-prune` worker revalidates open Guacamole sessions and
+deletes expired bootstrap rows. It refreshes its liveness heartbeat after each
+session and each batch, because one cycle can take minutes under event load.
+The p300 capacity profile runs 8 OpenFGA servers. With 4 servers, gateway
+authority renewals at that load exceeded the portal's 5-second limit.
+
 The portal's WebSocket opening deadline is 30 seconds, including access checks
 and SSH setup. The gateway authority HTTP read deadline is 10 seconds, which
 allows the portal's bounded Google certificate lookup and range authorization.
