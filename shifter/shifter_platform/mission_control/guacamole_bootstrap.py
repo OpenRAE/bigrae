@@ -269,6 +269,33 @@ def consume_ready_url(*, request_id: UUID, credential: CredentialContext | None 
     return url
 
 
+def _previous_rdp_sessions(request_id: UUID) -> list[GuacamoleBootstrapRequest]:
+    """Return earlier live RDP native sessions of the same principal for the same target."""
+    current = GuacamoleBootstrapRequest.objects.filter(pk=request_id).first()
+    if (
+        current is None
+        or current.protocol != GuacamoleBootstrapRequest.Protocol.RDP
+        or current.authority_kind != "principal"
+        or current.initiating_principal_uuid is None
+        or current.authority_target_uuid is None
+    ):
+        return []
+    return list(
+        GuacamoleBootstrapRequest.objects.filter(
+            protocol=GuacamoleBootstrapRequest.Protocol.RDP,
+            authority_kind="principal",
+            initiating_principal_uuid=current.initiating_principal_uuid,
+            authority_target_uuid=current.authority_target_uuid,
+            target_id=current.target_id,
+            native_terminated_at__isnull=True,
+            created_at__lt=current.created_at,
+        )
+        .exclude(pk=current.pk)
+        # nosec B106
+        .exclude(native_session_token="")
+    )
+
+
 def end_previous_rdp_sessions(request_id: UUID) -> int:
     """End the same principal's earlier RDP native sessions for the same target.
 
@@ -281,37 +308,16 @@ def end_previous_rdp_sessions(request_id: UUID) -> int:
     never fails the new session. Returns the number of sessions ended.
     """
     try:
-        current = GuacamoleBootstrapRequest.objects.filter(pk=request_id).first()
-        if (
-            current is None
-            or current.protocol != GuacamoleBootstrapRequest.Protocol.RDP
-            or current.authority_kind != "principal"
-            or current.initiating_principal_uuid is None
-            or current.authority_target_uuid is None
-        ):
-            return 0
-        previous = list(
-            GuacamoleBootstrapRequest.objects.filter(
-                protocol=GuacamoleBootstrapRequest.Protocol.RDP,
-                authority_kind="principal",
-                initiating_principal_uuid=current.initiating_principal_uuid,
-                authority_target_uuid=current.authority_target_uuid,
-                target_id=current.target_id,
-                native_terminated_at__isnull=True,
-                created_at__lt=current.created_at,
-            )
-            .exclude(pk=current.pk)
-            # nosec B106
-            .exclude(native_session_token="")
-        )
-        if not previous:
-            return 0
-        from .guacamole_session import _bind_guacamole_client
+        previous = _previous_rdp_sessions(request_id)
+        if previous:
+            from .guacamole_session import _bind_guacamole_client
 
-        client = _bind_guacamole_client("Remote access", require_signing_key=False)
+            client = _bind_guacamole_client("Remote access", require_signing_key=False)
     # best effort after delivery; the new session must not fail here, and errors can carry endpoints
     except Exception as exc:  # noqa: BLE001
         logger.warning("Previous RDP session lookup failed: request_id=%s exc_type=%s", request_id, type(exc).__name__)
+        previous = []
+    if not previous:
         return 0
 
     from .guacamole_authority import terminate_bootstrap
