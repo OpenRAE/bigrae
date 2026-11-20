@@ -251,6 +251,21 @@ receipt for retry. Only success or the pinned endpoint's specific already-absent
 response clears the native token. Browser closure and JSON admission expiry do
 not prove native teardown.
 
+### One RDP session for each target
+
+An RDP desktop accepts one client at a time. When a second RDP tab connects,
+the desktop drops the first tab. The first tab then reconnects with its valid
+token and drops the second tab, so the two tabs swap in a loop.
+
+To prevent this loop, URL delivery ends earlier RDP native sessions of the same
+principal for the same target. The portal uses the termination path above and
+calls `end_previous_rdp_sessions` after the new URL is delivered. The cleanup
+does not touch SSH or NGFW sessions, other targets or other principals. A
+cleanup failure is logged and does not fail the new session.
+
+This rule does not cover one session token that is open in two browser tabs.
+Both tabs share one valid native session.
+
 The [content and range authority guide](../shifter_platform/content-range-authority.md)
 records SSH, SFTP and RDP transport qualification, outage cases and timing
 limits. Those synthetic fixture results do not establish a loaded deployment
