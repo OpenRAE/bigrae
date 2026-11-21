@@ -32,6 +32,7 @@ from django.utils import timezone
 
 from cms.models import RaesPackageSource, RangeInstance
 from cms.models import Request as CmsRequest
+from cms.services._range_workspace import resolve_scope_egress_mode
 from ctf.enums import (
     EventStatus,
     ParticipantStatus,
@@ -102,7 +103,7 @@ def _make_spare_range(*, event: CTFEvent, owner, scenario_id: str = "basic", req
         scope_kind=event.scope_kind,
         account_id=event.account_id,
         organization_id=event.organization_id,
-        egress_mode="none",
+        egress_mode=resolve_scope_egress_mode(event.workspace_id),
         resource_generation=uuid4(),
         status=EngineRange.Status.READY,
         subnet_index=EngineRange.allocate_subnet_index(),
