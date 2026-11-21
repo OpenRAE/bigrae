@@ -39,7 +39,7 @@ public final class AuthorityProvider extends AbstractAuthenticationProvider {
             thread.setDaemon(true);
             return thread;
         });
-        if (renewals != null) timer.scheduleAtFixedRate(renewals::renew, 15, 15, TimeUnit.SECONDS);
+        if (renewals != null) timer.scheduleAtFixedRate(renewals::renew, 1, 1, TimeUnit.SECONDS);
     }
 
     @Override public String getIdentifier() { return "shifter-authority"; }

@@ -28,7 +28,8 @@ The control body contains only the bootstrap UUID. Redirects, URL credentials,
 unknown response fields, duplicate fields and trailing JSON values are refused.
 Loopback HTTP exists solely for local transport tests.
 
-The lease lasts 90 seconds; renewal runs every 15 seconds. At most 2048 decorated
+The lease lasts 90 seconds. Each lease renews 15 seconds after its last renewal
+attempt, so renewals spread out by admission time. At most 2048 decorated
 contexts are registered, with 16 concurrent renewal workers and one bounded
 queue slot per admitted context. A stalled or saturated control path cannot
 extend the local deadline. Apache's one-minute eviction interval and guest
