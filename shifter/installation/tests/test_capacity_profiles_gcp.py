@@ -102,10 +102,10 @@ def test_p300_carries_the_live_event_openfga_values():
     helm = profile.helm_projection()
     kubernetes = cast(dict[str, object], profile.desired_state()["kubernetes"])
 
-    assert (profile.openfga.replicas, profile.openfga.timeout_ms) == (4, 5000)
-    assert helm["openfga"] == {"replicas": 4}
+    assert (profile.openfga.replicas, profile.openfga.timeout_ms) == (8, 5000)
+    assert helm["openfga"] == {"replicas": 8}
     assert cast(dict[str, str], helm["runtimeEnv"])["OPENFGA_TIMEOUT_MS"] == "5000"
-    assert kubernetes["deployment/openfga.spec.replicas"] == 4
+    assert kubernetes["deployment/openfga.spec.replicas"] == 8
     assert kubernetes["configmap/platform-runtime.data.OPENFGA_TIMEOUT_MS"] == "5000"
 
 

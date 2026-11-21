@@ -38,15 +38,18 @@ spec:
           envFrom:
             - configMapRef:
                 name: platform-runtime
+          # The worker refreshes its heartbeat during each cycle. The 10-minute
+          # window and the 30-minute first liveness check are the safety margin
+          # for a slow cycle under event load.
           readinessProbe:
             exec:
-              command: ["sh", "-c", "find /tmp/guacamole-bootstrap-prune-heartbeat -mmin -2 | grep -q ."]
+              command: ["sh", "-c", "find /tmp/guacamole-bootstrap-prune-heartbeat -mmin -10 | grep -q ."]
             initialDelaySeconds: 10
             periodSeconds: 15
           livenessProbe:
             exec:
-              command: ["sh", "-c", "find /tmp/guacamole-bootstrap-prune-heartbeat -mmin -2 | grep -q ."]
-            initialDelaySeconds: 90
+              command: ["sh", "-c", "find /tmp/guacamole-bootstrap-prune-heartbeat -mmin -10 | grep -q ."]
+            initialDelaySeconds: 1800
             periodSeconds: 30
           resources:
             {{- toYaml .Values.workers.guacamolePrune.resources | nindent 12 }}
