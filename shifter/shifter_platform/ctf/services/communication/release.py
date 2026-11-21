@@ -203,7 +203,9 @@ def release_campaign(
     with transaction.atomic():
         # 1. Lock the live target events in primary-key order (canonical order shared
         #    with lifecycle) so a concurrent cancellation/fence cannot interleave.
-        target_events = list(CTFEvent.objects.select_for_update().filter(id__in=target_event_ids).order_by("pk"))
+        target_events = list(
+            CTFEvent.objects.select_for_update(no_key=True).filter(id__in=target_event_ids).order_by("pk")
+        )
 
         # 2. Re-check live authority inside the locked transaction -- on every caller,
         #    replay included -- so a revoked/unauthorized/token actor admits no work.
@@ -374,7 +376,9 @@ def release_due_declaration(
     organizers = prepare_organizer_recipients(campaign.audience_spec)
 
     with transaction.atomic():
-        target_events = list(CTFEvent.objects.select_for_update().filter(id__in=target_event_ids).order_by("pk"))
+        target_events = list(
+            CTFEvent.objects.select_for_update(no_key=True).filter(id__in=target_event_ids).order_by("pk")
+        )
         locked_campaign = CommunicationCampaign.objects.select_for_update().get(pk=campaign.pk)
         actor = reauthorize(locked_campaign, target_events, actor)
         locked_intent = CommunicationIntent.objects.select_for_update().get(pk=intent.pk)

@@ -93,11 +93,24 @@ def _record_submission_locked(
     challenge_id = challenge.id
     dynamic_mode = event.scoring_mode == ScoringMode.DYNAMIC.value
     with transaction.atomic():
-        locked_participant = CTFParticipant.objects.select_for_update().select_related("event").get(pk=participant.id)
+        # Lock only the participant and challenge rows, and with NO KEY UPDATE: the
+        # submission never changes their keys. A FOR UPDATE lock here blocked the
+        # key-share locks that an event-wide communication release takes on
+        # participant rows while it holds the event row, and the submission's own
+        # foreign-key checks then waited on that event row: a deadlock.
+        locked_participant = (
+            CTFParticipant.objects.select_for_update(no_key=True, of=("self",))
+            .select_related("event")
+            .get(pk=participant.id)
+        )
         # The challenge lock is the shared fence for receipt context and dynamic
         # scoring. Legacy static/regex/HTTP submissions retain the same behavior;
         # they simply gain a final availability check against the locked rows.
-        locked_challenge = CTFChallenge.objects.select_for_update().select_related("event").get(pk=challenge.pk)
+        locked_challenge = (
+            CTFChallenge.objects.select_for_update(no_key=True, of=("self",))
+            .select_related("event")
+            .get(pk=challenge.pk)
+        )
 
         from ctf.services.challenge import assert_challenge_available_for_participant
         from ctf.services.participant.queries import assert_participant_can_compete
