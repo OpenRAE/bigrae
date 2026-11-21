@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CTF Leaderboard</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --bg:#0b0f14; --panel:#121923; --row:#16202c; --text:#e8eef5; --muted:#8a9bb0; --accent:#ff5a1f; --gold:#f5c542; --silver:#c9d1db; --bronze:#d98a4a; }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--text);
+    font-family: "Inter", "Segoe UI", system-ui, sans-serif; overflow:hidden; }
+  body.loop { cursor:none; }
+  header { display:flex; align-items:baseline; justify-content:space-between; padding:2.2vh 4vw 1vh; }
+  h1 { margin:0; font-size:4.4vh; letter-spacing:.02em; }
+  h1 span { color:var(--accent); }
+  h1 #event-title { color:var(--text); }
+  .meta { color:var(--muted); font-size:1.8vh; text-align:right; }
+  .tabs { display:flex; gap:1.2vw; padding:0 4vw 1.4vh; }
+  .tab { font-size:2.2vh; padding:.5vh 1.2vw; border-radius:99px; color:var(--muted); border:1px solid #233142; }
+  .tab.on { color:var(--bg); background:var(--accent); border-color:var(--accent); font-weight:700; }
+  main { padding:0 4vw; height:calc(100% - 15vh); }
+  .view { display:none; height:100%; animation:fade .6s ease; }
+  .view.on { display:block; }
+  @keyframes fade { from { opacity:0; transform:translateY(1vh);} to { opacity:1; transform:none; } }
+  table { width:100%; border-collapse:separate; border-spacing:0 .6vh; font-size:2.6vh; }
+  th { text-align:left; color:var(--muted); font-weight:500; font-size:1.8vh; text-transform:uppercase; letter-spacing:.08em; padding:0 1vw .4vh; }
+  td { background:var(--row); padding:1.05vh 1vw; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; max-width:40vw; }
+  td:first-child { border-radius:.8vh 0 0 .8vh; width:7vw; font-weight:800; }
+  td:last-child { border-radius:0 .8vh .8vh 0; }
+  td.num, th.num { text-align:right; font-variant-numeric:tabular-nums; }
+  td.score { font-weight:800; color:var(--accent); }
+  tr.r1 td:first-child { color:var(--gold); } tr.r2 td:first-child { color:var(--silver); } tr.r3 td:first-child { color:var(--bronze); }
+  .empty { color:var(--muted); font-size:2.6vh; padding:4vh 0; }
+  .bar { position:fixed; left:0; bottom:0; height:.5vh; background:var(--accent); width:0; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span id="event-title">CTF</span> <span>Leaderboard</span></h1>
+  <div class="meta"><div id="updated">Loading…</div><div id="page"></div></div>
+</header>
+<div class="tabs"><div class="tab" id="tab-teams">Teams</div><div class="tab" id="tab-individuals">Individuals</div></div>
+<main>
+  <section class="view" id="view-teams"></section>
+  <section class="view" id="view-individuals"></section>
+</main>
+<div class="bar" id="bar"></div>
+<script>
+// Team and individual leaderboards. data.json is refreshed on the host every 60 s.
+// Right arrow / Space / PageDown: next screen. Left arrow / PageUp: previous screen. F: fullscreen.
+// URL options: ?loop=1 (auto-advance instead of arrows), ?rows=N (rows per screen, default 14),
+// ?secs=N (seconds per screen when looping, default 12), ?all=1 (also show entries with no points).
+const params = new URLSearchParams(location.search);
+const ROWS = Math.max(5, parseInt(params.get("rows") || "14", 10));
+const SHOW_ALL = params.get("all") === "1";
+if (params.get("title")) { document.getElementById("event-title").textContent = params.get("title"); document.title = params.get("title") + " Leaderboard"; }
+const SECS = Math.max(4, parseInt(params.get("secs") || "12", 10));
+const LOOP = params.get("loop") === "1";
+if (LOOP) document.body.classList.add("loop");
+let data = { teams: [], individuals: [] }, screens = [], idx = 0;
+
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const fmt = n => Number(n || 0).toLocaleString();
+
+function buildScreens() {
+  const out = [];
+  for (const kind of ["teams", "individuals"]) {
+    const rows = (data[kind] || []).filter(r => SHOW_ALL || r.score > 0);
+    const pages = Math.max(1, Math.ceil(rows.length / ROWS));
+    for (let p = 0; p < pages; p++) out.push({ kind, page: p, pages, rows: rows.slice(p * ROWS, (p + 1) * ROWS) });
+  }
+  return out;
+}
+
+function render(s) {
+  const head = s.kind === "teams"
+    ? `<tr><th>#</th><th>Team</th><th class="num">Members</th><th class="num">Solves</th><th class="num">Score</th></tr>`
+    : `<tr><th>#</th><th>Player</th><th>Team</th><th class="num">Solves</th><th class="num">Score</th></tr>`;
+  const body = s.rows.map(r => s.kind === "teams"
+    ? `<tr class="r${r.rank}"><td>${r.rank}</td><td>${esc(r.name)}</td><td class="num">${fmt(r.members)}</td><td class="num">${fmt(r.solves)}</td><td class="num score">${fmt(r.score)}</td></tr>`
+    : `<tr class="r${r.rank}"><td>${r.rank}</td><td>${esc(r.name)}</td><td>${esc(r.team)}</td><td class="num">${fmt(r.solves)}</td><td class="num score">${fmt(r.score)}</td></tr>`).join("");
+  const view = document.getElementById("view-" + s.kind);
+  view.innerHTML = s.rows.length ? `<table><thead>${head}</thead><tbody>${body}</tbody></table>` : `<div class="empty">No scores yet.</div>`;
+  for (const k of ["teams", "individuals"]) {
+    document.getElementById("view-" + k).classList.toggle("on", k === s.kind);
+    document.getElementById("tab-" + k).classList.toggle("on", k === s.kind);
+  }
+  document.getElementById("page").textContent = s.pages > 1 ? `Page ${s.page + 1} of ${s.pages}` : "";
+  const bar = document.getElementById("bar");
+  bar.style.transition = "none"; bar.style.width = "0";
+  if (LOOP) requestAnimationFrame(() => requestAnimationFrame(() => { bar.style.transition = `width ${SECS}s linear`; bar.style.width = "100%"; }));
+}
+
+async function load() {
+  try {
+    const r = await fetch("data.json?t=" + Date.now(), { cache: "no-store" });
+    if (!r.ok) throw new Error(r.status);
+    data = await r.json();
+    const t = new Date(data.updated);
+    document.getElementById("updated").textContent = "Updated " + t.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    document.getElementById("updated").textContent = "Waiting for scores…";
+  }
+}
+
+function next() {
+  if (idx === 0) screens = buildScreens();   // pick up new data at the start of each cycle
+  if (screens.length) render(screens[idx]);
+  idx = screens.length ? (idx + 1) % screens.length : 0;
+}
+
+/* Arrow mode: idx is the screen on display. */
+function show(n) {
+  screens = buildScreens();
+  if (!screens.length) return;
+  idx = (n + screens.length) % screens.length;
+  render(screens[idx]);
+}
+
+document.addEventListener("keydown", e => {
+  if (e.key === "f" || e.key === "F") (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen());
+  if (LOOP) return;
+  if (["ArrowRight", "ArrowDown", " ", "PageDown"].includes(e.key)) { e.preventDefault(); show(idx + 1); }
+  if (["ArrowLeft", "ArrowUp", "PageUp"].includes(e.key)) { e.preventDefault(); show(idx - 1); }
+});
+
+(async () => {
+  await load();
+  if (LOOP) {
+    next();
+    setInterval(next, SECS * 1000);
+    setInterval(load, 30000);
+  } else {
+    show(0);
+    setInterval(async () => { await load(); show(idx); }, 30000);   // fresh scores, same screen
+  }
+})();
+</script>
+</body>
+</html>
