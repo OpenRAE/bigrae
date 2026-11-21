@@ -86,7 +86,8 @@ def _reject_operator_credentials(value: object) -> None:
         _reject_secret_value("operator document", value, error_cls=ValueError)
 
 
-MAX_RETAINED_BYTES = 64 * 1024**2
+MAX_PLAN_BYTES = 256 * 1024**2
+MAX_RETAINED_BYTES = 512 * 1024**2
 MAX_AUTHORITY_BYTES = 4 * 1024**2
 MAX_DOCUMENT_BYTES = 16 * 1024**2
 SUPPORTED_DEPENDENCIES = {"raes": "12.0.0", "raes-env-packs": "7.2.3"}
@@ -261,7 +262,7 @@ def _context(
         "participant_configuration_validators": validators,
         "realization_envelope": envelope,
         "execution_authority": authority.execution_authority,
-        "limits": TrialCompilationLimitsModel(),
+        "limits": TrialCompilationLimitsModel(max_plan_bytes=MAX_PLAN_BYTES),
     }
 
 
