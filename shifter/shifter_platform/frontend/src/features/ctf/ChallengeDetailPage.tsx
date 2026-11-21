@@ -136,7 +136,7 @@ function HintRow({ hint }: Readonly<{ hint: CtfHint }>) {
     <li className="rounded-md border border-border/60 p-3">
       <div className="flex items-center justify-between gap-2 text-sm">
         <span className="font-medium">Hint {hint.order + 1}</span>
-        <span className="text-xs text-muted-foreground">−{hint.penalty} pts</span>
+        <span className="text-xs text-muted-foreground">−{hint.cost_points} pts</span>
       </div>
       {hint.unlocked ? <p className="mt-2 text-sm whitespace-pre-wrap">{hint.text}</p> : null}
     </li>
@@ -155,7 +155,7 @@ function HintsSection({ challenge }: Readonly<{ challenge: CtfChallengeDetail }>
         <div className="mb-3 flex items-center justify-between gap-2">
           <h2 className="text-sm font-semibold">Hints</h2>
           {challenge.total_hint_penalty > 0 ? (
-            <span className="text-xs text-muted-foreground">−{challenge.total_hint_penalty} pts used</span>
+            <span className="text-xs text-muted-foreground">−{challenge.total_hint_penalty_points} pts used</span>
           ) : null}
         </div>
         <ul className="flex flex-col gap-2">

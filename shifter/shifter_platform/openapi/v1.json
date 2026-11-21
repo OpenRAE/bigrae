@@ -29536,6 +29536,11 @@
             "type": "integer",
             "readOnly": true
           },
+          "total_hint_penalty_points": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Points that the unlocked hints take from a solve."
+          },
           "files": {
             "type": "array",
             "items": {
@@ -29614,6 +29619,7 @@
           "timeout_retry_after",
           "topics",
           "total_hint_penalty",
+          "total_hint_penalty_points",
           "unmet_prerequisites"
         ]
       },
@@ -30044,7 +30050,13 @@
           },
           "penalty": {
             "type": "integer",
-            "readOnly": true
+            "readOnly": true,
+            "description": "Percentage of the challenge value."
+          },
+          "cost_points": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Points this hint costs when the hints are unlocked in order."
           },
           "unlocked": {
             "type": "boolean",
@@ -30057,6 +30069,7 @@
           }
         },
         "required": [
+          "cost_points",
           "id",
           "order",
           "penalty",

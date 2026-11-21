@@ -130,7 +130,10 @@ class ParticipantHintSerializer(serializers.Serializer):
 
     id = serializers.CharField(read_only=True)
     order = serializers.IntegerField(read_only=True)
-    penalty = serializers.IntegerField(read_only=True)
+    penalty = serializers.IntegerField(read_only=True, help_text="Percentage of the challenge value.")
+    cost_points = serializers.IntegerField(
+        read_only=True, help_text="Points this hint costs when the hints are unlocked in order."
+    )
     unlocked = serializers.BooleanField(read_only=True)
     text = serializers.CharField(read_only=True, allow_null=True)
 
@@ -192,6 +195,9 @@ class ParticipantChallengeDetailSerializer(serializers.Serializer):
     next_hint_cost = serializers.IntegerField(read_only=True)
     points_after_next_hint = serializers.IntegerField(read_only=True)
     total_hint_penalty = serializers.IntegerField(read_only=True)
+    total_hint_penalty_points = serializers.IntegerField(
+        read_only=True, help_text="Points that the unlocked hints take from a solve."
+    )
     files = ParticipantChallengeFileSerializer(many=True, read_only=True)
     prerequisites_met = serializers.BooleanField(read_only=True)
     unmet_prerequisites = _NamedRefSerializer(many=True, read_only=True)
