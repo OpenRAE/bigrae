@@ -64,14 +64,33 @@ def _resolve_scope(launch: PreparedScopedLaunch, *, for_update: bool = False) ->
     return resolve_range_scope_binding(launch.scope, member=launch.current.principal, for_update=for_update)
 
 
+def _launch_scope_egress(workspace_id: int | None, *, locked: bool) -> str:
+    """Pin the egress mode for a launch scope.
+
+    A workspace supplies its own selector. An organization- or account-placed
+    launch has no workspace selector, so it inherits the deployment baseline
+    (``status-quo``), the same as a ``status-quo`` workspace. Only an explicit
+    ``none`` selection resolves to zero egress (ADR-017-R5); a missing selector is
+    never read as one.
+    """
+    from installation.range_egress import RangeEgressMode
+
+    from ._range_workspace import resolve_effective_egress_mode
+
+    if workspace_id is None:
+        return RangeEgressMode.STATUS_QUO.value
+    if locked:
+        return resolve_effective_egress_mode_locked(workspace_id)
+    return resolve_effective_egress_mode(workspace_id)
+
+
 def _reserve_quota(
     launch: PreparedScopedLaunch, resolved: ResolvedResourceScope, audit: WorkspaceQuotaAuditContext
 ) -> str:
     """Reserve the workspace draw and pin egress while holding the ancestry lock."""
-    egress = "none"
     if resolved.workspace_id is not None:
         reserve_workspace_concurrent_range(resolved.workspace_id, launch.request_id, audit)
-        egress = resolve_effective_egress_mode_locked(resolved.workspace_id)
+    egress = _launch_scope_egress(resolved.workspace_id, locked=True)
     assert_range_backend_egress_supported(launch.backend.backend if launch.backend else None, egress)
     return egress
 
@@ -166,11 +185,7 @@ def _recover_reservation(
             launch.request_id, launch.intent_digest, launch.current, resolved, launch.owner
         )
         if existing is not None:
-            from ._range_workspace import resolve_effective_egress_mode
-
-            return existing, (
-                resolve_effective_egress_mode(resolved.workspace_id) if resolved.workspace_id is not None else "none"
-            )
+            return existing, _launch_scope_egress(resolved.workspace_id, locked=False)
     if getattr(getattr(exc.__cause__, "diag", None), "constraint_name", None) in {
         "uq_range_active_principal_source",
         "uq_rangeinstance_active_per_user_source",
