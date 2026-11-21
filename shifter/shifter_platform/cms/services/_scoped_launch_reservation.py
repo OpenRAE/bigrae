@@ -23,7 +23,7 @@ from workspaces.services import (
 )
 
 from ._range_lease import build_resolved_mission_control_range_lease
-from ._range_workspace import resolve_effective_egress_mode_locked
+from ._range_workspace import resolve_scope_egress_mode
 from ._scoped_launch_source import source_launch_binding
 from ._scoped_launch_types import PreparedScopedLaunch
 
@@ -68,10 +68,9 @@ def _reserve_quota(
     launch: PreparedScopedLaunch, resolved: ResolvedResourceScope, audit: WorkspaceQuotaAuditContext
 ) -> str:
     """Reserve the workspace draw and pin egress while holding the ancestry lock."""
-    egress = "none"
     if resolved.workspace_id is not None:
         reserve_workspace_concurrent_range(resolved.workspace_id, launch.request_id, audit)
-        egress = resolve_effective_egress_mode_locked(resolved.workspace_id)
+    egress = resolve_scope_egress_mode(resolved.workspace_id)
     assert_range_backend_egress_supported(launch.backend.backend if launch.backend else None, egress)
     return egress
 
@@ -166,11 +165,7 @@ def _recover_reservation(
             launch.request_id, launch.intent_digest, launch.current, resolved, launch.owner
         )
         if existing is not None:
-            from ._range_workspace import resolve_effective_egress_mode
-
-            return existing, (
-                resolve_effective_egress_mode(resolved.workspace_id) if resolved.workspace_id is not None else "none"
-            )
+            return existing, resolve_scope_egress_mode(resolved.workspace_id)
     if getattr(getattr(exc.__cause__, "diag", None), "constraint_name", None) in {
         "uq_range_active_principal_source",
         "uq_rangeinstance_active_per_user_source",

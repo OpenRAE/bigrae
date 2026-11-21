@@ -140,10 +140,9 @@ def _run_atomic_claim(request: WarmClaimRequest, candidates: list[tuple[str, str
     try:
         with transaction.atomic():
             resolve_range_scope_binding(request.scope, member=prepared.credential.principal, for_update=True)
-            from ._range_workspace import resolve_effective_egress_mode_locked
+            from ._range_workspace import resolve_scope_egress_mode
 
-            workspace_id = prepared.scope_ids[3]
-            egress = resolve_effective_egress_mode_locked(workspace_id) if workspace_id is not None else "none"
+            egress = resolve_scope_egress_mode(prepared.scope_ids[3])
             if egress != request.egress_mode:
                 # The ready generation's digest pins its original network mode.
                 # Cold reservation re-resolves the changed policy under this lock.

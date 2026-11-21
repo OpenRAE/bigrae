@@ -51,7 +51,7 @@ def test_spares_are_event_principal_owned_without_placeholder_users(
         assert runtime.owner_principal_uuid == event_with_scenario.owner_principal_uuid
         assert instance.event_uuid == event_with_scenario.pk
         assert runtime.event_uuid == event_with_scenario.pk
-        assert runtime.egress_mode == "none"
+        assert runtime.egress_mode == "status-quo"
 
     audit = AuditLog.objects.get(action=AuditAction.SPARE_PROVISION)
     assert audit.actor_id is None
