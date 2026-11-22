@@ -86,6 +86,7 @@ Disposable trial workers reuse Engine's native lifecycle and capacity ledger.
 A trial archive carries a LilRAE trial record or a partial RAES run record under the SDK's `TrialSeal`.
 SDK 0.4.0 also defines assigned-trial contracts (`trial.assigned`), which dispatch does not use.
 BigRAE, not the worker, records the cleanup of each trial.
+
 Only the provisioner reads host-management keys and runs the fixed bounded SSH probe.
 The shared result/member parsers validate the closed observation shape.
 Engine validates credential-free host observations against the accepted
