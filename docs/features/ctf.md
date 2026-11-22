@@ -49,6 +49,17 @@ Event cleanup follows the organizer's configured lifecycle.
 
 Open **Challenges** and select an available challenge.
 Read its description, category, points, difficulty, target, and current state.
+
+To change the list:
+
+1. Select **By category**, **By status**, or **All** to change the view.
+   **By status** shows **Not solved**, then **Solved**.
+2. Select a key in **Sort within groups** to sort the challenges in each group.
+3. Select a tag or topic to show only the challenges that have it.
+   Select it again to remove the filter.
+
+A challenge that a teammate solved counts as solved.
+The page keeps these selections when you open a challenge and go back.
 Scheduled releases and prerequisites can keep other challenges locked.
 Use only targets within the event's authorization.
 

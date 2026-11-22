@@ -31,8 +31,8 @@ export interface A11ySurface {
   readonly actor: ActorName;
   /** Text proving the intended surface/state rendered before scanning. */
   readonly ready: string;
-  /** Whether the readiness text is a page heading (default) or an alert. */
-  readonly readyKind?: "heading" | "alert";
+  /** Whether the readiness text is a page heading (default), an alert, or exact loaded-state text. */
+  readonly readyKind?: "heading" | "alert" | "text";
   /** Source path responsible for remediation. */
   readonly remediation: string;
 }
@@ -79,6 +79,17 @@ export const SURFACES: readonly A11ySurface[] = [
     actor: "inbox",
     ready: "Inbox",
     remediation: "src/features/ctf/inbox/InboxPage.tsx",
+  },
+  {
+    // Seeded event without released challenges. The loaded empty state, not
+    // the heading that also shows while loading, proves the view and sort
+    // controls rendered above it (#2998).
+    id: "ctf-participant-challenges",
+    route: "/ctf/challenges",
+    actor: "inbox",
+    ready: "No challenges available yet",
+    readyKind: "text",
+    remediation: "src/features/ctf/ChallengesPage.tsx",
   },
   {
     id: "ctf-admin-dashboard",

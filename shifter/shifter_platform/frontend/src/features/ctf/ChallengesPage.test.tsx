@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { axe } from "vitest-axe";
+
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { createMemoryRouter, RouterProvider } from "react-router";
 
 import { renderRoute } from "@/test/utils";
 
@@ -118,5 +121,138 @@ describe("ChallengesPage", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "xdr" }));
     expect(screen.getByRole("link", { name: /Buffer Overflow/ })).toBeInTheDocument();
+  });
+
+  it("groups challenges by solved and not solved in the status view", async () => {
+    mockApi.mockResolvedValue([
+      challenge({ id: "c1", name: "Open One" }),
+      challenge({ id: "c2", name: "Mine", category: "pwn", solved: true }),
+      challenge({ id: "c3", name: "Teammate", category: "crypto", team_solved: true }),
+    ]);
+    renderRoute(<ChallengesPage />);
+    await screen.findByRole("link", { name: /Open One/ });
+
+    const viewGroup = screen.getByRole("group", { name: "View" });
+    expect(viewGroup.tagName).toBe("FIELDSET");
+    fireEvent.click(within(viewGroup).getByRole("button", { name: "By status" }));
+
+    expect(screen.getByRole("button", { name: "By status" })).toHaveAttribute("aria-pressed", "true");
+    const headings = screen.getAllByRole("heading", { level: 2 });
+    expect(headings.map((heading) => heading.textContent)).toEqual(["Not solved", "Solved"]);
+    const solved = screen.getByRole("region", { name: "Solved" });
+    expect(within(solved).getAllByRole("link").map((link) => link.textContent)).toEqual([
+      expect.stringContaining("Mine"),
+      expect.stringContaining("Teammate"),
+    ]);
+    expect(within(screen.getByRole("region", { name: "Not solved" })).getAllByRole("link")).toHaveLength(1);
+  });
+
+  it("sorts the list by the selected key", async () => {
+    mockApi.mockResolvedValue([
+      challenge({ id: "c1", name: "Low", points: 50, order: 0 }),
+      challenge({ id: "c2", name: "High", points: 500, order: 1 }),
+      challenge({ id: "c3", name: "Mid", points: 200, order: 2 }),
+    ]);
+    renderRoute(<ChallengesPage />);
+    await screen.findByRole("link", { name: /Low/ });
+    const names = () => screen.getAllByRole("link").map((link) => link.querySelector("span")?.textContent);
+    expect(names()).toEqual(["Low", "High", "Mid"]);
+
+    fireEvent.change(screen.getByLabelText("Sort within groups"), { target: { value: "points-desc" } });
+    expect(names()).toEqual(["High", "Mid", "Low"]);
+
+    fireEvent.change(screen.getByLabelText("Sort within groups"), { target: { value: "name" } });
+    expect(names()).toEqual(["High", "Low", "Mid"]);
+  });
+
+  it("restores the view and sort from the URL", async () => {
+    mockApi.mockResolvedValue([
+      challenge({ id: "c1", name: "Low", category: "web", points: 50 }),
+      challenge({ id: "c2", name: "High", category: "pwn", points: 500 }),
+    ]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?view=all&sort=points-desc"] });
+    await screen.findByRole("link", { name: /Low/ });
+
+    expect(screen.getByRole("button", { name: "All" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Sort within groups")).toHaveValue("points-desc");
+    expect(screen.queryByRole("heading", { level: 2 })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("link").map((link) => link.querySelector("span")?.textContent)).toEqual(["High", "Low"]);
+  });
+
+  it("ignores unknown view, sort, and label values in the URL", async () => {
+    mockApi.mockResolvedValue([challenge(), challenge({ id: "c2", name: "Buffer Overflow", category: "pwn" })]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?view=bogus&sort=bogus&tag=missing&topic=missing"] });
+    await screen.findByRole("link", { name: /SQL Injection/ });
+
+    expect(screen.getByRole("link", { name: /Buffer Overflow/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "By category" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Sort within groups")).toHaveValue("order");
+  });
+
+  it("filters by a markup-like tag without rendering it as markup", async () => {
+    const tag = '<img src=x onerror="alert(1)">';
+    mockApi.mockResolvedValue([
+      challenge({ tags: [tag] }),
+      challenge({ id: "c2", name: "Buffer Overflow", category: "pwn" }),
+    ]);
+    const { container } = renderRoute(<ChallengesPage />, {
+      initialEntries: [`/?tag=${encodeURIComponent(tag)}`],
+    });
+    await screen.findByRole("link", { name: /SQL Injection/ });
+
+    expect(screen.queryByRole("link", { name: /Buffer Overflow/ })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: tag })).toHaveAttribute("aria-pressed", "true");
+    expect(container.querySelector("img")).toBeNull();
+  });
+
+  it("keeps the controls when no challenge matches the filters", async () => {
+    mockApi.mockResolvedValue([
+      challenge({ tags: ["xdr"] }),
+      challenge({ id: "c2", name: "Buffer Overflow", category: "pwn", topics: ["linux"] }),
+    ]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?tag=xdr&topic=linux"] });
+
+    expect(await screen.findByText("No challenges match this filter")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "xdr" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "By status" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Sort within groups")).toBeInTheDocument();
+  });
+
+  it("keeps the list state after opening a challenge and going back", async () => {
+    mockApi.mockResolvedValue([challenge(), challenge({ id: "c2", name: "Solved One", solved: true })]);
+    const router = createMemoryRouter(
+      [
+        { path: "/ctf/challenges/", element: <ChallengesPage /> },
+        { path: "/ctf/challenges/:challengeId/", element: <p>Challenge detail</p> },
+      ],
+      { initialEntries: ["/ctf/challenges/"] },
+    );
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <RouterProvider router={router} />
+      </QueryClientProvider>,
+    );
+    await screen.findByRole("link", { name: /SQL Injection/ });
+
+    fireEvent.click(screen.getByRole("button", { name: "By status" }));
+    fireEvent.change(screen.getByLabelText("Sort within groups"), { target: { value: "name" } });
+    fireEvent.click(screen.getByRole("link", { name: /SQL Injection/ }));
+    expect(await screen.findByText("Challenge detail")).toBeInTheDocument();
+
+    await act(async () => {
+      await router.navigate(-1);
+    });
+
+    expect(await screen.findByRole("button", { name: "By status" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByLabelText("Sort within groups")).toHaveValue("name");
+  });
+
+  it("has no axe violations in the status view", async () => {
+    mockApi.mockResolvedValue([challenge({ tags: ["xdr"] }), challenge({ id: "c2", name: "B", solved: true })]);
+    const { container } = renderRoute(<ChallengesPage />, { initialEntries: ["/?view=status"] });
+    await screen.findByRole("link", { name: /SQL Injection/ });
+    const results = await axe(container);
+    expect(results.violations).toEqual([]);
   });
 });
