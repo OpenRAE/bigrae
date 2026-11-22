@@ -1,63 +1,91 @@
 """The Guacamole bootstrap prune worker reports liveness during a long cycle."""
 
-from types import SimpleNamespace
+import urllib.error
+from datetime import timedelta
 from unittest import mock
 
 import pytest
+from django.utils import timezone
 
 from mission_control import guacamole_authority
 from mission_control.management.commands import run_guacamole_bootstrap_prune as prune_command
+from mission_control.models import GuacamoleBootstrapRequest
+
+pytestmark = [pytest.mark.django_db]
 
 
-class _Rows(list):
-    """Stand-in for the bounded revalidation queryset."""
+class _Gateway:
+    """Synthetic native gateway that records each termination request."""
 
-    def exclude(self, **_kwargs):
-        return self
+    def __init__(self, *, terminated: bool) -> None:
+        self.terminated = terminated
+        self.tokens: list[str] = []
 
-    def order_by(self, *_args):
-        return self
+    def terminate_session(self, token: str) -> bool:
+        self.tokens.append(token)
+        return self.terminated
+
+
+def _pending_termination(index: int) -> GuacamoleBootstrapRequest:
+    """A principal session already marked for termination, so no reauthorization runs."""
+    return GuacamoleBootstrapRequest.objects.create(
+        protocol="range_ssh",
+        target_id=f"synthetic-target-{index}",
+        expires_at=timezone.now() + timedelta(hours=1),
+        authority_kind="principal",
+        native_session_token=f"synthetic-token-{index}",
+        termination_pending=True,
+    )
+
+
+def _expired_prunable(index: int) -> GuacamoleBootstrapRequest:
+    return GuacamoleBootstrapRequest.objects.create(
+        protocol="range_ssh",
+        target_id=f"synthetic-expired-{index}",
+        expires_at=timezone.now() - timedelta(minutes=5),
+    )
 
 
 def test_revalidation_reports_progress_once_per_session():
-    rows = _Rows(
-        SimpleNamespace(pk=index, delivered_at=None, is_expired=False, termination_pending=True) for index in range(3)
-    )
+    for index in range(3):
+        _pending_termination(index)
+    gateway = _Gateway(terminated=False)
     progress = mock.Mock()
-    manager = SimpleNamespace(filter=lambda **_kwargs: rows)
-    with (
-        mock.patch("mission_control.models.GuacamoleBootstrapRequest.objects", manager),
-        mock.patch.object(guacamole_authority, "terminate_bootstrap", return_value=False) as terminate,
-    ):
-        guacamole_authority.revalidate_guacamole_sessions(client=mock.Mock(), limit=10, progress=progress)
 
+    terminated = guacamole_authority.revalidate_guacamole_sessions(client=gateway, limit=10, progress=progress)
+
+    assert terminated == 0
     assert progress.call_count == 3
-    assert terminate.call_count == 3
+    assert sorted(gateway.tokens) == [f"synthetic-token-{index}" for index in range(3)]
 
 
 def test_revalidation_without_progress_still_runs():
-    rows = _Rows([SimpleNamespace(pk=1, delivered_at=None, is_expired=False, termination_pending=True)])
-    manager = SimpleNamespace(filter=lambda **_kwargs: rows)
-    with (
-        mock.patch("mission_control.models.GuacamoleBootstrapRequest.objects", manager),
-        mock.patch.object(guacamole_authority, "terminate_bootstrap", return_value=True),
-    ):
-        assert guacamole_authority.revalidate_guacamole_sessions(client=mock.Mock(), limit=10) == 1
+    row = _pending_termination(0)
+
+    assert guacamole_authority.revalidate_guacamole_sessions(client=_Gateway(terminated=True), limit=10) == 1
+
+    row.refresh_from_db()
+    assert row.native_terminated_at is not None
+    assert row.native_session_token == ""
 
 
-def test_prune_cycle_refreshes_heartbeat_during_revalidation_and_each_batch(tmp_path, monkeypatch):
+def test_prune_cycle_refreshes_heartbeat_during_revalidation_and_each_batch(tmp_path, monkeypatch, settings):
+    settings.GUACAMOLE_API_BASE_URL = "https://guacamole.example.test"
     monkeypatch.setattr(prune_command, "HEARTBEAT_FILE", tmp_path / "heartbeat")
+    pending = _pending_termination(0)
+    for index in range(12):
+        _expired_prunable(index)
     command = prune_command.Command()
     touches = mock.Mock()
     monkeypatch.setattr(command, "_touch_heartbeat", touches)
-    with (
-        mock.patch.object(prune_command, "revalidate_guacamole_sessions") as revalidate,
-        mock.patch.object(prune_command, "prune_expired_bootstrap_requests", side_effect=[5, 5, 2]),
-    ):
+
+    # The gateway is unreachable, so the session stays pending for the next cycle.
+    with mock.patch("urllib.request.OpenerDirector.open", side_effect=urllib.error.URLError("synthetic outage")):
         assert command._prune_cycle(batch_size=5) == 12
 
-    assert revalidate.call_args.kwargs["progress"] is touches
-    assert touches.call_count == 3
+    # One touch for the revalidated session, then one for each batch of 5, 5 and 2.
+    assert touches.call_count == 4
+    assert list(GuacamoleBootstrapRequest.objects.values_list("pk", flat=True)) == [pending.pk]
 
 
 @pytest.mark.parametrize("poll_interval", [1, 90])
