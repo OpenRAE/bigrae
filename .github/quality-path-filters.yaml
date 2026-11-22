@@ -452,6 +452,8 @@ exclusions:
       - scripts/smoke-test-gcp.sh
       - scripts/sync-deploy-secrets.sh
       - scripts/update-coverage-readme.py
+      # Operator display for a live CTF event; shellcheck covers refresh.sh.
+      - tools/ctf-leaderboard/**
 
   - type: test
     reason: >-

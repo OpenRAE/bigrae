@@ -73,7 +73,7 @@ def test_build_values_projects_every_selected_capacity_profile(
     assert values["runtimeEnv"]["PORTAL_WEB_WORKERS"] == "4"
     assert values["portal"]["terminationGracePeriodSeconds"] == 330
     assert values["guacamoleClient"]["postgresqlAbsoluteMaxConnections"] == participants
-    assert values["services"]["portal"]["backendConfig"]["timeoutSec"] == 3600
+    assert values["services"]["portal"]["backendConfig"]["timeoutSec"] == 28800
 
 
 def test_build_values_refuses_an_insecure_public_edge(tmp_path: Path):

@@ -201,7 +201,7 @@ repos:
     rev: v0.11.0.1
     hooks:
       - id: shellcheck
-        files: ^scripts/
+        files: ^(scripts|tools)/
 
   # Terraform formatting (fast). Validation/tflint/checkov are deferred to CI.
   - repo: https://github.com/antonbabenko/pre-commit-terraform
