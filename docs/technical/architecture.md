@@ -84,6 +84,7 @@ ownership, application administration and cloud administration remain distinct.
 
 Disposable trial workers reuse Engine's native lifecycle and capacity ledger.
 A trial archive carries a LilRAE trial record or a partial RAES run record under the SDK's `TrialSeal`.
+SDK 0.4.0 also defines assigned-trial contracts (`trial.assigned`), which dispatch does not use.
 BigRAE, not the worker, records the cleanup of each trial.
 Only the provisioner reads host-management keys and runs the fixed bounded SSH probe.
 The shared result/member parsers validate the closed observation shape.
@@ -564,7 +565,7 @@ trust boundaries, retention and admission checks.
 
 Adapters declaring `provision.prepare` may propose bounded scalar values and
 literal UTF-8 secret payloads for explicitly declared provisioning concerns.
-SDK 0.3.0 accepts at most 2048 distinct secret payload selections per response.
+SDK 0.4.0 accepts at most 2048 distinct secret payload selections per response.
 Each value is limited to 64 KiB, and the complete clear response remains limited to 512 KiB.
 
 The host checks the original invocation and declared authority before it uses any selection.
