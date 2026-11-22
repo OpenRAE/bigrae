@@ -132,7 +132,9 @@ describe("ChallengesPage", () => {
     renderRoute(<ChallengesPage />);
     await screen.findByRole("link", { name: /Open One/ });
 
-    fireEvent.click(screen.getByRole("button", { name: "By status" }));
+    const viewGroup = screen.getByRole("group", { name: "View" });
+    expect(viewGroup.tagName).toBe("FIELDSET");
+    fireEvent.click(within(viewGroup).getByRole("button", { name: "By status" }));
 
     expect(screen.getByRole("button", { name: "By status" })).toHaveAttribute("aria-pressed", "true");
     const headings = screen.getAllByRole("heading", { level: 2 });

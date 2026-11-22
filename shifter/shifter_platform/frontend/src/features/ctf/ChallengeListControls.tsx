@@ -17,7 +17,8 @@ export function ChallengeListControls({
 }>) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-3">
-      <div className="flex flex-wrap items-center gap-1.5" role="group" aria-label="View">
+      <fieldset className="m-0 flex min-w-0 flex-wrap items-center gap-1.5 border-0 p-0">
+        <legend className="sr-only">View</legend>
         {CHALLENGE_VIEWS.map((option) => (
           <Button
             key={option.value}
@@ -30,7 +31,7 @@ export function ChallengeListControls({
             {option.label}
           </Button>
         ))}
-      </div>
+      </fieldset>
       <div className="flex items-center gap-2">
         <Label htmlFor="challenge-sort" className="text-xs text-muted-foreground">
           Sort within groups
