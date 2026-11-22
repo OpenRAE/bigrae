@@ -46,6 +46,8 @@ AWS_DEV_WAF_ACL_ARN = (
 # direct-provider configuration, capacity contracts, and isolated provider egress.
 # Regenerated for #2305 after granting namespace-scoped pod listing for cancellation.
 # Regenerated after raising provisioner launcher memory for burst requests.
+# Regenerated after raising the CTF communication worker memory limit and the
+# Guacamole bootstrap prune CPU limit and heartbeat windows for event load.
 # Regenerated for #2467 after admitting raes-range activate in the provisioner Job policy.
 # Regenerated for #2480 after admitting the OpenVPN pool env and dropping the 1195 port.
 # Regenerated for #2320: dedicated Guacamole/guacd KSAs and bounded native SQL admission.
@@ -75,8 +77,8 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for the live event settings: portal TCP liveness and a 5 s readiness
 # timeout, portal BackendConfig unhealthyThreshold 5, and API_SESSION_TIMEOUT 15.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "8991256ee52e3558e4d5275656c61235c134f96760c4731130f4e3865a9bcb7a",
-    "gcp-dev": "2992446967983038b900b9069fb271e1109b50e303a3c4a4b0ff796dc9f85f20",
+    "gcp-prod": "3ffc117e4676bf2533089049c00609da89d060d162e15fcc7dc2a4d4e596cdab",
+    "gcp-dev": "ad9206f5b520ee2e6c6b06de1d562cb9d1a357ac76c4ca1caed6f2df20e66070",
 }
 
 

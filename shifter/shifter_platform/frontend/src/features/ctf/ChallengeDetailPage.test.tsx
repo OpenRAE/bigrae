@@ -35,6 +35,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     next_hint_cost: 0,
     points_after_next_hint: 100,
     total_hint_penalty: 0,
+    total_hint_penalty_points: 0,
     files: [],
     prerequisites_met: true,
     unmet_prerequisites: [],
@@ -82,6 +83,28 @@ describe("ChallengeDetailPage", () => {
     expect(await screen.findByRole("heading", { name: "SQL Injection" })).toBeInTheDocument();
     expect(screen.getAllByText("Solved by your team").length).toBeGreaterThan(0);
     expect(screen.getByLabelText("Submit flag")).toBeInTheDocument();
+  });
+
+  it("labels each hint with its point cost, not its percentage", async () => {
+    mockApi.mockResolvedValue(
+      detail({
+        points: 200,
+        hints: [
+          { id: "h1", order: 0, penalty: 10, cost_points: 20, unlocked: true, text: "Look closer." },
+          { id: "h2", order: 1, penalty: 20, cost_points: 40, unlocked: false, text: null },
+        ],
+        next_hint_id: "h2",
+        next_hint_cost: 40,
+        points_after_next_hint: 140,
+        total_hint_penalty: 10,
+        total_hint_penalty_points: 20,
+      }),
+    );
+    renderRoute(<ChallengeDetailPage />, ROUTE);
+    expect(await screen.findByText("−20 pts")).toBeInTheDocument();
+    expect(screen.getByText("−40 pts")).toBeInTheDocument();
+    expect(screen.getByText("−20 pts used")).toBeInTheDocument();
+    expect(screen.queryByText("−10 pts")).not.toBeInTheDocument();
   });
 
   it("shows a success message after a correct submission", async () => {

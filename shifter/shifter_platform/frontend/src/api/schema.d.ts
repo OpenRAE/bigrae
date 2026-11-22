@@ -6806,6 +6806,8 @@ export interface components {
             readonly next_hint_cost: number;
             readonly points_after_next_hint: number;
             readonly total_hint_penalty: number;
+            /** @description Points that the unlocked hints take from a solve. */
+            readonly total_hint_penalty_points: number;
             readonly files: components["schemas"]["ParticipantChallengeFile"][];
             readonly prerequisites_met: boolean;
             readonly unmet_prerequisites: components["schemas"]["_NamedRef"][];
@@ -6925,7 +6927,10 @@ export interface components {
         ParticipantHint: {
             readonly id: string;
             readonly order: number;
+            /** @description Percentage of the challenge value. */
             readonly penalty: number;
+            /** @description Points this hint costs when the hints are unlocked in order. */
+            readonly cost_points: number;
             readonly unlocked: boolean;
             readonly text: string | null;
         };

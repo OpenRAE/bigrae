@@ -100,12 +100,9 @@ def range_egress_compatible_with_scope(range_instance_pk: int, scope: ResourceSc
         resolved.workspace_id,
     ):
         return False
-    if resolved.workspace_id is None:
-        current_mode = "none"
-    else:
-        from cms.services._range_workspace import resolve_effective_egress_mode_locked
+    from cms.services._range_workspace import resolve_scope_egress_mode
 
-        current_mode = resolve_effective_egress_mode_locked(resolved.workspace_id)
+    current_mode = resolve_scope_egress_mode(resolved.workspace_id)
     return get_pinned_range_egress_mode_by_request(instance.request.request_id) == current_mode
 
 

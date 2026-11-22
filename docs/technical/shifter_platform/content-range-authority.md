@@ -299,7 +299,8 @@ The approved gateway extension additionally uses Apache's supported
 the JSON-authenticated identity. The gateway sends only this opaque ID to
 `/api/v1/mission-control/guacamole/control/authority/`. Google's SDK supplies the gateway's metadata-issued ID token. The portal verifies audience, service-account email, and immutable subject. It then checks the original application credential, ceiling, range generation, and scope.
 
-The local monotonic lease is 90 seconds and renewals run every 15 seconds.
+The local monotonic lease is 90 seconds. Each lease renews 15 seconds after
+its last renewal attempt, so renewals spread out by admission time.
 Denial or expiry permanently invalidates that native session. Guacamole's
 one-minute native eviction cadence remains part of the shutdown bound.
 

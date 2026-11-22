@@ -286,6 +286,36 @@ class TestParticipantChallengeDetail:
         assert body["hints"][0]["unlocked"] is False
         assert body["hints"][0]["text"] is None
 
+    def test_hint_costs_are_points_not_percentages(self, authenticated_participant_client, ctf_participant, ctf_event):
+        """A hint penalty is a percentage; the detail reports its point cost for this challenge."""
+        from ctf.models.hint import CTFHintUsage
+
+        challenge = CTFChallenge.objects.create(
+            event=ctf_event,
+            name="Big Card",
+            description="worth 200",
+            category=ChallengeCategory.WEB.value,
+            points=200,
+            difficulty=ChallengeDifficulty.MEDIUM.value,
+        )
+        first = CTFHint.objects.create(challenge=challenge, text="h1", penalty=10, order=0)
+        CTFHint.objects.create(challenge=challenge, text="h2", penalty=20, order=1)
+        CTFHintUsage.objects.create(participant=ctf_participant, hint=first)
+
+        response = call_json(
+            authenticated_participant_client,
+            "get",
+            "api_participant_challenge_detail",
+            kwargs={"challenge_id": challenge.id},
+        )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert [hint["cost_points"] for hint in body["hints"]] == [20, 40]
+        assert body["total_hint_penalty"] == 10
+        assert body["total_hint_penalty_points"] == 20
+        assert body["next_hint_cost"] == 40
+
     def test_locked_challenge_is_readable_and_flagged_locked(
         self, authenticated_participant_client, ctf_participant, ctf_event
     ):

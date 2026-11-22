@@ -166,6 +166,22 @@ def resolve_effective_egress_mode_locked(workspace_id: int) -> str:
     return resolve_effective_egress_mode(workspace_id)
 
 
+def resolve_scope_egress_mode(workspace_id: int | None) -> str:
+    """Resolve the egress mode for a resolved launch scope (ADR-017-R5).
+
+    A workspace scope uses the workspace selector. An account- or
+    organization-placed scope has no selector, so it inherits the deployment
+    baseline (``status-quo``). Only an explicit ``none`` selection resolves to
+    zero egress; a missing selector never does. Every path that pins or compares
+    a range's egress for a scope uses this function, so they agree.
+    """
+    from installation.range_egress import RangeEgressMode
+
+    if workspace_id is None:
+        return RangeEgressMode.STATUS_QUO.value
+    return resolve_effective_egress_mode_locked(workspace_id)
+
+
 def admit_workspace_launch(
     *,
     workspace_id: int,
