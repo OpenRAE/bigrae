@@ -298,8 +298,9 @@ See the [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf
 ### Participant challenge list
 
 The SPA participant challenge list filters, sorts, and groups the rows from `GET /api/v1/ctf/me/challenges/` in the browser.
-The URL query parameters `view`, `sort`, `tag`, and `topic` hold the list state.
-Unknown `view` and `sort` values give the defaults; unknown labels are ignored.
+The URL query parameters `view`, `sort`, `layout`, `tag`, and `topic` hold the list state.
+The `layout` parameter shows each group as cards, a list, or a table; it does not change the rows or their order.
+Unknown `view`, `sort`, and `layout` values give the defaults; unknown labels are ignored.
 The list API keeps its release, visibility, and prerequisite rules.
 Team membership changes refresh the list, because they can change `team_solved`.
 
@@ -307,7 +308,9 @@ The challenge page **Previous** and **Next** buttons use the same rows and query
 They open the adjacent challenge in the shown list order and keep the query parameters.
 When the current challenge is not in the list response, both buttons are disabled.
 See the
-[list design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-list-views-2998.md)
+[list design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-list-views-2998.md),
+the
+[layout design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-list-layout-3012.md),
 and the
 [navigation design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-navigation-2999.md).
 

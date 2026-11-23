@@ -1,24 +1,26 @@
 import { useCallback, useMemo } from "react";
-import { Link, useLocation, useSearchParams } from "react-router";
-
-import { CheckCircle2 } from "lucide-react";
+import { useSearchParams } from "react-router";
 
 import { useCtfChallenges } from "@/api/ctf";
-import type { CtfChallengeListItem } from "@/api/types";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ChallengeListControls } from "./ChallengeListControls";
+import { ChallengeGroupLayout } from "./ChallengeListLayouts";
 import { isSolved, readListView } from "./challenge-list";
 import { titleCase } from "./format";
 import { LabelFilterRow } from "./label-filters";
-import { ctfChallengeDetailPath } from "./routes";
 
-type ListParam = "view" | "sort" | "tag" | "topic";
-const PARAM_DEFAULTS: Readonly<Record<ListParam, string | null>> = { view: "category", sort: "order", tag: null, topic: null };
+type ListParam = "view" | "sort" | "layout" | "tag" | "topic";
+const PARAM_DEFAULTS: Readonly<Record<ListParam, string | null>> = {
+  view: "category",
+  sort: "order",
+  layout: "cards",
+  tag: null,
+  topic: null,
+};
 
 /** List state held in the URL, so it stays when the participant opens a challenge and goes back. */
 function useListParams() {
@@ -39,34 +41,9 @@ function useListParams() {
   return { params, update };
 }
 
-/** The card link keeps the list query parameters, so the challenge page follows the shown order. */
-function ChallengeCard({ challenge }: Readonly<{ challenge: CtfChallengeListItem }>) {
-  const { search } = useLocation();
-  return (
-    <Link
-      to={{ pathname: ctfChallengeDetailPath(challenge.id), search }}
-      className="block rounded-lg border border-border/60 p-4 transition-colors hover:border-border hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-medium">{challenge.name}</span>
-        {isSolved(challenge) ? (
-          <Badge variant="secondary" className="gap-1">
-            <CheckCircle2 className="size-3" aria-hidden="true" />
-            {challenge.solved ? "Solved" : "Solved by your team"}
-          </Badge>
-        ) : null}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>{challenge.points} pts</span>
-        {challenge.difficulty ? <span>· {titleCase(challenge.difficulty)}</span> : null}
-      </div>
-    </Link>
-  );
-}
-
 function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfChallenges> }>) {
   const { params, update } = useListParams();
-  const { view, sort, tagLabels, topicLabels, activeTag, activeTopic, groups: grouped } = useMemo(
+  const { view, sort, layout, tagLabels, topicLabels, activeTag, activeTopic, groups: grouped } = useMemo(
     () => readListView(query.data ?? [], params),
     [query.data, params],
   );
@@ -95,8 +72,10 @@ function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfCha
       <ChallengeListControls
         view={view}
         sort={sort}
+        layout={layout}
         onViewChange={(value) => update("view", value)}
         onSortChange={(value) => update("sort", value)}
+        onLayoutChange={(value) => update("layout", value)}
       />
       <LabelFilterRow
         axis="tags"
@@ -139,11 +118,7 @@ function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfCha
       {grouped.map(({ key, label, items }) => (
         <section key={key} aria-label={label ?? "All challenges"}>
           {label === null ? null : <h2 className="mb-3 text-sm font-semibold">{titleCase(label)}</h2>}
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((challenge) => (
-              <ChallengeCard key={challenge.id} challenge={challenge} />
-            ))}
-          </div>
+          <ChallengeGroupLayout layout={layout} items={items} name={label === null ? "All challenges" : titleCase(label)} />
         </section>
       ))}
     </div>

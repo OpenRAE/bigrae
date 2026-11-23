@@ -54,8 +54,10 @@ To change the list:
 
 1. Select **By category**, **By status**, or **All** to change the view.
    **By status** shows **Not solved**, then **Solved**.
-2. Select a key in **Sort within groups** to sort the challenges in each group.
-3. Select a tag or topic to show only the challenges that have it.
+2. Select **Cards**, **List**, or **Table** to change the layout.
+   The layout does not change the order of the challenges.
+3. Select a key in **Sort within groups** to sort the challenges in each group.
+4. Select a tag or topic to show only the challenges that have it.
    Select it again to remove the filter.
 
 A challenge that a teammate solved counts as solved.

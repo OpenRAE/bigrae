@@ -257,6 +257,105 @@ describe("ChallengesPage", () => {
     );
   });
 
+  it("shows the challenge list as cards by default", async () => {
+    mockApi.mockResolvedValue([challenge()]);
+    renderRoute(<ChallengesPage />);
+    await screen.findByRole("link", { name: /SQL Injection/ });
+
+    const layoutGroup = screen.getByRole("group", { name: "Layout" });
+    expect(within(layoutGroup).getByRole("button", { name: "Cards" })).toHaveAttribute("aria-pressed", "true");
+    const region = screen.getByRole("region", { name: "web" });
+    expect(within(region).queryByRole("list")).not.toBeInTheDocument();
+    expect(within(region).queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("shows the challenge list as a list", async () => {
+    mockApi.mockResolvedValue([
+      challenge({ id: "c1", name: "Low", points: 50, order: 0 }),
+      challenge({ id: "c2", name: "High", points: 500, order: 1, solved: true }),
+    ]);
+    renderRoute(<ChallengesPage />);
+    await screen.findByRole("link", { name: /Low/ });
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Layout" })).getByRole("button", { name: "List" }));
+
+    expect(screen.getByRole("button", { name: "List" })).toHaveAttribute("aria-pressed", "true");
+    const list = within(screen.getByRole("region", { name: "web" })).getByRole("list");
+    const items = within(list).getAllByRole("listitem");
+    expect(items).toHaveLength(2);
+    expect(within(items[0]).getByRole("link", { name: "Low" })).toHaveAttribute(
+      "href",
+      "/ctf/challenges/c1/?layout=list",
+    );
+    expect(items[0]).toHaveTextContent("50 pts");
+    expect(within(items[1]).getByText("Solved")).toBeInTheDocument();
+  });
+
+  it("shows the challenge list as a table", async () => {
+    mockApi.mockResolvedValue([
+      challenge({ id: "c1", name: "Low", points: 50, order: 0, difficulty: "easy" }),
+      challenge({ id: "c2", name: "High", points: 500, order: 1, difficulty: "hard", team_solved: true }),
+    ]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?sort=points-desc"] });
+    await screen.findByRole("link", { name: /Low/ });
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Layout" })).getByRole("button", { name: "Table" }));
+
+    expect(screen.getByRole("button", { name: "Table" })).toHaveAttribute("aria-pressed", "true");
+    const table = within(screen.getByRole("region", { name: "web" })).getByRole("table", { name: "Web" });
+    expect(within(table).getAllByRole("columnheader").map((header) => header.textContent)).toEqual([
+      "Challenge",
+      "Category",
+      "Difficulty",
+      "Points",
+      "Status",
+    ]);
+    const rows = within(table).getAllByRole("row").slice(1);
+    expect(rows.map((tableRow) => within(tableRow).getAllByRole("cell").map((cell) => cell.textContent))).toEqual([
+      ["High", "Web", "Hard", "500", "Solved by your team"],
+      ["Low", "Web", "Easy", "50", "Not solved"],
+    ]);
+    expect(within(rows[0]).getByRole("link", { name: "High" })).toHaveAttribute(
+      "href",
+      "/ctf/challenges/c2/?sort=points-desc&layout=table",
+    );
+  });
+
+  it("restores the layout from the URL", async () => {
+    mockApi.mockResolvedValue([challenge()]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?layout=table"] });
+    await screen.findByRole("link", { name: /SQL Injection/ });
+
+    expect(screen.getByRole("button", { name: "Table" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("table")).toBeInTheDocument();
+  });
+
+  it("ignores an unknown layout value in the URL", async () => {
+    mockApi.mockResolvedValue([challenge()]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?layout=%3Cscript%3E"] });
+    await screen.findByRole("link", { name: /SQL Injection/ });
+
+    expect(screen.getByRole("button", { name: "Cards" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
+
+  it("writes the card layout as an absent parameter", async () => {
+    mockApi.mockResolvedValue([challenge()]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?layout=list"] });
+    await screen.findByRole("link", { name: /SQL Injection/ });
+
+    fireEvent.click(screen.getByRole("button", { name: "Cards" }));
+    expect(screen.getByRole("link", { name: /SQL Injection/ })).toHaveAttribute("href", "/ctf/challenges/c1/");
+  });
+
+  it.each(["list", "table"])("has no axe violations in the %s layout", async (layout) => {
+    mockApi.mockResolvedValue([challenge(), challenge({ id: "c2", name: "B", category: "pwn", solved: true })]);
+    const { container } = renderRoute(<ChallengesPage />, { initialEntries: [`/?layout=${layout}`] });
+    await screen.findByRole("link", { name: /SQL Injection/ });
+    const results = await axe(container);
+    expect(results.violations).toEqual([]);
+  });
+
   it("has no axe violations in the status view", async () => {
     mockApi.mockResolvedValue([challenge({ tags: ["xdr"] }), challenge({ id: "c2", name: "B", solved: true })]);
     const { container } = renderRoute(<ChallengesPage />, { initialEntries: ["/?view=status"] });

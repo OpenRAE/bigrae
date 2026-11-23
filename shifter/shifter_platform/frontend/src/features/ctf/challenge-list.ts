@@ -19,8 +19,16 @@ export const CHALLENGE_SORTS = [
   { value: "difficulty", label: "Difficulty" },
 ] as const;
 
+/** Presentation of each group (#3012). It never changes the rows or their order. */
+export const CHALLENGE_LAYOUTS = [
+  { value: "cards", label: "Cards" },
+  { value: "list", label: "List" },
+  { value: "table", label: "Table" },
+] as const;
+
 export type ChallengeView = (typeof CHALLENGE_VIEWS)[number]["value"];
 export type ChallengeSort = (typeof CHALLENGE_SORTS)[number]["value"];
+export type ChallengeLayout = (typeof CHALLENGE_LAYOUTS)[number]["value"];
 
 export interface ListedChallenge {
   id: string;
@@ -40,7 +48,8 @@ export interface ChallengeGroup<T> {
   items: T[];
 }
 
-const UNCATEGORIZED = "Uncategorized";
+/** Group and table label for a challenge with no category. */
+export const UNCATEGORIZED = "Uncategorized";
 const MISSION_CATEGORY = /^Mission\s+(\d+)\b/i;
 const START_HERE_CATEGORY = /^Start Here$/i;
 /** Domain order of `ctf.enums.ChallengeDifficulty`; other values sort after it. */
@@ -54,6 +63,11 @@ export function parseView(value: string | null): ChallengeView {
 /** Return the allowlisted sort, or the default for a missing or unknown value. */
 export function parseSort(value: string | null): ChallengeSort {
   return CHALLENGE_SORTS.find((sort) => sort.value === value)?.value ?? "order";
+}
+
+/** Return the allowlisted layout, or cards for a missing or unknown value. */
+export function parseLayout(value: string | null): ChallengeLayout {
+  return CHALLENGE_LAYOUTS.find((layout) => layout.value === value)?.value ?? "cards";
 }
 
 /** One solve predicate for grouping and totals: a personal or a team solve. */
@@ -142,6 +156,7 @@ export function groupChallenges<T extends ListedChallenge>(
 export interface ListView<T> {
   view: ChallengeView;
   sort: ChallengeSort;
+  layout: ChallengeLayout;
   tagLabels: string[];
   topicLabels: string[];
   activeTag: string | null;
@@ -164,12 +179,13 @@ export function readListView<T extends ListedChallenge & Labeled>(
 ): ListView<T> {
   const view = parseView(params.get("view"));
   const sort = parseSort(params.get("sort"));
+  const layout = parseLayout(params.get("layout"));
   const tagLabels = distinctLabels(items, "tags");
   const topicLabels = distinctLabels(items, "topics");
   const activeTag = knownLabel(params.get("tag"), tagLabels);
   const activeTopic = knownLabel(params.get("topic"), topicLabels);
   const groups = groupChallenges(filterByLabels(items, activeTag, activeTopic), view, sort);
-  return { view, sort, tagLabels, topicLabels, activeTag, activeTopic, groups };
+  return { view, sort, layout, tagLabels, topicLabels, activeTag, activeTopic, groups };
 }
 
 /**
