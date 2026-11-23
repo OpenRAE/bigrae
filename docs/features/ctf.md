@@ -82,8 +82,9 @@ A hint can reduce the score for that challenge.
 
 ## Teams and brackets
 
-In team mode, join or create a team before submitting flags.
-The event's team-size limit applies, and the team shares a score.
+In team mode, you can join or create a team to share a score.
+A participant with no team competes as an individual and can still submit flags and score.
+The event's team-size limit applies to teams.
 Solo events require no team membership.
 Brackets provide separate cohort standings when the organizer uses them.
 

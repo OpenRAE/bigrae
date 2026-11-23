@@ -466,8 +466,7 @@ class TestConcurrentReceiptRedemption:
 
 
 def test_membership_withdrawn_before_submission_lock(event, participant, challenge, monkeypatch):
-    """A committed team leave during verification prevents a PostgreSQL solve."""
-    from ctf.exceptions import CTFStateError
+    """A committed team leave during verification still scores the solo participant (#3000)."""
     from ctf.extensions import _flag_validators
     from ctf.models import CTFTeam
     from ctf.services.team import leave_team
@@ -501,10 +500,11 @@ def test_membership_withdrawn_before_submission_lock(event, participant, challen
             leave_team(participant.pk)
         finally:
             withdrawn.set()
-        with pytest.raises(CTFStateError, match="team"):
-            future.result(timeout=15)
-    assert not CTFSubmission.objects.filter(participant=participant).exists()
+        submission = future.result(timeout=15)
+    assert submission.is_correct is True
+    assert submission.points_awarded == challenge.points
     participant.refresh_from_db()
     team.refresh_from_db()
-    assert participant.cached_score == team.cached_score == 0
-    assert participant.last_active_at is None
+    assert participant.team_id is None
+    assert participant.cached_score == challenge.points
+    assert team.cached_score == 0

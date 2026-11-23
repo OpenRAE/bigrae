@@ -115,7 +115,7 @@ def _record_submission_locked(
         from ctf.services.challenge import assert_challenge_available_for_participant
         from ctf.services.participant.queries import assert_participant_can_compete
 
-        assert_participant_can_compete(locked_participant, require_team=True)
+        assert_participant_can_compete(locked_participant, validate_team=True)
         assert_challenge_available_for_participant(locked_participant, locked_challenge)
         if decision.receipt_evidence is not None:
             revalidate_receipt_for_commit(decision.receipt_evidence, locked_participant, locked_challenge)
@@ -264,10 +264,12 @@ def submit_flag(
     participant, challenge = _load_submission_entities(participant_id, challenge_id)
 
     # Compete gate before any flag verification work: refuses unregistered,
-    # disqualified, and banned rows plus observers (CTF-604/605/609).
+    # disqualified, and banned rows plus observers (CTF-604/605/609). A teamless
+    # participant competes as an individual (#3000); validate_team only rejects a
+    # stale or cross-event team reference, never the absence of a team.
     from ctf.services.participant.queries import assert_participant_can_compete
 
-    assert_participant_can_compete(participant, require_team=True)
+    assert_participant_can_compete(participant, validate_team=True)
 
     # Issue #769: shared participant→challenge availability policy. Same
     # contract as use_hint(), so hints can never be easier to obtain than
