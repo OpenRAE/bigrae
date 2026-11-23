@@ -76,8 +76,8 @@ lane cannot prove. The SQLite lane is a fast local lane; CI does not run it.
 | Legacy platform JavaScript (Jest) | `make test-js` | None | Tests JavaScript (shifter_platform) | yes |
 | React SPA lint, types, Vitest, build | `make test-spa` | None | SPA (shifter_platform frontend) | yes |
 | API contract and generated client | The command below, in `shifter/shifter_platform` | None | API contract (shifter_platform) | no |
-| Authenticated SPA journeys | `make test-platform-e2e` | Chromium (the target installs it) | SPA E2E (shifter_platform frontend) | no |
-| Browser accessibility | `make test-platform-a11y` | Chromium (the target installs it) | Accessibility (`deploy.yml`) | no |
+| Authenticated SPA journeys | `make test-platform-e2e` | Docker; Chromium (the target installs it) | SPA E2E (shifter_platform frontend) | no |
+| Browser accessibility | `make test-platform-a11y` | Docker; Chromium (the target installs it) | Accessibility (`deploy.yml`) | no |
 
 The API contract check needs the test posture, as in CI. The secret key is a
 synthetic, non-secret value:
@@ -267,15 +267,17 @@ migrates and seeds a job-local database, and drives Playwright through normal
 Django sessions and CSRF. The CI job `shifter-platform-e2e` in
 `.github/workflows/_quality.yml` feeds the `PR Gate`. It runs the journeys
 through `scripts/run_openfga_integration.sh --browser`, which starts a job-local
-PostgreSQL and OpenFGA server, migrates, and seeds. The make target uses SQLite
-locally.
+PostgreSQL and OpenFGA server, migrates, and seeds.
+The make target uses the same harness, so it needs Docker.
+The seed commands need the OpenFGA provider.
 
 The dev/test-only `seed_e2e` management command establishes the synthetic
 actors, their accounts and their native policy grants; `dev_login` establishes
 their sessions. The dev/test-only `seed_e2e_ctf` command runs after `seed_e2e`.
 It adds one CTF event in the organizer's account, publishes the event's
 authorization relationships, and releases inbox messages for the inbox
-participant actor. The Playwright config's `auth.setup.ts` logs each actor in once and reuses its
+participant actor.
+It also releases two challenges with fixed IDs for the challenge page accessibility scan. The Playwright config's `auth.setup.ts` logs each actor in once and reuses its
 `storageState`. No cloud, provisioner, IdP, or live-range dependency is used:
 `LOCAL_PROVISIONER`/`ENGINE_TASK_*` stay unset, so a range launch enqueues
 nothing and contacts no cloud.

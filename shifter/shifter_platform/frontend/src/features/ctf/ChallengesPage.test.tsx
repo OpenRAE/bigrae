@@ -248,6 +248,15 @@ describe("ChallengesPage", () => {
     expect(screen.getByLabelText("Sort within groups")).toHaveValue("name");
   });
 
+  it("keeps the list query parameters on each challenge link", async () => {
+    mockApi.mockResolvedValue([challenge()]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?view=all&sort=name"] });
+    expect(await screen.findByRole("link", { name: /SQL Injection/ })).toHaveAttribute(
+      "href",
+      "/ctf/challenges/c1/?view=all&sort=name",
+    );
+  });
+
   it("has no axe violations in the status view", async () => {
     mockApi.mockResolvedValue([challenge({ tags: ["xdr"] }), challenge({ id: "c2", name: "B", solved: true })]);
     const { container } = renderRoute(<ChallengesPage />, { initialEntries: ["/?view=status"] });

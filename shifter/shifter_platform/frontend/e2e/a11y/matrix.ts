@@ -81,15 +81,26 @@ export const SURFACES: readonly A11ySurface[] = [
     remediation: "src/features/ctf/inbox/InboxPage.tsx",
   },
   {
-    // Seeded event without released challenges. The loaded empty state, not
-    // the heading that also shows while loading, proves the view and sort
-    // controls rendered above it (#2998).
+    // `seed_e2e_ctf` releases two challenges. A loaded card, not the heading
+    // that also shows while loading, proves the view and sort controls and the
+    // challenge cards rendered (#2998).
     id: "ctf-participant-challenges",
     route: "/ctf/challenges",
     actor: "inbox",
-    ready: "No challenges available yet",
+    ready: "E2E Warm-up",
     readyKind: "text",
     remediation: "src/features/ctf/ChallengesPage.tsx",
+  },
+  {
+    // The first seeded challenge, by its fixed `seed_e2e_ctf` ID. The next
+    // challenge name shows only in the loaded Next link, so it proves that the
+    // sequence buttons rendered (#2999).
+    id: "ctf-participant-challenge-detail",
+    route: "/ctf/challenges/5e3d0c1a-0000-4000-8000-000000002999/",
+    actor: "inbox",
+    ready: "E2E First Mission",
+    readyKind: "text",
+    remediation: "src/features/ctf/ChallengeDetailPage.tsx",
   },
   {
     id: "ctf-admin-dashboard",

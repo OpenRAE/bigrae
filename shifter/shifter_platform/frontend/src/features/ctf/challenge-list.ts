@@ -3,6 +3,7 @@
  * stays the disclosure boundary: these functions only reorder and group the
  * rows it returned, and never change their input arrays.
  */
+import { distinctLabels, filterByLabels, type Labeled } from "./label-filters";
 
 export const CHALLENGE_VIEWS = [
   { value: "category", label: "By category" },
@@ -135,4 +136,53 @@ export function groupChallenges<T extends ListedChallenge>(
   if (view === "category") return byCategory(sorted);
   if (view === "status") return byStatus(sorted);
   return sorted.length > 0 ? [{ key: "all", label: null, items: sorted }] : [];
+}
+
+/** The list state that the URL query parameters select, and the groups it shows. */
+export interface ListView<T> {
+  view: ChallengeView;
+  sort: ChallengeSort;
+  tagLabels: string[];
+  topicLabels: string[];
+  activeTag: string | null;
+  activeTopic: string | null;
+  groups: ChallengeGroup<T>[];
+}
+
+/** A label value from the URL applies only when a listed challenge carries it. */
+function knownLabel(value: string | null, labels: readonly string[]): string | null {
+  return value !== null && labels.includes(value) ? value : null;
+}
+
+/**
+ * Apply the list query parameters to the rows. The list page and the challenge page
+ * both use this function, so the challenge page buttons follow the shown order (#2999).
+ */
+export function readListView<T extends ListedChallenge & Labeled>(
+  items: readonly T[],
+  params: URLSearchParams,
+): ListView<T> {
+  const view = parseView(params.get("view"));
+  const sort = parseSort(params.get("sort"));
+  const tagLabels = distinctLabels(items, "tags");
+  const topicLabels = distinctLabels(items, "topics");
+  const activeTag = knownLabel(params.get("tag"), tagLabels);
+  const activeTopic = knownLabel(params.get("topic"), topicLabels);
+  const groups = groupChallenges(filterByLabels(items, activeTag, activeTopic), view, sort);
+  return { view, sort, tagLabels, topicLabels, activeTag, activeTopic, groups };
+}
+
+/**
+ * Return the challenges before and after one challenge in the shown order, across groups.
+ * There is no wraparound. A challenge that is not shown has no neighbors, so a caller
+ * never falls through to the first row.
+ */
+export function adjacentChallenges<T extends { id: string }>(
+  groups: readonly ChallengeGroup<T>[],
+  challengeId: string,
+): { previous: T | null; next: T | null } {
+  const sequence = groups.flatMap((group) => group.items);
+  const index = sequence.findIndex((challenge) => challenge.id === challengeId);
+  if (index === -1) return { previous: null, next: null };
+  return { previous: sequence[index - 1] ?? null, next: sequence[index + 1] ?? null };
 }

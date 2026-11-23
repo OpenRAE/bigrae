@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { Link, useSearchParams } from "react-router";
+import { Link, useLocation, useSearchParams } from "react-router";
 
 import { CheckCircle2 } from "lucide-react";
 
@@ -12,9 +12,9 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ChallengeListControls } from "./ChallengeListControls";
-import { groupChallenges, isSolved, parseSort, parseView } from "./challenge-list";
+import { isSolved, readListView } from "./challenge-list";
 import { titleCase } from "./format";
-import { LabelFilterRow, distinctLabels, filterByLabels } from "./label-filters";
+import { LabelFilterRow } from "./label-filters";
 import { ctfChallengeDetailPath } from "./routes";
 
 type ListParam = "view" | "sort" | "tag" | "topic";
@@ -39,15 +39,12 @@ function useListParams() {
   return { params, update };
 }
 
-/** A label value from the URL applies only when a listed challenge carries it. */
-function knownLabel(value: string | null, labels: readonly string[]): string | null {
-  return value !== null && labels.includes(value) ? value : null;
-}
-
+/** The card link keeps the list query parameters, so the challenge page follows the shown order. */
 function ChallengeCard({ challenge }: Readonly<{ challenge: CtfChallengeListItem }>) {
+  const { search } = useLocation();
   return (
     <Link
-      to={ctfChallengeDetailPath(challenge.id)}
+      to={{ pathname: ctfChallengeDetailPath(challenge.id), search }}
       className="block rounded-lg border border-border/60 p-4 transition-colors hover:border-border hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
     >
       <div className="flex items-start justify-between gap-2">
@@ -69,15 +66,9 @@ function ChallengeCard({ challenge }: Readonly<{ challenge: CtfChallengeListItem
 
 function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfChallenges> }>) {
   const { params, update } = useListParams();
-  const view = parseView(params.get("view"));
-  const sort = parseSort(params.get("sort"));
-  const tagLabels = useMemo(() => distinctLabels(query.data ?? [], "tags"), [query.data]);
-  const topicLabels = useMemo(() => distinctLabels(query.data ?? [], "topics"), [query.data]);
-  const activeTag = knownLabel(params.get("tag"), tagLabels);
-  const activeTopic = knownLabel(params.get("topic"), topicLabels);
-  const grouped = useMemo(
-    () => groupChallenges(filterByLabels(query.data ?? [], activeTag, activeTopic), view, sort),
-    [query.data, activeTag, activeTopic, view, sort],
+  const { view, sort, tagLabels, topicLabels, activeTag, activeTopic, groups: grouped } = useMemo(
+    () => readListView(query.data ?? [], params),
+    [query.data, params],
   );
 
   if (query.isLoading) {

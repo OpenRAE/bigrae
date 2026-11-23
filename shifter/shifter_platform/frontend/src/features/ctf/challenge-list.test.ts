@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { groupChallenges, isSolved, parseSort, parseView, sortChallenges } from "./challenge-list";
+import {
+  adjacentChallenges,
+  groupChallenges,
+  isSolved,
+  parseSort,
+  parseView,
+  readListView,
+  sortChallenges,
+} from "./challenge-list";
 
 interface Row {
   id: string;
@@ -11,6 +19,8 @@ interface Row {
   order: number;
   solved: boolean;
   team_solved: boolean;
+  tags: string[];
+  topics: string[];
 }
 
 function row(overrides: Partial<Row> = {}): Row {
@@ -23,6 +33,8 @@ function row(overrides: Partial<Row> = {}): Row {
     order: 0,
     solved: false,
     team_solved: false,
+    tags: [],
+    topics: [],
     ...overrides,
   };
 }
@@ -130,5 +142,68 @@ describe("groupChallenges", () => {
   it("returns no group for an empty list", () => {
     expect(groupChallenges([], "all", "order")).toEqual([]);
     expect(groupChallenges([], "status", "order")).toEqual([]);
+  });
+});
+
+describe("readListView", () => {
+  const rows = [
+    row({ id: "m2", name: "Mission two", category: "Mission 2", order: 0, tags: ["web"] }),
+    row({ id: "s1", name: "Start", category: "Start Here", order: 0 }),
+    row({ id: "m10", name: "Mission ten", category: "Mission 10", order: 0, tags: ["web"] }),
+    row({ id: "m1b", name: "Mission one b", category: "Mission 1", order: 2 }),
+    row({ id: "m1a", name: "Mission one a", category: "Mission 1", order: 1, tags: ["web"] }),
+  ];
+  const flat = (params: string) => readListView(rows, new URLSearchParams(params)).groups.flatMap((group) => ids(group.items));
+
+  it("gives the chain order by default", () => {
+    expect(flat("")).toEqual(["s1", "m1a", "m1b", "m2", "m10"]);
+  });
+
+  it("applies the view, the sort, and a known tag from the query parameters", () => {
+    const view = readListView(rows, new URLSearchParams("view=all&sort=name&tag=web"));
+    expect(view.view).toBe("all");
+    expect(view.sort).toBe("name");
+    expect(view.activeTag).toBe("web");
+    expect(view.tagLabels).toEqual(["web"]);
+    expect(view.groups.flatMap((group) => ids(group.items))).toEqual(["m1a", "m10", "m2"]);
+  });
+
+  it("ignores a tag or topic that no listed challenge has", () => {
+    const view = readListView(rows, new URLSearchParams("tag=<b>x</b>&topic=missing"));
+    expect(view.activeTag).toBeNull();
+    expect(view.activeTopic).toBeNull();
+    expect(view.groups.flatMap((group) => ids(group.items))).toEqual(["s1", "m1a", "m1b", "m2", "m10"]);
+  });
+});
+
+describe("adjacentChallenges", () => {
+  const groups = groupChallenges(
+    [
+      row({ id: "a", name: "A", category: "Mission 1", order: 0 }),
+      row({ id: "b", name: "B", category: "Mission 1", order: 1 }),
+      row({ id: "c", name: "C", category: "Mission 2", order: 0 }),
+    ],
+    "category",
+    "order",
+  );
+  const neighbors = (id: string) => {
+    const result = adjacentChallenges(groups, id);
+    return [result.previous?.id ?? null, result.next?.id ?? null];
+  };
+
+  it("crosses group boundaries in the shown order", () => {
+    expect(neighbors("b")).toEqual(["a", "c"]);
+  });
+
+  it("does not wrap at the start or the end", () => {
+    expect(neighbors("a")).toEqual([null, "b"]);
+    expect(neighbors("c")).toEqual(["b", null]);
+  });
+
+  it("gives no neighbors for one challenge or a challenge that is not shown", () => {
+    expect(neighbors("missing")).toEqual([null, null]);
+    const single = groupChallenges([row({ id: "only" })], "all", "order");
+    expect(adjacentChallenges(single, "only")).toEqual({ previous: null, next: null });
+    expect(adjacentChallenges([], "only")).toEqual({ previous: null, next: null });
   });
 });
