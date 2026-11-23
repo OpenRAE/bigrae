@@ -38,7 +38,9 @@ Phase = Literal["prepare", "validate", "configure", "verify", "cleanup"]
 if TYPE_CHECKING:
     from .validation import ValidationInput, ValidationResult
 
-Capability = Literal["provision.prepare", "guest.configure", "guest.verify", "trial.control", "participant.validate"]
+Capability = Literal[
+    "provision.prepare", "guest.configure", "guest.verify", "trial.control", "trial.assigned", "participant.validate"
+]
 
 
 class ClosedModel(BaseModel):
@@ -117,10 +119,11 @@ class PluginManifest(ClosedModel):
             raise ValueError("a runtime plugin must provide readiness verification")
         if not self.required_bindings and self.capabilities != ["provision.prepare"]:
             raise ValueError("a plugin without guests must provide only preparation")
-        if "trial.control" in self.capabilities and (
-            self.protocol != "bigrae.runtime-plugin/v2" or "guest.configure" not in self.capabilities
+        trials = {"trial.control", "trial.assigned"} & set(self.capabilities)
+        if trials and (
+            len(trials) > 1 or self.protocol != "bigrae.runtime-plugin/v2" or "guest.configure" not in self.capabilities
         ):
-            raise ValueError("trial control requires the apparatus protocol and a configure phase")
+            raise ValueError("trial control requires the apparatus protocol, a configure phase and one trial mode")
         if ("participant.validate" in self.capabilities) != bool(self.participant_validators) or (
             self.participant_validators and self.protocol != "bigrae.runtime-plugin/v2"
         ):
