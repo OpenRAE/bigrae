@@ -60,6 +60,11 @@ To change the list:
 
 A challenge that a teammate solved counts as solved.
 The page keeps these selections when you open a challenge and go back.
+
+On a challenge page, select **Previous** or **Next** to open the adjacent challenge.
+The buttons follow the order of the list, with your view, sort, and filter.
+The default order is **Start Here**, then the missions in number order.
+A button is disabled at the start or the end of the list.
 Scheduled releases and prerequisites can keep other challenges locked.
 Use only targets within the event's authorization.
 

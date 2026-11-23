@@ -302,8 +302,14 @@ The URL query parameters `view`, `sort`, `tag`, and `topic` hold the list state.
 Unknown `view` and `sort` values give the defaults; unknown labels are ignored.
 The list API keeps its release, visibility, and prerequisite rules.
 Team membership changes refresh the list, because they can change `team_solved`.
+
+The challenge page **Previous** and **Next** buttons use the same rows and query parameters.
+They open the adjacent challenge in the shown list order and keep the query parameters.
+When the current challenge is not in the list response, both buttons are disabled.
 See the
-[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-list-views-2998.md).
+[list design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-list-views-2998.md)
+and the
+[navigation design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-navigation-2999.md).
 
 ### Participant scoreboard controls
 

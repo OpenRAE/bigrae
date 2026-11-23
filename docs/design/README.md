@@ -18,6 +18,7 @@ An approved design does not establish production activation or live qualificatio
 | Leaderboard sort and filter | [Controls design](ctf-leaderboard-controls-3001.md) adds a browser-side name filter and sort to the participant scoreboards |
 | Challenge list boundaries | [Participant list preflight](ctf-challenge-list-preflight-2998.md) records filtering, ordering, solve-state views, and existing security boundaries before implementation |
 | Challenge list | [List views design](ctf-challenge-list-views-2998.md) adds browser-side search, sort, and grouping to the participant list |
+| Challenge navigation | [Navigation preflight](ctf-challenge-navigation-preflight-2999.md) records event scope, response boundaries, and challenge-specific browser state; [navigation design](ctf-challenge-navigation-2999.md) adds previous and next buttons in the list order |
 | Visual examples | [Design-system artifacts](design-system/README.md) describe the HTML/CSS reference examples and their limits |
 | UX research | [Research personas](ux-003-oss-shifter-research-personas.md) and [information architecture](ux-003-information-architecture-sitemap.md) retain their dated research context |
 
