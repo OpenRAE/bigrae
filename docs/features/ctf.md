@@ -99,6 +99,16 @@ Open **Scoreboard** for the permitted standings.
 In a team-mode event, open **Individual scoreboard** for participant standings.
 Open **Team scoreboard** for team standings.
 An open scoreboard refreshes every **15 seconds**.
+
+To change the board:
+
+1. Type a name in **Filter participants** or **Filter teams** to show only the matching entries.
+2. Select a key in **Sort by** to change the order.
+   **Rank** gives the official order.
+
+The rank column always shows the official rank.
+The filter and the sort apply to the selected bracket.
+
 The organizer can hide it or freeze results near event end.
 Do not infer final standings from a frozen display.
 

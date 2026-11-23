@@ -92,6 +92,16 @@ export const SURFACES: readonly A11ySurface[] = [
     remediation: "src/features/ctf/ChallengesPage.tsx",
   },
   {
+    // Seeded public-scoreboard event. The sort label renders only with the
+    // loaded board, not while it loads, so it proves the controls rendered (#3001).
+    id: "ctf-participant-scoreboard",
+    route: "/ctf/scoreboard",
+    actor: "inbox",
+    ready: "Sort by",
+    readyKind: "text",
+    remediation: "src/features/ctf/ScoreboardPage.tsx",
+  },
+  {
     id: "ctf-admin-dashboard",
     route: "/ctf/admin",
     actor: "organizer",

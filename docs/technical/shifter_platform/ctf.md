@@ -305,6 +305,17 @@ Team membership changes refresh the list, because they can change `team_solved`.
 See the
 [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-list-views-2998.md).
 
+### Participant scoreboard controls
+
+The SPA participant scoreboards filter by name and sort the rows from the scoreboard API in the browser.
+The filter and the sort apply to the rows of the selected bracket. The API does not change.
+The rank column shows the server rank. A row without a rank shows a dash.
+
+The control state is component state.
+It stays during the refresh and resets for a new event or board kind.
+See the
+[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-leaderboard-controls-3001.md).
+
 ### Scoreboard refresh
 
 The SPA participant and organizer scoreboard hooks poll their API read every
