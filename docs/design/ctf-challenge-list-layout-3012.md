@@ -56,8 +56,12 @@ The list and the table have the group heading as their accessible name, or **All
 The table has a caption with that name and column headers with `scope="col"`.
 The table status column shows **Solved**, **Solved by your team**, or **Not solved**.
 A blank difficulty shows a dash in the table.
-Long challenge names wrap in the table.
-The table container scrolls horizontally on a narrow viewport.
+
+All table cells wrap their text.
+A long word in a challenge name or a category breaks when its column is too narrow.
+Thus the table fits the 390-pixel narrow viewport of the ADR-055 browser scan.
+On a narrower viewport, the table container scrolls horizontally.
+WCAG 2.2 success criterion 1.4.10 permits two-dimensional scrolling for data tables.
 
 The challenge page **Previous** and **Next** buttons do not change.
 The layout does not change the row order, so the sequence stays the same in each layout.
@@ -118,6 +122,7 @@ It carries no principal, tenant, permission, or scoring input.
 | <https://www.w3.org/WAI/tutorials/tables/one-header/> | Table with header cells in the top row only | The table uses a caption and column headers. |
 | <https://developer.mozilla.org/en-US/docs/Web/HTML/Reference/Elements/table> | Accessibility: Captions; Scoping rows and columns | The caption names the group. Headers use `scope="col"`. |
 | <https://reactrouter.com/api/hooks/useSearchParams> | `useSearchParams` (v8) | Reads and writes the `layout` parameter. |
+| <https://www.w3.org/WAI/WCAG22/Understanding/reflow.html> | Understanding SC 1.4.10 Reflow: data tables | A data table can scroll in two dimensions below the scan viewport. |
 
 ## Non-goals
 

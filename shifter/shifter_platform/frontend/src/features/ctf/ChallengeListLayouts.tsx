@@ -104,7 +104,7 @@ function TableLayout({ items, name }: Readonly<{ items: readonly CtfChallengeLis
     <Table>
       <TableCaption className="sr-only">{name}</TableCaption>
       <TableHeader>
-        <TableRow className="hover:bg-transparent">
+        <TableRow className="hover:bg-transparent [&>th]:whitespace-normal">
           <TableHead scope="col">Challenge</TableHead>
           <TableHead scope="col">Category</TableHead>
           <TableHead scope="col">Difficulty</TableHead>
@@ -114,14 +114,14 @@ function TableLayout({ items, name }: Readonly<{ items: readonly CtfChallengeLis
       </TableHeader>
       <TableBody>
         {items.map((challenge) => (
-          <TableRow key={challenge.id}>
-            <TableCell className="min-w-[12rem] font-medium break-words whitespace-normal">
+          <TableRow key={challenge.id} className="[&>td]:whitespace-normal">
+            <TableCell className="font-medium wrap-anywhere">
               <ChallengeLink
                 challenge={challenge}
                 className="hover:underline focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
               />
             </TableCell>
-            <TableCell className="whitespace-normal">{titleCase(challenge.category || UNCATEGORIZED)}</TableCell>
+            <TableCell className="wrap-anywhere">{titleCase(challenge.category || UNCATEGORIZED)}</TableCell>
             <TableCell>{challenge.difficulty ? titleCase(challenge.difficulty) : "—"}</TableCell>
             <TableCell>{challenge.points}</TableCell>
             <TableCell>{solvedText(challenge) ?? "Not solved"}</TableCell>
