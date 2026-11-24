@@ -27,7 +27,7 @@ from engine.services import (
     install_runtime_plugin,
     reconcile_runtime_plugin_operations,
 )
-from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
+from engine.services._runtime_plugin.bindings import retained_runtime_plugin_pin
 from shared.exceptions import ValidationError
 from shared.raes.operation_input import parse_raes_operation_input
 from shared.range_instantiation_policy import BackendAdmission, InstantiationPurpose
@@ -41,7 +41,7 @@ pytestmark = pytest.mark.django_db
 
 @pytest.fixture
 def pack(monkeypatch, tenant):
-    monkeypatch.setattr("engine.services._raes_range.start_raes_range_provisioning", lambda request: None)
+    monkeypatch.setattr("engine.services._raes.range.start_raes_range_provisioning", lambda request: None)
     actor, organization = tenant
     manifest = {
         "protocol": "shifter.runtime-plugin/v1",
@@ -146,7 +146,7 @@ def test_required_file_selection_is_fenced_before_range_creation(pack):
 
 def test_revoked_file_material_blocks_worker_dispatch(pack, monkeypatch):
     target = launch(pack)
-    from engine.services import _runtime_plugin_operations as operations
+    from engine.services._runtime_plugin import operations
 
     launch_job = Mock()
     monkeypatch.setattr(operations, "launch_plugin", launch_job)
@@ -380,9 +380,9 @@ def test_pack_update_requires_explicit_rebinding_instead_of_silently_skipping_pl
 @pytest.fixture
 def worker(monkeypatch):
     dispatch = Mock()
-    monkeypatch.setattr("engine.services._runtime_plugin_operations.launch_plugin", dispatch)
-    monkeypatch.setattr("engine.services._runtime_plugin_operations._pull_secret", lambda *args: "")
-    monkeypatch.setattr("engine.services._runtime_plugin_operations.interrupt_plugin", Mock())
+    monkeypatch.setattr("engine.services._runtime_plugin.operations.launch_plugin", dispatch)
+    monkeypatch.setattr("engine.services._runtime_plugin.operations._pull_secret", lambda *args: "")
+    monkeypatch.setattr("engine.services._runtime_plugin.operations.interrupt_plugin", Mock())
 
     def observe(request):
         return RuntimePlan(
@@ -398,7 +398,7 @@ def worker(monkeypatch):
             ],
         )
 
-    monkeypatch.setattr("engine.services._runtime_plugin_operations.observe_plugin", observe)
+    monkeypatch.setattr("engine.services._runtime_plugin.operations.observe_plugin", observe)
     return dispatch
 
 
@@ -447,7 +447,7 @@ def test_controller_rejects_generation_change_during_worker_observation(pack, wo
             ],
         )
 
-    monkeypatch.setattr("engine.services._runtime_plugin_operations.observe_plugin", observe)
+    monkeypatch.setattr("engine.services._runtime_plugin.operations.observe_plugin", observe)
     reconcile_runtime_plugin_operations()
     assert not RuntimePluginInvocation.objects.filter(state="planned").exists()
 

@@ -13,8 +13,8 @@ from engine.launch_intents import enqueue_provisioner_launch
 from engine.models import Range, RuntimePluginInstallation, RuntimePluginInvocation, RuntimePluginRangeBinding
 from engine.operation_inputs import operation_input_payload
 from engine.services import RangeBindings, bind_runtime_plugin, create_raes_range, install_runtime_plugin
-from engine.services import _runtime_plugin_operations as operations
-from engine.services._runtime_plugin_preparation import preparation_result_secret
+from engine.services._runtime_plugin import operations
+from engine.services._runtime_plugin.preparation import preparation_result_secret
 from shared.field_encryption import decrypt_value
 from shared.raes.operation_input import parse_raes_operation_input
 from shared.range_instantiation_policy import BackendAdmission, InstantiationPurpose
@@ -198,7 +198,7 @@ def test_cancel_intent_fences_preparation_even_before_the_range_changes_state(pe
 @pytest.mark.parametrize("pending", ["oversized"], indirect=True)
 def test_valid_values_that_would_overflow_cleanup_are_rejected_before_acceptance(pending):
     from engine.models import OperationInput
-    from engine.services._runtime_plugin_preparation import approve_invocation
+    from engine.services._runtime_plugin.preparation import approve_invocation
     from shared.exceptions import ValidationError
     from shared.operation_envelope import validate_operation_envelope
 

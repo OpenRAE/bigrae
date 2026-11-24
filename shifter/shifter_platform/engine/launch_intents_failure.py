@@ -55,7 +55,7 @@ def _generation_still_authorizes_failure(
 def _publish_range_dispatch_failure(payload: dict[str, object], target: Range) -> None:
     """Publish the standard failed status event for a Range dispatch."""
     from engine.models import RangeEventOutbox
-    from engine.services._principal_range_events import range_status_authority_fields
+    from engine.services._principal.range_events import range_status_authority_fields
     from shared.enums import ResourceStatus
     from shared.messages.events import EVENT_TYPE_STATUS_UPDATED
 
@@ -118,7 +118,7 @@ def fail_current_provisioner_operation(
         return False
     target = lock_provisioner_target(payload)
     if payload.get("resource") == "worker-trial":
-        from engine.services._worker_trials import fail_worker_trial_dispatch
+        from engine.services._worker.trials import fail_worker_trial_dispatch
 
         return fail_worker_trial_dispatch(payload, expected_operation_id)
     if isinstance(target, GcpRangeProject):
@@ -137,7 +137,7 @@ def _fail_project_registration(
     payload: dict[str, object], expected_operation_id: UUID | str, target: GcpRangeProject
 ) -> bool:
     """Only the still-current registration generation may record a dispatch failure."""
-    from engine.services._gcp_project_operations import validate_project_operation
+    from engine.services._gcp_project.operations import validate_project_operation
 
     try:
         validate_project_operation(payload, expected_operation_id)

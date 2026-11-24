@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 
 from engine.models import CapacityDeclaration, CapacityReservation
-from engine.services._capacity_plan import (
+from engine.services._capacity.plan import (
     _demand_from_declaration,
     _NullInventory,
     _observe,

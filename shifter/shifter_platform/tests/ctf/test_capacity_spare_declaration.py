@@ -55,7 +55,7 @@ class TestImageProjectionReachesTheEngine:
 
     def test_engine_scales_per_range_images_by_concurrency(self, ctf_event, monkeypatch):
         """Twenty ranges each needing one kali is twenty kali images to pre-bake."""
-        from engine.services._capacity_plan import _demand_from_declaration
+        from engine.services._capacity.plan import _demand_from_declaration
         from shared.capacity.catalog import load_catalog
 
         class _Declaration:
@@ -95,7 +95,7 @@ class TestImageProjectionReachesTheEngine:
 
     def test_malformed_image_hint_entries_are_dropped(self, ctf_event):
         """The hint travels through a JSONField, so entries are shape-checked."""
-        from engine.services._capacity_plan import _demand_from_declaration
+        from engine.services._capacity.plan import _demand_from_declaration
         from shared.capacity.catalog import load_catalog
 
         class _Declaration:

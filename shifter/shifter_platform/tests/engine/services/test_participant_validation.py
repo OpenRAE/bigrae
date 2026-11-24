@@ -152,7 +152,7 @@ def launcher(monkeypatch):
     monkeypatch.setattr("engine.models.RuntimePluginValidation.objects", _Validations())
     monkeypatch.setattr(validation, "launch_plugin", lambda item, **_: state.launched.append(item))
     monkeypatch.setattr(validation, "interrupt_plugin", state.interrupted.append)
-    monkeypatch.setattr("engine.services._runtime_plugin_controller._pull_secret", lambda _row, _request: "")
+    monkeypatch.setattr("engine.services._runtime_plugin.controller._pull_secret", lambda _row, _request: "")
     monkeypatch.setattr(validation, "observe_plugin", lambda _request: state.observed.pop(0))
     state.request, state.pending_row = request, pending_row
     return state

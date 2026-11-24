@@ -39,7 +39,7 @@ def fence_pack_reference(
     queryset = RaesPackageSource.objects.filter(scenario_id=scenario_id)
     if connection.vendor == "postgresql":
         # Django has no FOR SHARE queryset operation; SQL comes from the ORM
-        # compiler, as in engine.services._model_allocation_authority.
+        # compiler.
         sql, params = queryset.values_list("pk", flat=True).query.sql_with_params()
         with connection.cursor() as cursor:
             cursor.execute(sql + " FOR SHARE", params)  # NOSONAR -- SQL and params come from Django's ORM compiler.

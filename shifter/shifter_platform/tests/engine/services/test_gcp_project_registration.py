@@ -7,7 +7,7 @@ import pytest
 from django.contrib.auth.models import User
 
 from engine.models import GcpRangeProject, OperationInput, OperationResultInbox, ProvisionerLaunchIntent
-from engine.services._gcp_project_registration import disable_gcp_range_project, register_gcp_range_project
+from engine.services._gcp_project.registration import disable_gcp_range_project, register_gcp_range_project
 from shared.exceptions import ValidationError
 
 pytestmark = [pytest.mark.django_db, pytest.mark.postgres]

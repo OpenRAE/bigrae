@@ -7,7 +7,7 @@ from django.utils import timezone
 
 from engine.models import PreparationAttempt, PreparationOperation
 from engine.services import cancel_artifact_preparation
-from engine.services._preparation_worker import attempt_token, record_preparation_worker_result
+from engine.services._preparation.worker import attempt_token, record_preparation_worker_result
 from shared.cloud.types import TaskInterruptDisposition
 from shared.identity_scope import ResourceScope
 from tests.engine.services._preparation_fixtures import request_artifact_preparation
@@ -56,7 +56,7 @@ class Observer:
 
 @pytest.fixture
 def runtime(monkeypatch):
-    from engine.services import _preparation_controller as controller
+    from engine.services._preparation import controller
 
     task, observer = Task(), Observer()
     monkeypatch.setattr(controller, "get_preparation_task", lambda *args: task)

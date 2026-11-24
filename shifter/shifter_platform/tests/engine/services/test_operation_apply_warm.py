@@ -1,4 +1,4 @@
-"""Warm-pool apply-path tests for ``engine.services._operation_apply_raes`` (#28).
+"""Warm-pool apply-path tests for ``engine.services._operation_apply.raes`` (#28).
 
 The warm pool overloads the RAES terminal result apply with three warm-specific
 transitions the SQLite coverage lane can prove:
@@ -21,7 +21,7 @@ from django.utils import timezone
 
 from engine.models import OperationResultInbox, Range, Request, WarmRangeGeneration
 from engine.services import apply_pending_operation_results
-from engine.services._operation_apply_raes import (
+from engine.services._operation_apply.raes import (
     _pending_warm_generation,
     _retire_warm_generation_on_failure,
     _settle_warm_generation_on_activation,

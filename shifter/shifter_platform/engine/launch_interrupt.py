@@ -151,11 +151,11 @@ def _enqueue_destroy(claimed: ProvisionerLaunchIntent) -> bool:
     """Enqueue the canonical RAES destroy for the cancelled range. Idempotent."""
     payload = claimed.payload or {}
     if payload.get("resource") == "vpn-profile":
-        from engine.services._vpn_profile_operations import enqueue_interrupted_vpn_cleanup
+        from engine.services._vpn.profile_operations import enqueue_interrupted_vpn_cleanup
 
         return enqueue_interrupted_vpn_cleanup(claimed)
     if payload.get("resource") == "worker-trial":
-        from engine.services._worker_trials import enqueue_interrupted_worker_trial
+        from engine.services._worker.trials import enqueue_interrupted_worker_trial
 
         return enqueue_interrupted_worker_trial(claimed)
     return _enqueue_provider_destroy(claimed, payload)

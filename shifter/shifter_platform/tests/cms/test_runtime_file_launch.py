@@ -6,7 +6,7 @@ from cms.models import FileAssetUse, RangeInstance
 from cms.services import create_raes_native_range, delete_file_asset
 from engine.models import OperationInput, Range, RuntimePluginInstallation, RuntimePluginInvocation
 from engine.services import install_runtime_plugin
-from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
+from engine.services._runtime_plugin.bindings import retained_runtime_plugin_pin
 from shared.authorization import TargetRef
 from shared.credentials import resolve_credential_scope
 from tests.cms.services.test_file_assets import _upload
@@ -64,8 +64,8 @@ def test_real_launch_pins_cms_file_use_and_byte_free_engine_operation(file_launc
 
     from django.db import connection
 
-    from engine.services import _runtime_plugin_operations as controller
     from engine.services import reconcile_runtime_plugin_operations
+    from engine.services._runtime_plugin import operations as controller
     from shared.authorization import configured_authorization_provider, port
 
     provider = configured_authorization_provider()
@@ -125,7 +125,7 @@ def test_deleted_required_file_refuses_real_launch_before_native_dispatch(file_l
 def test_cancellation_during_file_read_prevents_worker_dispatch(file_launch, storage_client, monkeypatch):
     from unittest.mock import Mock
 
-    from engine.services import _runtime_plugin_operations as controller
+    from engine.services._runtime_plugin import operations as controller
 
     actor, source, _ = file_launch
     result = create_raes_native_range(actor.credential, source.scenario_id, scope=actor.scope)

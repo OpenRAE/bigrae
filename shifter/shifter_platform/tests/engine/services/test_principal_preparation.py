@@ -45,7 +45,7 @@ def service_preparer(settings, monkeypatch):
 def test_service_preparation_records_original_proof_and_revocation_blocks_new_input(service_preparer, installed):
     from engine.models import PreparationAttempt, PreparationOperation
     from engine.services import get_artifact_preparation, read_preparation_worker_input, request_artifact_preparation
-    from engine.services._preparation_worker import attempt_token
+    from engine.services._preparation.worker import attempt_token
     from management.models import ServiceCredentialAdmission
     from shared.exceptions import ValidationError
 
@@ -69,7 +69,7 @@ def test_service_preparation_records_original_proof_and_revocation_blocks_new_in
 def test_preparation_attempt_pins_an_independent_native_workload(service_preparer, installed, phase):
     from engine.models import PreparationAttempt, PreparationOperation
     from engine.services import request_artifact_preparation
-    from engine.services._preparation_operations import new_preparation_attempt
+    from engine.services._preparation.operations import new_preparation_attempt
 
     admitted = request_artifact_preparation(
         service_preparer, installed.id, package_input(), scope=ResourceScope("installation")
@@ -162,8 +162,8 @@ def test_dispatch_and_apply_policy_checks_never_hold_database_transaction(servic
     from django.db import connection
 
     from engine.models import PreparationOperation
-    from engine.services import _preparation_controller as controller
     from engine.services import request_artifact_preparation
+    from engine.services._preparation import controller
     from shared.authorization import port
     from tests.engine.services.test_preparation_controller import Observer, Task, receipt
     from tests.shared.raes.test_prepared_artifacts import admission_arguments
@@ -193,8 +193,8 @@ def test_dispatch_and_apply_policy_checks_never_hold_database_transaction(servic
 
 def test_authentic_receipt_survives_revocation_but_cannot_advance_work(service_preparer, installed, monkeypatch):
     from engine.models import PreparationAttempt, PreparationOperation, PreparedArtifactAdmission
-    from engine.services import _preparation_controller as controller
     from engine.services import request_artifact_preparation
+    from engine.services._preparation import controller
     from management.models import ServiceCredentialAdmission
     from tests.engine.services.test_preparation_controller import Task, receipt
     from tests.shared.raes.test_prepared_artifacts import admission_arguments

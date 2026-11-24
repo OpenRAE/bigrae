@@ -68,7 +68,7 @@ class Command(BaseCommand):
                 reconcile_runtime_plugin_operations(limit=30)
                 reconcile_participant_validations(limit=3)
                 reconcile_feature_artifact_acquisitions(limit=3)
-                from engine.services._vpn_profiles import reconcile_vpn_profiles
+                from engine.services._vpn.profiles import reconcile_vpn_profiles
 
                 reconcile_vpn_profiles(limit=100)
             self.stdout.write(f"Drained {drained} launch intents, {interrupted} interrupts")

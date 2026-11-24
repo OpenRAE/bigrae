@@ -596,7 +596,7 @@ def hydratable_scenario(transactional_db, monkeypatch, settings) -> RaesPackageS
     )
     settings.ENGINE_TASK_CLUSTER = "test-namespace"
     settings.ENGINE_TASK_DEFINITION = "test-provisioner:latest"
-    monkeypatch.setattr("engine.services._raes_range.start_raes_range_provisioning", lambda *_a, **_kw: None)
+    monkeypatch.setattr("engine.services._raes.range.start_raes_range_provisioning", lambda *_a, **_kw: None)
 
     def dispatch(request_id, actor, source, *dispatch_args):
         from cms.raes.dispatch import CmsRaesDispatchPort

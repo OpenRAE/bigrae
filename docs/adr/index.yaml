@@ -50,7 +50,7 @@
       "shifter/shifter_platform/management/management/commands/check_model_fks.py",
       "docs/_deprecated/architecture/mission-control-runtime-service-boundary-preflight-994.md",
       "shifter/shifter_platform/config/credential_scope.py",
-      "shifter/shifter_platform/engine/services/_disposable_workers.py"
+      "shifter/shifter_platform/engine/services/_worker/disposable.py"
     ]
   },
   {
@@ -2459,7 +2459,7 @@
       "shifter/installation/contract.py",
       "shifter/installation/registry.py",
       "shifter/shifter_platform/engine/ecs.py",
-      "shifter/shifter_platform/engine/services/_range.py",
+      "shifter/shifter_platform/engine/services/_range/compatibility.py",
       "shifter/shifter_platform/engine/services/_lifecycle.py",
       "shifter/engine/provisioner/range_terraform_runner.py",
       "shifter/engine/provisioner/range_ops.py",
@@ -2605,8 +2605,8 @@
       "docs/architecture/external-scenario-runtime-design.md",
       "docs/architecture/named-file-assets-2719.md",
       "shifter/shifter_adapter_sdk/runtime.py",
-      "shifter/shifter_platform/engine/services/_runtime_plugins.py",
-      "shifter/shifter_platform/engine/services/_runtime_plugin_controller.py",
+      "shifter/shifter_platform/engine/services/_runtime_plugin/installation.py",
+      "shifter/shifter_platform/engine/services/_runtime_plugin/controller.py",
       "shifter/shifter_platform/shared/cloud/runtime_plugins.py",
       "platform/charts/shifter/templates/runtime-plugins.yaml",
       "platform/terraform/modules/portal/eks/runtime_plugins.tf",
@@ -2618,7 +2618,7 @@
       ".github/quality-path-filters.yaml",
       ".github/workflows/_quality.yml",
       "docs/architecture/adapter-pre-provisioning-2718.md",
-      "shifter/shifter_platform/engine/services/_runtime_plugin_cleanup.py"
+      "shifter/shifter_platform/engine/services/_runtime_plugin/cleanup.py"
     ]
   },
   {
@@ -3093,13 +3093,13 @@
       "shifter/shifter_platform/shared/cloud/aws/capacity_inventory.py",
       "shifter/shifter_platform/shared/cloud/gcp/capacity_inventory.py",
       "shifter/shifter_platform/engine/models/_capacity_assessment.py",
-      "shifter/shifter_platform/engine/services/_capacity_plan.py",
+      "shifter/shifter_platform/engine/services/_capacity/plan.py",
       "shifter/shifter_platform/config/_capacity_planning_settings.py",
       "shifter/shifter_platform/tests/shared/capacity",
       "shifter/shifter_platform/tests/shared/cloud/test_capacity_inventory.py",
       "shifter/shifter_platform/tests/engine/test_capacity_plan.py",
       "shifter/shifter_platform/tests/ctf/test_capacity_admission_wiring.py",
-      "shifter/shifter_platform/engine/services/_capacity_admit.py",
+      "shifter/shifter_platform/engine/services/_capacity/admit.py",
       "shifter/shifter_platform/tests/engine/test_capacity_admit.py",
       "shifter/shifter_platform/tests/ctf/test_capacity_draw_wiring.py",
       "docs/technical/shifter_platform/disposable-workers.md",
@@ -3204,7 +3204,7 @@
     "title": "GCP range cells select a persisted multi-region placement zone at creation",
     "status": "accepted",
     "scope": "shifter_platform",
-    "decision": "GCP range-cell placement spreads a range fleet across regions because Compute CPU quota is enforced per project per region. RANGE_NETWORK_ZONES is an ordered, deployment-owned zone pool and is the single canonical operator input. A range's zone is selected from the pool once, in the range-create transaction (alongside subnet_index, via engine.services._range_placement), and persisted on the range row (mission_control_range.placement_zone, migration engine 0054). The provisioner is a pure reader: both the legacy gcp_range_cells and the RAES-native raes_range_ops apply/destroy lifecycles bind the range-cell config to the stored zone and never recompute from the pool. Deciding placement at creation makes it a durable property of the range, so teardown reconstructs the exact zone even if the pool is later reordered or resized, there is no apply-time race (creation is single and transactional), and an empty placement_zone unambiguously means a pre-#2029 single-zone range that stays on the scalar RANGE_NETWORK_ZONE. Cross-region cells keep an egress path: platform/terraform/gcp/modules/range/vpc provisions a Cloud Router + external address + Cloud NAT for every non-primary region a pooled zone lives in, and those NAT regions are derived from the same range_network_zones list (projected from the same RANGE_NETWORK_ZONES variable) so NAT coverage cannot diverge from where cells are placed. This reverses two boundaries the issue #2029 architecture preflight had set as non-goals (no new placement column; no regional NAT), which pre-push review showed documentation alone could not safely uphold.",
+    "decision": "GCP range-cell placement spreads a range fleet across regions because Compute CPU quota is enforced per project per region. RANGE_NETWORK_ZONES is an ordered, deployment-owned zone pool and is the single canonical operator input. A range's zone is selected from the pool once, in the range-create transaction (alongside subnet_index, via engine.services._range.placement), and persisted on the range row (mission_control_range.placement_zone, migration engine 0054). The provisioner is a pure reader: both the legacy gcp_range_cells and the RAES-native raes_range_ops apply/destroy lifecycles bind the range-cell config to the stored zone and never recompute from the pool. Deciding placement at creation makes it a durable property of the range, so teardown reconstructs the exact zone even if the pool is later reordered or resized, there is no apply-time race (creation is single and transactional), and an empty placement_zone unambiguously means a pre-#2029 single-zone range that stays on the scalar RANGE_NETWORK_ZONE. Cross-region cells keep an egress path: platform/terraform/gcp/modules/range/vpc provisions a Cloud Router + external address + Cloud NAT for every non-primary region a pooled zone lives in, and those NAT regions are derived from the same range_network_zones list (projected from the same RANGE_NETWORK_ZONES variable) so NAT coverage cannot diverge from where cells are placed. This reverses two boundaries the issue #2029 architecture preflight had set as non-goals (no new placement column; no regional NAT), which pre-push review showed documentation alone could not safely uphold.",
     "rules": [
       {
         "id": "ADR-050-R1",
@@ -3221,7 +3221,7 @@
     "evidence": [
       "https://github.com/Brad-Edwards/bigrae/issues/2029",
       "docs/_deprecated/architecture/gcp-range-cell-zone-pool-preflight-2029.md",
-      "shifter/shifter_platform/engine/services/_range_placement.py",
+      "shifter/shifter_platform/engine/services/_range/placement.py",
       "shifter/shifter_platform/engine/migrations/0054_range_placement_zone.py",
       "shifter/engine/provisioner/range_placement.py",
       "platform/terraform/gcp/modules/range/vpc/main.tf"
@@ -4044,7 +4044,7 @@
       "shifter/shifter_platform/cms/services/_range_lifecycle.py",
       "shifter/shifter_platform/engine/launch_intents.py",
       "shifter/shifter_platform/engine/models/_operation_io.py",
-      "shifter/shifter_platform/engine/services/_operation_apply.py",
+      "shifter/shifter_platform/engine/services/_operation_apply/applier.py",
       "shifter/shifter_platform/shared/audit",
       "shifter/engine/provisioner/range_ops/_pause_resume.py",
       "docs/requirements/GEN-2005/requirement.md",
@@ -4320,7 +4320,7 @@
       "shifter/shifter_platform/mission_control/api",
       "docs/architecture/disposable-trial-workers-boundary-2741.md",
       "shifter/shifter_platform/engine/worker_retention.py",
-      "shifter/shifter_platform/engine/services/_worker_retirement.py"
+      "shifter/shifter_platform/engine/services/_worker/retirement.py"
     ]
   },
   {

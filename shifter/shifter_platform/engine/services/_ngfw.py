@@ -33,7 +33,7 @@ def create_ngfw(
     """Provision NGFW infrastructure."""
 
     if credential is not None:
-        from ._principal_ngfw import create_principal_ngfw
+        from ._principal.ngfw import create_principal_ngfw
 
         if resource_scope is None:
             raise ValueError("Device scope unavailable")
@@ -69,7 +69,7 @@ def destroy_ngfw(request_id: UUID, *, credential: CredentialContext | None = Non
     """Tear down NGFW infrastructure."""
 
     if credential is not None:
-        from ._principal_ngfw import commit_ngfw_lifecycle, prepare_ngfw_lifecycle
+        from ._principal.ngfw import commit_ngfw_lifecycle, prepare_ngfw_lifecycle
 
         return commit_ngfw_lifecycle(prepare_ngfw_lifecycle(request_id, credential, "deprovision"))
     return _destroy_legacy_ngfw(request_id)
@@ -120,7 +120,7 @@ def _run_ngfw_lifecycle_op(
     from engine.ecs import start_ngfw_operation
 
     if credential is not None:
-        from ._principal_ngfw import commit_ngfw_lifecycle, prepare_ngfw_lifecycle
+        from ._principal.ngfw import commit_ngfw_lifecycle, prepare_ngfw_lifecycle
 
         return commit_ngfw_lifecycle(prepare_ngfw_lifecycle(request_id, credential, op_name))
     logger.debug("%s_ngfw: request_id=%s", op_name, request_id)

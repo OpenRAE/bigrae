@@ -8,7 +8,7 @@ from django.utils import timezone
 
 from engine.models import PreparationAttempt, PreparationOperation
 from engine.services import cancel_artifact_preparation, read_preparation_worker_input, record_preparation_worker_result
-from engine.services._preparation_worker import attempt_token
+from engine.services._preparation.worker import attempt_token
 from shared.exceptions import ValidationError
 from tests.engine.services._preparation_fixtures import request_artifact_preparation
 from tests.engine.services.test_preparation_operations import administrator, grant, installed, operator, package_input
@@ -127,7 +127,7 @@ def test_mutated_grant_cannot_extend_existing_worker_authority(attempt, grant):
 
 
 def test_cleanup_survives_revocation_but_cannot_change_its_pinned_cloud_scope(attempt, grant, operator):
-    from engine.services._preparation_operations import new_preparation_attempt
+    from engine.services._preparation.operations import new_preparation_attempt
 
     cancel_artifact_preparation(operator, attempt.operation_id)
     row = PreparationOperation.objects.get(pk=attempt.operation_id)

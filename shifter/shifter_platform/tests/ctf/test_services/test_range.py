@@ -133,7 +133,7 @@ class TestProvisionParticipantRange:
     def test_provision_success_persists_assignment(self, ctf_participant, organizer_credential, monkeypatch):
         """The real queue is empty until CTF records its exact runtime association."""
         from engine.models import ProvisionerLaunchIntent
-        from engine.services._launch_authority import authorize_launch_authority
+        from engine.services._launch.authority import authorize_launch_authority
         from shared.authorization import configured_authorization_provider
 
         provider = configured_authorization_provider()
@@ -629,7 +629,7 @@ class TestCmsBridgeRangeSource:
         from cms.raes.dispatch import CmsRaesDispatchPort
         from workspaces.services import resource_scope_from_ids
 
-        monkeypatch.setattr("engine.services._raes_range.start_raes_range_provisioning", lambda *_a, **_kw: None)
+        monkeypatch.setattr("engine.services._raes.range.start_raes_range_provisioning", lambda *_a, **_kw: None)
         settings.ENGINE_TASK_CLUSTER = "synthetic-namespace"
         settings.ENGINE_TASK_DEFINITION = "example.test/synthetic@sha256:" + "1" * 64
 
