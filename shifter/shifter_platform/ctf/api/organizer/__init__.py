@@ -76,7 +76,6 @@ from ctf.api.organizer.participants import (
 )
 from ctf.api.organizer.play import (
     RateChallengeView,
-    SubmissionListView,
     SubmitFlagView,
     UseHintView,
 )
@@ -178,7 +177,6 @@ __all__ = [
     "ScenarioListView",
     "ScoreTimelineView",
     "SendLoginInfoView",
-    "SubmissionListView",
     "SubmitFlagView",
     "TaskRunNowView",
     "TeamCaptainView",

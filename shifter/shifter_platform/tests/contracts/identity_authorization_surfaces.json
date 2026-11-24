@@ -2889,8 +2889,8 @@
     },
     {
       "authority": {
-        "decision": "event.manage_submissions",
-        "scope": "sql:submission_collection",
+        "decision": "event.participate",
+        "scope": "sql:active_event",
         "target": "event"
       },
       "disposition": "retained",

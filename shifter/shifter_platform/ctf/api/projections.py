@@ -22,7 +22,7 @@ from ctf.services.submission import get_participant_submissions
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from ctf.models import CTFChallenge, CTFEvent, CTFParticipant
+    from ctf.models import CTFChallenge, CTFEvent, CTFParticipant, CTFSubmission
     from shared.credentials import CredentialContext
 
 
@@ -109,6 +109,40 @@ def participant_challenge_list(participant: CTFParticipant) -> list[dict[str, An
         }
         for challenge in challenges
     ]
+
+
+def participant_submissions(participant: CTFParticipant) -> list[dict[str, Any]]:
+    """Return the participant's own submission history, newest first (#3002).
+
+    ``submitted_flag`` is the stored submitted value of a correct row on a live
+    challenge and ``None`` otherwise (ADR-028). It never comes from the authored ``CTFFlag``
+    answers, and a signed receipt keeps its stored redaction marker. The caller
+    MUST have admitted ``participant`` for the current credential.
+    """
+    return [
+        {
+            "id": str(submission.id),
+            "challenge_id": str(submission.challenge_id),
+            "challenge_name": submission.challenge.name,
+            "is_correct": submission.is_correct,
+            "points_awarded": submission.points_awarded,
+            "attempt_number": submission.attempt_number,
+            "submitted_at": submission.submitted_at,
+            "submitted_flag": _disclosed_flag(submission),
+        }
+        for submission in get_participant_submissions(participant.id)
+    ]
+
+
+def _disclosed_flag(submission: CTFSubmission) -> str | None:
+    """Return the stored value of a correct submission on a live challenge, else ``None``.
+
+    ``select_related`` does not apply the challenge's soft-delete manager, so a
+    retained submission on a deleted challenge keeps its metadata but no value.
+    """
+    if submission.is_correct and submission.challenge.deleted_at is None:
+        return submission.submitted_flag
+    return None
 
 
 def _team_solved_challenge_ids(participant: CTFParticipant, challenge_id: UUID | None = None) -> set[UUID]:
