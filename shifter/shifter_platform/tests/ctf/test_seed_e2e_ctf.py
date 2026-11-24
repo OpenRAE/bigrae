@@ -45,6 +45,10 @@ def test_seed_publishes_an_idempotent_inbox_for_the_participant_actor():
     assert by_subject[SAFE_SUBJECT]["acknowledgement_policy"] == "explicit"
     # The hostile row is stored as-is; only the renderer and CSP may neutralize it.
     assert "<script>" in by_subject[HOSTILE_SUBJECT]["body"]
+    # One award, not one per run, gives the scoreboard graph a score step (#3004).
+    board = client.get(f"/api/v1/ctf/events/{current.json()['event']['id']}/scoreboard/").json()
+    assert [row["score"] for row in board["rankings"]] == [100]
+    assert [point["score"] for point in board["progression"]["series"][0]["points"]] == [0, 100]
 
 
 def test_seed_releases_stable_challenges_for_the_browser_scan():

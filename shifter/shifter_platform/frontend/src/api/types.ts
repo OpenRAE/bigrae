@@ -190,6 +190,7 @@ export type CtfSubmissionList = components["schemas"]["SubmissionListResponse"];
 export type CtfRangeStatus = components["schemas"]["RangeStatusResponse"];
 export type CtfRangeAccess = components["schemas"]["RangeAccessResponse"];
 export type CtfScoreboard = components["schemas"]["PublicScoreboardResponse"];
+export type CtfScoreProgression = components["schemas"]["ScoreProgression"];
 export type CtfScoreboardKind = NonNullable<
   NonNullable<operations["ctf_events_scoreboard_retrieve"]["parameters"]["query"]>["kind"]
 >;

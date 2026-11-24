@@ -29070,6 +29070,14 @@
               "$ref": "#/components/schemas/_NamedRef"
             },
             "readOnly": true
+          },
+          "progression": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScoreProgression"
+              }
+            ],
+            "readOnly": true
           }
         },
         "required": [
@@ -29077,6 +29085,7 @@
           "brackets",
           "event_id",
           "frozen",
+          "progression",
           "rankings",
           "team_mode"
         ]
@@ -31584,6 +31593,15 @@
               "$ref": "#/components/schemas/_NamedRef"
             },
             "readOnly": true
+          },
+          "progression": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScoreProgression"
+              }
+            ],
+            "readOnly": true,
+            "nullable": true
           }
         },
         "required": [
@@ -31591,6 +31609,7 @@
           "brackets",
           "event_id",
           "frozen",
+          "progression",
           "rankings",
           "scoreboard_hidden",
           "team_mode"
@@ -33701,6 +33720,34 @@
           "target_uuid"
         ]
       },
+      "ScoreProgression": {
+        "type": "object",
+        "description": "Score-over-time series for the leading rows of the selected board (ADR-028-R3).",
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/_ScoreSeries"
+            },
+            "readOnly": true
+          }
+        },
+        "required": [
+          "ends_at",
+          "series",
+          "starts_at"
+        ]
+      },
       "ScoreTimelineResponse": {
         "type": "object",
         "description": "Per-participant chronological score progression for a step chart.",
@@ -34764,6 +34811,56 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "_ScorePoint": {
+        "type": "object",
+        "description": "One step of a score progression: a time and the cumulative score.",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "score": {
+            "type": "integer",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "at",
+          "score"
+        ]
+      },
+      "_ScoreSeries": {
+        "type": "object",
+        "description": "One leading competitor's score progression (#3004).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "readOnly": true
+          },
+          "rank": {
+            "type": "integer",
+            "readOnly": true
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/_ScorePoint"
+            },
+            "readOnly": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "points",
+          "rank"
         ]
       }
     },

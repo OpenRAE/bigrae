@@ -115,6 +115,10 @@ In a team-mode event, open **Individual scoreboard** for participant standings.
 Open **Team scoreboard** for team standings.
 An open scoreboard refreshes every **15 seconds**.
 
+A graph above the table shows the score over time of the top eight entries.
+Open **Score history** below the graph to read each time and score as a table.
+The graph shows times and scores only, not challenge names.
+
 To change the board:
 
 1. Type a name in **Filter participants** or **Filter teams** to show only the matching entries.
@@ -123,6 +127,7 @@ To change the board:
 
 The rank column always shows the official rank.
 The filter and the sort apply to the selected bracket.
+They do not change the graph.
 
 The organizer can hide it or freeze results near event end.
 Do not infer final standings from a frozen display.
