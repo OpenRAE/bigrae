@@ -10,12 +10,13 @@ from django.test import override_settings
 from rest_framework.test import APIClient
 
 from ctf.management.commands.seed_e2e_ctf import (
+    CHALLENGES,
     HOSTILE_SUBJECT,
     INBOX_PARTICIPANT_EMAIL,
     ORGANIZER_EMAIL,
     SAFE_SUBJECT,
 )
-from ctf.models import CommunicationIntent, CTFEvent
+from ctf.models import CommunicationIntent, CTFChallenge, CTFEvent
 from tests.ctf._account_scope import individual_account_uuid
 
 User = get_user_model()
@@ -48,6 +49,24 @@ def test_seed_publishes_an_idempotent_inbox_for_the_participant_actor():
     board = client.get(f"/api/v1/ctf/events/{current.json()['event']['id']}/scoreboard/").json()
     assert [row["score"] for row in board["rankings"]] == [100]
     assert [point["score"] for point in board["progression"]["series"][0]["points"]] == [0, 100]
+
+
+def test_seed_releases_stable_challenges_for_the_browser_scan():
+    # The accessibility matrix opens a loaded challenge page by its fixed ID (#2999).
+    individual_account_uuid(User.objects.create_user(username=ORGANIZER_EMAIL, email=ORGANIZER_EMAIL))
+    call_command("seed_e2e_ctf")
+    call_command("seed_e2e_ctf")
+
+    assert CTFChallenge.objects.count() == len(CHALLENGES)
+    client = APIClient()
+    client.force_login(User.objects.get(username=INBOX_PARTICIPANT_EMAIL))
+    listed = client.get("/api/v1/ctf/me/challenges/")
+    assert listed.status_code == 200, listed.content
+    assert {item["id"] for item in listed.json()} == {str(challenge.id) for challenge in CHALLENGES}
+    for challenge in CHALLENGES:
+        detail = client.get(f"/api/v1/ctf/me/challenges/{challenge.id}/")
+        assert detail.status_code == 200, detail.content
+        assert detail.json()["name"] == challenge.name
 
 
 def test_seed_requires_the_organizer_account_from_seed_e2e():

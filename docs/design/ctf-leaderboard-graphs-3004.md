@@ -76,6 +76,7 @@ The public and organizer scoreboard responses add one field:
 - The graph skips a point with an invalid time or a non-finite score. It does not plot it as zero.
 - Each score step has a marker with a native title: name, score, and time.
 - A legend lists rank and name.
+- The browser name filter and sort (#3001) change only the table. The graph keeps the official leading rows.
 - A **Score history** disclosure below the graph holds a table of every plotted time and score. It is the text alternative for the graph.
 - The graph refreshes with the existing 15-second scoreboard poll. It has no animation.
 

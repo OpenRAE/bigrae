@@ -3,6 +3,7 @@
  * stays the disclosure boundary: these functions only reorder and group the
  * rows it returned, and never change their input arrays.
  */
+import { distinctLabels, filterByLabels, type Labeled } from "./label-filters";
 
 export const CHALLENGE_VIEWS = [
   { value: "category", label: "By category" },
@@ -18,8 +19,16 @@ export const CHALLENGE_SORTS = [
   { value: "difficulty", label: "Difficulty" },
 ] as const;
 
+/** Presentation of each group (#3012). It never changes the rows or their order. */
+export const CHALLENGE_LAYOUTS = [
+  { value: "cards", label: "Cards" },
+  { value: "list", label: "List" },
+  { value: "table", label: "Table" },
+] as const;
+
 export type ChallengeView = (typeof CHALLENGE_VIEWS)[number]["value"];
 export type ChallengeSort = (typeof CHALLENGE_SORTS)[number]["value"];
+export type ChallengeLayout = (typeof CHALLENGE_LAYOUTS)[number]["value"];
 
 export interface ListedChallenge {
   id: string;
@@ -39,7 +48,8 @@ export interface ChallengeGroup<T> {
   items: T[];
 }
 
-const UNCATEGORIZED = "Uncategorized";
+/** Group and table label for a challenge with no category. */
+export const UNCATEGORIZED = "Uncategorized";
 const MISSION_CATEGORY = /^Mission\s+(\d+)\b/i;
 const START_HERE_CATEGORY = /^Start Here$/i;
 /** Domain order of `ctf.enums.ChallengeDifficulty`; other values sort after it. */
@@ -53,6 +63,11 @@ export function parseView(value: string | null): ChallengeView {
 /** Return the allowlisted sort, or the default for a missing or unknown value. */
 export function parseSort(value: string | null): ChallengeSort {
   return CHALLENGE_SORTS.find((sort) => sort.value === value)?.value ?? "order";
+}
+
+/** Return the allowlisted layout, or cards for a missing or unknown value. */
+export function parseLayout(value: string | null): ChallengeLayout {
+  return CHALLENGE_LAYOUTS.find((layout) => layout.value === value)?.value ?? "cards";
 }
 
 /** One solve predicate for grouping and totals: a personal or a team solve. */
@@ -135,4 +150,55 @@ export function groupChallenges<T extends ListedChallenge>(
   if (view === "category") return byCategory(sorted);
   if (view === "status") return byStatus(sorted);
   return sorted.length > 0 ? [{ key: "all", label: null, items: sorted }] : [];
+}
+
+/** The list state that the URL query parameters select, and the groups it shows. */
+export interface ListView<T> {
+  view: ChallengeView;
+  sort: ChallengeSort;
+  layout: ChallengeLayout;
+  tagLabels: string[];
+  topicLabels: string[];
+  activeTag: string | null;
+  activeTopic: string | null;
+  groups: ChallengeGroup<T>[];
+}
+
+/** A label value from the URL applies only when a listed challenge carries it. */
+function knownLabel(value: string | null, labels: readonly string[]): string | null {
+  return value !== null && labels.includes(value) ? value : null;
+}
+
+/**
+ * Apply the list query parameters to the rows. The list page and the challenge page
+ * both use this function, so the challenge page buttons follow the shown order (#2999).
+ */
+export function readListView<T extends ListedChallenge & Labeled>(
+  items: readonly T[],
+  params: URLSearchParams,
+): ListView<T> {
+  const view = parseView(params.get("view"));
+  const sort = parseSort(params.get("sort"));
+  const layout = parseLayout(params.get("layout"));
+  const tagLabels = distinctLabels(items, "tags");
+  const topicLabels = distinctLabels(items, "topics");
+  const activeTag = knownLabel(params.get("tag"), tagLabels);
+  const activeTopic = knownLabel(params.get("topic"), topicLabels);
+  const groups = groupChallenges(filterByLabels(items, activeTag, activeTopic), view, sort);
+  return { view, sort, layout, tagLabels, topicLabels, activeTag, activeTopic, groups };
+}
+
+/**
+ * Return the challenges before and after one challenge in the shown order, across groups.
+ * There is no wraparound. A challenge that is not shown has no neighbors, so a caller
+ * never falls through to the first row.
+ */
+export function adjacentChallenges<T extends { id: string }>(
+  groups: readonly ChallengeGroup<T>[],
+  challengeId: string,
+): { previous: T | null; next: T | null } {
+  const sequence = groups.flatMap((group) => group.items);
+  const index = sequence.findIndex((challenge) => challenge.id === challengeId);
+  if (index === -1) return { previous: null, next: null };
+  return { previous: sequence[index - 1] ?? null, next: sequence[index + 1] ?? null };
 }

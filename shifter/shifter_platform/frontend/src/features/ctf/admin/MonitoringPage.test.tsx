@@ -1,8 +1,7 @@
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 
-import { renderRoute } from "@/test/utils";
+import { renderRoute, setupUser } from "@/test/utils";
 
 vi.mock("@/api/client", () => ({ apiFetch: vi.fn() }));
 
@@ -113,7 +112,7 @@ describe("MonitoringPage", () => {
   });
 
   it("graphs and lists a participant's score timeline with the service fields", async () => {
-    const user = userEvent.setup({ delay: null });
+    const user = setupUser();
     mockApi.mockImplementation((path: string) => {
       if (path.endsWith("/participants/")) return Promise.resolve({ participants: [{ id: "p1", name: "Ada" }] });
       if (path.endsWith("/score-timeline/")) {

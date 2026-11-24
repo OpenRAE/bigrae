@@ -115,18 +115,24 @@ def ranked_participant_q(field_prefix: str = "") -> Q:
     return eligible_participant_q(field_prefix) & Q(**{f"{p}hidden": False, f"{p}role": ParticipantRole.PLAYER.value})
 
 
-def assert_participant_can_compete(participant: CTFParticipant, *, require_team: bool = False) -> None:
+def assert_participant_can_compete(participant: CTFParticipant, *, validate_team: bool = False) -> None:
     """Raise unless `participant` may take competitive actions (submit, hints).
 
     The imperative twin of :func:`eligible_participant_q` for callers already
     holding a row, plus the CTF-604 role rule: observers watch but never act.
-    Flag submission also requires live same-event team membership in team mode
-    when ``require_team`` is set. Team onboarding and other callers do not.
+
+    A teamless participant competes as an individual in every event mode,
+    including team mode (#3000): a team is not a prerequisite for submitting a
+    flag or scoring. When ``validate_team`` is set the caller additionally
+    rejects a participant whose ``team_id`` points to a team that is not a live
+    team of the same event. Flag submission sets it so a stale or cross-event
+    membership cannot drive team-score maintenance; a ``None`` team always
+    passes.
 
     Raises:
-        CTFStateError: If the participant is unregistered or their status is
-            outside the playing set (invited, disqualified, banned), or required
-            team membership is missing.
+        CTFStateError: If the participant is unregistered, their status is
+            outside the playing set (invited, disqualified, banned), or
+            ``validate_team`` is set and their team reference is invalid.
         CTFPermissionError: If the participant is an observer.
     """
     from ctf.enums import ParticipantRole
@@ -143,15 +149,12 @@ def assert_participant_can_compete(participant: CTFParticipant, *, require_team:
             details={"participant_id": str(participant.id)},
         )
     if (
-        require_team
-        and participant.event.team_mode
-        and (
-            participant.team_id is None
-            or not CTFTeam.objects.filter(pk=participant.team_id, event_id=participant.event_id).exists()
-        )
+        validate_team
+        and participant.team_id is not None
+        and not CTFTeam.objects.filter(pk=participant.team_id, event_id=participant.event_id).exists()
     ):
         raise CTFStateError(
-            "Join or create a team before submitting flags",
+            "Your team is not a valid team for this event",
             details={"participant_id": str(participant.id)},
         )
 
