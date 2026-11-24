@@ -1,4 +1,4 @@
-"""Participant play views for the canonical CTF API (rate, submit, hints, submissions).
+"""Participant play views for the canonical CTF API (rate, submit, hints).
 
 These endpoints carry participant permissions but live in the organizer package
 alongside the shared resolution helpers they reuse.
@@ -19,18 +19,14 @@ from ctf.api.organizer._base import (
     _CHALLENGE_ACTION_FAILED,
     _CHALLENGE_OR_PARTICIPANT_NOT_FOUND,
     _NO_MORE_HINTS,
-    _PARTICIPANT_NOT_FOUND,
-    _PLAY_READ,
     _PLAY_WRITE,
     _raise_bad_request,
     _raise_not_found,
-    _resolve_active_participant,
     _resolve_challenge_participant,
 )
 from ctf.api.serializers import (
     RateChallengeRequestSerializer,
     RateChallengeResultSerializer,
-    SubmissionListResponseSerializer,
     SubmitFlagRequestSerializer,
     SubmitFlagResultSerializer,
     UseHintRequestSerializer,
@@ -204,36 +200,3 @@ class UseHintView(APIView):
         except (CTFValidationError, CTFStateError):
             _raise_bad_request(_CHALLENGE_ACTION_FAILED)
         return Response(result)
-
-
-class SubmissionListView(APIView):
-    """List the requesting participant's own submissions."""
-
-    permission_classes = CTF_PARTICIPANT_PERMISSIONS
-    required_read_scopes = _PLAY_READ
-
-    @extend_schema(responses=SubmissionListResponseSerializer)
-    def get(self, request: Request) -> Response:
-        """Return the active participant's own submission history."""
-        from ctf.services.submission import get_participant_submissions
-
-        try:
-            participant = _resolve_active_participant(request)
-            if participant is None:
-                _raise_not_found(_PARTICIPANT_NOT_FOUND)
-            submissions = get_participant_submissions(participant.id)
-            data = [
-                {
-                    "id": str(s.id),
-                    "challenge_id": str(s.challenge_id),
-                    "challenge_name": s.challenge.name,
-                    "is_correct": s.is_correct,
-                    "points_awarded": s.points_awarded,
-                    "attempt_number": s.attempt_number,
-                    "submitted_at": s.submitted_at.isoformat() if s.submitted_at else None,
-                }
-                for s in submissions.select_related("challenge")
-            ]
-            return Response({"submissions": data, "total": len(data)})
-        except _CtfApiError as exc:
-            return exc.to_response(request)

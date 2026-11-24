@@ -325,6 +325,19 @@ It stays during the refresh and resets for a new event or board kind.
 See the
 [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-leaderboard-controls-3001.md).
 
+### Participant correct flags
+
+`GET /api/v1/ctf/submissions/` returns the participant's own submission history.
+`submitted_flag` holds the stored submitted value of a correct row on a live challenge, and `null` for other rows.
+The view admits the participant with `viewing_participant_for_credential` and sends no-cache headers.
+A signed receipt keeps its stored redaction marker.
+
+The SPA **Account** page shows each row that has a value, with a link to its challenge.
+The page query fetches again when the tab gets focus.
+The page shows no values until that read completes, also when the browser is offline.
+See the
+[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-correct-flags-3002.md).
+
 ### Scoreboard refresh
 
 The SPA participant and organizer scoreboard hooks poll their API read every

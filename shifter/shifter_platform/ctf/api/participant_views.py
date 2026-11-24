@@ -15,6 +15,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.utils.cache import add_never_cache_headers
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import serializers, status
 from rest_framework.request import Request
@@ -37,6 +38,7 @@ from ctf.api.serializers import (
     ParticipantProfileSerializer,
     ParticipantTeamSerializer,
     ProfileUpdateRequestSerializer,
+    SubmissionListResponseSerializer,
     UsernameChangeRequestSerializer,
 )
 from shared.api.errors import api_error_response
@@ -75,6 +77,31 @@ def _resolve_active_participant(request: Request) -> CTFParticipant | None:
     # View-predicate resolution (CTF-609): disqualified participants read the
     # me-surface; mutation services re-assert compete eligibility themselves.
     return get_viewing_participant_by_user(actor, event_id=role.active_ctf_event.id)
+
+
+def _require_admitted_participant(request: Request) -> CTFParticipant:
+    """Resolve the active-event participant, then admit it under the current credential.
+
+    ``viewing_participant_for_credential`` rechecks current proof, the exact event,
+    the credential ceiling, and live policy. Raises ``_CtfApiError``: 404 without
+    exact participation, 503 when the authority is unavailable (fail closed).
+    """
+    from ctf.exceptions import CTFError, CTFPermissionError
+    from ctf.services.principal_participation import viewing_participant_for_credential
+    from shared.credentials import CredentialUnavailable
+
+    participant = _resolve_active_participant(request)
+    if participant is None:
+        raise _CtfApiError(code="not_found", message=_NO_ACTIVE_EVENT, status_code=status.HTTP_404_NOT_FOUND)
+    try:
+        return viewing_participant_for_credential(authenticated_credential(request), participant.event_id)
+    except CredentialUnavailable:
+        # Subclasses ValueError, so it must be caught before the denial branch.
+        raise _CtfApiError(code="dependency_unavailable", message="Service unavailable", status_code=503) from None
+    except (ValueError, CTFPermissionError):
+        raise _CtfApiError(code="not_found", message=_NO_ACTIVE_EVENT, status_code=status.HTTP_404_NOT_FOUND) from None
+    except CTFError:
+        raise _CtfApiError(code="dependency_unavailable", message="Service unavailable", status_code=503) from None
 
 
 class ParticipantCurrentEventView(APIView):
@@ -370,30 +397,19 @@ class ParticipantContentImagesView(APIView):
     @extend_schema(responses=ParticipantContentImagesSerializer)
     def get(self, request: Request) -> Response:
         """Return ready copies of images in content the participant can read now."""
-        from ctf.exceptions import CTFError, CTFPermissionError
-        from ctf.services._content_image_authority import require_content_image_participant
         from ctf.services.content_images import participant_image_state
 
-        participant = _resolve_active_participant(request)
-        if participant is None:
-            return _no_active_event_response(request)
         try:
-            participant = require_content_image_participant(authenticated_credential(request), participant.event_id)
-        except (ValueError, CTFPermissionError):
-            response = _no_active_event_response(request)
-        except CTFError:
-            response = api_error_response(
-                code="dependency_unavailable", message="Service unavailable", status_code=503, request=request
-            )
-        else:
-            mapping, pending = participant_image_state(participant)
-            response = Response(
-                {
-                    "images": [{"source_url": src, "url": url} for src, url in sorted(mapping.items())],
-                    "pending": pending,
-                }
-            )
-        return response
+            participant = _require_admitted_participant(request)
+        except _CtfApiError as exc:
+            return exc.to_response(request)
+        mapping, pending = participant_image_state(participant)
+        return Response(
+            {
+                "images": [{"source_url": src, "url": url} for src, url in sorted(mapping.items())],
+                "pending": pending,
+            }
+        )
 
 
 class ParticipantBriefingView(APIView):
@@ -445,3 +461,27 @@ class ParticipantBriefingView(APIView):
                 }
             ).data
         )
+
+
+class SubmissionListView(APIView):
+    """List the requesting participant's own submission history (#3002).
+
+    Correct rows carry the participant's own stored submitted value, so the
+    response is admitted under the current credential and is never cached.
+    """
+
+    permission_classes = CTF_PARTICIPANT_PERMISSIONS
+    required_read_scopes = _PLAY_READ
+
+    @extend_schema(responses={200: SubmissionListResponseSerializer, 503: ApiErrorSerializer})
+    def get(self, request: Request) -> Response:
+        """Return the admitted participant's own submissions, newest first."""
+        try:
+            participant = _require_admitted_participant(request)
+        except _CtfApiError as exc:
+            response = exc.to_response(request)
+        else:
+            rows = projections.participant_submissions(participant)
+            response = Response(SubmissionListResponseSerializer({"submissions": rows, "total": len(rows)}).data)
+        add_never_cache_headers(response)
+        return response
