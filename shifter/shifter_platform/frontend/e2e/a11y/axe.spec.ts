@@ -44,6 +44,8 @@ for (const surface of SURFACES) {
           alert: () => page.getByRole("alert").filter({ hasText: surface.ready }),
           heading: () => page.getByRole("heading", { name: surface.ready, exact: true }),
           text: () => page.getByText(surface.ready, { exact: true }),
+          list: () => page.getByRole("list", { name: surface.ready, exact: true }),
+          table: () => page.getByRole("table", { name: surface.ready, exact: true }),
         };
         const readyLocator = readyLocators[surface.readyKind ?? "heading"]();
         await expect(readyLocator.first()).toBeVisible();

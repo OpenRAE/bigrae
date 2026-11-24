@@ -4,6 +4,7 @@ import {
   adjacentChallenges,
   groupChallenges,
   isSolved,
+  parseLayout,
   parseSort,
   parseView,
   readListView,
@@ -50,6 +51,17 @@ describe("parseView and parseSort", () => {
     expect(parseSort("points-desc")).toBe("points-desc");
     expect(parseSort(null)).toBe("order");
     expect(parseSort("constructor")).toBe("order");
+  });
+});
+
+describe("parseLayout", () => {
+  it("accepts only the closed set and falls back to cards", () => {
+    expect(parseLayout("list")).toBe("list");
+    expect(parseLayout("table")).toBe("table");
+    expect(parseLayout("cards")).toBe("cards");
+    expect(parseLayout(null)).toBe("cards");
+    expect(parseLayout("<script>")).toBe("cards");
+    expect(parseLayout("constructor")).toBe("cards");
   });
 });
 
@@ -166,6 +178,14 @@ describe("readListView", () => {
     expect(view.activeTag).toBe("web");
     expect(view.tagLabels).toEqual(["web"]);
     expect(view.groups.flatMap((group) => ids(group.items))).toEqual(["m1a", "m10", "m2"]);
+  });
+
+  it("reads the layout without changing the shown order", () => {
+    expect(readListView(rows, new URLSearchParams("")).layout).toBe("cards");
+    expect(readListView(rows, new URLSearchParams("layout=table")).layout).toBe("table");
+    expect(readListView(rows, new URLSearchParams("layout=bogus")).layout).toBe("cards");
+    expect(flat("layout=table")).toEqual(flat(""));
+    expect(flat("layout=list")).toEqual(flat(""));
   });
 
   it("ignores a tag or topic that no listed challenge has", () => {

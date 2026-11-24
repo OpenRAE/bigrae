@@ -31,8 +31,11 @@ export interface A11ySurface {
   readonly actor: ActorName;
   /** Text proving the intended surface/state rendered before scanning. */
   readonly ready: string;
-  /** Whether the readiness text is a page heading (default), an alert, or exact loaded-state text. */
-  readonly readyKind?: "heading" | "alert" | "text";
+  /**
+   * Whether the readiness text is a page heading (default), an alert, exact loaded-state
+   * text, or the accessible name of a list or table that only the loaded state renders.
+   */
+  readonly readyKind?: "heading" | "alert" | "text" | "list" | "table";
   /** Source path responsible for remediation. */
   readonly remediation: string;
 }
@@ -90,6 +93,24 @@ export const SURFACES: readonly A11ySurface[] = [
     ready: "E2E Warm-up",
     readyKind: "text",
     remediation: "src/features/ctf/ChallengesPage.tsx",
+  },
+  {
+    // The list and table layouts of the same list (#3012). The named list or table
+    // renders only in the loaded state of the requested layout.
+    id: "ctf-participant-challenges-list-layout",
+    route: "/ctf/challenges?layout=list",
+    actor: "inbox",
+    ready: "Start Here",
+    readyKind: "list",
+    remediation: "src/features/ctf/ChallengeListLayouts.tsx",
+  },
+  {
+    id: "ctf-participant-challenges-table-layout",
+    route: "/ctf/challenges?layout=table",
+    actor: "inbox",
+    ready: "Start Here",
+    readyKind: "table",
+    remediation: "src/features/ctf/ChallengeListLayouts.tsx",
   },
   {
     // The first seeded challenge, by its fixed `seed_e2e_ctf` ID. The next
