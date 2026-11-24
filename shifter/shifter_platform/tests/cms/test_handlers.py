@@ -159,9 +159,10 @@ class TestParseSnsMessage:
 
 
 class TestProcessRangeEventStatusUpdates:
-    def test_updates_range_instance_status(self, user, ctf_signal):
+    def test_updates_range_instance_status(self, user, ctf_signal, django_capture_on_commit_callbacks):
         ri = _range_instance(user, range_id=1, status=ResourceStatus.PENDING.value)
-        process_range_event(_range_event(range_id=1, new_status=ResourceStatus.PROVISIONING.value, user_id=user.id))
+        with django_capture_on_commit_callbacks(execute=True):
+            process_range_event(_range_event(range_id=1, new_status=ResourceStatus.PROVISIONING.value, user_id=user.id))
         ri.refresh_from_db()
         assert ri.status == ResourceStatus.PROVISIONING.value
         # CTF bridge fired once with the real before/after statuses.

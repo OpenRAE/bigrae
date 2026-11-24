@@ -63,6 +63,26 @@ def test_reconciler_pass_also_expires_due_range_leases():
     assert engine_range.status == ResourceStatus.DESTROYING.value
 
 
+def test_reconciler_pass_reports_a_retained_ctf_delivery_backlog(caplog):
+    """A healthy worker with a stuck CTF backlog is visible in the pass summary."""
+    from cms.models import RangeStatusDelivery
+
+    RangeStatusDelivery.objects.create(
+        range_instance_id=12345,
+        new_status=ResourceStatus.READY.value,
+        previous_status=ResourceStatus.PROVISIONING.value,
+        attempts=4,
+        next_attempt_at=timezone.now() + timedelta(minutes=5),
+    )
+
+    with caplog.at_level(logging.INFO, logger="cms.management.commands.reconcile_range_events"):
+        Command()._run_once(stale_seconds=300, batch_size=25)
+
+    summary = next(r for r in caplog.records if "pass complete" in r.getMessage())
+    assert summary.levelno == logging.WARNING
+    assert "ctf_delivered=0 ctf_pending=1 ctf_retrying=1 ctf_oldest_pending_seconds=" in summary.getMessage()
+
+
 # ---------------------------------------------------------------------------
 # Shared helpers
 # ---------------------------------------------------------------------------
@@ -146,7 +166,7 @@ class TestApplyRangeStatus:
         instance.refresh_from_db()
         assert instance.status == ResourceStatus.READY.value
 
-    def test_applies_status_change_and_fires_ctf_signal(self, db):
+    def test_applies_status_change_and_fires_ctf_signal(self, db, django_capture_on_commit_callbacks):
         user = _user()
         cms_req = _cms_request(user)
         instance = _range_instance(user, cms_req, status=ResourceStatus.PROVISIONING.value)
@@ -154,9 +174,14 @@ class TestApplyRangeStatus:
         received, receiver = _ctf_signal_collector()
         range_status_changed.connect(receiver, weak=False)
         try:
-            result = apply_range_status(instance, ResourceStatus.READY.value)
+            with django_capture_on_commit_callbacks(execute=True) as callbacks:
+                result = apply_range_status(instance, ResourceStatus.READY.value)
+                # CTF receivers run only after the CMS status transaction commits.
+                assert received == []
         finally:
             range_status_changed.disconnect(receiver)
+
+        assert len(callbacks) == 1
 
         assert result is True
         instance.refresh_from_db()
@@ -205,7 +230,9 @@ class TestApplyRangeStatus:
             pre_save.disconnect(_fail_if_target, sender=RangeInstance)
 
     @pytest.mark.parametrize("failure", ["raise", "sql"])
-    def test_ctf_receiver_failure_retains_a_retry_and_the_status_write_stands(self, db, caplog, failure):
+    def test_ctf_receiver_failure_retains_a_retry_and_the_status_write_stands(
+        self, db, caplog, failure, django_capture_on_commit_callbacks
+    ):
         """A failing CTF receiver rolls back only its own writes; the CMS status commits."""
         from django.db import connection
 
@@ -223,7 +250,10 @@ class TestApplyRangeStatus:
 
         range_status_changed.connect(_failing_receiver, weak=False)
         try:
-            with caplog.at_level(logging.ERROR, logger="cms.handlers.ctf_bridge"):
+            with (
+                caplog.at_level(logging.ERROR, logger="cms.handlers.ctf_bridge"),
+                django_capture_on_commit_callbacks(execute=True),
+            ):
                 assert apply_range_status(instance, ResourceStatus.READY.value) is True
         finally:
             range_status_changed.disconnect(_failing_receiver)
@@ -294,7 +324,7 @@ class TestApplyRangeStatus:
 
 
 class TestReconcileRangeInstances:
-    def test_stale_lagging_instance_reconciled_to_ready_and_bridges_fired(self, db):
+    def test_stale_lagging_instance_reconciled_to_ready_and_bridges_fired(self, db, django_capture_on_commit_callbacks):
         """Stale PROVISIONING RangeInstance whose engine.Range is READY → updated."""
         user = _user()
         request_id = uuid4()
@@ -306,7 +336,8 @@ class TestReconcileRangeInstances:
         received, receiver = _ctf_signal_collector()
         range_status_changed.connect(receiver, weak=False)
         try:
-            counts = reconcile_range_instances(stale_seconds=0, batch_size=100)
+            with django_capture_on_commit_callbacks(execute=True):
+                counts = reconcile_range_instances(stale_seconds=0, batch_size=100)
         finally:
             range_status_changed.disconnect(receiver)
 
