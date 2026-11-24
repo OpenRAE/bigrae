@@ -74,6 +74,11 @@ A hint can reduce the score for that challenge.
 In team mode, join or create a team before submitting flags.
 The event's team-size limit applies, and the team shares a score.
 Solo events require no team membership.
+
+The challenge list and the challenge page show a challenge that a teammate solved as **Solved by** *name*.
+The name is the current team member who solved it first.
+You can still submit the flag for your individual score.
+
 Brackets provide separate cohort standings when the organizer uses them.
 
 A captain can rename the team, remove members, and transfer captaincy.

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link, useParams } from "react-router";
 
 import { useMutation } from "@tanstack/react-query";
-import { CheckCircle2, Download, Loader2 } from "lucide-react";
+import { Download, Loader2 } from "lucide-react";
 
 import { fetchCtfFileDownload, useCtfChallenge, useRateChallenge, useSubmitFlag, useUseHint } from "@/api/ctf";
 import { ApiError, describeMutationError } from "@/api/errors";
@@ -18,6 +18,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { titleCase } from "./format";
 import { MarkdownContent } from "./MarkdownContent";
+import { SolvedBadge } from "./SolvedBadge";
 import { ctfChallengeDetailPath, ctfChallengesPath } from "./routes";
 
 function ChallengeMeta({ challenge }: Readonly<{ challenge: CtfChallengeDetail }>) {
@@ -27,12 +28,7 @@ function ChallengeMeta({ challenge }: Readonly<{ challenge: CtfChallengeDetail }
       {challenge.difficulty ? <span>{titleCase(challenge.difficulty)}</span> : null}
       <span>· {challenge.points} pts</span>
       {challenge.attempts_remaining === null ? null : <span>· {challenge.attempts_remaining} attempts left</span>}
-      {challenge.solved || challenge.team_solved ? (
-        <Badge variant="secondary" className="gap-1">
-          <CheckCircle2 className="size-3" aria-hidden="true" />
-          {challenge.solved ? "Solved" : "Solved by your team"}
-        </Badge>
-      ) : null}
+      <SolvedBadge challenge={challenge} />
     </div>
   );
 }
@@ -297,19 +293,19 @@ function FlagSubmission({ challenge }: Readonly<{ challenge: CtfChallengeDetail 
 
   return (
     <>
-      {challenge.team_solved ? <TeamSolvedNotice /> : null}
+      {challenge.team_solved ? <TeamSolvedNotice solver={challenge.team_solved_by} /> : null}
       <FlagForm flag={flag} setFlag={setFlag} submit={submit} disabled={disabled} />
     </>
   );
 }
 
-function TeamSolvedNotice() {
+function TeamSolvedNotice({ solver }: Readonly<{ solver?: string | null }>) {
   return (
     <Alert className="mt-6">
-      <AlertTitle>Solved by your team</AlertTitle>
+      <AlertTitle>{solver ? `Solved by ${solver}` : "Solved by your team"}</AlertTitle>
       <AlertDescription>
-        A teammate captured this flag, and your team has the points. You can still submit it for your individual
-        score.
+        {solver ? `${solver}, a member of your team,` : "A member of your team"} captured this flag. You can still
+        submit it for your individual score.
       </AlertDescription>
     </Alert>
   );

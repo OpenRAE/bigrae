@@ -91,3 +91,11 @@ def test_organizer_detail_retains_flag_format_and_solution(openapi_document: dic
     """
     props = _component_properties(openapi_document, "OrganizerChallengeDetail")
     assert {"flag_format", "solution"} <= props
+
+
+@pytest.mark.parametrize("name", ["ParticipantChallengeListItem", "ParticipantChallengeDetail"])
+def test_team_solved_by_is_an_optional_nullable_addition(openapi_document: dict, name: str) -> None:
+    """``team_solved_by`` is an optional, nullable v1 response addition (ADR-040-R3, #2997)."""
+    schema = openapi_document["components"]["schemas"][name]
+    assert schema["properties"]["team_solved_by"]["nullable"] is True
+    assert "team_solved_by" not in schema.get("required", [])

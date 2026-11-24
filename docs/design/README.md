@@ -14,6 +14,7 @@ An approved design does not establish production activation or live qualificatio
 | Communications | [Console boundaries](ctf-communications-console-boundaries-2052.md) and [participant inbox](ctf-participant-inbox-boundaries-2053.md) specialize the communication design |
 | Email | [Ledger templates](ctf-ledger-email-template-boundaries-580.md) and [recipient time zones](ctf-recipient-time-zone-582.md) record accepted design constraints |
 | Scoreboards | [Refresh design](ctf-scoreboard-refresh-576.md) explains the 30-second update boundary; [dual-scoreboard design](ctf-dual-scoreboards-2968.md) adds the individual and team boards; its [preflight](ctf-dual-scoreboards-preflight-2968.md) records selection and access boundaries |
+| Team solve attribution | [Solver name design](ctf-team-solver-name-2997.md) shows the teammate who solved a challenge first; its [preflight](ctf-team-solve-attribution-preflight-2997.md) records identity, projection, and refresh boundaries |
 | Visual examples | [Design-system artifacts](design-system/README.md) describe the HTML/CSS reference examples and their limits |
 | UX research | [Research personas](ux-003-oss-shifter-research-personas.md) and [information architecture](ux-003-information-architecture-sitemap.md) retain their dated research context |
 

@@ -1,18 +1,16 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 
-import { CheckCircle2 } from "lucide-react";
-
 import { useCtfChallenges } from "@/api/ctf";
 import type { CtfChallengeListItem } from "@/api/types";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { titleCase } from "./format";
 import { LabelFilterRow, distinctLabels, filterByLabels } from "./label-filters";
+import { SolvedBadge } from "./SolvedBadge";
 import { ctfChallengeDetailPath } from "./routes";
 
 const UNCATEGORIZED = "Uncategorized";
@@ -59,12 +57,7 @@ function ChallengeCard({ challenge }: Readonly<{ challenge: CtfChallengeListItem
     >
       <div className="flex items-start justify-between gap-2">
         <span className="font-medium">{challenge.name}</span>
-        {challenge.solved || challenge.team_solved ? (
-          <Badge variant="secondary" className="gap-1">
-            <CheckCircle2 className="size-3" aria-hidden="true" />
-            {challenge.solved ? "Solved" : "Solved by your team"}
-          </Badge>
-        ) : null}
+        <SolvedBadge challenge={challenge} />
       </div>
       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         <span>{challenge.points} pts</span>

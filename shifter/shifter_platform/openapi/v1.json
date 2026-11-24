@@ -29498,6 +29498,11 @@
             "readOnly": true,
             "description": "True when any member of the participant's team has solved it (team mode)."
           },
+          "team_solved_by": {
+            "type": "string",
+            "nullable": true,
+            "description": "Display name of the team member who solved it first (team mode); null when unsolved by the team."
+          },
           "attempt_count": {
             "type": "integer",
             "readOnly": true
@@ -29692,6 +29697,11 @@
             "type": "boolean",
             "readOnly": true,
             "description": "True when any member of the participant's team has solved it (team mode)."
+          },
+          "team_solved_by": {
+            "type": "string",
+            "nullable": true,
+            "description": "Display name of the team member who solved it first (team mode); null when unsolved by the team."
           },
           "tags": {
             "type": "array",

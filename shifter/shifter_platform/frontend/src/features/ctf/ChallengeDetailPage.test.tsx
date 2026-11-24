@@ -26,6 +26,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     attempt_limit_mode: "unlimited",
     solved: false,
     team_solved: false,
+    team_solved_by: null,
     locked: false,
     attempt_count: 0,
     attempts_remaining: null,
@@ -77,11 +78,20 @@ describe("ChallengeDetailPage", () => {
     expect(screen.getByLabelText("Submit flag")).toBeInTheDocument();
   });
 
-  it("shows a team solve notice and keeps the flag form for an individual submit", async () => {
+  it("shows the teammate who solved it and keeps the flag form for an individual submit", async () => {
+    mockApi.mockResolvedValue(detail({ team_solved: true, team_solved_by: "Alex Rivera" }));
+    renderRoute(<ChallengeDetailPage />, ROUTE);
+    expect(await screen.findByRole("heading", { name: "SQL Injection" })).toBeInTheDocument();
+    expect(screen.getAllByText("Solved by Alex Rivera")).toHaveLength(2);
+    expect(screen.getByText(/Alex Rivera, a member of your team, captured this flag/)).toBeInTheDocument();
+    expect(screen.getByLabelText("Submit flag")).toBeInTheDocument();
+  });
+
+  it("falls back to solved by your team when the solver name is absent", async () => {
     mockApi.mockResolvedValue(detail({ team_solved: true }));
     renderRoute(<ChallengeDetailPage />, ROUTE);
     expect(await screen.findByRole("heading", { name: "SQL Injection" })).toBeInTheDocument();
-    expect(screen.getAllByText("Solved by your team").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Solved by your team")).toHaveLength(2);
     expect(screen.getByLabelText("Submit flag")).toBeInTheDocument();
   });
 
