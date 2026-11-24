@@ -302,7 +302,10 @@ The URL query parameters `view`, `sort`, `layout`, `tag`, and `topic` hold the l
 The `layout` parameter shows each group as cards, a list, or a table; it does not change the rows or their order.
 Unknown `view`, `sort`, and `layout` values give the defaults; unknown labels are ignored.
 The list API keeps its release, visibility, and prerequisite rules.
-Team membership changes refresh the list, because they can change `team_solved`.
+
+In team mode, the list and detail responses give `team_solved_by`: the display name of the current team member with the earliest correct submission.
+The field is optional, and its value is `null` when the team has not solved the challenge.
+Team membership and profile changes refresh the list and each challenge page, because they can change `team_solved` and `team_solved_by`.
 
 The challenge page **Previous** and **Next** buttons use the same rows and query parameters.
 They open the adjacent challenge in the shown list order and keep the query parameters.
@@ -347,6 +350,19 @@ within 30 seconds (CTF-401). A frozen participant board withholds later solves
 by design. The ADR-072 `position_changed` hint is optional and only accelerates
 the refresh. See the
 [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-scoreboard-refresh-576.md).
+
+### Scoreboard graphs
+
+The public and organizer scoreboard responses include `progression`.
+It holds a score-over-time series for the first `PROGRESSION_LIMIT` (8) rows of the returned board.
+`get_score_progression` in `ctf/services/scoring/_progression.py` builds it.
+It uses the board's freeze cutoff, bracket filter, ranking eligibility, and team challenge deduplication.
+
+Each point holds only a time and a cumulative score (ADR-028-R3).
+A hidden public board returns `null`.
+The SPA draws the series as an SVG step graph above each scoreboard table.
+See the
+[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-leaderboard-graphs-3004.md).
 
 ## Scheduled Work
 

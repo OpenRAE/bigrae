@@ -29,6 +29,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 
 import { formatDateTime, rankingKey, rankingNumber, rankingString, titleCase } from "../format";
+import { ScoreboardGraph, ScoreProgressionChart } from "../ScoreProgressionChart";
 import { EventAnalyticsCard } from "./EventAnalyticsCard";
 import { EventTasksCard } from "./EventTasksCard";
 import { OrganizerAlertsCard } from "./OrganizerAlertsCard";
@@ -68,6 +69,7 @@ function ScoreboardTab({ eventId }: Readonly<{ eventId: string }>) {
   return (
     <>
       {data.frozen ? <Badge variant="secondary" className="mb-3">Frozen</Badge> : null}
+      <ScoreboardGraph progression={data.progression} teamMode={teamMode} frozen={false} />
       <Card className="overflow-hidden py-0">
         <Table>
           <TableHeader>
@@ -369,35 +371,49 @@ function renderAnalyticsBody(
   if (rows.length === 0) {
     return <p className="text-sm text-muted-foreground">No scoring activity yet for this participant.</p>;
   }
+  const points = rows.map((row) => ({ at: rankingString(row, "timestamp"), score: rankingNumber(row, "cumulative") ?? Number.NaN }));
   return (
-    <Card className="overflow-hidden py-0">
-      <Table>
-        <TableHeader>
-          <TableRow className="hover:bg-transparent">
-            <TableHead>When</TableHead>
-            <TableHead>Challenge</TableHead>
-            <TableHead className="w-[100px] text-right">Points</TableHead>
-            <TableHead className="w-[120px] text-right">Total</TableHead>
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {rows.map((row, index) => (
-            <TableRow key={rankingKey(row, index)}>
-              <TableCell className="text-sm text-muted-foreground">
-                {formatDateTime(rankingString(row, "timestamp") || rankingString(row, "solved_at"))}
-              </TableCell>
-              <TableCell>{rankingString(row, "challenge_name") || "—"}</TableCell>
-              <TableCell className="text-right font-mono text-sm tabular-nums">
-                {rankingNumber(row, "points") ?? 0}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm tabular-nums">
-                {rankingNumber(row, "cumulative_score") ?? rankingNumber(row, "total_score") ?? 0}
-              </TableCell>
+    <>
+      <Card>
+        <CardContent>
+          <ScoreProgressionChart
+            startsAt={points[0].at}
+            endsAt={points.at(-1)?.at ?? points[0].at}
+            series={[{ id: participantId, name: timeline.data?.participant_name ?? "", points }]}
+            title="Score over time"
+            description="Cumulative score of the selected participant. The table lists each score change."
+          />
+        </CardContent>
+      </Card>
+      <Card className="overflow-hidden py-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>When</TableHead>
+              <TableHead>Event</TableHead>
+              <TableHead className="w-[100px] text-right">Points</TableHead>
+              <TableHead className="w-[120px] text-right">Total</TableHead>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </Card>
+          </TableHeader>
+          <TableBody>
+            {rows.map((row, index) => (
+              <TableRow key={rankingKey(row, index)}>
+                <TableCell className="text-sm text-muted-foreground">
+                  {formatDateTime(rankingString(row, "timestamp"))}
+                </TableCell>
+                <TableCell>{rankingString(row, "label") || "—"}</TableCell>
+                <TableCell className="text-right font-mono text-sm tabular-nums">
+                  {rankingNumber(row, "points") ?? "—"}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm tabular-nums">
+                  {rankingNumber(row, "cumulative") ?? "—"}
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </Card>
+    </>
   );
 }
 

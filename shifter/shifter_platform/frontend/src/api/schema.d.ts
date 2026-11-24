@@ -6616,6 +6616,7 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
             readonly brackets: components["schemas"]["_NamedRef"][];
+            readonly progression: components["schemas"]["ScoreProgression"];
         };
         /**
          * @description * `kali` - kali
@@ -6798,6 +6799,8 @@ export interface components {
             readonly solved: boolean;
             /** @description True when any member of the participant's team has solved it (team mode). */
             readonly team_solved: boolean;
+            /** @description Display name of the team member who solved it first (team mode); null when unsolved by the team. */
+            team_solved_by?: string | null;
             readonly attempt_count: number;
             readonly attempts_remaining: number | null;
             readonly timeout_retry_after: number | null;
@@ -6841,6 +6844,8 @@ export interface components {
             readonly solved: boolean;
             /** @description True when any member of the participant's team has solved it (team mode). */
             readonly team_solved: boolean;
+            /** @description Display name of the team member who solved it first (team mode); null when unsolved by the team. */
+            team_solved_by?: string | null;
             readonly tags: string[];
             readonly topics: string[];
         };
@@ -7375,6 +7380,7 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
             readonly brackets: components["schemas"]["_NamedRef"][];
+            readonly progression: components["schemas"]["ScoreProgression"] | null;
         };
         /**
          * @description * `pending` - pending
@@ -8126,6 +8132,14 @@ export interface components {
             target_uuid: string;
             idempotency_key: string;
         };
+        /** @description Score-over-time series for the leading rows of the selected board (ADR-028-R3). */
+        ScoreProgression: {
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string;
+            readonly series: components["schemas"]["_ScoreSeries"][];
+        };
         /** @description Per-participant chronological score progression for a step chart. */
         ScoreTimelineResponse: {
             readonly participant_id: string;
@@ -8452,6 +8466,19 @@ export interface components {
         _ProfileEventRef: {
             readonly id: string;
             readonly name: string;
+        };
+        /** @description One step of a score progression: a time and the cumulative score. */
+        _ScorePoint: {
+            /** Format: date-time */
+            readonly at: string;
+            readonly score: number;
+        };
+        /** @description One leading competitor's score progression (#3004). */
+        _ScoreSeries: {
+            readonly id: string;
+            readonly name: string;
+            readonly rank: number;
+            readonly points: components["schemas"]["_ScorePoint"][];
         };
     };
     responses: never;
