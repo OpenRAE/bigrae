@@ -496,6 +496,11 @@ Cross-domain access uses public service facades and validated scalar identifiers
 not another app's model or a private split-package module. Concrete per-symbol
 allowlists remain authoritative when a table entry is broader.
 
+`engine.services` keeps its implementation in private responsibility packages,
+for example `engine.services._range` and `engine.services._vpn`.
+Each package initializer re-exports only the names that the facade uses.
+The leading underscore keeps these packages inside the private-module rule.
+
 The identity-cutover command composes the tenancy-owned hierarchy verifier
 directly through `workspaces.services.verify_identity_cutover_hierarchy`.
 The same sanctioned facade supplies the typed `IdentityCutoverStateView` for

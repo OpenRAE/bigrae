@@ -31,7 +31,7 @@ def ready_worker(apparatus, monkeypatch):
     Range.objects.update(status="ready", provisioner_operation="raes-range:provision", provisioner_operation_id=uuid4())
     qualified = {"current": True}
     monkeypatch.setattr(
-        "engine.services._worker_qualification.has_current_qualification", lambda _worker: qualified["current"]
+        "engine.services._worker.qualification.has_current_qualification", lambda _worker: qualified["current"]
     )
     return SimpleNamespace(apparatus=apparatus, worker_id=worker.worker_id, qualified=qualified)
 
@@ -58,7 +58,7 @@ def current_intent(trial_id):
 def test_start_persists_one_trial_and_its_run_operation_before_launch(ready_worker):
     from engine.launch_intents import command_from_payload, validate_provisioner_command
     from engine.models import OperationInput, ProvisionerLaunchIntent, WorkerTrial
-    from engine.services._worker_trials import validate_worker_trial_operation
+    from engine.services._worker.trials import validate_worker_trial_operation
 
     ready_worker.qualified["current"] = False
     with pytest.raises(ValueError, match="qualification"):
@@ -89,7 +89,7 @@ def test_start_persists_one_trial_and_its_run_operation_before_launch(ready_work
 def test_stop_interrupts_run_and_the_interrupt_launches_collect_only(ready_worker):
     from engine.models import InterruptState, OperationInput
     from engine.services import collect_worker_trial
-    from engine.services._worker_trials import enqueue_interrupted_worker_trial
+    from engine.services._worker.trials import enqueue_interrupted_worker_trial
 
     view = start(ready_worker)
     _trial, run = current_intent(view.trial_id)
@@ -108,7 +108,7 @@ def test_stop_interrupts_run_and_the_interrupt_launches_collect_only(ready_worke
 def test_receipts_apply_only_to_the_current_operation_and_failure_allows_collection(ready_worker):
     from engine.models import OperationResultDisposition, OperationResultInbox, WorkerTrial
     from engine.services import collect_worker_trial
-    from engine.services._worker_trials import apply_worker_trial_result
+    from engine.services._worker.trials import apply_worker_trial_result
 
     view = start(ready_worker)
     trial, run = current_intent(view.trial_id)

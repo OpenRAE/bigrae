@@ -6,7 +6,7 @@ mix is classified against the persisted range-backend binding.
 
 import pytest
 
-import engine.services._range as range_service
+import engine.services._range.compatibility as range_service
 
 
 def _patch_status(monkeypatch, instances, backend):

@@ -42,7 +42,7 @@ def test_unrecorded_callback_cannot_mutate_principal_cms_projection(principal_ra
 def test_native_recorded_status_mirrors_accepted_state_and_remains_idempotent(principal_range):
     from cms.handlers.range_events import process_range_event
     from engine.models import RangeEventOutbox
-    from engine.services._operation_apply_effects import _enqueue_range_status_event
+    from engine.services._operation_apply.effects import _enqueue_range_status_event
 
     fixture = principal_range
     fixture.realized.status = "failed"
@@ -62,7 +62,7 @@ def test_native_recorded_status_mirrors_accepted_state_and_remains_idempotent(pr
 def test_stale_or_rewritten_callback_cannot_project_principal_state(principal_range, change):
     from cms.handlers.range_events import process_range_event
     from engine.models import RangeEventOutbox
-    from engine.services._operation_apply_effects import _enqueue_range_status_event
+    from engine.services._operation_apply.effects import _enqueue_range_status_event
 
     fixture = principal_range
     fixture.realized.status = "failed"

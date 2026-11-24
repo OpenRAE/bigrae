@@ -33,6 +33,8 @@ Read the [decision guide](../adr/README.md), source code, and current handbook t
 
 ## Find implementation history
 
+The [Engine service package design](engine-service-packages-preflight-2863.md) records the package boundaries for issue #2863.
+
 Use the issue number or subject to locate a record without treating it as
 installation guidance:
 

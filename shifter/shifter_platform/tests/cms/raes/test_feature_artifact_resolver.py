@@ -11,7 +11,7 @@ from django.utils import timezone
 
 from cms.raes.feature_artifacts import feature_artifact_resolver
 from engine.models import AcquiredFeatureArtifact
-from engine.services._feature_artifacts import StorageTarget
+from engine.services._feature_artifacts.acquisition import StorageTarget
 from shared.raes.content_delivery import ContentDeliveryError
 
 SHA = hashlib.sha256(b"claude").hexdigest()

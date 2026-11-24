@@ -152,7 +152,7 @@ def _dispatch_lifecycle_ecs(
 def pause_range(request_id: UUID, *, credential: CredentialContext | None = None) -> bool:
     """Pause all instances in a range. Idempotent."""
     if credential is not None:
-        from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
+        from ._principal.lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
 
         return commit_prepared_range_lifecycle(prepare_range_lifecycle(credential, request_id, "pause"))
     return _run_range_lifecycle_op(
@@ -170,7 +170,7 @@ def resume_range(
 ) -> bool:
     """Resume all instances in a range. Idempotent."""
     if credential is not None:
-        from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
+        from ._principal.lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
 
         if defer_dispatch:
             raise ValueError("Principal lifecycle requires an atomic launch intent")

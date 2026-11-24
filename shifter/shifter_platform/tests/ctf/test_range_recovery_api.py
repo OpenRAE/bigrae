@@ -95,7 +95,7 @@ def event_with_spare_scenario(ctf_event: CTFEvent, organizer_user, monkeypatch, 
     from cms.raes.dispatch import CmsRaesDispatchPort
     from workspaces.services import resource_scope_from_ids
 
-    monkeypatch.setattr("engine.services._raes_range.start_raes_range_provisioning", lambda *_a, **_kw: None)
+    monkeypatch.setattr("engine.services._raes.range.start_raes_range_provisioning", lambda *_a, **_kw: None)
     settings.ENGINE_TASK_CLUSTER = "synthetic-namespace"
     settings.ENGINE_TASK_DEFINITION = "example.test/synthetic@sha256:" + "1" * 64
 

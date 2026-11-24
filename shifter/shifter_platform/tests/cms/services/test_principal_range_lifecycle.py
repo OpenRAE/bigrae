@@ -628,7 +628,7 @@ def test_failed_cleanup_retry_reserves_one_fresh_attempt_with_the_original_autho
 
     from cms.services import destroy_range
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._principal_lifecycle import (
+    from engine.services._principal.lifecycle import (
         _commit_destroy,
         commit_prepared_range_lifecycle,
         prepare_system_range_cleanup,
@@ -688,7 +688,7 @@ def test_launcher_observes_current_cleanup_once_per_minute_and_retries_only_fail
     from cms.services import destroy_range
     from engine.models import ProvisionerLaunchIntent
     from engine.services._failed_cleanup_task import retry_due_failed_cleanup_tasks
-    from engine.services._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+    from engine.services._principal.lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
 
     fixture = lifecycle_range
     destroy_range(fixture.credential, fixture.instance.pk)

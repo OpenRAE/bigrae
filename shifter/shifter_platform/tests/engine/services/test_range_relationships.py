@@ -10,7 +10,7 @@ from django.db import connection
 
 from engine.models import Range
 from engine.services import publish_range_relationships
-from engine.services._range_authority_history import record_range_authority_change
+from engine.services._range.authority_history import record_range_authority_change
 from shared.authorization import HierarchyRelationshipChange, RelationshipState, port
 from tests.cms.services.test_principal_range_authority import principal_range
 

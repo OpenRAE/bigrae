@@ -231,6 +231,9 @@ Live qualification requires the approved GCP operating procedure and an approved
 The updated composition allowance permits the worker ancestry resolver.
 The layer-import checker enforces this model.
 
+The private `engine.services._worker` package implements worker admission, trials, qualification and retirement.
+The `engine.services` facade is the only entry point for other layers.
+
 No new application, provider, public listener, or deployment environment is added.
 Existing range containment and Job policies continue to apply.
 The capacity and native hold fences extend their existing owning services.

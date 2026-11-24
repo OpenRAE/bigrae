@@ -176,17 +176,17 @@ def test_staff_user_without_native_session_proof_cannot_author_content(django_us
 
 def test_image_registry_revocation_after_policy_prevents_write(content_http_actor, monkeypatch):
     from engine.models import RaesImageMapping
-    from engine.services import _principal_image_registry
+    from engine.services._principal import image_registry
     from management.models import Principal
 
-    original = _principal_image_registry.authorize_image_registry
+    original = image_registry.authorize_image_registry
 
     def admit_then_revoke(*args, **kwargs):
         current = original(*args, **kwargs)
         Principal.objects.filter(uuid=current.principal.uuid).update(is_active=False)
         return current
 
-    monkeypatch.setattr(_principal_image_registry, "authorize_image_registry", admit_then_revoke)
+    monkeypatch.setattr(image_registry, "authorize_image_registry", admit_then_revoke)
     response = content_http_actor.client.post("/api/v1/cms/raes-image-mappings/", _image(), format="json")
     assert response.status_code == 403, response.data
     assert not RaesImageMapping.objects.exists()
