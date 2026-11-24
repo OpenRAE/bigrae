@@ -71,6 +71,8 @@ The public and organizer scoreboard responses add one field:
 ### Graph
 
 - The graph is SVG with class-based colors and presentation attributes. It has no style attributes, so ADR-036 CSP needs no change.
+- Axis labels are HTML text beside the SVG, so axe can check their contrast and they keep their size on narrow screens.
+- The plot has a fixed height and stretches to the card width. Strokes do not scale, so lines and markers keep their size.
 - Each series has a fixed hue slot by row position. The eight hues pass the colour-vision check and have 3:1 contrast on the light and dark cards.
 - The graph draws a zero gridline, so negative scores show below it.
 - The graph skips a point with an invalid time or a non-finite score. It does not plot it as zero.

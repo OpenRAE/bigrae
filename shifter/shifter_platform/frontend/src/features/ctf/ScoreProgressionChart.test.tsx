@@ -20,7 +20,21 @@ function chart(series: ScoreSeries[], endsAt = END) {
 }
 
 function linePaths(container: HTMLElement): string[] {
-  return Array.from(container.querySelectorAll("path")).map((path) => path.getAttribute("d") ?? "");
+  return Array.from(container.querySelectorAll("path:not([data-marker])")).map((path) => path.getAttribute("d") ?? "");
+}
+
+/** Marker centers in SVG user units, parsed from each `M x,y h0` marker stroke. */
+function markers(container: HTMLElement): Array<{ x: number; y: number }> {
+  return Array.from(container.querySelectorAll("path[data-marker]")).map((path) => {
+    const [, x, y] = /^M([\d.-]+),([\d.-]+)h0$/.exec(path.getAttribute("d") ?? "") ?? [];
+    return { x: Number(x), y: Number(y) };
+  });
+}
+
+function scoreLabels(container: HTMLElement): number[] {
+  return Array.from(container.querySelectorAll('[data-axis="score"] span span')).map((label) =>
+    Number(label.textContent?.replaceAll(",", "")),
+  );
 }
 
 describe("ScoreProgressionChart", () => {
@@ -33,10 +47,15 @@ describe("ScoreProgressionChart", () => {
     const paths = linePaths(container);
     expect(paths).toHaveLength(2);
     // Alpha: flat at zero to the 12:00 midpoint, up to 300 (the top tick), flat to the right edge.
-    expect(paths[0]).toBe("M52,232H378V12H704");
-    expect(paths[1]).toMatch(/^M52,232H541V\d+(\.\d+)?H704$/);
+    expect(paths[0]).toBe("M0,220H360V0H720");
+    expect(paths[1]).toMatch(/^M0,220H540V\d+(\.\d+)?H720$/);
     expect(screen.getByRole("img", { name: "Score over time" })).toBeInTheDocument();
     expect(screen.getByRole("list", { name: "Graph legend" })).toHaveTextContent("1. Alpha2. Bravo");
+    // Axis labels are HTML text outside the SVG: axe cannot check contrast of
+    // SVG text inside an image, and SVG text would shrink with the plot.
+    expect(container.querySelectorAll("svg text")).toHaveLength(0);
+    expect(scoreLabels(container)).toEqual([0, 100, 200, 300]);
+    expect(container.querySelectorAll('[data-axis="time"] span span')).toHaveLength(5);
   });
 
   it("keeps a negative score below a visible zero baseline", () => {
@@ -44,9 +63,9 @@ describe("ScoreProgressionChart", () => {
       { id: "a", name: "Alpha", rank: 1, points: [{ at: START, score: 0 }, { at: "2026-11-21T11:00:00Z", score: -40 }] },
     ]);
 
-    const zeroLabel = Array.from(container.querySelectorAll("text")).find((text) => text.textContent === "0");
-    const zeroY = Number(zeroLabel?.getAttribute("y"));
-    const lastY = Number(/V([\d.]+)H704$/.exec(linePaths(container)[0])?.[1]);
+    const zeroY = Number(container.querySelector("line.stroke-muted-foreground")?.getAttribute("y1"));
+    const lastY = Number(/V([\d.]+)H720$/.exec(linePaths(container)[0])?.[1]);
+    expect(scoreLabels(container)).toContain(0);
     expect(lastY).toBeGreaterThan(zeroY);
   });
 
@@ -57,14 +76,12 @@ describe("ScoreProgressionChart", () => {
     const points = scores.map((score, index) => ({ at: new Date(Date.parse(START) + index * 3_600_000).toISOString(), score }));
     const { container } = chart([{ id: "a", name: "Alpha", rank: 1, points }]);
 
-    const ys = Array.from(container.querySelectorAll("circle")).map((circle) => Number(circle.getAttribute("cy")));
-    const ticks = Array.from(container.querySelectorAll("text"))
-      .map((text) => Number(text.textContent?.replaceAll(",", "")))
-      .filter(Number.isFinite);
+    const ys = markers(container).map((marker) => marker.y);
+    const ticks = scoreLabels(container);
     expect(ys.length).toBe(scores.length - 1);
     for (const y of ys) {
-      expect(y).toBeGreaterThanOrEqual(12);
-      expect(y).toBeLessThanOrEqual(232);
+      expect(y).toBeGreaterThanOrEqual(0);
+      expect(y).toBeLessThanOrEqual(220);
     }
     expect(Math.max(...ticks)).toBeGreaterThanOrEqual(Math.max(...scores));
     expect(Math.min(...ticks)).toBeLessThanOrEqual(Math.min(...scores));
@@ -75,7 +92,7 @@ describe("ScoreProgressionChart", () => {
       { id: "a", name: "Alpha", rank: 1, points: [{ at: START, score: 0 }, { at: "2026-11-21T12:00:00Z", score: 300 }] },
     ]);
 
-    const titles = Array.from(container.querySelectorAll("circle title")).map((title) => title.textContent);
+    const titles = Array.from(container.querySelectorAll("path[data-marker] title")).map((title) => title.textContent);
     expect(titles).toHaveLength(1);
     expect(titles[0]).toMatch(/^Alpha: 300 at /);
   });
@@ -94,8 +111,8 @@ describe("ScoreProgressionChart", () => {
       },
     ]);
 
-    expect(linePaths(container)).toEqual(["M52,232H704"]);
-    expect(container.querySelectorAll("circle")).toHaveLength(0);
+    expect(linePaths(container)).toEqual(["M0,220H720"]);
+    expect(markers(container)).toHaveLength(0);
   });
 
   it("renders nothing for an empty time range", () => {
