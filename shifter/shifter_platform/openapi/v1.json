@@ -18016,7 +18016,7 @@
     "/api/v1/ctf/submissions/": {
       "get": {
         "operationId": "ctf_submissions_retrieve",
-        "description": "Return the active participant's own submission history.",
+        "description": "Return the admitted participant's own submissions, newest first.",
         "tags": [
           "ctf"
         ],
@@ -18034,6 +18034,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SubmissionListResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             },
@@ -33917,6 +33927,12 @@
             "format": "date-time",
             "readOnly": true,
             "nullable": true
+          },
+          "submitted_flag": {
+            "type": "string",
+            "readOnly": true,
+            "nullable": true,
+            "description": "The participant's own stored value for a correct submission; null for an incorrect one"
           }
         },
         "required": [
@@ -33926,7 +33942,8 @@
           "id",
           "is_correct",
           "points_awarded",
-          "submitted_at"
+          "submitted_at",
+          "submitted_flag"
         ]
       },
       "SubmissionListResponse": {

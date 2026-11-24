@@ -444,3 +444,176 @@ class TestParticipantChallengeDetail:
         )
 
         assert response.status_code == 403
+
+
+def _submit(
+    participant, challenge, flag: str, *, correct: bool, attempt: int = 1, points: int | None = None
+) -> CTFSubmission:
+    return CTFSubmission.objects.create(
+        participant=participant,
+        challenge=challenge,
+        submitted_flag=flag,
+        is_correct=correct,
+        points_awarded=(challenge.points if correct else 0) if points is None else points,
+        attempt_number=attempt,
+        ip_address="192.168.1.1",
+    )
+
+
+class TestParticipantSubmissionHistory:
+    """``GET /api/v1/ctf/submissions/`` discloses only the viewer's own correct flag values (#3002)."""
+
+    def test_returns_own_correct_flags_with_their_challenges(
+        self, authenticated_participant_client, ctf_participant, participant_user, ctf_event, ctf_challenge
+    ):
+        """Each correct row carries its stored value and challenge; incorrect rows carry no value."""
+        _activate(participant_user, ctf_event)
+        second = CTFChallenge.objects.create(
+            event=ctf_event,
+            name="Second Challenge",
+            description="another",
+            category=ChallengeCategory.WEB.value,
+            points=50,
+            difficulty=ChallengeDifficulty.EASY.value,
+        )
+        _submit(ctf_participant, ctf_challenge, "FLAG{wrong-guess}", correct=False)
+        _submit(ctf_participant, ctf_challenge, "flag{First}", correct=True, attempt=2)
+        _submit(ctf_participant, second, "<b>zero-point</b>", correct=True, points=0)
+        # The authored answer must not leak in place of the stored submitted value.
+        ctf_challenge.flags.create(value="authored-answer", flag_type="static")
+
+        response = call_json(authenticated_participant_client, "get", "api_submissions")
+
+        assert response.status_code == 200
+        assert "no-store" in response["Cache-Control"]
+        rows = response.json()["submissions"]
+        correct = {row["challenge_id"]: row for row in rows if row["is_correct"]}
+        assert correct[str(ctf_challenge.id)]["submitted_flag"] == "flag{First}"
+        assert correct[str(ctf_challenge.id)]["challenge_name"] == ctf_challenge.name
+        assert correct[str(second.id)]["submitted_flag"] == "<b>zero-point</b>"
+        assert correct[str(second.id)]["challenge_name"] == "Second Challenge"
+        assert [row["submitted_flag"] for row in rows if not row["is_correct"]] == [None]
+        assert b"wrong-guess" not in response.content
+        assert b"authored-answer" not in response.content
+
+    def test_excludes_teammate_and_deleted_values_and_keeps_receipt_marker(
+        self, authenticated_participant_client, ctf_participant_team, participant_user, ctf_event_team, ctf_team
+    ):
+        """A teammate's value and a soft-deleted solve never show; a receipt marker stays redacted."""
+        _activate(participant_user, ctf_event_team)
+        challenges = [
+            CTFChallenge.objects.create(
+                event=ctf_event_team,
+                name=f"Team Challenge {index}",
+                description="solve it",
+                category=ChallengeCategory.WEB.value,
+                points=100,
+                difficulty=ChallengeDifficulty.EASY.value,
+            )
+            for index in range(3)
+        ]
+        teammate = CTFParticipant.objects.create(
+            event=ctf_event_team,
+            email="teammate@test.com",
+            name="Teammate",
+            team=ctf_team,
+            status=ParticipantStatus.ACTIVE.value,
+            registered_at=timezone.now(),
+        )
+        _submit(teammate, challenges[0], "FLAG{teammate-secret}", correct=True)
+        _submit(ctf_participant_team, challenges[1], "FLAG{removed}", correct=True).delete()
+        _submit(ctf_participant_team, challenges[2], "[signed receipt redacted]", correct=True)
+
+        response = call_json(authenticated_participant_client, "get", "api_submissions")
+
+        assert response.status_code == 200
+        assert response.json()["submissions"] == [
+            {
+                "id": response.json()["submissions"][0]["id"],
+                "challenge_id": str(challenges[2].id),
+                "challenge_name": "Team Challenge 2",
+                "is_correct": True,
+                "points_awarded": 100,
+                "attempt_number": 1,
+                "submitted_at": response.json()["submissions"][0]["submitted_at"],
+                "submitted_flag": "[signed receipt redacted]",
+            }
+        ]
+        assert b"teammate-secret" not in response.content
+        assert b"removed" not in response.content
+
+    def test_live_policy_denial_and_outage_return_no_values(
+        self, authenticated_participant_client, ctf_participant, participant_user, ctf_event, ctf_challenge, monkeypatch
+    ):
+        """Credential admission rechecks live event policy and fails closed on an outage."""
+        from shared.authorization import AuthorizationDecision, DecisionKind, configured_authorization_provider
+
+        _activate(participant_user, ctf_event)
+        _submit(ctf_participant, ctf_challenge, "FLAG{private}", correct=True)
+        provider = configured_authorization_provider()
+
+        monkeypatch.setattr(
+            provider, "check", lambda request: AuthorizationDecision(DecisionKind.DENIED, "policy_denied")
+        )
+        denied = call_json(authenticated_participant_client, "get", "api_submissions")
+        monkeypatch.setattr(
+            provider, "check", lambda request: AuthorizationDecision(DecisionKind.EVALUATOR_ERROR, "unavailable")
+        )
+        outage = call_json(authenticated_participant_client, "get", "api_submissions")
+
+        assert denied.status_code == 404
+        assert outage.status_code == 503
+        assert b"private" not in denied.content + outage.content
+        assert "no-store" in denied["Cache-Control"]
+        assert "no-store" in outage["Cache-Control"]
+
+    def test_deleted_challenge_discloses_no_value(
+        self, authenticated_participant_client, ctf_participant, participant_user, ctf_event, ctf_challenge
+    ):
+        """A live correct submission on a soft-deleted challenge keeps its metadata but no value."""
+        _activate(participant_user, ctf_event)
+        _submit(ctf_participant, ctf_challenge, "FLAG{retired}", correct=True)
+        ctf_challenge.delete()
+
+        response = call_json(authenticated_participant_client, "get", "api_submissions")
+
+        assert response.status_code == 200
+        [row] = response.json()["submissions"]
+        assert row["challenge_id"] == str(ctf_challenge.id)
+        assert row["is_correct"] is True
+        assert row["submitted_flag"] is None
+        assert b"retired" not in response.content
+
+    def test_credential_outage_returns_503_not_404(
+        self, authenticated_participant_client, ctf_participant, participant_user, ctf_event, ctf_challenge, monkeypatch
+    ):
+        """A credential outage is a 503 even though CredentialUnavailable subclasses ValueError."""
+        from ctf.services import principal_participation
+        from shared.credentials import CredentialUnavailable
+
+        _activate(participant_user, ctf_event)
+        _submit(ctf_participant, ctf_challenge, "FLAG{private}", correct=True)
+
+        def unavailable(*_args, **_kwargs):
+            raise CredentialUnavailable("authority unavailable")
+
+        monkeypatch.setattr(principal_participation, "viewing_participant_for_credential", unavailable)
+        history = call_json(authenticated_participant_client, "get", "api_submissions")
+        images = call_json(authenticated_participant_client, "get", "api_me_content_images")
+
+        assert history.status_code == 503
+        assert images.status_code == 503
+        assert b"private" not in history.content
+
+    def test_disqualified_participant_can_read_own_history(
+        self, authenticated_participant_client, ctf_participant, participant_user, ctf_event, ctf_challenge
+    ):
+        """Viewing admission admits a disqualified participant, as on the other self-reads (CTF-609)."""
+        _activate(participant_user, ctf_event)
+        _submit(ctf_participant, ctf_challenge, "FLAG{mine}", correct=True)
+        CTFParticipant.objects.filter(pk=ctf_participant.pk).update(status=ParticipantStatus.DISQUALIFIED.value)
+
+        response = call_json(authenticated_participant_client, "get", "api_submissions")
+
+        assert response.status_code == 200
+        assert response.json()["submissions"][0]["submitted_flag"] == "FLAG{mine}"

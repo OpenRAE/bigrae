@@ -3479,7 +3479,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Return the active participant's own submission history. */
+        /** @description Return the admitted participant's own submissions, newest first. */
         get: operations["ctf_submissions_retrieve"];
         put?: never;
         post?: never;
@@ -8196,6 +8196,8 @@ export interface components {
             readonly attempt_number: number;
             /** Format: date-time */
             readonly submitted_at: string | null;
+            /** @description The participant's own stored value for a correct submission; null for an incorrect one */
+            readonly submitted_flag: string | null;
         };
         /** @description Envelope returned by the participant submission history. */
         SubmissionListResponse: {
@@ -19660,6 +19662,14 @@ export interface operations {
             };
             /** @description Permission denied. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

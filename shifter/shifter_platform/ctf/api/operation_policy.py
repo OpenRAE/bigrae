@@ -183,7 +183,7 @@ API_OPERATION_POLICY: dict[str, OperationPolicy] = {
     "ctf_range_vpn_profile_create": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
     "ctf_registration_requests_disposition_create": OperationPolicy((_MANAGE_PARTICIPANTS,), "event", "request"),
     "ctf_scenario_options_retrieve": OperationPolicy((), None, None, "cms_model_access"),
-    "ctf_submissions_retrieve": OperationPolicy(("event.manage_submissions",), "event", "submission_collection"),
+    "ctf_submissions_retrieve": OperationPolicy((_PARTICIPATE,), "event", "active_event"),
     "ctf_webhooks_destroy": OperationPolicy((_MANAGE_COMMUNICATIONS,), "event", "webhook"),
 }
 
