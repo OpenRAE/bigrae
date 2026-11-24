@@ -146,7 +146,7 @@ def apply_pending_operation_results(*, batch_size: int = 50) -> int:
         rows = list(
             OperationResultInbox.objects.select_for_update(skip_locked=True)
             .filter(disposition=OperationResultDisposition.PENDING)
-            .order_by("created_at")[:batch_size]
+            .order_by("created_at", "pk")[:batch_size]
         )
         for row in rows:
             disposition, detail = evaluate_operation_result(row)

@@ -44,16 +44,19 @@ def applied_steps(row: OperationResultInbox) -> list[str]:
 
 
 def has_earlier_pending_sibling(row: OperationResultInbox) -> bool:
-    """Return whether an earlier-created result of this generation is pending."""
+    """Return whether an earlier result of this generation is pending.
+
+    Order is ``(created_at, pk)``, the applier's claim order. The insertion-ordered
+    primary key breaks a ``created_at`` tie between sibling results.
+    """
+    from django.db.models import Q
+
     from engine.models import OperationResultDisposition
     from engine.models import OperationResultInbox as Inbox
 
-    return (
-        Inbox.objects.filter(
-            operation_id=row.operation_id,
-            disposition=OperationResultDisposition.PENDING,
-            created_at__lt=row.created_at,
-        )
-        .exclude(pk=row.pk)
-        .exists()
-    )
+    earlier = Q(created_at__lt=row.created_at) | Q(created_at=row.created_at, pk__lt=row.pk)
+    return Inbox.objects.filter(
+        earlier,
+        operation_id=row.operation_id,
+        disposition=OperationResultDisposition.PENDING,
+    ).exists()
