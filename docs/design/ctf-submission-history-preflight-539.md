@@ -2,6 +2,10 @@
 
 Status: pre-implementation guidance
 
+Scope clarification: this note concerns #539, including its broader history and configuration work.
+For #3002, use the [correct-submission preflight](ctf-correct-submissions-preflight-3002.md) and amended ADR-028.
+That issue requires neither a history-visibility setting nor formal requirement traceability.
+
 Date: 2026-06-28
 
 Requirement: CTF-1305, "Submission History"

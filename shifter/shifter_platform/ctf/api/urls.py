@@ -184,7 +184,7 @@ urlpatterns = [
         organizer.RateChallengeView.as_view(),
         name="api_rate_challenge",
     ),
-    path("submissions/", organizer.SubmissionListView.as_view(), name="api_submissions"),
+    path("submissions/", participant_views.SubmissionListView.as_view(), name="api_submissions"),
     path(
         "events/<uuid:event_id>/participants/",
         organizer.ParticipantListView.as_view(),

@@ -284,6 +284,11 @@ class SubmissionListItemSerializer(serializers.Serializer):
     points_awarded = serializers.IntegerField(read_only=True)
     attempt_number = serializers.IntegerField(read_only=True)
     submitted_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    submitted_flag = serializers.CharField(
+        read_only=True,
+        allow_null=True,
+        help_text="The participant's own stored value for a correct submission; null for an incorrect one",
+    )
 
 
 class SubmissionListResponseSerializer(serializers.Serializer):

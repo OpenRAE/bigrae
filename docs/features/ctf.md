@@ -75,6 +75,9 @@ Organizers must protect authoring access and exports accordingly.
 The challenge can enforce a cooldown and attempt limit.
 A repeated correct submission does not award the same solve twice.
 
+Open **Account** to see each flag that you submitted correctly and its challenge.
+The list shows only your own flags, not the flags of teammates.
+
 ## Hints
 
 Read the displayed cost before revealing a hint.
