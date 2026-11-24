@@ -120,35 +120,29 @@ test-mcp: ## MCP server packages: zero-warning lint and node:test suites
 	  (cd "mcp/$$pkg" && npm ci && npm run lint && npm test); \
 	done
 
-# Authenticated SPA E2E (#1526). Builds the real Django-hosted SPA, migrates and
-# seeds a hermetic SQLite stack, and drives Playwright journeys through normal
-# session/CSRF. Mirrors the `shifter-platform-e2e` CI job (which uses PostgreSQL).
-# LOCAL_PROVISIONER/ENGINE_TASK_* stay unset, so range launch enqueues nothing
-# and no cloud is contacted. Requires a Chromium build (installed below).
+# Authenticated SPA E2E (#1526). Builds the real Django-hosted SPA. The
+# `run_openfga_integration.sh --browser` harness starts a job-local PostgreSQL
+# and OpenFGA server in Docker, migrates, seeds, and runs the Playwright
+# journeys through normal session/CSRF. The seeds need the OpenFGA provider.
+# Mirrors the `shifter-platform-e2e` CI job. LOCAL_PROVISIONER/ENGINE_TASK_* stay
+# unset, so range launch enqueues nothing and no cloud is contacted. Requires
+# Docker and a Chromium build (installed below).
 test-platform-e2e: ## Authenticated SPA E2E (Playwright) against the hermetic Django-hosted SPA
 	cd shifter/shifter_platform && uv sync --group dev && \
 	  (cd frontend && npm ci && npm run build) && \
-	  rm -f db.sqlite3 && \
 	  $(PLATFORM_ENV) uv run python manage.py collectstatic --noinput && \
-	  $(PLATFORM_ENV) uv run python manage.py migrate --noinput && \
-	  $(PLATFORM_ENV) uv run python manage.py seed_e2e && \
-	  $(PLATFORM_ENV) uv run python manage.py seed_e2e_ctf && \
-	  cd frontend && npx playwright install chromium && \
-	  ( $(PLATFORM_ENV) npm run test:e2e; status=$$?; rm -f ../db.sqlite3; exit $$status )
+	  (cd frontend && npx playwright install chromium) && \
+	  ./scripts/run_openfga_integration.sh --browser npm run test:e2e
 
 # Browser accessibility scans (#1526, ADR-055). Same hermetic stack as the E2E
 # target; runs the @axe-core/playwright surface matrix. Mirrors the deploy.yml
-# `Accessibility` PR Gate job (which uses PostgreSQL).
+# `Accessibility` PR Gate job.
 test-platform-a11y: ## Browser accessibility (Playwright + axe) against the hermetic Django-hosted SPA
 	cd shifter/shifter_platform && uv sync --group dev && \
 	  (cd frontend && npm ci && npm run build) && \
-	  rm -f db.sqlite3 && \
 	  $(PLATFORM_ENV) uv run python manage.py collectstatic --noinput && \
-	  $(PLATFORM_ENV) uv run python manage.py migrate --noinput && \
-	  $(PLATFORM_ENV) uv run python manage.py seed_e2e && \
-	  $(PLATFORM_ENV) uv run python manage.py seed_e2e_ctf && \
-	  cd frontend && npx playwright install chromium && \
-	  ( $(PLATFORM_ENV) npm run test:e2e:a11y; status=$$?; rm -f ../db.sqlite3; exit $$status )
+	  (cd frontend && npx playwright install chromium) && \
+	  ./scripts/run_openfga_integration.sh --browser npm run test:e2e:a11y
 
 # Mirrors the `adr-guard-tests` CI job, including its pinned interpreter and
 # pyyaml, so the guard suite runs from a clean checkout the same way. CI selects

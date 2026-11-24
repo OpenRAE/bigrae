@@ -49,6 +49,24 @@ Event cleanup follows the organizer's configured lifecycle.
 
 Open **Challenges** and select an available challenge.
 Read its description, category, points, difficulty, target, and current state.
+
+To change the list:
+
+1. Select **By category**, **By status**, or **All** to change the view.
+   **By status** shows **Not solved**, then **Solved**.
+2. Select **Cards**, **List**, or **Table** to change the layout.
+   The layout does not change the order of the challenges.
+3. Select a key in **Sort within groups** to sort the challenges in each group.
+4. Select a tag or topic to show only the challenges that have it.
+   Select it again to remove the filter.
+
+A challenge that a teammate solved counts as solved.
+The page keeps these selections when you open a challenge and go back.
+
+On a challenge page, select **Previous** or **Next** to open the adjacent challenge.
+The buttons follow the order of the list, with your view, sort, and filter.
+The default order is **Start Here**, then the missions in number order.
+A button is disabled at the start or the end of the list.
 Scheduled releases and prerequisites can keep other challenges locked.
 Use only targets within the event's authorization.
 
@@ -71,8 +89,9 @@ A hint can reduce the score for that challenge.
 
 ## Teams and brackets
 
-In team mode, join or create a team before submitting flags.
-The event's team-size limit applies, and the team shares a score.
+In team mode, you can join or create a team to share a score.
+A participant with no team competes as an individual and can still submit flags and score.
+The event's team-size limit applies to teams.
 Solo events require no team membership.
 
 The challenge list and the challenge page show a challenge that a teammate solved as **Solved by** *name*.
@@ -92,6 +111,16 @@ Open **Scoreboard** for the permitted standings.
 In a team-mode event, open **Individual scoreboard** for participant standings.
 Open **Team scoreboard** for team standings.
 An open scoreboard refreshes every **15 seconds**.
+
+To change the board:
+
+1. Type a name in **Filter participants** or **Filter teams** to show only the matching entries.
+2. Select a key in **Sort by** to change the order.
+   **Rank** gives the official order.
+
+The rank column always shows the official rank.
+The filter and the sort apply to the selected bracket.
+
 The organizer can hide it or freeze results near event end.
 Do not infer final standings from a frozen display.
 

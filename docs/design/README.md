@@ -15,6 +15,12 @@ An approved design does not establish production activation or live qualificatio
 | Email | [Ledger templates](ctf-ledger-email-template-boundaries-580.md) and [recipient time zones](ctf-recipient-time-zone-582.md) record accepted design constraints |
 | Scoreboards | [Refresh design](ctf-scoreboard-refresh-576.md) explains the 30-second update boundary; [dual-scoreboard design](ctf-dual-scoreboards-2968.md) adds the individual and team boards; its [preflight](ctf-dual-scoreboards-preflight-2968.md) records selection and access boundaries |
 | Team solve attribution | [Solver name design](ctf-team-solver-name-2997.md) shows the teammate who solved a challenge first; its [preflight](ctf-team-solve-attribution-preflight-2997.md) records identity, projection, and refresh boundaries |
+| Leaderboard controls | [Sorting and filtering preflight](ctf-leaderboard-controls-preflight-3001.md) records browser controls, official-rank preservation, bracket semantics, and existing security boundaries |
+| Leaderboard sort and filter | [Controls design](ctf-leaderboard-controls-3001.md) adds a browser-side name filter and sort to the participant scoreboards |
+| Challenge list boundaries | [Participant list preflight](ctf-challenge-list-preflight-2998.md) records filtering, ordering, solve-state views, and existing security boundaries before implementation |
+| Challenge list | [List views design](ctf-challenge-list-views-2998.md) adds browser-side search, sort, and grouping to the participant list |
+| Challenge layouts | [Layout preflight](ctf-challenge-layout-preflight-3012.md) separates cards, list, and table from grouping, with shared data and navigation boundaries; [layout design](ctf-challenge-list-layout-3012.md) adds the card, list, and table layouts |
+| Challenge navigation | [Navigation preflight](ctf-challenge-navigation-preflight-2999.md) records event scope, response boundaries, and challenge-specific browser state; [navigation design](ctf-challenge-navigation-2999.md) adds previous and next buttons in the list order |
 | Visual examples | [Design-system artifacts](design-system/README.md) describe the HTML/CSS reference examples and their limits |
 | UX research | [Research personas](ux-003-oss-shifter-research-personas.md) and [information architecture](ux-003-information-architecture-sitemap.md) retain their dated research context |
 

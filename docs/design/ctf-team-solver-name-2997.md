@@ -23,7 +23,7 @@ The pages show **Solved by your team** without the member name.
 | `ctf/api/projections.py` | `_team_first_solvers` replaces `_team_solved_challenge_ids`. It returns a map from challenge ID to the first solver's display name, in one query. `team_solved` and `team_solved_by` both read this map. The query excludes soft-deleted members and teams. |
 | `ctf/api/serializers/participant.py` | `ParticipantChallengeListItemSerializer` and `ParticipantChallengeDetailSerializer` add an optional, nullable `team_solved_by`. ADR-040-R3 permits only optional v1 response additions. The schema generator makes each read-only field required, so the field is not read-only. |
 | `openapi/v1.json`, `frontend/src/api/schema.d.ts` | `npm run gen:api` adds the field. |
-| `features/ctf/ChallengesPage.tsx`, `ChallengeDetailPage.tsx`, `SolvedBadge.tsx` | The badge and the team notice show **Solved by** *name*. The participant's own solve keeps **Solved**. The notice does not claim that the solve adds points to the team score. One shared badge shrinks and truncates a long name. Its title shows the full label. |
+| `features/ctf/ChallengeListLayouts.tsx`, `ChallengeDetailPage.tsx`, `SolvedBadge.tsx` | The card and list badges, the table status cell, the detail badge, and the team notice show **Solved by** *name*. The participant's own solve keeps **Solved**. The notice does not claim that the solve adds points to the team score. One shared badge shrinks and truncates a long name. Its title shows the full label. |
 | `frontend/src/api/ctf.ts` | Team membership and profile mutations also refresh the challenge list and detail queries. Membership and display names change the attribution. |
 
 The first correct submission is the solve that captured the flag for the team.

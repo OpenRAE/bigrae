@@ -1,21 +1,31 @@
-import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { useMemo, useState } from "react";
+import { Link, useLocation, useParams, useSearchParams } from "react-router";
 
 import { useMutation } from "@tanstack/react-query";
-import { Download, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Download, Loader2 } from "lucide-react";
 
-import { fetchCtfFileDownload, useCtfChallenge, useRateChallenge, useSubmitFlag, useUseHint } from "@/api/ctf";
+import {
+  fetchCtfFileDownload,
+  useCtfChallenge,
+  useCtfChallenges,
+  useRateChallenge,
+  useSubmitFlag,
+  useUseHint,
+} from "@/api/ctf";
 import { ApiError, describeMutationError } from "@/api/errors";
-import type { CtfChallengeDetail, CtfChallengeFile, CtfHint } from "@/api/types";
+import type { CtfChallengeDetail, CtfChallengeFile, CtfChallengeListItem, CtfHint } from "@/api/types";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { ConfirmDialog } from "@/components/confirm-dialog";
+import { cn } from "@/lib/utils";
+
+import { adjacentChallenges, readListView } from "./challenge-list";
 import { titleCase } from "./format";
 import { MarkdownContent } from "./MarkdownContent";
 import { SolvedBadge } from "./SolvedBadge";
@@ -34,6 +44,7 @@ function ChallengeMeta({ challenge }: Readonly<{ challenge: CtfChallengeDetail }
 }
 
 function PrereqAlert({ challenge }: Readonly<{ challenge: CtfChallengeDetail }>) {
+  const { search } = useLocation();
   if (challenge.prerequisites_met) return null;
   return (
     <Alert className="mb-4">
@@ -43,7 +54,7 @@ function PrereqAlert({ challenge }: Readonly<{ challenge: CtfChallengeDetail }>)
         {challenge.unmet_prerequisites.map((required, index) => (
           <span key={required.id}>
             {index > 0 ? ", " : ""}
-            <Link className="underline" to={ctfChallengeDetailPath(required.id)}>
+            <Link className="underline" to={{ pathname: ctfChallengeDetailPath(required.id), search }}>
               {required.name}
             </Link>
           </span>
@@ -353,44 +364,67 @@ function FlagForm({
   );
 }
 
-export function ChallengeDetailPage() {
-  const params = useParams();
-  const challengeId = params.id ?? "";
-  const query = useCtfChallenge(challengeId);
+const DIRECTION_LABELS = { previous: "Previous", next: "Next" } as const;
 
-  if (query.isLoading) {
+function SequenceButton({
+  direction,
+  target,
+  search,
+}: Readonly<{ direction: keyof typeof DIRECTION_LABELS; target: CtfChallengeListItem | null; search: string }>) {
+  const label = DIRECTION_LABELS[direction];
+  const leadingIcon = direction === "previous" ? <ChevronLeft className="size-4" aria-hidden="true" /> : null;
+  const trailingIcon = direction === "next" ? <ChevronRight className="size-4" aria-hidden="true" /> : null;
+  if (target === null) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-9 w-72" />
-        <Skeleton className="h-40 w-full" />
-      </div>
+      <Button variant="outline" size="sm" disabled>
+        {leadingIcon}
+        {label}
+        {trailingIcon}
+      </Button>
     );
   }
+  return (
+    <Link
+      className={cn(buttonVariants({ variant: "outline", size: "sm" }), "max-w-full min-w-0")}
+      to={{ pathname: ctfChallengeDetailPath(target.id), search }}
+    >
+      {leadingIcon}
+      <span>{label}</span> <span className="truncate text-muted-foreground">{target.name}</span>
+      {trailingIcon}
+    </Link>
+  );
+}
 
-  if (query.isError || !query.data) {
-    const forbidden = query.error instanceof ApiError && query.error.status === 403;
-    return (
-      <Alert variant="destructive">
-        <AlertTitle>{forbidden ? "Challenge locked" : "Challenge unavailable"}</AlertTitle>
-        <AlertDescription>
-          {forbidden
-            ? "This challenge is not available to you yet."
-            : "This challenge was not found or has been removed."}{" "}
-          <Link className="underline" to={ctfChallengesPath()}>
-            Back to challenges
-          </Link>
-          .
-        </AlertDescription>
-      </Alert>
-    );
-  }
+/**
+ * Previous and next buttons in the order that the challenge list shows (#2999). The
+ * neighbors come only from the list response; a challenge that the list does not
+ * show gets two disabled buttons, so a button never opens another event's challenge.
+ */
+function ChallengeSequenceNav({ challengeId }: Readonly<{ challengeId: string }>) {
+  const [params] = useSearchParams();
+  const { search } = useLocation();
+  const list = useCtfChallenges();
+  // A failed refresh keeps the cached rows in `data`; they are not a current order, so ignore them.
+  const rows = list.isError ? undefined : list.data;
+  const { previous, next } = useMemo(
+    () => adjacentChallenges(readListView(rows ?? [], params).groups, challengeId),
+    [rows, params, challengeId],
+  );
+  return (
+    <nav aria-label="Challenge sequence" className="mt-8 flex flex-wrap items-center justify-between gap-3">
+      <SequenceButton direction="previous" target={previous} search={search} />
+      <SequenceButton direction="next" target={next} search={search} />
+    </nav>
+  );
+}
 
-  const challenge = query.data;
-
+/** One challenge. The caller keys it by challenge ID, so its form state never crosses challenges. */
+function ChallengeBody({ challenge }: Readonly<{ challenge: CtfChallengeDetail }>) {
+  const { search } = useLocation();
   return (
     <>
       <nav className="mb-3 text-sm text-muted-foreground" aria-label="Breadcrumb">
-        <Link className="hover:text-foreground" to={ctfChallengesPath()}>
+        <Link className="hover:text-foreground" to={{ pathname: ctfChallengesPath(), search }}>
           Challenges
         </Link>
         <span className="px-1.5">/</span>
@@ -427,6 +461,45 @@ export function ChallengeDetailPage() {
           </CardContent>
         </Card>
       ) : null}
+
+      <ChallengeSequenceNav challengeId={challenge.id} />
     </>
   );
+}
+
+export function ChallengeDetailPage() {
+  const params = useParams();
+  const challengeId = params.id ?? "";
+  const query = useCtfChallenge(challengeId);
+  const { search } = useLocation();
+
+  if (query.isLoading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-9 w-72" />
+        <Skeleton className="h-40 w-full" />
+      </div>
+    );
+  }
+
+  if (query.isError || !query.data) {
+    const forbidden = query.error instanceof ApiError && query.error.status === 403;
+    return (
+      <Alert variant="destructive">
+        <AlertTitle>{forbidden ? "Challenge locked" : "Challenge unavailable"}</AlertTitle>
+        <AlertDescription>
+          {forbidden
+            ? "This challenge is not available to you yet."
+            : "This challenge was not found or has been removed."}{" "}
+          <Link className="underline" to={{ pathname: ctfChallengesPath(), search }}>
+            Back to challenges
+          </Link>
+          .
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  // Same-route navigation keeps component state, so the key resets it for each challenge.
+  return <ChallengeBody key={query.data.id} challenge={query.data} />;
 }

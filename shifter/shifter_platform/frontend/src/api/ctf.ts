@@ -242,6 +242,8 @@ function useTeamMutation<TBody>(path: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ctfKeys.team() });
       queryClient.invalidateQueries({ queryKey: ctfKeys.currentEvent() });
+      // Membership decides `team_solved`, which the challenge list groups by (#2998),
+      // and `team_solved_by` on the list and detail (#2997).
       invalidateChallengeReads(queryClient);
     },
   });
