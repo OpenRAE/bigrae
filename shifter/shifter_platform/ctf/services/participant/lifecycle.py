@@ -169,6 +169,11 @@ def delete_participant(participant_id: UUID) -> bool:
 
         participant.delete(soft=True)
 
+        # A removed member no longer counts toward the team score.
+        from ctf.services.participant.moderation import refresh_participant_standing
+
+        refresh_participant_standing(participant)
+
         # Stop this participation's unclaimed communications and erase its delivery
         # coordinate in the same transaction as the removal; the immutable snapshot
         # identity survives as bounded evidence (#2099, AC3).

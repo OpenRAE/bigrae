@@ -39,9 +39,11 @@ _VIEWING_PARTICIPANT_STATUSES: tuple[str, ...] = (
 def eligible_participant_q(field_prefix: str = "") -> Q:
     """Return a `Q` predicate matching participants eligible for scoring/access.
 
-    A participant is eligible iff they have completed registration
-    (`registered_at` is set) AND their status is one of ACTIVE / REGISTERED
-    / COMPLETED — i.e. NOT disqualified. This is the single shared
+    A participant is eligible iff the row is not soft-deleted, they have
+    completed registration (`registered_at` is set), AND their status is one
+    of ACTIVE / REGISTERED / COMPLETED — i.e. NOT disqualified. The explicit
+    `deleted_at` check matters for joined lookups (`participant__`,
+    `members__`): the soft-delete manager does not filter a join. This is the single shared
     predicate used by `is_active_participant` (access control), by
     `get_scoreboard` (individual rankings), and by `get_team_scoreboard`
     (team aggregates) so the three layers cannot drift apart.
@@ -56,7 +58,13 @@ def eligible_participant_q(field_prefix: str = "") -> Q:
         A `Q` object combining the registration and status checks.
     """
     p = field_prefix
-    return Q(**{f"{p}registered_at__isnull": False, f"{p}status__in": _PLAYING_PARTICIPANT_STATUSES})
+    return Q(
+        **{
+            f"{p}deleted_at__isnull": True,
+            f"{p}registered_at__isnull": False,
+            f"{p}status__in": _PLAYING_PARTICIPANT_STATUSES,
+        }
+    )
 
 
 def viewing_participant_q(field_prefix: str = "") -> Q:
@@ -77,7 +85,13 @@ def viewing_participant_q(field_prefix: str = "") -> Q:
         A `Q` object combining the registration and view-status checks.
     """
     p = field_prefix
-    return Q(**{f"{p}registered_at__isnull": False, f"{p}status__in": _VIEWING_PARTICIPANT_STATUSES})
+    return Q(
+        **{
+            f"{p}deleted_at__isnull": True,
+            f"{p}registered_at__isnull": False,
+            f"{p}status__in": _VIEWING_PARTICIPANT_STATUSES,
+        }
+    )
 
 
 def ranked_participant_q(field_prefix: str = "") -> Q:

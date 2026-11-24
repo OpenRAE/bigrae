@@ -1586,7 +1586,7 @@
     "title": "CTF participant solve history is semi-private (participant and organizer only)",
     "status": "accepted",
     "scope": "shifter_platform",
-    "decision": "The individual scoreboard (CTF-401) exposes aggregate ranking data -- rank, display name, total score, solve count, and last-solve time -- publicly to all participants. A participant's per-challenge solve history is semi-private: it is visible only to that participant and to the event organizer, unless the participant explicitly chooses to share it. This clarifies and supersedes the literal reading of CTF-401's \"Participants shall be able to click a row to see that participant's solve history\" clause, which would expose every participant's per-challenge history to all participants. Rationale: aggregate standing is inherently public on a scoreboard, but which specific challenges a participant solved reveals skill areas and progress and enables targeting or collusion inference -- it is nobody's business except the participant and the organizer. Concretely, scoreboard rows link to the solve-history drill-down only for the viewer's own row; the ctf:participant_solve_history view authorizes own-participant-or-event-organizer. Solve-history projections are correct-solves-only and never expose submitted flag values, incorrect-attempt details, or attempt source IP addresses. Ranking and CTF-406 tie-breaking stay in ctf.services.scoring; presentation never re-ranks. Governing requirement: CTF-1404 (Solve History Visibility).",
+    "decision": "The individual scoreboard (CTF-401) exposes aggregate ranking data -- rank, display name, total score, solve count, and last-solve time -- publicly to all participants. A participant's per-challenge solve history is semi-private: it is visible only to that participant and to the event organizer, unless the participant explicitly chooses to share it. This clarifies and supersedes the literal reading of CTF-401's \"Participants shall be able to click a row to see that participant's solve history\" clause, which would expose every participant's per-challenge history to all participants. Rationale: aggregate standing is inherently public on a scoreboard, but which specific challenges a participant solved reveals skill areas and progress and enables targeting or collusion inference -- it is nobody's business except the participant and the organizer. Concretely, scoreboard rows link to the solve-history drill-down only for the viewer's own row; the ctf:participant_solve_history view authorizes own-participant-or-event-organizer. Solve-history projections are correct-solves-only and never expose submitted flag values, incorrect-attempt details, or attempt source IP addresses. Ranking and CTF-406 tie-breaking stay in ctf.services.scoring; presentation never re-ranks. Governing requirement: CTF-1404 (Solve History Visibility). Amendment (#3004): the published scoreboard also exposes a score progression for its leading rows. Each point is a time and a cumulative score. Score timing is public aggregate standing, even though a score step can imply a challenge by its point value. The progression never names a challenge or an award reason, and it follows the same publication, freeze, bracket, and eligibility rules as the rankings.",
     "rules": [
       {
         "id": "ADR-028-R1",
@@ -1596,6 +1596,11 @@
       {
         "id": "ADR-028-R2",
         "description": "Any solve-history projection must be correct-solves-only and must never expose submitted flag values, incorrect-attempt details, or attempt source IP addresses to a participant-visible surface. Reuse ctf.services.submission.get_participant_solve_history rather than serialising raw CTFSubmission rows.",
+        "checks": []
+      },
+      {
+        "id": "ADR-028-R3",
+        "description": "A published score progression must contain only times and cumulative scores for at most ctf.services.scoring.PROGRESSION_LIMIT leading rows. It must not name a challenge or an award reason. It must use the same publication gate, freeze cutoff, bracket filter, and ranking eligibility as the rankings it accompanies. Build it only through ctf.services.scoring.get_score_progression.",
         "checks": []
       }
     ],
@@ -1611,7 +1616,9 @@
       "shifter/shifter_platform/templates/ctf/includes/scoreboard_table.html",
       "shifter/shifter_platform/templates/ctf/participant/scoreboard.html",
       "shifter/shifter_platform/tests/ctf/test_scoreboard_views.py",
-      "shifter/shifter_platform/tests/ctf/test_submission_service.py"
+      "shifter/shifter_platform/tests/ctf/test_submission_service.py",
+      "shifter/shifter_platform/ctf/services/scoring/_progression.py",
+      "shifter/shifter_platform/tests/ctf/test_score_progression.py"
     ]
   },
   {

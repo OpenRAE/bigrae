@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 
 import { renderRoute } from "@/test/utils";
 
@@ -20,6 +21,13 @@ function render() {
 
 beforeEach(() => {
   mockApi.mockReset();
+});
+
+// Radix Select drives pointer capture and scrolling, which jsdom does not implement.
+beforeAll(() => {
+  window.HTMLElement.prototype.hasPointerCapture = vi.fn();
+  window.HTMLElement.prototype.releasePointerCapture = vi.fn();
+  window.HTMLElement.prototype.scrollIntoView = vi.fn();
 });
 
 describe("MonitoringPage", () => {
@@ -75,5 +83,65 @@ describe("MonitoringPage", () => {
     fireEvent.click(await screen.findByRole("button", { name: "Export results" }));
     expect(await screen.findByText("Could not export the results.")).toBeInTheDocument();
     expect(screen.queryByText("Failed to fetch")).not.toBeInTheDocument();
+  });
+
+  it("graphs the live score progression on the organizer scoreboard", async () => {
+    mockApi.mockResolvedValue({
+      team_mode: true,
+      frozen: true,
+      rankings: [{ team_id: "t1", name: "Red Team", score: 300, solve_count: 3, rank: 1 }],
+      progression: {
+        starts_at: "2026-11-21T10:00:00Z",
+        ends_at: "2026-11-21T12:00:00Z",
+        series: [
+          {
+            id: "t1",
+            name: "Red Team",
+            rank: 1,
+            points: [
+              { at: "2026-11-21T10:00:00Z", score: 0 },
+              { at: "2026-11-21T11:00:00Z", score: 300 },
+            ],
+          },
+        ],
+      },
+    });
+    render();
+    const graph = await screen.findByRole("img", { name: "Score over time" });
+    // The organizer board is live, so the description names no freeze cutoff.
+    expect(graph).toHaveAccessibleDescription("Cumulative score of the top 1 teams. Open Score history below the graph for each value.");
+  });
+
+  it("graphs and lists a participant's score timeline with the service fields", async () => {
+    const user = userEvent.setup({ delay: null });
+    mockApi.mockImplementation((path: string) => {
+      if (path.endsWith("/participants/")) return Promise.resolve({ participants: [{ id: "p1", name: "Ada" }] });
+      if (path.endsWith("/score-timeline/")) {
+        return Promise.resolve({
+          participant_id: "p1",
+          participant_name: "Ada",
+          timeline: [
+            { timestamp: "2026-11-21T10:00:00Z", points: 0, cumulative: 0, label: "Event start", type: "start" },
+            { timestamp: "2026-11-21T11:00:00Z", points: 150, cumulative: 150, label: "Web 1", type: "solve" },
+            { timestamp: "2026-11-21T11:30:00Z", points: -20, cumulative: 130, label: "Penalty", type: "award" },
+          ],
+        });
+      }
+      if (path.endsWith("/analytics/")) return Promise.resolve(null);
+      return Promise.resolve({});
+    });
+    renderRoute(<MonitoringPage defaultTab="analytics" />, {
+      path: "/ctf/admin/events/:eventId/monitoring",
+      initialEntries: ["/ctf/admin/events/e1/monitoring"],
+    });
+
+    await user.click(await screen.findByRole("combobox", { name: "Participant" }));
+    await user.click(await screen.findByRole("option", { name: "Ada" }));
+
+    expect(await screen.findByRole("img", { name: "Score over time" })).toBeInTheDocument();
+    const penalty = screen.getByRole("row", { name: /Penalty/ });
+    expect(penalty).toHaveTextContent("-20");
+    expect(penalty).toHaveTextContent("130");
+    expect(screen.getByRole("row", { name: /Web 1/ })).toHaveTextContent("150");
   });
 });

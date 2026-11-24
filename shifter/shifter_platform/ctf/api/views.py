@@ -96,7 +96,7 @@ class PublicScoreboardView(APIView):
 
 def _scoreboard_payload(event: CTFEvent, request: Request, allowed: bool, kind: ScoreboardKind) -> JsonResponse:
     """Project admitted rankings or the published empty scoreboard shape."""
-    from ctf.services.scoring import get_scoreboard, get_team_scoreboard
+    from ctf.services.scoring import get_score_progression, get_scoreboard, get_team_scoreboard
     from ctf.views import _parsing
 
     if not allowed:
@@ -109,15 +109,24 @@ def _scoreboard_payload(event: CTFEvent, request: Request, allowed: bool, kind: 
                 "rankings": [],
                 "bracket_rankings": None,
                 "brackets": [],
+                "progression": None,
             }
         )
 
     freeze_at = event.scoreboard_freeze_at if event.is_scoreboard_frozen else None
     bracket_param = request.query_params.get("bracket")
     brackets, _selected_bracket, bracket_id = _parsing._resolve_bracket_filter(event.id, bracket_param)
-    read_board = get_team_scoreboard if kind is ScoreboardKind.TEAM else get_scoreboard
+    team = kind is ScoreboardKind.TEAM
+    read_board = get_team_scoreboard if team else get_scoreboard
     rankings = read_board(event.id, freeze_at=freeze_at)
     bracket_rankings = read_board(event.id, freeze_at=freeze_at, bracket_id=bracket_id) if bracket_id else None
+    progression = get_score_progression(
+        event,
+        rankings if bracket_rankings is None else bracket_rankings,
+        team=team,
+        freeze_at=freeze_at,
+        bracket_id=bracket_id,
+    )
 
     return JsonResponse(
         {
@@ -128,6 +137,7 @@ def _scoreboard_payload(event: CTFEvent, request: Request, allowed: bool, kind: 
             "rankings": rankings,
             "bracket_rankings": bracket_rankings,
             "brackets": [{"id": str(bracket.id), "name": bracket.name} for bracket in brackets],
+            "progression": progression,
         }
     )
 

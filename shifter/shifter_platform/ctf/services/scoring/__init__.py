@@ -9,6 +9,7 @@ Split from the monolithic ``ctf/services/scoring.py`` into a package (issue
 - ``_read``: scoreboard / team-scoreboard / participant-rank reads (materialized
   hot path + authoritative recompute fallback) and ``calculate_score``;
 - ``_stats``: challenge / event statistics and the per-participant timeline;
+- ``_progression``: bounded score-over-time series for the leading board rows;
 - ``_maintenance``: recompute helpers that rebuild the materialized columns.
 
 Every public name is re-exported here so ``from ctf.services.scoring import X``
@@ -36,6 +37,7 @@ from ._maintenance import (
     recompute_participant_score,
     recompute_team_score,
 )
+from ._progression import PROGRESSION_LIMIT, get_score_progression
 from ._read import (
     calculate_score,
     get_participant_rank,
@@ -53,6 +55,7 @@ from ._strategy import (
 )
 
 __all__ = [
+    "PROGRESSION_LIMIT",
     "apply_dynamic_decay",
     "calculate_score",
     "calculate_solve_points",
@@ -60,6 +63,7 @@ __all__ = [
     "get_event_analytics",
     "get_event_statistics",
     "get_participant_rank",
+    "get_score_progression",
     "get_score_timeline",
     "get_scoreboard",
     "get_scoring_strategy",

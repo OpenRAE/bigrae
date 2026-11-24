@@ -12,6 +12,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 import { rankingKey, rankingNumber, rankingString } from "./format";
+import { ScoreboardGraph } from "./ScoreProgressionChart";
 
 const ALL = "all";
 
@@ -77,6 +78,7 @@ function ScoreboardContent({
 
   const brackets = data.brackets ?? [];
   const rows = bracket === ALL ? (data.rankings ?? []) : (data.bracket_rankings ?? []);
+  const teamMode = kind ? kind === "team" : Boolean(data.team_mode);
 
   return (
     <>
@@ -98,8 +100,11 @@ function ScoreboardContent({
           </Select>
         ) : null}
       </div>
+      {rows.length > 0 ? (
+        <ScoreboardGraph progression={data.progression} teamMode={teamMode} frozen={Boolean(data.frozen)} />
+      ) : null}
       <Card className="overflow-hidden py-0">
-        <ScoreboardTable rows={rows} teamMode={kind ? kind === "team" : Boolean(data.team_mode)} />
+        <ScoreboardTable rows={rows} teamMode={teamMode} />
       </Card>
     </>
   );

@@ -315,6 +315,18 @@ by design. The ADR-072 `position_changed` hint is optional and only accelerates
 the refresh. See the
 [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-scoreboard-refresh-576.md).
 
+### Scoreboard graphs
+
+The public and organizer scoreboard responses include `progression`.
+It holds a score-over-time series for the first `PROGRESSION_LIMIT` (8) rows of the returned board.
+`get_score_progression` in `ctf/services/scoring/_progression.py` builds it.
+It uses the board's freeze cutoff, bracket filter, ranking eligibility, and team challenge deduplication.
+Each point holds only a time and a cumulative score (ADR-028-R3).
+A hidden public board returns `null`.
+The SPA draws the series as an SVG step graph above each scoreboard table.
+See the
+[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-leaderboard-graphs-3004.md).
+
 ## Scheduled Work
 
 Two management commands operate the event runtime:

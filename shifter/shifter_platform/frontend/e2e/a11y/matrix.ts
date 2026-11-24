@@ -92,6 +92,16 @@ export const SURFACES: readonly A11ySurface[] = [
     remediation: "src/features/ctf/ChallengesPage.tsx",
   },
   {
+    // The seeded award gives the participant a score step, so the loaded
+    // score graph renders above the table (#3004).
+    id: "ctf-participant-scoreboard",
+    route: "/ctf/scoreboard",
+    actor: "inbox",
+    ready: "Score over time",
+    readyKind: "text",
+    remediation: "src/features/ctf/ScoreProgressionChart.tsx",
+  },
+  {
     id: "ctf-admin-dashboard",
     route: "/ctf/admin",
     actor: "organizer",

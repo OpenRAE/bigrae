@@ -11,7 +11,9 @@ inbox participant; and two released communications (#2053). The first goes
 through the real authoring and admission services. The second carries a stored
 hostile body written below the admission validator, as a row admitted before a
 validator change would be; the browser journey proves the renderer and the
-enforced CSP keep it inert. Idempotent: safe to re-run.
+enforced CSP keep it inert. One synthetic award gives the participant a score,
+so the scoreboard renders its score graph for the accessibility lane (#3004).
+Idempotent: safe to re-run.
 """
 
 from __future__ import annotations
@@ -28,9 +30,10 @@ from django.utils import timezone
 import workspaces.services as ws
 from ctf.communication_contracts import CONTENT_PROFILE_V1, canonical_digest
 from ctf.enums import EventStatus
-from ctf.models import CommunicationCampaign, CTFEvent, CTFParticipant, MessageRevision
+from ctf.models import CommunicationCampaign, CTFAward, CTFEvent, CTFParticipant, MessageRevision
 from ctf.services.communication import CampaignDraft, create_campaign, release_campaign
 from ctf.services.event import publish_event_relationships
+from ctf.services.scoring import recompute_participant_score
 from management.services import set_active_ctf_event
 from shared.auth import CTF_PARTICIPANT_GROUP
 from shared.principal_port import principal_for_user
@@ -46,6 +49,7 @@ INBOX_PARTICIPANT_EMAIL = "e2e-inbox@example.com"
 EVENT_NAME = "E2E Inbox Event"
 SAFE_SUBJECT = "Welcome to the E2E event"
 HOSTILE_SUBJECT = "Stored hostile content"
+AWARD_REASON = "E2E score"
 HOSTILE_BODY = (
     "Stored hostile content.\n\n"
     '<img src="x" onerror="window.__inboxXss = 1">\n\n'
@@ -108,11 +112,18 @@ class Command(BaseCommand):
         account_uuid = str(scope.account_uuid)
 
         participant_user = _ensure_user(INBOX_PARTICIPANT_EMAIL)
-        CTFParticipant.objects.get_or_create(
+        participant, _ = CTFParticipant.objects.get_or_create(
             event=event,
             user=participant_user,
             defaults={"email": INBOX_PARTICIPANT_EMAIL, "name": "E2E Inbox", "status": "active", "registered_at": now},
         )
+        CTFAward.objects.get_or_create(
+            event=event,
+            participant=participant,
+            reason=AWARD_REASON,
+            defaults={"points": 100, "granted_by": organizer},
+        )
+        recompute_participant_score(participant.pk)
         participant_user.groups.add(Group.objects.get_or_create(name=CTF_PARTICIPANT_GROUP)[0])
         set_active_ctf_event(participant_user, event.pk)
 
