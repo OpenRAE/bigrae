@@ -1,5 +1,12 @@
 # Team membership before flag submission (#644 / CTF-501)
 
+> **Superseded by #3000 (2026-11-23).** This preflight required team membership
+> before flag submission in team mode. #3000 reversed that rule: a participant
+> with no team competes as an individual and can submit flags and score. The
+> `require_team` option described below was removed. Submission now validates
+> only that a present team reference resolves to a live same-event team
+> (`validate_team`). The rest of this document is historical.
+
 > **Issue-scoped preflight, 2026-11-02.** This records design constraints, not
 > implementation or deployment evidence. The [current handbook](../technical/architecture.md),
 > accepted ADRs, and current source retain their authority.

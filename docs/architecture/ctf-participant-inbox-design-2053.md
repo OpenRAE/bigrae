@@ -36,7 +36,7 @@ Application paths are relative to `shifter/shifter_platform/`.
 | Inbox page | `frontend/src/features/ctf/inbox/` | List, message body, actions, views and offline state. |
 | Workspace shell | `frontend/src/features/ctf/CtfWorkspaceLayout.tsx` | Current socket protocol and the non-modal action notice. |
 | Renderer | `frontend/src/features/ctf/MarkdownContent.tsx` | Neutralized links render as text in the communication profile. |
-| E2E seed | `ctf/management/commands/seed_e2e_ctf.py` | Dev/test-only event, participant and messages for the browser lane. |
+| E2E seed | `ctf/management/commands/seed_e2e_ctf.py` | Dev/test-only event, participant, challenges, and messages for the browser lane. |
 
 ### API contract
 

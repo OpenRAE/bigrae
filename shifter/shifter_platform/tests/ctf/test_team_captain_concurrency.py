@@ -52,8 +52,10 @@ def test_solve_and_disband_serialize(arena, solve_first):  # noqa: F811
                 with pytest.raises(CTFStateError, match="busy"):
                     disband_team(captain.pk)
             else:
-                with pytest.raises(CTFStateError, match="team"):
-                    submit_flag(captain.pk, challenge.pk, FLAG)
+                # #3000: a disband that commits first leaves the captain teamless,
+                # so the serialized submission scores them as an individual.
+                submission = submit_flag(captain.pk, challenge.pk, FLAG)
+                assert submission.is_correct is True
         finally:
             close_old_connections()
 
@@ -73,5 +75,8 @@ def test_solve_and_disband_serialize(arena, solve_first):  # noqa: F811
                 # The submission loaded old membership and now waits for our row.
                 _wait_for_database_block(worker_pids[0])
         future.result(timeout=20)
+    # solve_first: disband is refused while the solve is open, so the team survives.
+    # disband-first: the team is soft-deleted. The captain scores a correct solve in
+    # both orders (the second as an individual, #3000).
     assert CTFTeam.objects.filter(pk=team.pk).exists() is solve_first
-    assert CTFSubmission.objects.filter(participant=captain, is_correct=True).exists() is solve_first
+    assert CTFSubmission.objects.filter(participant=captain, is_correct=True).exists()
