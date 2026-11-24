@@ -113,6 +113,7 @@ New operations would also need `ctf/api/operation_policy.py` and authorization-s
 `ctf/services/scoring/_stats.py:get_score_timeline` and `ctf/api/organizer/scoreboard.py:ScoreTimelineView` already own participant history.
 `api/ctfAdmin.ts:useCtfScoreTimeline` consumes that endpoint.
 Its authorization allows native submission-management authority or the exact participant's own history.
+
 ADR-028 separates published aggregate rankings from semi-private solve history.
 Leaderboard publication does not grant access to competitors' timelines or justify new drill-down links to their solves.
 The service has no freeze/bracket parameters and is not a team-history projection.
@@ -121,6 +122,7 @@ Do not fan out a timeline request per leaderboard row or sum participant histori
 The service emits `timestamp`, `points`, `cumulative`, `label`, and `type`.
 The current monitoring timeline table instead looks for `challenge_name` and `cumulative_score`/`total_score`.
 Do not copy those mismatched keys into a graph or disguise absent values as zero.
+
 If that related page is changed, use the actual service fields and an API-shaped fixture.
 History can contain deductions, pre-start points, challenge labels, and award reasons; it is not a sanitized public series.
 Historical score/rank graphs need a separately specified publication, cutoff, team, and bounded-query contract before implementation.
@@ -138,13 +140,16 @@ Reuse `features/ctf/ScoreboardPage.test.tsx`, `ScoreboardRoutes.test.tsx`, `admi
 Evidence must establish meaningful plotted values matching the selected table, not merely a graph heading or empty SVG.
 Exercise individual/team/default selection, bracket isolation, signed/zero scores, duplicate names, row bounds, polling, and hidden/error transitions.
 Retain keyboard access, accessible names, table equivalence, contrast, and responsive layout.
+
 Reuse Vitest/Testing Library/axe and the existing browser CSP guard in `frontend/e2e/support/csp.ts`.
 Register graph-bearing accessibility states through `frontend/e2e/a11y/matrix.ts`, using synthetic scored fixtures and a loaded-graph readiness check.
 Reuse `ctf/management/commands/seed_e2e_ctf.py` and `frontend/e2e/support/actors.ts` for authenticated browser fixtures.
 The current CTF seed has no scored challenges; its existing inbox state cannot prove that graph geometry rendered.
+
 Preserve the ADR-055 exact-finding baseline; do not add another runner or hide new findings with broad exclusions.
 DOM tests alone cannot establish browser CSP compatibility or visible geometry.
 The current browser accessibility runner scans the dark theme; passing it alone does not establish light-theme contrast.
+
 ADR-055 also requires release-scoped manual accessibility evidence for materially changed surfaces; automated checks do not establish WCAG conformance.
 Keep browser evidence synthetic and diagnostics bounded; never publish authenticated traces, storage state, screenshots, DOM, or request/response bodies.
 A targeted mutation that uses overall rows for a bracket graph or clamps deductions to zero must fail the relevant test.

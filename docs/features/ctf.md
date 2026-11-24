@@ -106,6 +106,7 @@ Open **Scoreboard** for the permitted standings.
 In a team-mode event, open **Individual scoreboard** for participant standings.
 Open **Team scoreboard** for team standings.
 An open scoreboard refreshes every **15 seconds**.
+
 A graph above the table shows the score over time of the top eight entries.
 Open **Score history** below the graph to read each time and score as a table.
 The graph shows times and scores only, not challenge names.
