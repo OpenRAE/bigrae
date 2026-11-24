@@ -9,10 +9,10 @@
     ]
   },
   {
-    "rule_id": "ADR-004-R11",
+    "rule_id": "ADR-004-R5",
     "owner": "@Brad-Edwards",
-    "reason": "CKV_K8S_35 (prefer secret files over environment variables): the guacamole-client Deployment reads the guacamole-runtime Secret through envFrom. The pinned Guacamole 1.6.0 image has a confirmed file-secret regression (GUACAMOLE-2119): its entrypoint has no _FILE variable support, and it links the PostgreSQL authentication extension through an environment-variable-driven feature framework. A correct file-delivery fix must fork the custom image entrypoint to build guacamole.properties from a mounted file and link the extension without the environment path, which is a higher-risk change to participant remote access. The image fork is tracked in #2565. The `checkov.io/skip1: CKV_K8S_35` annotation on the chart's guacamole-client Deployment points back to this entry. The chart is the only renderer since ADR-070, so the same acceptance now covers every rendered profile.",
-    "expires_on": "2027-04-28",
+    "reason": "kube-linter env-var-secret: verified false positive for the guacamole-client Deployment. The check matches every environment variable whose name contains \"secret\" and has a literal value. JSON_SECRET_KEY_FILE holds only the path /run/secrets/guacamole-runtime/json-secret-key. The JSON auth key is in the read-only guacamole-runtime Secret file at that path, and Guacamole reads the property from the named file (enable-file-environment-properties). Guacamole fixes the variable name from the json-secret-key property, so the name cannot change. The `ignore-check.kube-linter.io/env-var-secret` annotation on the chart's guacamole-client Deployment points back to this entry.",
+    "expires_on": "2027-11-24",
     "paths": [
       "platform/charts/shifter/templates/guacamole-client-deployment.yaml"
     ]

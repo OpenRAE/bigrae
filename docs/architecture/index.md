@@ -33,6 +33,11 @@ Read the [decision guide](../adr/README.md), source code, and current handbook t
 
 ## Find implementation history
 
+The [Guacamole credential-file preflight (#2565)](guacamole-secret-files-preflight-2565.md)
+records the image, Secret, parser, and verification boundaries before implementation.
+The [Guacamole credential-file design (#2565)](guacamole-secret-files-design-2565.md)
+records the chosen file-delivery contract.
+
 Use the issue number or subject to locate a record without treating it as
 installation guidance:
 
