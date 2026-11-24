@@ -33,7 +33,7 @@ from django.db import transaction
 from django.db.models import QuerySet
 from django.utils import timezone
 
-from cms.handlers.ctf_bridge import drain_ctf_status_deliveries
+from cms.handlers.ctf_bridge import ctf_status_delivery_backlog, drain_ctf_status_deliveries
 from cms.handlers.range_events import apply_range_status
 from cms.models import RangeInstance
 from engine.services import get_authoritative_range_status
@@ -367,6 +367,7 @@ class Command(BaseCommand):
     def _run_once(self, stale_seconds: int, batch_size: int) -> None:
         """Execute one reconciliation pass and log the summary."""
         ctf_delivered = drain_ctf_status_deliveries(limit=batch_size)
+        ctf_backlog = ctf_status_delivery_backlog()
         ri_counts = reconcile_range_instances(stale_seconds, batch_size)
         from cms import services as cms_services
 
@@ -380,11 +381,12 @@ class Command(BaseCommand):
         total_skipped = ri_counts["skipped"]
         total_no_engine = ri_counts["no_engine_range"]
 
-        log_fn = logger.warning if total_reconciled > 0 else logger.info
+        log_fn = logger.warning if total_reconciled > 0 or ctf_backlog["retrying"] > 0 else logger.info
         log_fn(
             "reconcile_range_events: pass complete — "
             "reconciled=%d converged=%d skipped=%d no_engine_range=%d "
-            "expired=%d expiry_failed=%d ctf_delivered=%d (range_instances: %r)",
+            "expired=%d expiry_failed=%d ctf_delivered=%d ctf_pending=%d ctf_retrying=%d "
+            "ctf_oldest_pending_seconds=%d (range_instances: %r)",
             total_reconciled,
             total_converged,
             total_skipped,
@@ -392,6 +394,9 @@ class Command(BaseCommand):
             lease_counts["expired"],
             lease_counts["failed"],
             ctf_delivered,
+            ctf_backlog["pending"],
+            ctf_backlog["retrying"],
+            ctf_backlog["oldest_age_seconds"],
             ri_counts,
         )
 

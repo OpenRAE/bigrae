@@ -50,6 +50,9 @@ superseding decisions matter. Do not infer a live release claim from a proposed
 control or an earlier passing test. This directory remains excluded from the
 public MkDocs site; exclusion is not a confidentiality boundary.
 
+The [CTF range-status preflight (#2577)](ctf-range-status-commit-boundary-2577.md)
+explains the commit boundary clarified in ADR-025 and the remaining delivery risks.
+
 ## Durable design notes
 
 These retain their stated design authority and are not historical preflights:
