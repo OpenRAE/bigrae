@@ -26,6 +26,7 @@ function challenge(overrides: Record<string, unknown> = {}) {
     order: 0,
     solved: false,
     team_solved: false,
+    team_solved_by: null,
     ...overrides,
   };
 }
@@ -47,7 +48,14 @@ describe("ChallengesPage", () => {
     expect(screen.getByText("Solved")).toBeInTheDocument();
   });
 
-  it("shows a teammate's solve as solved by your team", async () => {
+  it("shows a teammate's solve with the name of the member who solved it", async () => {
+    mockApi.mockResolvedValue([challenge({ team_solved: true, team_solved_by: "Alex Rivera" })]);
+    renderRoute(<ChallengesPage />);
+    expect(await screen.findByText("Solved by Alex Rivera")).toBeInTheDocument();
+    expect(screen.getByText("1 of 1 solved")).toBeInTheDocument();
+  });
+
+  it("falls back to solved by your team when the solver name is absent", async () => {
     mockApi.mockResolvedValue([challenge({ team_solved: true })]);
     renderRoute(<ChallengesPage />);
     expect(await screen.findByText("Solved by your team")).toBeInTheDocument();
@@ -289,6 +297,17 @@ describe("ChallengesPage", () => {
     );
     expect(items[0]).toHaveTextContent("50 pts");
     expect(within(items[1]).getByText("Solved")).toBeInTheDocument();
+  });
+
+  it("names the teammate who solved it in the list and table layouts", async () => {
+    mockApi.mockResolvedValue([challenge({ team_solved: true, team_solved_by: "Alex Rivera" })]);
+    renderRoute(<ChallengesPage />, { initialEntries: ["/?layout=list"] });
+    expect(await screen.findByText("Solved by Alex Rivera")).toBeInTheDocument();
+
+    fireEvent.click(within(screen.getByRole("group", { name: "Layout" })).getByRole("button", { name: "Table" }));
+
+    const row = screen.getAllByRole("row")[1];
+    expect(within(row).getAllByRole("cell").at(-1)).toHaveTextContent("Solved by Alex Rivera");
   });
 
   it("shows the challenge list as a table", async () => {

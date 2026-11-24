@@ -4,22 +4,15 @@
  */
 import { Link, useLocation } from "react-router";
 
-import { CheckCircle2 } from "lucide-react";
-
 import type { CtfChallengeListItem } from "@/api/types";
-import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCaption, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-import { UNCATEGORIZED, type ChallengeLayout } from "./challenge-list";
-import { titleCase } from "./format";
+import { UNCATEGORIZED, isSolved, type ChallengeLayout } from "./challenge-list";
+import { solvedLabel, titleCase } from "./format";
 import { ctfChallengeDetailPath } from "./routes";
+import { SolvedBadge } from "./SolvedBadge";
 
 type Challenge = Readonly<{ challenge: CtfChallengeListItem }>;
-
-function solvedText(challenge: CtfChallengeListItem): string | null {
-  if (challenge.solved) return "Solved";
-  return challenge.team_solved ? "Solved by your team" : null;
-}
 
 /** The link keeps the list query parameters, so the challenge page follows the shown order. */
 function ChallengeLink({ challenge, className }: Challenge & Readonly<{ className?: string }>) {
@@ -28,17 +21,6 @@ function ChallengeLink({ challenge, className }: Challenge & Readonly<{ classNam
     <Link to={{ pathname: ctfChallengeDetailPath(challenge.id), search }} className={className}>
       {challenge.name}
     </Link>
-  );
-}
-
-function SolvedBadge({ challenge }: Challenge) {
-  const text = solvedText(challenge);
-  if (text === null) return null;
-  return (
-    <Badge variant="secondary" className="gap-1">
-      <CheckCircle2 className="size-3" aria-hidden="true" />
-      {text}
-    </Badge>
   );
 }
 
@@ -124,7 +106,7 @@ function TableLayout({ items, name }: Readonly<{ items: readonly CtfChallengeLis
             <TableCell className="wrap-anywhere">{titleCase(challenge.category || UNCATEGORIZED)}</TableCell>
             <TableCell>{challenge.difficulty ? titleCase(challenge.difficulty) : "—"}</TableCell>
             <TableCell>{challenge.points}</TableCell>
-            <TableCell>{solvedText(challenge) ?? "Not solved"}</TableCell>
+            <TableCell className="wrap-anywhere">{isSolved(challenge) ? solvedLabel(challenge) : "Not solved"}</TableCell>
           </TableRow>
         ))}
       </TableBody>

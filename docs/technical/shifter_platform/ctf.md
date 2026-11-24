@@ -302,7 +302,10 @@ The URL query parameters `view`, `sort`, `layout`, `tag`, and `topic` hold the l
 The `layout` parameter shows each group as cards, a list, or a table; it does not change the rows or their order.
 Unknown `view`, `sort`, and `layout` values give the defaults; unknown labels are ignored.
 The list API keeps its release, visibility, and prerequisite rules.
-Team membership changes refresh the list, because they can change `team_solved`.
+
+In team mode, the list and detail responses give `team_solved_by`: the display name of the current team member with the earliest correct submission.
+The field is optional, and its value is `null` when the team has not solved the challenge.
+Team membership and profile changes refresh the list and each challenge page, because they can change `team_solved` and `team_solved_by`.
 
 The challenge page **Previous** and **Next** buttons use the same rows and query parameters.
 They open the adjacent challenge in the shown list order and keep the query parameters.

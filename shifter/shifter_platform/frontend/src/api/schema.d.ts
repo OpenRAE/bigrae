@@ -6798,6 +6798,8 @@ export interface components {
             readonly solved: boolean;
             /** @description True when any member of the participant's team has solved it (team mode). */
             readonly team_solved: boolean;
+            /** @description Display name of the team member who solved it first (team mode); null when unsolved by the team. */
+            team_solved_by?: string | null;
             readonly attempt_count: number;
             readonly attempts_remaining: number | null;
             readonly timeout_retry_after: number | null;
@@ -6841,6 +6843,8 @@ export interface components {
             readonly solved: boolean;
             /** @description True when any member of the participant's team has solved it (team mode). */
             readonly team_solved: boolean;
+            /** @description Display name of the team member who solved it first (team mode); null when unsolved by the team. */
+            team_solved_by?: string | null;
             readonly tags: string[];
             readonly topics: string[];
         };

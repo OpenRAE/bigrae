@@ -67,6 +67,20 @@ class ParticipantCurrentEventSerializer(serializers.Serializer):
     participant = ParticipantSelfSerializer(read_only=True)
 
 
+def _team_solved_by_field() -> serializers.CharField:
+    """Return the optional, nullable ``team_solved_by`` output field.
+
+    ADR-040-R3 permits only optional response fields as v1 additions. The schema
+    generator marks every ``read_only`` field as required, so this output-only
+    field is declared ``required=False`` instead. The serializers only render.
+    """
+    return serializers.CharField(
+        required=False,
+        allow_null=True,
+        help_text="Display name of the team member who solved it first (team mode); null when unsolved by the team.",
+    )
+
+
 class ParticipantChallengeListItemSerializer(serializers.Serializer):
     """A participant-safe browse entry for one available challenge.
 
@@ -84,6 +98,7 @@ class ParticipantChallengeListItemSerializer(serializers.Serializer):
     team_solved = serializers.BooleanField(
         read_only=True, help_text="True when any member of the participant's team has solved it (team mode)."
     )
+    team_solved_by = _team_solved_by_field()
     tags = serializers.ListField(child=serializers.CharField(), read_only=True)
     topics = serializers.ListField(child=serializers.CharField(), read_only=True)
 
@@ -187,6 +202,7 @@ class ParticipantChallengeDetailSerializer(serializers.Serializer):
     team_solved = serializers.BooleanField(
         read_only=True, help_text="True when any member of the participant's team has solved it (team mode)."
     )
+    team_solved_by = _team_solved_by_field()
     attempt_count = serializers.IntegerField(read_only=True)
     attempts_remaining = serializers.IntegerField(read_only=True, allow_null=True)
     timeout_retry_after = serializers.IntegerField(read_only=True, allow_null=True)

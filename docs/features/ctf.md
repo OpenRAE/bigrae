@@ -96,6 +96,11 @@ In team mode, you can join or create a team to share a score.
 A participant with no team competes as an individual and can still submit flags and score.
 The event's team-size limit applies to teams.
 Solo events require no team membership.
+
+The challenge list and the challenge page show a challenge that a teammate solved as **Solved by** *name*.
+The name is the current team member who solved it first.
+You can still submit the flag for your individual score.
+
 Brackets provide separate cohort standings when the organizer uses them.
 
 A captain can rename the team, remove members, and transfer captaincy.
