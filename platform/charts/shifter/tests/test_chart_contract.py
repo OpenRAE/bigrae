@@ -77,8 +77,8 @@ AWS_DEV_WAF_ACL_ARN = (
 # Regenerated for the live event settings: portal TCP liveness and a 5 s readiness
 # timeout, portal BackendConfig unhealthyThreshold 5, and API_SESSION_TIMEOUT 15.
 GCP_RENDER_SHA256 = {
-    "gcp-prod": "3ffc117e4676bf2533089049c00609da89d060d162e15fcc7dc2a4d4e596cdab",
-    "gcp-dev": "ad9206f5b520ee2e6c6b06de1d562cb9d1a357ac76c4ca1caed6f2df20e66070",
+    "gcp-prod": "bd15929cfbfc22129c5dc83b0e4f79319bbddd147c7ad4231840b0af843dfb78",
+    "gcp-dev": "0c4d739b7918b3f066dc137044a5c59618d53a271999ee0c3547179fa917925c",
 }
 
 
@@ -183,6 +183,45 @@ class BackendNeutralChartContractTests(unittest.TestCase):
             ref = env[name]["valueFrom"]["configMapKeyRef"]
             self.assertEqual(ref["name"], "platform-runtime")
             self.assertEqual(ref["key"], name)
+
+    def test_guacamole_reads_runtime_credentials_from_read_only_files(self) -> None:
+        directory = "/run/secrets/guacamole-runtime"
+        for profile, values_file in VALUES_FILES.items():
+            with self.subTest(profile=profile):
+                _, documents = _render(values_file)
+                deployment = next(doc for doc in documents if _identity(doc) == ("Deployment", "guacamole-client"))
+                self.assertNotIn("checkov.io/skip1", deployment["metadata"].get("annotations", {}))
+                pod = deployment["spec"]["template"]["spec"]
+                self.assertEqual(pod["securityContext"]["fsGroup"], 10001)
+                self.assertEqual(pod["securityContext"]["fsGroupChangePolicy"], "OnRootMismatch")
+                volume = next(item for item in pod["volumes"] if item["name"] == "guacamole-runtime")
+                self.assertEqual(
+                    volume["secret"],
+                    {
+                        "secretName": "guacamole-runtime",
+                        "defaultMode": 0o440,
+                        "items": [
+                            {"key": "POSTGRESQL_USER", "path": "postgresql-username"},
+                            {"key": "POSTGRESQL_PASSWORD", "path": "postgresql-password"},
+                            {"key": "JSON_SECRET_KEY", "path": "json-secret-key"},
+                        ],
+                    },
+                )
+                container = pod["containers"][0]
+                self.assertNotIn("envFrom", container)
+                mount = next(item for item in container["volumeMounts"] if item["name"] == "guacamole-runtime")
+                self.assertEqual(mount, {"name": "guacamole-runtime", "mountPath": directory, "readOnly": True})
+                for other in pod["containers"][1:] + pod.get("initContainers", []):
+                    self.assertNotIn("guacamole-runtime", [item["name"] for item in other.get("volumeMounts", [])])
+                env = {item["name"]: item for item in container["env"]}
+                for name, path in (
+                    ("POSTGRESQL_USERNAME_FILE", "postgresql-username"),
+                    ("POSTGRESQL_PASSWORD_FILE", "postgresql-password"),
+                    ("JSON_SECRET_KEY_FILE", "json-secret-key"),
+                ):
+                    self.assertEqual(env[name], {"name": name, "value": f"{directory}/{path}"})
+                for item in container["env"]:
+                    self.assertNotIn("secretKeyRef", item.get("valueFrom", {}))
 
     def test_guacd_has_a_writable_freerdp_home(self) -> None:
         _, documents = _render(VALUES_FILES["gcp-dev"])
