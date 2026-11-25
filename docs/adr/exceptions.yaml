@@ -29,7 +29,7 @@
   {
     "rule_id": "ADR-004-R11",
     "owner": "@Brad-Edwards",
-    "reason": "CKV_GCP_38 (boot disk CSEK): the GCP-native dev-tenant runner (#1546) boot disk relies on Google-managed at-rest encryption (AES-256) rather than a customer-supplied/managed key. CSEK/CMEK would require provisioning and managing a KMS key + IAM in the dedicated runner root for marginal defense-in-depth over Google's default encryption, on a private, re-creatable dev-tenant runner. Inline `# checkov:skip=CKV_GCP_38` on google_compute_instance.runner points back to this entry; a CMEK upgrade is tracked with the runner hardening follow-up (#1613 area).",
+    "reason": "CKV_GCP_38 / GCP-0033 (boot disk CSEK / CMEK): the GCP-native dev-tenant runner (#1546) boot disk relies on Google-managed at-rest encryption (AES-256) rather than a customer-supplied/managed key. CSEK/CMEK would require provisioning and managing a KMS key + IAM in the dedicated runner root for marginal defense-in-depth over Google's default encryption, on a private, re-creatable dev-tenant runner. The inline `# checkov:skip=CKV_GCP_38` and `#trivy:ignore:GCP-0033` comments on google_compute_instance.runner point back to this entry; a CMEK upgrade is tracked with the runner hardening follow-up (#1613 area).",
     "expires_on": "2027-07-13",
     "paths": [
       "platform/terraform/gcp/global/github-runner/"
@@ -64,8 +64,7 @@
       "platform/terraform/modules/portal/cognito/",
       "platform/terraform/modules/portal/rds/",
       "platform/terraform/environments/dev/portal/",
-      "platform/terraform/environments/prod/portal/",
-      "platform/terraform/global/dev-box/"
+      "platform/terraform/environments/prod/portal/"
     ]
   },
   {
@@ -76,22 +75,6 @@
     "paths": [
       "platform/terraform/modules/engine-provisioner/iam.tf"
     ]
-  },
-  {
-    "rule_id": "ADR-004-R11",
-    "owner": "@Brad-Edwards",
-    "reason": "CKV_AWS_88 / CKV_AWS_130 (EC2 / subnet public IP) and CKV_AWS_25 / CKV_AWS_260 / CKV_AWS_24 (open RDP/HTTP/SSH ingress): these fire on demo workstations (dev-box) and on the CTFd-platform module that backs customer CTF events. Demo participants need direct console access to those instances (public IP + RDP/SSH/HTTP from controlled CIDRs) or the workshop scenario does not run. The ingress rules are scoped to specific source CIDRs where possible; '0.0.0.0/0' appears only on the public CTFd web port where the platform is by design publicly reachable.",
-    "expires_on": "2026-11-26",
-    "paths": [
-      "platform/terraform/global/dev-box/",
-      "platform/terraform/modules/portal/ctfd/"
-    ]
-  },
-  {
-    "rule_id": "ADR-004-R11",
-    "owner": "@Brad-Edwards",
-    "reason": "CKV_AWS_382 (egress 0.0.0.0/0 all-ports): default outbound egress is required for package updates, SSM agent traffic, AWS API calls, container image pulls, and demo internet access. Narrowing to a proxy/NAT path is a future refactor (#860); meanwhile each rule is documented with a description and confined to a single SG.",
-    "expires_on": "2027-05-26"
   },
   {
     "rule_id": "ADR-004-R11",
@@ -151,8 +134,8 @@
   {
     "rule_id": "ADR-004-R11",
     "owner": "@Brad-Edwards",
-    "reason": "CKV_AWS_18 / CKV_AWS_21 / CKV_AWS_144 / CKV2_AWS_62 / CKV_AWS_145 (S3 access logging / versioning / cross-region replication / event notifications / SSE-KMS): the log-aggregation S3 bucket is the access log sink \u2014 logging access of the log bucket back to itself is a recursion, and versioning would double storage on append-only log data. Cross-region replication is not in scope for ephemeral log archive. Event notifications are only added when a consumer actually exists. The dedicated ALB access-log bucket must use SSE-S3 because Elastic Load Balancing access-log delivery does not support SSE-KMS; central Firehose log archives remain protected by the log-aggregation CMK.",
-    "expires_on": "2027-05-26",
+    "reason": "CKV_AWS_144 / CKV2_AWS_62 / CKV_AWS_145 / AWS-0132 (cross-region replication / event notifications / SSE-KMS): the log-aggregation and engine-state buckets have versioning and S3 server access logging since #2566. Cross-region replication is not in scope for the log archive. Event notifications are added only when a consumer exists. The ALB access-log bucket uses SSE-S3 because Elastic Load Balancing access-log delivery supports only SSE-S3 (https://docs.aws.amazon.com/elasticloadbalancing/latest/application/enable-access-logging.html); this is a service constraint, not a configuration choice. The `#trivy:ignore:AWS-0132` comment and the `# checkov:skip=CKV_AWS_145` comment on that bucket point to this entry. Central Firehose archives keep the log-aggregation CMK.",
+    "expires_on": "2027-11-25",
     "paths": [
       "platform/terraform/modules/log-aggregation/s3.tf",
       "platform/terraform/modules/engine-state/"
@@ -161,7 +144,7 @@
   {
     "rule_id": "ADR-004-R11",
     "owner": "@Brad-Edwards",
-    "reason": "CKV_AWS_18 / CKV_AWS_21 / CKV_AWS_144 / CKV2_AWS_62 (S3 access logging / versioning / cross-region replication / event notifications): portal user-uploads bucket stores ephemeral presigned-PUT data only; authoritative state is in RDS. Versioning is disabled to avoid retaining deleted uploads (#109). Access logging awaits the unified logging strategy (#310). Cross-region replication evaluated and rejected \u2014 CRR requires versioning, adds destination-bucket/KMS/replication-role cost, and the upload data is re-creatable; see docs/_deprecated/architecture/s3-bucket-hardening-preflight.md \u00a7 Cross-Region Replication Evaluation (#143). Event notifications are omitted until a real consumer exists.",
+    "reason": "CKV_AWS_144 / CKV2_AWS_62 (cross-region replication / event notifications): the portal user-uploads bucket stores ephemeral presigned-PUT data only; authoritative state is in RDS. Versioning and S3 server access logging are on since #2566, and noncurrent versions expire after one day to keep uploads ephemeral (#109). Cross-region replication was evaluated and rejected: it adds destination-bucket, KMS, and replication-role cost, and the upload data is re-creatable; see docs/_deprecated/architecture/s3-bucket-hardening-preflight.md (#143). Event notifications are omitted until a real consumer exists.",
     "expires_on": "2027-05-26",
     "paths": [
       "platform/terraform/modules/portal/s3/"
@@ -309,7 +292,7 @@
   {
     "rule_id": "ADR-004-R11",
     "owner": "@Brad-Edwards",
-    "reason": "CKV_AWS_344 (Network Firewall delete protection): delete protection is variableized as a Terraform lifecycle toggle (var.network_firewall_delete_protection on the range egress firewall, var.portal_inspection_delete_protection on the portal inspection firewall) so disposable dev environments can complete `terraform destroy`/rebuild (#934). The secure default is `true`; production keeps it `true` and only dev sets it `false`. Same dev-false / prod-true convention as the RDS CKV_AWS_293 and ALB deletion-protection toggles. Each firewall resource carries an inline `# checkov:skip=CKV_AWS_344` pointer back to this entry.",
+    "reason": "CKV_AWS_344 (Network Firewall delete protection): delete protection is variableized as a Terraform lifecycle toggle (var.network_firewall_delete_protection on the range egress firewall, var.portal_inspection_delete_protection on the portal inspection firewall) so disposable dev environments can complete `terraform destroy`/rebuild (#934). The secure default is `true`; production keeps it `true` and only dev sets it `false`. Same dev-false / prod-true convention as the ALB deletion-protection toggle. Each firewall resource carries an inline `# checkov:skip=CKV_AWS_344` pointer back to this entry.",
     "expires_on": "2027-06-14",
     "paths": [
       "platform/terraform/modules/portal/vpc/inspection.tf",
@@ -398,6 +381,80 @@
     "expires_on": "2027-01-13",
     "paths": [
       "shifter/shifter_platform/frontend/src/api/account-admin-schema.d.ts"
+    ]
+  },
+  {
+    "rule_id": "ADR-004-R11",
+    "owner": "@Brad-Edwards",
+    "reason": "github-runner-internet-egress: AWS-0104 / CKV_AWS_382 on aws_security_group.runner. The self-hosted GitHub Actions runner must reach github.com, api.github.com, *.actions.githubusercontent.com, and package registries over the public internet (https://docs.github.com/en/actions/reference/runners/self-hosted-runners). GitHub publishes no stable address set that a security group can express. The maintainer kept the runner unchanged on #2566, because #2573 owns an AWS deploy path that needs no runner. The `#trivy:ignore:AWS-0104` and `# checkov:skip=CKV_AWS_382` comments on the group point to this entry.",
+    "expires_on": "2027-05-25",
+    "paths": [
+      "platform/terraform/global/github-runner/main.tf"
+    ]
+  },
+  {
+    "rule_id": "ADR-004-R11",
+    "owner": "@Brad-Edwards",
+    "reason": "ngfw-management-egress: AWS-0104 / CKV_AWS_382 on aws_security_group_rule.ngfw_mgmt_egress_all. The NGFW management interface must reach the vendor licensing, content-update, and cloud management services, whose addresses the vendor does not publish as a stable set. The rule applies only to the management group, only when NGFW infrastructure is enabled. The `#trivy:ignore:AWS-0104` and `# checkov:skip=CKV_AWS_382` comments on the rule point to this entry.",
+    "expires_on": "2027-05-25",
+    "paths": [
+      "platform/terraform/modules/range/vpc/ngfw.tf"
+    ]
+  },
+  {
+    "rule_id": "ADR-004-R11",
+    "owner": "@Brad-Edwards",
+    "reason": "ngfw-dataplane-egress: verified false positive for AWS-0104 / CKV_AWS_382 on aws_security_group_rule.ngfw_data_egress_all. The NGFW dataplane forwards range traffic that the NGFW security policy inspects and filters (ADR-017, ADR-020), so the security group rule does not make egress unrestricted. The `#trivy:ignore:AWS-0104` and `# checkov:skip=CKV_AWS_382` comments on the rule point to this entry.",
+    "expires_on": "2027-11-25",
+    "paths": [
+      "platform/terraform/modules/range/vpc/ngfw.tf"
+    ]
+  },
+  {
+    "rule_id": "ADR-004-R11",
+    "owner": "@Brad-Edwards",
+    "reason": "passrole-scoped-grants: verified false positive for AWS-0342 on aws_iam_policy.security and aws_iam_policy.eks (global/iam) and aws_iam_policy.ec2_provisioning (provisioner-iam). The rule reports every policy that allows iam:PassRole without a Deny. Each grant names a role namespace and a target service: shifter-* and <env>-* roles to named services, shifter-<env>-eks-* roles to EKS, and the range and NGFW instance roles to EC2. The RDS monitoring grant has no service condition because RDS does not set iam:PassedToService; it names only *-rds-enhanced-monitoring roles, whose trust admits only monitoring.rds.amazonaws.com. check_tf_iam_role_naming rejects any iam:PassRole allow without these scopes. The `#trivy:ignore:AWS-0342` comments on the policies point to this entry.",
+    "expires_on": "2027-11-25",
+    "paths": [
+      "platform/terraform/global/iam/github-oidc.tf",
+      "platform/terraform/modules/provisioner-iam/main.tf"
+    ]
+  },
+  {
+    "rule_id": "ADR-004-R11",
+    "owner": "@Brad-Edwards",
+    "reason": "range-deny-ingress-port-range: verified false positive for GCP-0074 on google_compute_firewall.range_deny_ingress_all. The rule reports a large port range, but this firewall rule denies all ingress (ADR-008-R4). Narrowing it would weaken range containment. The `#trivy:ignore:GCP-0074` comment on the rule points to this entry.",
+    "expires_on": "2027-11-25",
+    "paths": [
+      "platform/terraform/gcp/modules/range/vpc/main.tf"
+    ]
+  },
+  {
+    "rule_id": "ADR-004-R11",
+    "owner": "@Brad-Edwards",
+    "reason": "s3-access-log-destination: AWS-0089 / CKV_AWS_18 and AWS-0132 / CKV_AWS_145 on the modules/s3-access-logs bucket. AWS documents that a server access log destination must not have server access logging and must use SSE-S3 default encryption, because log delivery cannot use SSE-KMS (https://docs.aws.amazon.com/AmazonS3/latest/userguide/enable-server-access-logging.html). The bucket is the terminal sink for each root. The `#trivy:ignore` and `# checkov:skip` comments on the bucket and its encryption configuration point to this entry.",
+    "expires_on": "2027-11-25",
+    "paths": [
+      "platform/terraform/modules/s3-access-logs/main.tf"
+    ]
+  },
+  {
+    "rule_id": "ADR-004-R11",
+    "owner": "@Brad-Edwards",
+    "reason": "rds-deletion-protection-input: CKV_AWS_293 on aws_db_instance.this in modules/portal/rds. Deletion protection is the required var.deletion_protection input, so Checkov cannot see its value. Dev and prod set db_deletion_protection = true (#2566); scripts/bootstrap/aws_env_destroy.py lifts it for an intended teardown. The `# checkov:skip=CKV_AWS_293` comment on the instance points to this entry.",
+    "expires_on": "2027-11-25",
+    "paths": [
+      "platform/terraform/modules/portal/rds/main.tf"
+    ]
+  },
+  {
+    "rule_id": "ADR-004-R11",
+    "owner": "@Brad-Edwards",
+    "reason": "guacamole-rdp-test-root: DS-0002 on the test-only RDP fixture image. xrdp-sesman must run as root to authenticate the synthetic user through PAM and start the session as that user. The image is built and run only by the CI Guacamole integration test and is never published. Trivy cannot ignore an absence check inline, so the DS-0002 entry in .trivyignore-config.yaml, with the same expiry, points to this entry.",
+    "expires_on": "2027-05-25",
+    "paths": [
+      ".trivyignore-config.yaml",
+      "shifter/shifter_platform/tests/integration/guacamole-rdp/Dockerfile"
     ]
   }
 ]

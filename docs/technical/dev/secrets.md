@@ -73,12 +73,6 @@ The AWS EKS provisioner environment carries the secret reference through the exi
 The secret is not stored in Helm values or committed configuration.
 A fresh environment uses the normal infrastructure apply; no manual secret creation is required.
 
-### Dev Box
-
-| Secret Name | Contains |
-|-------------|----------|
-| `shifter-dev-box-admin-password` | Windows Administrator password (auto-generated) |
-
 ## GCP Secret Manager
 
 `gcp-dev` stages parallel runtime secret bundles with the same shapes the portal

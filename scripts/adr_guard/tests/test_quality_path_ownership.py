@@ -559,15 +559,27 @@ class QualityOwnershipCheckTests(unittest.TestCase):
 
     def test_advisory_job_cannot_own_responsibility(self):
         data = json.loads(json.dumps(DEFAULT_CONTRACT))
-        # security-trivy-advisory is an evidence-only (advisory) job by name.
-        # (security-k8s became a blocking gate in #2558.)
-        data["quality_units"][0]["responsibilities"]["security"] = ["security-trivy-advisory"]
+        # security-osv-advisory is an evidence-only (advisory) job by name.
+        data["quality_units"][0]["responsibilities"]["security"] = ["security-osv-advisory"]
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             write_repo(root, contract=data)
             self.assertTrue(
                 any("advisory" in v.message for v in run_check(root)),
                 msg=messages(run_check(root)),
+            )
+
+    def test_blocking_trivy_config_job_can_own_security(self):
+        # The Trivy configuration scan blocks on findings since #2566.
+        data = json.loads(json.dumps(DEFAULT_CONTRACT))
+        data["quality_units"][0]["responsibilities"]["security"] = ["security-trivy-config"]
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            write_repo(root, contract=data)
+            violations = run_check(root)
+            self.assertFalse(
+                any("security-trivy-config" in v.message for v in violations),
+                msg=messages(violations),
             )
 
     def test_missing_job_flagged(self):

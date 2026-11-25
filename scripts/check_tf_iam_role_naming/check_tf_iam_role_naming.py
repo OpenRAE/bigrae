@@ -696,12 +696,70 @@ def check_github_oidc_image_passrole_scope(
     return violations
 
 
+# RDS does not set iam:PassedToService when it validates an enhanced-monitoring
+# role, so that grant cannot carry the condition. It is the only exception, and
+# it must name only enhanced-monitoring roles, whose trust admits only
+# monitoring.rds.amazonaws.com.
+PASSROLE_NO_SERVICE_SUFFIX = "-rds-enhanced-monitoring"
+STATEMENT_START_RE = re.compile(r"^\s*(?:\{|statement\s*\{)\s*$")
+
+
+def _first_values(statement: str, keys: tuple[str, ...]) -> set[str] | None:
+    for key in keys:
+        values = _assignment_values(statement, key)
+        if values is not None:
+            return values
+    return None
+
+
+def _passrole_violation(statement: str) -> str | None:
+    """Return why an iam:PassRole allow statement is unscoped, or None."""
+    actions = _first_values(statement, ("Action", "actions")) or set()
+    if "iam:PassRole" not in actions:
+        return None
+    effect = _first_values(statement, ("Effect", "effect")) or {"Allow"}
+    if effect != {"Allow"}:
+        return None
+    resources = _first_values(statement, ("Resource", "resources")) or set()
+    if not resources or "*" in resources:
+        return "must name a role namespace, not a wildcard resource"
+    if "iam:PassedToService" in statement:
+        return None
+    if all(value.endswith(PASSROLE_NO_SERVICE_SUFFIX) for value in resources):
+        return None
+    return "must carry an iam:PassedToService condition"
+
+
+def check_passrole_scope(path: Path, lines: list[str]) -> list[Violation]:
+    """Every iam:PassRole allow names a role namespace and a target service (#2566).
+
+    The AWS-0342 false-positive record in docs/adr/exceptions.yaml relies on this
+    invariant, because an exact-resource Trivy ignore covers every statement in
+    the policy.
+    """
+    violations: list[Violation] = []
+    idx = 0
+    while idx < len(lines):
+        if not STATEMENT_START_RE.match(lines[idx]):
+            idx += 1
+            continue
+        _, block = _extract_resource_block(lines, idx)
+        reason = _passrole_violation(_strip_hcl_comments("\n".join(block)))
+        if reason:
+            violations.append(
+                Violation(path, idx + 1, f"iam:PassRole grant {reason} (ADR-004-R22, #2566)")
+            )
+        idx += 1
+    return violations
+
+
 def check_file(path: Path, *, repo_root: Path = REPO_ROOT) -> list[Violation]:
     if path.suffix != ".tf":
         return []
     text = path.read_text(encoding="utf-8")
     lines = text.splitlines()
     violations = check_iam_resource_names(path, lines)
+    violations.extend(check_passrole_scope(path, lines))
     violations.extend(
         check_vpn_gateway_identity_policy(path, lines, repo_root=repo_root)
     )

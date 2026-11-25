@@ -51,6 +51,7 @@ locals {
     "s3:PutBucketCORS",
     "s3:PutBucketNotification",
     "s3:PutBucketLogging",
+    "s3:PutBucketOwnershipControls",
     "s3:PutBucketTagging",
     "s3:PutObject",
     "s3:DeleteObject",
@@ -881,7 +882,10 @@ resource "aws_iam_policy" "data" {
           # Bucket names carry an account-id suffix (e.g. proof-range-pulumi-state-<acct>),
           # so match the prefix with a trailing wildcard.
           "arn:aws:s3:::*-range-pulumi-state*",
-          "arn:aws:s3:::*-range-pulumi-state*/*"
+          "arn:aws:s3:::*-range-pulumi-state*/*",
+          # Range S3 server access log destination (modules/s3-access-logs, #2566).
+          "arn:aws:s3:::*-range-s3-access-logs-*",
+          "arn:aws:s3:::*-range-s3-access-logs-*/*"
         ]
       },
       {
@@ -976,6 +980,10 @@ resource "aws_iam_policy" "data" {
 # NOTE: Not best practice. Project in rapid development - velocity impact of permissions errors
 # and size of inline policies outweigh need for pure least privilege. Risk accepted.
 # IAM statements stay restricted to shifter-* naming after #253 role standardization.
+# Every iam:PassRole grant here names a role namespace and a target service;
+# check_tf_iam_role_naming enforces that. See ADR-004-R11 exception
+# passrole-scoped-grants.
+#trivy:ignore:AWS-0342:exp:2027-11-25
 resource "aws_iam_policy" "security" {
   name = "shifter-${var.environment}-security"
 
@@ -1215,6 +1223,10 @@ resource "aws_iam_policy" "security" {
 # security category because that managed policy is already near AWS's 6,144
 # character document limit; the deploy role remains at the repository's
 # six-attachment cap.
+# Every iam:PassRole grant here names a role namespace and a target service;
+# check_tf_iam_role_naming enforces that. See ADR-004-R11 exception
+# passrole-scoped-grants.
+#trivy:ignore:AWS-0342:exp:2027-11-25
 resource "aws_iam_policy" "eks" {
   name = "shifter-${var.environment}-eks"
 

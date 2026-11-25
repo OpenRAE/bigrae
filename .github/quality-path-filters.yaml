@@ -413,6 +413,9 @@ exclusions:
       # Exact-release Trivy exposure-management policy consumed by the
       # release-scan gate in .github/workflows/_gcp-dev.yml (--ignorefile).
       - .trivyignore.yaml
+      # Trivy configuration-scan absence-check exceptions consumed by the
+      # Security (trivy config) quality job (--ignorefile, #2566).
+      - .trivyignore-config.yaml
       # OSV-Scanner policy consumed by the Security (osv-scanner) quality job
       # via --config. Any future suppression must be time-boxed and limited to
       # an advisory with no upstream fix.
@@ -442,7 +445,6 @@ exclusions:
       # new script package under scripts/ still fails closed as unclassified.
       - scripts/ami.sh
       - scripts/delete-user.sh
-      - scripts/dev-box.sh
       - scripts/iam-deploy.sh
       - scripts/runner-deploy.sh
       - scripts/setup-worktree.sh

@@ -31,4 +31,7 @@ COPY shifter/shifter_platform/shared/raes/__init__.py shifter/shifter_platform/s
 COPY shifter/packer/preparation ./preparation
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1
 USER 10001:10001
+# The preparation worker runs one attempt and exits. It is not a service, so
+# it has no health check.
+HEALTHCHECK NONE
 ENTRYPOINT ["/opt/venv/bin/python", "-m", "preparation.worker_client"]

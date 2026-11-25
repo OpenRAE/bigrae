@@ -132,7 +132,11 @@ data "aws_ami" "al2023" {
 # Security Group
 # ------------------------------------------------------------------------------
 
+# The runner must reach GitHub and package registries on the public internet.
+# See ADR-004-R11 exception github-runner-internet-egress.
+#trivy:ignore:AWS-0104:exp:2027-05-25
 resource "aws_security_group" "runner" {
+  # checkov:skip=CKV_AWS_382:The runner must reach GitHub and package registries on the public internet. See ADR-004-R11 exception github-runner-internet-egress.
   name        = "shifter-github-runner"
   description = "Security group for GitHub Actions runner"
   vpc_id      = local.runner_vpc_id

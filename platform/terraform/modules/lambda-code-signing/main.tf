@@ -57,6 +57,13 @@ resource "aws_s3_bucket_versioning" "artifacts" {
   }
 }
 
+resource "aws_s3_bucket_logging" "artifacts" {
+  bucket = aws_s3_bucket.artifacts.id
+
+  target_bucket = var.access_log_bucket
+  target_prefix = "${aws_s3_bucket.artifacts.id}/"
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "artifacts" {
   bucket = aws_s3_bucket.artifacts.id
 
