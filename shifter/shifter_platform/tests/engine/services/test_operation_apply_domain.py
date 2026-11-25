@@ -24,6 +24,7 @@ from engine.models import (
     Request,
 )
 from engine.services import apply_pending_operation_results
+from engine.services._operation_apply.admission import has_earlier_pending_sibling
 from shared.audit import bind_audit_writer, get_audit_writer, reset_audit_writer
 from shared.enums import ResourceStatus
 from shared.operation_envelope import build_operation_envelope, canonical_payload_digest
@@ -337,6 +338,10 @@ class TestSiblingResultsAreSerialized:
         # Hide the earlier row from this pass, as skip_locked would.
         OperationResultInbox.objects.filter(pk=later.pk).update(created_at=earlier.created_at)
         assert _disposition(later) == OperationResultDisposition.PENDING
+        # Equal timestamps: the insertion-ordered key still makes the earlier
+        # row a pending predecessor, so the later row waits in either claim order.
+        later.refresh_from_db()
+        assert has_earlier_pending_sibling(later)
 
         apply_pending_operation_results()
         # Both eventually apply, and the range only reaches its terminal state

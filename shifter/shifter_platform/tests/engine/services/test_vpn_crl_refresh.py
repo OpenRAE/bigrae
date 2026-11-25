@@ -39,7 +39,7 @@ def _finish(operation_id, request_id, operation):
 def _live_profiles(fixture):
     """Return two issued profiles, so a refresh can rotate to a second candidate."""
     from engine.models import VpnAccessProfile
-    from engine.services._vpn_profiles import request_vpn_profile
+    from engine.services._vpn.profiles import request_vpn_profile
 
     first = request_vpn_profile(fixture.credential, fixture.request.request_id)
     first.state, first.certificate_serial = "ready", "1234"
@@ -82,7 +82,7 @@ def _refresh_inputs():
 
 def test_pending_revision_publishes_once_without_a_new_revision(vpn_range):
     from engine.models import VpnAccessProfile
-    from engine.services._vpn_profiles import _refresh_vpn_crl
+    from engine.services._vpn.profiles import _refresh_vpn_crl
 
     _live_profiles(vpn_range)
     pending = _requested_revision()
@@ -100,8 +100,8 @@ def test_pending_revision_publishes_once_without_a_new_revision(vpn_range):
 
 
 def test_revocation_adds_one_revision_and_one_refresh(vpn_range):
-    from engine.services._vpn_profile_operations import queue_vpn_operation
-    from engine.services._vpn_profiles import _refresh_vpn_crl
+    from engine.services._vpn.profile_operations import queue_vpn_operation
+    from engine.services._vpn.profiles import _refresh_vpn_crl
 
     _first, second = _live_profiles(vpn_range)
     _publish(_requested_revision(), timedelta(days=7))
@@ -121,7 +121,7 @@ def test_revocation_adds_one_revision_and_one_refresh(vpn_range):
 
 
 def test_expiring_published_list_renews_with_one_new_revision(vpn_range):
-    from engine.services._vpn_profiles import _refresh_vpn_crl
+    from engine.services._vpn.profiles import _refresh_vpn_crl
 
     _live_profiles(vpn_range)
     published = _requested_revision()

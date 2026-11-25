@@ -4,7 +4,7 @@ import pytest
 from django.contrib.auth.models import Permission, User
 
 from engine.models import PreparationGrant
-from engine.services._preparation_grants import activate_preparation_grant, revoke_preparation_grant
+from engine.services._preparation.grants import activate_preparation_grant, revoke_preparation_grant
 from shared.exceptions import ValidationError
 from tests.shared.cloud.test_preparation_cloud_readback import cloud_observations
 from tests.shared.cloud.test_preparation_installation_readback import observed_fixture

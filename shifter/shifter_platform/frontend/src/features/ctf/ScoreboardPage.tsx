@@ -13,6 +13,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 import { ScoreboardControls } from "./ScoreboardControls";
 import { rankingKey, rankingNumber, rankingString } from "./format";
+import { ScoreboardGraph } from "./ScoreProgressionChart";
 import { filterScoreboardRows, sortScoreboardRows, type ScoreboardSort } from "./scoreboard-list";
 
 const ALL = "all";
@@ -145,6 +146,9 @@ function ScoreboardContent({
           onSortChange={controls.onSortChange}
         />
       </div>
+      {(source ?? []).length > 0 ? (
+        <ScoreboardGraph progression={data.progression} teamMode={teamMode} frozen={Boolean(data.frozen)} />
+      ) : null}
       <Card className="overflow-hidden py-0">{table}</Card>
     </>
   );

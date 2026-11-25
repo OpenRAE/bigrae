@@ -33,7 +33,7 @@ def pull_secret_env(monkeypatch):
     batch.read_namespaced_job.return_value = SimpleNamespace(metadata=SimpleNamespace(uid="job-uid"))
     core = MagicMock()
     monkeypatch.setattr(
-        "engine.services._runtime_plugin_controller.load_kubernetes_api",
+        "engine.services._runtime_plugin.controller.load_kubernetes_api",
         lambda: (batch, core, None, _ApiException),
     )
     monkeypatch.setattr("shared.cloud.kubernetes._helpers.time.sleep", lambda _seconds: None)
@@ -56,7 +56,7 @@ def test_admission_conflict_is_distinguished_from_already_exists():
 
 
 def test_pull_secret_retries_quota_conflicts_and_never_reads_an_absent_secret(pull_secret_env):
-    from engine.services._runtime_plugin_controller import _pull_secret
+    from engine.services._runtime_plugin.controller import _pull_secret
 
     env = pull_secret_env
     env.core.create_namespaced_secret.side_effect = [
@@ -80,7 +80,7 @@ def test_pull_secret_retries_quota_conflicts_and_never_reads_an_absent_secret(pu
 
 
 def test_pull_secret_reuses_an_existing_matching_secret(pull_secret_env):
-    from engine.services._runtime_plugin_controller import _pull_secret
+    from engine.services._runtime_plugin.controller import _pull_secret
 
     env = pull_secret_env
     env.core.create_namespaced_secret.side_effect = _ApiException(409, "AlreadyExists")
@@ -113,7 +113,7 @@ def test_pull_secret_reuses_an_existing_matching_secret(pull_secret_env):
 
 @pytest.mark.parametrize("changed", ["uid", "controller", "name", "kind", "api_version", "data", "immutable"])
 def test_input_secret_conflict_cannot_adopt_another_owner_or_material(pull_secret_env, changed):
-    from engine.services._runtime_plugin_controller import _owned_secret
+    from engine.services._runtime_plugin.controller import _owned_secret
 
     env = pull_secret_env
     env.core.create_namespaced_secret.side_effect = _ApiException(409, "AlreadyExists")

@@ -31,9 +31,12 @@ function reports errors. Legacy alerts may still call this a Lambda failure.
    database, queue, provider, quota, policy-admission, image, or code failure.
 4. On AWS, confirm that the named Lambda belongs to the selected deployment before inspection. Identity rotation functions are separate from range provisioning.
 
-CTF status deliveries use the existing `worker-reconciler`. A receiver failure
-leaves the CMS status committed and retains a `cms.RangeStatusDelivery` row. The row contains only the source id, status transition, verified-cleanup flag,
-attempt count, next attempt time, and exception class.
+CTF status deliveries use the existing `worker-reconciler`. The CMS status
+write and a `cms.RangeStatusDelivery` row commit together. CTF receivers run
+only after that commit, in a separate transaction. A receiver failure leaves the
+CMS status committed and keeps the row. The row contains only the source id,
+status transition, verified-cleanup flag, attempt count, next attempt time, and
+exception class.
 
 Retry proceeds in status
 order for each range, with backoff capped at five minutes; a failing range does
@@ -42,9 +45,14 @@ row commit together. Pending rows survive terminal CMS states and source-row
 pruning.
 
 Correlate `CTF range status delivery retained for retry` records by
-delivery id and range-instance id; `ctf_delivered` in the reconciler summary
-shows recovery. Restore the failed dependency and let the reconciler retry;
-do not delete pending rows to clear an error.
+delivery id and range-instance id. A `deferred to reconciler` record means the
+post-commit attempt failed before a receiver ran; the reconciler retries the row.
+
+The reconciler pass summary shows `ctf_delivered`, `ctf_pending`,
+`ctf_retrying`, and `ctf_oldest_pending_seconds`. The summary is a warning while
+a delivery is retrying. A growing oldest age shows a stuck backlog on a healthy
+worker. Restore the failed dependency and let the reconciler retry. Do not
+delete pending rows to clear an error.
 
 ## Resolution
 

@@ -105,7 +105,7 @@ class OrganizerScoreboardView(APIView):
     @extend_schema(operation_id="ctf_organizer_scoreboard", responses=OrganizerScoreboardResponseSerializer)
     def get(self, request: Request, event_id: UUID) -> Response:
         """Return the full scoreboard for an owned event, ignoring freeze/visibility."""
-        from ctf.services.scoring import get_scoreboard, get_team_scoreboard
+        from ctf.services.scoring import get_score_progression, get_scoreboard, get_team_scoreboard
         from ctf.views import _parsing
 
         try:
@@ -115,18 +115,15 @@ class OrganizerScoreboardView(APIView):
 
         bracket_param = request.query_params.get("bracket")
         brackets, _selected_bracket, bracket_id = _parsing._resolve_bracket_filter(event.id, bracket_param)
-        rankings = (
-            get_team_scoreboard(event.id, freeze_at=None)
-            if event.team_mode
-            else get_scoreboard(event.id, freeze_at=None)
+        read_board = get_team_scoreboard if event.team_mode else get_scoreboard
+        rankings = read_board(event.id, freeze_at=None)
+        bracket_rankings = read_board(event.id, freeze_at=None, bracket_id=bracket_id) if bracket_id else None
+        progression = get_score_progression(
+            event,
+            rankings if bracket_rankings is None else bracket_rankings,
+            team=event.team_mode,
+            bracket_id=bracket_id,
         )
-        bracket_rankings = None
-        if bracket_id:
-            bracket_rankings = (
-                get_team_scoreboard(event.id, freeze_at=None, bracket_id=bracket_id)
-                if event.team_mode
-                else get_scoreboard(event.id, freeze_at=None, bracket_id=bracket_id)
-            )
         return Response(
             {
                 "event_id": str(event.id),
@@ -135,5 +132,6 @@ class OrganizerScoreboardView(APIView):
                 "rankings": rankings,
                 "bracket_rankings": bracket_rankings,
                 "brackets": [{"id": str(bracket.id), "name": bracket.name} for bracket in brackets],
+                "progression": progression,
             }
         )

@@ -9,6 +9,8 @@ projects for retries and cleanup. The native IAM/Secret Manager runtime and inde
 in the current change; live provider qualification is still pending.
 Nothing in this page claims a tenant deployment or live acceptance.
 
+The private `engine.services._gcp_project` package implements registration, allocation, completion and release.
+
 ## Native capture boundary
 
 Provider secret-version reads accept only ASCII decimal project and version

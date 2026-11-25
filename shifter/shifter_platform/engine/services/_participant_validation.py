@@ -111,7 +111,7 @@ def _reconcile(row: RuntimePluginValidation) -> None:
     """Launch or observe one worker; record only a result authorized for its input."""
     from engine.models import RuntimePluginValidation
 
-    from ._runtime_plugin_controller import _pull_secret
+    from ._runtime_plugin.controller import _pull_secret
 
     state, result, request = "pending", None, None
     try:

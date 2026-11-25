@@ -55,6 +55,7 @@ export const ctfKeys = {
   all: ["ctf"] as const,
   currentEvent: () => ["ctf", "current-event"] as const,
   challenges: () => ["ctf", "challenges"] as const,
+  challengeAll: () => ["ctf", "challenge"] as const,
   challenge: (id: string) => ["ctf", "challenge", id] as const,
   team: () => ["ctf", "team"] as const,
   profile: () => ["ctf", "profile"] as const,
@@ -269,6 +270,15 @@ export function useUseHint(challengeId: string) {
   });
 }
 
+/**
+ * Refresh the challenge list and every challenge detail. Their team solve
+ * attribution depends on team membership and member display names.
+ */
+function invalidateChallengeReads(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ctfKeys.challenges() });
+  queryClient.invalidateQueries({ queryKey: ctfKeys.challengeAll() });
+}
+
 function useTeamMutation<TBody>(path: string) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -277,8 +287,9 @@ function useTeamMutation<TBody>(path: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ctfKeys.team() });
       queryClient.invalidateQueries({ queryKey: ctfKeys.currentEvent() });
-      // Membership decides `team_solved`, which the challenge list groups by (#2998).
-      queryClient.invalidateQueries({ queryKey: ctfKeys.challenges() });
+      // Membership decides `team_solved`, which the challenge list groups by (#2998),
+      // and `team_solved_by` on the list and detail (#2997).
+      invalidateChallengeReads(queryClient);
     },
   });
 }
@@ -334,6 +345,7 @@ export function useUpdateCtfProfile() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ctfKeys.profile() });
       queryClient.invalidateQueries({ queryKey: ctfKeys.currentEvent() });
+      invalidateChallengeReads(queryClient);
     },
   });
 }

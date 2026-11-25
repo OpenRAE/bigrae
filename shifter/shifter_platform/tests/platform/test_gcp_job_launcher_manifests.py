@@ -741,7 +741,7 @@ def test_registered_project_job_requires_exact_read_only_operation_and_generatio
 @pytest.mark.parametrize("inline_params", [True, False])
 def test_worker_trial_job_admits_exactly_the_launcher_command(inline_params):
     """Each ``worker-trial`` operation is admitted only in its dispatched form."""
-    from engine.services._worker_trials import _OPERATIONS, validate_worker_trial_command
+    from engine.services._worker.trials import _OPERATIONS, validate_worker_trial_command
 
     parameters = _canonical_admission_parameters()
     policy = _policy(_load_helm_documents(runtime_env=parameters, inline_params=inline_params))

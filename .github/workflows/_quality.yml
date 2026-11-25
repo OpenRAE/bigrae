@@ -3091,11 +3091,15 @@ jobs:
           name: coverage-adr-guard
           path: scripts/adr_guard
 
+      # The Maven cache keeps the analysis compile off Maven Central, which
+      # can refuse plugin downloads with HTTP 429.
       - name: Setup Java for SonarScanner
         uses: actions/setup-java@0f481fcb613427c0f801b606911222b5b6f3083a # v5.5.0
         with:
           distribution: temurin
           java-version: '21'
+          cache: maven
+          cache-dependency-path: shifter/engine/guacamole/authority-extension/pom.xml
 
       - name: Download Guacamole authority coverage
         if: ${{ needs.guacamole-authority-tests.result == 'success' }}

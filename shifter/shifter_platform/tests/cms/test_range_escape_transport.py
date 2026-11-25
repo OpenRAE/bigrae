@@ -13,7 +13,7 @@ from typing import Any
 
 import pytest
 
-from engine.services._range_escape import GuestProbeError, GuestProbeRequest, run_guest_probe
+from engine.services._range.escape import GuestProbeError, GuestProbeRequest, run_guest_probe
 from shared import guest_probe
 
 

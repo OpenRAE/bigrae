@@ -9,76 +9,26 @@ import engine.ssh as _api_engine_ssh
 
 from . import _authorization_inventory as _api_authorization_inventory
 from . import _capacity as _api_capacity
-from . import _capacity_admit as _api_capacity_admit
-from . import _capacity_plan as _api_capacity_plan
-from . import _cleanup_outcome as _api_cleanup_outcome
-from . import _cleanup_verification as _api_cleanup_verification
+from . import _cleanup as _api_cleanup
 from . import _common as _api_common
 from . import _device_authority as _api_device_authority
-from . import _feature_artifact_launcher as _api_feature_artifact_launcher
 from . import _feature_artifacts as _api_feature_artifacts
-from . import _gcp_project_registration as _api_gcp_project_registration
+from . import _gcp_project as _api_gcp_project
 from . import _lifecycle as _api_lifecycle
 from . import _ngfw as _api_ngfw
 from . import _operation_apply as _api_operation_apply
-from . import _preparation_adapters as _api_preparation_adapters
-from . import _preparation_controller as _api_preparation_controller
-from . import _preparation_grants as _api_preparation_grants
-from . import _preparation_operations as _api_preparation_operations
-from . import _preparation_worker as _api_preparation_worker
-from . import _principal_lifecycle as _api_principal_lifecycle
-from . import _principal_ngfw as _api_principal_ngfw
-from . import _principal_range_create as _api_principal_range_create
-from . import _principal_warm_claim as _api_principal_warm_claim
+from . import _preparation as _api_preparation
+from . import _principal as _api_principal
 from . import _public_operations as _api_public_operations
 from . import _queries as _api_queries
-from . import _raes_evidence as _api_raes_evidence
-from . import _raes_image as _api_raes_image
-from . import _raes_range as _api_raes_range
-from . import _raes_status as _api_raes_status
+from . import _raes as _api_raes
 from . import _range as _api_range
-from . import _range_by_request as _api_range_by_request
-from . import _range_escape as _api_range_escape
-from . import _range_ownership as _api_range_ownership
-from . import _range_relationships as _api_range_relationships
 from . import _receipt as _api_receipt
-from . import _runtime_plugin_bindings as _api_runtime_plugin_bindings
-from . import _runtime_plugin_controller as _api_runtime_plugin_controller
-from . import _runtime_plugin_file_selection as _api_runtime_plugin_file_selection
-from . import _runtime_plugin_operations as _api_runtime_plugin_operations
-from . import _runtime_plugins as _api_runtime_plugins
-from . import _runtime_project_parameters as _api_runtime_project_parameters
+from . import _runtime_plugin as _api_runtime_plugin
 from . import _subnet_coordination as _api_subnet_coordination
 from . import _terminal as _api_terminal
 from . import _vpn as _api_vpn
-from . import _vpn_sessions as _api_vpn_sessions
 from . import _warm_pool as _api_warm_pool
-from . import _warm_pool_admission as _api_warm_pool_admission
-from . import _warm_pool_sweep as _api_warm_pool_sweep
-from ._disposable_workers import (
-    WorkerView as WorkerView,
-)
-from ._disposable_workers import (
-    bind_worker_trial as bind_worker_trial,
-)
-from ._disposable_workers import (
-    configure_worker_policy as configure_worker_policy,
-)
-from ._disposable_workers import (
-    create_disposable_worker as create_disposable_worker,
-)
-from ._disposable_workers import (
-    get_disposable_worker as get_disposable_worker,
-)
-from ._disposable_workers import (
-    published_worker_profile as published_worker_profile,
-)
-from ._disposable_workers import (
-    worker_credential_scope as worker_credential_scope,
-)
-from ._disposable_workers import (
-    worker_profile_binding as worker_profile_binding,
-)
 from ._identity_cutover import (
     apply_identity_cutover_resources as apply_identity_cutover_resources,
 )
@@ -94,61 +44,85 @@ from ._participant_validation import (
 from ._participant_validation import (
     validate_participant_configurations as validate_participant_configurations,
 )
-from ._principal_lifecycle import commit_prepared_range_lifecycle as commit_prepared_range_lifecycle
-from ._principal_lifecycle import prepare_range_lifecycle as prepare_range_lifecycle
-from ._principal_lifecycle import prepare_system_range_cleanup as prepare_system_range_cleanup
-from ._principal_range_events import verified_range_status_projection as verified_range_status_projection
-from ._principal_range_owner import commit_range_owner_move as commit_range_owner_move
-from ._principal_range_owner import prepare_event_range_owner_move as prepare_event_range_owner_move
-from ._principal_range_owner import prepare_range_owner_move as prepare_range_owner_move
-from ._principal_range_scope import commit_range_scope_move as commit_range_scope_move
-from ._principal_range_scope import prepare_range_scope_move as prepare_range_scope_move
+from ._principal import commit_prepared_range_lifecycle as commit_prepared_range_lifecycle
+from ._principal import commit_range_owner_move as commit_range_owner_move
+from ._principal import commit_range_scope_move as commit_range_scope_move
+from ._principal import prepare_event_range_owner_move as prepare_event_range_owner_move
+from ._principal import prepare_range_lifecycle as prepare_range_lifecycle
+from ._principal import prepare_range_owner_move as prepare_range_owner_move
+from ._principal import prepare_range_scope_move as prepare_range_scope_move
+from ._principal import prepare_system_range_cleanup as prepare_system_range_cleanup
+from ._principal import verified_range_status_projection as verified_range_status_projection
 from ._public_api import PUBLIC_API as _DECLARED_PUBLIC_API
-from ._range_authority import RangeAuthorityProjection as RangeAuthorityProjection
-from ._range_authority import has_range_runtime as has_range_runtime
-from ._range_authority import lock_range_remote_authority as lock_range_remote_authority
-from ._range_authority import native_range_id_by_request as native_range_id_by_request
-from ._range_authority import project_range_authority as project_range_authority
-from ._range_cleanup_retry import reconcile_range_cleanup_verification as reconcile_range_cleanup_verification
-from ._vpn_profiles import get_vpn_crl as get_vpn_crl
-from ._worker_qualification import (
-    WorkerQualification as WorkerQualification,
-)
-from ._worker_qualification import (
-    qualify_disposable_worker as qualify_disposable_worker,
-)
-from ._worker_retirement import (
+from ._range import RangeAuthorityProjection as RangeAuthorityProjection
+from ._range import has_range_runtime as has_range_runtime
+from ._range import lock_range_remote_authority as lock_range_remote_authority
+from ._range import native_range_id_by_request as native_range_id_by_request
+from ._range import project_range_authority as project_range_authority
+from ._range import reconcile_range_cleanup_verification as reconcile_range_cleanup_verification
+from ._vpn import get_vpn_crl as get_vpn_crl
+from ._worker import (
     WorkerHoldView as WorkerHoldView,
 )
-from ._worker_retirement import (
-    acquire_worker_hold as acquire_worker_hold,
+from ._worker import (
+    WorkerQualification as WorkerQualification,
 )
-from ._worker_retirement import (
-    list_worker_holds as list_worker_holds,
-)
-from ._worker_retirement import (
-    reconcile_disposable_workers as reconcile_disposable_workers,
-)
-from ._worker_retirement import (
-    release_worker_hold as release_worker_hold,
-)
-from ._worker_retirement import (
-    resume_worker_cleanup as resume_worker_cleanup,
-)
-from ._worker_retirement import (
-    retire_disposable_worker as retire_disposable_worker,
-)
-from ._worker_trials import (
+from ._worker import (
     WorkerTrialView as WorkerTrialView,
 )
-from ._worker_trials import (
+from ._worker import (
+    WorkerView as WorkerView,
+)
+from ._worker import (
+    acquire_worker_hold as acquire_worker_hold,
+)
+from ._worker import (
+    bind_worker_trial as bind_worker_trial,
+)
+from ._worker import (
     collect_worker_trial as collect_worker_trial,
 )
-from ._worker_trials import (
+from ._worker import (
+    configure_worker_policy as configure_worker_policy,
+)
+from ._worker import (
+    create_disposable_worker as create_disposable_worker,
+)
+from ._worker import (
+    get_disposable_worker as get_disposable_worker,
+)
+from ._worker import (
     get_worker_trial as get_worker_trial,
 )
-from ._worker_trials import (
+from ._worker import (
+    list_worker_holds as list_worker_holds,
+)
+from ._worker import (
+    published_worker_profile as published_worker_profile,
+)
+from ._worker import (
+    qualify_disposable_worker as qualify_disposable_worker,
+)
+from ._worker import (
+    reconcile_disposable_workers as reconcile_disposable_workers,
+)
+from ._worker import (
+    release_worker_hold as release_worker_hold,
+)
+from ._worker import (
+    resume_worker_cleanup as resume_worker_cleanup,
+)
+from ._worker import (
+    retire_disposable_worker as retire_disposable_worker,
+)
+from ._worker import (
     start_worker_trial as start_worker_trial,
+)
+from ._worker import (
+    worker_credential_scope as worker_credential_scope,
+)
+from ._worker import (
+    worker_profile_binding as worker_profile_binding,
 )
 
 transaction = _api_django_db.transaction
@@ -167,28 +141,28 @@ EventCapacitySignal = _api_capacity.EventCapacitySignal
 latest_capacity_declaration = _api_capacity.latest_capacity_declaration
 record_capacity_declaration = _api_capacity.record_capacity_declaration
 
-admit_range_capacity = _api_capacity_admit.admit_range_capacity
-reconcile_capacity_budgets = _api_capacity_admit.reconcile_capacity_budgets
-release_range_capacity = _api_capacity_admit.release_range_capacity
+admit_range_capacity = _api_capacity.admit_range_capacity
+reconcile_capacity_budgets = _api_capacity.reconcile_capacity_budgets
+release_range_capacity = _api_capacity.release_range_capacity
 
-EventCapacityRequest = _api_capacity_plan.EventCapacityRequest
-assess_declared_event_capacity = _api_capacity_plan.assess_declared_event_capacity
-assess_event_capacity = _api_capacity_plan.assess_event_capacity
-release_capacity_reservations = _api_capacity_plan.release_capacity_reservations
+EventCapacityRequest = _api_capacity.EventCapacityRequest
+assess_declared_event_capacity = _api_capacity.assess_declared_event_capacity
+assess_event_capacity = _api_capacity.assess_event_capacity
+release_capacity_reservations = _api_capacity.release_capacity_reservations
 
-CLEANUP_NOT_APPLICABLE = _api_cleanup_outcome.CLEANUP_NOT_APPLICABLE
-CLEANUP_PENDING = _api_cleanup_outcome.CLEANUP_PENDING
-CLEANUP_UNKNOWN = _api_cleanup_outcome.CLEANUP_UNKNOWN
-CLEANUP_VERIFIED_TERMINAL = _api_cleanup_outcome.CLEANUP_VERIFIED_TERMINAL
-CleanupObligation = _api_cleanup_outcome.CleanupObligation
-RangeCleanupOutcome = _api_cleanup_outcome.RangeCleanupOutcome
-project_range_cleanup_outcome = _api_cleanup_outcome.project_range_cleanup_outcome
+CLEANUP_NOT_APPLICABLE = _api_cleanup.CLEANUP_NOT_APPLICABLE
+CLEANUP_PENDING = _api_cleanup.CLEANUP_PENDING
+CLEANUP_UNKNOWN = _api_cleanup.CLEANUP_UNKNOWN
+CLEANUP_VERIFIED_TERMINAL = _api_cleanup.CLEANUP_VERIFIED_TERMINAL
+CleanupObligation = _api_cleanup.CleanupObligation
+RangeCleanupOutcome = _api_cleanup.RangeCleanupOutcome
+project_range_cleanup_outcome = _api_cleanup.project_range_cleanup_outcome
 
-CleanupVerificationView = _api_cleanup_verification.CleanupVerificationView
-is_cleanup_verified_absent = _api_cleanup_verification.is_cleanup_verified_absent
-is_range_generation_cleanup_verified_absent = _api_cleanup_verification.is_range_generation_cleanup_verified_absent
-latest_cleanup_verification = _api_cleanup_verification.latest_cleanup_verification
-record_cleanup_verification = _api_cleanup_verification.record_cleanup_verification
+CleanupVerificationView = _api_cleanup.CleanupVerificationView
+is_cleanup_verified_absent = _api_cleanup.is_cleanup_verified_absent
+is_range_generation_cleanup_verified_absent = _api_cleanup.is_range_generation_cleanup_verified_absent
+latest_cleanup_verification = _api_cleanup.latest_cleanup_verification
+record_cleanup_verification = _api_cleanup.record_cleanup_verification
 
 EngineError = _api_common.EngineError
 
@@ -197,8 +171,8 @@ lock_native_device_access_binding = _api_device_authority.lock_native_device_acc
 prepare_ngfw_creation = _api_device_authority.prepare_ngfw_creation
 verified_device_status_projection = _api_device_authority.verified_device_status_projection
 
-default_storage_target = _api_feature_artifact_launcher.default_storage_target
-reconcile_feature_artifact_acquisitions = _api_feature_artifact_launcher.reconcile_feature_artifact_acquisitions
+default_storage_target = _api_feature_artifacts.default_storage_target
+reconcile_feature_artifact_acquisitions = _api_feature_artifacts.reconcile_feature_artifact_acquisitions
 
 ArtifactRequest = _api_feature_artifacts.ArtifactRequest
 FeatureArtifactUnavailableError = _api_feature_artifacts.FeatureArtifactUnavailableError
@@ -219,38 +193,38 @@ stop_ngfw = _api_ngfw.stop_ngfw
 apply_pending_operation_results = _api_operation_apply.apply_pending_operation_results
 evaluate_operation_result = _api_operation_apply.evaluate_operation_result
 
-PreparationAdapterView = _api_preparation_adapters.PreparationAdapterView
-install_preparation_adapter = _api_preparation_adapters.install_preparation_adapter
-list_preparation_adapter_grants = _api_preparation_adapters.list_preparation_adapter_grants
-list_preparation_adapters = _api_preparation_adapters.list_preparation_adapters
-set_preparation_adapter_state = _api_preparation_adapters.set_preparation_adapter_state
+PreparationAdapterView = _api_preparation.PreparationAdapterView
+install_preparation_adapter = _api_preparation.install_preparation_adapter
+list_preparation_adapter_grants = _api_preparation.list_preparation_adapter_grants
+list_preparation_adapters = _api_preparation.list_preparation_adapters
+set_preparation_adapter_state = _api_preparation.set_preparation_adapter_state
 
-reconcile_preparations = _api_preparation_controller.reconcile_preparations
+reconcile_preparations = _api_preparation.reconcile_preparations
 
-activate_preparation_grant = _api_preparation_grants.activate_preparation_grant
-revoke_preparation_grant = _api_preparation_grants.revoke_preparation_grant
+activate_preparation_grant = _api_preparation.activate_preparation_grant
+revoke_preparation_grant = _api_preparation.revoke_preparation_grant
 
-PreparationView = _api_preparation_operations.PreparationView
-cancel_artifact_preparation = _api_preparation_operations.cancel_artifact_preparation
-get_artifact_preparation = _api_preparation_operations.get_artifact_preparation
-request_artifact_preparation = _api_preparation_operations.request_artifact_preparation
-retry_artifact_preparation = _api_preparation_operations.retry_artifact_preparation
+PreparationView = _api_preparation.PreparationView
+cancel_artifact_preparation = _api_preparation.cancel_artifact_preparation
+get_artifact_preparation = _api_preparation.get_artifact_preparation
+request_artifact_preparation = _api_preparation.request_artifact_preparation
+retry_artifact_preparation = _api_preparation.retry_artifact_preparation
 
-read_preparation_worker_input = _api_preparation_worker.read_preparation_worker_input
-record_preparation_worker_result = _api_preparation_worker.record_preparation_worker_result
+read_preparation_worker_input = _api_preparation.read_preparation_worker_input
+record_preparation_worker_result = _api_preparation.record_preparation_worker_result
 
-PreparedRangeLifecycle = _api_principal_lifecycle.PreparedRangeLifecycle
+PreparedRangeLifecycle = _api_principal.PreparedRangeLifecycle
 
-commit_ngfw_lifecycle = _api_principal_ngfw.commit_ngfw_lifecycle
-prepare_ngfw_lifecycle = _api_principal_ngfw.prepare_ngfw_lifecycle
+commit_ngfw_lifecycle = _api_principal.commit_ngfw_lifecycle
+prepare_ngfw_lifecycle = _api_principal.prepare_ngfw_lifecycle
 
-PreparedRaesRangeCreation = _api_principal_range_create.PreparedRaesRangeCreation
-prepare_raes_range_creation = _api_principal_range_create.prepare_raes_range_creation
-publish_range_relationships = _api_range_relationships.publish_range_relationships
+PreparedRaesRangeCreation = _api_principal.PreparedRaesRangeCreation
+prepare_raes_range_creation = _api_principal.prepare_raes_range_creation
+publish_range_relationships = _api_range.publish_range_relationships
 
-PreparedWarmRangeClaim = _api_principal_warm_claim.PreparedWarmRangeClaim
-commit_warm_range_claim = _api_principal_warm_claim.commit_warm_range_claim
-prepare_warm_range_claim = _api_principal_warm_claim.prepare_warm_range_claim
+PreparedWarmRangeClaim = _api_principal.PreparedWarmRangeClaim
+commit_warm_range_claim = _api_principal.commit_warm_range_claim
+prepare_warm_range_claim = _api_principal.prepare_warm_range_claim
 
 __all__ = _DECLARED_PUBLIC_API
 
@@ -268,24 +242,24 @@ get_principal_ready_range_instances = _api_queries.get_principal_ready_range_ins
 get_ranges_for_ngfw = _api_queries.get_ranges_for_ngfw
 get_user_ready_range_instances = _api_queries.get_user_ready_range_instances
 
-record_raes_operation_status = _api_raes_evidence.record_raes_operation_status
-record_raes_runtime_snapshot = _api_raes_evidence.record_raes_runtime_snapshot
+record_raes_operation_status = _api_raes.record_raes_operation_status
+record_raes_runtime_snapshot = _api_raes.record_raes_runtime_snapshot
 
-RaesImageMappingError = _api_raes_image.RaesImageMappingError
-RaesImageMappingOptions = _api_raes_image.RaesImageMappingOptions
-RaesImageMappingView = _api_raes_image.RaesImageMappingView
-disable_raes_image_mapping = _api_raes_image.disable_raes_image_mapping
-list_backend_artifacts = _api_raes_image.list_backend_artifacts
-list_raes_image_mappings = _api_raes_image.list_raes_image_mappings
-upsert_raes_image_mapping = _api_raes_image.upsert_raes_image_mapping
+RaesImageMappingError = _api_raes.RaesImageMappingError
+RaesImageMappingOptions = _api_raes.RaesImageMappingOptions
+RaesImageMappingView = _api_raes.RaesImageMappingView
+disable_raes_image_mapping = _api_raes.disable_raes_image_mapping
+list_backend_artifacts = _api_raes.list_backend_artifacts
+list_raes_image_mappings = _api_raes.list_raes_image_mappings
+upsert_raes_image_mapping = _api_raes.upsert_raes_image_mapping
 
-RaesRangeRef = _api_raes_range.RaesRangeRef
-RangeBindings = _api_raes_range.RangeBindings
-create_raes_range = _api_raes_range.create_raes_range
-dispatch_created_raes_range = _api_raes_range.dispatch_created_raes_range
-grant_raes_remote_access = _api_raes_range.grant_raes_remote_access
+RaesRangeRef = _api_raes.RaesRangeRef
+RangeBindings = _api_raes.RangeBindings
+create_raes_range = _api_raes.create_raes_range
+dispatch_created_raes_range = _api_raes.dispatch_created_raes_range
+grant_raes_remote_access = _api_raes.grant_raes_remote_access
 
-project_raes_operation_status = _api_raes_status.project_raes_operation_status
+project_raes_operation_status = _api_raes.project_raes_operation_status
 
 cancel_range = _api_range.cancel_range
 destroy_range = _api_range.destroy_range
@@ -293,25 +267,25 @@ get_instance_ips_by_uuid = _api_range.get_instance_ips_by_uuid
 get_range_pause_resume_capability = _api_range.get_range_pause_resume_capability
 get_range_status = _api_range.get_range_status
 
-RangeOwnershipTransferBlocked = _api_range_by_request.RangeOwnershipTransferBlocked
-RangeProjectionIntegrityError = _api_range_by_request.RangeProjectionIntegrityError
-RangeWorkspaceRebindOutcome = _api_range_by_request.RangeWorkspaceRebindOutcome
-cancel_range_by_request = _api_range_by_request.cancel_range_by_request
-destroy_range_by_request = _api_range_by_request.destroy_range_by_request
-get_pinned_range_egress_mode_by_request = _api_range_by_request.get_pinned_range_egress_mode_by_request
-get_range_failure_reason_by_request = _api_range_by_request.get_range_failure_reason_by_request
-range_owner_reassignment_available_by_request = _api_range_by_request.range_owner_reassignment_available_by_request
-reassign_range_owner_by_request = _api_range_by_request.reassign_range_owner_by_request
-rebind_range_workspace_by_request = _api_range_by_request.rebind_range_workspace_by_request
+RangeOwnershipTransferBlocked = _api_range.RangeOwnershipTransferBlocked
+RangeProjectionIntegrityError = _api_range.RangeProjectionIntegrityError
+RangeWorkspaceRebindOutcome = _api_range.RangeWorkspaceRebindOutcome
+cancel_range_by_request = _api_range.cancel_range_by_request
+destroy_range_by_request = _api_range.destroy_range_by_request
+get_pinned_range_egress_mode_by_request = _api_range.get_pinned_range_egress_mode_by_request
+get_range_failure_reason_by_request = _api_range.get_range_failure_reason_by_request
+range_owner_reassignment_available_by_request = _api_range.range_owner_reassignment_available_by_request
+reassign_range_owner_by_request = _api_range.reassign_range_owner_by_request
+rebind_range_workspace_by_request = _api_range.rebind_range_workspace_by_request
 
-GuestProbeError = _api_range_escape.GuestProbeError
-GuestProbeRequest = _api_range_escape.GuestProbeRequest
-RangeMembership = _api_range_escape.RangeMembership
-get_range_membership = _api_range_escape.get_range_membership
-run_guest_probe = _api_range_escape.run_guest_probe
+GuestProbeError = _api_range.GuestProbeError
+GuestProbeRequest = _api_range.GuestProbeRequest
+RangeMembership = _api_range.RangeMembership
+get_range_membership = _api_range.get_range_membership
+run_guest_probe = _api_range.run_guest_probe
 
-RangeOwnershipProjection = _api_range_ownership.RangeOwnershipProjection
-range_ownership_projection = _api_range_ownership.range_ownership_projection
+RangeOwnershipProjection = _api_range.RangeOwnershipProjection
+range_ownership_projection = _api_range.range_ownership_projection
 
 ReceiptBindingUnavailable = _api_receipt.ReceiptBindingUnavailable
 ReceiptRegistrationConflict = _api_receipt.ReceiptRegistrationConflict
@@ -320,30 +294,30 @@ project_receipt_verifier_binding = _api_receipt.project_receipt_verifier_binding
 register_receipt_verifier = _api_receipt.register_receipt_verifier
 revoke_receipt_verifier = _api_receipt.revoke_receipt_verifier
 
-retry_gcp_range_project = _api_gcp_project_registration.retry_gcp_range_project
-register_gcp_range_project = _api_gcp_project_registration.register_gcp_range_project
-list_gcp_range_projects = _api_gcp_project_registration.list_gcp_range_projects
-disable_gcp_range_project = _api_gcp_project_registration.disable_gcp_range_project
+retry_gcp_range_project = _api_gcp_project.retry_gcp_range_project
+register_gcp_range_project = _api_gcp_project.register_gcp_range_project
+list_gcp_range_projects = _api_gcp_project.list_gcp_range_projects
+disable_gcp_range_project = _api_gcp_project.disable_gcp_range_project
 
-RuntimePluginBindingRemovalAdmission = _api_runtime_plugin_bindings.RuntimePluginBindingRemovalAdmission
-RuntimePluginPackView = _api_runtime_plugin_bindings.RuntimePluginPackView
-bind_runtime_plugin = _api_runtime_plugin_bindings.bind_runtime_plugin
-has_runtime_plugin_binding = _api_runtime_plugin_bindings.has_runtime_plugin_binding
-runtime_plugin_file_selection = _api_runtime_plugin_file_selection.runtime_plugin_file_selection
-runtime_plugin_plan_parameters = _api_runtime_project_parameters.runtime_plugin_plan_parameters
-project_parameters_for_binding = _api_runtime_project_parameters.project_parameters_for_binding
-list_runtime_plugin_bindings = _api_runtime_plugin_bindings.list_runtime_plugin_bindings
-prepare_runtime_plugin_binding = _api_runtime_plugin_bindings.prepare_runtime_plugin_binding
-prepare_runtime_plugin_pack_binding_removal = _api_runtime_plugin_bindings.prepare_runtime_plugin_pack_binding_removal
-remove_runtime_plugin_pack_binding = _api_runtime_plugin_bindings.remove_runtime_plugin_pack_binding
+RuntimePluginBindingRemovalAdmission = _api_runtime_plugin.RuntimePluginBindingRemovalAdmission
+RuntimePluginPackView = _api_runtime_plugin.RuntimePluginPackView
+bind_runtime_plugin = _api_runtime_plugin.bind_runtime_plugin
+has_runtime_plugin_binding = _api_runtime_plugin.has_runtime_plugin_binding
+runtime_plugin_file_selection = _api_runtime_plugin.runtime_plugin_file_selection
+runtime_plugin_plan_parameters = _api_runtime_plugin.runtime_plugin_plan_parameters
+project_parameters_for_binding = _api_runtime_plugin.project_parameters_for_binding
+list_runtime_plugin_bindings = _api_runtime_plugin.list_runtime_plugin_bindings
+prepare_runtime_plugin_binding = _api_runtime_plugin.prepare_runtime_plugin_binding
+prepare_runtime_plugin_pack_binding_removal = _api_runtime_plugin.prepare_runtime_plugin_pack_binding_removal
+remove_runtime_plugin_pack_binding = _api_runtime_plugin.remove_runtime_plugin_pack_binding
 
-reconcile_runtime_plugins = _api_runtime_plugin_controller.reconcile_runtime_plugins
+reconcile_runtime_plugins = _api_runtime_plugin.reconcile_runtime_plugins
 
-reconcile_runtime_plugin_operations = _api_runtime_plugin_operations.reconcile_runtime_plugin_operations
+reconcile_runtime_plugin_operations = _api_runtime_plugin.reconcile_runtime_plugin_operations
 
-change_runtime_plugin = _api_runtime_plugins.change_runtime_plugin
-install_runtime_plugin = _api_runtime_plugins.install_runtime_plugin
-list_runtime_plugins = _api_runtime_plugins.list_runtime_plugins
+change_runtime_plugin = _api_runtime_plugin.change_runtime_plugin
+install_runtime_plugin = _api_runtime_plugin.install_runtime_plugin
+list_runtime_plugins = _api_runtime_plugin.list_runtime_plugins
 
 
 read_subnet_reservation = _api_subnet_coordination.read_subnet_reservation
@@ -364,13 +338,13 @@ VpnProfileUnavailable = _api_vpn.VpnProfileUnavailable
 get_openvpn_profile = _api_vpn.get_openvpn_profile
 has_openvpn_profile = _api_vpn.has_openvpn_profile
 
-VPN_SESSION_HEARTBEAT_SECONDS = _api_vpn_sessions.VPN_SESSION_HEARTBEAT_SECONDS
-VPN_SESSION_LEASE_SECONDS = _api_vpn_sessions.VPN_SESSION_LEASE_SECONDS
-VpnSessionDenied = _api_vpn_sessions.VpnSessionDenied
-VpnSessionGrant = _api_vpn_sessions.VpnSessionGrant
-authorize_vpn_session = _api_vpn_sessions.authorize_vpn_session
-end_vpn_session = _api_vpn_sessions.end_vpn_session
-renew_vpn_sessions = _api_vpn_sessions.renew_vpn_sessions
+VPN_SESSION_HEARTBEAT_SECONDS = _api_vpn.VPN_SESSION_HEARTBEAT_SECONDS
+VPN_SESSION_LEASE_SECONDS = _api_vpn.VPN_SESSION_LEASE_SECONDS
+VpnSessionDenied = _api_vpn.VpnSessionDenied
+VpnSessionGrant = _api_vpn.VpnSessionGrant
+authorize_vpn_session = _api_vpn.authorize_vpn_session
+end_vpn_session = _api_vpn.end_vpn_session
+renew_vpn_sessions = _api_vpn.renew_vpn_sessions
 
 WarmGenerationDraft = _api_warm_pool.WarmGenerationDraft
 abandon_warm_preparation = _api_warm_pool.abandon_warm_preparation
@@ -392,7 +366,7 @@ retire_removed_bucket_generations = _api_warm_pool.retire_removed_bucket_generat
 total_active_generation_count = _api_warm_pool.total_active_generation_count
 warm_capacity_scope_ref = _api_warm_pool.warm_capacity_scope_ref
 
-reserve_warm_generation = _api_warm_pool_admission.reserve_warm_generation
+reserve_warm_generation = _api_warm_pool.reserve_warm_generation
 
-WarmRecoveryProgress = _api_warm_pool_sweep.WarmRecoveryProgress
-reconcile_retained_warm_generations = _api_warm_pool_sweep.reconcile_retained_warm_generations
+WarmRecoveryProgress = _api_warm_pool.WarmRecoveryProgress
+reconcile_retained_warm_generations = _api_warm_pool.reconcile_retained_warm_generations

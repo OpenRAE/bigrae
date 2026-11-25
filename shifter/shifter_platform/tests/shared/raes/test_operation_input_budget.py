@@ -11,8 +11,8 @@ from raes.scenarios import load_scenario
 from raes_runtime import RuntimeManager
 from shifter_adapter_sdk.runtime import RuntimePlan
 
-from engine.services._runtime_plugin_cleanup import preparation_cleanup_payload
-from engine.services._runtime_plugin_preparation import approved_preparation
+from engine.services._runtime_plugin.cleanup import preparation_cleanup_payload
+from engine.services._runtime_plugin.preparation import approved_preparation
 from shared.operation_envelope import build_operation_envelope, validate_operation_envelope
 from shared.raes.operation_input import (
     RaesInputBindings,

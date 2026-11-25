@@ -10,6 +10,16 @@ export function titleCase(value: string): string {
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
 }
 
+/**
+ * Badge text for a solved challenge. The participant's own solve reads "Solved";
+ * a teammate's solve names the member who solved it first, with a generic
+ * fallback while the name is absent.
+ */
+export function solvedLabel(challenge: Readonly<{ solved: boolean; team_solved_by?: string | null }>): string {
+  if (challenge.solved) return "Solved";
+  return challenge.team_solved_by ? `Solved by ${challenge.team_solved_by}` : "Solved by your team";
+}
+
 /** Format an ISO datetime for display, or a dash when absent/unparseable. */
 export function formatDateTime(value: string | null | undefined): string {
   if (!value) return "—";

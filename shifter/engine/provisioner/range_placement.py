@@ -1,7 +1,7 @@
 """Realized multi-region placement read-back for GCE range cells (#2029).
 
 Placement is selected once, in the range-create transaction on the platform side
-(``engine.services._range_placement``), and stored on the range row
+(``engine.services._range.placement``), and stored on the range row
 (``mission_control_range.placement_zone``). The provisioner is a pure reader: it
 binds the range-cell config to the stored zone and never recomputes from the
 ``RANGE_NETWORK_ZONES`` pool, so teardown reconstructs the exact zone the range

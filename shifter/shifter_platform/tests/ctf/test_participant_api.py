@@ -13,7 +13,7 @@ from datetime import timedelta
 from django.utils import timezone
 
 from ctf.enums import ChallengeCategory, ChallengeDifficulty, ParticipantStatus
-from ctf.models import CTFChallenge, CTFHint, CTFParticipant, CTFSubmission
+from ctf.models import CTFChallenge, CTFHint, CTFParticipant, CTFSubmission, CTFTeam
 
 from ._api_flow_helpers import call_json
 
@@ -141,75 +141,119 @@ class TestParticipantChallengeList:
         assert names == {ctf_challenge.name}
 
 
-class TestParticipantTeamSolvedState:
-    """A teammate's solve shows as ``team_solved`` on the browse list and the detail page."""
+def _team_challenge(event) -> CTFChallenge:
+    return CTFChallenge.objects.create(
+        event=event,
+        name="Team Challenge",
+        description="solve it",
+        category=ChallengeCategory.WEB.value,
+        points=100,
+        difficulty=ChallengeDifficulty.EASY.value,
+    )
 
-    def test_teammate_solve_marks_team_solved_not_solved(
+
+def _member(event, team, name: str) -> CTFParticipant:
+    return CTFParticipant.objects.create(
+        event=event,
+        email=f"{name.lower().replace(' ', '-')}@test.com",
+        name=name,
+        team=team,
+        status=ParticipantStatus.ACTIVE.value,
+        registered_at=timezone.now(),
+    )
+
+
+def _correct(participant, challenge, *, minutes_ago: int = 0) -> CTFSubmission:
+    """Record a correct submission at a fixed time (``submitted_at`` is auto-set on insert)."""
+    submission = CTFSubmission.objects.create(
+        participant=participant,
+        challenge=challenge,
+        submitted_flag="FLAG{correct}",
+        is_correct=True,
+        points_awarded=challenge.points,
+        attempt_number=1,
+        ip_address="192.168.1.2",
+    )
+    CTFSubmission.objects.filter(pk=submission.pk).update(submitted_at=timezone.now() - timedelta(minutes=minutes_ago))
+    return submission
+
+
+def _team_state(client, challenge) -> tuple[dict, dict]:
+    """Return the list entry and the detail body for ``challenge``."""
+    listed = call_json(client, "get", "api_participant_challenges")
+    detail = call_json(client, "get", "api_participant_challenge_detail", kwargs={"challenge_id": challenge.id})
+    assert listed.status_code == 200
+    assert detail.status_code == 200
+    item = next(entry for entry in listed.json() if entry["id"] == str(challenge.id))
+    return item, detail.json()
+
+
+class TestParticipantTeamSolvedState:
+    """A teammate's solve shows as ``team_solved``, with the solver's name, on the list and the detail page."""
+
+    def test_teammate_solve_shows_team_solved_and_solver_name(
         self, authenticated_participant_client, ctf_participant_team, participant_user, ctf_event_team, ctf_team
     ):
         _activate(participant_user, ctf_event_team)
-        challenge = CTFChallenge.objects.create(
-            event=ctf_event_team,
-            name="Team Challenge",
-            description="solve it",
-            category=ChallengeCategory.WEB.value,
-            points=100,
-            difficulty=ChallengeDifficulty.EASY.value,
-        )
-        teammate = CTFParticipant.objects.create(
-            event=ctf_event_team,
-            email="teammate@test.com",
-            name="Teammate",
-            team=ctf_team,
-            status=ParticipantStatus.ACTIVE.value,
-            registered_at=timezone.now(),
-        )
-        CTFSubmission.objects.create(
-            participant=teammate,
-            challenge=challenge,
-            submitted_flag="FLAG{correct}",
-            is_correct=True,
-            points_awarded=challenge.points,
-            attempt_number=1,
-            ip_address="192.168.1.2",
-        )
+        challenge = _team_challenge(ctf_event_team)
+        _correct(_member(ctf_event_team, ctf_team, "Teammate"), challenge)
 
-        listed = call_json(authenticated_participant_client, "get", "api_participant_challenges")
-        detail = call_json(
-            authenticated_participant_client,
-            "get",
-            "api_participant_challenge_detail",
-            kwargs={"challenge_id": challenge.id},
-        )
+        for body in _team_state(authenticated_participant_client, challenge):
+            assert body["solved"] is False
+            assert body["team_solved"] is True
+            assert body["team_solved_by"] == "Teammate"
 
-        assert listed.status_code == 200
-        item = next(entry for entry in listed.json() if entry["id"] == str(challenge.id))
-        assert item["solved"] is False
-        assert item["team_solved"] is True
-        assert detail.status_code == 200
-        assert detail.json()["solved"] is False
-        assert detail.json()["team_solved"] is True
+    def test_solver_is_the_earliest_correct_submission(
+        self, authenticated_participant_client, ctf_participant_team, participant_user, ctf_event_team, ctf_team
+    ):
+        _activate(participant_user, ctf_event_team)
+        challenge = _team_challenge(ctf_event_team)
+        _correct(_member(ctf_event_team, ctf_team, "Later Solver"), challenge, minutes_ago=1)
+        _correct(_member(ctf_event_team, ctf_team, "First Solver"), challenge, minutes_ago=10)
+        _correct(ctf_participant_team, challenge, minutes_ago=5)
+
+        for body in _team_state(authenticated_participant_client, challenge):
+            assert body["solved"] is True
+            assert body["team_solved_by"] == "First Solver"
+
+    def test_other_team_solve_is_not_attributed(
+        self, authenticated_participant_client, ctf_participant_team, participant_user, ctf_event_team, ctf_team
+    ):
+        _activate(participant_user, ctf_event_team)
+        challenge = _team_challenge(ctf_event_team)
+        other_team = CTFTeam.objects.create(event=ctf_event_team, name="Other Team")
+        _correct(_member(ctf_event_team, other_team, "Rival"), challenge)
+
+        for body in _team_state(authenticated_participant_client, challenge):
+            assert body["team_solved"] is False
+            assert body["team_solved_by"] is None
+
+    def test_deleted_teammate_solve_is_not_attributed(
+        self, authenticated_participant_client, ctf_participant_team, participant_user, ctf_event_team, ctf_team
+    ):
+        _activate(participant_user, ctf_event_team)
+        challenge = _team_challenge(ctf_event_team)
+        deleted = _member(ctf_event_team, ctf_team, "Deleted Member")
+        _correct(deleted, challenge, minutes_ago=10)
+        _correct(_member(ctf_event_team, ctf_team, "Current Member"), challenge, minutes_ago=1)
+        deleted.delete()
+
+        for body in _team_state(authenticated_participant_client, challenge):
+            assert body["team_solved"] is True
+            assert body["team_solved_by"] == "Current Member"
 
     def test_solo_event_never_reports_team_solved(
         self, authenticated_participant_client, ctf_participant, participant_user, ctf_event, ctf_challenge
     ):
         _activate(participant_user, ctf_event)
-        CTFSubmission.objects.create(
-            participant=ctf_participant,
-            challenge=ctf_challenge,
-            submitted_flag="FLAG{correct}",
-            is_correct=True,
-            points_awarded=ctf_challenge.points,
-            attempt_number=1,
-            ip_address="192.168.1.1",
-        )
+        _correct(ctf_participant, ctf_challenge)
 
-        response = call_json(authenticated_participant_client, "get", "api_participant_challenges")
+        item, detail = _team_state(authenticated_participant_client, ctf_challenge)
 
-        assert response.status_code == 200
-        item = response.json()[0]
-        assert item["solved"] is True
-        assert item["team_solved"] is False
+        for body in (item, detail):
+            assert body["solved"] is True
+            assert body["team_solved"] is False
+            assert body["team_solved_by"] is None
 
 
 class TestParticipantTeam:

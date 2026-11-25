@@ -45,7 +45,7 @@ def _clear_vpn_rate_limit_cache():
 @pytest.fixture(autouse=True)
 def _trust_engine_certificate_verification(monkeypatch):
     """This API suite exercises delivery; Engine tests own certificate cryptography."""
-    monkeypatch.setattr("engine.services._vpn_profile_delivery._verify_profile_material", lambda row, material: None)
+    monkeypatch.setattr("engine.services._vpn.profile_delivery._verify_profile_material", lambda row, material: None)
 
 
 @pytest.fixture
@@ -133,7 +133,7 @@ def _ready_range(user, *, source=RangeSource.MISSION_CONTROL, secret_ref=None):
 
 def _seed_ready_profile(user, cms_range, *, secret_ref=None):
     from engine.models import Range, VpnAccessProfile
-    from engine.services._vpn_profiles import admit_vpn_profile_authority
+    from engine.services._vpn.profiles import admit_vpn_profile_authority
     from shared.api_tokens.policy import personal_credential_for_token
 
     token = ApiToken.objects.get(created_by=user)

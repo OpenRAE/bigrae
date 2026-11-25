@@ -367,7 +367,9 @@ version. Image build, scan and native session-closure checks run in CI.
 - `JSON_SECRET_KEY` and DB credentials reach the client via the
   `guacamole-runtime` Kubernetes Secret. `gcp-deploy` creates that Secret
   **out of band** (`kubectl apply` from GCP Secret Manager, before the Helm
-  release). Helm references the Secret by name through `envFrom.secretRef`. Secret values never enter chart values or Helm release history. `scripts/gcp/render_runtime_env.py` sets
+  release). Helm references the Secret by name and mounts its keys as read-only files at
+  `/run/secrets/guacamole-runtime`. Secret values never enter chart values, Helm release
+  history, or the container environment. `scripts/gcp/render_runtime_env.py` sets
   `GUACAMOLE_SECRET_ID`, `GUACAMOLE_BASE_URL`, and the in-cluster
   `GUACAMOLE_API_BASE_URL`.
 - NetworkPolicies restrict `guacamole-client` to `guacd` on TCP 4822 and admit
@@ -383,9 +385,17 @@ exercised through the AWS or GCP stacks.
 
 The Portal entrypoint (`entrypoint.sh`) resolves `GUACAMOLE_SECRET_ID` /
 `GUACAMOLE_SECRET_ARN` and exports `GUACAMOLE_JSON_AUTH_SECRET` from the secret
-store, failing closed if the fetch fails. The guacamole-client container receives
-the same key as `JSON_SECRET_KEY`. The two values must match, or every signature
-fails validation.
+store, failing closed if the fetch fails. The guacamole-client container reads
+the same key from the file that `JSON_SECRET_KEY_FILE` names. The two values must
+match, or every signature fails validation.
+
+The guacamole-client container reads each credential from a file, not from an
+environment variable. The upstream `enable-file-environment-properties` feature
+reads each property from the file that its `*_FILE` variable names. The image
+entrypoint rejects credential variables, because Guacamole gives them priority
+over files. Schema initialization reads the same files through private libpq
+service and password files, which the entrypoint deletes before Guacamole starts.
+A Secret rotation takes effect after a pod restart.
 
 ## Configuration reference
 
@@ -395,10 +405,10 @@ fails validation.
 |----------|--------|-------|
 | `GUACD_HOSTNAME` / `GUACD_PORT` | deployment | `guacd` service / `4822`. |
 | `POSTGRESQL_HOSTNAME` / `PORT` / `DATABASE` | runtime config | Guacamole DB. |
-| `POSTGRESQL_USER` / `PASSWORD` | secret store | Guacamole DB creds. |
+| `POSTGRESQL_USERNAME_FILE` / `POSTGRESQL_PASSWORD_FILE` | deployment | Paths of the DB credential files from the `guacamole-runtime` Secret. |
 | `POSTGRESQL_AUTO_CREATE_ACCOUNTS` | deployment | `true`. |
 | `JSON_ENABLED` / `OPENID_ENABLED` | deployment | `true` / `false`. |
-| `JSON_SECRET_KEY` | secret store | Must equal `GUACAMOLE_JSON_AUTH_SECRET`. |
+| `JSON_SECRET_KEY_FILE` | deployment | Path of the JSON auth key file from the `guacamole-runtime` Secret. The key must equal `GUACAMOLE_JSON_AUTH_SECRET`. |
 | `GUACAMOLE_CONTROL_URL` / `GUACAMOLE_CONTROL_AUDIENCE` | runtime config | Administrator-selected HTTPS renewal endpoint and workload-token audience. |
 | `GUACAMOLE_CONTROL_IDENTITY` | runtime config | `google` (default) or `aws`. AWS uses an STS web identity token from the gateway's IRSA role. |
 
@@ -435,6 +445,6 @@ fails validation.
 | Launch returns `503` | All bootstrap worker slots busy, or `GUACAMOLE_JSON_AUTH_SECRET` unset | Retry after the `Retry-After` interval; verify the Portal secret. |
 | Status poll returns `410` "no longer available" | The URL was already delivered (single-use) | Launch again; the first reader consumes the token. |
 | Status poll returns `410` "expired" | Polled after the bootstrap TTL | Launch again. |
-| "Invalid signature" in guacamole-client logs | Key mismatch | Ensure `JSON_SECRET_KEY` equals `GUACAMOLE_JSON_AUTH_SECRET`. |
+| "Invalid signature" in guacamole-client logs | Key mismatch | Ensure the `JSON_SECRET_KEY` key of the `guacamole-runtime` Secret equals `GUACAMOLE_JSON_AUTH_SECRET`. |
 | Connection timeout after the client opens | guacd cannot reach the range host | Verify peering and the range RDP/SSH ingress rules. |
 | No RDP button | Instance has no GUI (`os_type == "ubuntu"`) | Expected; use SSH. |

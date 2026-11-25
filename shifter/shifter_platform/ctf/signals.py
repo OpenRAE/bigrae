@@ -10,7 +10,7 @@ from functools import partial
 from typing import TYPE_CHECKING
 
 from django.db import transaction
-from django.db.models import Model
+from django.db.models import Model, QuerySet
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
@@ -28,6 +28,16 @@ from ctf.models import (  # noqa: E402  # Django signal senders are imported aft
     CTFEventPage,
     CTFNotification,
 )
+
+
+def _lock_events(rows: QuerySet) -> None:
+    """Lock the events that own ``rows`` in primary-key order (event before row)."""
+    list(
+        CTFEvent.objects.select_for_update()
+        .filter(pk__in=rows.values("event_id"))
+        .order_by("pk")
+        .values_list("pk", flat=True)
+    )
 
 
 def _declare_range_ready(participant: CTFParticipant, *, publish: bool) -> None:
@@ -49,17 +59,15 @@ def sync_ctf_participant_range_status(
     **kwargs: object,
 ) -> None:
     """Update CTFParticipant.range_status when CMS reports a status change."""
-    from ctf.models import CTFEvent, CTFParticipant
+    from ctf.models import CTFParticipant
 
-    participants = CTFParticipant.objects.filter(
-        range_instance_id=range_instance_id,
-    )
-    if new_status == ResourceStatus.READY.value:
-        # The range-ready declaration locks the event. Take the event locks first,
-        # in primary-key order, as provisioning and recovery do (event before
-        # participant); the loop below then reads the assignment under them.
-        event_ids = participants.values("event_id")
-        list(CTFEvent.objects.select_for_update().filter(pk__in=event_ids).order_by("pk").values_list("pk", flat=True))
+    matched = CTFParticipant.objects.filter(range_instance_id=range_instance_id)
+    # Delivery runs after the CMS commit, so recovery can repoint a participant
+    # first. Lock events, then participants, as provisioning and recovery do; the
+    # locked re-read drops a repointed participant, so a stale status never
+    # clears a replacement link or releases its draw.
+    _lock_events(matched)
+    participants = matched.select_for_update(of=("self",)).order_by("pk")
 
     # Scoped provider inventory/readback evidence that every owned resource is
     # gone (#2086, ADR-063-R4/R5). A logical DESTROYED status alone is not proof
@@ -133,10 +141,14 @@ def sync_ctf_spare_range_status(
     if mapped_status is None:
         return
 
-    spares = CTFSpareRange.objects.filter(
+    matched = CTFSpareRange.objects.filter(
         range_instance_id=range_instance_id,
         consumed_by__isnull=True,
     )
+    # Lock events, then spares, as spare claims do; the locked re-read drops a
+    # spare that a concurrent claim consumed.
+    _lock_events(matched)
+    spares = matched.select_for_update(of=("self",)).order_by("pk")
 
     updated = 0
     for spare in spares:

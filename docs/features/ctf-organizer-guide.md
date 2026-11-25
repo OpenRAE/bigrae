@@ -264,7 +264,11 @@ position notices stop while the scoreboard is hidden or frozen.
 
 - The **Scoreboard** on the Monitoring page refreshes every 15 seconds. Freeze it
   near the end to keep final standings suspended until close.
+- Each scoreboard shows a graph of the top eight entries' scores over time.
+  Participants see the graph only when they can see the scoreboard. A frozen
+  participant graph stops at the freeze time. The Monitoring graph stays live.
 - **Analytics** summarizes solves, attempts, and challenge difficulty in practice.
+  Select a participant to see a graph and a table of their score changes.
 - After the event, scoring can be recomputed authoritatively if needed (see the
   technical docs for the leaderboard recompute command).
 

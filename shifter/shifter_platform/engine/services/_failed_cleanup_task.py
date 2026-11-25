@@ -65,7 +65,7 @@ def retry_due_failed_cleanup_tasks(limit: int = 3) -> int:
     """The privileged launcher alone observes retained cleanup, once per minute."""
     from engine.models import ProvisionerLaunchIntent, ProvisionerLaunchStatus, Range
 
-    from ._principal_lifecycle import _commit_destroy, prepare_system_range_cleanup
+    from ._principal.lifecycle import _commit_destroy, prepare_system_range_cleanup
 
     now = timezone.now()
     intents = ProvisionerLaunchIntent.objects.filter(

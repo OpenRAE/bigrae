@@ -42,7 +42,7 @@ def _locked_participant(participant_id: UUID) -> CTFParticipant:
         ) from None
 
 
-def _recompute_team(participant: CTFParticipant) -> None:
+def refresh_participant_standing(participant: CTFParticipant) -> None:
     """Refresh the materialized team score after an eligibility-affecting change.
 
     Eligibility changes who ranks, so board positions can move (CTF-802).
@@ -80,7 +80,7 @@ def ban_participant(participant_id: UUID, reason: str | None = None) -> CTFParti
         participant.status = ParticipantStatus.BANNED.value
         participant.status_reason = (reason or "").strip()
         participant.save(update_fields=["status", "status_reason", "updated_at"])
-        _recompute_team(participant)
+        refresh_participant_standing(participant)
     logger.info("Banned participant %s", participant_id)
     return participant
 
@@ -94,7 +94,7 @@ def unban_participant(participant_id: UUID) -> CTFParticipant:
         participant.status = _restored_status()
         participant.status_reason = ""
         participant.save(update_fields=["status", "status_reason", "updated_at"])
-        _recompute_team(participant)
+        refresh_participant_standing(participant)
     logger.info("Unbanned participant %s", participant_id)
     return participant
 
@@ -114,7 +114,7 @@ def disqualify_participant(participant_id: UUID, reason: str | None = None) -> C
         participant.status = ParticipantStatus.DISQUALIFIED.value
         participant.status_reason = (reason or "").strip()
         participant.save(update_fields=["status", "status_reason", "updated_at"])
-        _recompute_team(participant)
+        refresh_participant_standing(participant)
     logger.info("Disqualified participant %s: %s", participant_id, safe_log_value(reason or "No reason provided"))
     return participant
 
@@ -128,7 +128,7 @@ def requalify_participant(participant_id: UUID) -> CTFParticipant:
         participant.status = _restored_status()
         participant.status_reason = ""
         participant.save(update_fields=["status", "status_reason", "updated_at"])
-        _recompute_team(participant)
+        refresh_participant_standing(participant)
     logger.info("Requalified participant %s", participant_id)
     return participant
 
@@ -147,7 +147,7 @@ def set_participant_role(participant_id: UUID, role: str) -> CTFParticipant:
         if participant.role != role:
             participant.role = role
             participant.save(update_fields=["role", "updated_at"])
-            _recompute_team(participant)
+            refresh_participant_standing(participant)
     logger.info("Set participant %s role to %s", participant_id, role)
     return participant
 
@@ -159,6 +159,6 @@ def set_participant_hidden(participant_id: UUID, hidden: bool) -> CTFParticipant
         if participant.hidden != hidden:
             participant.hidden = hidden
             participant.save(update_fields=["hidden", "updated_at"])
-            _recompute_team(participant)
+            refresh_participant_standing(participant)
     logger.info("Set participant %s hidden=%s", participant_id, hidden)
     return participant

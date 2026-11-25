@@ -204,7 +204,7 @@ def test_mutated_adapter_record_cannot_authorize_new_work(operator, installed):
 
 
 def test_explicit_retry_waits_for_cleanup_and_fences_the_previous_attempt(operator, installed):
-    from engine.services._preparation_operations import retry_artifact_preparation
+    from engine.services._preparation.operations import retry_artifact_preparation
 
     requested = request_artifact_preparation(operator, installed.id, package_input())
     previous = PreparationAttempt.objects.get(operation_id=requested.id)
