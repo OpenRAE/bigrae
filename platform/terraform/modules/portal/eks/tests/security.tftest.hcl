@@ -318,19 +318,20 @@ override_resource {
 }
 
 variables {
-  environment              = "test"
-  aws_region               = "us-east-2"
-  cluster_name             = "shifter-test"
-  deployment_role_arn      = "arn:aws:iam::123456789012:role/shifter-test-deploy"
-  permissions_boundary_arn = "arn:aws:iam::123456789012:policy/shifter-test-ci-role-boundary"
-  vpc_cidr                 = "10.42.0.0/16"
-  availability_zones       = ["us-east-2a", "us-east-2b"]
-  private_subnet_cidrs     = ["10.42.0.0/20", "10.42.16.0/20"]
-  public_subnet_cidrs      = ["10.42.128.0/24", "10.42.129.0/24"]
-  kubernetes_version       = "1.31"
-  domain_name              = "shifter.test.example.com"
-  oidc_thumbprints         = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
-  node_instance_types      = ["m7i.large"]
+  environment               = "test"
+  aws_region                = "us-east-2"
+  cluster_name              = "shifter-test"
+  deployment_role_arn       = "arn:aws:iam::123456789012:role/shifter-test-deploy"
+  permissions_boundary_arn  = "arn:aws:iam::123456789012:policy/shifter-test-ci-role-boundary"
+  vpc_cidr                  = "10.42.0.0/16"
+  access_log_retention_days = 30
+  availability_zones        = ["us-east-2a", "us-east-2b"]
+  private_subnet_cidrs      = ["10.42.0.0/20", "10.42.16.0/20"]
+  public_subnet_cidrs       = ["10.42.128.0/24", "10.42.129.0/24"]
+  kubernetes_version        = "1.31"
+  domain_name               = "shifter.test.example.com"
+  oidc_thumbprints          = ["6938fd4d98bab03faadb97b34396831e3780aea1"]
+  node_instance_types       = ["m7i.large"]
   addon_versions = {
     vpc_cni           = "v1.22.4-eksbuild.3"
     ebs_csi           = "v1.63.1-eksbuild.1"
@@ -910,6 +911,50 @@ run "native_identity_contract" {
       aws_iam_role_policy_attachment.operator_access_ssm.policy_arn == "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
     )
     error_message = "The operator access node must have no public address or inbound rule, IMDSv2 and only the Session Manager core policy."
+  }
+
+  assert {
+    condition = alltrue([
+      for group in [aws_security_group.operator_access, aws_security_group.openfga_rotation] :
+      alltrue([for rule in group.egress : !contains(coalesce(rule.cidr_blocks, []), "0.0.0.0/0")])
+    ])
+    error_message = "Management helpers must not send traffic to the internet (#2566)."
+  }
+
+  assert {
+    condition = alltrue([
+      for group in [aws_security_group.operator_access, aws_security_group.openfga_rotation] :
+      anytrue([
+        for rule in group.egress :
+        rule.from_port == 443 && rule.to_port == 443 && rule.protocol == "tcp" &&
+        contains(coalesce(rule.security_groups, []), aws_security_group.interface_endpoints.id)
+      ])
+    ])
+    error_message = "Management helpers reach AWS APIs only through the VPC interface endpoints."
+  }
+
+  assert {
+    condition = (
+      toset(keys(aws_vpc_endpoint.interface)) == toset(["ec2messages", "secretsmanager", "ssm", "ssmmessages"]) &&
+      alltrue([
+        for endpoint in aws_vpc_endpoint.interface :
+        endpoint.vpc_endpoint_type == "Interface" && endpoint.private_dns_enabled &&
+        contains(endpoint.security_group_ids, aws_security_group.interface_endpoints.id) && length(endpoint.security_group_ids) == 1
+      ]) &&
+      anytrue([
+        for rule in aws_security_group.interface_endpoints.ingress :
+        rule.from_port == 443 && rule.to_port == 443 && tolist(rule.cidr_blocks) == tolist(["10.42.0.0/16"])
+      ])
+    )
+    error_message = "The EKS VPC has private-DNS interface endpoints for Secrets Manager and Session Manager, open to the VPC on HTTPS."
+  }
+
+  assert {
+    condition = (
+      module.lambda_code_signing.signing.bucket != "" &&
+      contains(module.s3_access_logs.source_bucket_names, module.lambda_code_signing.signing.bucket)
+    )
+    error_message = "The Lambda artifact bucket sends S3 server access logs to this root's destination."
   }
 }
 

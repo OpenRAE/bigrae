@@ -108,8 +108,9 @@ variable "db_backup_retention_days" {
 }
 
 variable "db_deletion_protection" {
-  description = "Enable deletion protection"
+  description = "Enable deletion protection. scripts/bootstrap/aws_env_destroy.py sets it to false for an intended teardown."
   type        = bool
+  default     = true
 }
 
 variable "db_skip_final_snapshot" {

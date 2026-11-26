@@ -100,7 +100,11 @@ resource "aws_security_group_rule" "ngfw_mgmt_https_from_range_vpc" {
 }
 
 # Outbound: All (for SCM/licensing communication)
+# The firewall management plane must reach the vendor licensing and management
+# services. See ADR-004-R11 exception ngfw-management-egress.
+#trivy:ignore:AWS-0104:exp:2027-05-25
 resource "aws_security_group_rule" "ngfw_mgmt_egress_all" {
+  # checkov:skip=CKV_AWS_382:The firewall management plane must reach the vendor licensing and management services. See ADR-004-R11 exception ngfw-management-egress.
   count = var.enable_ngfw_infrastructure ? 1 : 0
 
   type              = "egress"
@@ -148,7 +152,11 @@ resource "aws_security_group_rule" "ngfw_data_ingress_vpc" {
 }
 
 # Outbound: All (for inspected traffic egress)
+# The NGFW security policy filters the forwarded range traffic, so this rule
+# does not make egress unrestricted. See ADR-004-R11 exception ngfw-dataplane-egress.
+#trivy:ignore:AWS-0104:exp:2027-11-25
 resource "aws_security_group_rule" "ngfw_data_egress_all" {
+  # checkov:skip=CKV_AWS_382:The NGFW security policy filters the forwarded range traffic. See ADR-004-R11 exception ngfw-dataplane-egress.
   count = var.enable_ngfw_infrastructure ? 1 : 0
 
   type              = "egress"

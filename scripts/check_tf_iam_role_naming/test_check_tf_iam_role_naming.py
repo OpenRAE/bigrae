@@ -715,5 +715,153 @@ class CheckTfVpnGatewayIdentityPolicyTest(unittest.TestCase):
         self.assertEqual(reasons, [])
 
 
+class CheckTfPassRoleScopeTest(unittest.TestCase):
+    """#2566: every iam:PassRole allow names a role namespace and a target service."""
+
+    def _reasons(self, body: str) -> list[str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            tf = _write(Path(tmp), "main.tf", body)
+            return [v.reason for v in check_file(tf) if "PassRole" in v.reason]
+
+    def test_current_passrole_grants_are_scoped(self) -> None:
+        for path in (
+            Path("platform/terraform/global/iam/github-oidc.tf"),
+            Path("platform/terraform/modules/provisioner-iam/main.tf"),
+        ):
+            reasons = [v.reason for v in check_file(path) if "PassRole" in v.reason]
+            self.assertEqual(reasons, [], path)
+
+    def test_service_filtered_passrole_passes(self) -> None:
+        self.assertEqual(
+            self._reasons(
+                """
+                resource "aws_iam_policy" "this" {
+                  policy = jsonencode({
+                    Statement = [
+                      {
+                        Effect   = "Allow"
+                        Action   = ["iam:PassRole"]
+                        Resource = "arn:aws:iam::${local.account_id}:role/shifter-*"
+                        Condition = {
+                          StringEquals = {
+                            "iam:PassedToService" = "ec2.amazonaws.com"
+                          }
+                        }
+                      }
+                    ]
+                  })
+                }
+                """
+            ),
+            [],
+        )
+
+    def test_passrole_without_service_condition_rejected(self) -> None:
+        reasons = self._reasons(
+            """
+            resource "aws_iam_policy" "this" {
+              policy = jsonencode({
+                Statement = [
+                  {
+                    Effect   = "Allow"
+                    Action   = ["iam:PassRole"]
+                    Resource = "arn:aws:iam::${local.account_id}:role/shifter-*"
+                  }
+                ]
+              })
+            }
+            """
+        )
+        self.assertTrue(any("iam:PassedToService" in reason for reason in reasons), reasons)
+
+    def test_passrole_on_every_role_rejected(self) -> None:
+        reasons = self._reasons(
+            """
+            resource "aws_iam_policy" "this" {
+              policy = jsonencode({
+                Statement = [
+                  {
+                    Effect   = "Allow"
+                    Action   = "iam:PassRole"
+                    Resource = "*"
+                    Condition = {
+                      StringEquals = {
+                        "iam:PassedToService" = "ec2.amazonaws.com"
+                      }
+                    }
+                  }
+                ]
+              })
+            }
+            """
+        )
+        self.assertTrue(any("wildcard" in reason for reason in reasons), reasons)
+
+    def test_rds_monitoring_grant_may_omit_service_condition(self) -> None:
+        # RDS does not set iam:PassedToService; the grant names only monitoring roles.
+        self.assertEqual(
+            self._reasons(
+                """
+                resource "aws_iam_policy" "this" {
+                  policy = jsonencode({
+                    Statement = [
+                      {
+                        Sid    = "IAMPassRoleRdsMonitoring"
+                        Effect = "Allow"
+                        Action = ["iam:PassRole"]
+                        Resource = [
+                          "arn:aws:iam::${local.account_id}:role/shifter-*-rds-enhanced-monitoring"
+                        ]
+                      }
+                    ]
+                  })
+                }
+                """
+            ),
+            [],
+        )
+
+    def test_rds_monitoring_exception_does_not_cover_other_roles(self) -> None:
+        reasons = self._reasons(
+            """
+            resource "aws_iam_policy" "this" {
+              policy = jsonencode({
+                Statement = [
+                  {
+                    Effect = "Allow"
+                    Action = ["iam:PassRole"]
+                    Resource = [
+                      "arn:aws:iam::${local.account_id}:role/shifter-*-rds-enhanced-monitoring",
+                      "arn:aws:iam::${local.account_id}:role/shifter-*"
+                    ]
+                  }
+                ]
+              })
+            }
+            """
+        )
+        self.assertTrue(any("iam:PassedToService" in reason for reason in reasons), reasons)
+
+    def test_deny_passrole_is_not_a_grant(self) -> None:
+        self.assertEqual(
+            self._reasons(
+                """
+                resource "aws_iam_policy" "this" {
+                  policy = jsonencode({
+                    Statement = [
+                      {
+                        Effect   = "Deny"
+                        Action   = ["iam:PassRole"]
+                        Resource = "*"
+                      }
+                    ]
+                  })
+                }
+                """
+            ),
+            [],
+        )
+
+
 if __name__ == "__main__":
     unittest.main()

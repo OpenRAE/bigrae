@@ -44,8 +44,7 @@ platform/terraform/
 │   └── ecr/                  # Container registries
 └── global/                   # Cross-environment resources
     ├── iam/                  # GitHub OIDC, roles
-    ├── github-runner/        # Self-hosted runners (+ runner-health)
-    └── dev-box/              # Windows dev instance
+    └── github-runner/        # Self-hosted runners (+ runner-health)
 ```
 
 GCP work lives in a parallel tree so it cannot collide with the AWS deploy path:

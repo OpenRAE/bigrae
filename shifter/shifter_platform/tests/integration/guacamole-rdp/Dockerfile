@@ -9,4 +9,8 @@ RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-ins
     && chmod +x /etc/xrdp/startwm.sh \
     && sed -i 's/^autorun=.*/autorun=Xvnc/' /etc/xrdp/xrdp.ini \
     && mkdir -p /run/xrdp
+# xrdp-sesman must run as root to authenticate the synthetic user and start
+# the session. See the DS-0002 entry in .trivyignore-config.yaml.
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
+    CMD ["bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/3389"]
 CMD ["sh", "-c", "/usr/sbin/xrdp-sesman && exec /usr/sbin/xrdp --nodaemon"]

@@ -126,11 +126,11 @@ resource "aws_security_group" "openfga_rotation" {
   }
 
   egress {
-    description = "HTTPS to the Secrets Manager API through NAT"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "HTTPS to the Secrets Manager interface endpoint"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.interface_endpoints.id]
   }
 
   tags = merge(var.tags, {
@@ -254,8 +254,19 @@ resource "aws_cloudwatch_log_group" "openfga_rotation" {
 module "lambda_code_signing" {
   source = "../../lambda-code-signing"
 
-  name_prefix = var.cluster_name
-  tags        = var.tags
+  name_prefix       = var.cluster_name
+  access_log_bucket = module.s3_access_logs.bucket
+  tags              = var.tags
+}
+
+# S3 server access log destination for this root's buckets (#2566).
+module "s3_access_logs" {
+  source = "../../s3-access-logs"
+
+  name_prefix         = var.cluster_name
+  retention_days      = var.access_log_retention_days
+  source_bucket_names = [module.lambda_code_signing.signing.bucket]
+  tags                = var.tags
 }
 
 module "openfga_rotation_package" {

@@ -32,7 +32,8 @@ override_resource {
 }
 
 variables {
-  name_prefix = "test-eks"
+  name_prefix       = "test-eks"
+  access_log_bucket = "test-eks-s3-access-logs-123456789012"
 }
 
 run "only_signed_code_deploys_from_a_hardened_bucket" {
@@ -69,5 +70,13 @@ run "only_signed_code_deploys_from_a_hardened_bucket" {
   assert {
     condition     = output.signing.bucket == aws_s3_bucket.artifacts.bucket && output.signing.code_signing_config_arn == aws_lambda_code_signing_config.this.arn
     error_message = "Consumers receive the versioned bucket and the enforcing configuration."
+  }
+
+  assert {
+    condition = (
+      aws_s3_bucket_logging.artifacts.target_bucket == "test-eks-s3-access-logs-123456789012" &&
+      aws_s3_bucket_logging.artifacts.target_prefix == "test-eks-lambda-artifacts-123456789012/"
+    )
+    error_message = "The artifact bucket sends S3 server access logs to the root's destination under its own prefix."
   }
 }
