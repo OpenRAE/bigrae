@@ -445,6 +445,83 @@ class TestParticipantChallengeDetail:
 
         assert response.status_code == 403
 
+    def test_statistics_hidden_by_default(self, authenticated_participant_client, ctf_participant, ctf_event):
+        """With the setting off, the detail hides statistics (CTF-407)."""
+        challenge = self._challenge_with_solution(ctf_event)
+        _submit(ctf_participant, challenge, "FLAG{x}", correct=True)
+
+        response = call_json(
+            authenticated_participant_client,
+            "get",
+            "api_participant_challenge_detail",
+            kwargs={"challenge_id": challenge.id},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["statistics"] is None
+
+    def test_statistics_shown_when_event_enables(self, authenticated_participant_client, ctf_participant, ctf_event):
+        """With the setting on, participants see the four CTF-407 metrics."""
+        ctf_event.participant_challenge_stats_visible = True
+        ctf_event.save(update_fields=["participant_challenge_stats_visible"])
+        challenge = self._challenge_with_solution(ctf_event)
+        _submit(ctf_participant, challenge, "FLAG{x}", correct=True)
+
+        response = call_json(
+            authenticated_participant_client,
+            "get",
+            "api_participant_challenge_detail",
+            kwargs={"challenge_id": challenge.id},
+        )
+
+        assert response.status_code == 200
+        stats = response.json()["statistics"]
+        assert stats["challenge_id"] == str(challenge.id)
+        assert stats["solve_count"] == 1
+        assert stats["total_attempts"] == 1
+        assert stats["solve_rate"] == 1.0
+        assert stats["first_blood"]["participant_name"] == "Test Participant"
+
+    def test_statistics_enabled_but_unsolved_has_null_holder(
+        self, authenticated_participant_client, ctf_participant, ctf_event
+    ):
+        """An enabled, unsolved challenge returns real counts and no holder."""
+        ctf_event.participant_challenge_stats_visible = True
+        ctf_event.save(update_fields=["participant_challenge_stats_visible"])
+        challenge = self._challenge_with_solution(ctf_event)
+
+        response = call_json(
+            authenticated_participant_client,
+            "get",
+            "api_participant_challenge_detail",
+            kwargs={"challenge_id": challenge.id},
+        )
+
+        assert response.status_code == 200
+        stats = response.json()["statistics"]
+        assert stats["solve_count"] == 0
+        assert stats["first_blood"] is None
+
+    def test_statistics_never_disclose_flag_or_solution(
+        self, authenticated_participant_client, ctf_participant, ctf_event
+    ):
+        """Enabling statistics never adds flag, solution, or target disclosure."""
+        ctf_event.participant_challenge_stats_visible = True
+        ctf_event.save(update_fields=["participant_challenge_stats_visible"])
+        challenge = self._challenge_with_solution(ctf_event)
+
+        response = call_json(
+            authenticated_participant_client,
+            "get",
+            "api_participant_challenge_detail",
+            kwargs={"challenge_id": challenge.id},
+        )
+
+        body = response.json()
+        assert "flag_hash" not in body
+        assert "flags" not in body
+        assert body["solution"] is None
+
 
 def _submit(
     participant, challenge, flag: str, *, correct: bool, attempt: int = 1, points: int | None = None

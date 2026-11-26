@@ -317,6 +317,16 @@ the
 and the
 [navigation design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-navigation-2999.md).
 
+### Challenge statistics visibility
+
+The event field `participant_challenge_stats_visible` controls whether participants see per-challenge statistics (CTF-407).
+The default is off, so existing behavior is unchanged.
+The organizer challenge detail always includes the statistics; the participant challenge detail includes them only when the event enables them, and returns `statistics: null` otherwise.
+Both detail responses share one `ChallengeStatisticsSerializer` and one scoring read, `get_challenge_statistics`.
+The scoring read excludes disqualified solvers from the solve count and the first-blood holder (CTF-609) and keeps the full event roster as the solve-rate denominator.
+The participant challenge page polls on the 15-second interval, so an open page reflects a setting change and new solves within the 30-second bound.
+See the [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-statistics-522.md).
+
 ### Participant scoreboard controls
 
 The SPA participant scoreboards filter by name and sort the rows from the scoreboard API in the browser.

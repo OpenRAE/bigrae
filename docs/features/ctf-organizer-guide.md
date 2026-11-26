@@ -46,6 +46,7 @@ From **CTF Admin → Events → Create**, set the core parameters:
 | Range spin-up minutes | Lead time to provision ranges before start |
 | Submission cooldown / attempt limit | Anti-brute-force throttles |
 | Scoreboard visibility / freeze | Whether and when standings are shown |
+| Show challenge statistics to participants | Whether participants see per-challenge solve count, solve rate, attempts, and the first solver's name. Off by default. Organizers always see them |
 | Live notifications | Which live notices participants get; see [Notifications](#6-notifications) |
 | Auto cleanup / cleanup delay | Whether ranges are torn down after the event |
 | Publish public registration page | Opt-in public event details and request form; off by default |

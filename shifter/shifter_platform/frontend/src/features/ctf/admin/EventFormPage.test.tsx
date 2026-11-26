@@ -95,6 +95,29 @@ describe("EventFormPage (create)", () => {
     });
   });
 
+  it("defaults the participant statistics toggle off and sends it when enabled", async () => {
+    routeApi((path) => {
+      if (path === "/ctf/scenario-options/") return { scenarios: [{ id: "s1", name: "Basic" }] };
+      if (path === "/ctf/events/") return { id: "e9", name: "New", status: "draft" };
+      return {};
+    });
+    const user = setupUser();
+    renderRoute(<EventFormPage mode="create" />, { path: "/*", initialEntries: ["/ctf/admin/events/create"] });
+
+    const toggle = await screen.findByRole("checkbox", {
+      name: "Show per-challenge statistics to participants (publishes solve counts and the first solver's name)",
+    });
+    expect(toggle).not.toBeChecked();
+    await user.type(await screen.findByLabelText("Name"), "New event");
+    await user.click(toggle);
+    await user.click(screen.getByRole("button", { name: "Create event" }));
+
+    await waitFor(() => {
+      const call = mockApi.mock.calls.find(([p, o]) => p === "/ctf/events/" && o?.method === "POST");
+      expect(call?.[1]?.body).toMatchObject({ participant_challenge_stats_visible: true });
+    });
+  });
+
   it("shows authored copy when the save fails without an API error", async () => {
     routeApi((path, options) => {
       if (path === "/ctf/scenarios/") return { scenarios: [] };

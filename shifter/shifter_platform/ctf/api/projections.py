@@ -299,7 +299,23 @@ def participant_challenge_detail(
         "show_solution": show_solution,
         "solution": challenge.solution if show_solution else None,
         "rating": _participant_rating(event, participant, challenge),
+        "statistics": _participant_challenge_stats(event, challenge),
     }
+
+
+def _participant_challenge_stats(event: CTFEvent, challenge: CTFChallenge) -> dict[str, Any] | None:
+    """Return per-challenge statistics for the participant, or ``None`` (CTF-407).
+
+    ``None`` when the event does not publish statistics to participants; the
+    aggregate query is skipped in that case. When enabled, the four metrics come
+    from the one canonical scoring read, so participants and organizers see the
+    same definition.
+    """
+    if not event.participant_challenge_stats_visible:
+        return None
+    from ctf.services.scoring import get_challenge_statistics
+
+    return get_challenge_statistics(challenge.id)
 
 
 def _participant_rating(event: CTFEvent, participant: CTFParticipant, challenge: CTFChallenge) -> dict[str, Any] | None:

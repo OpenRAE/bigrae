@@ -385,7 +385,20 @@ def _challenge_detail_payload(challenge: CTFChallenge) -> dict[str, object]:
         "topics": list(challenge.topics.values_list("name", flat=True)),
         "solution": challenge.solution,
         "rating": _organizer_rating(challenge),
+        "statistics": _organizer_challenge_stats(challenge),
     }
+
+
+def _organizer_challenge_stats(challenge: CTFChallenge) -> dict[str, object]:
+    """Per-challenge statistics for the organizer view (CTF-407, CTF-013).
+
+    Organizers always see the metrics on every readable challenge state,
+    independent of the participant visibility setting and of scoreboard
+    visibility or freeze.
+    """
+    from ctf.services.scoring import get_challenge_statistics
+
+    return get_challenge_statistics(challenge.id)
 
 
 def _organizer_rating(challenge: CTFChallenge) -> dict[str, float | int | None] | None:

@@ -178,6 +178,96 @@ class TestGetChallengeStatistics:
         assert stats["solve_rate"] == pytest.approx(2 / 3)
         assert stats["first_blood"]["participant_name"] == "Second Solver"
 
+    def test_disqualified_solver_excluded_from_count_and_first_blood(
+        self,
+        ctf_event,
+        ctf_challenge,
+        ctf_participant,
+        second_participant_user,
+    ):
+        """A disqualified solver leaves the count and first blood (CTF-609)."""
+        disqualified = CTFParticipant.objects.create(
+            event=ctf_event,
+            user=second_participant_user,
+            email=second_participant_user.email,
+            name="Disqualified Solver",
+            status=ParticipantStatus.DISQUALIFIED.value,
+            registered_at=timezone.now(),
+        )
+        early = CTFSubmission.objects.create(
+            participant=disqualified,
+            challenge=ctf_challenge,
+            submitted_flag="FLAG{dq}",
+            is_correct=True,
+            points_awarded=ctf_challenge.points,
+            attempt_number=1,
+        )
+        late = CTFSubmission.objects.create(
+            participant=ctf_participant,
+            challenge=ctf_challenge,
+            submitted_flag="FLAG{ok}",
+            is_correct=True,
+            points_awarded=ctf_challenge.points,
+            attempt_number=1,
+        )
+        CTFSubmission.objects.filter(pk=early.pk).update(submitted_at=timezone.now() - timedelta(minutes=5))
+        CTFSubmission.objects.filter(pk=late.pk).update(submitted_at=timezone.now() - timedelta(minutes=1))
+
+        stats = get_challenge_statistics(ctf_challenge.id)
+
+        # Attempt history is retained for every submission.
+        assert stats["total_attempts"] == 2
+        # The disqualified solve leaves the count and the first-blood holder.
+        assert stats["solve_count"] == 1
+        assert stats["first_blood"]["participant_name"] == "Test Participant"
+        # The disqualified participant stays in the full-roster denominator.
+        assert stats["solve_rate"] == pytest.approx(1 / 2)
+
+    def test_first_blood_breaks_timestamp_ties_by_submission_id(
+        self,
+        ctf_event,
+        ctf_challenge,
+        ctf_participant,
+        second_participant_user,
+    ):
+        """Equal first-solve timestamps break by submission id, not insertion luck."""
+        second_solver = CTFParticipant.objects.create(
+            event=ctf_event,
+            user=second_participant_user,
+            email=second_participant_user.email,
+            name="Second Solver",
+            status=ParticipantStatus.ACTIVE.value,
+            registered_at=timezone.now(),
+        )
+        tie_time = timezone.now() - timedelta(minutes=2)
+        one = CTFSubmission.objects.create(
+            participant=ctf_participant,
+            challenge=ctf_challenge,
+            submitted_flag="FLAG{a}",
+            is_correct=True,
+            points_awarded=ctf_challenge.points,
+            attempt_number=1,
+        )
+        two = CTFSubmission.objects.create(
+            participant=second_solver,
+            challenge=ctf_challenge,
+            submitted_flag="FLAG{b}",
+            is_correct=True,
+            points_awarded=ctf_challenge.points,
+            attempt_number=1,
+        )
+        CTFSubmission.objects.filter(pk__in=[one.pk, two.pk]).update(submitted_at=tie_time)
+
+        expected = (
+            CTFSubmission.objects.filter(challenge=ctf_challenge, is_correct=True)
+            .order_by("submitted_at", "id")
+            .first()
+        )
+
+        stats = get_challenge_statistics(ctf_challenge.id)
+
+        assert stats["first_blood"]["participant_name"] == expected.participant.name
+
     def test_solve_rate_is_zero_without_event_participants(self, ctf_event):
         """A challenge with no event roster has a zero solve rate."""
         challenge = CTFChallenge.objects.create(

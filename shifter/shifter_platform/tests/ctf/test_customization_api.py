@@ -141,6 +141,45 @@ class TestTheming:
         assert me["event"]["logo_url"] == "https://cdn.example.test/logo.png"
         assert me["event"]["theme_color"] == "#22d3ee"
 
+    def test_participant_stats_visibility_round_trips_and_persists(
+        self, ctf_event_active, authenticated_organizer_client
+    ):
+        """The organizer toggle persists and a partial update preserves it (CTF-407)."""
+        enabled = call_json(
+            authenticated_organizer_client,
+            "put",
+            "api_event_detail",
+            kwargs={"event_id": ctf_event_active.id},
+            body={"participant_challenge_stats_visible": True},
+        )
+        assert enabled.status_code == 200, enabled.content
+        detail = call_json(
+            authenticated_organizer_client, "get", "api_event_detail", kwargs={"event_id": ctf_event_active.id}
+        ).json()
+        assert detail["participant_challenge_stats_visible"] is True
+
+        # A later partial update that omits the field keeps the stored value.
+        call_json(
+            authenticated_organizer_client,
+            "put",
+            "api_event_detail",
+            kwargs={"event_id": ctf_event_active.id},
+            body={"theme_color": "#111111"},
+        )
+        ctf_event_active.refresh_from_db()
+        assert ctf_event_active.participant_challenge_stats_visible is True
+
+        # An explicit false is honored and not dropped.
+        call_json(
+            authenticated_organizer_client,
+            "put",
+            "api_event_detail",
+            kwargs={"event_id": ctf_event_active.id},
+            body={"participant_challenge_stats_visible": False},
+        )
+        ctf_event_active.refresh_from_db()
+        assert ctf_event_active.participant_challenge_stats_visible is False
+
 
 class TestExtensionRegistries:
     def test_custom_flag_validator_dispatch(self, ctf_challenge):

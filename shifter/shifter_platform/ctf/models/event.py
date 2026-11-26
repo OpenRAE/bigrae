@@ -244,6 +244,14 @@ class CTFEvent(ImmutableFieldsMixin, LiveNotificationsMixin, CTFBaseModel):
         default=RatingVisibility.PUBLIC.value,
         help_text="Challenge rating visibility: public, organizer-only, or disabled",
     )
+    participant_challenge_stats_visible = models.BooleanField(
+        default=False,
+        help_text=(
+            "Whether participants see per-challenge statistics (solve count, solve rate, "
+            "attempts, and the first solver's display name). Organizers always see them. "
+            "Defaults to off (CTF-407)."
+        ),
+    )
     scoring_mode = models.CharField(
         max_length=20,
         choices=_scoring_mode_choices,

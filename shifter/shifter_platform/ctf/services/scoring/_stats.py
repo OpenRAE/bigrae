@@ -35,6 +35,7 @@ def get_challenge_statistics(challenge_id: UUID) -> dict[str, Any]:
         Dict with solve count, attempt count, first blood, etc.
     """
     from ctf.models import CTFChallenge
+    from ctf.services.participant.queries import eligible_participant_q
 
     try:
         challenge = CTFChallenge.objects.get(pk=challenge_id)
@@ -42,11 +43,14 @@ def get_challenge_statistics(challenge_id: UUID) -> dict[str, Any]:
         return {}
 
     submissions = CTFSubmission.objects.filter(challenge=challenge)
-    correct = submissions.filter(is_correct=True)
+    # Credited solves and first blood exclude disqualified solvers (CTF-609);
+    # attempt history keeps every submission. A tie on ``submitted_at`` breaks
+    # by submission ``id`` so the holder is deterministic, as team attribution does.
+    correct = submissions.filter(is_correct=True).filter(eligible_participant_q("participant__"))
     solve_count = correct.count()
     participant_count = CTFParticipant.objects.filter(event_id=challenge.event_id).count()
 
-    first_blood = correct.order_by("submitted_at").first()
+    first_blood = correct.order_by("submitted_at", "id").first()
 
     return {
         "challenge_id": str(challenge_id),

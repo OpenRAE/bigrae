@@ -61,6 +61,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     show_solution: false,
     solution: null,
     rating: null,
+    statistics: null,
     ...overrides,
   };
 }
@@ -244,6 +245,31 @@ describe("ChallengeDetailPage", () => {
     expect(await screen.findByRole("heading", { name: "SQL Injection" })).toBeInTheDocument();
     expect(screen.getByText("Exploit the login form.")).toBeInTheDocument();
     expect(screen.getByLabelText("Submit flag")).toBeInTheDocument();
+  });
+
+  it("shows challenge statistics when the event publishes them", async () => {
+    mockApiRoutes(() =>
+      detail({
+        statistics: {
+          challenge_id: "c1",
+          total_attempts: 7,
+          solve_count: 3,
+          solve_rate: 0.5,
+          first_blood: { participant_name: "Alex Rivera", time: "2026-01-01T00:00:00Z" },
+        },
+      }),
+    );
+    renderRoute(<ChallengeDetailPage />, ROUTE);
+    expect(await screen.findByRole("heading", { name: "Challenge statistics" })).toBeInTheDocument();
+    expect(screen.getByText("50%")).toBeInTheDocument();
+    expect(screen.getByText("Alex Rivera")).toBeInTheDocument();
+  });
+
+  it("omits challenge statistics when the event hides them", async () => {
+    mockApiRoutes(() => detail({ statistics: null }));
+    renderRoute(<ChallengeDetailPage />, ROUTE);
+    expect(await screen.findByRole("heading", { name: "SQL Injection" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "Challenge statistics" })).not.toBeInTheDocument();
   });
 
   it("shows the teammate who solved it and keeps the flag form for an individual submit", async () => {
