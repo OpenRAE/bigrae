@@ -48,10 +48,11 @@ def get_range_status(participant_id: UUID, *, credential: CredentialContext | No
             "status": "not_assigned",
             "range_instance_id": None,
             "vpn_profile_available": False,
+            "scenario_name": None,
         }
 
     # Query CMS for fresh status via bridge
-    from ctf.bridges import cms_get_range_status
+    from ctf.bridges import cms_get_range_scenario_name, cms_get_range_status
 
     fresh_status = cms_get_range_status(participant.range_instance_id)
 
@@ -82,6 +83,8 @@ def get_range_status(participant_id: UUID, *, credential: CredentialContext | No
         "range_instance_id": participant.range_instance_id,
         "vpn_profile_available": vpn_profile_available,
         "target_instances": target_instances,
+        # The participant's own range authorizes its scenario name (#378).
+        "scenario_name": cms_get_range_scenario_name(participant.range_instance_id),
     }
 
 

@@ -109,9 +109,9 @@ def range_scenario_name(scenario_id: str) -> str | None:
     """Return the catalog name of the package source that a range records.
 
     The name is the same value that the catalog projection shows as ``name``.
-    Pass only the ``scenario_id`` of a range projection that the caller can
-    already read. The range read authorizes the name as range provenance, so
-    this lookup applies no separate content scope.
+    Pass only the ``scenario_id`` of a range that the caller can already
+    enter. Access to the range authorizes its scenario name and grants no
+    other access.
 
     Args:
         scenario_id: The ``scenario_id`` recorded on an authorized range.

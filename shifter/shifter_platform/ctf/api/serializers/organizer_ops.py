@@ -225,6 +225,8 @@ class RangeStatusResponseSerializer(serializers.Serializer):
     range_instance_id = serializers.IntegerField(read_only=True, allow_null=True)
     vpn_profile_available = serializers.BooleanField(read_only=True, default=False)
     target_instances = RangeTargetInstanceSerializer(many=True, read_only=True, required=False)
+    # Catalog name of the participant range's scenario; null when no range is assigned.
+    scenario_name = serializers.CharField(read_only=True, allow_null=True)
 
 
 class RangeAccessResponseSerializer(serializers.Serializer):

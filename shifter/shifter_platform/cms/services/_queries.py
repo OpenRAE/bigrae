@@ -29,6 +29,21 @@ def get_range_status_by_id(range_instance_id: int) -> str:
         return "unknown"
 
 
+def get_range_scenario_name_by_id(range_instance_id: int) -> str | None:
+    """Return the catalog scenario name of a RangeInstance by its PK.
+
+    Pass only the PK of a range that the caller can already enter. Access to
+    the range authorizes its scenario name and grants no other access.
+
+    Returns:
+        The catalog name, or None when the range or its package source is gone.
+    """
+    from ._scenarios import range_scenario_name
+
+    scenario_id = RangeInstance.all_objects.filter(pk=range_instance_id).values_list("scenario_id", flat=True).first()
+    return range_scenario_name(scenario_id) if scenario_id else None
+
+
 def get_range_spec_by_id(range_instance_id: int) -> dict | None:
     """Get the range_spec dict from a RangeInstance by its PK.
 

@@ -211,9 +211,10 @@ target, endpoint, profile version, and secret reference. Profile bytes are resol
 and validated in memory only after CTF provenance, participant ownership, range
 status, request generation, and target membership checks pass.
 
-The participant range-status projection exposes only
+For VPN access, the participant range-status projection exposes only
 `vpn_profile_available`; it does not expose provider, endpoint, target, or secret
-metadata. Paused and non-ready ranges cannot deliver a profile. Destroy removes the
+metadata. The projection also exposes `scenario_name`, the catalog name of the
+range's scenario. Access to the range authorizes the name and grants no other access. Paused and non-ready ranges cannot deliver a profile. Destroy removes the
 provider material.
 
 Ownership transfer is rejected while a participant VPN binding exists. Clearing a database reference cannot revoke a downloaded credential. Recovery must destroy that generation and provision a new one for the replacement owner before readiness.

@@ -29,6 +29,7 @@ function readyStatus(overrides: Record<string, unknown> = {}) {
     range_instance_id: 5,
     vpn_profile_available: false,
     target_instances: [],
+    scenario_name: null,
     ...overrides,
   };
 }
@@ -93,6 +94,22 @@ describe("RangePage", () => {
     expect(screen.queryByRole("button", { name: /Open .* session/ })).not.toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /Open .* terminal/ })).not.toBeInTheDocument();
     expect(screen.getByText(/becomes available once your range is ready/)).toBeInTheDocument();
+  });
+
+  it("shows the scenario name while the range provisions", async () => {
+    mockApi.mockResolvedValue(readyStatus({ status: "provisioning", scenario_name: "web-pack" }));
+    renderRoute(<RangePage />);
+
+    expect(await screen.findByText("Provisioning")).toBeInTheDocument();
+    expect(screen.getByText("Scenario").nextElementSibling).toHaveTextContent("web-pack");
+  });
+
+  it("hides the scenario row when the server has no scenario name", async () => {
+    mockApi.mockResolvedValue(readyStatus());
+    renderRoute(<RangePage />);
+
+    expect(await screen.findByText("Ready")).toBeInTheDocument();
+    expect(screen.queryByText("Scenario")).not.toBeInTheDocument();
   });
 
   it("shows an empty message when a ready range has no target boxes", async () => {

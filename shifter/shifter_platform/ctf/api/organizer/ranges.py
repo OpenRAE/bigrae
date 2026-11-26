@@ -155,6 +155,7 @@ class ParticipantRangeStatusView(APIView):
                         "status": "not_assigned",
                         "range_instance_id": None,
                         "vpn_profile_available": False,
+                        "scenario_name": None,
                     }
                 )
             try:

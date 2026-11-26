@@ -35,6 +35,7 @@ Without a briefing, use the standard help and organizer instructions.
 ## Your range
 
 1. Open **Range** to inspect provisioning and access details.
+   The page shows the name of the scenario for your range.
 2. Wait for the assigned range to become ready.
 3. Use [Terminal](terminal.md) for the supported guest channels.
 4. Use **Download VPN profile** only when the ready range advertises that capability.

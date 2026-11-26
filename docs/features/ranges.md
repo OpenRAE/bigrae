@@ -45,6 +45,7 @@ Do not submit another launch to recover a lost API response; use [retry-safe ope
 ## Monitor provisioning
 
 The range page updates status while connected.
+It shows the name of the scenario that the range uses.
 If live updates disconnect, use the displayed connection information and refresh the status.
 Provisioning has no fixed duration.
 Read a failure result before cancellation or another launch.

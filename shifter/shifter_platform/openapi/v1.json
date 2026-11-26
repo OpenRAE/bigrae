@@ -32706,11 +32706,17 @@
               "$ref": "#/components/schemas/RangeTargetInstance"
             },
             "readOnly": true
+          },
+          "scenario_name": {
+            "type": "string",
+            "readOnly": true,
+            "nullable": true
           }
         },
         "required": [
           "participant_id",
           "range_instance_id",
+          "scenario_name",
           "status",
           "target_instances",
           "vpn_profile_available"

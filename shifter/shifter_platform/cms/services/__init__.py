@@ -107,6 +107,7 @@ from ._principal_scopes import mission_control_resource_scope as mission_control
 from ._queries import (
     find_range_instance_id_by_request,
     get_principal_range_target_instances,
+    get_range_scenario_name_by_id,
     get_range_spec_by_id,
     get_range_status_by_id,
     get_range_target_instances,
@@ -355,6 +356,7 @@ __all__ = (
     "get_range",
     "get_range_by_request_id",
     "get_range_rdp_connection_info",
+    "get_range_scenario_name_by_id",
     "get_range_spec_by_id",
     "get_range_ssh_connection_info",
     "get_range_status_by_id",
