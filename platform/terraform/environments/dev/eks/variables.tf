@@ -189,3 +189,9 @@ variable "openfga_rotation_package" {
   default     = null
   nullable    = true
 }
+
+variable "log_retention_days" {
+  description = "Days to keep S3 server access logs for this root's buckets."
+  type        = number
+  default     = 365
+}

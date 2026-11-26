@@ -164,6 +164,9 @@ destroy. Empty the Portal-owned buckets before the Portal destroy:
 - Portal user-storage bucket.
 - Log-aggregation `logs` and `alb_access_logs` buckets.
 - Engine state bucket (`engine-state` module; `force_destroy = false`).
+- The S3 access-log bucket of each root (`s3-access-logs` module): portal,
+  range, and EKS. Empty the range and EKS buckets before their own destroy.
+  `scripts/bootstrap/aws_env_destroy.py` empties all of them.
 
 Empty a versioned bucket by bulk-removing current objects, then sweeping old
 versions and delete markers:
@@ -314,9 +317,7 @@ double-quoted shell string does not trigger backtick command substitution.
     --query "CacheSubnetGroups[?starts_with(CacheSubnetGroupName, '$ENV-portal')].CacheSubnetGroupName" --output text
   aws elasticache delete-cache-subnet-group --cache-subnet-group-name "$ENV-portal-redis"
   ```
-- **EventBridge Scheduler schedules** (`<env>-portal-cognito-rotation-reminder`; the
-  dev-box `shifter-dev-box-nightly-shutdown` only if the `global/dev-box` stack was
-  applied and you are retiring it):
+- **EventBridge Scheduler schedules** (`<env>-portal-cognito-rotation-reminder`):
   ```bash
   aws scheduler list-schedules \
     --query "Schedules[?starts_with(Name, '$ENV-portal')].Name" --output text

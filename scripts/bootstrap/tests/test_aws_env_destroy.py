@@ -500,6 +500,40 @@ def test_s3_empty_skips_unowned_and_state_bucket(tmp_path, monkeypatch, sweep_ok
     assert emptied == {"dev-portal-logs"}
 
 
+def test_eks_and_range_access_log_buckets_are_emptied_before_their_destroy(tmp_path, monkeypatch, sweep_ok):
+    """#2566: EKS and range own versioned S3 access-log buckets that block destroy unless emptied."""
+    state = _full_state()
+    state["environments/dev/eks"] = ["module.eks.module.s3_access_logs.aws_s3_bucket.this"]
+    state["environments/dev/range"].append("module.s3_access_logs.aws_s3_bucket.this")
+    fake = _fake(
+        state=state,
+        s3_state_buckets={
+            **_STATE_BUCKETS,
+            "module.eks.module.s3_access_logs.aws_s3_bucket.this": "shifter-dev-eks-s3-access-logs-1",
+            "module.s3_access_logs.aws_s3_bucket.this": "dev-range-s3-access-logs-1",
+        },
+        versions={
+            "shifter-dev-eks-s3-access-logs-1": {"Versions": [{"Key": "a", "VersionId": "v1"}]},
+            "dev-range-s3-access-logs-1": {"DeleteMarkers": [{"Key": "b", "VersionId": "m1"}]},
+        },
+    )
+    _wire(monkeypatch, fake)
+
+    aed.teardown(_ctx(tmp_path))
+
+    for bucket, stack in (
+        ("shifter-dev-eks-s3-access-logs-1", "environments/dev/eks"),
+        ("dev-range-s3-access-logs-1", "environments/dev/range"),
+    ):
+        order = [
+            ("empty" if "delete-objects" in c and _flag_value(c, "--bucket") == bucket else "destroy")
+            for c in fake.calls
+            if ("delete-objects" in c and _flag_value(c, "--bucket") == bucket)
+            or (c[0] == "terraform" and c[2] == "destroy" and _stack_of(c) == stack)
+        ]
+        assert order[:2] == ["empty", "destroy"], (bucket, order)
+
+
 def test_ecr_from_state_batches_at_100_and_runs_before_core_destroy(tmp_path, monkeypatch, sweep_ok):
     images = [{"imageDigest": f"sha256:{i}"} for i in range(150)]
     fake = _fake(ecr_images={"shifter-dev-portal": images})

@@ -1,0 +1,22 @@
+# Trivy configuration-scan exceptions (#2566)
+# ---------------------------------------------------------------------------
+# Consumed only by the security-trivy-config job in
+# .github/workflows/_quality.yml through --ignorefile. Use an inline
+# `trivy:ignore` comment on the exact resource where Trivy supports it. This
+# file holds only the absence checks that Trivy cannot ignore inline. Each entry
+# has a matching docs/adr/exceptions.yaml entry (rule_id ADR-004-R11) with the
+# same expiry. Paths are relative to the scanned root.
+#
+# The root .trivyignore.yaml is the exact-release image policy. Do not mix the
+# two policies.
+
+misconfigurations:
+  - id: DS-0002
+    paths:
+      - "tests/integration/guacamole-rdp/Dockerfile"
+    statement: >-
+      Test-only RDP fixture for the Guacamole integration test. xrdp-sesman must
+      run as root to authenticate the synthetic user through PAM and start the
+      session as that user. The image is built and run only by the CI
+      integration test and is never published. See docs/adr/exceptions.yaml.
+    expired_at: 2027-05-25

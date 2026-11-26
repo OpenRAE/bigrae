@@ -127,3 +127,8 @@ output "firewall_subnet_cidrs" {
   description = "CIDR blocks of the per-AZ firewall subnets, ordered by availability_zones. Empty list when inspection is disabled."
   value       = aws_subnet.firewall[*].cidr_block
 }
+
+output "interface_endpoints_security_group_id" {
+  description = "Security group of the private-tier interface VPC endpoints. Clients reference it in HTTPS egress rules."
+  value       = aws_security_group.interface_endpoints.id
+}

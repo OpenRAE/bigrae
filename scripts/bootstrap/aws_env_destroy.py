@@ -191,8 +191,9 @@ def _layers(env: str, state_bucket: str) -> tuple[Layer, ...]:
     """Return the ordered teardown layers for one environment."""
     return (
         # EKS is parked (#1324); like every layer it is skipped when its state is
-        # empty (the universal already-destroyed check in destroy_layer).
-        Layer("eks", "environments/{env}/eks"),
+        # empty (the universal already-destroyed check in destroy_layer). EKS and
+        # range own versioned buckets (S3 access logs, engine state, #2566).
+        Layer("eks", "environments/{env}/eks", empty_s3=True),
         Layer(
             "portal",
             "environments/{env}/portal",
@@ -200,7 +201,7 @@ def _layers(env: str, state_bucket: str) -> tuple[Layer, ...]:
             empty_s3=True,
             var_flags=(f"-var=terraform_state_bucket={state_bucket}",),
         ),
-        Layer("range", "environments/{env}/range"),
+        Layer("range", "environments/{env}/range", empty_s3=True),
         Layer("core", "environments/{env}", empty_s3=True, empty_ecr=True),
         # The runner root's network vars are resolved from its own state at
         # destroy time (managed, default opt-in, or explicit external), so

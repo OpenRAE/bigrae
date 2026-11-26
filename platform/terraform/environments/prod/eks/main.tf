@@ -48,6 +48,7 @@ module "eks" {
   deployment_role_arn       = var.deployment_role_arn
   permissions_boundary_arn  = local.permissions_boundary_arn
   vpc_cidr                  = var.vpc_cidr
+  access_log_retention_days = var.log_retention_days
   availability_zones        = var.availability_zones
   private_subnet_cidrs      = var.private_subnet_cidrs
   public_subnet_cidrs       = var.public_subnet_cidrs

@@ -66,6 +66,18 @@ module "engine_state" {
   environment        = var.environment
   tags               = var.tags
   log_retention_days = var.log_retention_days
+  access_log_bucket  = module.s3_access_logs.bucket
+}
+
+# S3 server access log destination for this root's buckets (#2566). Range keeps
+# its own destination, so it does not depend on portal state.
+module "s3_access_logs" {
+  source = "../../../modules/s3-access-logs"
+
+  name_prefix         = local.name_prefix
+  retention_days      = var.log_retention_days
+  source_bucket_names = [module.engine_state.bucket_name]
+  tags                = var.tags
 }
 
 moved {

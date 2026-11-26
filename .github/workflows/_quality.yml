@@ -2745,13 +2745,12 @@ jobs:
           compact: true
           soft_fail: false
 
-  # Repository configuration remains advisory here. Exact release OCI digests
-  # are scanned as a blocking deploy gate by deploy.py gcp-release-scan (#2084,
-  # #2571).
-  security-trivy-advisory:
+  # Blocking Trivy configuration gate (#2566). Exact release OCI digests are
+  # scanned separately by deploy.py gcp-release-scan (#2084, #2571).
+  security-trivy-config:
     permissions:
       contents: read
-    name: Security (trivy advisory)
+    name: Security (trivy config)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -2770,31 +2769,38 @@ jobs:
           echo "${RUNNER_TEMP}/trivy-bin" >> "${GITHUB_PATH}"
           "${RUNNER_TEMP}/trivy-bin/trivy" --version
 
-      - name: Scan first-party Dockerfiles and Terraform (advisory)
+      # The checks bundle is pinned by digest so the verdict changes only with a
+      # repository change. Update the digest deliberately. Inline trivy:ignore
+      # comments carry resource exceptions; .trivyignore-config.yaml carries the
+      # absence checks that cannot be ignored inline. Every root runs, and any
+      # finding or scanner error fails the job.
+      - name: Scan first-party Dockerfiles and Terraform
+        env:
+          TRIVY_CHECKS_BUNDLE: mirror.gcr.io/aquasec/trivy-checks@sha256:b591e9190cff4aa4e385b1a25bccfd9ecf178d3c77fd194e1410b7ce7e1df058
         run: |
           set -euo pipefail
           mkdir -p "${RUNNER_TEMP}/trivy-results"
-          # Trivy config accepts one target root per invocation. Scan each
-          # first-party tree separately (skip temp/ via path exclusion).
-          for target in shifter/engine shifter/shifter_platform shifter/packer; do
-            slug=$(echo "$target" | tr '/' '-')
-            trivy config \
-              --exit-code 0 \
+          scan_status=0
+          for target in shifter/engine shifter/shifter_platform shifter/packer platform/terraform; do
+            slug=$(printf '%s' "$target" | tr '/' '-')
+            if ! trivy config \
+              --exit-code 1 \
+              --checks-bundle-repository "${TRIVY_CHECKS_BUNDLE}" \
+              --ignorefile .trivyignore-config.yaml \
               --format sarif \
               --output "${RUNNER_TEMP}/trivy-results/${slug}.sarif" \
               --skip-dirs '**/temp/**' \
-              "$target"
+              "$target"; then
+              scan_status=1
+            fi
           done
-          trivy config \
-            --exit-code 0 \
-            --format sarif \
-            --output "${RUNNER_TEMP}/trivy-results/terraform.sarif" \
-            platform/terraform/
+          exit "${scan_status}"
 
       - name: Upload Trivy SARIF artifacts
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: trivy-advisory-sarif
+          name: trivy-config-sarif
           path: ${{ runner.temp }}/trivy-results/*.sarif
           if-no-files-found: error
           retention-days: 14
