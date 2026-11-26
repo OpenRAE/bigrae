@@ -17,7 +17,7 @@ The system should display per-challenge statistics including: total solve count,
 
 ## Rationale
 
-Challenge statistics help participants gauge difficulty (low solve rate = hard) and help organizers identify broken or overly easy challenges mid-event. For organizers, statistics inform decisions about releasing hints or adjusting point values during long-running events. (CTFd shows solve counts on challenge cards.)
+Challenge statistics help participants gauge difficulty (low solve rate = hard) and help organizers identify broken or overly simple challenges mid-event. For organizers, statistics inform decisions about releasing hints or adjusting point values during long-running events. (CTFd shows solve counts on challenge cards.)
 
 ## Traceability
 
