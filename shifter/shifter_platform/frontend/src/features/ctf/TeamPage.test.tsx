@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import { axe } from "vitest-axe";
 
 import { renderRoute } from "@/test/utils";
@@ -97,6 +97,68 @@ describe("TeamPage", () => {
     expect(await screen.findByRole("button", { name: "Leave team" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Regenerate" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Make captain" })).not.toBeInTheDocument();
+  });
+
+  it("shows invite-code settings and recovery to the captain", async () => {
+    mockApi.mockResolvedValue({
+      id: "t1",
+      name: "Blue Team",
+      members: [{ id: "m1", name: "Alice", is_captain: true }],
+      is_captain: true,
+      team_size_limit: 4,
+      invite_code: null,
+      invite_code_single_use: false,
+      invite_code_expires_at: null,
+    });
+    renderRoute(<TeamPage />);
+    expect(await screen.findByText("No active code. Regenerate to create one.")).toBeInTheDocument();
+    expect(screen.getByLabelText("Use mode")).toBeInTheDocument();
+    expect(screen.getByLabelText("Expiry")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Regenerate" })).toBeInTheDocument();
+  });
+
+  it("sends only the edited invite-code settings on regenerate", async () => {
+    mockApi.mockResolvedValue({
+      id: "t1",
+      name: "Blue Team",
+      members: [{ id: "m1", name: "Alice", is_captain: true }],
+      is_captain: true,
+      team_size_limit: 4,
+      invite_code: "join-us-123",
+      invite_code_single_use: false,
+      invite_code_expires_at: null,
+    });
+    renderRoute(<TeamPage />);
+    fireEvent.change(await screen.findByLabelText("Use mode"), { target: { value: "single" } });
+    fireEvent.change(screen.getByLabelText("Expiry"), { target: { value: "3600" } });
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    await waitFor(() => {
+      expect(mockApi).toHaveBeenCalledWith(
+        "/ctf/me/team/regenerate-code/",
+        expect.objectContaining({ method: "POST", body: { single_use: true, expires_in_seconds: 3600 } }),
+      );
+    });
+  });
+
+  it("omits unedited settings so a routine regenerate keeps restrictions", async () => {
+    mockApi.mockResolvedValue({
+      id: "t1",
+      name: "Blue Team",
+      members: [{ id: "m1", name: "Alice", is_captain: true }],
+      is_captain: true,
+      team_size_limit: 4,
+      invite_code: "join-us-123",
+      invite_code_single_use: true,
+      invite_code_expires_at: "2030-01-01T00:00:00Z",
+    });
+    renderRoute(<TeamPage />);
+    fireEvent.click(await screen.findByRole("button", { name: "Regenerate" }));
+    await waitFor(() => {
+      expect(mockApi).toHaveBeenCalledWith(
+        "/ctf/me/team/regenerate-code/",
+        expect.objectContaining({ method: "POST", body: {} }),
+      );
+    });
   });
 
   it("reports a failed member removal to the captain", async () => {

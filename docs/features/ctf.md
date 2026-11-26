@@ -104,6 +104,10 @@ You can still submit the flag for your individual score.
 Brackets provide separate cohort standings when the organizer uses them.
 
 A captain can rename the team, remove members, and transfer captaincy.
+A captain can regenerate the invite code at any time.
+A regenerated code can be single-use or multi-use.
+A captain can also set an expiry on the code.
+The platform rejects an expired, used, or replaced code.
 Disbanding requires the current members to have no recorded correct solve.
 A zero-point solve still prevents disbanding.
 The same rule applies when the last member leaves.

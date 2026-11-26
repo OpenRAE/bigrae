@@ -22,4 +22,9 @@ Invite codes provide a simple, shareable mechanism for team formation without re
 ## Traceability
 
 - IMPLEMENTS → CODE_FILE `shifter/shifter_platform/ctf/models/` (CTFTeam.invite_code - unique field with auto-generation on save)
-- DOCUMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#647` (CTF-504: Team Invite Codes)
+- IMPLEMENTS → CODE_FILE `shifter/shifter_platform/ctf/models/team.py` (invite-code use mode, lifetime, deadline, and spent marker)
+- IMPLEMENTS → CODE_FILE `shifter/shifter_platform/ctf/services/team.py` (single-use spend, expiry rejection, and rotation of invite codes)
+- IMPLEMENTS → CODE_FILE `shifter/shifter_platform/ctf/api/team_views.py` (optional regenerate settings and never-cache code disclosure)
+- TESTS → TEST `shifter/shifter_platform/tests/ctf/test_team_api.py` (single-use, expiry, rotation, and captain-only disclosure)
+- TESTS → TEST `shifter/shifter_platform/tests/ctf/test_team_captain_concurrency.py` (single-use code admits one winner under contention)
+- IMPLEMENTS → GITHUB_ISSUE `Brad-Edwards/bigrae#647` (CTF-504: Team Invite Codes)

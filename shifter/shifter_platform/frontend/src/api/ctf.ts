@@ -27,6 +27,7 @@ import type {
   CtfSubmissionList,
   CtfSubmitFlagResult,
   CtfTeam,
+  CtfTeamRegenerateCodeRequest,
   CtfUseHintResult,
 } from "./types";
 
@@ -307,7 +308,7 @@ export function useRenameTeam() {
 }
 
 export function useRegenerateTeamCode() {
-  return useTeamMutation<Record<string, never>>("regenerate-code");
+  return useTeamMutation<CtfTeamRegenerateCodeRequest>("regenerate-code");
 }
 
 export function useTransferCaptaincy() {

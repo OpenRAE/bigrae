@@ -13,8 +13,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from django.utils.cache import add_never_cache_headers
 from drf_spectacular.utils import extend_schema
 from rest_framework import status
+from rest_framework.parsers import FormParser, MultiPartParser
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -28,9 +30,11 @@ from ctf.api.serializers import (
     TeamCreateRequestSerializer,
     TeamJoinRequestSerializer,
     TeamMemberRequestSerializer,
+    TeamRegenerateCodeRequestSerializer,
 )
 from ctf.exceptions import CTFError
 from shared.api.errors import api_error_response
+from shared.api.strict_json import ClosedJSONParser
 from shared.api_tokens import scopes
 
 if TYPE_CHECKING:
@@ -53,10 +57,16 @@ def _no_participant_response(request: Request) -> Response:
 
 
 def _team_response(participant: CTFParticipant) -> Response:
-    """Serialize the participant's refreshed team projection."""
+    """Serialize the participant's refreshed team projection.
+
+    The captain projection carries the invite code, a join secret, so the
+    response is never cached (CTF-504).
+    """
     participant.refresh_from_db()
     team = projections.participant_team(participant)
-    return Response(ParticipantTeamSerializer(team).data)
+    response = Response(ParticipantTeamSerializer(team).data)
+    add_never_cache_headers(response)
+    return response
 
 
 class _TeamActionView(APIView):
@@ -135,14 +145,32 @@ class TeamRenameView(_TeamActionView):
 
 
 class TeamRegenerateCodeView(_TeamActionView):
-    """Mint a fresh invite code (captain only)."""
+    """Mint a fresh invite code (captain only), with optional settings."""
 
-    @extend_schema(request=None, responses=ParticipantTeamSerializer)
+    parser_classes = [ClosedJSONParser, FormParser, MultiPartParser]
+
+    @extend_schema(request=TeamRegenerateCodeRequestSerializer, responses=ParticipantTeamSerializer)
     def post(self, request: Request) -> Response:
-        """Invalidate the old invite code and return the new one."""
+        """Invalidate the old invite code and return the new one.
+
+        An empty body keeps the current settings. ``single_use`` and
+        ``expires_in_seconds`` are optional; an omitted field keeps its value.
+        """
         from ctf.services.team import regenerate_invite_code
 
-        return self._act(request, lambda p: regenerate_invite_code(p.pk))
+        serializer = TeamRegenerateCodeRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        # Decide "supplied" from the parsed request, not from validated_data: a
+        # non-partial DRF BooleanField coerces an omitted HTML-form field to
+        # False, which would silently downgrade a single-use code. A key absent
+        # from request.data (JSON or form) means "keep the current value".
+        supplied = request.data
+        kwargs: dict[str, object] = {}
+        if "single_use" in supplied:
+            kwargs["single_use"] = serializer.validated_data["single_use"]
+        if "expires_in_seconds" in supplied:
+            kwargs["expires_in_seconds"] = serializer.validated_data["expires_in_seconds"]
+        return self._act(request, lambda p: regenerate_invite_code(p.pk, **kwargs))
 
 
 class TeamTransferCaptaincyView(_TeamActionView):

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import pytest
 from django.utils import timezone
 
@@ -220,6 +222,155 @@ class TestTeamConfigGuards:
                 team_id=team.pk,
                 actor=organizer_credential,
             )
+
+
+class TestInviteCodeSettings:
+    """CTF-504: single-use mode, expiry, disclosure, and the regenerate contract."""
+
+    def _make_team(self, event, client, name="Settings Squad"):
+        call_json(client, "post", "api_team_create", body={"name": name})
+        return CTFTeam.objects.get(event=event, name=name)
+
+    def _joiner(self, event, django_user_model, label):
+        user = django_user_model.objects.create_user(username=f"{label}@test.com", email=f"{label}@test.com")
+        return _register(event, user, label.title())
+
+    def test_multi_use_code_admits_multiple_joiners(self, team_event_participant, django_user_model):
+        event, _captain, client = team_event_participant
+        team = self._make_team(event, client)
+        from ctf.services.team import join_team
+
+        for label in ("mate-a", "mate-b"):
+            joiner = self._joiner(event, django_user_model, label)
+            assert join_team(joiner.pk, team.invite_code).pk == team.pk
+
+    def test_single_use_code_is_spent_after_one_join(self, team_event_participant, django_user_model):
+        event, captain, client = team_event_participant
+        team = self._make_team(event, client)
+        from ctf.exceptions import CTFNotFoundError
+        from ctf.services.team import join_team, regenerate_invite_code
+
+        regenerate_invite_code(captain.pk, single_use=True)
+        team.refresh_from_db()
+        code = team.invite_code
+
+        first = self._joiner(event, django_user_model, "first")
+        assert join_team(first.pk, code).pk == team.pk
+        team.refresh_from_db()
+        assert team.invite_code_spent is True
+
+        second = self._joiner(event, django_user_model, "second")
+        with pytest.raises(CTFNotFoundError):
+            join_team(second.pk, code)
+        second.refresh_from_db()
+        assert second.team_id is None
+
+    def test_expired_code_is_rejected(self, team_event_participant, django_user_model):
+        event, captain, client = team_event_participant
+        team = self._make_team(event, client)
+        from ctf.exceptions import CTFNotFoundError
+        from ctf.services.team import join_team, regenerate_invite_code
+
+        regenerate_invite_code(captain.pk, expires_in_seconds=3600)
+        team.refresh_from_db()
+        # Drive the deadline into the past to exercise rejection deterministically.
+        CTFTeam.objects.filter(pk=team.pk).update(invite_code_expires_at=timezone.now() - timedelta(seconds=1))
+
+        joiner = self._joiner(event, django_user_model, "late")
+        with pytest.raises(CTFNotFoundError):
+            join_team(joiner.pk, team.invite_code)
+
+    def test_regeneration_restarts_lifetime_and_clears_spent(self, team_event_participant, django_user_model):
+        event, captain, client = team_event_participant
+        team = self._make_team(event, client)
+        from ctf.exceptions import CTFNotFoundError
+        from ctf.services.team import join_team, regenerate_invite_code
+
+        regenerate_invite_code(captain.pk, single_use=True, expires_in_seconds=3600)
+        team.refresh_from_db()
+        old_code = team.invite_code
+        first = self._joiner(event, django_user_model, "first")
+        join_team(first.pk, old_code)
+        team.refresh_from_db()
+        assert team.invite_code_spent is True
+
+        # An omitted setting is retained; rotation restarts the lifetime and clears consumption.
+        regenerate_invite_code(captain.pk)
+        team.refresh_from_db()
+        assert team.invite_code != old_code
+        assert team.invite_code_spent is False
+        assert team.invite_code_single_use is True
+        assert team.invite_code_expires_at is not None
+
+        stale = self._joiner(event, django_user_model, "stale")
+        with pytest.raises(CTFNotFoundError):
+            join_team(stale.pk, old_code)
+
+        fresh = self._joiner(event, django_user_model, "fresh")
+        assert join_team(fresh.pk, team.invite_code).pk == team.pk
+
+    def test_null_lifetime_removes_expiry(self, team_event_participant):
+        _event, captain, _client = team_event_participant
+        from ctf.services.team import create_team, regenerate_invite_code
+
+        team = create_team(captain.pk, "No Expiry")
+        regenerate_invite_code(captain.pk, expires_in_seconds=3600)
+        team.refresh_from_db()
+        assert team.invite_code_expires_at is not None
+
+        regenerate_invite_code(captain.pk, expires_in_seconds=None)
+        team.refresh_from_db()
+        assert team.invite_code_lifetime_seconds is None
+        assert team.invite_code_expires_at is None
+
+    def test_code_hidden_from_captain_when_spent(self, team_event_participant, django_user_model):
+        event, captain, client = team_event_participant
+        team = self._make_team(event, client)
+        from ctf.api import projections
+        from ctf.services.team import join_team, regenerate_invite_code
+
+        regenerate_invite_code(captain.pk, single_use=True)
+        team.refresh_from_db()
+        joiner = self._joiner(event, django_user_model, "redeemer")
+        join_team(joiner.pk, team.invite_code)
+
+        captain.refresh_from_db()
+        projection = projections.participant_team(captain)
+        assert projection["invite_code"] is None
+        assert projection["invite_code_single_use"] is True
+
+    def test_regenerate_api_sets_settings_and_returns_code(self, team_event_participant):
+        event, _captain, client = team_event_participant
+        self._make_team(event, client)
+        resp = call_json(
+            client, "post", "api_team_regenerate_code", body={"single_use": True, "expires_in_seconds": 3600}
+        )
+        assert resp.status_code == 200
+        body = resp.json()
+        assert body["invite_code"]
+        assert body["invite_code_single_use"] is True
+        assert body["invite_code_expires_at"]
+        assert "no-store" in resp["Cache-Control"]
+
+    def test_team_read_is_never_cached(self, team_event_participant):
+        event, _captain, client = team_event_participant
+        self._make_team(event, client)
+        resp = call_json(client, "get", "api_participant_team")
+        assert resp.status_code == 200
+        assert "no-store" in resp["Cache-Control"]
+
+    def test_regenerate_api_rejects_unknown_field(self, team_event_participant):
+        event, _captain, client = team_event_participant
+        self._make_team(event, client)
+        resp = call_json(client, "post", "api_team_regenerate_code", body={"bogus": True})
+        assert resp.status_code == 400
+
+    def test_regenerate_api_accepts_empty_object_body(self, team_event_participant):
+        event, _captain, client = team_event_participant
+        self._make_team(event, client)
+        resp = call_json(client, "post", "api_team_regenerate_code", body={})
+        assert resp.status_code == 200
+        assert resp.json()["invite_code"]
 
 
 @pytest.mark.parametrize("action", ["disband", "leave"])

@@ -12,7 +12,7 @@ import {
   useTransferCaptaincy,
 } from "@/api/ctf";
 import { describeMutationError } from "@/api/errors";
-import type { CtfTeam } from "@/api/types";
+import type { CtfTeam, CtfTeamRegenerateCodeRequest } from "@/api/types";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -79,10 +79,28 @@ function NoTeamActions() {
   );
 }
 
-/** Invite code display + regenerate, shown to the captain only. */
+const SELECT_CLASS = "h-9 rounded-md border border-input bg-background px-2 text-sm";
+
+/** Invite code display, settings, and regenerate, shown to the captain only. */
 function CaptainInviteCode({ team }: Readonly<{ team: CtfTeam }>) {
   const regenerate = useRegenerateTeamCode();
-  if (!team.invite_code) return null;
+  // "" means keep the current server value; the request omits unedited settings
+  // so a routine rotation never drops a restriction (CTF-504).
+  const [mode, setMode] = useState("");
+  const [expiry, setExpiry] = useState("");
+  // Show regeneration to the captain even when the code is null, so an expired
+  // or spent code can be replaced.
+  if (!team.is_captain) return null;
+
+  const onRegenerate = () => {
+    const body: CtfTeamRegenerateCodeRequest = {};
+    if (mode === "single") body.single_use = true;
+    else if (mode === "multi") body.single_use = false;
+    if (expiry === "none") body.expires_in_seconds = null;
+    else if (expiry !== "") body.expires_in_seconds = Number(expiry);
+    regenerate.mutate(body);
+  };
+
   return (
     <Card>
       <CardContent>
@@ -91,17 +109,60 @@ function CaptainInviteCode({ team }: Readonly<{ team: CtfTeam }>) {
           Share this code so teammates can join. Regenerating invalidates the old code.
         </p>
         <div className="mt-2 flex items-center gap-2">
-          <code className="rounded bg-muted px-2 py-1 font-mono text-sm">{team.invite_code}</code>
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            disabled={regenerate.isPending}
-            onClick={() => regenerate.mutate({})}
-          >
-            Regenerate
-          </Button>
+          {team.invite_code ? (
+            <code className="rounded bg-muted px-2 py-1 font-mono text-sm">{team.invite_code}</code>
+          ) : (
+            <span className="text-sm text-muted-foreground">No active code. Regenerate to create one.</span>
+          )}
         </div>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {team.invite_code_single_use ? "Single-use" : "Multi-use"}
+          {" · "}
+          {team.invite_code_expires_at
+            ? `expires ${new Date(team.invite_code_expires_at).toLocaleString()}`
+            : "no expiry"}
+        </p>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="invite-mode">Use mode</Label>
+            <select
+              id="invite-mode"
+              className={SELECT_CLASS}
+              value={mode}
+              onChange={(event) => setMode(event.target.value)}
+            >
+              <option value="">Keep current</option>
+              <option value="multi">Multi-use</option>
+              <option value="single">Single-use</option>
+            </select>
+          </div>
+          <div className="flex flex-col gap-1">
+            <Label htmlFor="invite-expiry">Expiry</Label>
+            <select
+              id="invite-expiry"
+              className={SELECT_CLASS}
+              value={expiry}
+              onChange={(event) => setExpiry(event.target.value)}
+            >
+              <option value="">Keep current</option>
+              <option value="none">No expiry</option>
+              <option value="3600">1 hour</option>
+              <option value="21600">6 hours</option>
+              <option value="86400">24 hours</option>
+              <option value="604800">7 days</option>
+            </select>
+          </div>
+        </div>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          className="mt-3"
+          disabled={regenerate.isPending}
+          onClick={onRegenerate}
+        >
+          Regenerate
+        </Button>
         <MutationError error={regenerate.error} />
       </CardContent>
     </Card>

@@ -200,8 +200,12 @@ def participant_team(participant: CTFParticipant) -> dict[str, Any] | None:
         ],
         "is_captain": is_captain,
         "team_size_limit": team.event.team_size_limit,
-        # The invite code is the joining secret; only the captain sees it.
-        "invite_code": team.invite_code if is_captain else None,
+        # The invite code is the joining secret; only the captain sees it, and
+        # only while it is still valid (not spent, not expired) (CTF-504).
+        "invite_code": team.invite_code if (is_captain and team.invite_code_is_valid) else None,
+        # Code settings are shown to the captain only.
+        "invite_code_single_use": team.invite_code_single_use if is_captain else None,
+        "invite_code_expires_at": team.invite_code_expires_at if is_captain else None,
     }
 
 

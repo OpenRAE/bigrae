@@ -15756,10 +15756,29 @@
     "/api/v1/ctf/me/team/regenerate-code/": {
       "post": {
         "operationId": "ctf_me_team_regenerate_code_create",
-        "description": "Invalidate the old invite code and return the new one.",
+        "description": "Invalidate the old invite code and return the new one.\n\nAn empty body keeps the current settings. ``single_use`` and\n``expires_in_seconds`` are optional; an omitted field keeps its value.",
         "tags": [
           "ctf"
         ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamRegenerateCodeRequest"
+              }
+            },
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamRegenerateCodeRequest"
+              }
+            },
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/TeamRegenerateCodeRequest"
+              }
+            }
+          }
+        },
         "security": [
           {
             "ApiTokenAuth": []
@@ -30550,6 +30569,15 @@
             "type": "string",
             "readOnly": true,
             "nullable": true
+          },
+          "invite_code_single_use": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "invite_code_expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "nullable": true
           }
         },
         "required": [
@@ -34115,6 +34143,21 @@
         "required": [
           "participant_id"
         ]
+      },
+      "TeamRegenerateCodeRequest": {
+        "type": "object",
+        "description": "Optional settings for a regenerated invite code (CTF-504).\n\nBoth fields are optional. An omitted field keeps its current value. A\n``null`` ``expires_in_seconds`` removes expiry; a positive value sets a\nlifetime that each regeneration restarts.",
+        "properties": {
+          "single_use": {
+            "type": "boolean"
+          },
+          "expires_in_seconds": {
+            "type": "integer",
+            "maximum": 2147483647,
+            "minimum": 1,
+            "nullable": true
+          }
+        }
       },
       "TenantPackInstalled": {
         "type": "object",
