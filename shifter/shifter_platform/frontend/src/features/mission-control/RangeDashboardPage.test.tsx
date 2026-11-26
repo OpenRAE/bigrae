@@ -59,6 +59,7 @@ function currentRange(overrides: Partial<RangePresentation> = {}): CurrentRangeR
       can_extend: true,
     },
     vpn_profile_available: true,
+    scenario_name: "basic-pack",
   };
 }
 
@@ -70,6 +71,7 @@ const EMPTY_RANGE: CurrentRangeResponse = {
   raes_participant_runtime: null,
   lifecycle: null,
   vpn_profile_available: false,
+  scenario_name: null,
 };
 
 beforeEach(() => {
@@ -195,6 +197,26 @@ describe("RangeDashboardPage", () => {
     expect(click).toHaveBeenCalledTimes(1);
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:mission-control-profile");
     click.mockRestore();
+  });
+
+  it("shows the scenario name while the range provisions", async () => {
+    mockApi.mockResolvedValue(currentRange({ status: "provisioning", is_ready: false }));
+
+    renderRoute(<RangeDashboardPage />);
+
+    await screen.findByText("Provisioning");
+    expect(screen.getByText("Scenario").nextElementSibling).toHaveTextContent("basic-pack");
+  });
+
+  it("falls back to the scenario id when the server has no scenario name", async () => {
+    const response = currentRange({ status: "provisioning", is_ready: false });
+    response.scenario_name = null;
+    mockApi.mockResolvedValue(response);
+
+    renderRoute(<RangeDashboardPage />);
+
+    await screen.findByText("Provisioning");
+    expect(screen.getByText("Scenario").nextElementSibling).toHaveTextContent("basic");
   });
 
   it("hides extension and VPN actions when the server says they are unavailable", async () => {

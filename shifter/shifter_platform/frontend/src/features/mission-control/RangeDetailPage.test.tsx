@@ -53,6 +53,7 @@ const CURRENT_RANGE: CurrentRangeResponse = {
     can_extend: true,
   },
   vpn_profile_available: true,
+  scenario_name: "basic-pack",
 };
 
 const EMPTY_CURRENT_RANGE: CurrentRangeResponse = {
@@ -63,6 +64,7 @@ const EMPTY_CURRENT_RANGE: CurrentRangeResponse = {
   raes_participant_runtime: null,
   lifecycle: null,
   vpn_profile_available: false,
+  scenario_name: null,
 };
 
 function historyEntry(overrides: Partial<RangeHistory> = {}): RangeHistory {

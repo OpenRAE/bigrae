@@ -5682,6 +5682,7 @@ export interface components {
             } | null;
             lifecycle: components["schemas"]["RangeLease"] | null;
             vpn_profile_available: boolean;
+            scenario_name: string | null;
         };
         /** @description Bounded active-event summary. */
         DashboardEvent: {

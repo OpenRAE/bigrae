@@ -194,6 +194,7 @@ from ._scenarios import (
     get_scenario,
     list_launchable_scenarios,
     list_scenarios,
+    range_scenario_name,
     validate_scenario_requirements,
 )
 from ._scoped_devices import admit_device_remote_authority as admit_device_remote_authority
@@ -398,6 +399,7 @@ __all__ = (
     "range_egress_compatible_with_scope",
     "range_identity_present",
     "range_owner_reassignment_available",
+    "range_scenario_name",
     "range_status_changed",
     "reassign_event_range_owner",
     "reassign_range_owner",

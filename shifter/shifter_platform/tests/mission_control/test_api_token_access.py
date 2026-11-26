@@ -59,6 +59,7 @@ class TestRangeTokenAccess:
             "raes_participant_runtime": None,
             "lifecycle": None,
             "vpn_profile_available": False,
+            "scenario_name": None,
         }
 
     def test_token_without_range_read_scope_is_forbidden(self, client, user):

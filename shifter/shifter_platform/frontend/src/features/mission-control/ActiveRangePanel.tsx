@@ -226,6 +226,7 @@ function RangeAccessPanel({
  */
 export function ActiveRangePanel({
   range,
+  scenarioName,
   lifecycle,
   vpnProfileAvailable,
   isFetching,
@@ -233,6 +234,7 @@ export function ActiveRangePanel({
   description,
 }: Readonly<{
   range: RangePresentation;
+  scenarioName: string | null;
   lifecycle: RangeLease | null;
   vpnProfileAvailable: boolean;
   isFetching: boolean;
@@ -301,7 +303,7 @@ export function ActiveRangePanel({
         <dl className="text-sm text-muted-foreground">
           <div className="flex gap-2">
             <dt className="font-medium text-foreground">Scenario</dt>
-            <dd>{range.scenario_id}</dd>
+            <dd>{scenarioName ?? range.scenario_id}</dd>
           </div>
         </dl>
         <LifecycleActions range={range} onAction={setDialog} />

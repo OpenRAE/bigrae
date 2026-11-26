@@ -26492,6 +26492,10 @@
           },
           "vpn_profile_available": {
             "type": "boolean"
+          },
+          "scenario_name": {
+            "type": "string",
+            "nullable": true
           }
         },
         "required": [
@@ -26501,6 +26505,7 @@
           "raes_participant_runtime",
           "raes_projection",
           "range",
+          "scenario_name",
           "vpn_profile_available"
         ]
       },

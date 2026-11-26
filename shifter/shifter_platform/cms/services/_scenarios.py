@@ -6,7 +6,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from cms.exceptions import CMSError
-from cms.models import AgentConfig
+from cms.models import AgentConfig, RaesPackageSource
 from shared.credentials import CredentialContext
 from shared.identity_scope import ResourceScope
 from shared.log_sanitize import safe_log_value
@@ -103,6 +103,24 @@ def list_launchable_scenarios(
     except Exception:
         logger.exception("Error in list_launchable_scenarios for user_id=%s", user.id)
         raise
+
+
+def range_scenario_name(scenario_id: str) -> str | None:
+    """Return the catalog name of the package source that a range records.
+
+    The name is the same value that the catalog projection shows as ``name``.
+    Pass only the ``scenario_id`` of a range projection that the caller can
+    already read. The range read authorizes the name as range provenance, so
+    this lookup applies no separate content scope.
+
+    Args:
+        scenario_id: The ``scenario_id`` recorded on an authorized range.
+
+    Returns:
+        The catalog name, or None when no package source has this id.
+    """
+    source = RaesPackageSource.objects.only("scenario_id", "package_name").filter(scenario_id=scenario_id).first()
+    return source.package_identity if source is not None else None
 
 
 def get_scenario(
