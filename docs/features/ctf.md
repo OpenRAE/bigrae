@@ -76,6 +76,9 @@ Use only targets within the event's authorization.
 2. Enter it in the challenge submission form.
 3. Submit it and read the result.
 
+When a challenge has flag-format guidance, the submission form shows it above the flag field.
+The guidance is a hint only. The server does not reject a flag that has a different format.
+
 The server validates submissions against the configured flag type.
 Static flag values are stored as normalized plaintext; they are not protected by a one-way hash.
 Organizers must protect authoring access and exports accordingly.

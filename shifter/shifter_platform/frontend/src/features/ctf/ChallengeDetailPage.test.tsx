@@ -39,6 +39,7 @@ function detail(overrides: Record<string, unknown> = {}) {
     category: "web",
     points: 100,
     difficulty: "easy",
+    flag_format: "",
     max_attempts: 0,
     attempt_limit_mode: "unlimited",
     solved: false,
@@ -270,6 +271,23 @@ describe("ChallengeDetailPage", () => {
     renderRoute(<ChallengeDetailPage />, ROUTE);
     expect(await screen.findByRole("heading", { name: "SQL Injection" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: "Challenge statistics" })).not.toBeInTheDocument();
+  });
+
+  it("shows the flag-format guidance on the flag input", async () => {
+    mockApiRoutes(() => detail({ flag_format: "CTF{hex}" }));
+    renderRoute(<ChallengeDetailPage />, ROUTE);
+    const input = await screen.findByLabelText("Submit flag");
+    expect(screen.getByText("CTF{hex}")).toBeInTheDocument();
+    expect(input).toHaveAccessibleDescription("Flag format: CTF{hex}");
+    expect(input).toHaveAttribute("placeholder", "CTF{hex}");
+  });
+
+  it("omits the flag-format line when the challenge has no guidance", async () => {
+    mockApiRoutes(() => detail());
+    renderRoute(<ChallengeDetailPage />, ROUTE);
+    const input = await screen.findByLabelText("Submit flag");
+    expect(screen.queryByText(/Flag format:/)).not.toBeInTheDocument();
+    expect(input).not.toHaveAttribute("aria-describedby");
   });
 
   it("shows the teammate who solved it and keeps the flag form for an individual submit", async () => {

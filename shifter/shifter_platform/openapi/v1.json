@@ -29535,7 +29535,7 @@
       },
       "ParticipantChallengeDetail": {
         "type": "object",
-        "description": "Participant-safe challenge detail for the solve view.\n\nNever declares flag, flag-format, or validator-config fields. ``solution`` is\nnon-null only after the event has ended/archived.",
+        "description": "Participant-safe challenge detail for the solve view.\n\nNever declares flag or validator-config fields. ``flag_format`` is the\norganizer's format hint; validation does not enforce it. ``solution`` is\nnon-null only after the event has ended/archived.",
         "properties": {
           "id": {
             "type": "string",
@@ -29574,6 +29574,11 @@
           "difficulty": {
             "type": "string",
             "readOnly": true
+          },
+          "flag_format": {
+            "type": "string",
+            "readOnly": true,
+            "description": "Flag-format guidance; blank when the challenge has none."
           },
           "max_attempts": {
             "type": "integer",
@@ -29708,6 +29713,7 @@
           "description",
           "difficulty",
           "files",
+          "flag_format",
           "hints",
           "id",
           "locked",

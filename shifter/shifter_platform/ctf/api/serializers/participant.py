@@ -3,9 +3,10 @@
 The participant-safe read projections (consumed by the ``/api/v1/ctf/me/*``
 workspace) and the participant play surface (flag submission, hints, ratings,
 own submissions). These serializers are the typed contract over the dicts
-produced by :mod:`ctf.api.projections`; they intentionally never declare flag,
-solution, or validator-config fields so the generated OpenAPI schema (and
-therefore the SPA types) cannot express those values.
+produced by :mod:`ctf.api.projections`; they intentionally never declare flag
+or validator-config fields so the generated OpenAPI schema (and therefore the
+SPA types) cannot express those values. The detail projection carries the
+flag-format hint and the post-event solution only.
 """
 
 from __future__ import annotations
@@ -184,7 +185,8 @@ class ChallengeRatingSerializer(serializers.Serializer):
 class ParticipantChallengeDetailSerializer(serializers.Serializer):
     """Participant-safe challenge detail for the solve view.
 
-    Never declares flag, flag-format, or validator-config fields. ``solution`` is
+    Never declares flag or validator-config fields. ``flag_format`` is the
+    organizer's format hint; validation does not enforce it. ``solution`` is
     non-null only after the event has ended/archived.
     """
 
@@ -196,6 +198,9 @@ class ParticipantChallengeDetailSerializer(serializers.Serializer):
     topics = serializers.ListField(child=serializers.CharField(), read_only=True)
     points = serializers.IntegerField(read_only=True)
     difficulty = serializers.CharField(read_only=True, allow_blank=True)
+    flag_format = serializers.CharField(
+        read_only=True, allow_blank=True, help_text="Flag-format guidance; blank when the challenge has none."
+    )
     max_attempts = serializers.IntegerField(read_only=True)
     attempt_limit_mode = serializers.CharField(read_only=True)
     solved = serializers.BooleanField(read_only=True)
