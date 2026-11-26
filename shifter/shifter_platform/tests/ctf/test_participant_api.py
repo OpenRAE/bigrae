@@ -308,7 +308,7 @@ class TestParticipantChallengeDetail:
     def test_returns_detail_without_flag_or_solution_pre_end(
         self, authenticated_participant_client, ctf_participant, ctf_event
     ):
-        """Detail carries hints/files but never the flag; solution stays hidden."""
+        """Detail carries hints, files, and format guidance but never the flag; solution stays hidden."""
         challenge = self._challenge_with_solution(ctf_event)
         CTFHint.objects.create(challenge=challenge, text="secret hint", penalty=10, order=0)
 
@@ -324,7 +324,7 @@ class TestParticipantChallengeDetail:
         assert body["id"] == str(challenge.id)
         assert "flag_hash" not in body
         assert "flags" not in body
-        assert "flag_format" not in body
+        assert body["flag_format"] == "FLAG{...}"
         assert body["show_solution"] is False
         assert body["solution"] is None
         assert body["hints"][0]["unlocked"] is False

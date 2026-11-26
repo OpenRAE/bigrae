@@ -305,7 +305,13 @@ function FlagSubmission({ challenge }: Readonly<{ challenge: CtfChallengeDetail 
   return (
     <>
       {challenge.team_solved ? <TeamSolvedNotice solver={challenge.team_solved_by} /> : null}
-      <FlagForm flag={flag} setFlag={setFlag} submit={submit} disabled={disabled} />
+      <FlagForm
+        flag={flag}
+        setFlag={setFlag}
+        submit={submit}
+        disabled={disabled}
+        flagFormat={challenge.flag_format}
+      />
     </>
   );
 }
@@ -327,11 +333,13 @@ function FlagForm({
   setFlag,
   submit,
   disabled,
+  flagFormat,
 }: Readonly<{
   flag: string;
   setFlag: (value: string) => void;
   submit: ReturnType<typeof useSubmitFlag>;
   disabled: boolean;
+  flagFormat?: string;
 }>) {
   return (
     <Card className="mt-6">
@@ -344,12 +352,18 @@ function FlagForm({
           }}
         >
           <Label htmlFor="ctf-flag">Submit flag</Label>
+          {flagFormat ? (
+            <p id="ctf-flag-format" className="mt-1 text-sm text-muted-foreground">
+              Flag format: <span className="font-mono">{flagFormat}</span>
+            </p>
+          ) : null}
           <div className="mt-2 flex gap-2">
             <Input
               id="ctf-flag"
               value={flag}
               onChange={(event) => setFlag(event.target.value)}
-              placeholder="FLAG{...}"
+              placeholder={flagFormat || "FLAG{...}"}
+              aria-describedby={flagFormat ? "ctf-flag-format" : undefined}
               autoComplete="off"
             />
             <Button type="submit" disabled={disabled}>
