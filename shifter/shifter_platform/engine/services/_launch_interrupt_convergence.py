@@ -25,11 +25,17 @@ from typing import Any
 from django.db import transaction
 from django.utils import timezone
 
-from engine.models import InterruptState, ProvisionerLaunchIntent, Range
+from engine.ecs import interrupt_provisioner_task
+from engine.launch_commands import command_from_payload
+from engine.models import InterruptState, ProvisionerLaunchIntent
+from engine.services._launch_intents import enqueue_provisioner_launch
+from engine.services._vpn_profile_operations import enqueue_interrupted_vpn_cleanup
+from engine.services._worker_trials import enqueue_interrupted_worker_trial
 from shared.cloud.exceptions import CloudTaskError
 from shared.cloud.types import TaskInterruptDisposition
 
-logger = logging.getLogger(__name__)
+# Keep the pre-split logger name so log routing and dashboards do not change.
+logger = logging.getLogger("engine.launch_interrupt")
 
 # Non-terminal interrupt states the worker keeps advancing. DESTROY_ENQUEUED and
 # IDENTITY_MISMATCH are terminal and are never re-claimed.
@@ -40,8 +46,14 @@ _ACTIVE_INTERRUPT_STATES = (
     InterruptState.TERMINAL_ABSENT,
     InterruptState.UNKNOWN,
 )
+
+
 _LEASE = timedelta(minutes=5)
+
+
 _BACKOFF_SECONDS = 15
+
+
 _MAX_BACKOFF_SECONDS = 300
 
 
@@ -151,19 +163,14 @@ def _enqueue_destroy(claimed: ProvisionerLaunchIntent) -> bool:
     """Enqueue the canonical RAES destroy for the cancelled range. Idempotent."""
     payload = claimed.payload or {}
     if payload.get("resource") == "vpn-profile":
-        from engine.services._vpn_profile_operations import enqueue_interrupted_vpn_cleanup
-
         return enqueue_interrupted_vpn_cleanup(claimed)
     if payload.get("resource") == "worker-trial":
-        from engine.services._worker_trials import enqueue_interrupted_worker_trial
-
         return enqueue_interrupted_worker_trial(claimed)
     return _enqueue_provider_destroy(claimed, payload)
 
 
 def _enqueue_provider_destroy(claimed: ProvisionerLaunchIntent, payload: dict[str, Any]) -> bool:
     """Enqueue the NGFW deprovision or the RAES range destroy for the cancelled intent."""
-    from engine.launch_intents import enqueue_provisioner_launch
 
     if payload.get("resource") == "ngfw" and payload.get("operation") == "deprovision":
         enqueue_provisioner_launch(
@@ -211,8 +218,6 @@ def _converge_interrupt(claimed: ProvisionerLaunchIntent) -> None:
 
 def _stop_and_converge(claimed: ProvisionerLaunchIntent) -> None:
     """Verify + stop the reserved provider task, observe absence, map the disposition."""
-    from engine.ecs import interrupt_provisioner_task
-    from engine.launch_intents import command_from_payload
 
     command = command_from_payload({**claimed.payload, "operation_id": str(claimed.operation_id)})
     try:
@@ -240,71 +245,3 @@ def _stop_and_converge(claimed: ProvisionerLaunchIntent) -> None:
     else:
         # UNKNOWN, or None when the engine task runner is not configured.
         _reschedule(claimed, InterruptState.UNKNOWN, error="interrupt_unknown")
-
-
-# Bounded convergence budget for a provision-task interrupt (#277). Safe internal
-# default; promote to a typed deployment setting only if operators need to tune it.
-_INTERRUPT_DEADLINE_SECONDS = 1800
-# Only the RAES provision generation is interruptible in this scope (#277); the
-# AWS legacy ``range`` provision path is #1894.
-_INTERRUPTIBLE_PROVISION = ("raes-range", "provision")
-
-
-def request_provision_interrupt(range_obj: Range) -> bool:
-    """Record a durable interrupt against the range's current provision generation (#277).
-
-    Bound under the caller's transaction to the current ``provisioner_operation_id``
-    -- never keyed by ``request_id`` or task reference alone. Scoped to the RAES
-    provision path; the AWS legacy ``range`` path is out of scope (#1894). The
-    launcher worker converges the recorded request (suppress pending / stop running
-    / observe terminal absence / enqueue canonical destroy). Idempotent: returns
-    True without re-stamping when the generation is already marked.
-
-    Returns:
-        True when an interruptible provision generation was (or already is) marked.
-    """
-    intent = _interruptible_provision_intent(range_obj)
-    if intent is None:
-        return False
-    _request_intent_interrupt(intent)
-    return True
-
-
-def _request_intent_interrupt(intent: ProvisionerLaunchIntent) -> None:
-    """Suppress one validated native generation before observing provider absence."""
-    if intent.interrupt_state != InterruptState.NONE:
-        return
-    now = timezone.now()
-    intent.interrupt_state = InterruptState.REQUESTED
-    intent.interrupt_requested_at = now
-    intent.interrupt_next_attempt_at = now
-    intent.interrupt_deadline = now + timedelta(seconds=_INTERRUPT_DEADLINE_SECONDS)
-    intent.save(
-        update_fields=[
-            "interrupt_state",
-            "interrupt_requested_at",
-            "interrupt_next_attempt_at",
-            "interrupt_deadline",
-        ]
-    )
-
-
-def _interruptible_provision_intent(range_obj: Range) -> ProvisionerLaunchIntent | None:
-    """Return the range's current launch intent when its generation can be interrupted.
-
-    ``None`` when the range has no reserved generation, no intent is recorded for
-    it, or the recorded intent is not the RAES provision operation the interrupt
-    path converges.
-    """
-    op_id = range_obj.provisioner_operation_id
-    intent = (
-        ProvisionerLaunchIntent.objects.select_for_update().filter(operation_id=op_id).first()
-        if op_id is not None
-        else None
-    )
-    if intent is None:
-        return None
-    payload = intent.payload or {}
-    if payload.get("resource") != "raes-range" or payload.get("operation") not in {"provision", "activate"}:
-        return None
-    return intent

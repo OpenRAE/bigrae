@@ -8,7 +8,6 @@ The persisted truth is the serialized RAES ``ProvisioningPlan`` stored in
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import UUID, uuid4
 
@@ -17,10 +16,20 @@ from django.db import transaction
 from django.utils import timezone
 from installation.range_egress import RangeEgressMode
 
-from engine.ecs import start_raes_range_provisioning
+from engine.models import Range, Request
+from engine.services._launch_starts import start_raes_range_provisioning
 from shared.enums import RequestType
+from shared.raes.operations import persist_operation_receipt_record
 
 from ._common import _persist_task_arn
+from ._principal_range_create import (
+    assert_principal_range_creation,
+    dispatch_principal_raes_range,
+    prepare_principal_range_fields,
+    prepared_creation_fields,
+    verify_principal_range_replay,
+)
+from ._raes_range_bindings import RaesRangeRef as RaesRangeRef
 from ._raes_range_bindings import (
     RangeBindings as RangeBindings,
 )
@@ -45,6 +54,7 @@ from ._raes_range_bindings import (
 from ._raes_range_bindings import (
     mint_remote_access_capability as mint_remote_access_capability,
 )
+from ._range_authority_history import lock_warm_range_creation, record_range_authority_change
 from ._range_backend_binding import (
     assert_backend_supports_egress,
     backend_binding_fields,
@@ -55,6 +65,7 @@ from ._range_backend_binding import (
     verify_existing_workspace_binding,
 )
 from ._range_placement import select_placement_zone
+from ._receipt import revoke_receipt_verifier
 from ._runtime_plugin_bindings import (
     persist_runtime_plugin_pin,
     resolve_runtime_plugin_pin,
@@ -63,11 +74,10 @@ from ._runtime_plugin_bindings import (
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from engine.models import Range
     from shared.credentials import CredentialContext
     from shared.range_instantiation_policy import BackendAdmission
 
-    from ._principal_range_create import PreparedRaesRangeCreation
+    from ._raes_range_bindings import PreparedRaesRangeCreation
 
 
 __all__ = [
@@ -78,16 +88,6 @@ __all__ = [
     "grant_raes_remote_access",
     "mint_remote_access_capability",
 ]
-
-
-@dataclass(frozen=True)
-class RaesRangeRef:
-    """IDs/status returned to the dispatch port after an RAES range is accepted."""
-
-    request_id: str
-    range_id: str
-    status: str
-    accepted: bool
 
 
 def create_raes_range(
@@ -145,12 +145,6 @@ def create_raes_range(
     bindings = bindings or RangeBindings()
     # Imported lazily so importing the ``engine`` app does not define models
     # before the app registry is ready.
-    from engine.models import Range, Request
-
-    from ._principal_range_create import (
-        assert_principal_range_creation,
-        verify_principal_range_replay,
-    )
 
     principal_fields = _prepared_range_creation_fields(bindings, workspace_id, user_id, compiled_plan)
     request_uuid = request_id if isinstance(request_id, UUID) else UUID(str(request_id))
@@ -241,12 +235,9 @@ def dispatch_created_raes_range(
     prepared_creation: PreparedRaesRangeCreation | None = None,
 ) -> RaesRangeRef:
     """Dispatch an already persisted range through the incumbent launch outbox."""
-    from engine.models import Range
 
     range_obj = Range.objects.get(request__request_id=request_uuid)
     if range_obj.owner_principal_uuid is not None or credential is not None:
-        from ._principal_range_create import dispatch_principal_raes_range
-
         if credential is None:
             raise PermissionError("Range authority unavailable")
         return dispatch_principal_raes_range(range_obj, credential, prepared_creation)
@@ -256,7 +247,6 @@ def dispatch_created_raes_range(
         range_obj.status = Range.Status.FAILED
         range_obj.error_message = "Provisioning dispatch failed"
         range_obj.save(update_fields=["status", "error_message", "updated_at"])
-        from ._receipt import revoke_receipt_verifier
 
         revoke_receipt_verifier(request_uuid)
         raise
@@ -272,7 +262,6 @@ def _write_operation_receipt(request_id: UUID, *, range_id: str) -> None:
     """Write the idempotent operation_receipt sidecar for an accepted provision."""
     # Lazy import: shared.raes.operations pulls shared.models, which must not load
     # during app population (mirrors _raes_status.py).
-    from shared.raes.operations import persist_operation_receipt_record
 
     operation_id = str(request_id)
     persist_operation_receipt_record(
@@ -288,7 +277,6 @@ def _prepared_range_creation_fields(
     bindings: RangeBindings, workspace_id: int | None, user_id: int | None, compiled_plan: dict[str, Any]
 ) -> dict[str, object]:
     """Choose the already-admitted principal custody or the incumbent workspace binding before creation."""
-    from ._principal_range_create import prepare_principal_range_fields, prepared_creation_fields
 
     principal_fields: dict[str, object] = {}
     if bindings.credential is not None:
@@ -325,16 +313,12 @@ def _new_resource_generation(principal_owned: bool, range_backend: object) -> UU
 def _lock_native_warm_creation(request_uuid: UUID, bindings: RangeBindings, principal_owned: bool) -> None:
     """Acquire the existing installation warm ledger fence before native range creation."""
     if principal_owned and bindings.resource_scope is not None and bindings.resource_scope.kind == "installation":
-        from ._range_authority_history import lock_warm_range_creation
-
         lock_warm_range_creation(request_uuid)
 
 
 def _record_creation_authority(range_obj: Range, bindings: RangeBindings, principal_owned: bool) -> None:
     """Retain exact native creation authority after its receipt in the same SQL transaction."""
     if principal_owned:
-        from ._range_authority_history import record_range_authority_change
-
         if bindings.credential is None:
             raise ValueError("Range creation authority unavailable")
         record_range_authority_change(range_obj, bindings.credential, "create", "")

@@ -9,6 +9,8 @@ from uuid import UUID
 from django.db import transaction
 from pydantic import ValidationError as ModelValidationError
 
+from engine.models import PreparationAdapter, PreparationGrant
+from shared.api.principals import human_session_credential
 from shared.audit import (
     AuditAction,
     AuditActorType,
@@ -24,14 +26,13 @@ from shared.credentials import CredentialContext, resolve_current_credential, re
 from shared.exceptions import ValidationError
 from shared.identity_scope import ResourceScope
 from shared.preparation_grant import PreparationGrantConfiguration
+from shared.principal_port import resolve_principal
 from shared.raes.preparation_contract import AdapterManifest
 
 _PREPARATION_ACCESS_DENIED = "Artifact preparation access is not permitted"
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
-
-    from engine.models import PreparationAdapter, PreparationGrant
 
 
 @dataclass(frozen=True)
@@ -70,8 +71,6 @@ def require_preparation_permission(user: User | CredentialContext, permission: s
             raise ValidationError(_PREPARATION_ACCESS_DENIED) from None
     # Trusted synchronous administration can supply a human identity. It still
     # uses the same application policy and is never serialized as native proof.
-    from shared.api.principals import human_session_credential
-    from shared.principal_port import resolve_principal
 
     try:
         current = human_session_credential(user)
@@ -98,7 +97,6 @@ def install_preparation_adapter(
     Registering a pack never calls this service. A retry may return an identical
     registration, but cannot re-enable it or change any executable/grant identity.
     """
-    from engine.models import PreparationAdapter
 
     current = require_preparation_permission(user, "manage_preparation_adapters")
     if isinstance(user, CredentialContext):
@@ -135,7 +133,6 @@ def set_preparation_adapter_state(
     user: User | CredentialContext, adapter_id: UUID, state: str, *, audit: RequestAudit | None = None
 ) -> PreparationAdapterView:
     """Fence new starts without retargeting in-flight execution or cleanup."""
-    from engine.models import PreparationAdapter
 
     current = require_preparation_permission(user, "manage_preparation_adapters")
     if isinstance(user, CredentialContext):
@@ -170,15 +167,11 @@ def _fence_preparation_actor(user: User | CredentialContext) -> None:
         except ValueError:
             raise ValidationError(_PREPARATION_ACCESS_DENIED) from None
     else:
-        from shared.api.principals import human_session_credential
-        from shared.principal_port import resolve_principal
-
         resolve_principal(human_session_credential(user).principal)
 
 
 def list_preparation_adapters(user: User | CredentialContext) -> list[PreparationAdapterView]:
     """Return private registration detail only to executable administrators."""
-    from engine.models import PreparationAdapter
 
     require_preparation_permission(user, "manage_preparation_adapters")
     return [_view(row) for row in PreparationAdapter.objects.order_by("adapter_id", "version")]
@@ -186,7 +179,6 @@ def list_preparation_adapters(user: User | CredentialContext) -> list[Preparatio
 
 def list_preparation_adapter_grants(user: User | CredentialContext) -> list[dict[str, Any]]:
     """List selectable grants without exposing cloud credentials or configuration."""
-    from engine.models import PreparationGrant
 
     require_preparation_permission(user, "manage_preparation_adapters")
     return [
@@ -197,7 +189,6 @@ def list_preparation_adapter_grants(user: User | CredentialContext) -> list[dict
 
 def _locked_grant(grant_id: UUID) -> PreparationGrant:
     """Lock authority before registration/operation locks to serialize revocation."""
-    from engine.models import PreparationGrant
 
     grant = PreparationGrant.objects.select_for_update().filter(pk=grant_id).first()
     if grant is None:

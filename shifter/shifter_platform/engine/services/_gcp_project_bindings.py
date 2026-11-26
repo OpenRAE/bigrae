@@ -12,6 +12,7 @@ from shifter_adapter_sdk.runtime import Digest
 from engine.models import GcpRangeProject, GcpRangeProjectUse, InterruptState, ProvisionerLaunchIntent, Range
 from shared.gcp_range_projects import MAX_PROJECTS_PER_RANGE, GcpBaselineRef, GcpProjectLease, ProjectID
 
+from ._gcp_project_registration import protected_project_ids
 from ._range_authority import project_range_authority
 
 _UNAVAILABLE = "Registered project binding is unavailable"
@@ -26,7 +27,6 @@ def allocate_gcp_projects(*, range_id: int, project_ids: list[str], plan_digest:
     native launch/preparation first. Organization custody comes from the owning
     Range service, never a caller-supplied organization or scenario document.
     """
-    from ._gcp_project_registration import protected_project_ids
 
     try:
         identifiers = _PROJECTS.validate_python(project_ids)

@@ -16,6 +16,10 @@ import logging
 from dataclasses import replace
 from typing import TYPE_CHECKING
 
+from django.db.models import Q, Sum
+
+from engine.models import CapacityAssessment, CapacityReservation
+from shared.audit import AuditAction, AuditEntityType, AuditTarget, audit_log_system_event
 from shared.capacity import (
     CapacityAssessmentResult,
     CapacityOutcome,
@@ -30,7 +34,6 @@ if TYPE_CHECKING:
     from datetime import datetime
     from uuid import UUID
 
-    from engine.models import CapacityAssessment
     from shared.capacity import CapacityMetricSpec
 
 logger = logging.getLogger(__name__)
@@ -50,9 +53,6 @@ def _committed_reservation(partition_name: str, metric_name: str, start: datetim
     Half-open comparison: two windows that merely touch at an instant do not
     contend, but any real overlap does.
     """
-    from django.db.models import Q, Sum
-
-    from engine.models import CapacityReservation
 
     total = CapacityReservation.objects.filter(
         Q(window_start__lt=end, window_end__gt=start) | Q(release_on_absence=True, consumed__gt=0),
@@ -69,7 +69,6 @@ def _persist_assessment(event_ref: UUID, result: CapacityAssessmentResult) -> Ca
     Verdicts are serialized as bounded codes only -- no limit, usage, account,
     or provider payload reaches this row.
     """
-    from engine.models import CapacityAssessment
 
     return CapacityAssessment.objects.create(
         event_ref=event_ref,
@@ -99,7 +98,6 @@ def _persist_reservations(
     end: datetime,
 ) -> None:
     """Commit this event's share of each declared metric for the window."""
-    from engine.models import CapacityReservation
 
     CapacityReservation.objects.bulk_create(
         [
@@ -192,8 +190,6 @@ def _audit_assessment(assessment: CapacityAssessment, result: CapacityAssessment
     identifier, or provider payload reaches audit free text.
     """
     try:
-        from shared.audit import AuditAction, AuditEntityType, AuditTarget, audit_log_system_event
-
         audit_log_system_event(
             AuditTarget(AuditEntityType.CAPACITY_ASSESSMENT, assessment.pk),
             action=AuditAction.CAPACITY_ASSESS,

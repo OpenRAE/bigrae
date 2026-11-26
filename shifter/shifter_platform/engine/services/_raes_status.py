@@ -28,23 +28,22 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID, uuid4
 
 from django.db import transaction
 from django.utils import timezone
 
+from engine.models import Range, RangeEventOutbox
 from shared.enums import ResourceStatus
 from shared.messages.events import EVENT_TYPE_STATUS_UPDATED
+from shared.raes.operations import latest_operation_status_source_timestamp, persist_operation_status_record
 from shared.raes.status import (
     ProjectionDecision,
     RaesOperationStatusObservation,
     RaesStatusProjection,
     project_operation_status,
 )
-
-if TYPE_CHECKING:
-    from engine.models import Range
 
 logger = logging.getLogger(__name__)
 
@@ -107,10 +106,6 @@ def project_raes_operation_status(observation: RaesOperationStatusObservation) -
         only when the decision is ``APPLY`` and the target differs from the
         range's current status.
     """
-    from shared.raes.operations import (
-        latest_operation_status_source_timestamp,
-        persist_operation_status_record,
-    )
 
     request_id = observation.request_id
     previous_source_timestamp = latest_operation_status_source_timestamp(request_id)
@@ -152,7 +147,6 @@ def project_raes_operation_status(observation: RaesOperationStatusObservation) -
 
 def _resolve_range(request_id: UUID | str) -> Range | None:
     """Resolve the engine range for ``request_id`` or ``None`` when absent."""
-    from engine.models import Range
 
     return Range.objects.filter(request__request_id=request_id).first()
 
@@ -164,7 +158,6 @@ def _maybe_enqueue(
     request_id: UUID | str,
 ) -> None:
     """Enqueue a ``range.status.updated`` event when the projection is actionable."""
-    from engine.models import RangeEventOutbox
 
     # Defensive: an APPLY decision always carries a target status.
     if projection.target_status is None:

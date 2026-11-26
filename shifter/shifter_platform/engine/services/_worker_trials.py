@@ -16,17 +16,39 @@ from uuid import UUID, uuid4
 from django.db import transaction
 from django.utils import timezone
 
+from engine.ecs._workload import provisioner_workload
+from engine.launch_commands import WORKER_TRIAL_OPERATIONS as _OPERATIONS
+from engine.launch_commands import WORKER_TRIAL_RESOURCE as _RESOURCE
+from engine.launch_commands import WORKER_TRIAL_UNAVAILABLE as _UNAVAILABLE
+from engine.launch_commands import command_from_payload
+from engine.launch_commands import validate_worker_trial_command as validate_worker_trial_command
+from engine.models import (
+    OperationInput,
+    OperationResultDisposition,
+    OperationResultInbox,
+    ProvisionerLaunchIntent,
+    ProvisionerLaunchStatus,
+    WorkerTrial,
+)
+from engine.services._launch_interrupt import _request_intent_interrupt
+from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
+from shared.db import RecordedAuthorityFields
 from shared.disposable_workers import WorkerHostProfile
+from shared.operation_authority import credential_reference_from_record
 from shared.operation_envelope import build_operation_envelope
 from shared.worker_trial import RUN_OVERDUE_SECONDS, StagedObject, WorkerTrialInput, parse_worker_trial_receipt
 
-if TYPE_CHECKING:
-    from engine.models import OperationResultInbox, ProvisionerLaunchIntent, WorkerTrial
-    from shared.credentials import CredentialContext
+from ._launch_authority import (
+    admit_launch_authority,
+    assert_input_authority_binding,
+    authority_envelope_fields,
+    authorize_launch_authority,
+)
+from ._worker_custody import _authorized_worker, _lock_worker
+from ._worker_qualification_evidence import has_current_qualification
 
-_RESOURCE = "worker-trial"
-_OPERATIONS = frozenset({"run", "collect"})
-_UNAVAILABLE = "Worker trial operation unavailable"
+if TYPE_CHECKING:
+    from shared.credentials import CredentialContext
 
 
 @dataclass(frozen=True)
@@ -56,7 +78,6 @@ def _current_operation_id(trial: WorkerTrial) -> UUID:
 
 def _view(trial: WorkerTrial) -> WorkerTrialView:
     """Project the trial and the state of its current operation."""
-    from engine.models import ProvisionerLaunchIntent
 
     intent = ProvisionerLaunchIntent.objects.get(operation_id=_current_operation_id(trial))
     return WorkerTrialView(
@@ -77,7 +98,6 @@ def _view(trial: WorkerTrial) -> WorkerTrialView:
 
 def _range_authority(credential: CredentialContext, worker_request_id: UUID) -> dict[str, object]:
     """Record exact range-manage authority on the worker's native range."""
-    from ._launch_authority import admit_launch_authority
 
     payload: dict[str, object] = {"resource": "raes-range", "request_id": str(worker_request_id), "operation": "trial"}
     return admit_launch_authority(payload, credential)
@@ -92,11 +112,6 @@ def start_worker_trial(
     deadline: datetime,
 ) -> WorkerTrialView:
     """Create the worker's single trial and launch ``run``; an identical replay returns it."""
-    from engine.models import WorkerTrial
-
-    from ._disposable_workers import _authorized_worker
-    from ._worker_qualification import has_current_qualification
-    from ._worker_retirement import _lock_worker
 
     worker = _authorized_worker(credential, worker_id, "range.manage")
     fields = _range_authority(credential, worker.request_id)
@@ -126,9 +141,6 @@ def start_worker_trial(
 
 def get_worker_trial(credential: CredentialContext, worker_id: UUID) -> WorkerTrialView:
     """Return the trial after current range-read authorization."""
-    from engine.models import WorkerTrial
-
-    from ._disposable_workers import _authorized_worker
 
     _authorized_worker(credential, worker_id, "range.read")
     return _view(WorkerTrial.objects.get(worker_id=worker_id))
@@ -139,10 +151,6 @@ def collect_worker_trial(credential: CredentialContext, worker_id: UUID, *, stop
 
     A running ``run`` operation is interrupted; its interrupt hook launches ``collect``.
     """
-    from engine.launch_interrupt import _request_intent_interrupt
-    from engine.models import ProvisionerLaunchIntent, WorkerTrial
-
-    from ._disposable_workers import _authorized_worker
 
     _authorized_worker(credential, worker_id, "range.manage")
     with transaction.atomic():
@@ -161,7 +169,6 @@ def collect_worker_trial(credential: CredentialContext, worker_id: UUID, *, stop
 
 def _operation_finished(intent: ProvisionerLaunchIntent) -> bool:
     """An operation ends with an applied terminal result or exhausted dispatch."""
-    from engine.models import OperationResultDisposition, OperationResultInbox, ProvisionerLaunchStatus
 
     if intent.status == ProvisionerLaunchStatus.DLQ:
         return True
@@ -203,12 +210,6 @@ def _input(trial: WorkerTrial) -> dict[str, object]:
 
 def _queue(trial: WorkerTrial, operation: str) -> None:
     """Commit the launch intent, immutable input and audit together."""
-    from engine.ecs._workload import provisioner_workload
-    from engine.launch_intents import command_from_payload
-    from engine.models import OperationInput, ProvisionerLaunchIntent
-    from shared.db import RecordedAuthorityFields
-
-    from ._launch_authority import authority_envelope_fields
 
     operation_id, intent_id = uuid4(), uuid4()
     payload = _payload(trial, operation)
@@ -251,8 +252,6 @@ def _queue(trial: WorkerTrial, operation: str) -> None:
 
 def _audit(trial: WorkerTrial, operation: str) -> None:
     """Audit a queued trial operation against the worker's range."""
-    from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
-    from shared.operation_authority import credential_reference_from_record
 
     audit_log(
         AuditEvent(
@@ -268,30 +267,8 @@ def _audit(trial: WorkerTrial, operation: str) -> None:
     )
 
 
-def validate_worker_trial_command(command: list[str]) -> dict[str, Any]:
-    """Parse only the canonical ``worker-trial`` command."""
-    if (
-        len(command) != 6
-        or command[0] != _RESOURCE
-        or command[1] not in _OPERATIONS
-        or command[2] != "--request-id"
-        or command[4] != "--trial-id"
-    ):
-        raise ValueError(_UNAVAILABLE)
-    return {
-        "version": 1,
-        "resource": _RESOURCE,
-        "operation": command[1],
-        "request_id": str(UUID(command[3])),
-        "trial_id": str(UUID(command[5])),
-    }
-
-
 def validate_worker_trial_operation(payload: dict[str, Any], operation_id: UUID | str | None) -> WorkerTrial:
     """Fence the trial generation, current operation and immutable input."""
-    from engine.models import OperationInput, ProvisionerLaunchIntent, WorkerTrial
-
-    from ._launch_authority import assert_input_authority_binding
 
     trial = WorkerTrial.objects.select_related("worker__range__request").get(pk=UUID(str(payload["trial_id"])))
     if str(trial.generation) != payload["request_id"] or payload["operation"] not in _OPERATIONS:
@@ -312,9 +289,6 @@ def validate_worker_trial_operation(payload: dict[str, Any], operation_id: UUID 
 
 def authorize_worker_trial_operation(payload: dict[str, Any], operation_id: UUID | str | None) -> None:
     """Recheck the recorded initiating proof against the worker's range."""
-    from engine.models import ProvisionerLaunchIntent
-
-    from ._launch_authority import authorize_launch_authority
 
     try:
         trial = validate_worker_trial_operation(payload, operation_id)
@@ -327,7 +301,6 @@ def authorize_worker_trial_operation(payload: dict[str, Any], operation_id: UUID
 
 def enqueue_interrupted_worker_trial(origin: ProvisionerLaunchIntent) -> bool:
     """After an interrupted ``run`` stops, collect with a stop request."""
-    from engine.models import WorkerTrial
 
     with transaction.atomic():
         trial = WorkerTrial.objects.select_for_update().filter(pk=origin.payload.get("trial_id")).first()
@@ -346,7 +319,6 @@ def mark_worker_trial_operation_failed(trial: WorkerTrial) -> None:
 
 def fail_worker_trial_dispatch(payload: dict[str, Any], operation_id: UUID | str) -> bool:
     """Exhausted dispatch fails only the trial operation that still owns its generation."""
-    from engine.models import WorkerTrial
 
     trial_id = payload.get("trial_id")
     if trial_id is None:
@@ -360,7 +332,6 @@ def fail_worker_trial_dispatch(payload: dict[str, Any], operation_id: UUID | str
 
 def apply_worker_trial_result(result: OperationResultInbox, payload: dict[str, Any]) -> tuple[str, str]:
     """Apply the closed receipt of the exact current operation."""
-    from engine.models import OperationResultDisposition, WorkerTrial
 
     trial = WorkerTrial.objects.select_for_update().filter(provisioner_operation_id=result.operation_id).first()
     if trial is None or str(trial.generation) != str(result.request_id):
@@ -373,7 +344,6 @@ def apply_worker_trial_result(result: OperationResultInbox, payload: dict[str, A
 
 def _record_receipt(trial: WorkerTrial, payload: dict[str, Any]) -> tuple[str, str]:
     """Record the observed trial facts from a receipt that names this trial."""
-    from engine.models import OperationResultDisposition
 
     receipt = parse_worker_trial_receipt(payload)
     if receipt.trial_id != trial.pk:

@@ -317,7 +317,9 @@ def test_teardown_revokes_receipt_registration_before_dispatch(monkeypatch):
     _user, request, _range_obj = _owned_range()
     registered = register_receipt_verifier(request.request_id, _PROVISIONING_OPERATION_ID, _demand())
     dispatched = []
-    monkeypatch.setattr("engine.ecs.start_range_teardown", lambda request_id: dispatched.append(request_id))
+    monkeypatch.setattr(
+        "engine.services._range_by_request.start_range_teardown", lambda request_id: dispatched.append(request_id)
+    )
 
     assert destroy_range_by_request(request.request_id) is True
 
@@ -331,7 +333,9 @@ def test_range_id_teardown_revokes_receipt_registration_before_dispatch(monkeypa
     user, request, range_obj = _owned_range()
     registered = register_receipt_verifier(request.request_id, _PROVISIONING_OPERATION_ID, _demand())
     dispatched = []
-    monkeypatch.setattr("engine.ecs.start_teardown", lambda range_id, user_id: dispatched.append((range_id, user_id)))
+    monkeypatch.setattr(
+        "engine.services._range.start_teardown", lambda range_id, user_id: dispatched.append((range_id, user_id))
+    )
 
     assert (
         destroy_range(

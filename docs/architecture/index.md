@@ -54,6 +54,7 @@ These retain their stated design authority and are not historical preflights:
 - [RAES 10.6 contract-pair adoption boundary](raes-contract-pair-adoption-2722.md)
 - [Tenant trial archive intake boundary](experiments-trial-archive-intake-boundary-2740.md)
 - [Disposable trial worker boundary](disposable-trial-workers-boundary-2741.md)
+- [Engine import structure](engine-import-design-2865.md)
 - [Pack experiment admission boundary](experiment-admission-boundary-2742.md)
 - [Admitted trials on disposable workers](parallel-trial-dispatch-boundary-2743.md)
 - [Trial archive custody design](trial-archive-custody.md)

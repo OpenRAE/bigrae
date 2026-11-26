@@ -6,13 +6,21 @@ import logging
 from collections.abc import Iterator
 from contextlib import contextmanager
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID, uuid4
 
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from engine.models import (
+    PreparationAdapter,
+    PreparationAttempt,
+    PreparationGrant,
+    PreparationOperation,
+    PreparationScopeLock,
+    PreparedArtifactAdmission,
+)
 from shared.audit import AuditAction
 from shared.cloud import get_preparation_readback, get_preparation_task
 from shared.cloud.preparation_runtime import PreparationTask
@@ -29,14 +37,10 @@ from ._preparation_worker import _current_attempt, attempt_token
 _LEASE_SECONDS = 300
 logger = logging.getLogger(__name__)
 
-if TYPE_CHECKING:
-    from engine.models import PreparationAttempt, PreparationOperation
-
 
 @contextmanager
 def _locked(operation_id: UUID) -> Iterator[PreparationOperation]:
     """Same lock order as admission and grant/adapter administration."""
-    from engine.models import PreparationAdapter, PreparationGrant, PreparationOperation, PreparationScopeLock
 
     with transaction.atomic():
         initial = PreparationOperation.objects.select_related("adapter").get(pk=operation_id)
@@ -48,7 +52,6 @@ def _locked(operation_id: UUID) -> Iterator[PreparationOperation]:
 
 def reconcile_preparations(*, limit: int = 20, scope_digest: str | None = None) -> int:
     """Bounded durable scan; no message delivery is necessary for eventual recovery."""
-    from engine.models import PreparationOperation
 
     operations = PreparationOperation.objects.filter(
         Q(state__in=["queued", "running", "verifying"]) | Q(cleanup_pending=True)
@@ -72,7 +75,6 @@ def reconcile_preparations(*, limit: int = 20, scope_digest: str | None = None) 
 
 def reconcile_preparation(operation_id: UUID) -> None:
     """One recoverable dispatch/application step with a current-attempt lease."""
-    from engine.models import PreparationAttempt
 
     needs_cleanup, attempt = _lease_attempt(operation_id)
     if needs_cleanup:
@@ -101,7 +103,6 @@ def reconcile_preparation(operation_id: UUID) -> None:
 
 def _lease_attempt(operation_id: UUID) -> tuple[bool, PreparationAttempt | None]:
     """Handle lease attempt."""
-    from engine.models import PreparationAttempt, PreparationOperation
 
     snapshot = PreparationOperation.objects.get(pk=operation_id)
     if snapshot.current_attempt_id is None:
@@ -206,7 +207,6 @@ def _fenced(
     operation: PreparationOperation, snapshot: PreparationAttempt, *, eligible: bool
 ) -> PreparationAttempt | None:
     """Handle fenced."""
-    from engine.models import PreparationAttempt
 
     current = PreparationAttempt.objects.select_for_update().get(pk=snapshot.id)
     if (
@@ -284,7 +284,6 @@ def _fail(operation: PreparationOperation, code: str) -> None:
 
 def _start_cleanup(operation_id: UUID) -> None:
     """Fence all old worker identities before dispatching the operator cleanup image."""
-    from engine.models import PreparationAttempt, PreparationOperation, PreparedArtifactAdmission
 
     operation = PreparationOperation.objects.get(pk=operation_id)
     attempts = list(

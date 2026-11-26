@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING
 from uuid import UUID
+
+from django.db import transaction
 
 # Re-exported (see ``__all__``): historical import path for callers and tests
 # that reference status predicates at ``engine.services._lifecycle`` (#685).
@@ -15,14 +16,14 @@ from uuid import UUID
 # (that would make the model depend upward on the service layer, which already
 # depends on the model).
 from engine._range_state import is_range_terminal, is_range_usable
+from engine.models import Range
+from engine.services._launch_starts import start_range_operation
+from shared.cloud.exceptions import CloudTaskError
 from shared.credentials import CredentialContext
 from shared.enums import ResourceStatus
 from shared.raes.runtime_target import is_raes_provisioning_plan
 
-if TYPE_CHECKING:
-    from contextlib import AbstractContextManager as ContextManager
-
-    from engine.models import Range
+from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
 
 __all__ = [
     "is_range_terminal",
@@ -32,13 +33,6 @@ __all__ = [
 ]
 
 logger = logging.getLogger(__name__)
-
-
-def _atomic() -> ContextManager[None]:
-    """Late-bound ``engine.services.transaction.atomic()`` so tests can patch the package-level name."""
-    from engine import services as _es
-
-    return _es.transaction.atomic()
 
 
 def _run_range_lifecycle_op(
@@ -58,13 +52,10 @@ def _run_range_lifecycle_op(
     could not be started. Status transitions and revert-on-failure mirror
     the original per-operation implementations so behaviour is unchanged.
     """
-    from engine.ecs import start_range_operation
-    from engine.models import Range
-    from shared.cloud.exceptions import CloudTaskError
 
     logger.debug("%s_range: request_id=%s", op_name, request_id)
 
-    with _atomic():
+    with transaction.atomic():
         range_obj = Range.objects.select_for_update().filter(request__request_id=request_id).first()
         decision: bool | None
         if not range_obj:
@@ -152,8 +143,6 @@ def _dispatch_lifecycle_ecs(
 def pause_range(request_id: UUID, *, credential: CredentialContext | None = None) -> bool:
     """Pause all instances in a range. Idempotent."""
     if credential is not None:
-        from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
-
         return commit_prepared_range_lifecycle(prepare_range_lifecycle(credential, request_id, "pause"))
     return _run_range_lifecycle_op(
         request_id,
@@ -170,8 +159,6 @@ def resume_range(
 ) -> bool:
     """Resume all instances in a range. Idempotent."""
     if credential is not None:
-        from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
-
         if defer_dispatch:
             raise ValueError("Principal lifecycle requires an atomic launch intent")
         return commit_prepared_range_lifecycle(prepare_range_lifecycle(credential, request_id, "resume"))
@@ -188,6 +175,5 @@ def resume_range(
 
 def dispatch_prepared_range_resume(request_id: UUID) -> bool:
     """Enqueue the existing resume operation after the owner refreshes model authority."""
-    from engine.ecs import start_range_operation
 
     return bool(start_range_operation(request_id, "resume"))

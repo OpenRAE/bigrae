@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from engine.models import ProvisionerLaunchIntent, Range, RangeAuthorityChange
-
 from uuid import UUID
 
+from engine.models import ProvisionerLaunchIntent, Range, RangeAuthorityChange, WarmRangeGeneration
 from shared.operation_authority import credential_reference_fields, credential_reference_from_record
+
+from ._range_authority_history import cleanup_origin_record
+from ._runtime_binding_digest import range_runtime_binding_digest
 
 _CLEANUP_AUTHORITY_UNAVAILABLE = "Cleanup authority unavailable"
 
 
 def assert_cleanup_origin(intent: ProvisionerLaunchIntent, runtime: Range) -> None:
     """Cleanup never borrows an actor's grant or authorizes another operation."""
-    from ._launch_authority import range_runtime_binding_digest
-    from ._range_authority_history import cleanup_origin_record
 
     origin = cleanup_origin_record(intent.cleanup_origin_operation_uuid)
     if runtime.request is None or origin is None:
@@ -51,10 +48,6 @@ def assert_cleanup_origin(intent: ProvisionerLaunchIntent, runtime: Range) -> No
 
 def prepare_cleanup_authority(payload: dict[str, object], origin_operation_uuid: UUID) -> dict[str, object]:
     """Only server-owned teardown of a recorded generation survives revocation."""
-    from engine.models import Range
-
-    from ._launch_authority import range_runtime_binding_digest
-    from ._range_authority_history import cleanup_origin_record
 
     if payload.get("resource") not in {"range", "raes-range"} or payload.get("operation") != "destroy":
         raise ValueError(_CLEANUP_AUTHORITY_UNAVAILABLE)
@@ -104,7 +97,6 @@ def _assert_warm_origin(origin: ProvisionerLaunchIntent | RangeAuthorityChange, 
     """A warm cleanup consumes the recorded ledger and exact creation receipt only."""
     if origin.authority_kind != "warm_pool":
         return
-    from engine.models import RangeAuthorityChange
 
     request_uuid, generation = _warm_cleanup_binding(origin, runtime)
     receipts = list(
@@ -126,7 +118,6 @@ def _assert_warm_origin(origin: ProvisionerLaunchIntent | RangeAuthorityChange, 
 
 def _warm_cleanup_binding(origin: ProvisionerLaunchIntent | RangeAuthorityChange, runtime: Range) -> tuple[UUID, UUID]:
     """Require installation custody and its unclaimed retiring ledger before receipt lookup."""
-    from engine.models import WarmRangeGeneration
 
     if runtime.request is None or runtime.resource_generation is None:
         raise ValueError(_CLEANUP_AUTHORITY_UNAVAILABLE)
@@ -156,7 +147,6 @@ def _assert_cleanup_generation(
     origin: ProvisionerLaunchIntent | RangeAuthorityChange, runtime: Range, origin_operation_uuid: UUID
 ) -> None:
     """Keep retained transfer evidence and replayed cleanup on the same generation."""
-    from engine.models import ProvisionerLaunchIntent, RangeAuthorityChange
 
     if isinstance(origin, RangeAuthorityChange) and (
         origin.range_id != runtime.pk or origin.resource_generation != runtime.resource_generation

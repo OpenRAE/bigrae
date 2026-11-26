@@ -26,7 +26,7 @@ TEST_REQUEST_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
 
 class TestStartNgfwTeardown:
     def test_enqueues_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import start_ngfw_teardown
+        from engine.services._launch_starts import start_ngfw_teardown
 
         make_authorized_ngfw(TEST_REQUEST_ID, status="ready")
         ref = start_ngfw_teardown(request_id=TEST_REQUEST_ID)
@@ -38,7 +38,7 @@ class TestStartNgfwTeardown:
         ecs_client.run_task.assert_not_called()
 
     def test_uses_deprovision_not_provision(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import start_ngfw_teardown
+        from engine.services._launch_starts import start_ngfw_teardown
 
         make_authorized_ngfw(TEST_REQUEST_ID, status="ready")
         start_ngfw_teardown(request_id=TEST_REQUEST_ID)
@@ -48,7 +48,7 @@ class TestStartNgfwTeardown:
         assert intent.payload["operation"] != "provision"
 
     def test_returns_none_when_ecs_not_configured(self, aws_ecs_unconfigured, ecs_client):
-        from engine.ecs import start_ngfw_teardown
+        from engine.services._launch_starts import start_ngfw_teardown
 
         make_authorized_ngfw(TEST_REQUEST_ID, status="ready")
         assert start_ngfw_teardown(request_id=TEST_REQUEST_ID) is None
@@ -56,7 +56,7 @@ class TestStartNgfwTeardown:
         ecs_client.run_task.assert_not_called()
 
     def test_raises_type_error_for_none_request_id(self, aws_ecs_configured):
-        from engine.ecs import start_ngfw_teardown
+        from engine.services._launch_starts import start_ngfw_teardown
 
         with pytest.raises(TypeError):
             start_ngfw_teardown(request_id=None)

@@ -1,38 +1,6 @@
 """Shifter Engine - Infrastructure lifecycle.
 
-Range provisioning, NGFW operations, terminal connections.
+Range provisioning, NGFW operations, terminal connections. The public service
+interface is ``engine.services``. This package exports nothing, because Django
+imports it before the model registry is ready.
 """
-
-from .services import (
-    EngineError,
-    cancel_range,
-    cancel_range_by_request,
-    connect_ngfw_terminal,
-    connect_terminal,
-    create_ngfw,
-    destroy_ngfw,
-    destroy_range,
-    destroy_range_by_request,
-    get_range_status,
-    pause_range,
-    resume_range,
-    start_ngfw,
-    stop_ngfw,
-)
-
-__all__ = [
-    "EngineError",
-    "cancel_range",
-    "cancel_range_by_request",
-    "connect_ngfw_terminal",
-    "connect_terminal",
-    "create_ngfw",
-    "destroy_ngfw",
-    "destroy_range",
-    "destroy_range_by_request",
-    "get_range_status",
-    "pause_range",
-    "resume_range",
-    "start_ngfw",
-    "stop_ngfw",
-]

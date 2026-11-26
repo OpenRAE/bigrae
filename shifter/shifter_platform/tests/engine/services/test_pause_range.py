@@ -13,8 +13,8 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.test import override_settings
 
-from engine import pause_range
 from engine.models import Range, Request
+from engine.services import pause_range
 
 # Opaque #1325 workspace scope binding. engine.services requires one on every
 # range create (ADR-046-R3); these suites do not exercise tenancy, so a fixed

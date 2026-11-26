@@ -23,13 +23,13 @@ from uuid import UUID, uuid4
 from django.db import transaction
 from django.utils import timezone
 
+from engine.models import AcquiredFeatureArtifact
 from shared.cloud.exceptions import CloudStorageError
 from shared.feature_artifacts.job import AcquisitionResult
 from shared.feature_artifacts.recipes import NpmBinaryRecipe, RecipeError, recipe_for
 from shared.raes.content_delivery import ContentDeliveryError, normalized_storage_key
 
 if TYPE_CHECKING:
-    from engine.models import AcquiredFeatureArtifact
     from shared.cloud.types import ObjectStorage
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,6 @@ _ACQUIRING, _READY, _FAILED = "acquiring", "ready", "failed"
 
 def _model() -> type[AcquiredFeatureArtifact]:
     """The inventory model, imported lazily (engine.services loads before the app registry)."""
-    from engine.models import AcquiredFeatureArtifact
 
     return AcquiredFeatureArtifact
 

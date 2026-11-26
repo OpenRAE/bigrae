@@ -24,6 +24,8 @@ from uuid import UUID
 
 from django.utils import timezone
 
+from engine.models import App, Instance, OperationResultDisposition, Range, WarmRangeGeneration
+from engine.services._launch_intents import clear_provisioner_operation_after_failure
 from shared.audit import AuditEntityType
 from shared.enums import ResourceStatus
 from shared.operation_envelope import OperationEnvelopeError, validate_operation_envelope
@@ -37,6 +39,7 @@ from shared.operation_results import (
     step_follows,
 )
 
+from ._gcp_project_results import apply_project_registration_result
 from ._operation_apply_admission import (
     applied_steps,
     discriminator_mismatch,
@@ -50,11 +53,14 @@ from ._operation_apply_effects import (
     _save_status,
     _terminal_timestamps,
 )
+from ._operation_apply_raes import RaesRealizedAccessError, apply_raes_result
+from ._receipt import _revoke_receipt_verifier_for_range
+from ._vpn_pki_results import apply_vpn_pki_result
+from ._worker_trials import apply_worker_trial_result
 
 if TYPE_CHECKING:
-    from engine.models import Instance, OperationResultInbox, Range
+    from engine.models import OperationResultInbox
 
-    from ._operation_apply_raes import RaesRealizedAccessError
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +90,6 @@ def _lock_range(operation_id: UUID | str) -> Range | None:
     join. Related rows are resolved afterwards and locked explicitly, in the
     declared primary-key order, by the paths that mutate them.
     """
-    from engine.models import Range, WarmRangeGeneration
 
     # Claim, activation, creation and retirement serialize on the ledger before
     # the runtime. Results must take that same order before their READY/FAILED
@@ -102,7 +107,6 @@ def _lock_range(operation_id: UUID | str) -> Range | None:
 
 def _lock_ngfw_instance(operation_id: UUID | str) -> Instance | None:
     """Lock and return the NGFW Instance that currently owns this generation."""
-    from engine.models import Instance
 
     return (
         Instance.objects.select_for_update()
@@ -113,7 +117,6 @@ def _lock_ngfw_instance(operation_id: UUID | str) -> Instance | None:
 
 def _lock_instance_by_pk(pk: int) -> Instance | None:
     """Lock one Instance row explicitly (used after a nullable FK is resolved)."""
-    from engine.models import Instance
 
     return Instance.objects.select_for_update().filter(pk=pk).first()
 
@@ -124,7 +127,6 @@ def _apply_instances(range_obj: Range, payload: dict[str, Any], request_id: str)
     Locked in primary-key order, and matched against the closed UUID set the
     result carries — never a blanket update of every instance for the request.
     """
-    from engine.models import Instance
 
     wanted = {outcome["instance_uuid"]: outcome["status"] for outcome in payload["instances"]}
     # The permitted set is derived server-side from the locked Range's request,
@@ -185,7 +187,6 @@ def _resolve_cascade_ngfw(range_obj: Range, payload: dict[str, Any]) -> Instance
 
 def _other_attached_range_needs_ngfw(range_obj: Range, ngfw: Instance) -> bool:
     """Return True when another attached Range still needs this shared NGFW."""
-    from engine.models import Range
 
     return (
         Range.objects.filter(ngfw_instance=ngfw, status__in=_NGFW_KEEP_ALIVE_STATUSES).exclude(pk=range_obj.pk).exists()
@@ -194,7 +195,6 @@ def _other_attached_range_needs_ngfw(range_obj: Range, ngfw: Instance) -> bool:
 
 def _apply_ngfw(ngfw: Instance, new_status: str, request_id: str) -> None:
     """Apply an NGFW Instance transition and its NGFW App projection."""
-    from engine.models import App
 
     previous = _save_status(ngfw, new_status, _terminal_timestamps(new_status))
 
@@ -229,8 +229,6 @@ def _apply_range_terminal(range_obj: Range, payload: dict[str, Any], request_id:
         extra["paused_at"] = timezone.now()
     previous = _save_status(range_obj, new_status, extra)
     if new_status in {ResourceStatus.DESTROYED.value, ResourceStatus.FAILED.value}:
-        from ._receipt import _revoke_receipt_verifier_for_range
-
         _revoke_receipt_verifier_for_range(range_obj)
     _audit(AuditEntityType.RANGE, range_obj.id, new_status, request_id=request_id, previous={"status": previous})
     _enqueue_range_status_event(range_obj, new_status, "")
@@ -239,7 +237,6 @@ def _apply_range_terminal(range_obj: Range, payload: dict[str, Any], request_id:
 
 def _apply_failure(target: Range | Instance, payload: dict[str, Any], request_id: str, is_range: bool) -> str:
     """Apply a terminal failure, carrying only the authored reason code."""
-    from engine.launch_intents import clear_provisioner_operation_after_failure
 
     new_status = ResourceStatus.FAILED.value
     context = payload["reason_code"]
@@ -253,8 +250,6 @@ def _apply_failure(target: Range | Instance, payload: dict[str, Any], request_id
     target.save(update_fields=update_fields)
 
     if is_range:
-        from ._receipt import _revoke_receipt_verifier_for_range
-
         _revoke_receipt_verifier_for_range(cast("Range", target))
         _audit(
             AuditEntityType.RANGE,
@@ -337,7 +332,6 @@ def _dispatch(row: OperationResultInbox, step: ResultStep, payload: dict[str, An
         if (row.resource, row.operation) in _RAES_OPERATIONS:
             # RAES provision/destroy report operation observations and topology
             # evidence, not instance sets; pause/resume keep the range shape.
-            from ._operation_apply_raes import apply_raes_result
 
             return apply_raes_result(row, step, payload, cast("Range", target), _apply_failure)
         return _dispatch_range(row, step, payload, cast("Range", target))
@@ -359,7 +353,6 @@ def _admit(row: OperationResultInbox) -> tuple[ResultStep, dict[str, Any]]:
     Raising rather than returning a verdict per check keeps the caller to a
     single exit and keeps each guard a one-liner.
     """
-    from engine.models import OperationResultDisposition
 
     try:
         envelope = validate_operation_envelope(row.envelope)
@@ -398,7 +391,6 @@ def _lock_and_authorize(row: OperationResultInbox, step: ResultStep) -> Range | 
     Returns None when the row should stay PENDING for a later pass. Raises
     ``_Rejected`` for a deterministic refusal.
     """
-    from engine.models import OperationResultDisposition
 
     # Lock BEFORE deciding conflict or ordering. Every result for one operation
     # resolves to the same target, so this serializes sibling results: without it
@@ -433,23 +425,14 @@ def apply_validated_result(row: OperationResultInbox) -> tuple[str, str]:
     An empty disposition means "leave PENDING for a later pass". Transient
     failures propagate so the row stays retryable.
     """
-    from engine.models import OperationResultDisposition
-
-    from ._operation_apply_raes import RaesRealizedAccessError
 
     try:
         step, payload = _admit(row)
         if row.resource == "range-project":
-            from ._gcp_project_results import apply_project_registration_result
-
             disposition = apply_project_registration_result(row, payload)
         elif row.resource == "vpn-profile":
-            from ._vpn_pki_results import apply_vpn_pki_result
-
             disposition = apply_vpn_pki_result(row, payload)
         elif row.resource == "worker-trial":
-            from ._worker_trials import apply_worker_trial_result
-
             disposition = apply_worker_trial_result(row, payload)
         else:
             target = _lock_and_authorize(row, step)
@@ -465,7 +448,6 @@ def apply_validated_result(row: OperationResultInbox) -> tuple[str, str]:
 
 def _refusal_disposition(refusal: _Rejected | _NotApplicable | RaesRealizedAccessError) -> tuple[str, str]:
     """Map a deterministic refusal onto the disposition and detail to record."""
-    from engine.models import OperationResultDisposition
 
     if isinstance(refusal, _Rejected):
         return refusal.disposition, refusal.detail

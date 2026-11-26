@@ -5,12 +5,19 @@ from __future__ import annotations
 from collections.abc import Mapping
 from uuid import UUID
 
+from engine.models import (
+    PreparationOperation,
+    ProvisionerLaunchIntent,
+    Range,
+    Request,
+    RuntimePluginInstallation,
+    VpnAccessProfile,
+)
 from shared.operation_authority import credential_reference_from_record
 
 
 def identity_cutover_resource_disposition() -> tuple[int, int]:
     """Return retained resource count and rows with no reconstructable owner."""
-    from engine.models import Range, Request
 
     models = (Request, Range)
     return (
@@ -24,12 +31,6 @@ def identity_cutover_resource_disposition() -> tuple[int, int]:
 
 def pending_identity_cutover_work() -> tuple[int, int]:
     """Count pending Engine work and rows lacking a complete initiator reference."""
-    from engine.models import (
-        PreparationOperation,
-        ProvisionerLaunchIntent,
-        RuntimePluginInstallation,
-        VpnAccessProfile,
-    )
 
     querysets = (
         ProvisionerLaunchIntent.objects.filter(status__in=("PENDING", "RUNNING")),
@@ -53,7 +54,6 @@ def apply_identity_cutover_resources(
     mappings: Mapping[int, tuple[int, int | None, int | None]], principal_by_user: Mapping[int, UUID]
 ) -> None:
     """Bind retained runtime resources to planned account and principal facts."""
-    from engine.models import Range, Request
 
     for workspace_id, (account_id, organization_id, retained_workspace_id) in mappings.items():
         for model in (Request, Range):

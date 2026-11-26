@@ -665,11 +665,11 @@ def test_admission_policy_accepts_compatible_operation_id_command_forms(inline_p
 def test_admission_policy_admits_exactly_the_launcher_operation_grammar(inline_params: bool) -> None:
     """Every operation the launcher may enqueue is admitted; nothing else is.
 
-    Derived from ``engine.launch_intents._OPERATIONS`` so the admission grammar
+    Derived from ``engine.launch_commands._OPERATIONS`` so the admission grammar
     cannot drift from the launcher again (warm-pool ``raes-range activate`` was
     enqueued but denied at admission, #2467).
     """
-    from engine.launch_intents import _OPERATIONS
+    from engine.launch_commands import _OPERATIONS
 
     parameters = _canonical_admission_parameters()
     policy = _policy(_load_helm_documents(runtime_env=parameters, inline_params=inline_params))

@@ -27,7 +27,7 @@ TEST_REQUEST_ID_2 = UUID("660e8400-e29b-41d4-a716-446655440001")
 
 class TestStartNgfwEcsTask:
     def test_enqueues_provision_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import _start_ngfw_ecs_task
+        from engine.services._launch_starts import _start_ngfw_ecs_task
 
         make_authorized_ngfw(TEST_REQUEST_ID, status="provisioning")
         command = ["ngfw", "provision", "--request-id", str(TEST_REQUEST_ID)]
@@ -40,7 +40,7 @@ class TestStartNgfwEcsTask:
         ecs_client.run_task.assert_not_called()
 
     def test_enqueues_deprovision_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import _start_ngfw_ecs_task
+        from engine.services._launch_starts import _start_ngfw_ecs_task
 
         make_authorized_ngfw(TEST_REQUEST_ID_2, status="ready")
         command = ["ngfw", "deprovision", "--request-id", str(TEST_REQUEST_ID_2)]
@@ -53,7 +53,7 @@ class TestStartNgfwEcsTask:
         ecs_client.run_task.assert_not_called()
 
     def test_returns_none_when_cluster_missing(self, aws_ecs_unconfigured, settings, ecs_client):
-        from engine.ecs import _start_ngfw_ecs_task
+        from engine.services._launch_starts import _start_ngfw_ecs_task
 
         # #1826: the provisioner dispatches as a Kubernetes Job, so the config
         # gate needs only the namespace + image; an image without a namespace is
@@ -67,13 +67,13 @@ class TestStartNgfwEcsTask:
 
     @pytest.mark.parametrize("request_id", [None, str(TEST_REQUEST_ID), 42])
     def test_validates_request_id_type(self, aws_ecs_configured, request_id):
-        from engine.ecs import _start_ngfw_ecs_task
+        from engine.services._launch_starts import _start_ngfw_ecs_task
 
         with pytest.raises(TypeError):
             _start_ngfw_ecs_task(request_id=request_id, command=["ngfw", "provision"])
 
     def test_validates_command_type(self, aws_ecs_configured):
-        from engine.ecs import _start_ngfw_ecs_task
+        from engine.services._launch_starts import _start_ngfw_ecs_task
 
         for invalid_cmd in (None, "ngfw provision"):
             with pytest.raises(TypeError):
@@ -82,7 +82,7 @@ class TestStartNgfwEcsTask:
             _start_ngfw_ecs_task(request_id=TEST_REQUEST_ID, command=[])
 
     def test_logs_request_id_on_enqueue(self, aws_ecs_configured, ecs_client, caplog):
-        from engine.ecs import _start_ngfw_ecs_task
+        from engine.services._launch_starts import _start_ngfw_ecs_task
 
         make_authorized_ngfw(TEST_REQUEST_ID, status="provisioning")
         with caplog.at_level(logging.INFO, logger="engine.ecs"):

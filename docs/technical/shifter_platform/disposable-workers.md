@@ -230,6 +230,7 @@ Live qualification requires the approved GCP operating procedure and an approved
 `.importlinter` and `scripts/check_layer_imports/layer_imports.yaml` define the executable dependency model.
 The updated composition allowance permits the worker ancestry resolver.
 The layer-import checker enforces this model.
+`.importlinter` also rejects an import cycle inside Engine (ADR-001-R5).
 
 No new application, provider, public listener, or deployment environment is added.
 Existing range containment and Job policies continue to apply.

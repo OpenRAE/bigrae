@@ -17,8 +17,8 @@ def test_dispatched_maintenance_without_receipt_waits_for_absence_then_recovers(
 
     from django.db import transaction
 
-    from engine.launch_interrupt import drain_due_interrupts
     from engine.models import InterruptState, OperationInput, OperationResultInbox, ProvisionerLaunchIntent
+    from engine.services._launch_interrupt_convergence import drain_due_interrupts
     from engine.services._vpn_profile_operations import authorize_vpn_operation, queue_vpn_operation
     from engine.services._vpn_profiles import (
         reconcile_vpn_profiles,

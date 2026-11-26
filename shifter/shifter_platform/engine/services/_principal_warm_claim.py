@@ -3,18 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
 
+from engine.models import Range, RangeAuthorityChange, Request, WarmRangeGeneration
+from management.services import human_principal_user_id
 from shared.authorization import AuthorizationRequest
 from shared.authorization.policy import require_authorization, scope_parent
 from shared.credentials import CredentialContext, resolve_current_credential, resolve_local_credential
 from shared.identity_scope import ResourceScope
+from shared.operation_authority import credential_reference_fields
+from shared.raes.runtime_target import is_raes_provisioning_plan
+from workspaces.services import resolve_range_scope_binding
 
-if TYPE_CHECKING:
-    from engine.models import Range
+from ._range_authority import project_range_authority
+from ._receipt import _revoke_receipt_verifier_for_range
+from ._runtime_binding_digest import range_runtime_binding_digest
 
 
 @dataclass(frozen=True, slots=True)
@@ -28,7 +33,6 @@ class PreparedWarmRangeClaim:
 
 def prepare_warm_range_claim(credential: CredentialContext, scope: ResourceScope) -> PreparedWarmRangeClaim:
     """Authorize the customer launch target without holding a SQL transaction."""
-    from workspaces.services import resolve_range_scope_binding
 
     if not isinstance(scope, ResourceScope) or scope.kind != "account":
         raise ValueError("Warm claim scope unavailable")
@@ -56,8 +60,6 @@ def commit_warm_range_claim(
     user_id: int | None,
 ) -> int:
     """Fence the admitted destination and move Engine owner and scope together."""
-    from engine.models import Range, Request, WarmRangeGeneration
-    from workspaces.services import resolve_range_scope_binding
 
     current = _current_claim_credential(prepared, user_id)
     with transaction.atomic():
@@ -82,8 +84,6 @@ def commit_warm_range_claim(
         if generation is None or row is None or row.request is None or row.cms_range_uuid != cms_range_uuid:
             raise ValueError("Warm generation changed")
         _require_quarantined_custody(row)
-        from ._launch_authority import range_runtime_binding_digest
-        from ._receipt import _revoke_receipt_verifier_for_range
 
         previous_digest = range_runtime_binding_digest(row)
         _revoke_receipt_verifier_for_range(row)
@@ -132,12 +132,6 @@ def commit_warm_range_claim(
 
 def _record_warm_claim_authority(row: Range, credential: CredentialContext, previous_digest: str) -> None:
     """Retain the exact launch decision as current cleanup custody evidence."""
-    from engine.models import RangeAuthorityChange
-    from shared.operation_authority import credential_reference_fields
-    from shared.raes.runtime_target import is_raes_provisioning_plan
-
-    from ._launch_authority import range_runtime_binding_digest
-    from ._range_authority import project_range_authority
 
     if row.request is None:
         raise ValueError("Warm generation request unavailable")
@@ -172,7 +166,6 @@ def _record_warm_claim_authority(row: Range, credential: CredentialContext, prev
 
 def _current_claim_credential(prepared: PreparedWarmRangeClaim, user_id: int | None) -> CredentialContext:
     """Require the admitted local proof and its real optional human projection before the custody write."""
-    from management.services import human_principal_user_id
 
     if not isinstance(prepared, PreparedWarmRangeClaim):
         raise ValueError("Warm claim authority unavailable")
@@ -185,7 +178,6 @@ def _current_claim_credential(prepared: PreparedWarmRangeClaim, user_id: int | N
 
 def _require_quarantined_custody(row: Range) -> None:
     """Only an installation-owned quarantined generation can become a customer claim."""
-    from engine.models import Range
 
     if row.owner_principal_uuid is None or row.request is None:
         raise ValueError("Warm generation custody unavailable")

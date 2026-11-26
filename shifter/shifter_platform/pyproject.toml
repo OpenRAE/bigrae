@@ -217,6 +217,7 @@ select = [
     "G",      # flake8-logging-format (#2569)
     "LOG",    # flake8-logging (#2569)
     "TRY401", # redundant exception object in logging.exception (#2569)
+    "PLC0415", # import-outside-top-level; scoped to engine below (ADR-001-R5, #2865)
 ]
 ignore = [
     "S101",   # assert - OK in tests
@@ -231,6 +232,10 @@ ignore = [
 max-complexity = 15
 
 [tool.ruff.lint.per-file-ignores]
+# ADR-001-R5 (#2865): engine imports are module-level. Other apps are not yet in scope.
+"!engine/**" = ["PLC0415"]
+# Django loads AppConfig before the model registry; ready() must defer its import.
+"engine/apps.py" = ["PLC0415"]
 "tests/**/*.py" = [
     "S101",   # assert is fine in tests
     "S105",   # hardcoded passwords in test fixtures OK

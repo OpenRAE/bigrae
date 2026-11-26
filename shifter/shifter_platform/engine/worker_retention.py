@@ -4,13 +4,14 @@ from typing import TYPE_CHECKING
 
 from django.utils import timezone
 
+from engine.models import DisposableWorker, WorkerRetirementHold
+
 if TYPE_CHECKING:
     from engine.models import Range
 
 
 def fence_worker_retirement(runtime: Range, *, admit: bool = False) -> None:
     """The caller holds the native range row lock before this local fence."""
-    from engine.models import DisposableWorker, WorkerRetirementHold
 
     worker = DisposableWorker.objects.filter(range_id=runtime.pk).first()
     if worker is None:

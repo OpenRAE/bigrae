@@ -8,21 +8,30 @@ from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
+from django.db import transaction
 
+from engine.ecs import interrupt_provisioner_task
+from engine.ecs._config import _get_engine_task_config
+from engine.launch_commands import command_from_payload
+from engine.models import App, Instance, InterruptState, ProvisionerLaunchIntent, RangeEventOutbox, Request
+from engine.services._launch_interrupt import _request_intent_interrupt
+from management.services import human_principal_user_id
 from shared.authorization import AuthorizationRequest
 from shared.authorization.policy import require_authorization, scope_parent
 from shared.authorization.port import AuthorizationProviderBindingError, AuthorizationUnavailable
+from shared.cloud.types import TaskInterruptDisposition
 from shared.credentials import CredentialContext, resolve_current_credential, resolve_local_credential
 from shared.identity_scope import ResourceScope
 from shared.log_sanitize import safe_log_value
+from shared.messages.events import EVENT_TYPE_NGFW
 from shared.operation_authority import credential_reference_fields, credential_reference_from_record
 from shared.operation_envelope import canonical_payload_digest
+from workspaces.services import resolve_range_scope_binding, resource_scope_from_ids
 
 if TYPE_CHECKING:
     from typing import Any
     from uuid import UUID
 
-    from engine.models import Instance, ProvisionerLaunchIntent, Request
     from shared.credentials import CredentialContext
     from shared.identity_scope import ResourceScope
     from shared.schemas import RequestSpec
@@ -42,7 +51,6 @@ def require_device_scope(
     credential: CredentialContext, scope: ResourceScope, operation: str = "manage_devices"
 ) -> CredentialContext:
     """Authorize the device action through its persisted customer parent."""
-    from workspaces.services import resolve_range_scope_binding
 
     current = resolve_current_credential(credential)
     resolve_range_scope_binding(scope)
@@ -69,9 +77,6 @@ def prepare_ngfw_creation(
     request_spec: RequestSpec, credential: CredentialContext, resource_scope: ResourceScope
 ) -> PreparedDeviceCreation:
     """Admit device creation before taking native persistence locks."""
-    from engine.ecs._config import _get_engine_task_config
-    from management.services import human_principal_user_id
-    from workspaces.services import resolve_range_scope_binding
 
     if _get_engine_task_config() is None or resource_scope.kind != "account":
         raise ValueError("Device provisioner unavailable")
@@ -89,7 +94,6 @@ def assert_device_creation(
     prepared: PreparedDeviceCreation, request_spec: RequestSpec, credential: CredentialContext, scope: ResourceScope
 ) -> None:
     """Fence prepared device input and original scope before persistence."""
-    from workspaces.services import resolve_range_scope_binding
 
     if (
         not isinstance(prepared, PreparedDeviceCreation)
@@ -113,7 +117,6 @@ def _device_request(runtime: Instance) -> Request:
 
 def device_scope(runtime: Instance) -> ResourceScope:
     """Resolve the native request customer ancestry without a creator fallback."""
-    from workspaces.services import resource_scope_from_ids
 
     request = _device_request(runtime)
     return resource_scope_from_ids(
@@ -175,7 +178,6 @@ def _device_authority_fields(runtime: Instance) -> dict[str, Any]:
 
 def prepare_device_authority(payload: dict[str, Any], credential: CredentialContext | None) -> dict[str, Any]:
     """Resolve the original credential and admit the exact native device effect."""
-    from engine.models import Instance
 
     runtime = (
         Instance.objects.select_related("request")
@@ -220,7 +222,6 @@ def assert_device_cleanup_origin(
     origin_id: UUID | None, runtime: Instance, *, require_absence: bool = True
 ) -> ProvisionerLaunchIntent:
     """Only a terminal, already-authorized teardown permits bounded system replay."""
-    from engine.models import InterruptState, ProvisionerLaunchIntent
 
     if origin_id is None or runtime.request is None:
         raise ValueError("Device cleanup origin unavailable")
@@ -241,7 +242,6 @@ def assert_device_cleanup_origin(
 
 def _assert_device_cleanup_generation(runtime: Instance, origin_id: UUID) -> None:
     """Only the original task or its recorded cleanup may own this device generation."""
-    from engine.models import ProvisionerLaunchIntent
 
     if runtime.provisioner_operation_id != origin_id:
         if runtime.provisioner_operation_id is None:
@@ -253,13 +253,6 @@ def _assert_device_cleanup_generation(runtime: Instance, origin_id: UUID) -> Non
 
 def prepare_device_cleanup(payload: dict[str, Any], origin_id: UUID) -> dict[str, Any]:
     """Bind required destruction to verified native device cleanup evidence."""
-    from django.db import transaction
-
-    from engine.ecs import interrupt_provisioner_task
-    from engine.launch_intents import command_from_payload
-    from engine.launch_interrupt import _request_intent_interrupt
-    from engine.models import Instance, InterruptState, ProvisionerLaunchIntent
-    from shared.cloud.types import TaskInterruptDisposition
 
     if payload.get("resource") != "ngfw" or payload.get("operation") != "deprovision":
         raise ValueError("Device cleanup operation unavailable")
@@ -306,8 +299,6 @@ def device_status_authority_fields(runtime: Instance) -> dict[str, str]:
 
 def verified_device_status_projection(event: dict[str, Any]) -> tuple[UUID, UUID, UUID, ResourceScope] | None:
     """Verify the recorded callback before disclosing native device custody."""
-    from engine.models import Instance, RangeEventOutbox
-    from shared.messages.events import EVENT_TYPE_NGFW
 
     try:
         stored = RangeEventOutbox.objects.get(event_id=UUID(event["event_id"]), event_type=EVENT_TYPE_NGFW)
@@ -343,7 +334,6 @@ def verified_device_status_projection(event: dict[str, Any]) -> tuple[UUID, UUID
 
 def admit_native_device_access(credential: CredentialContext, identifier: UUID | str) -> dict[str, Any]:
     """Authorize the device before loading connection material or opening transport."""
-    from engine.models import Instance
 
     try:
         runtime = Instance.objects.select_related("request").get(
@@ -378,9 +368,6 @@ def _device_remote_authority_fields(runtime: Instance) -> dict[str, Any]:
 
 def lock_native_device_access_binding(identifier: UUID | str) -> dict[str, Any]:
     """Lock and project exact native remote custody, without a policy decision."""
-    from django.db import transaction
-
-    from engine.models import App, Instance, Request
 
     if not transaction.get_connection().in_atomic_block:
         raise ValueError("Device binding requires a transaction")

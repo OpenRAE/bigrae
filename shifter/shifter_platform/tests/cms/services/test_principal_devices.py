@@ -133,8 +133,8 @@ def device_administrator(content_actor, _ngfw_catalog, settings):
 def test_service_creates_device_with_native_generation_and_revocable_authority(device_administrator):
     from cms.models import App
     from cms.services import create_ngfw, get_ngfw
-    from engine.launch_intents import authorize_provisioner_payload
     from engine.models import Instance, ProvisionerLaunchIntent
+    from engine.services._launch_intents import authorize_provisioner_payload
     from management.models import ServiceCredentialAdmission
 
     actor = device_administrator
@@ -468,7 +468,7 @@ def test_device_remote_access_retains_original_credential_and_closes_on_revocati
     actor = provisioned_device
     actor.native.state = {"management_ip": "192.0.2.10", "ssh_key_secret_id": "synthetic-device-key"}
     actor.native.save(update_fields=["state"])
-    monkeypatch.setattr("engine.secrets.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
+    monkeypatch.setattr("engine.services._terminal.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
     settings.GUACAMOLE_BOOTSTRAP_INLINE = True
     gateway = Gateway()
     result = launch_guacamole_session(
@@ -511,8 +511,8 @@ def test_device_teardown_cleanup_requires_native_absence_after_revocation(provis
     from types import SimpleNamespace
 
     from cms.services import destroy_ngfw
-    from engine.launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
     from engine.models import ProvisionerLaunchIntent, ProvisionerLaunchStatus
+    from engine.services._launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
     from management.models import ServiceCredentialAdmission
     from shared.cloud.types import TaskInterruptDisposition
 
@@ -541,8 +541,8 @@ def test_device_teardown_cleanup_requires_native_absence_after_revocation(provis
 
 
 def test_device_cleanup_cannot_borrow_a_provision_or_running_operation(provisioned_device):
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import ProvisionerLaunchIntent
+    from engine.services._launch_intents import enqueue_provisioner_launch
 
     actor = provisioned_device
     origin = ProvisionerLaunchIntent.objects.get()
@@ -558,8 +558,8 @@ def test_device_cleanup_cannot_overwrite_a_concurrent_terminal_interrupt(provisi
     from types import SimpleNamespace
 
     from cms.services import destroy_ngfw
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import InterruptState, ProvisionerLaunchIntent
+    from engine.services._launch_intents import enqueue_provisioner_launch
     from shared.cloud.types import TaskInterruptDisposition
 
     actor = provisioned_device
@@ -586,9 +586,9 @@ def test_uncertain_device_cleanup_waits_for_existing_interrupt_worker(provisione
     from types import SimpleNamespace
 
     from cms.services import destroy_ngfw
-    from engine.launch_intents import enqueue_provisioner_launch
-    from engine.launch_interrupt import drain_due_interrupts
     from engine.models import InterruptState, ProvisionerLaunchIntent
+    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch_interrupt_convergence import drain_due_interrupts
     from management.models import ServiceCredentialAdmission
     from shared.cloud.types import TaskInterruptDisposition
 
@@ -631,7 +631,7 @@ def test_device_bootstrap_does_not_log_private_secret_provider_errors(
     def unavailable(reference):
         raise RuntimeError("SYNTHETIC_SECRET_PROVIDER_FAILURE")
 
-    monkeypatch.setattr("engine.secrets.get_ssh_key", unavailable)
+    monkeypatch.setattr("engine.services._terminal.get_ssh_key", unavailable)
     settings.GUACAMOLE_BOOTSTRAP_INLINE = True
     result = launch_guacamole_session(
         user=actor.credential, protocol="ngfw_ssh", target_id=str(actor.app.pk), guacamole_client=Gateway()

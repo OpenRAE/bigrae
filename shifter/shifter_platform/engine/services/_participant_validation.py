@@ -12,7 +12,7 @@ import logging
 import time
 from contextlib import suppress
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID, uuid4
 
 from django.utils import timezone
@@ -24,10 +24,10 @@ from shifter_adapter_sdk.validation import (
     ValidationResult,
 )
 
+from engine.models import RuntimePluginInstallation, RuntimePluginValidation
 from shared.cloud.runtime_plugins import interrupt_plugin, launch_plugin, observe_plugin
 
-if TYPE_CHECKING:
-    from engine.models import RuntimePluginInstallation, RuntimePluginValidation
+from ._runtime_plugin_controller import _pull_secret
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,6 @@ _POLL_SECONDS = 2.0
 
 def _installation(organization_uuid: UUID, owner: str) -> RuntimePluginInstallation:
     """Return the organization's one ready installation that declares the owner."""
-    from engine.models import RuntimePluginInstallation
 
     rows = [
         row
@@ -73,7 +72,6 @@ def validate_participant_configurations(
     organization_uuid: UUID, *, owner: str, family_digest: str, requests: list[dict[str, Any]]
 ) -> list[ParticipantValidation]:
     """Record one validate request, await the launcher's result, and return it in order or refuse."""
-    from engine.models import RuntimePluginValidation
 
     installation = _installation(organization_uuid, owner)
     request = _request(installation, owner, family_digest, requests)
@@ -97,7 +95,6 @@ def validate_participant_configurations(
 
 def reconcile_participant_validations(*, limit: int = 3) -> int:
     """Run a bounded batch of pending validate requests in isolated plugin workers."""
-    from engine.models import RuntimePluginValidation
 
     if not 1 <= limit <= 30:
         raise ValueError("Invalid validation reconciliation batch size")
@@ -109,9 +106,6 @@ def reconcile_participant_validations(*, limit: int = 3) -> int:
 
 def _reconcile(row: RuntimePluginValidation) -> None:
     """Launch or observe one worker; record only a result authorized for its input."""
-    from engine.models import RuntimePluginValidation
-
-    from ._runtime_plugin_controller import _pull_secret
 
     state, result, request = "pending", None, None
     try:

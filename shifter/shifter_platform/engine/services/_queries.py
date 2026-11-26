@@ -7,12 +7,12 @@ from uuid import UUID
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 
+from engine.models import Instance, Range
 from shared.remote_access import PrincipalCredentialRequired
+from shared.schemas.app import LinkedRangeContext
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
-
-    from shared.schemas.app import LinkedRangeContext
 
 
 def get_authoritative_range_status(
@@ -36,7 +36,6 @@ def get_authoritative_range_status(
     Returns:
         Status string (a ``shared.enums.ResourceStatus`` value) or ``None``.
     """
-    from engine.models import Range
 
     if request_id is not None:
         eng = Range.objects.filter(request__request_id=request_id).first()
@@ -63,7 +62,6 @@ def get_user_ready_range_instances(
     caller cannot authorize one ready range and project another ready range
     selected only by user identity.
     """
-    from engine.models import Range
 
     range_obj = Range.objects.filter(
         user_id=user_id,
@@ -84,7 +82,6 @@ def get_principal_ready_range_instances(
     workspace_id: int | None,
 ) -> list[dict[str, Any]]:
     """Project one exact principal-owned ready range by both correlation keys."""
-    from engine.models import Range
 
     range_obj = Range.objects.filter(
         owner_principal_uuid=owner_principal_uuid,
@@ -112,8 +109,6 @@ def get_ranges_for_ngfw(user_id: int, ngfw_request_id: UUID | str) -> list[Linke
     NGFW templates render) for each linked range. An unknown/unprovisioned NGFW
     yields an empty list.
     """
-    from engine.models import Instance, Range
-    from shared.schemas.app import LinkedRangeContext
 
     ngfw_instance = Instance.objects.filter(
         request__request_id=ngfw_request_id,
@@ -136,7 +131,6 @@ _INSTANCE_UNAVAILABLE = "Instance unavailable"
 
 def _owned_legacy_instance_request_ref(user: User, instance_uuid: str) -> str | None:
     """Resolve incumbent range or device request custody without disclosing principal-owned resources."""
-    from engine.models import Range
 
     user_id = getattr(user, "id", None)
     request_ref = None
@@ -153,7 +147,6 @@ def _owned_legacy_instance_request_ref(user: User, instance_uuid: str) -> str | 
 
 def _legacy_instance_row_request_ref(user_id: int, instance_uuid: str) -> str | None:
     """Resolve only incumbent device request ownership, including detached rows."""
-    from engine.models import Instance
 
     request_ref = None
     try:

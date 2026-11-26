@@ -11,10 +11,21 @@ from django.conf import settings
 from django.db import transaction
 from shifter_adapter_sdk.runtime import RuntimeInput, RuntimePlan, canonical_digest
 
-from shared.field_encryption import encrypt_value
+from engine.models import OperationInput, RuntimePluginRangeBinding
+from shared.field_encryption import decrypt_value, encrypt_value
+from shared.operation_envelope import validate_operation_envelope
+from shared.raes.operation_input import (
+    RaesInputBindings,
+    RaesRangeIdentity,
+    build_raes_operation_input,
+    parse_raes_operation_input,
+)
 from shared.raes.runtime_preparation import validate_runtime_preparation
 from shared.runtime_plugin_binding import RuntimePin, parse_runtime_pin
 from shared.runtime_plugin_preparation import RuntimePreparation
+
+from ._gcp_project_inputs import allocate_plan_projects, validate_project_preparation
+from ._runtime_plugin_cleanup import _UNAVAILABLE, preparation_cleanup_payload
 
 if TYPE_CHECKING:
     from engine.models import Range, RuntimePluginInvocation
@@ -62,16 +73,12 @@ def approved_preparation(
 
 def approve_invocation(row: RuntimePluginInvocation, request: RuntimeInput, result: RuntimePlan) -> RuntimePreparation:
     """Read the already-authorized immutable operation; never accept a worker's plan."""
-    from engine.models import OperationInput
-    from shared.operation_envelope import validate_operation_envelope
-    from shared.raes.operation_input import parse_raes_operation_input
 
     operation = OperationInput.objects.get(operation_id=row.operation_id, request_id=row.request_id)
     payload = parse_raes_operation_input(validate_operation_envelope(operation.envelope)["payload"])
     if payload.runtime_plugin is None:
         raise ValueError(_IDENTITY_CHANGED)
     record = approved_preparation(request, result, payload.runtime_plugin, payload.plan)
-    from ._runtime_plugin_cleanup import preparation_cleanup_payload
 
     preparation_cleanup_payload(operation.envelope, record)
     return record
@@ -86,11 +93,6 @@ def preparation_identity(record: RuntimePreparation, pin: RuntimePin, plan: obje
 @transaction.atomic
 def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePreparation:
     """Called under the range/operation mutex; an accepted mapping cannot be replaced."""
-    from engine.models import OperationInput, RuntimePluginRangeBinding
-    from shared.field_encryption import decrypt_value
-
-    from ._gcp_project_inputs import allocate_plan_projects, validate_project_preparation
-    from ._runtime_plugin_cleanup import preparation_cleanup_payload
 
     binding = RuntimePluginRangeBinding.objects.select_for_update().get(range=target)
     if binding.pin_digest != record.pin_digest or canonical_digest(target.range_config) != record.plan_digest:
@@ -122,7 +124,6 @@ def retain_preparation(target: Range, record: RuntimePreparation) -> RuntimePrep
 
 def retained_preparation(target: Range, pin: RuntimePin | None) -> RuntimePreparation | None:
     """Snapshot accepted values or pre-effect absence for the range's next operation."""
-    from engine.models import RuntimePluginRangeBinding
 
     if pin is None or "provision.prepare" not in pin.manifest.capabilities:
         return None
@@ -136,3 +137,33 @@ def retained_preparation(target: Range, pin: RuntimePin | None) -> RuntimePrepar
     if record.state != "prepared":
         raise ValueError("Runtime preparation is unavailable")
     return record
+
+
+def retained_cleanup_payload(target: Range, pin: RuntimePin | None) -> dict[str, Any] | None:
+    """Never rebuild accepted cleanup from a changed registry or guest selection."""
+
+    record = retained_preparation(target, pin)
+    if record is None:
+        return None
+    if record.state == "unprepared":
+        plan = target.range_config
+        if not isinstance(plan, dict):
+            raise ValueError(_UNAVAILABLE)
+        return build_raes_operation_input(
+            plan=plan,
+            bindings=RaesInputBindings(delivery=(), runtime_plugin=pin, runtime_preparation=record),
+            image_candidates={},
+            range_backend=target.range_backend,
+            instantiation_purpose=target.instantiation_purpose or None,
+            identity=RaesRangeIdentity(
+                target.id, str(target.resource_generation) if target.resource_generation else None
+            ),
+            egress_mode=target.egress_mode,
+        )
+    if target.request is None or record.source_operation_id is None:
+        raise ValueError(_UNAVAILABLE)
+    source = OperationInput.objects.get(
+        operation_id=record.source_operation_id,
+        request_id=target.request.request_id,
+    )
+    return preparation_cleanup_payload(source.envelope, record)

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from engine.models import OperationInput, WorkerHostObservation
 from shared.range_management import validate_management_targets
 from shared.worker_observations import validate_worker_observations
 
@@ -13,7 +14,6 @@ if TYPE_CHECKING:
 
 def persist_worker_observations(row: OperationResultInbox, payload: dict[str, object], runtime: Range) -> None:
     """Retain safe facts only for admitted targets and the accepted generation."""
-    from engine.models import OperationInput, WorkerHostObservation
 
     if row.operation_id != runtime.provisioner_operation_id:
         raise ValueError("Worker observation operation changed")

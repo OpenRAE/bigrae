@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import secrets
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
 from django.core.signing import Signer
@@ -11,14 +11,16 @@ from django.db import transaction
 from django.utils import timezone
 from pydantic import ValidationError as ModelValidationError
 
+from engine.models import PreparationAttempt, PreparationOperation
 from shared.artifact_preparation import PreparationWorkerResult
+from shared.credentials import resolve_local_credential
 from shared.exceptions import ValidationError
+from shared.operation_authority import credential_reference_from_record
 from shared.operation_envelope import canonical_payload_digest
 
 from ._preparation_adapters import _validate_grant, validate_pinned_adapter
-
-if TYPE_CHECKING:
-    from engine.models import PreparationAttempt, PreparationOperation
+from ._preparation_authority import reauthorize_preparation_initiator, verify_preparation_authority_binding
+from ._preparation_workload import verify_preparation_workload
 
 _DENIED = "The preparation worker grant is unavailable"
 
@@ -39,7 +41,6 @@ def attempt_token(attempt: PreparationAttempt) -> str:
 
 def _authenticate(operation_id: UUID, token: str) -> PreparationAttempt:
     """An opaque ID alone is not authority; unknown/foreign/expired grants agree."""
-    from engine.models import PreparationAttempt
 
     if not isinstance(token, str) or len(token) > 256:
         raise ValidationError(_DENIED)
@@ -76,9 +77,6 @@ def _verify_recorded_attempt(attempt: PreparationAttempt) -> None:
     if any(invalid):
         raise ValidationError(_DENIED)
     if operation.authority_kind:
-        from ._preparation_authority import verify_preparation_authority_binding
-        from ._preparation_workload import verify_preparation_workload
-
         verify_preparation_authority_binding(operation)
         try:
             verify_preparation_workload(attempt)
@@ -104,14 +102,9 @@ def _validate_active_authority(operation: PreparationOperation, *, authorize: bo
     if operation.state in {"cancelled", "failed", "available"} or not operation.adapter.grant.active:
         raise ValidationError(_DENIED)
     if operation.authority_kind:
-        from ._preparation_authority import reauthorize_preparation_initiator
-
         if authorize:
             reauthorize_preparation_initiator(operation)
         else:
-            from shared.credentials import resolve_local_credential
-            from shared.operation_authority import credential_reference_from_record
-
             original = credential_reference_from_record(operation)
             if resolve_local_credential(original) != original:
                 raise ValidationError(_DENIED)
@@ -135,7 +128,6 @@ def read_preparation_worker_input(operation_id: UUID, token: str) -> dict[str, A
 
 def record_preparation_worker_result(operation_id: UUID, token: str, payload: object) -> str:
     """Record a receipt, with role/generation/replay fences; never admit output."""
-    from engine.models import PreparationAttempt, PreparationOperation
 
     authenticated = _authenticate(operation_id, token)
     try:

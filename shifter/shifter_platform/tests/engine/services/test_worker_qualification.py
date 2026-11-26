@@ -50,7 +50,7 @@ def test_qualification_pins_host_identity_and_records_bounded_facts(apparatus, g
     def forbidden_management_access(*args, **kwargs):
         raise AssertionError("Portal must not access host-management secrets or SSH")
 
-    monkeypatch.setattr("engine.secrets.get_ssh_key", forbidden_management_access)
+    monkeypatch.setattr("engine.services._terminal.get_ssh_key", forbidden_management_access)
     monkeypatch.setattr(asyncssh, "connect", forbidden_management_access)
     result = qualify_disposable_worker(apparatus.credential, guest.worker.worker_id)
     assert result.daemon_identity == guest.observed["daemon_identity"]

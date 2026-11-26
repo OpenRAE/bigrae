@@ -4,17 +4,16 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.conf import settings
 from django.db import transaction
 from pydantic import TypeAdapter
 
+from engine.models import GcpRangeProject, RaesImageMapping
 from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
-from shared.authorization import AuthorizationRequest, TargetRef
-from shared.authorization.policy import require_authorization
-from shared.credentials import CredentialContext, resolve_credential_scope, resolve_current_credential
+from shared.authorization import TargetRef
+from shared.credentials import CredentialContext, resolve_credential_scope
 from shared.exceptions import ValidationError
 from shared.gcp_project_registration import (
     PROTECTED_IMAGE_ENV_NAMES,
@@ -23,16 +22,11 @@ from shared.gcp_project_registration import (
     configured_project_ids,
 )
 from shared.gcp_range_projects import GcpBaselineRef, ProjectID
-from shared.identity_scope import ResourceScope
-from shared.operation_authority import credential_reference_fields
-from shared.operation_envelope import canonical_payload_digest
 
-if TYPE_CHECKING:
-    from engine.models import GcpRangeProject
+from ._gcp_project_authority import require_project_administrator
+from ._gcp_project_operations import queue_project_registration
 
 _UNAVAILABLE = "Registered project is unavailable"
-_DENIED = "Project administration is not permitted"
-_ACTION = "installation.manage_cloud_authority"
 
 
 @dataclass(frozen=True, slots=True)
@@ -46,20 +40,6 @@ class GcpRangeProjectView:
     status: str
     failure_code: str
     in_use: bool
-
-
-def require_project_administrator(credential: CredentialContext) -> CredentialContext:
-    """Staff flags and scenario documents cannot grant installation authority."""
-    try:
-        current = resolve_current_credential(credential)
-        require_authorization(
-            AuthorizationRequest(
-                current.principal, _ACTION, TargetRef("installation"), ResourceScope("installation"), current.ceiling
-            )
-        )
-        return current
-    except Exception:  # noqa: BLE001  # current policy/proof failures are one bounded denial
-        raise PermissionError(_DENIED) from None
 
 
 def project_registration_input(row: GcpRangeProject) -> GcpProjectRegistrationInput:
@@ -84,7 +64,6 @@ def project_registration_input(row: GcpRangeProject) -> GcpProjectRegistrationIn
 
 def protected_project_ids() -> list[str]:
     """Deployment root and registered image stores cannot become scenario projects."""
-    from engine.models import RaesImageMapping
 
     projects = (str(getattr(settings, name, os.environ.get(name, "")) or "") for name in PROTECTED_PROJECT_ENV_NAMES)
     images = [os.environ.get(name, "") for name in PROTECTED_IMAGE_ENV_NAMES]
@@ -92,35 +71,10 @@ def protected_project_ids() -> list[str]:
     return configured_project_ids(projects, images)
 
 
-def project_authority_fields(current: CredentialContext, row: GcpRangeProject) -> dict[str, object]:
-    """Bind one original credential to the immutable operator assignment."""
-    return {
-        **credential_reference_fields(current),
-        "authority_kind": "principal",
-        "authority_action": _ACTION,
-        "authority_target_type": "installation",
-        "authority_target_uuid": None,
-        "authority_parent_type": "installation",
-        "authority_parent_uuid": None,
-        "authority_scope_kind": "installation",
-        "authority_account_uuid": None,
-        "authority_organization_uuid": None,
-        "authority_workspace_uuid": None,
-        "authority_owner_uuid": current.principal.uuid,
-        "authority_resource_uuid": row.pk,
-        "authority_binding_digest": canonical_payload_digest(
-            {"id": str(row.pk), "organization_uuid": str(row.organization_uuid), "project_id": row.project_id}
-        ),
-    }
-
-
 def register_gcp_range_project(
     credential: CredentialContext, organization_uuid: UUID, project_id: str
 ) -> GcpRangeProjectView:
     """Queue read-only baseline capture; never perform provider I/O in the portal."""
-    from engine.models import GcpRangeProject
-
-    from ._gcp_project_operations import queue_project_registration
 
     current = require_project_administrator(credential)
     try:
@@ -150,7 +104,6 @@ def list_gcp_range_projects(
     credential: CredentialContext, *, cursor: UUID | None = None
 ) -> tuple[tuple[GcpRangeProjectView, ...], UUID | None]:
     """Return one bounded installation-only page in stable opaque-ID order."""
-    from engine.models import GcpRangeProject
 
     require_project_administrator(credential)
     query = GcpRangeProject.objects.order_by("pk")
@@ -162,7 +115,6 @@ def list_gcp_range_projects(
 
 def disable_gcp_range_project(credential: CredentialContext, registration_id: UUID) -> GcpRangeProjectView:
     """Stop new allocation without erasing an existing range's cleanup authority."""
-    from engine.models import GcpRangeProject
 
     current = require_project_administrator(credential)
     with transaction.atomic():
@@ -178,9 +130,6 @@ def disable_gcp_range_project(credential: CredentialContext, registration_id: UU
 
 def retry_gcp_range_project(credential: CredentialContext, registration_id: UUID) -> GcpRangeProjectView:
     """Re-enable only after a fresh readback of the accepted original baseline."""
-    from engine.models import GcpRangeProject
-
-    from ._gcp_project_operations import queue_project_registration
 
     current = require_project_administrator(credential)
     with transaction.atomic():

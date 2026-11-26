@@ -474,6 +474,7 @@ See [disposable workers](shifter_platform/disposable-workers.md) for contracts, 
 The authoritative dependency map is
 [layer_imports.yaml](https://github.com/Brad-Edwards/bigrae/blob/dev/scripts/check_layer_imports/layer_imports.yaml),
 backed by `.importlinter` and model-boundary checks. The following is its reader's map.
+Inside `engine`, imports are at module level and the package has no import cycle (ADR-001-R5).
 
 | Package/root | Owns | Supported dependency seam |
 | --- | --- | --- |

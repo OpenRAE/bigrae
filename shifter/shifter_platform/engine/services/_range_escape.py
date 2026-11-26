@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from engine.models import Range, SubnetAllocation
 from shared.guest_probe import GuestProbeError, GuestProbeRequest, run_guest_probe
 
 
@@ -30,7 +31,6 @@ def get_range_membership(request_id: str) -> RangeMembership | None:
     allocations. Returns plain data so callers in other layers do not import the
     engine models.
     """
-    from engine.models import Range, SubnetAllocation
 
     range_obj = Range.objects.filter(request__request_id=request_id).order_by("-id").first()
     if range_obj is None:

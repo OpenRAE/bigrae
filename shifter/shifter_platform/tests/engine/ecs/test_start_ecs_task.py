@@ -27,7 +27,7 @@ class TestStartEcsTaskEnqueue:
     launcher worker instead of synchronously starting an ECS task."""
 
     def test_enqueues_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import _start_ecs_task
+        from engine.services._launch_starts import _start_ecs_task
 
         range_row = make_authorized_legacy_range()
         ref = _start_ecs_task(range_id=range_row.pk, user_id=range_row.user_id, command="provision")
@@ -41,7 +41,7 @@ class TestStartEcsTaskEnqueue:
         ecs_client.run_task.assert_not_called()
 
     def test_enqueues_destroy_for_a_destroying_range(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import _start_ecs_task
+        from engine.services._launch_starts import _start_ecs_task
 
         range_row = make_authorized_legacy_range(status=Range.Status.DESTROYING)
         _start_ecs_task(range_id=range_row.pk, user_id=range_row.user_id, command="destroy")
@@ -61,7 +61,7 @@ class TestStartEcsTaskConfigurationValidation:
     ECS security-group / subnet requirements no longer gate dispatch."""
 
     def test_returns_none_when_cluster_missing(self, aws_ecs_unconfigured, settings, ecs_client):
-        from engine.ecs import _start_ecs_task
+        from engine.services._launch_starts import _start_ecs_task
 
         settings.ENGINE_TASK_DEFINITION = "test-taskdef"
 
@@ -71,7 +71,7 @@ class TestStartEcsTaskConfigurationValidation:
         ecs_client.run_task.assert_not_called()
 
     def test_returns_none_when_task_definition_missing(self, aws_ecs_unconfigured, settings, ecs_client):
-        from engine.ecs import _start_ecs_task
+        from engine.services._launch_starts import _start_ecs_task
 
         settings.ENGINE_TASK_CLUSTER = "test-cluster"
 
@@ -98,7 +98,7 @@ class TestStartEcsTaskInputValidation:
         ],
     )
     def test_rejects_invalid_inputs(self, aws_ecs_configured, range_id, user_id, command, exc):
-        from engine.ecs import _start_ecs_task
+        from engine.services._launch_starts import _start_ecs_task
 
         with pytest.raises(exc):
             _start_ecs_task(range_id=range_id, user_id=user_id, command=command)
@@ -106,7 +106,7 @@ class TestStartEcsTaskInputValidation:
 
 class TestStartEcsTaskLogging:
     def test_logs_enqueue_on_success(self, aws_ecs_configured, ecs_client, caplog):
-        from engine.ecs import _start_ecs_task
+        from engine.services._launch_starts import _start_ecs_task
 
         range_row = make_authorized_legacy_range()
         with caplog.at_level(logging.INFO, logger="engine.ecs"):
@@ -115,7 +115,7 @@ class TestStartEcsTaskLogging:
         assert str(range_row.pk) in caplog.text
 
     def test_logs_warning_when_config_incomplete(self, aws_ecs_unconfigured, ecs_client, caplog):
-        from engine.ecs import _start_ecs_task
+        from engine.services._launch_starts import _start_ecs_task
 
         range_row = make_authorized_legacy_range()
         with caplog.at_level(logging.WARNING, logger="engine.ecs"):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID, uuid4
 
 from django.db import transaction
@@ -13,6 +13,7 @@ from django.db.models import Q
 from django.utils import timezone
 from shifter_adapter_sdk.runtime import PluginManifest
 
+from engine.models import RuntimePluginInstallation
 from shared.audit import (
     AuditAction,
     AuditEntityType,
@@ -23,9 +24,15 @@ from shared.audit import (
 )
 from shared.credentials import CredentialContext
 from shared.exceptions import ValidationError
+from workspaces.services import OrganizationAuthorizationError
 
-if TYPE_CHECKING:
-    from engine.models import RuntimePluginInstallation
+from ._runtime_plugin_authority import (
+    admit_plugin_authority,
+    current_plugin_credential,
+    fence_plugin_authority,
+    reauthorize_plugin_initiator,
+    validate_plugin_scope,
+)
 
 
 @dataclass(frozen=True)
@@ -51,9 +58,6 @@ class RuntimePluginPage:
 
 def _authorize(user: CredentialContext, organization_uuid: UUID) -> UUID:
     """Require active organization administration before reading or mutating plugins."""
-    from workspaces.services import OrganizationAuthorizationError
-
-    from ._runtime_plugin_authority import admit_plugin_authority, current_plugin_credential
 
     try:
         user = current_plugin_credential(user)
@@ -91,14 +95,10 @@ def install_runtime_plugin(
     No allowlist or operator grant is required. Acceptance is deliberately
     ``checking``; only a successful, current isolated probe can make it ready.
     """
-    from engine.models import RuntimePluginInstallation
-
-    from ._runtime_plugin_authority import current_plugin_credential, fence_plugin_authority
 
     user = current_plugin_credential(user)
 
     organization_uuid = _authorize(user, organization_uuid)
-    from ._runtime_plugin_authority import admit_plugin_authority
 
     authority = admit_plugin_authority(user, organization_uuid)
     try:
@@ -123,7 +123,6 @@ def install_runtime_plugin(
         if row.manifest_digest != manifest.digest:
             raise ValidationError("An installed version cannot change its executable identity; use a new version")
         fence_plugin_authority(user, authority)
-        from ._runtime_plugin_authority import validate_plugin_scope
 
         validate_plugin_scope(row, authority)
         if not created and credentials and credentials != row.registry_credentials:
@@ -137,15 +136,11 @@ def list_runtime_plugins(
     user: CredentialContext, organization_uuid: UUID, *, cursor: str | None = None
 ) -> RuntimePluginPage:
     """Page through installations owned by the authorized organization."""
-    from engine.models import RuntimePluginInstallation
-
-    from ._runtime_plugin_authority import current_plugin_credential
 
     user = current_plugin_credential(user)
 
     organization_uuid = _authorize(user, organization_uuid)
     query = RuntimePluginInstallation.objects.filter(organization_uuid=organization_uuid)
-    from ._runtime_plugin_authority import admit_plugin_authority
 
     fields = admit_plugin_authority(user, organization_uuid)
     query = query.filter(
@@ -186,9 +181,6 @@ def change_runtime_plugin(
     audit: RequestAudit | None = None,
 ) -> RuntimePluginView:
     """Retain executable identity through disable, retry and irreversible retirement."""
-    from engine.models import RuntimePluginInstallation
-
-    from ._runtime_plugin_authority import current_plugin_credential, fence_plugin_authority
 
     user = current_plugin_credential(user)
 
@@ -196,11 +188,6 @@ def change_runtime_plugin(
     if action not in {"disable", "retire", "retry", "enable"}:
         raise ValidationError("The plugin action is invalid")
     credentials = _retry_registry_credentials(registry_credentials, action)
-    from ._runtime_plugin_authority import (
-        admit_plugin_authority,
-        reauthorize_plugin_initiator,
-        validate_plugin_scope,
-    )
 
     fields = admit_plugin_authority(user, organization_uuid)
     snapshot = (

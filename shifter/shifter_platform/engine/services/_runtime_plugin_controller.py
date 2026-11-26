@@ -5,13 +5,13 @@ from __future__ import annotations
 import base64
 import json
 import logging
-from typing import TYPE_CHECKING
 
 from django.db import transaction
 from django.utils import timezone
 from shifter_adapter_sdk.runtime import InspectionInput, InspectionResult, PluginManifest, RuntimeInput
 from shifter_adapter_sdk.validation import ValidationInput
 
+from engine.models import RuntimePluginInstallation
 from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log
 from shared.cloud.exceptions import CloudTaskError
 from shared.cloud.kubernetes._client import load_kubernetes_api
@@ -25,8 +25,7 @@ from shared.cloud.runtime_plugins import (
 )
 from shared.exceptions import ValidationError
 
-if TYPE_CHECKING:
-    from engine.models import RuntimePluginInstallation
+from ._runtime_plugin_authority import reauthorize_plugin_initiator
 
 logger = logging.getLogger(__name__)
 
@@ -105,7 +104,6 @@ def _owned_secret(
 
 def reconcile_runtime_plugins(*, limit: int = 3) -> int:
     """Execute no plugin in this process; accept only current probe evidence."""
-    from engine.models import RuntimePluginInstallation
 
     if not 1 <= limit <= 20:
         raise ValueError("Invalid plugin reconciliation batch size")
@@ -124,8 +122,6 @@ def _reconcile(row: RuntimePluginInstallation) -> None:
         if manifest.digest != row.manifest_digest:
             raise ValueError("Stored plugin identity mismatch")
         if row.authority_kind:
-            from ._runtime_plugin_authority import reauthorize_plugin_initiator
-
             reauthorize_plugin_initiator(row)
         request = InspectionInput(
             protocol=manifest.protocol, phase="inspect", invocation_id=row.probe_id, manifest=manifest
@@ -169,11 +165,8 @@ def _observe_probe(row: RuntimePluginInstallation, request: InspectionInput) -> 
 
 def _record(row: RuntimePluginInstallation, state: str, failure_code: str) -> None:
     """Persist only current probe evidence under the installation row lock."""
-    from engine.models import RuntimePluginInstallation
 
     if state == "ready" and row.authority_kind:
-        from ._runtime_plugin_authority import reauthorize_plugin_initiator
-
         try:
             reauthorize_plugin_initiator(row)
         except (ValueError, ValidationError):

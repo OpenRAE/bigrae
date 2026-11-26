@@ -10,10 +10,26 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from shared.remote_access import (
+    OpenVpnBindingError,
+    bind_openvpn_realization,
+    parse_openvpn_binding,
+    parse_openvpn_capability,
+)
+
 if TYPE_CHECKING:
     from engine.models import OperationResultInbox, Range
 
 __all__ = ["bound_vpn_access"]
+
+
+class RaesRealizedAccessError(Exception):
+    """A realized access projection contradicts the immutable declaration (#1710).
+
+    A permanent contract violation, not a transient failure: the dispatcher
+    maps it to ``REJECTED_INVALID`` so the row is refused once rather than
+    retried forever against state that can never satisfy it.
+    """
 
 
 def bound_vpn_access(
@@ -25,14 +41,6 @@ def bound_vpn_access(
     range without one must report none; anything else is a permanent contract
     violation, refused once rather than retried.
     """
-    from shared.remote_access import (
-        OpenVpnBindingError,
-        bind_openvpn_realization,
-        parse_openvpn_binding,
-        parse_openvpn_capability,
-    )
-
-    from ._operation_apply_raes import RaesRealizedAccessError
 
     capability = range_obj.remote_access_capability
     if capability is None and realization is None:

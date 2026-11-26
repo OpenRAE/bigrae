@@ -50,7 +50,7 @@ _BACKEND = "gce"
 def _no_provider_dispatch(monkeypatch):
     """Patch the provider-facing seams so lifecycle tests emit no real dispatch."""
     monkeypatch.setattr(
-        "engine.services._range_by_request.destroy_range_by_request", lambda request_id: True, raising=True
+        "engine.services._warm_pool_retirement.destroy_range_by_request", lambda request_id: True, raising=True
     )
 
 
@@ -220,7 +220,7 @@ class TestRetire:
         def _boom(request_id):
             raise RuntimeError("dispatch down")
 
-        monkeypatch.setattr("engine.services._range_by_request.destroy_range_by_request", _boom, raising=True)
+        monkeypatch.setattr("engine.services._warm_pool_retirement.destroy_range_by_request", _boom, raising=True)
         gen = _seed_generation()
         # Dispatch failure is not fatal: the row stays RETIRING for a later retry.
         assert retire_generation(gen) is True
@@ -301,7 +301,7 @@ class TestFinalize:
     def test_retiring_live_range_redispatches_destroy(self, monkeypatch):
         calls: list = []
         monkeypatch.setattr(
-            "engine.services._range_by_request.destroy_range_by_request",
+            "engine.services._warm_pool_retirement.destroy_range_by_request",
             lambda request_id: calls.append(request_id) or True,
             raising=True,
         )
@@ -313,7 +313,7 @@ class TestFinalize:
         def _boom(request_id):
             raise RuntimeError("destroy retry down")
 
-        monkeypatch.setattr("engine.services._range_by_request.destroy_range_by_request", _boom, raising=True)
+        monkeypatch.setattr("engine.services._warm_pool_retirement.destroy_range_by_request", _boom, raising=True)
         gen = _seed_generation(state=WarmRangeGeneration.State.RETIRING, range_status=Range.Status.PROVISIONING)
         # A failed re-dispatch is swallowed: the row stays RETIRING for a later pass.
         assert finalize_retiring_generations(_BUCKET) == 0
@@ -338,7 +338,7 @@ class TestEnqueue:
     def test_enqueue_range_activation_dispatches(self, monkeypatch):
         seen: list = []
         monkeypatch.setattr(
-            "engine.launch_intents.enqueue_provisioner_launch",
+            "engine.services._warm_pool.enqueue_provisioner_launch",
             lambda command, **_kwargs: seen.append(command) or "intent-123",
             raising=True,
         )

@@ -33,6 +33,11 @@
         "checks": [
           "layer-imports"
         ]
+      },
+      {
+        "id": "ADR-001-R5",
+        "description": "All imports in shifter_platform/engine are at module level, and the engine package has no import cycle. Ruff PLC0415 rejects a function-local import under engine/**. The only exception is engine/apps.py, because Django imports the AppConfig module before the model registry is ready and AppConfig.ready() must defer its import. The .importlinter acyclic_siblings contract rejects a cycle between the children of any engine package, and its forbidden contracts reject a module that imports its own package facade (engine, engine.services, engine.models, engine.ecs, engine.handlers). The engine root package exports nothing; engine.services is the public interface.",
+        "checks": []
       }
     ],
     "exceptions": [],
@@ -43,6 +48,8 @@
       "agent-policy"
     ],
     "evidence": [
+      "shifter/shifter_platform/pyproject.toml",
+      "docs/architecture/engine-import-design-2865.md",
       "scripts/check_layer_imports/layer_imports.yaml",
       "scripts/check_layer_imports/check_layer_imports.py",
       "scripts/adr_guard/adr_guard.py",
@@ -2740,7 +2747,7 @@
       "docs/_deprecated/architecture/raes-gce-shared-vpc-subnet-allocation-preflight-2219.md",
       "docs/_deprecated/architecture/gcp-provisioner-launch-boundary-preflight-1518.md",
       "docs/_deprecated/architecture/range-event-delivery-preflight-476.md",
-      "shifter/shifter_platform/engine/launch_intents.py",
+      "shifter/shifter_platform/engine/services/_launch_intents.py",
       "shifter/shifter_platform/engine/models",
       "shifter/shifter_platform/engine/services",
       "shifter/shifter_platform/shared",
@@ -4034,7 +4041,7 @@
       "shifter/shifter_platform/ctf/services/range/lifecycle.py",
       "shifter/shifter_platform/ctf/bridges.py",
       "shifter/shifter_platform/cms/services/_range_lifecycle.py",
-      "shifter/shifter_platform/engine/launch_intents.py",
+      "shifter/shifter_platform/engine/services/_launch_intents.py",
       "shifter/shifter_platform/engine/models/_operation_io.py",
       "shifter/shifter_platform/engine/services/_operation_apply.py",
       "shifter/shifter_platform/shared/audit",
@@ -4248,7 +4255,7 @@
       "shifter/shifter_platform/engine/services/_receipt.py",
       "shifter/shifter_platform/shared/receipt_validation.py",
       "docs/dev/ctf-signed-receipt-validators.md",
-      "shifter/shifter_platform/engine/launch_intents.py"
+      "shifter/shifter_platform/engine/services/_launch_intents.py"
     ]
   },
   {
@@ -4305,8 +4312,8 @@
       "docs/_deprecated/architecture/public-range-operations-preflight-2086.md",
       "docs/features/retry-safe-range-operations.md",
       "docs/technical/shifter_platform/retry-safe-range-operations.md",
-      "shifter/shifter_platform/engine/launch_intents.py",
-      "shifter/shifter_platform/engine/operation_inputs.py",
+      "shifter/shifter_platform/engine/services/_launch_intents.py",
+      "shifter/shifter_platform/engine/services/_operation_inputs.py",
       "shifter/shifter_platform/engine/models",
       "shifter/shifter_platform/shared/operation_envelope.py",
       "shifter/shifter_platform/mission_control/api",

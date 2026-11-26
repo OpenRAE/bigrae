@@ -3,23 +3,19 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from engine.models import Range
-
 from collections.abc import Mapping
 from uuid import UUID
 
 from django.core.exceptions import ObjectDoesNotExist
 
+from engine.models import Range, RangeEventOutbox
 from shared.log_sanitize import safe_log_value
 from shared.messages.events import EVENT_TYPE_STATUS_UPDATED
 from shared.operation_envelope import canonical_payload_digest
 
 from ._common import EngineError
-from ._launch_authority import range_runtime_binding_digest
 from ._range_authority import RangeAuthorityProjection, project_range_authority
+from ._runtime_binding_digest import range_runtime_binding_digest
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +38,6 @@ def range_status_authority_fields(row: Range) -> dict[str, object]:
 
 def verified_range_status_projection(event: Mapping[str, object]) -> RangeAuthorityProjection | None:
     """A callback mirrors accepted facts; it cannot authorize a runtime mutation."""
-    from engine.models import Range
 
     try:
         range_id = _verified_callback_range_id(event)
@@ -71,7 +66,6 @@ def verified_range_status_projection(event: Mapping[str, object]) -> RangeAuthor
 
 def _verified_callback_range_id(event: Mapping[str, object]) -> int:
     """Accept only the canonical callback bytes retained in the native outbox."""
-    from engine.models import RangeEventOutbox
 
     if event.get("event_type") != EVENT_TYPE_STATUS_UPDATED or type(event.get("range_id")) is not int:
         raise ValueError(_RANGE_CALLBACK_UNAVAILABLE)

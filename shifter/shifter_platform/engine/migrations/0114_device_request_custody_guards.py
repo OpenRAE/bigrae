@@ -2,6 +2,8 @@
 
 from django.db import migrations
 
+from engine.field_encryption import transform_spec
+
 
 def install_guard(apps, schema_editor):
     vendor = schema_editor.connection.vendor
@@ -42,8 +44,6 @@ def remove_guard(apps, schema_editor):
 
 
 def encrypt_native_specs(apps, schema_editor):
-    from engine.field_encryption import transform_spec
-
     alias = schema_editor.connection.alias
     for model_name in ("Instance", "App"):
         model = apps.get_model("engine", model_name)

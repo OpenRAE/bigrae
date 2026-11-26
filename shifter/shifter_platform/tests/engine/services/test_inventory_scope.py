@@ -57,7 +57,7 @@ def test_scoped_inventory_custody_cannot_be_rewritten_by_bulk_update(content_act
 
 def test_range_input_candidates_exclude_other_customers_and_legacy_inventory(principal_range):
     from engine.models import RaesImageMapping
-    from engine.operation_inputs import _raes_image_candidates
+    from engine.services._operation_inputs import _raes_image_candidates
     from tests.engine.test_operation_input_raes import _plan
 
     fields = {"provider": "gce", "source_name": "kali", "image_ref": "projects/synthetic/global/images/base"}

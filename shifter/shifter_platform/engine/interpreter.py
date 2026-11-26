@@ -10,17 +10,23 @@ import logging
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from django.contrib.auth import get_user_model
 from django.db import transaction
 
+from engine.models import App, Instance, Request, Subnet
+from management.services import human_principal_user_id, resolve_principal
+from shared.enums import RequestType, ResourceStatus
 from shared.log_sanitize import safe_log_value
+from shared.schemas import InstanceSpec, RangeSpec
+from shared.schemas import RequestSpec as RequestSpecClass
 from shared.schemas.persistence import wrap_persisted_spec
+from workspaces.services import resolve_range_scope_binding
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
 
-    from engine.models import App, Instance, Request, Subnet
     from shared.identity_scope import PrincipalRef, ResourceScope
-    from shared.schemas import InstanceSpec, NGFWAppSpec, RangeSpec, RequestSpec, SubnetSpec
+    from shared.schemas import NGFWAppSpec, RequestSpec, SubnetSpec
 
 
 logger = logging.getLogger(__name__)
@@ -45,10 +51,6 @@ def interpret(
         ValueError: If request_spec fails validation.
         User.DoesNotExist: If user_id doesn't map to a Django user.
     """
-
-    from engine.models import Request
-    from shared.schemas import InstanceSpec, RangeSpec
-    from shared.schemas import RequestSpec as RequestSpecClass
 
     if not isinstance(request_spec, RequestSpecClass):
         raise TypeError(f"Expected RequestSpec, got {type(request_spec).__name__}")
@@ -90,8 +92,6 @@ def interpret(
 
 def _infer_request_type(request_spec: RequestSpec) -> str:
     """Infer RequestType from the items in the spec."""
-    from shared.enums import RequestType
-    from shared.schemas import InstanceSpec, RangeSpec
 
     for item in request_spec.items:
         if isinstance(item, RangeSpec):
@@ -111,8 +111,6 @@ def _interpret_instance(instance_spec: InstanceSpec, request: Request, subnet: S
         request: Parent Request this instance belongs to.
         subnet: Optional Subnet this instance belongs to (for Range instances).
     """
-    from engine.models import Instance
-    from shared.enums import ResourceStatus
 
     # Generate UUID if not provided
     instance_uuid = instance_spec.uuid or str(uuid4())
@@ -145,8 +143,6 @@ def _interpret_instance(instance_spec: InstanceSpec, request: Request, subnet: S
 
 def _interpret_ngfw_app(ngfw_app_spec: NGFWAppSpec, instance: Instance, request: Request) -> App:
     """Create App from an NGFWAppSpec."""
-    from engine.models import App
-    from shared.enums import ResourceStatus
 
     # Use app_id from spec if provided, otherwise model generates default
     app_kwargs = {
@@ -182,8 +178,6 @@ def _interpret_range(range_spec: RangeSpec, request: Request) -> None:
 
 def _interpret_subnet(subnet_spec: SubnetSpec, request: Request) -> Subnet:
     """Create Subnet and its Instances from a SubnetSpec."""
-    from engine.models import Subnet
-    from shared.enums import ResourceStatus
 
     # Use UUID from spec if provided
     subnet_uuid = subnet_spec.uuid or str(uuid4())
@@ -215,14 +209,10 @@ def _request_custody(
     request_spec: RequestSpec, principal: PrincipalRef | None, resource_scope: ResourceScope | None
 ) -> tuple[User | None, dict[str, object]]:
     """Resolve a real request owner and customer ancestry before opening SQL locks."""
-    from django.contrib.auth import get_user_model
 
     user_model = get_user_model()
     fields = {}
     if principal is not None:
-        from management.services import human_principal_user_id, resolve_principal
-        from workspaces.services import resolve_range_scope_binding
-
         if resource_scope is None:
             raise ValueError("Request scope unavailable")
         owner = resolve_principal(principal)

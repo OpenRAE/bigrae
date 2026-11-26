@@ -6,8 +6,12 @@ from uuid import UUID
 
 from django.db import transaction
 
+from engine.models import DisposableWorker
 from shared.authorization import HierarchyRelationshipChange
 from shared.authorization.port import configured_authorization_provider
+
+from ._range_authority import project_range_authority
+from ._worker_custody import _lock_worker
 
 if TYPE_CHECKING:
     from ._range_authority import RangeAuthorityProjection
@@ -20,10 +24,6 @@ def publish_worker_relationships(worker_id: UUID) -> None:
     Store/model and immutable SQL custody fence every retry. There is no caller
     permission derived from the experiment reference or from a local fallback.
     """
-    from engine.models import DisposableWorker
-
-    from ._range_authority import project_range_authority
-    from ._worker_retirement import _lock_worker
 
     try:
         provider = configured_authorization_provider()
@@ -69,8 +69,6 @@ def publish_worker_relationships(worker_id: UUID) -> None:
 
 def _confirm_publication(worker_id: UUID, snapshot: RangeAuthorityProjection, store_id: str, model_id: str) -> None:
     """Commit primary readback only while original SQL custody and provider pins agree."""
-    from ._range_authority import project_range_authority
-    from ._worker_retirement import _lock_worker
 
     with transaction.atomic():
         worker = _lock_worker(worker_id)

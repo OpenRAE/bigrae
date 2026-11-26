@@ -3,33 +3,38 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from engine.models import ProvisionerLaunchIntent, Range, RangeAuthorityChange
 from uuid import UUID
 
 from django.db import transaction
 
+from engine.ecs._config import _get_engine_task_config
+from engine.models import (
+    InterruptState,
+    OperationResultDisposition,
+    OperationResultInbox,
+    ProvisionerLaunchIntent,
+    Range,
+    RangeAuthorityChange,
+    WarmRangeGeneration,
+)
+from engine.services._launch_intents import _enqueue_admitted_provisioner_launch
+from engine.worker_retention import fence_worker_retirement
 from shared.audit import AuditActorType, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.authorization import TargetRef
 from shared.credentials import CredentialContext
+from shared.operation_authority import credential_reference_from_record
+from shared.operation_results import ResultStep
 from shared.raes.runtime_target import is_raes_provisioning_plan
 
+from ._failed_cleanup_task import retire_failed_cleanup_task
+from ._launch_authority import admit_launch_authority, assert_admitted_launch_binding
+from ._launch_cleanup_authority import prepare_cleanup_authority
+from ._prepared_range_lifecycle import PreparedRangeLifecycle as PreparedRangeLifecycle
+from ._principal_cancellation import commit_range_cancellation
+from ._range_authority_history import cleanup_origin_record, current_range_cleanup_origin
+from ._receipt import _revoke_receipt_verifier_for_range
+
 _RANGE_OPERATION_UNAVAILABLE = "Range operation unavailable"
-
-
-@dataclass(frozen=True, slots=True)
-class PreparedRangeLifecycle:
-    """In-process owning-service facts; never an HTTP or worker credential."""
-
-    request_id: UUID
-    operation: str
-    native_id: int
-    status: str
-    authority: tuple[tuple[str, object], ...]
-    credential: CredentialContext
 
 
 def prepare_range_lifecycle(
@@ -41,10 +46,6 @@ def prepare_range_lifecycle(
     authority_target: TargetRef | None = None,
 ) -> PreparedRangeLifecycle:
     """Resolve the actual range and common action without holding row locks."""
-    from engine.ecs._config import _get_engine_task_config
-    from engine.models import Range
-
-    from ._launch_authority import admit_launch_authority
 
     if operation not in {"pause", "resume", "destroy", "cancel"} or _get_engine_task_config() is None:
         raise ValueError(_RANGE_OPERATION_UNAVAILABLE)
@@ -77,8 +78,6 @@ def commit_prepared_range_lifecycle(prepared: PreparedRangeLifecycle) -> bool:
     }:
         raise ValueError(_RANGE_OPERATION_UNAVAILABLE)
     if prepared.operation == "cancel":
-        from ._principal_cancellation import commit_range_cancellation
-
         return commit_range_cancellation(prepared)
     if prepared.operation == "destroy":
         return _commit_destroy(prepared)
@@ -89,18 +88,12 @@ def _commit_destroy(
     prepared: PreparedRangeLifecycle, *, _verification_retry: bool = False, _failed_task_retry: bool = False
 ) -> bool:
     """Commit only the admitted native destruction generation and its durable queue."""
-    from engine.launch_intents import _enqueue_admitted_provisioner_launch
-    from engine.models import Range
-
-    from ._launch_authority import assert_admitted_launch_binding
-    from ._receipt import _revoke_receipt_verifier_for_range
 
     fields = dict(prepared.authority)
     with transaction.atomic():
         row = Range.objects.select_for_update(of=("self",)).select_related("request").get(pk=prepared.native_id)
         assert_admitted_launch_binding(fields, row)
         _require_prepared_lifecycle_row(row, prepared)
-        from engine.worker_retention import fence_worker_retirement
 
         fence_worker_retirement(row, admit=True)
         if row.status == "destroyed" and not _reset_unverified_destroy(row, fields, _verification_retry):
@@ -162,12 +155,6 @@ def _reset_unverified_destroy(row: Range, fields: Mapping[str, object], verifica
 
 def prepare_system_range_cleanup(request_id: UUID) -> PreparedRangeLifecycle:
     """Derive bounded teardown from an existing admitted generation, never an absent actor."""
-    from engine.ecs._config import _get_engine_task_config
-    from engine.models import Range
-    from shared.operation_authority import credential_reference_from_record
-
-    from ._launch_cleanup_authority import prepare_cleanup_authority
-    from ._range_authority_history import current_range_cleanup_origin
 
     row = Range.objects.select_related("request").get(request__request_id=request_id)
     if _get_engine_task_config() is None or row.owner_principal_uuid is None:
@@ -192,7 +179,6 @@ def _cleanup_needs_cancellation(
     row: Range, fields: Mapping[str, object], origin: ProvisionerLaunchIntent | RangeAuthorityChange
 ) -> bool:
     """Distinguish a live provisioner from a safely quiescent retained generation."""
-    from engine.models import InterruptState
 
     if row.status in {"pending", "provisioning"}:
         return not (_is_undispatched_cleanup(row, fields) or _is_quiescent_warm_claim_cleanup(row, fields))
@@ -208,7 +194,6 @@ def _cleanup_origin_for_fields(
     fields: Mapping[str, object],
 ) -> ProvisionerLaunchIntent | RangeAuthorityChange | None:
     """Resolve only a native UUID retained in server-created cleanup fields."""
-    from ._range_authority_history import cleanup_origin_record
 
     identifier = fields.get("cleanup_origin_operation_uuid")
     return cleanup_origin_record(identifier if isinstance(identifier, UUID) else None)
@@ -216,14 +201,6 @@ def _cleanup_origin_for_fields(
 
 def _is_quiescent_warm_claim_cleanup(row: Range, fields: Mapping[str, object]) -> bool:
     """A claim crash before activation has only a completed quarantine producer."""
-    from engine.models import (
-        OperationResultDisposition,
-        OperationResultInbox,
-        ProvisionerLaunchIntent,
-        RangeAuthorityChange,
-        WarmRangeGeneration,
-    )
-    from shared.operation_results import ResultStep
 
     origin = _cleanup_origin_for_fields(fields)
     if (
@@ -264,7 +241,6 @@ def _is_quiescent_warm_claim_cleanup(row: Range, fields: Mapping[str, object]) -
 
 def _is_undispatched_cleanup(row: Range, fields: Mapping[str, object]) -> bool:
     """Only a retained creation receipt can clean a generation never queued."""
-    from engine.models import RangeAuthorityChange
 
     origin = _cleanup_origin_for_fields(fields)
     return bool(
@@ -279,10 +255,6 @@ def _is_undispatched_cleanup(row: Range, fields: Mapping[str, object]) -> bool:
 
 def _commit_pause_resume(prepared: PreparedRangeLifecycle) -> bool:
     """Atomically commit a previously admitted pause or resume against unchanged runtime custody."""
-    from engine.launch_intents import _enqueue_admitted_provisioner_launch
-    from engine.models import Range
-
-    from ._launch_authority import assert_admitted_launch_binding
 
     required, target, settled = (
         ("ready", "pausing", "paused") if prepared.operation == "pause" else ("paused", "resuming", "ready")
@@ -323,7 +295,6 @@ def _commit_pause_resume(prepared: PreparedRangeLifecycle) -> bool:
 
 def _destroy_already_queued(row: Range, fields: dict[str, object], *, failed_task_retry: bool = False) -> bool:
     """Retain a queued teardown generation while allowing recorded cleanup to replace ordinary dispatch."""
-    from engine.models import ProvisionerLaunchIntent
 
     existing = (
         ProvisionerLaunchIntent.objects.filter(operation_id=row.provisioner_operation_id).first()
@@ -334,8 +305,6 @@ def _destroy_already_queued(row: Range, fields: dict[str, object], *, failed_tas
     if not failed_task_retry:
         return queued or (existing is not None and existing.authority_kind == "cleanup")
     if not queued and existing is not None and existing.authority_kind == "cleanup":
-        from ._failed_cleanup_task import retire_failed_cleanup_task
-
         queued = not retire_failed_cleanup_task(existing)
         if not queued:
             # The exact failed workload is quiescent. Preserve its immutable

@@ -5,25 +5,26 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from engine.models import ProvisionerLaunchIntent, Range, RangeAuthorityChange, WarmRangeGeneration
+    from engine.models import Range
 
 from uuid import UUID
 
+from engine.models import ProvisionerLaunchIntent, RangeAuthorityChange, WarmRangeGeneration
 from shared.authorization import TargetRef
 from shared.authorization.policy import scope_parent
 from shared.credentials import CredentialContext
 from shared.operation_authority import credential_reference_fields
 from shared.raes.runtime_target import is_raes_provisioning_plan
 
-from ._launch_authority import range_runtime_binding_digest
 from ._range_authority import RangeAuthorityProjection, project_range_authority
+from ._range_creation_origin import _installation_creation_authority
+from ._runtime_binding_digest import range_runtime_binding_digest
 
 
 def record_range_authority_change(
     row: Range, credential: CredentialContext, operation: str, previous_digest: str
 ) -> None:
     """Retain original custody as bounded cleanup evidence after an authorized move."""
-    from engine.models import RangeAuthorityChange
 
     if row.request is None:
         raise ValueError("Range custody unavailable")
@@ -75,7 +76,6 @@ def _change_action_target(
 
 def lock_warm_range_creation(request_id: UUID) -> WarmRangeGeneration:
     """Serialize creation with retirement before a native runtime can exist."""
-    from engine.models import WarmRangeGeneration
 
     generation = WarmRangeGeneration.objects.select_for_update().get(request_id=request_id)
     if (
@@ -89,9 +89,6 @@ def lock_warm_range_creation(request_id: UUID) -> WarmRangeGeneration:
 
 def _record_warm_creation(row: Range, credential: CredentialContext) -> None:
     """Bind the exact service-owned generation to its retained creation receipt."""
-    from engine.models import RangeAuthorityChange, WarmRangeGeneration
-
-    from ._principal_range_create import _installation_creation_authority
 
     if (
         row.request is None
@@ -121,7 +118,6 @@ def _record_warm_creation(row: Range, credential: CredentialContext) -> None:
 
 def cleanup_origin_record(identifier: UUID | None) -> ProvisionerLaunchIntent | RangeAuthorityChange | None:
     """Resolve one retained native operation or authority change as cleanup evidence."""
-    from engine.models import ProvisionerLaunchIntent, RangeAuthorityChange
 
     if identifier is None:
         return None
@@ -133,7 +129,6 @@ def cleanup_origin_record(identifier: UUID | None) -> ProvisionerLaunchIntent | 
 
 def current_range_cleanup_origin(row: Range) -> ProvisionerLaunchIntent | RangeAuthorityChange | None:
     """Select cleanup evidence matching the current runtime generation and custody."""
-    from engine.models import ProvisionerLaunchIntent
 
     if row.resource_generation is None:
         return None

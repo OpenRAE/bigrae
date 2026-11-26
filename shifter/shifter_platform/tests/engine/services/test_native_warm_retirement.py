@@ -449,7 +449,6 @@ def test_completed_activation_cannot_be_retired_from_stale_claim_observation(
 def test_queued_warm_operation_is_interrupted_through_real_sdk_absence(
     warm_runtime, monkeypatch, django_user_model, live_session_credential, activation
 ):
-    from engine.launch_interrupt import drain_due_interrupts
     from engine.models import ProvisionerLaunchIntent, WarmRangeGeneration
     from engine.services import (
         dispatch_created_raes_range,
@@ -459,6 +458,7 @@ def test_queued_warm_operation_is_interrupted_through_real_sdk_absence(
         retire_generation,
     )
     from engine.services._launch_authority import authorize_launch_authority
+    from engine.services._launch_interrupt_convergence import drain_due_interrupts
     from shared.cloud.kubernetes import KubernetesTaskRunner
 
     case = warm_runtime

@@ -5,15 +5,21 @@ from __future__ import annotations
 import logging
 from contextlib import suppress
 from datetime import timedelta
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:
-    from engine.models import OperationInput, RuntimePluginInstallation, RuntimePluginInvocation
+from typing import Any
+from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
 from shifter_adapter_sdk.runtime import RuntimeInput, RuntimePlan
 
+from engine.models import (
+    InterruptState,
+    OperationInput,
+    ProvisionerLaunchIntent,
+    Range,
+    RuntimePluginInstallation,
+    RuntimePluginInvocation,
+)
 from shared.cloud.runtime_plugins import interrupt_plugin, launch_plugin, observe_plugin
 from shared.operation_envelope import validate_operation_envelope
 from shared.raes.operation_input import RaesOperationInput, parse_raes_operation_input
@@ -35,7 +41,6 @@ logger = logging.getLogger(__name__)
 
 def queue_runtime_plugin_plans(envelope: dict[str, Any]) -> None:
     """Called in the launch transaction; never imports the installed distribution."""
-    from engine.models import RuntimePluginInvocation
 
     if (envelope["resource"], envelope["operation"]) != ("raes-range", "provision"):
         return
@@ -46,7 +51,6 @@ def queue_runtime_plugin_plans(envelope: dict[str, Any]) -> None:
         return
     if parsed.range_backend not in {"gce", "ec2"}:
         raise ValueError("Runtime plugins are not supported by this range backend")
-    from uuid import UUID
 
     requests = runtime_plugin_requests(
         parsed.runtime_plugin,
@@ -76,7 +80,6 @@ def queue_runtime_plugin_plans(envelope: dict[str, Any]) -> None:
 
 def _retained_for_operation(parsed: RaesOperationInput, envelope: dict[str, Any]) -> RuntimePreparation | None:
     """Reserve enough transport budget even for cancellation before preparation."""
-    from engine.models import Range
 
     pin = parsed.runtime_plugin
     if pin is None or "provision.prepare" not in pin.manifest.capabilities:
@@ -107,7 +110,6 @@ def _authorized_request(
     row: RuntimePluginInvocation,
 ) -> tuple[RuntimeInput, RuntimePluginInstallation, dict[str, RuntimeFileBinding]]:
     """Reconstruct the authorized request from durable operation and executable pins."""
-    from engine.models import InterruptState, OperationInput, ProvisionerLaunchIntent, Range, RuntimePluginInstallation
 
     intent = ProvisionerLaunchIntent.objects.get(operation_id=row.operation_id)
     if intent.interrupt_state != InterruptState.NONE:
@@ -145,7 +147,6 @@ def _verify_invocation(row: RuntimePluginInvocation, requests: tuple[RuntimeInpu
 
 def reconcile_runtime_plugin_operations(*, limit: int = 6) -> int:
     """Reconcile a bounded batch of pending isolated planning invocations."""
-    from engine.models import RuntimePluginInvocation
 
     if not 1 <= limit <= 30:
         raise ValueError("Invalid plugin reconciliation batch size")
@@ -243,7 +244,6 @@ def _persist_observation(
     approval: RuntimePreparation | None,
 ) -> None:
     """Commit accepted mapping and planned projection under the same generation lock."""
-    from engine.models import Range, RuntimePluginInvocation
 
     with transaction.atomic():
         target = Range.objects.select_for_update().filter(request__request_id=row.request_id).first()

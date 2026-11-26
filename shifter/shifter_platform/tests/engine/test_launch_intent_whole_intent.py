@@ -31,8 +31,8 @@ def _provisioning_range(request_id: str, range_config: dict) -> None:
 
 
 def test_reenqueue_with_changed_intent_conflicts() -> None:
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import Range
+    from engine.services._launch_intents import enqueue_provisioner_launch
 
     request_id = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
     _provisioning_range(request_id, {"nodes": [{"name": "a"}]})
@@ -47,8 +47,8 @@ def test_reenqueue_with_changed_intent_conflicts() -> None:
 
 
 def test_reenqueue_with_unchanged_intent_reuses() -> None:
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import ProvisionerLaunchIntent
+    from engine.services._launch_intents import enqueue_provisioner_launch
 
     request_id = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"
     _provisioning_range(request_id, {"nodes": [{"name": "a"}]})

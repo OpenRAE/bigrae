@@ -18,9 +18,11 @@ from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
-if TYPE_CHECKING:
-    from engine.models import ProvisionerLaunchIntent
+from engine.models import CleanupVerificationOutcome, ProvisionerLaunchIntent, Range
 
+from ._cleanup_verification import latest_cleanup_verification
+
+if TYPE_CHECKING:
     from ._cleanup_verification import CleanupVerificationView
 
 __all__ = [
@@ -83,7 +85,6 @@ def _absent_outcome(rid: UUID) -> RangeCleanupOutcome:
 
 def _classify_with_verification(view: CleanupVerificationView, obligations: list[CleanupObligation]) -> str:
     """Classify cleanup from inventory/readback evidence and append residual obligations."""
-    from engine.models import CleanupVerificationOutcome
 
     if view.outcome == CleanupVerificationOutcome.VERIFIED_ABSENT.value:
         return CLEANUP_VERIFIED_TERMINAL
@@ -162,9 +163,6 @@ def _append_dispatch_obligations(
 
 def project_range_cleanup_outcome(request_id: str | UUID) -> RangeCleanupOutcome:
     """Project the truthful cleanup outcome for a request's range from durable state."""
-    from engine.models import ProvisionerLaunchIntent, Range
-
-    from ._cleanup_verification import latest_cleanup_verification
 
     rid = UUID(str(request_id))
     row = Range.objects.filter(request__request_id=rid).only("status", "provisioner_operation_id").first()

@@ -11,11 +11,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
-if TYPE_CHECKING:
-    from engine.models import ProvisionerLaunchIntent, Range
+from django.db import transaction
+
+from engine.models import CleanupVerificationOutcome, ProvisionerLaunchIntent, Range, RangeCleanupVerification
+
+from ._launch_authority import assert_launch_authority_binding
 
 __all__ = [
     "CleanupVerificationView",
@@ -38,7 +41,6 @@ class CleanupVerificationView:
 
 def latest_cleanup_verification(request_id: str | UUID) -> CleanupVerificationView | None:
     """Return the most recent cleanup verification for a request, or ``None``."""
-    from engine.models import RangeCleanupVerification
 
     row = RangeCleanupVerification.objects.filter(request_id=UUID(str(request_id))).order_by("-created_at").first()
     if row is None:
@@ -53,7 +55,6 @@ def latest_cleanup_verification(request_id: str | UUID) -> CleanupVerificationVi
 
 def is_cleanup_verified_absent(request_id: str | UUID) -> bool:
     """True only when the latest inventory/readback confirmed every owned resource absent."""
-    from engine.models import CleanupVerificationOutcome
 
     view = latest_cleanup_verification(request_id)
     return view is not None and view.outcome == CleanupVerificationOutcome.VERIFIED_ABSENT.value
@@ -61,9 +62,6 @@ def is_cleanup_verified_absent(request_id: str | UUID) -> bool:
 
 def is_range_generation_cleanup_verified_absent(request_id: UUID, cms_range_uuid: UUID, native_id: int) -> bool:
     """Require accepted destroy evidence for this exact native resource generation."""
-    from django.db import transaction
-
-    from engine.models import CleanupVerificationOutcome, Range, RangeCleanupVerification
 
     with transaction.atomic():
         runtime = (
@@ -95,7 +93,6 @@ def record_cleanup_verification(
     observed_at: datetime,
 ) -> None:
     """Append one scoped provider inventory/readback observation."""
-    from engine.models import RangeCleanupVerification
 
     RangeCleanupVerification.objects.create(
         request_id=UUID(str(request_id)),
@@ -109,9 +106,6 @@ def record_cleanup_verification(
 
 def _accepted_destroy_intent(runtime: Range, request_id: UUID, operation_id: UUID) -> ProvisionerLaunchIntent | None:
     """Bind cleanup readback to the exact accepted destroy of the locked generation."""
-    from engine.models import ProvisionerLaunchIntent
-
-    from ._launch_authority import assert_launch_authority_binding
 
     intent = ProvisionerLaunchIntent.objects.filter(operation_id=operation_id).first()
     if (

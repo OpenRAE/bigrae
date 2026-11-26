@@ -7,12 +7,13 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from engine.services._principal_lifecycle import PreparedRangeLifecycle
+    from ._prepared_range_lifecycle import PreparedRangeLifecycle
 
 from django.db import transaction
 
-from engine.launch_intents import request_provision_interrupt
 from engine.models import InterruptState, ProvisionerLaunchIntent, Range, RangeCancellationAuthority
+from engine.services._launch_intents import request_provision_interrupt
+from engine.worker_retention import fence_worker_retirement
 from shared.audit import AuditActorType, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 
 from ._launch_authority import assert_admitted_launch_binding, assert_launch_authority_binding
@@ -25,7 +26,6 @@ def commit_range_cancellation(prepared: PreparedRangeLifecycle) -> bool:
     with transaction.atomic():
         row = Range.objects.select_for_update(of=("self",)).select_related("request").get(pk=prepared.native_id)
         assert_admitted_launch_binding(fields, row)
-        from engine.worker_retention import fence_worker_retirement
 
         fence_worker_retirement(row, admit=True)
         if row.request is None or row.request.request_id != prepared.request_id or row.status != prepared.status:

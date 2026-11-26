@@ -13,6 +13,7 @@ from django.db.models import Q
 from django.utils import timezone
 from pydantic import ValidationError as ModelValidationError
 
+from engine.models import PreparationAdapter, PreparationAttempt, PreparationOperation, PreparationScopeLock
 from shared.audit import (
     AuditAction,
     AuditActorType,
@@ -26,21 +27,33 @@ from shared.credentials import CredentialContext, resolve_current_credential
 from shared.exceptions import ValidationError
 from shared.identity_scope import ResourceScope
 from shared.operation_envelope import canonical_payload_digest
+from shared.raes.artifact_inventory import build_artifact_supply
+from shared.raes.artifact_resolution import ArtifactResolutionStatus, resolve_artifact_requirement
+from shared.raes.manifest import shifter_artifact_mechanism_capabilities, shifter_backend_apparatus
 from shared.raes.preparation_contract import PreparationPackage, select_preparation
 from shared.raes.preparation_inputs import require_input_trust
 
 from ._preparation_adapters import (
+    _fence_preparation_actor,
     _locked_grant,
     _validate_grant,
     validate_pinned_adapter,
 )
+from ._preparation_authority import (
+    admit_preparation_authority,
+    authorize_preparation_credential,
+    preparation_authority_digest,
+    reauthorize_preparation_initiator,
+    verify_preparation_authority_binding,
+)
+from ._preparation_workload import preparation_workload
+from ._raes_image import list_backend_artifacts
 
 _NATIVE_PREPARATION_REQUIRED = "Preparation requires a live native credential"
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
 
-    from engine.models import PreparationAttempt, PreparationOperation
 
 _THE_ARTIFACT_PREPARATION_IS_UNAVAILABLE = "The artifact preparation is unavailable"
 
@@ -69,7 +82,6 @@ def request_artifact_preparation(
     Idempotency binds package/requirement, manifest, scope and cloud policy. A
     retry never changes an existing operation's inputs or executable identity.
     """
-    from engine.models import PreparationAdapter, PreparationOperation, PreparationScopeLock
 
     authority = _admit_preparation_request(user, scope)
     if not isinstance(user, CredentialContext) or scope is None:
@@ -81,8 +93,6 @@ def request_artifact_preparation(
         # private preparation history never becomes this requester's status URL.
         return PreparationView(None, "available", "", reused=True)
     with transaction.atomic():
-        from ._preparation_adapters import _fence_preparation_actor
-
         _fence_preparation_actor(user)
         initial = PreparationAdapter.objects.filter(pk=adapter_id).first()
         if initial is None:
@@ -112,8 +122,6 @@ def request_artifact_preparation(
             "package": package.model_dump(mode="json"),
         }
         if authority:
-            from ._preparation_authority import preparation_authority_digest
-
             payload["authority_digest"] = preparation_authority_digest(authority)
         if len(json.dumps(payload, separators=(",", ":")).encode("utf-8")) > 96 * 1024:
             raise ValidationError("The combined preparation input exceeds the worker message size limit")
@@ -143,11 +151,6 @@ def _has_admitted_availability(
     package: PreparationPackage, credential: CredentialContext, scope: ResourceScope
 ) -> bool:
     """Use the ordinary launch resolver; an inventory miss never starts work here."""
-    from shared.raes.artifact_inventory import build_artifact_supply
-    from shared.raes.artifact_resolution import ArtifactResolutionStatus, resolve_artifact_requirement
-    from shared.raes.manifest import shifter_artifact_mechanism_capabilities, shifter_backend_apparatus
-
-    from ._raes_image import list_backend_artifacts
 
     inventory = list_backend_artifacts(provider="gce", credential=credential, scope=scope)
     supply = build_artifact_supply(
@@ -168,7 +171,6 @@ def _has_admitted_availability(
 
 def _ensure_capacity(scope_digest: str, limit: int) -> None:
     """Caller holds the stable scope mutex across all grant versions."""
-    from engine.models import PreparationOperation
 
     occupied = (
         PreparationOperation.objects.filter(scope_digest=scope_digest)
@@ -183,14 +185,11 @@ def retry_artifact_preparation(
     user: User | CredentialContext, operation_id: UUID, *, audit: RequestAudit | None = None
 ) -> PreparationView:
     """Explicitly retry cleaned terminal work with a fresh authenticated attempt."""
-    from engine.models import PreparationAdapter, PreparationOperation, PreparationScopeLock
 
     if isinstance(user, CredentialContext):
         user = resolve_current_credential(user)
     initial = _mutation_snapshot(user, operation_id)
     if isinstance(user, CredentialContext):
-        from ._preparation_authority import reauthorize_preparation_initiator
-
         reauthorize_preparation_initiator(initial)
     with transaction.atomic():
         PreparationScopeLock.objects.select_for_update().get(pk=initial.scope_digest)
@@ -211,7 +210,6 @@ def retry_artifact_preparation(
         ):
             raise ValidationError("The artifact preparation cannot be retried before cleanup and current authorization")
         _ensure_capacity(row.scope_digest, configuration.max_concurrent_operations)
-        from engine.models import PreparationAttempt
 
         if PreparationAttempt.objects.filter(operation=row).exclude(phase="cleanup").count() > 93:
             raise ValidationError("The artifact preparation retry limit has been reached")
@@ -227,7 +225,6 @@ def new_preparation_attempt(
     operation: PreparationOperation, phase: str, *, evidence: dict[str, Any] | None = None
 ) -> PreparationAttempt:
     """Create one input/inbox identity inside the caller's operation transaction."""
-    from engine.models import PreparationAttempt
 
     now = timezone.now()
     attempt_id = uuid4()
@@ -240,8 +237,6 @@ def new_preparation_attempt(
     }
     workload = {}
     if operation.authority_kind:
-        from ._preparation_workload import preparation_workload
-
         workload = preparation_workload(payload, phase, operation.id, attempt_id)
     attempt = PreparationAttempt.objects.create(
         id=attempt_id,
@@ -262,7 +257,6 @@ def cancel_artifact_preparation(
     user: User | CredentialContext, operation_id: UUID, *, audit: RequestAudit | None = None
 ) -> PreparationView:
     """Fence admission first; cleanup is independently retried by the controller."""
-    from engine.models import PreparationOperation
 
     if isinstance(user, CredentialContext):
         user = resolve_current_credential(user)
@@ -281,7 +275,6 @@ def cancel_artifact_preparation(
 
 def get_artifact_preparation(user: User | CredentialContext, operation_id: UUID) -> PreparationView:
     """Scope private progress to the requester or explicit adapter administrator."""
-    from engine.models import PreparationOperation
 
     row = PreparationOperation.objects.filter(pk=operation_id).first()
     row = _authorize_operation(user, row)
@@ -290,7 +283,6 @@ def get_artifact_preparation(user: User | CredentialContext, operation_id: UUID)
 
 def _mutation_snapshot(user: User | CredentialContext, operation_id: UUID) -> PreparationOperation:
     """Resolve current policy before acquiring the native operation locks."""
-    from engine.models import PreparationOperation
 
     if not isinstance(user, CredentialContext):
         raise ValidationError(_NATIVE_PREPARATION_REQUIRED)
@@ -306,9 +298,6 @@ def _mutation_fence(
     if row is None or row.input_digest != snapshot.input_digest or row.adapter_id != snapshot.adapter_id:
         raise ValidationError(_THE_ARTIFACT_PREPARATION_IS_UNAVAILABLE)
     if isinstance(user, CredentialContext):
-        from ._preparation_adapters import _fence_preparation_actor
-        from ._preparation_authority import verify_preparation_authority_binding
-
         _fence_preparation_actor(user)
         verify_preparation_authority_binding(row)
         if row.input != snapshot.input:
@@ -323,8 +312,6 @@ def _authorize_operation(user: User | CredentialContext, row: PreparationOperati
     if row is None:
         raise ValidationError(_THE_ARTIFACT_PREPARATION_IS_UNAVAILABLE)
     if isinstance(user, CredentialContext):
-        from ._preparation_authority import authorize_preparation_credential
-
         authorize_preparation_credential(user, row)
         return row
     raise ValidationError(_THE_ARTIFACT_PREPARATION_IS_UNAVAILABLE)
@@ -385,8 +372,6 @@ def _admit_preparation_request(user: User | CredentialContext, scope: ResourceSc
     """Evaluate the existing preparation policy before reading private package input."""
     authority = {}
     if isinstance(user, CredentialContext):
-        from ._preparation_authority import admit_preparation_authority
-
         if scope is None:
             raise ValidationError("Preparation scope unavailable")
         authority = admit_preparation_authority(user, scope)

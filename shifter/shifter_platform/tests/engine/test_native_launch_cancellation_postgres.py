@@ -18,15 +18,15 @@ pytestmark = [pytest.mark.postgres, pytest.mark.django_db(transaction=True)]
 def test_cancellation_serializes_before_launch_or_failure(launch_actor, k8s_boundary, settlement):
     """Observe locks acquired by production services; never supply locks in the test."""
     from cms.services import create_raes_native_range
-    from engine.management.commands.drain_provisioner_launch_outbox import Command
     from engine.models import InterruptState, ProvisionerLaunchIntent, Range
+    from engine.services._launch_outbox import _record_failure, claim_next_intent, launch_intent
     from engine.services._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
 
     assert connection.vendor == "postgresql"
     actor = launch_actor
     launch = create_raes_native_range(actor.credential, actor.source.scenario_id, scope=actor.scope)
     runtime = Range.objects.get(request__request_id=launch.request_id)
-    claimed = Command._claim_next()
+    claimed = claim_next_intent()
     assert claimed is not None
     ProvisionerLaunchIntent.objects.filter(pk=claimed.pk).update(max_attempts=1)
     prepared = prepare_system_range_cleanup(launch.request_id)
@@ -76,9 +76,9 @@ def test_cancellation_serializes_before_launch_or_failure(launch_actor, k8s_boun
         try:
             with connection.execute_wrapper(observe_worker):
                 if settlement == "launch":
-                    Command()._launch(claimed)
+                    launch_intent(claimed)
                 else:
-                    Command()._record_failure(claimed, RuntimeError("synthetic dispatch failure"))
+                    _record_failure(claimed, RuntimeError("synthetic dispatch failure"))
         finally:
             connection.close()
 
@@ -104,13 +104,13 @@ def test_cancellation_serializes_before_launch_or_failure(launch_actor, k8s_boun
 def test_revocation_after_preflight_prevents_job_submission(launch_actor, k8s_boundary):
     """Revoke the real proof after its preflight transaction commits."""
     from cms.services import create_raes_native_range
-    from engine.management.commands.drain_provisioner_launch_outbox import Command
     from engine.models import Range
+    from engine.services._launch_outbox import claim_next_intent, launch_intent
     from management.models import ServiceCredentialAdmission
 
     actor = launch_actor
     create_raes_native_range(actor.credential, actor.source.scenario_id, scope=actor.scope)
-    claimed = Command._claim_next()
+    claimed = claim_next_intent()
     assert claimed is not None
     range_table = connection.ops.quote_name(Range._meta.db_table)
     revoked = []
@@ -127,7 +127,7 @@ def test_revocation_after_preflight_prevents_job_submission(launch_actor, k8s_bo
         return result
 
     with connection.execute_wrapper(observe_preflight):
-        Command()._launch(claimed)
+        launch_intent(claimed)
 
     assert revoked
     k8s_boundary.batch_api.create_namespaced_job.assert_not_called()

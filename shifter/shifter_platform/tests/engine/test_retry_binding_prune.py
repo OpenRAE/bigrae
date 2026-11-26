@@ -15,8 +15,8 @@ import pytest
 from django.utils import timezone
 
 from engine.models import CleanupVerificationOutcome, PublicOperationRetryBinding, RetryBindingStatus
-from engine.retry_binding import prune_expired_retry_bindings
 from engine.services import record_cleanup_verification
+from engine.services._retry_binding import prune_expired_retry_bindings
 
 pytestmark = pytest.mark.django_db
 

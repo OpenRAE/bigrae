@@ -5,6 +5,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 from uuid import UUID
 
+from engine.models import Range
 from shared.authorization import TargetRef, bind_authorization_descendant_resolver
 from shared.authorization.inventory import (
     AuthorizationDescendantResolutionError,
@@ -13,10 +14,11 @@ from shared.authorization.inventory import (
 )
 from shared.identity_scope import ResourceScope
 
+from ._range_authority import project_range_authority
+
 
 def list_authorization_range_uuids(workspace_ids: Sequence[int], limit: int) -> tuple[UUID, ...]:
     """Return at most ``limit`` range UUIDs for the exact workspace ids."""
-    from engine.models import Range
 
     if limit <= 0 or not workspace_ids:
         return ()
@@ -36,9 +38,6 @@ def list_authorization_range_uuids(workspace_ids: Sequence[int], limit: int) -> 
 
 def _authorization_event_range_targets(event_uuid: UUID, limit: int) -> tuple[TargetRef, ...]:
     """Include native event children with their independently verified ancestry."""
-    from engine.models import Range
-
-    from ._range_authority import project_range_authority
 
     result = []
     rows = (
@@ -59,9 +58,6 @@ def _authorization_event_range_targets(event_uuid: UUID, limit: int) -> tuple[Ta
 
 def _authorization_range_binding(range_uuid: UUID) -> tuple[TargetRef, ResourceScope]:
     """Return the exact SQL-owned parent and ancestry of one public range identity."""
-    from engine.models import Range
-
-    from ._range_authority import project_range_authority
 
     row = Range.objects.select_related("request").get(cms_range_uuid=range_uuid)
     if row.request is None:

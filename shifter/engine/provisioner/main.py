@@ -32,7 +32,7 @@ if __name__ == "__main__":
     # --operation-id is optional and carries the ADR-043 canonical operation
     # generation (#1834). The engine appends it as a trailing
     # `--operation-id <uuid>` pair only on the remote/drainer dispatch path
-    # (engine.launch_intents.command_from_payload); local-dev runs never carry
+    # (engine.launch_commands.command_from_payload); local-dev runs never carry
     # it, so it must never be required here.
     _operation_id_help = "ADR-043 canonical operation generation UUID (absent on local-dev runs)"
 

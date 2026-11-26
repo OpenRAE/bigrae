@@ -6,16 +6,25 @@ from typing import TYPE_CHECKING, Any
 
 from django.db import transaction
 
+from engine.interpreter import interpret
+from engine.models import Instance, Range, Request
+from engine.services._launch_intents import _enqueue_admitted_provisioner_launch
 from shared.audit import AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.credentials import CredentialContext
+from shared.schemas.range import InstanceSpec
 
-from ._device_authority import admitted_device_authority, assert_device_creation, prepare_ngfw_creation
+from ._device_authority import (
+    admitted_device_authority,
+    assert_device_creation,
+    prepare_device_authority,
+    prepare_ngfw_creation,
+)
+from ._launch_authority import assert_admitted_launch_binding
 
 if TYPE_CHECKING:
     from uuid import UUID
 
     from engine.services._device_authority import PreparedDeviceCreation
-    from engine.ssh import SSHConnection
     from shared.identity_scope import ResourceScope
     from shared.schemas import RequestSpec
 
@@ -30,12 +39,8 @@ def create_principal_ngfw(
     prepared: PreparedDeviceCreation | None,
 ) -> UUID:
     """Create and queue the native device with original principal custody."""
-    from engine.interpreter import interpret
-    from engine.launch_intents import _enqueue_admitted_provisioner_launch
-    from engine.models import Instance, Request
 
     prepared = prepared or prepare_ngfw_creation(request_spec, credential, scope)
-    from shared.schemas.range import InstanceSpec
 
     if (
         len(request_spec.items) != 1
@@ -77,9 +82,6 @@ def create_principal_ngfw(
 
 def prepare_ngfw_lifecycle(request_id: UUID, credential: CredentialContext, operation: str) -> PreparedDeviceLifecycle:
     """Admit one device transition before taking lifecycle row locks."""
-    from engine.models import Instance, Range
-
-    from ._device_authority import prepare_device_authority
 
     if operation not in {"deprovision", "start", "stop"}:
         raise ValueError("Device operation unavailable")
@@ -98,10 +100,6 @@ def prepare_ngfw_lifecycle(request_id: UUID, credential: CredentialContext, oper
 
 def commit_ngfw_lifecycle(prepared: PreparedDeviceLifecycle) -> bool:
     """Fence native device state and atomically queue the admitted transition."""
-    from engine.launch_intents import _enqueue_admitted_provisioner_launch
-    from engine.models import Instance, Range
-
-    from ._launch_authority import assert_admitted_launch_binding
 
     native_id, status, authority, credential, payload = prepared
     fields = dict(authority)
@@ -142,23 +140,3 @@ def commit_ngfw_lifecycle(prepared: PreparedDeviceLifecycle) -> bool:
             strict=True,
         )
     return True
-
-
-def connect_principal_device_terminal(credential: CredentialContext, identifier: UUID | str) -> SSHConnection:
-    """Authorize the native device before loading SSH connection material."""
-    from engine.models import Instance
-    from engine.ssh import SSHConnection
-
-    from ._device_authority import admit_native_device_access
-    from ._terminal import _get_ssh_key, _resolve_ngfw_management_ip, _resolve_ngfw_ssh_key_secret_ref
-
-    fields = admit_native_device_access(credential, identifier)
-    runtime = Instance.objects.get(uuid=fields["authority_resource_uuid"], status="ready")
-    host = _resolve_ngfw_management_ip(runtime.state or {})
-    reference = _resolve_ngfw_ssh_key_secret_ref(runtime.state or {})
-    if not host or not reference:
-        raise ValueError("Device connection unavailable")
-    key = _get_ssh_key(reference)
-    if fields != admit_native_device_access(credential, identifier):
-        raise PermissionError("Device connection changed")
-    return SSHConnection(host=host, username="admin", private_key=key, port=22, session_id=None)

@@ -123,3 +123,63 @@ forbidden_modules =
     raes_conformance
     raes_backend_protocols
 allow_indirect_imports = True
+
+# ADR-001-R5 (#2865): the engine package has no import cycle. The
+# acyclic_siblings contract checks the children of every engine package. A
+# submodule that imports its own package facade is not a sibling cycle, so the
+# forbidden contracts below reject those back-edges.
+[importlinter:contract:engine-acyclic-siblings]
+name = Engine modules have no import cycle (ADR-001-R5)
+type = acyclic_siblings
+ancestors =
+    engine
+
+[importlinter:contract:engine-root-facade-back-edges]
+name = Engine modules may not import the engine root package (ADR-001-R5)
+type = forbidden
+source_modules =
+    engine.**
+forbidden_modules =
+    engine
+as_packages = False
+allow_indirect_imports = True
+
+[importlinter:contract:engine-services-facade-back-edges]
+name = Engine service modules may not import the engine.services facade (ADR-001-R5)
+type = forbidden
+source_modules =
+    engine.services.**
+forbidden_modules =
+    engine.services
+as_packages = False
+allow_indirect_imports = True
+
+[importlinter:contract:engine-models-facade-back-edges]
+name = Engine model modules may not import the engine.models facade (ADR-001-R5)
+type = forbidden
+source_modules =
+    engine.models.**
+forbidden_modules =
+    engine.models
+as_packages = False
+allow_indirect_imports = True
+
+[importlinter:contract:engine-ecs-facade-back-edges]
+name = Engine ECS modules may not import the engine.ecs facade (ADR-001-R5)
+type = forbidden
+source_modules =
+    engine.ecs.**
+forbidden_modules =
+    engine.ecs
+as_packages = False
+allow_indirect_imports = True
+
+[importlinter:contract:engine-handlers-facade-back-edges]
+name = Engine handler modules may not import the engine.handlers facade (ADR-001-R5)
+type = forbidden
+source_modules =
+    engine.handlers.**
+forbidden_modules =
+    engine.handlers
+as_packages = False
+allow_indirect_imports = True

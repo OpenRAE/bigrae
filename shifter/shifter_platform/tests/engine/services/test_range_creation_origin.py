@@ -195,7 +195,7 @@ def test_prepared_dispatch_locks_actual_ancestry_before_native_range(deferred_cr
 
 def test_first_dispatch_cannot_commit_a_proof_revoked_after_live_admission(deferred_creation, monkeypatch):
     from engine.models import ProvisionerLaunchIntent
-    from engine.services import _launch_authority, dispatch_created_raes_range
+    from engine.services import _launch_authority, _principal_range_create, dispatch_created_raes_range
     from management.models import PrincipalSession, ServiceCredentialAdmission
 
     case = deferred_creation
@@ -209,7 +209,7 @@ def test_first_dispatch_cannot_commit_a_proof_revoked_after_live_admission(defer
             ServiceCredentialAdmission.objects.filter(uuid=case.credential.credential_uuid).update(is_active=False)
         return authority
 
-    monkeypatch.setattr(_launch_authority, "prepare_launch_authority", admit_then_revoke)
+    monkeypatch.setattr(_principal_range_create, "prepare_launch_authority", admit_then_revoke)
     with pytest.raises((ValueError, PermissionError)):
         dispatch_created_raes_range(case.request_uuid, credential=case.credential)
     assert not ProvisionerLaunchIntent.objects.exists()

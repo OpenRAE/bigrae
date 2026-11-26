@@ -9,8 +9,9 @@ from shared.gcp_project_registration import GcpProjectRegistrationInput, GcpProj
 from shared.operation_authority import credential_reference_from_record
 from shared.operation_results import latest_step, step_follows
 
+from ._gcp_project_authority import project_authority_fields, require_project_administrator
 from ._gcp_project_operations import validate_project_operation
-from ._gcp_project_registration import _audit_project, project_authority_fields, require_project_administrator
+from ._gcp_project_registration import _audit_project
 from ._operation_apply_admission import applied_steps, has_conflicting_sibling, has_earlier_pending_sibling
 
 if TYPE_CHECKING:

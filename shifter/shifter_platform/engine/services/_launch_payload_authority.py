@@ -7,6 +7,11 @@ from uuid import UUID
 from django.db import transaction
 
 from engine.models import Instance, ProvisionerLaunchIntent, Range
+from engine.services._gcp_project_operations import authorize_project_operation
+from engine.services._launch_authority import authorize_launch_authority
+from engine.services._launch_generation import assert_provisioner_input_matches, validate_provisioner_generation
+from engine.services._vpn_profile_operations import authorize_vpn_operation
+from engine.services._worker_trials import authorize_worker_trial_operation
 
 _OPERATION_AUTHORITY_UNAVAILABLE = "Operation authority unavailable"
 
@@ -18,21 +23,14 @@ def authorize_provisioner_payload(
     expected_operation_id: UUID | str | None = None,
 ) -> None:
     """Fail closed unless current domain state authorizes the queued operation."""
-    from engine.launch_intents import assert_provisioner_input_matches, validate_provisioner_generation
 
     if payload.get("resource") == "range-project":
-        from engine.services._gcp_project_operations import authorize_project_operation
-
         authorize_project_operation(payload, expected_operation_id)
         return
     if payload.get("resource") == "vpn-profile":
-        from engine.services._vpn_profile_operations import authorize_vpn_operation
-
         authorize_vpn_operation(payload, expected_operation_id)
         return
     if payload.get("resource") == "worker-trial":
-        from engine.services._worker_trials import authorize_worker_trial_operation
-
         authorize_worker_trial_operation(payload, expected_operation_id)
         return
     if expected_operation_id is not None:
@@ -72,7 +70,6 @@ def _authorize_recorded_principal(
     row: Range | Instance | None, payload: dict[str, object], expected_operation_id: UUID | str
 ) -> None:
     """Reauthorize the exact recorded initiating proof before taking the native generation fence."""
-    from engine.services._launch_authority import authorize_launch_authority
 
     if row is None or not _principal_owned(row):
         return

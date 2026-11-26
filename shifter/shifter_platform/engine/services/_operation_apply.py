@@ -17,12 +17,20 @@ silently applied to a newer lifecycle episode.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
 
+from engine.models import (
+    GcpRangeProject,
+    Instance,
+    OperationResultDisposition,
+    OperationResultInbox,
+    Range,
+    VpnAccessProfile,
+    WorkerTrial,
+)
 from shared.operation_envelope import (
     ACCEPTED_CONTRACT_VERSIONS,
     OperationEnvelopeError,
@@ -30,12 +38,11 @@ from shared.operation_envelope import (
     validate_operation_envelope,
 )
 
+from ._gcp_project_release import release_applied_project_restorations
 from ._operation_apply_domain import apply_validated_result
 
 # engine.models is imported lazily inside functions below (app-registry load
 # order); this block is type-check-only.
-if TYPE_CHECKING:
-    from engine.models import GcpRangeProject, Instance, OperationResultInbox, Range, VpnAccessProfile, WorkerTrial
 
 logger = logging.getLogger(__name__)
 
@@ -51,7 +58,6 @@ def _resolve_operation_target(
     result's ``operation_id`` — i.e. the generation is current. A rotated (or
     absent) generation resolves to None, which the caller treats as stale.
     """
-    from engine.models import GcpRangeProject, Instance, Range, VpnAccessProfile, WorkerTrial
 
     target: Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial | None
     if resource in _RANGE_RESOURCES:
@@ -81,7 +87,6 @@ def _request_matches(
     target: Range | Instance | VpnAccessProfile | GcpRangeProject | WorkerTrial, expected_request_id: object
 ) -> bool:
     """Return True if the target row's request matches the result's request_id."""
-    from engine.models import GcpRangeProject, WorkerTrial
 
     if isinstance(target, GcpRangeProject):
         return str(target.pk) == str(expected_request_id)
@@ -99,7 +104,6 @@ def evaluate_operation_result(row: OperationResultInbox) -> tuple[str, str]:
     version, digest mismatch, stale operation generation, or wrong resource
     ownership. The first failing check wins; a single exit returns the verdict.
     """
-    from engine.models import OperationResultDisposition
 
     try:
         envelope = validate_operation_envelope(row.envelope)
@@ -139,7 +143,6 @@ def apply_pending_operation_results(*, batch_size: int = 50) -> int:
     families receive a validation-only shadow disposition. Returns the number of
     rows dispositioned.
     """
-    from engine.models import OperationResultDisposition, OperationResultInbox
 
     evaluated = 0
     with transaction.atomic():
@@ -164,7 +167,6 @@ def apply_pending_operation_results(*, batch_size: int = 50) -> int:
             row.disposition_detail = detail
             row.applied_at = timezone.now()
             row.save(update_fields=["disposition", "disposition_detail", "applied_at"])
-            from ._gcp_project_release import release_applied_project_restorations
 
             release_applied_project_restorations(row)
             evaluated += 1

@@ -137,7 +137,7 @@ def test_operator_registration_commits_one_reference_input_and_original_authorit
         "--operation-id",
         str(row.provisioner_operation_id),
     ]
-    from engine.launch_payload_authority import authorize_provisioner_payload
+    from engine.services._launch_payload_authority import authorize_provisioner_payload
 
     authorize_provisioner_payload(intent.payload, expected_operation_id=intent.operation_id)
 
@@ -174,7 +174,7 @@ def test_registration_cannot_move_to_another_organization(operator):
 
 @pytest.mark.parametrize("change", ["credential", "policy", "disabled"])
 def test_revoked_or_disabled_registration_cannot_launch(operator, change):
-    from engine.launch_payload_authority import authorize_provisioner_payload
+    from engine.services._launch_payload_authority import authorize_provisioner_payload
     from management.models import PrincipalSession
 
     result = register(operator)

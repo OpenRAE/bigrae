@@ -8,6 +8,10 @@ from datetime import datetime, timedelta
 
 from django.db.models import Q
 
+from engine.models import Range, WarmRangeGeneration
+
+from ._warm_pool import _finalize_warm_generation, _generation_is_stalled, retire_generation
+
 logger = logging.getLogger(__name__)
 
 
@@ -29,9 +33,6 @@ def reconcile_retained_warm_generations(
     batch_size: int = 100,
 ) -> WarmRecoveryProgress:
     """Advance one keyset page; the managed worker retains the next page cursor."""
-    from engine.models import Range, WarmRangeGeneration
-
-    from ._warm_pool import _finalize_warm_generation, _generation_is_stalled, retire_generation
 
     limit = max(1, min(batch_size, 100))
     rows = list(

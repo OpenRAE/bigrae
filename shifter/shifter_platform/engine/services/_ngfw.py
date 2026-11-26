@@ -6,15 +6,21 @@ import logging
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from django.db.models import Prefetch
+
+from engine.interpreter import interpret
+from engine.models import App, Instance, Range, Request
+from engine.services._launch_intents import clear_provisioner_operation_after_failure
+from engine.services._launch_starts import start_ngfw_operation, start_ngfw_provisioning, start_ngfw_teardown
 from shared.enums import ResourceStatus
 from shared.schemas import InstanceSpec, RequestSpec
 
 from ._common import EngineError
+from ._principal_ngfw import commit_ngfw_lifecycle, create_principal_ngfw, prepare_ngfw_lifecycle
 
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from engine.models import Instance, Request
     from engine.services._device_authority import PreparedDeviceCreation
     from shared.credentials import CredentialContext
     from shared.identity_scope import ResourceScope
@@ -33,8 +39,6 @@ def create_ngfw(
     """Provision NGFW infrastructure."""
 
     if credential is not None:
-        from ._principal_ngfw import create_principal_ngfw
-
         if resource_scope is None:
             raise ValueError("Device scope unavailable")
         return create_principal_ngfw(request_spec, credential, resource_scope, prepared_creation)
@@ -43,9 +47,6 @@ def create_ngfw(
 
 def _set_ngfw_materialization_status(request: Request, status: str) -> None:
     """Persist engine NGFW Instance/App status for a request."""
-    from django.db.models import Prefetch
-
-    from engine.models import App, Instance
 
     ngfw_apps = App.objects.filter(app_type=App.AppType.NGFW)
     ngfw_instances = Instance.objects.filter(
@@ -56,8 +57,6 @@ def _set_ngfw_materialization_status(request: Request, status: str) -> None:
         ngfw_instance.status = status
         update_fields = ["status", "updated_at"]
         if status == ResourceStatus.FAILED.value:
-            from engine.launch_intents import clear_provisioner_operation_after_failure
-
             update_fields.extend(clear_provisioner_operation_after_failure(ngfw_instance))
         ngfw_instance.save(update_fields=update_fields)
         for app in ngfw_instance.apps.all():
@@ -69,8 +68,6 @@ def destroy_ngfw(request_id: UUID, *, credential: CredentialContext | None = Non
     """Tear down NGFW infrastructure."""
 
     if credential is not None:
-        from ._principal_ngfw import commit_ngfw_lifecycle, prepare_ngfw_lifecycle
-
         return commit_ngfw_lifecycle(prepare_ngfw_lifecycle(request_id, credential, "deprovision"))
     return _destroy_legacy_ngfw(request_id)
 
@@ -79,7 +76,6 @@ def _resolve_ngfw_instance_for_lifecycle(
     request_id: UUID, op_name: str, allowed_statuses: tuple[str, ...]
 ) -> Instance | None:
     """Return the NGFW Instance row when it exists and its status permits ``op_name``."""
-    from engine.models import Instance, Request
 
     try:
         request = Request.objects.get(request_id=request_id)
@@ -117,11 +113,8 @@ def _run_ngfw_lifecycle_op(
     request_id: UUID, op_name: str, allowed_statuses: tuple[str, ...], credential: CredentialContext | None = None
 ) -> bool:
     """Shared start/stop NGFW transition + ECS-dispatch helper."""
-    from engine.ecs import start_ngfw_operation
 
     if credential is not None:
-        from ._principal_ngfw import commit_ngfw_lifecycle, prepare_ngfw_lifecycle
-
         return commit_ngfw_lifecycle(prepare_ngfw_lifecycle(request_id, credential, op_name))
     logger.debug("%s_ngfw: request_id=%s", op_name, request_id)
 
@@ -157,8 +150,6 @@ def stop_ngfw(request_id: UUID, *, credential: CredentialContext | None = None) 
 
 def _destroy_legacy_ngfw(request_id: UUID) -> bool:
     """Destroy an incumbent human-owned device while principal resources retain their own admission."""
-    from engine.ecs import start_ngfw_teardown
-    from engine.models import Instance, Range, Request
 
     logger.debug("destroy_ngfw: request_id=%s", request_id)
 
@@ -198,9 +189,6 @@ def _destroy_legacy_ngfw(request_id: UUID) -> bool:
 
 def _create_legacy_ngfw(request_spec: RequestSpec) -> UUID:
     """Create an incumbent human-owned device through native interpretation and launch dispatch."""
-    from engine.ecs import start_ngfw_provisioning
-    from engine.interpreter import interpret
-    from engine.models import Request
 
     if request_spec.owner_principal_uuid is not None:
         raise PermissionError("Device authority unavailable")

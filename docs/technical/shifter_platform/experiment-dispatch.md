@@ -59,6 +59,7 @@ The provisioner copies the objects to the worker's fixed trial input directory.
 
 The `restrict-provisioner-jobs` admission policy admits only the dispatched `worker-trial` argument form.
 That form is `run` or `collect` with UUID `--request-id`, `--trial-id`, and `--operation-id` values.
+Engine validates the same form in `engine.launch_commands` before it records a launch intent.
 
 The provisioner rebuilds the worker's management target from its original RAES provision input.
 For a multi-VM worker, the trial input names the trial host, and the provisioner runs the trial only on that VM.

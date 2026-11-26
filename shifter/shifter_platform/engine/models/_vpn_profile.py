@@ -10,7 +10,7 @@ from django.db import models
 from shared.db import RecordedAuthorityFields
 
 if TYPE_CHECKING:
-    from engine.models import Request
+    from engine.models._request import Request
 
 
 class VpnAccessProfile(RecordedAuthorityFields):

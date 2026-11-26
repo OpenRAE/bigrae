@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 from typing import TYPE_CHECKING
@@ -11,8 +12,19 @@ from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from engine.models import (
+    CapacityDraw,
+    CapacityReservation,
+    DisposableWorker,
+    ProvisionerLaunchIntent,
+    Range,
+    WorkerPolicyRecord,
+)
+from management.services import human_principal_user_id
+from shared.audit import AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.authorization import AuthorizationRequest, TargetRef
-from shared.authorization.policy import require_authorization
+from shared.authorization.policy import require_authorization, scope_parent
+from shared.capacity import CapacityOutcome, EnforcementMode
 from shared.credentials import (
     CredentialContext,
     resolve_credential_scope,
@@ -28,12 +40,21 @@ from shared.disposable_workers import (
 )
 from shared.identity_scope import ResourceScope
 from shared.range_instantiation_policy import BackendAdmission, InstantiationPurpose, evaluate_gcp_backend_admission
+from workspaces.services import resolve_range_scope_binding
+
+from ._capacity_admit import admit_range_capacity
+from ._principal_range_create import prepare_raes_range_creation
+from ._raes_range import RangeBindings, create_raes_range, dispatch_created_raes_range
+from ._range_authority import project_range_authority
+from ._worker_custody import _authorized_worker, _lock_worker
+from ._worker_qualification_evidence import has_current_qualification
+from ._worker_relationships import publish_worker_relationships
+from ._worker_software import pin_worker_software
 
 if TYPE_CHECKING:
-    from engine.models import CapacityReservation, DisposableWorker
     from shared.capacity import MetricVerdict, PartitionRef
 
-    from ._principal_range_create import PreparedRaesRangeCreation
+    from ._raes_range_bindings import PreparedRaesRangeCreation
 
 
 @dataclass(frozen=True, slots=True)
@@ -72,7 +93,6 @@ def _installation_authority(credential: CredentialContext) -> CredentialContext:
 
 def configure_worker_policy(credential: CredentialContext, configuration: object) -> None:
     """Publish operator maxima and apparatus, independently of caller launches."""
-    from engine.models import WorkerPolicyRecord
 
     current = _installation_authority(credential)
     try:
@@ -93,7 +113,6 @@ def configure_worker_policy(credential: CredentialContext, configuration: object
 
 def _worker_backend() -> BackendAdmission:
     """Refuse a deployment without an admitted GCE live-fire backend."""
-    import os
 
     admission = evaluate_gcp_backend_admission(
         os.environ.get("GCP_RANGE_BACKEND"), os.environ.get("GCP_RANGE_PLANE"), InstantiationPurpose.LIVE_FIRE
@@ -116,12 +135,6 @@ def create_disposable_worker(
 
     A new worker uses the exact ``profile_binding`` that its batch retains, or the default profile.
     """
-    from engine.models import DisposableWorker, Range, WorkerPolicyRecord
-    from management.services import human_principal_user_id
-    from workspaces.services import resolve_range_scope_binding
-
-    from ._principal_range_create import prepare_raes_range_creation
-    from ._raes_range import RangeBindings, create_raes_range
 
     _validate_worker_custody(scope, worker_id, experiment_id, trial_id)
     current = resolve_current_credential(credential)
@@ -130,8 +143,6 @@ def create_disposable_worker(
     existing = DisposableWorker.objects.select_related("range").filter(pk=worker_id).first()
     if existing is not None:
         _validate_replay(existing, scope, experiment_id, trial_id, current.principal.uuid)
-        from engine.models import ProvisionerLaunchIntent
-        from shared.authorization.policy import scope_parent
 
         parent = scope_parent(scope)
         require_authorization(
@@ -190,7 +201,6 @@ def create_disposable_worker(
                 hold_review_seconds=policy.hold_review_seconds,
                 next_recovery_at=now + timedelta(seconds=policy.lifetime_seconds),
             )
-            from ._worker_software import pin_worker_software
 
             _validate_created_worker(worker, profile, scope)
             pin_worker_software(profile, runtime, scope)
@@ -214,12 +224,6 @@ def _dispatch_worker(
     current: CredentialContext, scope: ResourceScope, worker_id: UUID, prepared: PreparedRaesRangeCreation
 ) -> WorkerView:
     """Publish custody and dispatch retained inputs under the admission lock order."""
-    from engine.models import ProvisionerLaunchIntent, WorkerPolicyRecord
-    from workspaces.services import resolve_range_scope_binding
-
-    from ._raes_range import dispatch_created_raes_range
-    from ._worker_relationships import publish_worker_relationships
-    from ._worker_retirement import _lock_worker
 
     publish_worker_relationships(worker_id)
     with transaction.atomic():
@@ -247,9 +251,6 @@ def _validate_worker_custody(scope: ResourceScope, worker_id: UUID, experiment_i
 
 def _reserve_capacity(profile: WorkerHostProfile, worker_id: UUID, now: datetime) -> None:
     """Reserve every enforcing metric before a worker can dispatch."""
-    from engine.models import CapacityDraw, CapacityReservation
-
-    from ._capacity_admit import admit_range_capacity
 
     partition = _worker_partition(profile)
     budgets = list(
@@ -283,7 +284,6 @@ def _validate_worker_budgets(
 
 def _validate_worker_verdicts(verdicts: tuple[MetricVerdict, ...]) -> None:
     """Refuse absent, uncertain or advisory draw results."""
-    from shared.capacity import CapacityOutcome, EnforcementMode
 
     if not verdicts or any(
         item.outcome != CapacityOutcome.ADMITTED or item.enforcement != EnforcementMode.ENFORCING for item in verdicts
@@ -312,7 +312,6 @@ def get_disposable_worker(credential: CredentialContext, worker_id: UUID) -> Wor
 
 def bind_worker_trial(credential: CredentialContext, worker_id: UUID, trial_id: UUID) -> WorkerView:
     """An unassigned worker can acquire one immutable trial identity."""
-    from ._worker_retirement import _lock_worker
 
     _authorized_worker(credential, worker_id, "range.manage")
     if not isinstance(trial_id, UUID) or not trial_id.int:
@@ -333,28 +332,13 @@ def bind_worker_trial(credential: CredentialContext, worker_id: UUID, trial_id: 
 
 def worker_credential_scope(worker_id: UUID) -> ResourceScope | None:
     """Composition-only SQL ancestry, never a permission or fallback scope."""
-    from engine.models import DisposableWorker
-
-    from ._range_authority import project_range_authority
 
     row = DisposableWorker.objects.filter(pk=worker_id).first()
     return project_range_authority(row.request_id).scope if row is not None else None
 
 
-def _authorized_worker(credential: CredentialContext, worker_id: UUID, action: str) -> DisposableWorker:
-    """Resolve retained custody and require the exact current range action."""
-    from engine.models import DisposableWorker
-
-    from ._range_authority import require_native_range_action
-
-    row = DisposableWorker.objects.select_related("range").get(pk=worker_id)
-    require_native_range_action(credential, row.request_id, action)
-    return row
-
-
 def _view(row: DisposableWorker) -> WorkerView:
     """Project lifecycle facts without apparatus inputs or guest credentials."""
-    from ._worker_qualification import has_current_qualification
 
     row.range.refresh_from_db()
     return WorkerView(
@@ -378,7 +362,6 @@ def _audit(
     credential: CredentialContext, worker: DisposableWorker | None, action: str, facts: dict[str, str] | None = None
 ) -> None:
     """Record a strict principal-attributed worker transition."""
-    from shared.audit import AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 
     audit_log(
         AuditEvent(
@@ -395,7 +378,6 @@ def _audit(
 
 def published_worker_profile(name: str = DEFAULT_PROFILE) -> WorkerHostProfile:
     """Return the named host profile of the published worker policy."""
-    from engine.models import WorkerPolicyRecord
 
     record = WorkerPolicyRecord.objects.filter(pk=1).first()
     if record is None:
@@ -422,7 +404,6 @@ def _admitted_profile(
 
 def _check_worker_limits(policy: WorkerPolicy) -> None:
     """Check aggregate bounds under the caller's locked worker-policy mutex."""
-    from engine.models import DisposableWorker
 
     live = DisposableWorker.objects.filter(terminal_at__isnull=True)
     if live.count() >= policy.max_live or live.exclude(range__status="ready").count() >= policy.max_provisioning:

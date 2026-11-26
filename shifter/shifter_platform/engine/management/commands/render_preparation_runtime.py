@@ -7,6 +7,7 @@ from typing import Any
 
 from django.core.management.base import BaseCommand, CommandError
 
+from shared.cloud.preparation_cloud_installation import render_preparation_terraform
 from shared.cloud.preparation_installation import PreparationInstallation, render_preparation_installation
 
 
@@ -28,8 +29,6 @@ class Command(BaseCommand):
         except (OSError, ValueError) as exc:
             raise CommandError("Invalid preparation installation configuration") from exc
         if options["format"] == "terraform":
-            from shared.cloud.preparation_cloud_installation import render_preparation_terraform
-
             document = render_preparation_terraform(configuration)
         else:
             document = {"apiVersion": "v1", "kind": "List", "items": render_preparation_installation(configuration)}

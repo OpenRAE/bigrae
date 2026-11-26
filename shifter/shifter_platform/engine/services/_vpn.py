@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from engine.models import Instance, Range
 from engine.secrets import SecretsError, get_openvpn_profile_secret
 from shared.credentials import CredentialContext
 from shared.remote_access import (
@@ -13,34 +14,23 @@ from shared.remote_access import (
     OpenVpnProfile,
     is_raes_member_target,
     parse_openvpn_binding,
+    parse_openvpn_capability,
     validate_openvpn_profile,
 )
+
+from ._vpn_errors import VpnProfileConflict as VpnProfileConflict
+from ._vpn_errors import VpnProfileNotFound as VpnProfileNotFound
+from ._vpn_errors import VpnProfilePending as VpnProfilePending
+from ._vpn_errors import VpnProfileUnavailable as VpnProfileUnavailable
+from ._vpn_profile_authority import admit_vpn_profile_authority
+from ._vpn_profile_delivery import get_individual_vpn_profile
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
 
-    from engine.models import Range
-
-
-class VpnProfileNotFound(ValueError):
-    """No owned range exists for the requested correlation id."""
-
-
-class VpnProfileConflict(ValueError):
-    """The range exists but its current lifecycle cannot deliver a profile."""
-
-
-class VpnProfileUnavailable(ValueError):
-    """The provider binding or secret is unavailable or invalid."""
-
-
-class VpnProfilePending(VpnProfileConflict):
-    """The original credential's individual profile is being prepared."""
-
 
 def _owned_range(user: User, request_id: UUID) -> Range:
     """Return the caller-owned range for this correlation id or raise."""
-    from engine.models import Range
 
     range_obj = Range.objects.select_related("request").filter(request__request_id=request_id, user=user).first()
     if range_obj is None:
@@ -50,13 +40,8 @@ def _owned_range(user: User, request_id: UUID) -> Range:
 
 def has_openvpn_profile(user: User | CredentialContext, request_id: UUID, *, participation: bool = False) -> bool:
     """Project only safe readiness for the current owner and READY range."""
-    from engine.models import Range
 
     if isinstance(user, CredentialContext):
-        from shared.remote_access import parse_openvpn_capability
-
-        from ._vpn_profiles import admit_vpn_profile_authority
-
         try:
             admit_vpn_profile_authority(user, request_id, participation=participation)
             runtime = Range.objects.get(request__request_id=request_id)
@@ -70,7 +55,6 @@ def has_openvpn_profile(user: User | CredentialContext, request_id: UUID, *, par
 
 def _validate_current_binding(range_obj: Range, user: User, request_id: UUID) -> OpenVpnBinding:
     """Return the binding only when it names this owner, request, and Kali."""
-    from engine.models import Instance
 
     try:
         binding = parse_openvpn_binding(range_obj.vpn_access_binding)
@@ -117,11 +101,8 @@ def get_openvpn_profile(
     user: User | CredentialContext, request_id: UUID, *, participation: bool = False
 ) -> OpenVpnProfile:
     """Resolve and validate the current participant profile entirely in memory."""
-    from engine.models import Range
 
     if isinstance(user, CredentialContext):
-        from ._vpn_profile_delivery import get_individual_vpn_profile
-
         runtime = Range.objects.filter(request__request_id=request_id).first()
         if runtime is None:
             raise VpnProfileNotFound("Range not found")
@@ -146,7 +127,6 @@ def get_openvpn_profile(
 
 def _has_legacy_openvpn_profile(user: User, request_id: UUID) -> bool:
     """Project readiness only for a current incumbent owner and generation."""
-    from engine.models import Range
 
     range_obj = Range.objects.filter(request__request_id=request_id, user=user).first()
     if not range_obj or range_obj.status != Range.Status.READY:

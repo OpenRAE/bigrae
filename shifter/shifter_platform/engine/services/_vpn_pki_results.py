@@ -9,13 +9,23 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric.types import CertificateIssuerPublicKeyTypes
 from django.utils import timezone
 
+from engine.models import (
+    OperationInput,
+    OperationResultDisposition,
+    ProvisionerLaunchIntent,
+    VpnAccessProfile,
+    VpnCrlState,
+)
 from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.operation_authority import credential_reference_from_record
+
+from ._operation_apply_admission import has_conflicting_sibling, has_earlier_pending_sibling
+from ._vpn_profile_operations import validate_vpn_operation
 
 if TYPE_CHECKING:
     from typing import Any
 
-    from engine.models import OperationResultInbox, VpnAccessProfile, VpnCrlState
+    from engine.models import OperationResultInbox
 
 
 def _bind_certificate(profile: VpnAccessProfile, receipt: dict[str, Any], operation: str) -> None:
@@ -54,9 +64,6 @@ def apply_vpn_pki_result(result: OperationResultInbox, receipt: dict[str, Any]) 
 
 def _apply_failure(result: OperationResultInbox, receipt: dict[str, Any]) -> tuple[str, str]:
     """Retain PKI failure evidence without discarding required native cleanup."""
-    from engine.models import OperationResultDisposition, ProvisionerLaunchIntent, VpnAccessProfile
-
-    from ._vpn_profile_operations import validate_vpn_operation
 
     profile = VpnAccessProfile.objects.select_for_update().get(provisioner_operation_id=result.operation_id)
     intent = ProvisionerLaunchIntent.objects.get(operation_id=result.operation_id)
@@ -89,9 +96,6 @@ def _apply_failure(result: OperationResultInbox, receipt: dict[str, Any]) -> tup
 
 def _sibling_disposition(result: OperationResultInbox) -> tuple[str, str] | None:
     """Defer ordered siblings and reject conflicting native result receipts."""
-    from engine.models import OperationResultDisposition
-
-    from ._operation_apply_admission import has_conflicting_sibling, has_earlier_pending_sibling
 
     if has_earlier_pending_sibling(result):
         return "", ""
@@ -102,9 +106,6 @@ def _sibling_disposition(result: OperationResultInbox) -> tuple[str, str] | None
 
 def _apply_success(result: OperationResultInbox, receipt: dict[str, Any]) -> tuple[str, str]:
     """Commit verified certificate evidence and CRL publication in the native result transaction."""
-    from engine.models import OperationInput, OperationResultDisposition, ProvisionerLaunchIntent, VpnAccessProfile
-
-    from ._vpn_profile_operations import validate_vpn_operation
 
     profile = VpnAccessProfile.objects.select_for_update().get(provisioner_operation_id=result.operation_id)
     intent = ProvisionerLaunchIntent.objects.get(operation_id=result.operation_id)
@@ -197,7 +198,6 @@ def _publish_crl(
     state: VpnCrlState, receipt: dict[str, Any], crl: x509.CertificateRevocationList, expected_serials: set[int]
 ) -> None:
     """Publish a newer verified CRL only when it covers every current revocation."""
-    from engine.models import VpnAccessProfile
 
     current_revocations = {
         int(serial)
@@ -219,7 +219,6 @@ def _publish_crl(
 
 def _publication_state(receipt: dict[str, Any]) -> VpnCrlState:
     """Lock and check the current issuer before mutating certificate evidence."""
-    from engine.models import VpnCrlState
 
     state = VpnCrlState.objects.select_for_update().get(pk=1)
     if state.issuer_fingerprint and state.issuer_fingerprint != receipt["issuer_fingerprint"]:

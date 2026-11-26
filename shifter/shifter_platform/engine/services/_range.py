@@ -4,9 +4,14 @@ from __future__ import annotations
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
+from django.db import transaction
+
+from engine.models import Range
+from engine.services._launch_intents import request_provision_interrupt
+from engine.services._launch_starts import start_teardown
 from shared.enums import CANCELLABLE_STATUSES, ResourceStatus
 from shared.raes.runtime_target import is_raes_provisioning_plan
 from shared.range_lifecycle_capability import LifecycleCapability, range_pause_resume_capability
@@ -14,20 +19,9 @@ from shared.schemas import RangeRef
 
 from ._common import _persist_task_arn, _resolve_instance_host
 from ._range_by_request import cancel_range_by_request, destroy_range_by_request
-
-if TYPE_CHECKING:
-    from contextlib import AbstractContextManager as ContextManager
-
-    from engine.models import Range
+from ._receipt import _revoke_receipt_verifier_for_range, revoke_receipt_verifier
 
 logger = logging.getLogger(__name__)
-
-
-def _atomic() -> ContextManager[None]:
-    """Late-bound ``engine.services.transaction.atomic()`` so tests can patch the package-level name."""
-    from engine import services as _es
-
-    return _es.transaction.atomic()
 
 
 def destroy_range(range_ref: RangeRef) -> bool:
@@ -38,8 +32,6 @@ def destroy_range(range_ref: RangeRef) -> bool:
 
     Supports both legacy (range_id) and new (request_id) patterns.
     """
-    from engine.ecs import start_teardown
-    from engine.models import Range
 
     if not isinstance(range_ref, RangeRef):
         raise TypeError(f"range_ref must be RangeRef, got {type(range_ref).__name__}")
@@ -130,11 +122,9 @@ def cancel_range(range_ref: RangeRef) -> None:
         range_ref.user_id,
         range_ref.status,
     )
-    from engine.launch_intents import request_provision_interrupt
-    from engine.models import Range
 
     range_id = range_ref.range_id
-    with _atomic():
+    with transaction.atomic():
         try:
             range_obj = Range.objects.select_for_update().get(id=range_id)
         except Range.DoesNotExist:
@@ -145,8 +135,6 @@ def cancel_range(range_ref: RangeRef) -> None:
             raise PermissionError("Range operation authority unavailable")
         if ResourceStatus(range_obj.status) not in CANCELLABLE_STATUSES:
             if range_obj.status in {Range.Status.DESTROYING, Range.Status.DESTROYED, Range.Status.FAILED}:
-                from ._receipt import _revoke_receipt_verifier_for_range
-
                 _revoke_receipt_verifier_for_range(range_obj)
             logger.warning(
                 "cancel_range: range not cancellable range_id=%s status=%s",
@@ -157,7 +145,6 @@ def cancel_range(range_ref: RangeRef) -> None:
 
         range_obj.status = Range.Status.DESTROYING
         range_obj.save(update_fields=["status"])
-        from ._receipt import _revoke_receipt_verifier_for_range
 
         _revoke_receipt_verifier_for_range(range_obj)
         # Record a durable interrupt against the current provision generation
@@ -172,7 +159,6 @@ def _revoke_receipt_for_range_request(range_obj: Range) -> None:
     request = range_obj.request
     if request is None:
         return
-    from ._receipt import revoke_receipt_verifier
 
     revoke_receipt_verifier(request.request_id)
 
@@ -230,7 +216,6 @@ def get_range_status(range_id: int) -> dict[str, Any] | None:
     Returns dict with range status info, or None if not found.
     Keys: status, error_message, instances, created_at, ready_at
     """
-    from engine.models import Range
 
     logger.debug("get_range_status: range_id=%s", range_id)
     try:

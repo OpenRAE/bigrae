@@ -162,7 +162,7 @@ class TestRunLocalProvisioner:
 
 class TestNgfwProvisioningWithLocalMode:
     def test_routes_to_local_provisioner(self, local_provisioner):
-        from engine.ecs import start_ngfw_provisioning
+        from engine.services._launch_starts import start_ngfw_provisioning
 
         result = start_ngfw_provisioning(request_id=TEST_REQUEST_ID)
         assert result == "local-12345"
@@ -171,8 +171,8 @@ class TestNgfwProvisioningWithLocalMode:
 
     @pytest.mark.django_db
     def test_does_not_dispatch_to_ecs_when_local_enabled(self, local_provisioner, settings):
-        from engine.ecs import start_ngfw_provisioning
         from engine.models import ProvisionerLaunchIntent
+        from engine.services._launch_starts import start_ngfw_provisioning
 
         # ECS is fully configured, but local mode must win and never touch boto3.
         settings.ENGINE_TASK_CLUSTER = "test-cluster"
@@ -193,8 +193,8 @@ class TestNgfwProvisioningWithLocalMode:
 class TestRangeProvisioningWithLocalMode:
     @pytest.mark.django_db(transaction=True)
     def test_routes_to_local_provisioner(self, local_provisioner):
-        from engine.ecs import start_range_provisioning
         from engine.models import ProvisionerLaunchIntent, Range
+        from engine.services._launch_starts import start_range_provisioning
 
         from .conftest import make_authorized_range
 
@@ -215,7 +215,7 @@ class TestRangeProvisioningWithLocalMode:
 
 class TestNgfwTeardownWithLocalMode:
     def test_routes_deprovision_to_local_provisioner(self, local_provisioner):
-        from engine.ecs import start_ngfw_teardown
+        from engine.services._launch_starts import start_ngfw_teardown
 
         result = start_ngfw_teardown(request_id=TEST_REQUEST_ID)
         assert result == "local-12345"

@@ -9,10 +9,9 @@ from __future__ import annotations
 
 import logging
 
+from engine._status_audit import _status_to_action
 from shared.audit import AuditAction, AuditEntityType, AuditTarget, StateChange, audit_log_system_event
 from shared.messages.payloads import NGFWEventPayload
-
-from ._audit import _status_to_action
 
 # Stable "engine.handlers" logger namespace (conftest propagation list, audit
 # source parity) even though this code now lives in a package submodule.

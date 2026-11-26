@@ -23,8 +23,12 @@ from datetime import datetime, timedelta
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
+from django.conf import settings
 from django.db import transaction
+from django.utils import timezone
 
+from engine.models import CapacityReservation
+from engine.services._capacity import latest_capacity_declaration
 from engine.services._capacity_plan_persistence import (
     _audit_assessment,
     _committed_reservation,
@@ -46,6 +50,7 @@ from shared.capacity import (
     build_demand,
     evaluate_metric,
 )
+from shared.cloud import get_capacity_inventory
 from shared.log_sanitize import safe_log_value
 
 if TYPE_CHECKING:
@@ -166,9 +171,6 @@ def release_capacity_reservations(
     all call this without double-counting. Passing ``request_id`` narrows the
     release to one provisioning request.
     """
-    from django.utils import timezone
-
-    from engine.models import CapacityReservation
 
     queryset = CapacityReservation.objects.filter(event_ref=event_ref, released_at__isnull=True)
     if request_id is not None:
@@ -272,10 +274,6 @@ def assess_declared_event_capacity(
     per-range shape, scaled by the deployment-declared cost coefficients in the
     catalog. Shifter never guesses what a range costs.
     """
-    from django.conf import settings
-    from django.utils import timezone
-
-    from engine.services._capacity import latest_capacity_declaration
 
     if not getattr(settings, "CAPACITY_PLANNING_ENABLED", False):
         return None
@@ -289,8 +287,6 @@ def assess_declared_event_capacity(
 
     demand = _demand_from_declaration(declaration, resolved_catalog, target)
     if inventory is None:
-        from shared.cloud import get_capacity_inventory
-
         try:
             inventory = get_capacity_inventory()
         except Exception as exc:  # noqa: BLE001  # client setup errors can carry credential detail; log the type only

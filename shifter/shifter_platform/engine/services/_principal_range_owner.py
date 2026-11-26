@@ -3,21 +3,26 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
 
+from engine.models import Range, Request
 from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
-from shared.authorization import TargetRef
-from shared.credentials import CredentialContext, resolve_local_credential
+from shared.authorization import AuthorizationRequest, TargetRef
+from shared.authorization.policy import require_authorization
+from shared.credentials import CredentialContext, resolve_current_credential, resolve_local_credential
 from shared.identity_scope import PrincipalRef
 from shared.principal_port import resolve_principal
+from workspaces.services import resolve_range_scope_binding
 
+from ._launch_authority import admit_launch_authority, admitted_range_authority_fields, assert_admitted_launch_binding
+from ._principal_range_scope import _assert_move_supported
 from ._range_authority import RangeAuthorityProjection, project_range_authority
-
-if TYPE_CHECKING:
-    from engine.models import Range
+from ._range_authority_history import record_range_authority_change
+from ._range_custody import principal_range_owner_reassignment_available
+from ._receipt import _revoke_receipt_verifier_for_range
+from ._runtime_binding_digest import range_runtime_binding_digest
 
 
 @dataclass(frozen=True, slots=True)
@@ -36,11 +41,6 @@ def prepare_range_owner_move(
     credential: CredentialContext, request_id: UUID, new_owner: PrincipalRef
 ) -> PreparedRangeOwnerMove:
     """Admit reassignment and verify the destination owner current scope membership."""
-    from engine.models import Range
-    from workspaces.services import resolve_range_scope_binding
-
-    from ._launch_authority import admit_launch_authority
-    from ._principal_range_scope import _assert_move_supported
 
     owner = resolve_principal(new_owner)
     source = project_range_authority(request_id)
@@ -49,7 +49,6 @@ def prepare_range_owner_move(
     )
     row = Range.objects.get(pk=source.native_id)
     _assert_move_supported(row)
-    from ._range_by_request import principal_range_owner_reassignment_available
 
     if not principal_range_owner_reassignment_available(row):
         raise ValueError("Range owner unavailable")
@@ -62,13 +61,6 @@ def prepare_event_range_owner_move(
     credential: CredentialContext, request_id: UUID, new_owner: PrincipalRef, event_uuid: UUID
 ) -> PreparedRangeOwnerMove:
     """Admit an event-bound spare handoff without inventing SQL membership."""
-    from engine.models import Range
-    from shared.authorization import AuthorizationRequest, TargetRef
-    from shared.authorization.policy import require_authorization
-    from shared.credentials import resolve_current_credential
-
-    from ._launch_authority import admitted_range_authority_fields
-    from ._principal_range_scope import _assert_move_supported
 
     current = resolve_current_credential(credential)
     owner = resolve_principal(new_owner)
@@ -87,12 +79,6 @@ def prepare_event_range_owner_move(
 
 def commit_range_owner_move(prepared: PreparedRangeOwnerMove) -> bool:
     """Commit reassignment only while admitted runtime custody remains unchanged."""
-    from engine.models import Range, Request
-    from workspaces.services import resolve_range_scope_binding
-
-    from ._launch_authority import range_runtime_binding_digest
-    from ._range_authority_history import record_range_authority_change
-    from ._receipt import _revoke_receipt_verifier_for_range
 
     if not isinstance(prepared, PreparedRangeOwnerMove):
         raise ValueError("Range owner unavailable")
@@ -146,8 +132,6 @@ def commit_range_owner_move(prepared: PreparedRangeOwnerMove) -> bool:
 
 def _require_prepared_owner(prepared: PreparedRangeOwnerMove, row: Range) -> None:
     """Fence admitted custody and exact source state under the existing target/request locks."""
-    from ._launch_authority import assert_admitted_launch_binding
-    from ._principal_range_scope import _assert_move_supported
 
     assert_admitted_launch_binding(dict(prepared.authority), row)
     if project_range_authority(prepared.source.request_uuid) != prepared.source or row.status != prepared.status:
@@ -157,7 +141,6 @@ def _require_prepared_owner(prepared: PreparedRangeOwnerMove, row: Range) -> Non
         allow_event=prepared.event_uuid is not None,
         allow_principal_vpn=prepared.event_uuid is not None,
     )
-    from ._range_by_request import principal_range_owner_reassignment_available
 
     if not principal_range_owner_reassignment_available(row):
         raise ValueError("Range owner changed")

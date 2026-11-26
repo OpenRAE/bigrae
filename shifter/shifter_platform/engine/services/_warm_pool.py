@@ -37,11 +37,19 @@ from shared.capacity import CapacityAssessmentResult
 if TYPE_CHECKING:
     from django.db.models import QuerySet
 
-    from engine.models import WarmRangeGeneration
     from shared.credentials import CredentialContext
 
-    from ._principal_warm_claim import PreparedWarmRangeClaim
 
+from django.db.models import Count
+from django.utils import timezone
+
+from engine.models import Range, RangeAuthorityChange, WarmRangeGeneration
+from engine.services._launch_intents import _enqueue_admitted_provisioner_launch, enqueue_provisioner_launch
+from shared.credentials import resolve_local_credential
+from shared.operation_authority import credential_reference_fields
+
+from ._principal_warm_claim import PreparedWarmRangeClaim
+from ._runtime_binding_digest import range_runtime_binding_digest
 from ._warm_pool_retirement import (
     _finalize_warm_generation as _finalize_warm_generation,
 )
@@ -109,7 +117,6 @@ def enqueue_range_activation(request_id: UUID | str, *, credential: CredentialCo
     claimant's fresh, sanitized access; the result applier transitions the range to
     READY for its new owner.
     """
-    from engine.launch_intents import enqueue_provisioner_launch
 
     return enqueue_provisioner_launch(
         ["raes-range", "activate", "--request-id", str(request_id)],
@@ -174,9 +181,6 @@ def claim_ready_generation(
     launch transaction so a downstream conflict rolls the claim back. An expired
     generation is never claimed; the reconciler retires it.
     """
-    from django.utils import timezone
-
-    from engine.models import WarmRangeGeneration
 
     moment = now or timezone.now()
     with transaction.atomic():
@@ -199,7 +203,6 @@ def _ready_candidates(
     candidates: list[tuple[str, str]], backend: str, range_source: str, moment: datetime
 ) -> QuerySet[WarmRangeGeneration]:
     """Build one exact-fingerprint, unclaimed and unexpired generation query."""
-    from engine.models import WarmRangeGeneration
 
     authorized = Q(pk__in=[])
     for bucket_id, digest in candidates:
@@ -221,14 +224,12 @@ def preview_ready_generation(
     *, candidates: list[tuple[str, str]], backend: str, range_source: str
 ) -> WarmRangeGeneration | None:
     """Read one eligible generation for pre-lock admission; claiming still rechecks every predicate."""
-    from django.utils import timezone
 
     return _ready_candidates(candidates, backend, range_source, timezone.now()).first()
 
 
 def ready_generations(bucket_id: str) -> list[WarmRangeGeneration]:
     """Return the READY (unclaimed) generations for a bucket, oldest first."""
-    from engine.models import WarmRangeGeneration
 
     return list(
         WarmRangeGeneration.objects.filter(bucket_id=bucket_id, state=WarmRangeGeneration.State.READY).order_by(
@@ -239,7 +240,6 @@ def ready_generations(bucket_id: str) -> list[WarmRangeGeneration]:
 
 def active_generation_count(bucket_id: str) -> int:
     """Return the nonterminal-unclaimed (provisioning + ready) count for a bucket."""
-    from engine.models import WarmRangeGeneration
 
     return WarmRangeGeneration.objects.filter(
         bucket_id=bucket_id, state__in=WarmRangeGeneration.NONTERMINAL_UNCLAIMED_STATES
@@ -248,7 +248,6 @@ def active_generation_count(bucket_id: str) -> int:
 
 def total_active_generation_count() -> int:
     """Return the nonterminal-unclaimed count across every bucket (ceiling accounting)."""
-    from engine.models import WarmRangeGeneration
 
     return WarmRangeGeneration.objects.filter(state__in=WarmRangeGeneration.NONTERMINAL_UNCLAIMED_STATES).count()
 
@@ -279,7 +278,6 @@ def create_warm_generation(draft: WarmGenerationDraft) -> WarmRangeGeneration:
     Created at reservation time, before dispatch, so the warm-prepare provision
     suppresses participant access (quarantine).
     """
-    from engine.models import WarmRangeGeneration
 
     return WarmRangeGeneration.objects.create(
         bucket_id=draft.bucket_id,
@@ -302,9 +300,6 @@ def bucket_state_counts(bucket_id: str) -> dict[str, int]:
     Keys are the private allocation-state values; a state with no rows is 0. Used
     by the reconciler to publish pool-depth gauges without exposing the model.
     """
-    from django.db.models import Count
-
-    from engine.models import WarmRangeGeneration
 
     counts = {state.value: 0 for state in WarmRangeGeneration.State}
     rows = WarmRangeGeneration.objects.filter(bucket_id=bucket_id).values_list("state").annotate(n=Count("state"))
@@ -317,12 +312,6 @@ def enqueue_admitted_warm_activation(
     prepared: PreparedWarmRangeClaim, *, request_id: UUID, claimant_request_id: UUID
 ) -> str:
     """Commit activation with the exact already-admitted warm custody transition."""
-    from engine.launch_intents import _enqueue_admitted_provisioner_launch
-    from engine.models import Range, RangeAuthorityChange, WarmRangeGeneration
-    from shared.credentials import resolve_local_credential
-
-    from ._launch_authority import range_runtime_binding_digest
-    from ._principal_warm_claim import PreparedWarmRangeClaim
 
     if (
         not isinstance(prepared, PreparedWarmRangeClaim)
@@ -353,7 +342,6 @@ def enqueue_admitted_warm_activation(
         or row.owner_principal_uuid != prepared.credential.principal.uuid
     ):
         raise ValueError("Warm activation binding changed")
-    from shared.operation_authority import credential_reference_fields
 
     names = [field.name for field in RangeAuthorityChange._meta.fields if field.name.startswith("authority_")]
     fields = credential_reference_fields(prepared.credential) | {name: getattr(retained, name) for name in names}

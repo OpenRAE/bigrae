@@ -11,12 +11,20 @@ import enum
 import logging
 from typing import TYPE_CHECKING
 
+from django.db import transaction
+
+from engine.models import Range
+from engine.services._launch_intents import request_provision_interrupt
+from engine.services._launch_starts import start_raes_range_teardown, start_range_teardown
 from shared.credentials import CredentialContext
 from shared.enums import ResourceStatus
 from shared.identity_scope import PrincipalRef
 from shared.log_sanitize import safe_log_value
+from shared.raes.runtime_target import is_raes_provisioning_plan
 
 from ._common import EngineError, _persist_task_arn
+from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
+from ._principal_range_owner import commit_range_owner_move, prepare_range_owner_move
 from ._range_custody import (
     _vpn_custody_never_left,
     get_pinned_range_egress_mode_by_request,
@@ -24,6 +32,7 @@ from ._range_custody import (
     principal_range_owner_reassignment_available,
     range_owner_reassignment_available_by_request,
 )
+from ._receipt import _revoke_receipt_verifier_for_range, revoke_receipt_verifier
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -31,7 +40,6 @@ if TYPE_CHECKING:
 
     from django.contrib.auth.models import User
 
-    from engine.models import Range
 
 logger = logging.getLogger(__name__)
 
@@ -82,13 +90,8 @@ def destroy_range_by_request(request_id: UUID, *, credential: CredentialContext 
     flag, so an existing RAES range stays destroyable after a rollback empties the
     route or disables the native flag (ADR-031-R6).
     """
-    from engine.ecs import start_raes_range_teardown, start_range_teardown
-    from engine.models import Range
-    from shared.raes.runtime_target import is_raes_provisioning_plan
 
     if credential is not None:
-        from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
-
         return commit_prepared_range_lifecycle(prepare_range_lifecycle(credential, request_id, "destroy"))
     logger.debug("destroy_range_by_request: request_id=%s", request_id)
     range_obj = Range.objects.filter(request__request_id=request_id).first()
@@ -108,14 +111,10 @@ def _apply_destroy_by_request(
 ) -> bool:
     """Status-branch helper for ``destroy_range_by_request`` (same shape as ``_apply_destroy_to_range``)."""
     if range_obj.status == ResourceStatus.DESTROYED.value:
-        from ._receipt import revoke_receipt_verifier
-
         revoke_receipt_verifier(request_id)
         logger.warning("destroy_range_by_request: already destroyed request_id=%s", request_id)
         return False
     if range_obj.status == ResourceStatus.DESTROYING.value:
-        from ._receipt import revoke_receipt_verifier
-
         revoke_receipt_verifier(request_id)
         logger.info("destroy_range_by_request: already destroying request_id=%s", request_id)
         return True
@@ -127,7 +126,6 @@ def _apply_destroy_by_request(
     # provider teardown starts. Revocation is intentionally not rolled back if
     # the external teardown launch fails: a later retry may re-register a new
     # assignment, but stale proof must never become valid again.
-    from ._receipt import revoke_receipt_verifier
 
     revoke_receipt_verifier(request_id)
     logger.info(
@@ -158,8 +156,6 @@ def cancel_range_by_request(request_id: UUID, *, credential: CredentialContext |
     """
 
     if credential is not None:
-        from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
-
         return commit_prepared_range_lifecycle(prepare_range_lifecycle(credential, request_id, "cancel"))
     return _cancel_legacy_range_by_request(request_id)
 
@@ -171,7 +167,6 @@ def _cancellation_already_settled(range_obj: Range, request_id: UUID) -> bool | 
     not cancellable, and ``None`` when the caller should proceed with the
     cancellation. Caller holds the row lock.
     """
-    from engine.models import Range
 
     if range_obj.status == Range.Status.DESTROYING:
         logger.info(
@@ -221,7 +216,6 @@ def rebind_range_workspace_by_request(
         RangeProjectionIntegrityError: If more than one Engine range correlates
             to ``request_id`` (a one-to-one invariant violation).
     """
-    from engine.models import Range
 
     # Sanitize the request-derived correlation id before it reaches any log sink
     # (CodeQL py/log-injection); the internal workspace ints are not user text.
@@ -327,7 +321,6 @@ def reassign_range_owner_by_request(
     if credential is not None:
         if not isinstance(new_user, PrincipalRef):
             raise ValueError("A principal owner is required")
-        from ._principal_range_owner import commit_range_owner_move, prepare_range_owner_move
 
         return commit_range_owner_move(prepare_range_owner_move(credential, request_id, new_user))
     return _reassign_legacy_range_owner(
@@ -337,10 +330,6 @@ def reassign_range_owner_by_request(
 
 def _cancel_legacy_range_by_request(request_id: UUID) -> bool:
     """Record interruption for an incumbent human-owned range generation."""
-    from django.db import transaction
-
-    from engine.launch_intents import request_provision_interrupt
-    from engine.models import Range
 
     logger.debug("cancel_range_by_request: request_id=%s", request_id)
     with transaction.atomic():
@@ -353,13 +342,10 @@ def _cancel_legacy_range_by_request(request_id: UUID) -> bool:
         settled = _cancellation_already_settled(range_obj, request_id)
         if settled is not None:
             if settled:
-                from ._receipt import _revoke_receipt_verifier_for_range
-
                 _revoke_receipt_verifier_for_range(range_obj)
             return settled
         range_obj.status = Range.Status.DESTROYING
         range_obj.save(update_fields=["status"])
-        from ._receipt import _revoke_receipt_verifier_for_range
 
         _revoke_receipt_verifier_for_range(range_obj)
         request_provision_interrupt(range_obj)
@@ -379,9 +365,6 @@ def _reassign_legacy_range_owner(
     expected_scope: tuple[str, int | None, int | None, int | None] | None,
 ) -> bool:
     """Transfer an incumbent human-owned range while retaining projection and workspace fences."""
-    from django.db import transaction
-
-    from engine.models import Range
 
     if isinstance(new_user, PrincipalRef):
         raise ValueError("A legacy human owner is required")
@@ -415,7 +398,6 @@ def _reassign_legacy_range_owner(
         # Receipt authorization is server-held, so it can be revoked atomically
         # before the assignment owner changes.  The new owner must receive a new
         # registration revision and assignment epoch.
-        from ._receipt import _revoke_receipt_verifier_for_range
 
         _revoke_receipt_verifier_for_range(range_obj)
 

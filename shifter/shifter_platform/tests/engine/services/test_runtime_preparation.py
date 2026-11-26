@@ -9,11 +9,11 @@ from cryptography.fernet import Fernet
 from django.db import IntegrityError, transaction
 from shifter_adapter_sdk.runtime import RuntimeInput, RuntimePlan
 
-from engine.launch_intents import enqueue_provisioner_launch
 from engine.models import Range, RuntimePluginInstallation, RuntimePluginInvocation, RuntimePluginRangeBinding
-from engine.operation_inputs import operation_input_payload
 from engine.services import RangeBindings, bind_runtime_plugin, create_raes_range, install_runtime_plugin
 from engine.services import _runtime_plugin_operations as operations
+from engine.services._launch_intents import enqueue_provisioner_launch
+from engine.services._operation_inputs import operation_input_payload
 from engine.services._runtime_plugin_preparation import preparation_result_secret
 from shared.field_encryption import decrypt_value
 from shared.raes.operation_input import parse_raes_operation_input
@@ -223,6 +223,6 @@ def test_prepared_cleanup_uses_original_input_even_when_registry_projection_chan
     def changed(*_args):
         raise AssertionError("cleanup must not consult a changed registry")
 
-    monkeypatch.setattr("engine.operation_inputs._raes_image_candidates", changed)
+    monkeypatch.setattr("engine.services._operation_inputs._raes_image_candidates", changed)
     cleanup = operation_input_payload(pending.target, "raes-range", pending.target.request, operation="destroy")
     assert {key: value for key, value in cleanup.items() if key != "runtime_preparation"} == source

@@ -46,12 +46,12 @@ AUTHORITY_CONTRACT_VERSION = "2"
 ACCEPTED_CONTRACT_VERSIONS = frozenset({CONTRACT_VERSION, AUTHORITY_CONTRACT_VERSION})
 
 # Closed discriminators. The specific operation legal for a resource is enforced
-# by the domain authorization (engine.launch_intents); the envelope only bounds
+# by the domain authorization (engine.services._launch_intents); the envelope only bounds
 # the vocabulary so an unknown discriminator fails closed at the wire.
 RESOURCES = frozenset({"range", "raes-range", "ngfw", "vpn-profile", "range-project", "worker-trial"})
 # ``activate`` (#28, ADR-039-R11) hands an atomically claimed warm generation to
 # its claimant with fresh, fully sanitized access. Like every other value here it
-# is only a wire discriminator; engine.launch_intents authorizes which resource
+# is only a wire discriminator; engine.services._launch_intents authorizes which resource
 # may carry it (raes-range only).
 OPERATIONS = frozenset(
     {

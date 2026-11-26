@@ -33,11 +33,12 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import IntegrityError, transaction
+from django.utils import timezone
 
+from engine.models import CapacityDraw, CapacityReservation, DisposableWorker
 from shared.capacity import (
     CapacityAssessmentResult,
     CapacityOutcome,
@@ -47,9 +48,6 @@ from shared.capacity import (
     PartitionRef,
 )
 from shared.log_sanitize import safe_log_value
-
-if TYPE_CHECKING:
-    from engine.models import CapacityReservation
 
 logger = logging.getLogger(__name__)
 
@@ -69,9 +67,6 @@ def admit_range_capacity(
 
     Never performs provider I/O, so it is safe on the range-creation path.
     """
-    from django.utils import timezone
-
-    from engine.models import CapacityReservation
 
     moment = now or timezone.now()
 
@@ -106,9 +101,6 @@ def release_range_capacity(draw_key: UUID, *, now: datetime | None = None) -> in
     Idempotent: only open draws are touched, so destroy, expiry, cancellation,
     and a retried reconciliation can all call this safely.
     """
-    from django.utils import timezone
-
-    from engine.models import CapacityDraw, CapacityReservation, DisposableWorker
 
     if DisposableWorker.objects.filter(pk=draw_key, terminal_at__isnull=True).exists():
         return 0
@@ -139,9 +131,6 @@ def reconcile_capacity_budgets(*, now: datetime | None = None) -> int:
 
     Returns the number of budgets released.
     """
-    from django.utils import timezone
-
-    from engine.models import CapacityDraw, CapacityReservation
 
     moment = now or timezone.now()
     with transaction.atomic():
@@ -165,7 +154,6 @@ def reconcile_capacity_budgets(*, now: datetime | None = None) -> int:
 
 def _draw_one(budget: CapacityReservation, *, draw_key: UUID, now: datetime) -> MetricVerdict:
     """Take one range's share from a single budget, or explain why not."""
-    from engine.models import CapacityDraw
 
     enforcement = _enforcement_of(budget)
 
@@ -200,7 +188,6 @@ def _draw_one(budget: CapacityReservation, *, draw_key: UUID, now: datetime) -> 
 
 def _book(budget: CapacityReservation, *, draw_key: UUID, amount: float) -> None:
     """Persist the draw and its budget effect inside the caller's transaction."""
-    from engine.models import CapacityDraw
 
     try:
         with transaction.atomic():
@@ -220,7 +207,6 @@ def _book(budget: CapacityReservation, *, draw_key: UUID, amount: float) -> None
 
 def _clamped_consumed(reservation_id: int, amount: float) -> float:
     """Return the budget's consumption with ``amount`` returned, floored at zero."""
-    from engine.models import CapacityReservation
 
     current = CapacityReservation.objects.get(pk=reservation_id).consumed
     return max(0.0, current - amount)

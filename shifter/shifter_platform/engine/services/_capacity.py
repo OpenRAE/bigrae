@@ -11,11 +11,10 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from uuid import UUID
 
-if TYPE_CHECKING:
-    from engine.models import CapacityDeclaration
+from engine.models import CapacityDeclaration
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,6 @@ def record_capacity_declaration(signal: EventCapacitySignal) -> CapacityDeclarat
     event is skipped so scheduled re-runs do not spam the history; any change
     appends a fresh row.
     """
-    from engine.models import CapacityDeclaration
 
     latest = CapacityDeclaration.objects.filter(event_ref=signal.event_ref).order_by("-declared_at").first()
     if (
@@ -74,6 +72,5 @@ def record_capacity_declaration(signal: EventCapacitySignal) -> CapacityDeclarat
 
 def latest_capacity_declaration(event_ref: UUID) -> CapacityDeclaration | None:
     """Return the current (newest) declaration for one event, if any."""
-    from engine.models import CapacityDeclaration
 
     return CapacityDeclaration.objects.filter(event_ref=event_ref).order_by("-declared_at").first()

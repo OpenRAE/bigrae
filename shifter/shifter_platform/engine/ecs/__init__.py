@@ -13,18 +13,17 @@ Local Development:
 The implementation is split by responsibility across private submodules
 (``_env`` GCP Job env projection, ``_config`` task-runner config, ``_local``
 local subprocess fallback, ``_status`` task-status projection) and re-exported
-here (#685) so callers keep using ``from engine.ecs import X``. The dispatch
-pipeline and its logging stay in this facade so it retains the stable
-``engine.ecs`` logger namespace.
+here (#685) so callers keep using ``from engine.ecs import X``. Provider
+dispatch stays in this facade. The ``start_*`` launch entry points live in
+``engine.services._launch_starts`` because they enqueue launch intents.
 """
 
 from __future__ import annotations
 
-import logging
-from typing import TYPE_CHECKING
+from django.conf import settings
 
+from engine.launch_commands import validate_provisioner_command
 from shared.cloud import PROVISIONER_CONTAINER_NAME, get_task_runner
-from shared.enums import ResourceType
 
 from ._config import _get_engine_task_config
 from ._env import (
@@ -36,50 +35,16 @@ from ._env import (
 )
 from ._local import _is_local_provisioner_enabled, _run_local_provisioner
 from ._status import get_task_status
-from ._validation import _validate_start_ecs_task_args
-
-# SonarCloud S1192: extracted duplicated string literals.
-REQUEST_ID_NONE_MSG = "request_id cannot be None"
-
-if TYPE_CHECKING:
-    from uuid import UUID
-
-    from shared.credentials import CredentialContext
-
-logger = logging.getLogger(__name__)
-
-
-def _enqueue_provisioner_launch(command: list[str], *, credential: CredentialContext | None = None) -> str | None:
-    """Persist one durable ``ProvisionerLaunchIntent`` for the launcher worker and
-    return its reserved task ref.
-
-    Provider-neutral (ADR-043-R2): AWS and GCP share this single launch-intent
-    contract. There is no synchronous provider dispatch here; the active
-    ``TaskRunner.run_task`` is reached only by the ``drain_provisioner_launch_outbox``
-    worker through :func:`dispatch_provisioner_command`. Returns ``None`` when the
-    engine task runner is not configured, so a misconfigured provider does not
-    persist an intent the launcher can never execute (a ghost launch). The domain
-    operation generation is reserved and fenced inside
-    ``engine.launch_intents.enqueue_provisioner_launch`` for both providers.
-    """
-    if _get_engine_task_config() is None:
-        return None
-    from engine.launch_intents import enqueue_provisioner_launch, task_ref_for_intent
-
-    intent_id = enqueue_provisioner_launch(command, credential=credential)
-    return task_ref_for_intent(intent_id)
+from ._workload import assert_provisioner_workload
 
 
 def dispatch_provisioner_command(
     command: list[str], *, task_identity: str | None = None, expected_workload: dict[str, object] | None = None
 ) -> str | None:
     """Launch one validated command directly; callable only by the launcher worker on GCP."""
-    from engine.launch_intents import validate_provisioner_command
 
     validate_provisioner_command(command)
     if expected_workload is not None:
-        from ._workload import assert_provisioner_workload
-
         assert_provisioner_workload(expected_workload, command, task_identity)
     if _is_local_provisioner_enabled():
         return _run_local_provisioner(command)
@@ -109,7 +74,6 @@ def interrupt_provisioner_task(
     Job identity) before stopping it. Returns a ``TaskInterruptDisposition`` value,
     or ``None`` when the engine task runner is not configured.
     """
-    from django.conf import settings
 
     if expected_workload is not None:
         namespace = expected_workload.get("namespace")
@@ -143,331 +107,9 @@ def interrupt_provisioner_task(
     return runner.interrupt_task(cluster, task_ref, expected_identity)
 
 
-def _start_ecs_task(range_id: int, user_id: int, command: str) -> str | None:
-    """Start an ECS Fargate task for provisioning operations.
-
-    Args:
-        range_id: Database ID of the Range
-        user_id: Django User ID of the User
-        command: Command to run ("provision" or "destroy")
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is
-        not configured. The launcher worker submits the provider task later.
-
-    Raises:
-        TypeError: If range_id is not an integer or user_id is not an integer or command is not a string
-        ValueError: If range_id is negative or user_id is negative or command is empty,
-            or if current domain state does not authorize the operation
-    """
-    _validate_start_ecs_task_args(range_id, user_id, command)
-
-    command_list = [
-        ResourceType.RANGE.value,
-        command,
-        "--range-id",
-        str(range_id),
-        "--user-id",
-        str(user_id),
-    ]
-    logger.info("Enqueuing provisioner launch intent range_id=%s command=%s", range_id, command)
-    return _enqueue_provisioner_launch(command_list)
-
-
-def start_provisioning(range_id: int, user_id: int) -> str | None:
-    """Start provisioning a range via ECS Fargate.
-
-    Args:
-        range_id: Database ID of the Range to provision
-        user_id: Django User ID of the User
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is
-        not configured (falls back to a local subprocess in local dev)
-
-    Raises:
-        ValueError: If current domain state does not authorize the operation
-    """
-    return _start_ecs_task(range_id, user_id, "provision")
-
-
-def start_teardown(range_id: int, user_id: int) -> str | None:
-    """Start teardown of a range via ECS Fargate.
-
-    Args:
-        range_id: Database ID of the Range to teardown
-        user_id: User ID for event publishing in the provisioner
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is
-        not configured (falls back to a local subprocess in local dev)
-
-    Raises:
-        ValueError: If current domain state does not authorize the operation
-
-    .. deprecated::
-        Use :func:`start_range_teardown` instead.
-    """
-    return _start_ecs_task(range_id, user_id, "destroy")
-
-
 # =============================================================================
 # Request-based Range ECS Functions (new pattern matching NGFW)
 # =============================================================================
-
-
-def _dispatch_remote_provisioner_task(
-    command: list[str],
-    request_id: UUID,
-    resource: str,
-    *,
-    credential: CredentialContext | None = None,
-) -> str | None:
-    """Enqueue a durable launch intent for a request-based remote operation.
-
-    The ``drain_provisioner_launch_outbox`` worker later submits the provider
-    task; nothing here calls ``TaskRunner.run_task`` directly (ADR-043-R2).
-    """
-    logger.info("Enqueuing %s launch intent for request_id=%s", resource, request_id)
-    return _enqueue_provisioner_launch(command, credential=credential)
-
-
-def _start_range_ecs_task(
-    request_id: UUID,
-    command: str,
-    resource: str = "range",
-    *,
-    credential: CredentialContext | None = None,
-) -> str | None:
-    """Start an ECS Fargate task for Range operations using request_id.
-
-    Matches NGFW pattern - provisioner fetches all data from DB using request_id.
-
-    Args:
-        request_id: UUID of the Request to operate on
-        command: Command to run ("provision" or "destroy")
-        resource: Provisioner subcommand/resource group. RAES lifecycle calls
-            pass ``"raes-range"`` so the provisioner realizes a persisted
-            serialized RAES plan (ADR-031/ADR-032); the local/ECS dispatch
-            mechanics are otherwise identical.
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is not configured
-
-    Raises:
-        TypeError: If request_id is None or not a UUID
-        ValueError: If command is invalid
-        ValueError: If current domain state does not authorize the operation
-    """
-    from uuid import UUID as UUIDType
-
-    if request_id is None:
-        raise TypeError(REQUEST_ID_NONE_MSG)
-    if not isinstance(request_id, UUIDType):
-        raise TypeError(f"request_id must be a UUID, got {type(request_id).__name__}")
-    valid_commands = ("provision", "destroy", "pause", "resume")
-    if command not in valid_commands:
-        raise ValueError(f"Invalid command: {command}. Must be one of {valid_commands}.")
-
-    command_list = [resource, command, "--request-id", str(request_id)]
-    if _is_local_provisioner_enabled():
-        logger.info(
-            "Using local provisioner for %s request_id=%s command=%s",
-            resource,
-            request_id,
-            command,
-        )
-        from engine.launch_intents import enqueue_provisioner_launch, task_ref_for_intent
-
-        intent_id = enqueue_provisioner_launch(command_list, credential=credential)
-        return task_ref_for_intent(intent_id) or f"local-pending:{intent_id}"
-    return _dispatch_remote_provisioner_task(command_list, request_id, resource, credential=credential)
-
-
-def start_range_provisioning(request_id: UUID, *, credential: CredentialContext | None = None) -> str | None:
-    """Start provisioning a range via ECS Fargate using request_id.
-
-    Args:
-        request_id: UUID of the Request to provision.
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is not configured.
-
-    Raises:
-        TypeError: If request_id is None or not a UUID
-        ValueError: If current domain state does not authorize the operation
-    """
-    return _start_range_ecs_task(request_id, "provision", credential=credential)
-
-
-def start_raes_range_provisioning(request_id: UUID, *, credential: CredentialContext | None = None) -> str | None:
-    """Provision an RAES-native range through its request-bound lifecycle command.
-
-    Identical dispatch mechanics to :func:`start_range_provisioning` (local
-    subprocess or ECS Fargate); only the provisioner subcommand differs, so the
-    provisioner realizes a persisted serialized RAES plan rather than a RangeSpec.
-
-    Returns:
-        Task ARN / local handle if dispatched, None if ECS is not configured.
-    """
-    return _start_range_ecs_task(request_id, "provision", resource="raes-range", credential=credential)
-
-
-def start_raes_range_teardown(request_id: UUID, *, credential: CredentialContext | None = None) -> str | None:
-    """Destroy an RAES-native range through its request-bound lifecycle command.
-
-    Identical dispatch mechanics to :func:`start_range_teardown`; only the
-    provisioner subcommand differs, so the provisioner reconstructs the range
-    resources from the persisted serialized RAES plan and deletes them.
-
-    Returns:
-        Task ARN / local handle if dispatched, None if ECS is not configured.
-    """
-    return _start_range_ecs_task(request_id, "destroy", resource="raes-range", credential=credential)
-
-
-def start_range_teardown(request_id: UUID, *, credential: CredentialContext | None = None) -> str | None:
-    """Start teardown of a range via ECS Fargate using request_id.
-
-    Args:
-        request_id: UUID of the Request to teardown.
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is not configured.
-
-    Raises:
-        TypeError: If request_id is None or not a UUID
-        ValueError: If current domain state does not authorize the operation
-    """
-    return _start_range_ecs_task(request_id, "destroy", credential=credential)
-
-
-def start_range_operation(
-    request_id: UUID, operation: str, *, credential: CredentialContext | None = None
-) -> str | None:
-    """Start a range runtime operation (pause/resume) via ECS Fargate.
-
-    Args:
-        request_id: UUID of the Request containing the Range.
-        operation: Operation to perform ('pause' or 'resume').
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is not configured.
-
-    Raises:
-        TypeError: If request_id is None or not a UUID
-        ValueError: If operation is not 'pause' or 'resume'
-        ValueError: If current domain state does not authorize the operation
-    """
-    from uuid import UUID as UUIDType
-
-    if request_id is None:
-        raise TypeError(REQUEST_ID_NONE_MSG)
-    if not isinstance(request_id, UUIDType):
-        raise TypeError(f"request_id must be a UUID, got {type(request_id).__name__}")
-    if operation not in ("pause", "resume"):
-        raise ValueError(f"Invalid operation: {operation}. Must be 'pause' or 'resume'.")
-
-    return _start_range_ecs_task(request_id, operation, credential=credential)
-
-
-def _start_ngfw_ecs_task(request_id: UUID, command: list[str]) -> str | None:
-    """Start an ECS Fargate task for NGFW operations.
-
-    Args:
-        request_id: UUID of the Request to operate on
-        command: Command list to run (e.g., ["ngfw", "provision", "--request-id", "..."])
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is not configured
-
-    Raises:
-        TypeError: If request_id is None or command is not a list
-        ValueError: If command is empty
-        ValueError: If current domain state does not authorize the operation
-    """
-    from uuid import UUID
-
-    if request_id is None:
-        raise TypeError(REQUEST_ID_NONE_MSG)
-    if not isinstance(request_id, UUID):
-        raise TypeError(f"request_id must be a UUID, got {type(request_id).__name__}")
-    if command is None or not isinstance(command, list):
-        raise TypeError("command must be a list")
-    if not command:
-        raise ValueError("command must be a non-empty list")
-
-    if _is_local_provisioner_enabled():
-        logger.info(
-            "Using local provisioner for NGFW request_id=%s command=%s",
-            request_id,
-            command,
-        )
-        return _run_local_provisioner(command)
-    return _dispatch_remote_provisioner_task(command, request_id, "NGFW")
-
-
-def start_ngfw_provisioning(request_id: UUID) -> str | None:
-    """Start provisioning an NGFW via ECS Fargate.
-
-    Args:
-        request_id: UUID of the Request to provision.
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is
-        not configured (falls back to a local subprocess in local dev)
-
-    Raises:
-        TypeError: If request_id is None or not a UUID
-        ValueError: If current domain state does not authorize the operation
-    """
-    command = ["ngfw", "provision", "--request-id", str(request_id)]
-    return _start_ngfw_ecs_task(request_id, command)
-
-
-def start_ngfw_teardown(request_id: UUID) -> str | None:
-    """Start teardown/deprovision of an NGFW via ECS Fargate.
-
-    Args:
-        request_id: UUID of the Request to deprovision.
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is
-        not configured (falls back to a local subprocess in local dev)
-
-    Raises:
-        TypeError: If request_id is None or not a UUID
-        ValueError: If current domain state does not authorize the operation
-    """
-    command = ["ngfw", "deprovision", "--request-id", str(request_id)]
-    return _start_ngfw_ecs_task(request_id, command)
-
-
-def start_ngfw_operation(request_id: UUID, operation: str) -> str | None:
-    """Start an NGFW runtime operation (start/stop) via ECS Fargate.
-
-    Args:
-        request_id: UUID of the Request containing the NGFW instance.
-        operation: Operation to perform ('start' or 'stop').
-
-    Returns:
-        Reserved launch-intent task ref, or None if the engine task runner is not configured.
-
-    Raises:
-        TypeError: If request_id is None or not a UUID
-        ValueError: If operation is not 'start' or 'stop'
-        ValueError: If current domain state does not authorize the operation
-    """
-    from uuid import UUID
-
-    if request_id is None:
-        raise TypeError(REQUEST_ID_NONE_MSG)
-    if not isinstance(request_id, UUID):
-        raise TypeError(f"request_id must be a UUID, got {type(request_id).__name__}")
-    if operation not in ("start", "stop"):
-        raise ValueError(f"Invalid operation: {operation}. Must be 'start' or 'stop'.")
-
-    command = ["ngfw", operation, "--request-id", str(request_id)]
-    return _start_ngfw_ecs_task(request_id, command)
 
 
 __all__ = [
@@ -480,19 +122,7 @@ __all__ = [
     "_get_provisioner_env_overrides",
     "_is_local_provisioner_enabled",
     "_run_local_provisioner",
-    "_start_ecs_task",
-    "_start_ngfw_ecs_task",
     # Public provisioner dispatch entrypoints.
     "dispatch_provisioner_command",
     "get_task_status",
-    "start_ngfw_operation",
-    "start_ngfw_provisioning",
-    "start_ngfw_teardown",
-    "start_provisioning",
-    "start_raes_range_provisioning",
-    "start_raes_range_teardown",
-    "start_range_operation",
-    "start_range_provisioning",
-    "start_range_teardown",
-    "start_teardown",
 ]

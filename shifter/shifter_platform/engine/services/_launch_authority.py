@@ -5,32 +5,38 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, cast
 from uuid import UUID
 
+from engine.models import Instance, Range
 from shared.authorization import AuthorizationRequest, TargetRef
 from shared.authorization.catalog import TargetType
 from shared.authorization.policy import require_authorization
 from shared.credentials import CredentialContext, resolve_credential_scope, resolve_current_credential
+from shared.identity_scope import ResourceScope
 from shared.operation_authority import (
     authority_resource_scope,
     credential_reference_fields,
     credential_reference_from_record,
 )
 from shared.operation_envelope import AUTHORITY_CONTRACT_VERSION, canonical_payload_digest, validate_operation_envelope
+from shared.range_workspace_aggregate import require_range_event_association
 
+from ._device_authority import authorize_device_authority, prepare_device_authority, prepare_device_cleanup
 from ._launch_authority_binding import (
     assert_admitted_launch_binding,
     assert_launch_authority_binding,
     range_runtime_binding_digest,
 )
+from ._launch_cleanup_authority import prepare_cleanup_authority
+from ._range_authority import project_range_authority
+from ._range_creation_origin import _assert_creation_origin, _installation_creation_authority
 
 __all__ = ["assert_admitted_launch_binding", "assert_launch_authority_binding", "range_runtime_binding_digest"]
 
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from engine.models import Instance, OperationInput, ProvisionerLaunchIntent, Range
+    from engine.models import OperationInput, ProvisionerLaunchIntent
     from engine.services._range_authority import RangeAuthorityProjection
     from shared.credentials import CredentialContext
-    from shared.identity_scope import ResourceScope
 
 
 _OPERATION_AUTHORITY_UNAVAILABLE = "Operation authority unavailable"
@@ -46,9 +52,6 @@ def admit_launch_authority(
     authority_target: TargetRef | None = None,
 ) -> dict[str, object]:
     """Check the existing parent for creation; the exact leaf for lifecycle."""
-    from engine.models import Range
-
-    from ._range_authority import project_range_authority
 
     if (
         payload.get("resource") not in {"range", "raes-range"}
@@ -98,8 +101,6 @@ def _launch_action_target(
     action = "range.manage"
     if payload.get("operation") in {"provision", "activate"}:
         if parent.type == "event":
-            from shared.range_workspace_aggregate import require_range_event_association
-
             if parent.uuid is None:
                 raise ValueError(_OPERATION_AUTHORITY_UNAVAILABLE)
             require_range_event_association(request_uuid, parent.uuid)
@@ -138,14 +139,10 @@ def admitted_range_authority_fields(
 
 def authorize_launch_authority(intent: ProvisionerLaunchIntent, runtime: Range | Instance) -> None:
     """Recheck the original initiating proof; an owner cannot substitute for it."""
-    from engine.models import Instance
 
     if isinstance(runtime, Instance):
-        from ._device_authority import authorize_device_authority
-
         authorize_device_authority(intent, runtime)
         return
-    from ._range_authority import project_range_authority
 
     try:
         assert_launch_authority_binding(intent, runtime)
@@ -204,7 +201,6 @@ def _bound_range_scope(
 
 def _authorize_warm_pool_authority(intent: ProvisionerLaunchIntent, runtime: Range, current: CredentialContext) -> None:
     """Recheck the exact service and installation decision for warm preparation."""
-    from shared.identity_scope import ResourceScope
 
     target = TargetRef("installation")
     scope = ResourceScope("installation")
@@ -254,8 +250,6 @@ def prepare_launch_authority(
     if payload.get("resource") == "ngfw":
         return _prepare_device_launch_authority(payload, credential, cleanup_for)
     if cleanup_for is not None:
-        from ._launch_cleanup_authority import prepare_cleanup_authority
-
         if credential is not None:
             raise ValueError("Cleanup authority cannot replace a caller proof")
         return prepare_cleanup_authority(payload, cleanup_for)
@@ -325,7 +319,6 @@ def _prepare_device_launch_authority(
     payload: dict[str, object], credential: CredentialContext | None, cleanup_for: UUID | None
 ) -> dict[str, object]:
     """Keep device admission and bounded native cleanup on their existing owner boundary."""
-    from ._device_authority import prepare_device_authority, prepare_device_cleanup
 
     if cleanup_for is not None:
         if credential is not None:
@@ -336,17 +329,12 @@ def _prepare_device_launch_authority(
 
 def _principal_launch_fields(payload: dict[str, object], credential: CredentialContext | None) -> dict[str, object]:
     """Require explicit principal proof for any principal-owned native range."""
-    from engine.models import Range
 
     runtime = None
     if payload.get("resource") in {"range", "raes-range"} and "request_id" in payload:
         runtime = Range.objects.filter(request__request_id=UUID(str(payload["request_id"]))).first()
     if credential is not None:
         if runtime is not None and runtime.scope_kind == "installation" and payload.get("operation") == "provision":
-            from shared.identity_scope import ResourceScope
-
-            from ._principal_range_create import _assert_creation_origin, _installation_creation_authority
-
             current = resolve_current_credential(credential)
             if current.principal.kind != "service":
                 raise PermissionError(_OPERATION_AUTHORITY_UNAVAILABLE)

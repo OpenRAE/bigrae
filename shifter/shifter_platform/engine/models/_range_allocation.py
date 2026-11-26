@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from django.db import transaction
+from django.db import connection, transaction
 
 
 class RangeAllocationMixin:
@@ -16,7 +16,6 @@ class RangeAllocationMixin:
     @classmethod
     def allocate_subnet_index(cls: type[Any]) -> int:
         """Allocate the first free subnet index while holding the range-table lock."""
-        from django.db import connection
 
         with transaction.atomic():
             if connection.vendor != "sqlite":

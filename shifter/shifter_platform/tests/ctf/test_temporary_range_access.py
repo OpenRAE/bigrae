@@ -70,7 +70,9 @@ def participant_remote(launch_event, organizer_credential, monkeypatch):
     participant.save(update_fields=["range_status"])
     client, credential = login_participant(participant)
     reads = []
-    monkeypatch.setattr("engine.secrets.get_ssh_key", lambda key: reads.append(key) or "SYNTHETIC_PRIVATE_KEY")
+    monkeypatch.setattr(
+        "engine.services._terminal.get_ssh_key", lambda key: reads.append(key) or "SYNTHETIC_PRIVATE_KEY"
+    )
     return SimpleNamespace(
         participant=participant,
         event=launch_event,

@@ -3,6 +3,8 @@
 from dataclasses import dataclass
 from uuid import UUID
 
+from engine.models import Range
+
 from ._range_by_request import RangeProjectionIntegrityError
 
 
@@ -22,7 +24,6 @@ class RangeOwnershipProjection:
 
 def range_ownership_projection(request_id: UUID) -> RangeOwnershipProjection | None:
     """Fail closed on duplicate correlation instead of choosing an Engine row."""
-    from engine.models import Range
 
     rows = tuple(Range.objects.select_related("request").filter(request__request_id=request_id)[:2])
     if len(rows) > 1:

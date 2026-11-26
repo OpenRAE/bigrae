@@ -11,8 +11,8 @@ from uuid import uuid4
 import pytest
 from django.contrib.auth import get_user_model
 
-from engine import destroy_range
 from engine.models import Range
+from engine.services import destroy_range
 from shared.enums import ResourceStatus
 from shared.schemas import RangeRef
 

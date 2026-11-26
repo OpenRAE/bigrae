@@ -280,7 +280,9 @@ def test_service_administrator_opens_real_terminal_service_without_owner_imperso
     ]
     fixture.realized.save(update_fields=["provisioned_instances"])
     keys = []
-    monkeypatch.setattr("engine.secrets.get_ssh_key", lambda reference: keys.append(reference) or "SYNTHETIC_TEST_KEY")
+    monkeypatch.setattr(
+        "engine.services._terminal.get_ssh_key", lambda reference: keys.append(reference) or "SYNTHETIC_TEST_KEY"
+    )
     captured = []
     transport = object()
 
@@ -371,7 +373,7 @@ async def test_idle_service_terminal_revalidation_closes_transport_and_releases_
         }
     ]
     await database_sync_to_async(fixture.realized.save)(update_fields=["provisioned_instances"])
-    monkeypatch.setattr("engine.secrets.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
+    monkeypatch.setattr("engine.services._terminal.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
 
     class Terminal:
         is_connected = False
@@ -479,7 +481,7 @@ async def test_revocation_during_terminal_connect_cancels_work_and_releases_capa
         }
     ]
     await database_sync_to_async(fixture.realized.save)(update_fields=["provisioned_instances"])
-    monkeypatch.setattr("engine.secrets.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
+    monkeypatch.setattr("engine.services._terminal.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
     monkeypatch.setattr("config.session_credentials.validate_socket_session", lambda scope, **kwargs: True)
 
     class Terminal:
@@ -534,9 +536,9 @@ async def test_revocation_during_terminal_connect_cancels_work_and_releases_capa
 def test_queued_range_effect_revalidates_initiator_and_preserves_original_ceiling(principal_range):
     from django.utils import timezone
 
-    from engine.launch_intents import authorize_provisioner_payload
     from engine.models import ProvisionerLaunchIntent
     from engine.services._launch_authority import admit_launch_authority
+    from engine.services._launch_intents import authorize_provisioner_payload
     from management.models import Principal
 
     fixture = principal_range
@@ -561,7 +563,7 @@ def test_queued_range_effect_revalidates_initiator_and_preserves_original_ceilin
     assert queued.initiating_principal_uuid == fixture.credential.principal.uuid
     assert queued.authority_owner_uuid == fixture.owner.uuid
     assert queued.credential_uuid == fixture.credential.credential_uuid
-    from engine.operation_inputs import materialize_operation_input
+    from engine.services._operation_inputs import materialize_operation_input
 
     materialize_operation_input(payload, operation_id, fixture.realized)
     authorize_provisioner_payload(payload, expected_operation_id=operation_id)
@@ -571,8 +573,8 @@ def test_queued_range_effect_revalidates_initiator_and_preserves_original_ceilin
 
 
 def test_principal_owned_enqueue_cannot_omit_initiating_authority(principal_range):
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import OperationInput, ProvisionerLaunchIntent
+    from engine.services._launch_intents import enqueue_provisioner_launch
 
     fixture = principal_range
     fixture.realized.status = "resuming"
@@ -587,8 +589,8 @@ def test_principal_owned_enqueue_cannot_omit_initiating_authority(principal_rang
 
 
 def test_dispatch_rejects_operation_input_that_loses_its_original_authority(principal_range):
-    from engine.launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
     from engine.models import OperationInput, ProvisionerLaunchIntent
+    from engine.services._launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
 
     fixture = principal_range
     fixture.realized.status = "resuming"
@@ -607,8 +609,8 @@ def test_dispatch_rejects_operation_input_that_loses_its_original_authority(prin
 def test_rejected_dispatch_still_records_failure_for_its_current_generation(principal_range):
     from django.db import transaction
 
-    from engine.launch_intents import enqueue_provisioner_launch, fail_current_provisioner_operation
     from engine.models import OperationInput, ProvisionerLaunchIntent
+    from engine.services._launch_intents import enqueue_provisioner_launch, fail_current_provisioner_operation
 
     fixture = principal_range
     fixture.realized.status = "resuming"
@@ -626,8 +628,8 @@ def test_rejected_dispatch_still_records_failure_for_its_current_generation(prin
 
 
 def test_native_enqueue_binds_original_authority_and_equal_replay(principal_range):
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import OperationInput, ProvisionerLaunchIntent
+    from engine.services._launch_intents import enqueue_provisioner_launch
     from management.models import ServiceCredentialAdmission
 
     fixture = principal_range
@@ -697,8 +699,8 @@ def test_durable_authority_cannot_be_rewritten_by_bulk_updates(principal_range, 
 
 
 def test_explicit_cleanup_outlives_initiator_but_cannot_launch_or_change_resource_generation(principal_range):
-    from engine.launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
     from engine.models import ProvisionerLaunchIntent
+    from engine.services._launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
     from management.models import Principal
 
     fixture = principal_range

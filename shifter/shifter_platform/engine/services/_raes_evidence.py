@@ -16,6 +16,8 @@ from typing import Any
 
 from django.utils import timezone
 
+from shared.raes.operations import persist_operation_status_record, persist_runtime_snapshot_record
+
 logger = logging.getLogger(__name__)
 
 # Shared event/payload keys, kept as constants so the same contract key is not
@@ -55,7 +57,6 @@ def record_raes_operation_status(event: dict[str, Any]) -> None:
         payload["status_reason"] = reason
     # Lazy import: shared.raes.operations pulls shared.models, which must not load
     # during Django app population (AppRegistryNotReady), matching _raes_range.
-    from shared.raes.operations import persist_operation_status_record
 
     persist_operation_status_record(
         request_id=request_id,
@@ -81,7 +82,6 @@ def record_raes_runtime_snapshot(event: dict[str, Any]) -> None:
         "captured_at": source_timestamp.isoformat(),
     }
     # Lazy import (see record_raes_operation_status for why).
-    from shared.raes.operations import persist_runtime_snapshot_record
 
     # range_id on the record is an optional UUID projection key; the provisioner
     # event carries the integer range PK (not a UUID), and the MC RAES reads key on

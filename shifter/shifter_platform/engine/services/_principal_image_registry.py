@@ -3,20 +3,25 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import TYPE_CHECKING
 
 from django.db import transaction
 
+from engine.models import PreparedArtifactAdmission, RaesImageMapping
 from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.authorization import AuthorizationRequest, TargetRef
 from shared.authorization.policy import require_authorization
 from shared.credentials import CredentialContext, resolve_current_credential, resolve_local_credential
 from shared.identity_scope import ResourceScope
 
-if TYPE_CHECKING:
-    from engine.models import RaesImageMapping
-
 _IMAGE_REGISTRY_UNAVAILABLE = "Image registry unavailable"
+
+
+class RaesImageMappingError(ValueError):
+    """Validation failure with an explicit user-facing message, separate from diagnostics."""
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
 
 
 def authorize_image_registry(credential: object) -> CredentialContext:
@@ -62,7 +67,6 @@ def upsert_operator_image(
     credential: object, *, key: Mapping[str, object], defaults: Mapping[str, object]
 ) -> RaesImageMapping:
     """Retain immutable ownership and commit current-proof fencing with strict audit."""
-    from engine.models import PreparedArtifactAdmission, RaesImageMapping
 
     current = authorize_image_registry(credential)
     with transaction.atomic():
@@ -90,15 +94,12 @@ def upsert_operator_image(
 
 def disable_operator_image(credential: object, *, key: Mapping[str, object]) -> RaesImageMapping:
     """Disable only the exact scoped row; historical unscoped aliases remain isolated."""
-    from engine.models import RaesImageMapping
 
     current = authorize_image_registry(credential)
     with transaction.atomic():
         row = RaesImageMapping.objects.select_for_update().filter(**operator_image_selection(), **key).first()
         _fence_image_credential(current)
         if row is None:
-            from ._raes_image import RaesImageMappingError
-
             raise RaesImageMappingError("Image mapping unavailable")
         if row.owner_principal_uuid is None:
             raise PermissionError(_IMAGE_REGISTRY_UNAVAILABLE)

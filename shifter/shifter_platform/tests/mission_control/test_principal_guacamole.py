@@ -237,7 +237,7 @@ def remote(principal_range, settings, monkeypatch):
         }
     ]
     principal_range.realized.save(update_fields=["provisioned_instances"])
-    monkeypatch.setattr("engine.secrets.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
+    monkeypatch.setattr("engine.services._terminal.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
     return principal_range, target, Gateway()
 
 

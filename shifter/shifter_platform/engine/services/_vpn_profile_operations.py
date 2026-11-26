@@ -7,54 +7,47 @@ from hashlib import sha256
 from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
+from cryptography import x509
 from django.conf import settings
 from django.db import transaction
 from django.utils import timezone
 
+from engine.ecs._workload import provisioner_workload
+from engine.launch_commands import command_from_payload
+from engine.launch_commands import validate_vpn_command as validate_vpn_command
+from engine.models import (
+    InterruptState,
+    OperationInput,
+    OperationResultInbox,
+    ProvisionerLaunchIntent,
+    VpnAccessProfile,
+    VpnCrlState,
+)
+from engine.services._launch_interrupt import _request_intent_interrupt
+from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.db import RecordedAuthorityFields
 from shared.operation_authority import credential_reference_from_record
 from shared.operation_envelope import build_operation_envelope
+
+from ._launch_authority import assert_input_authority_binding, authority_envelope_fields
+from ._vpn_profile_authority import admit_vpn_profile_authority, assert_profile_runtime
 
 if TYPE_CHECKING:
     from typing import Any
     from uuid import UUID
 
-    from engine.models import ProvisionerLaunchIntent, VpnAccessProfile, VpnCrlState
-
 
 _VPN_CLEANUP_UNAVAILABLE = "VPN cleanup unavailable"
 
 
-def validate_vpn_command(command: list[str]) -> dict[str, Any]:
-    """Parse only the supported native PKI command and canonical identifiers."""
-    if (
-        len(command) != 6
-        or command[0] != "vpn-profile"
-        or command[1] not in {"issue", "revoke", "refresh-crl", "purge"}
-        or command[2] != "--request-id"
-        or command[4] != "--profile-id"
-    ):
-        raise ValueError("VPN operation unavailable")
-    return {
-        "version": 1,
-        "resource": "vpn-profile",
-        "operation": command[1],
-        "request_id": str(UUID(command[3])),
-        "profile_id": str(UUID(command[5])),
-    }
-
-
 def _vpn_operation_workload(payload: dict[str, Any], operation_id: UUID | str, intent_id: UUID) -> dict[str, object]:
     """Bind a PKI operation to its deterministic installed native workload."""
-    from engine.ecs._workload import provisioner_workload
-    from engine.launch_intents import command_from_payload
 
     return provisioner_workload(command_from_payload({**payload, "operation_id": str(operation_id)}), str(intent_id))
 
 
 def _reserve_crl_revision(operation: str) -> VpnCrlState:
     """Lock the CRL state and select the revision that this operation publishes."""
-    from engine.models import VpnCrlState
 
     VpnCrlState.objects.get_or_create(pk=1)
     crl = VpnCrlState.objects.select_for_update().get(pk=1)
@@ -69,9 +62,6 @@ def _reserve_crl_revision(operation: str) -> VpnCrlState:
 
 def queue_vpn_operation(profile: VpnAccessProfile, operation: str) -> None:
     """Commit a reference-only immutable input with the existing launch intent."""
-    from engine.models import OperationInput, ProvisionerLaunchIntent, VpnAccessProfile
-
-    from ._launch_authority import authority_envelope_fields
 
     with transaction.atomic():
         if operation == "purge":
@@ -168,7 +158,6 @@ def validate_vpn_operation(
     payload: dict[str, Any], operation_id: UUID | str | None, *, receipt: bool = False
 ) -> VpnAccessProfile:
     """Verify the exact recorded PKI generation, authority and immutable input."""
-    from engine.models import VpnAccessProfile
 
     profile = VpnAccessProfile.objects.select_related("range__request").get(pk=UUID(payload["profile_id"]))
     if str(profile.generation) != payload["request_id"] or (
@@ -186,9 +175,6 @@ def validate_vpn_operation(
 
 def _validate_cleanup_origin(profile: VpnAccessProfile, intent: ProvisionerLaunchIntent | None, operation: str) -> None:
     """Require the recorded issuance and native interruption for PKI cleanup."""
-    from engine.models import OperationInput, ProvisionerLaunchIntent
-
-    from ._launch_authority import assert_input_authority_binding
 
     if profile.issuance_operation_id is None or intent is None:
         raise ValueError(_VPN_CLEANUP_UNAVAILABLE)
@@ -208,20 +194,16 @@ def _validate_cleanup_origin(profile: VpnAccessProfile, intent: ProvisionerLaunc
         getattr(profile, field.name) != getattr(origin, field.name) for field in RecordedAuthorityFields._meta.fields
     ):
         raise ValueError("VPN cleanup authority changed")
-    if operation in {"revoke", "purge"}:
-        from engine.models import InterruptState
-
-        if profile.revoked_at is None or origin.interrupt_state != InterruptState.DESTROY_ENQUEUED:
-            raise ValueError("VPN issuer termination unconfirmed")
+    if operation in {"revoke", "purge"} and (
+        profile.revoked_at is None or origin.interrupt_state != InterruptState.DESTROY_ENQUEUED
+    ):
+        raise ValueError("VPN issuer termination unconfirmed")
     if operation == "purge":
         assert_vpn_revocation_published(profile)
 
 
 def assert_vpn_revocation_published(profile: VpnAccessProfile) -> None:
     """Private material can disappear only after its accepted public revocation."""
-    from cryptography import x509
-
-    from engine.models import OperationResultInbox, VpnCrlState
 
     if profile.revoked_at is None or profile.revocation_operation_id is None:
         raise ValueError("VPN revocation unconfirmed")
@@ -246,7 +228,6 @@ def assert_vpn_revocation_published(profile: VpnAccessProfile) -> None:
 
 def authorize_vpn_operation(payload: dict[str, Any], operation_id: UUID | str | None) -> None:
     """Admit ordinary issuance or its bounded recorded native cleanup."""
-    from ._vpn_profiles import admit_vpn_profile_authority
 
     try:
         profile = validate_vpn_operation(payload, operation_id)
@@ -275,7 +256,6 @@ def enqueue_interrupted_vpn_cleanup(origin: ProvisionerLaunchIntent) -> bool:
 
 def _audit_queued_operation(profile: VpnAccessProfile, operation: str, revision: int) -> None:
     """Record the original principal and the queued public CRL revision in the same transaction."""
-    from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 
     audit_log(
         AuditEvent(
@@ -299,9 +279,6 @@ def _recorded_vpn_intent(
     profile: VpnAccessProfile, payload: dict[str, Any], operation_id: UUID | str
 ) -> ProvisionerLaunchIntent:
     """Fence recorded command, initiating authority and immutable input before admission."""
-    from engine.models import OperationInput, ProvisionerLaunchIntent
-
-    from ._launch_authority import assert_input_authority_binding
 
     intent = ProvisionerLaunchIntent.objects.get(operation_id=operation_id)
     stored = OperationInput.objects.get(operation_id=operation_id)
@@ -318,7 +295,6 @@ def _recorded_vpn_intent(
 
 def _enqueue_interrupted_maintenance(origin: ProvisionerLaunchIntent, operation: str) -> bool:
     """Replace terminated maintenance once and preserve replay idempotency."""
-    from engine.models import VpnAccessProfile
 
     with transaction.atomic():
         profile = (
@@ -345,16 +321,12 @@ def _enqueue_interrupted_maintenance(origin: ProvisionerLaunchIntent, operation:
 
 def _enqueue_interrupted_issuance(origin: ProvisionerLaunchIntent) -> bool:
     """Queue revocation only after the admitted issuer has reached verified native absence."""
-    from engine.models import VpnAccessProfile
 
     with transaction.atomic():
         profile = VpnAccessProfile.objects.select_for_update().filter(issuance_operation_id=origin.operation_id).first()
         if profile is None or profile.revoked_at is None or origin.payload.get("profile_id") != str(profile.pk):
             return False
         if profile.provisioner_operation == "refresh-crl":
-            from engine.launch_interrupt import _request_intent_interrupt
-            from engine.models import ProvisionerLaunchIntent
-
             if profile.provisioner_operation_id is None:
                 raise ValueError(_VPN_CLEANUP_UNAVAILABLE)
             maintenance = ProvisionerLaunchIntent.objects.select_for_update().get(
@@ -368,7 +340,6 @@ def _enqueue_interrupted_issuance(origin: ProvisionerLaunchIntent) -> bool:
 
 def _assert_vpn_profile_state(profile: VpnAccessProfile, operation: str, *, receipt: bool) -> None:
     """Admit live issuance or retained cleanup evidence without widening the operation kind."""
-    from ._vpn_profiles import assert_profile_runtime
 
     if operation == "issue" and not receipt:
         assert_profile_runtime(profile, pending=True)

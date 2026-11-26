@@ -7,6 +7,16 @@ from typing import TYPE_CHECKING, Any
 from django.conf import settings
 from django.db import models
 
+from engine._range_state import (
+    attacker_instance,
+    attacker_private_ip,
+    find_instance_by_role,
+    find_instance_by_uuid,
+    first_victim_private_ip,
+    is_range_terminal,
+    is_range_usable,
+    victim_instances,
+)
 from shared.schemas.persistence import unwrap_persisted_spec
 
 from ._range_allocation import RangeAllocationMixin
@@ -264,7 +274,6 @@ class Range(RangeAllocationMixin, models.Model):
         ``engine.services``), so this stays a downward-only dependency even
         though ``engine.services._lifecycle`` re-exports the same function.
         """
-        from engine._range_state import is_range_usable
 
         return is_range_usable(self.status)
 
@@ -276,7 +285,6 @@ class Range(RangeAllocationMixin, models.Model):
         ``is_usable`` for why the model imports the neutral module directly
         rather than ``engine.services._lifecycle``.
         """
-        from engine._range_state import is_range_terminal
 
         return is_range_terminal(self.status)
 
@@ -377,7 +385,6 @@ class Range(RangeAllocationMixin, models.Model):
         Returns:
             Dictionary with instance details or None if not found
         """
-        from engine._range_state import find_instance_by_role
 
         return find_instance_by_role(self.provisioned_instances, role)
 
@@ -393,21 +400,18 @@ class Range(RangeAllocationMixin, models.Model):
         Raises:
             ValueError: If uuid is None or empty string
         """
-        from engine._range_state import find_instance_by_uuid
 
         return find_instance_by_uuid(self.provisioned_instances, uuid)
 
     @property
     def attacker_instance(self) -> dict | None:
         """Get the attacker instance details."""
-        from engine._range_state import attacker_instance
 
         return attacker_instance(self.provisioned_instances)
 
     @property
     def victim_instances(self) -> list[dict[str, Any]]:
         """Get all victim instance details."""
-        from engine._range_state import victim_instances
 
         return victim_instances(self.provisioned_instances)
 
@@ -418,7 +422,6 @@ class Range(RangeAllocationMixin, models.Model):
         Returns:
             The private IP address string or None if not available
         """
-        from engine._range_state import attacker_private_ip
 
         return attacker_private_ip(self.provisioned_instances)
 
@@ -429,6 +432,5 @@ class Range(RangeAllocationMixin, models.Model):
         Returns:
             The private IP address string or None if not available
         """
-        from engine._range_state import first_victim_private_ip
 
         return first_victim_private_ip(self.provisioned_instances)

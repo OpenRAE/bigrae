@@ -11,8 +11,8 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from engine import get_range_status
 from engine.models import Range
+from engine.services import get_range_status
 
 # Opaque #1325 workspace scope binding (ADR-046-R3). These suites do not
 # exercise tenancy; a fixed scalar stands in for the value the CMS launch

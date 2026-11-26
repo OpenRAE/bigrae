@@ -22,7 +22,7 @@ pytestmark = pytest.mark.django_db(databases=["default"])
 
 class TestStartTeardown:
     def test_enqueues_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import start_teardown
+        from engine.services._launch_starts import start_teardown
 
         range_row = make_authorized_legacy_range(status=Range.Status.DESTROYING)
         ref = start_teardown(range_id=range_row.pk, user_id=range_row.user_id)
@@ -34,7 +34,7 @@ class TestStartTeardown:
         ecs_client.run_task.assert_not_called()
 
     def test_returns_none_when_ecs_not_configured(self, aws_ecs_unconfigured, ecs_client):
-        from engine.ecs import start_teardown
+        from engine.services._launch_starts import start_teardown
 
         range_row = make_authorized_legacy_range(status=Range.Status.DESTROYING)
         assert start_teardown(range_id=range_row.pk, user_id=range_row.user_id) is None
@@ -55,7 +55,7 @@ class TestStartTeardownInputValidation:
         ],
     )
     def test_raises_on_invalid_input(self, aws_ecs_configured, range_id, user_id, exc_type):
-        from engine.ecs import start_teardown
+        from engine.services._launch_starts import start_teardown
 
         with pytest.raises(exc_type):
             start_teardown(range_id=range_id, user_id=user_id)

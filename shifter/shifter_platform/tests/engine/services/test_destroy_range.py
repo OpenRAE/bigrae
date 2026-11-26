@@ -13,9 +13,8 @@ from uuid import uuid4
 import pytest
 from django.contrib.auth import get_user_model
 
-from engine import destroy_range, destroy_range_by_request
 from engine.models import ProvisionerLaunchIntent, Range
-from engine.services import create_raes_range
+from engine.services import create_raes_range, destroy_range, destroy_range_by_request
 from shared.enums import ResourceStatus
 from shared.raes.runtime_target import RAES_PROVISIONING_PLAN_KIND
 from shared.schemas import InstanceSpec, RangeRef, RangeSpec, RequestSpec, SubnetSpec

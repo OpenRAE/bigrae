@@ -13,10 +13,9 @@ import pytest
 from django.contrib.auth import get_user_model
 from django.utils import timezone
 
-from engine import cancel_range, cancel_range_by_request
 from engine.models import ProvisionerLaunchIntent, Range
 from engine.models._launch import InterruptState
-from engine.services import create_raes_range
+from engine.services import cancel_range, cancel_range_by_request, create_raes_range
 from shared.enums import ResourceStatus
 from shared.schemas import InstanceSpec, RangeRef, RangeSpec, RequestSpec, SubnetSpec
 

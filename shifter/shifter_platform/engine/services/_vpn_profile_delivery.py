@@ -10,7 +10,12 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.x509.oid import ExtendedKeyUsageOID, NameOID
 from django.utils import timezone
 
+from engine.secrets import get_openvpn_profile_secret
 from shared.remote_access import OPENVPN_PROFILE_VERSION, OpenVpnProfile, validate_openvpn_profile_for_endpoint
+
+from ._vpn_errors import VpnProfilePending, VpnProfileUnavailable
+from ._vpn_profile_authority import authorize_vpn_profile
+from ._vpn_profiles import request_vpn_profile
 
 if TYPE_CHECKING:
     from datetime import datetime
@@ -24,8 +29,6 @@ def get_individual_vpn_profile(
     credential: CredentialContext, request_id: UUID, *, participation: bool = False
 ) -> OpenVpnProfile:
     """Reauthorize the original profile and verify its delivered certificate and key."""
-    from ._vpn import VpnProfilePending, VpnProfileUnavailable, get_openvpn_profile_secret
-    from ._vpn_profiles import authorize_vpn_profile, request_vpn_profile
 
     try:
         row = request_vpn_profile(credential, request_id, participation=participation)

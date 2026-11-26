@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from uuid import UUID
 
+from engine.models import PreparationAttempt, PreparedArtifactAdmission, RaesImageMapping
 from shared.artifact_preparation import PreparationWorkerResult
 from shared.cloud.preparation_readback import GCEPreparationReadback
 from shared.operation_envelope import canonical_payload_digest
@@ -13,7 +14,7 @@ from shared.raes.preparation_inputs import verify_input_observations
 from shared.raes.prepared_artifacts import VerifiedMaterialization, admit_materialization_facts
 
 if TYPE_CHECKING:
-    from engine.models import PreparationAttempt, PreparationOperation
+    from engine.models import PreparationOperation
 
 
 def validated_result(attempt: PreparationAttempt) -> PreparationWorkerResult:
@@ -82,7 +83,6 @@ def verified_facts(
 
 def _ancestor(attempt: PreparationAttempt, key: str, phase: str, evidence_key: str) -> None:
     """Handle ancestor."""
-    from engine.models import PreparationAttempt
 
     ancestor = PreparationAttempt.objects.get(pk=attempt.input["evidence"][key], operation_id=attempt.operation_id)
     result = validated_result(ancestor)
@@ -99,7 +99,6 @@ def _ancestor(attempt: PreparationAttempt, key: str, phase: str, evidence_key: s
 
 def save_admission(operation: PreparationOperation, facts: VerifiedMaterialization) -> None:
     """Caller holds scope/grant/adapter/operation/attempt fences in one transaction."""
-    from engine.models import PreparedArtifactAdmission, RaesImageMapping
 
     if operation.authority_kind != "principal":
         raise ValueError("Preparation native authority unavailable")

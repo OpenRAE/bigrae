@@ -8,11 +8,16 @@ from uuid import UUID, uuid4
 from django.db import transaction
 from django.utils import timezone
 
+from engine.ecs._workload import provisioner_workload
+from engine.launch_commands import command_from_payload
 from engine.models import GcpRangeProject, InterruptState, OperationInput, ProvisionerLaunchIntent
 from shared.credentials import CredentialContext
 from shared.gcp_project_registration import GcpProjectRegistrationInput
 from shared.operation_authority import credential_reference_from_record
 from shared.operation_envelope import build_operation_envelope, canonical_payload_digest
+
+from ._gcp_project_authority import project_authority_fields, require_project_administrator
+from ._launch_authority import assert_input_authority_binding, authority_envelope_fields
 
 _UNAVAILABLE = "Registered project operation is unavailable"
 
@@ -25,11 +30,6 @@ def queue_project_registration(
     operation: str = "register",
 ) -> None:
     """Commit input, original authority and workload identity in the registration transaction."""
-    from engine.ecs._workload import provisioner_workload
-    from engine.launch_intents import command_from_payload
-
-    from ._gcp_project_registration import project_authority_fields
-    from ._launch_authority import authority_envelope_fields
 
     if operation not in {"register", "verify"} or (operation == "verify") != (original.baseline is not None):
         raise ValueError(_UNAVAILABLE)
@@ -77,7 +77,6 @@ def validate_project_operation(
     payload: dict[str, object], operation_id: UUID | str | None, *, receipt: bool = False
 ) -> GcpRangeProject:
     """Require the exact original immutable input, target and current native generation."""
-    from ._launch_authority import assert_input_authority_binding
 
     if operation_id is None:
         raise ValueError(_UNAVAILABLE)
@@ -128,7 +127,6 @@ def _validate_capture_authority(
     row: GcpRangeProject, intent: ProvisionerLaunchIntent, stored: OperationInput, original: GcpProjectRegistrationInput
 ) -> None:
     """Reconstruct the exact initiating proof and immutable payload digest."""
-    from ._gcp_project_registration import project_authority_fields
 
     authority = project_authority_fields(credential_reference_from_record(intent), row)
     if any(getattr(intent, name) != value for name, value in authority.items()):
@@ -141,7 +139,6 @@ def _validate_capture_authority(
 
 def authorize_project_operation(payload: dict[str, object], operation_id: UUID | str | None) -> None:
     """Recheck the initiating credential and installation action immediately before launch."""
-    from ._gcp_project_registration import project_authority_fields, require_project_administrator
 
     try:
         row = validate_project_operation(payload, operation_id)

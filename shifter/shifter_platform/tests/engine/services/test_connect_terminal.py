@@ -46,7 +46,7 @@ def _active_range(user, instance, *, status=Range.Status.READY):
 
 class TestConnectTerminalOutputs:
     def test_returns_ssh_connection(self, settings, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
         from engine.ssh import SSHConnection
 
         settings.CLOUD_PROVIDER = "aws"
@@ -56,7 +56,7 @@ class TestConnectTerminalOutputs:
         assert isinstance(result, SSHConnection)
 
     def test_resolves_the_requested_instance(self, settings, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         # Two instances in the range; the requested uuid is the one connected to.
@@ -75,7 +75,7 @@ class TestConnectTerminalOutputs:
         assert result.host == "10.1.1.20"
 
     def test_builds_connection_with_gcp_provider_metadata(self, settings, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         instance = _instance(
@@ -105,7 +105,7 @@ class TestConnectTerminalFactoryInjection:
     """
 
     def test_uses_injected_factory_with_authorized_facts(self, settings, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         _active_range(user, _instance("fact-uuid", os_type="ubuntu", private_ip="10.1.1.77"))
@@ -127,7 +127,7 @@ class TestConnectTerminalFactoryInjection:
         assert captured["session_id"] == "fact-uuid"
 
     def test_default_factory_builds_real_ssh_connection(self, settings, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
         from engine.ssh import SSHConnection
 
         settings.CLOUD_PROVIDER = "aws"
@@ -137,7 +137,7 @@ class TestConnectTerminalFactoryInjection:
         assert isinstance(result, SSHConnection)
 
     def test_factory_not_invoked_when_authorization_fails(self, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         called = False
 
@@ -153,25 +153,25 @@ class TestConnectTerminalFactoryInjection:
 
 class TestConnectTerminalInputValidation:
     def test_requires_user_argument(self):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         with pytest.raises(TypeError):
             connect_terminal(instance_uuid="uuid-123")
 
     def test_raises_on_none_user(self):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         with pytest.raises((TypeError, ValueError)):
             connect_terminal(None, "uuid-123")
 
     def test_raises_on_none_instance_uuid(self, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         with pytest.raises((TypeError, ValueError)):
             connect_terminal(user, None)
 
     def test_raises_on_empty_instance_uuid(self, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         with pytest.raises((TypeError, ValueError)):
             connect_terminal(user, "")
@@ -179,21 +179,21 @@ class TestConnectTerminalInputValidation:
 
 class TestConnectTerminalErrorStates:
     def test_raises_when_no_active_range(self, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         with pytest.raises(ValueError, match="No active range"):
             connect_terminal(user, "non-existent-uuid")
 
     @pytest.mark.parametrize("status", [Range.Status.PROVISIONING, Range.Status.PAUSED])
     def test_raises_when_range_not_ready(self, user, status):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         _active_range(user, _instance("u-1"), status=status)
         with pytest.raises(ValueError, match="not ready"):
             connect_terminal(user, "u-1")
 
     def test_raises_when_instance_uuid_not_found_in_range(self, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         _active_range(user, _instance("present"))
         with pytest.raises(ValueError, match=r"(?i)instance.*not found"):
@@ -202,7 +202,7 @@ class TestConnectTerminalErrorStates:
 
 class TestConnectTerminalLogging:
     def test_logs_debug_on_entry(self, settings, user, caplog):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         _active_range(user, _instance("instance-uuid-123"))
@@ -211,7 +211,7 @@ class TestConnectTerminalLogging:
         assert "instance-uuid-123" in caplog.text
 
     def test_logs_warning_when_no_active_range(self, user, caplog):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         with caplog.at_level(logging.WARNING, logger="engine"), pytest.raises(ValueError):
             connect_terminal(user, "missing-uuid")
@@ -234,7 +234,7 @@ class TestConnectTerminalUsernameMapping:
         ],
     )
     def test_username_for_os_type(self, settings, user, os_type, expected_username):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         _active_range(user, _instance("os-uuid", os_type=os_type, private_ip="10.1.1.50"))
@@ -246,7 +246,7 @@ class TestConnectTerminalUsernameMapping:
 class TestConnectTerminalSessionIds:
     @pytest.mark.parametrize("os_type", ["kali", "ubuntu"])
     def test_sets_session_id_for_tmux_capable_instances(self, settings, user, os_type):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         _active_range(user, _instance("sess-uuid", os_type=os_type))
@@ -255,7 +255,7 @@ class TestConnectTerminalSessionIds:
         assert result.session_id == "sess-uuid"
 
     def test_no_session_id_for_windows_instances(self, settings, user):
-        from engine import connect_terminal
+        from engine.services import connect_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         _active_range(user, _instance("win-uuid", os_type="windows", private_ip="10.1.1.60"))

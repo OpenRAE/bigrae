@@ -1,6 +1,6 @@
 """RAES operation-input materialization (ADR-043 phase 5, #1837).
 
-Drives what ``engine.launch_intents`` materializes into ``OperationInput`` for an
+Drives what ``engine.services._launch_intents`` materializes into ``OperationInput`` for an
 ``raes-range`` generation: the serialized plan, the byte-free delivery bindings,
 the plan-scoped image candidates, and the normalized backend ownership the
 provisioner used to read straight out of Django tables.
@@ -16,7 +16,6 @@ from uuid import uuid4
 import pytest
 from django.contrib.auth import get_user_model
 
-from engine.launch_intents import enqueue_provisioner_launch
 from engine.models import (
     Instance,
     OperationInput,
@@ -27,6 +26,7 @@ from engine.models import (
     Range,
     Request,
 )
+from engine.services._launch_intents import enqueue_provisioner_launch
 from shared.enums import ResourceStatus
 from shared.raes.operation_input import (
     MAX_ACCESS_BINDINGS,
@@ -406,7 +406,7 @@ class TestParticipantAccessParserFailsClosed:
 
 
 def test_ec2_destroy_keeps_resource_epoch_when_operation_generation_changes():
-    from engine.operation_inputs import operation_input_payload
+    from engine.services._operation_inputs import operation_input_payload
 
     target = _RaesRange(range_backend="ec2")
     epoch = uuid4()

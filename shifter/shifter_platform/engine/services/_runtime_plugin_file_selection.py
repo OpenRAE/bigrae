@@ -7,11 +7,12 @@ from uuid import UUID
 
 from shifter_adapter_sdk.runtime import PluginManifest, canonical_digest
 
+from engine.models import RuntimePluginPackBinding
 from shared.exceptions import ValidationError
 from shared.runtime_plugin_binding import PluginTargetBindings, RuntimePluginScope
 
 if TYPE_CHECKING:
-    from engine.models import RuntimePluginInstallation, RuntimePluginPackBinding
+    from engine.models import RuntimePluginInstallation
 
 
 def file_selection_digest(binding: RuntimePluginPackBinding, installation: RuntimePluginInstallation) -> str:
@@ -41,7 +42,6 @@ def assert_file_selection(
 
 def runtime_plugin_file_selection(scope: RuntimePluginScope) -> tuple[str | None, dict[str, UUID]]:
     """Called only after CMS authorizes the source and its actual launch scope."""
-    from engine.models import RuntimePluginPackBinding
 
     row = (
         RuntimePluginPackBinding.objects.select_related("installation")

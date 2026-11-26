@@ -10,6 +10,7 @@ from django.contrib.auth import get_user_model
 from django.db import transaction
 from django.utils import timezone
 
+from engine.models import PreparationGrant, PreparationScopeLock
 from shared.audit import AuditAction, AuditActorType, AuditEntityType, AuditEvent, audit_log
 from shared.cloud.preparation_cloud_readback import verify_cloud_installation
 from shared.cloud.preparation_installation import PreparationInstallation
@@ -20,8 +21,6 @@ from ._preparation_adapters import _fence_preparation_actor, require_preparation
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
-
-    from engine.models import PreparationGrant
 
 
 def activate_preparation_grant(
@@ -39,7 +38,6 @@ def activate_preparation_grant(
     executable. A verified platform-controller release can refresh the proof
     without changing the immutable worker grant or existing operation inputs.
     """
-    from engine.models import PreparationGrant, PreparationScopeLock
 
     require_preparation_permission(user, "manage_preparation_grants")
     try:
@@ -91,7 +89,6 @@ def activate_preparation_grant(
 
 def revoke_preparation_grant(user: User, identity: UUID) -> None:
     """Revoke new execution and admission, preserving pinned cleanup and evidence."""
-    from engine.models import PreparationGrant, PreparationScopeLock
 
     require_preparation_permission(user, "manage_preparation_grants")
     with transaction.atomic():

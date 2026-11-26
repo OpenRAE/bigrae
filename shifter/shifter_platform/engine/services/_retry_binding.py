@@ -15,15 +15,15 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import timedelta
-from typing import TYPE_CHECKING
 
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from engine.models import PublicOperationRetryBinding, RetryBindingStatus
 from shared.exceptions import ValidationError
+from shared.operation_intent import INTENT_PROJECTION_VERSION
 
-if TYPE_CHECKING:
-    from engine.models import PublicOperationRetryBinding
+from ._cleanup_verification import is_cleanup_verified_absent
 
 __all__ = [
     "DEFAULT_RETRY_TTL_SECONDS",
@@ -83,7 +83,6 @@ def lookup_public_operation(
     *, deployment_scope: str, actor_key: str, action: str, caller_key: str
 ) -> PublicOperationRetryBinding | None:
     """Return the binding for a retry identity, or ``None`` when unbound."""
-    from engine.models import PublicOperationRetryBinding
 
     return PublicOperationRetryBinding.objects.filter(
         deployment_scope=deployment_scope,
@@ -112,8 +111,6 @@ def bind_public_operation(
     recovered (or conflicts). The binding records ``INTENT_PROJECTION_VERSION`` --
     the version ``intent_digest`` was computed under.
     """
-    from engine.models import PublicOperationRetryBinding, RetryBindingStatus
-    from shared.operation_intent import INTENT_PROJECTION_VERSION
 
     key = {
         "deployment_scope": deployment_scope,
@@ -155,9 +152,6 @@ def prune_expired_retry_bindings(*, batch_size: int) -> int:
     absence, so those bindings (the recovery / residual evidence) are retained
     until inventory confirms every owned resource is gone.
     """
-    from engine.models import PublicOperationRetryBinding
-
-    from .services._cleanup_verification import is_cleanup_verified_absent
 
     limit = max(1, int(batch_size))
     candidates = list(

@@ -3,21 +3,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
 
+from engine.models import DisposableWorker, Range
+from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 from shared.authorization import AuthorizationRequest
 from shared.authorization.policy import require_authorization, scope_parent
 from shared.credentials import CredentialContext, resolve_current_credential, resolve_local_credential
 from shared.identity_scope import ResourceScope
 from shared.principal_port import resolve_principal_uuid
+from workspaces.services import resolve_range_scope_binding
 
 from ._range_authority import RangeAuthorityProjection, project_range_authority
-
-if TYPE_CHECKING:
-    from engine.models import Range
+from ._range_authority_history import record_range_authority_change
+from ._receipt import _revoke_receipt_verifier_for_range
+from ._runtime_binding_digest import range_runtime_binding_digest
 
 
 @dataclass(frozen=True, slots=True)
@@ -34,8 +36,6 @@ def prepare_range_scope_move(
     credential: CredentialContext, request_id: UUID, target: ResourceScope
 ) -> PreparedRangeScopeMove:
     """Admit both parents and destination ownership before moving runtime custody."""
-    from engine.models import Range
-    from workspaces.services import resolve_range_scope_binding
 
     source = project_range_authority(request_id)
     current = resolve_current_credential(credential)
@@ -56,7 +56,6 @@ def prepare_range_scope_move(
 
 def _assert_move_supported(row: Range, *, allow_event: bool = False, allow_principal_vpn: bool = False) -> None:
     """Reject scope changes for runtime states that cannot safely move."""
-    from engine.models import DisposableWorker
 
     if DisposableWorker.objects.filter(range_id=row.pk).exists():
         raise ValueError("Worker custody cannot move")
@@ -72,11 +71,6 @@ def _assert_move_supported(row: Range, *, allow_event: bool = False, allow_princ
 
 def commit_range_scope_move(prepared: PreparedRangeScopeMove) -> bool:
     """Fence original custody and commit the independently admitted scope move."""
-    from engine.models import Range
-    from workspaces.services import resolve_range_scope_binding
-
-    from ._launch_authority import range_runtime_binding_digest
-    from ._range_authority_history import record_range_authority_change
 
     if not isinstance(prepared, PreparedRangeScopeMove):
         raise ValueError("Range scope unavailable")
@@ -107,7 +101,6 @@ def commit_range_scope_move(prepared: PreparedRangeScopeMove) -> bool:
         resolve_range_scope_binding(
             prepared.target, member=resolve_principal_uuid(row.owner_principal_uuid), for_update=True
         )
-        from ._receipt import _revoke_receipt_verifier_for_range
 
         _revoke_receipt_verifier_for_range(row)
         previous_digest = range_runtime_binding_digest(row)
@@ -117,7 +110,6 @@ def commit_range_scope_move(prepared: PreparedRangeScopeMove) -> bool:
         row.workspace_id = destination.workspace_id
         row.save(update_fields=["scope_kind", "account_id", "organization_id", "workspace_id", "updated_at"])
         record_range_authority_change(row, prepared.credential, "scope", previous_digest)
-        from shared.audit import AuditAction, AuditEntityType, AuditEvent, audit_log, principal_actor_fields
 
         audit_log(
             AuditEvent(

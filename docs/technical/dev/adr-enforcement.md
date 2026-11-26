@@ -347,6 +347,14 @@ The first slice intentionally stays small:
 
 - `import-linter`
   Adds package-level forbidden-import contracts across the main Django app layers.
+  For ADR-001-R5, an `acyclic_siblings` contract rejects an import cycle between the children of any `engine` package.
+  Forbidden contracts reject a module that imports its own package facade: `engine`, `engine.services`, `engine.models`, `engine.ecs`, or `engine.handlers`.
+  The [engine import design (#2865)](../../architecture/engine-import-design-2865.md) describes the layers.
+
+- Ruff `PLC0415`
+  Enforces ADR-001-R5: every import in `shifter_platform/engine` is at module level.
+  The platform `pyproject.toml` selects the rule and ignores it outside `engine/**`.
+  `engine/apps.py` is the only engine exception, recorded in `docs/adr/exceptions.yaml`.
 
 - `makemigrations --check --dry-run`
   Fails when a model or field-choices change ships without its migration. Runs in the Quality workflow. The old `missing-migrations-shifter-platform` hook is no longer configured. Adding a `TextChoices` member alters the field, so enum

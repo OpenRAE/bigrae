@@ -33,27 +33,33 @@ from typing import TYPE_CHECKING, Any
 
 from django.utils import timezone
 
+from engine.models import (
+    InterruptState,
+    OperationInput,
+    ProvisionerLaunchIntent,
+    RaesParticipantAccessBinding,
+    WarmRangeGeneration,
+)
 from shared.audit import AuditEntityType
 from shared.enums import ResourceStatus
 from shared.operation_results import ResultStep, range_status_for
+from shared.raes.completion import completed_snapshot, load_serialized_plan
+from shared.raes.operations import persist_operation_status_record, persist_runtime_snapshot_record
 from shared.raes.status import RAES_STATE_FAILED
 
+from ._cleanup_verification import record_cleanup_verification
+from ._gcp_project_completion import project_completion_context
+from ._gcp_project_release import project_restoration_uses
 from ._operation_apply_effects import _audit, _enqueue_range_status_event, _save_status, _terminal_timestamps
+from ._operation_apply_vpn import RaesRealizedAccessError as RaesRealizedAccessError
 from ._operation_apply_vpn import bound_vpn_access
+from ._receipt import _revoke_receipt_verifier_for_range
+from ._worker_observations import persist_worker_observations
 
 if TYPE_CHECKING:
-    from engine.models import OperationResultInbox, Range, WarmRangeGeneration
+    from engine.models import OperationResultInbox, Range
 
 logger = logging.getLogger(__name__)
-
-
-class RaesRealizedAccessError(Exception):
-    """A realized access projection contradicts the immutable declaration (#1710).
-
-    A permanent contract violation, not a transient failure: the dispatcher
-    maps it to ``REJECTED_INVALID`` so the row is refused once rather than
-    retried forever against state that can never satisfy it.
-    """
 
 
 # Steps whose evidence is a runtime snapshot rather than an operation status.
@@ -84,7 +90,6 @@ def _persist_operation_status(row: OperationResultInbox, state: str, status_reas
     # Lazy import: shared.raes.operations pulls shared.models, which must not
     # load during Django app population (AppRegistryNotReady) -- the same
     # constraint _raes_evidence and _raes_range already observe.
-    from shared.raes.operations import persist_operation_status_record
 
     source_timestamp = row.created_at
     payload = _sidecar_payload(row, status=state, source_timestamp=source_timestamp.isoformat())
@@ -100,7 +105,6 @@ def _persist_operation_status(row: OperationResultInbox, state: str, status_reas
 
 def _persist_runtime_snapshot(row: OperationResultInbox, resources: list[dict[str, Any]]) -> None:
     """Persist one RAES ``runtime_snapshot`` sidecar record for this result."""
-    from shared.raes.operations import persist_runtime_snapshot_record
 
     source_timestamp = row.created_at
     persist_runtime_snapshot_record(
@@ -118,8 +122,6 @@ def _apply_lifecycle(range_obj: Range, new_status: str, request_id: str) -> str:
         extra = {**extra, "ready_at": timezone.now()}
     previous = _save_status(range_obj, new_status, extra)
     if new_status in {ResourceStatus.DESTROYED.value, ResourceStatus.FAILED.value}:
-        from ._receipt import _revoke_receipt_verifier_for_range
-
         _revoke_receipt_verifier_for_range(range_obj)
     _audit(AuditEntityType.RANGE, range_obj.id, new_status, request_id=request_id, previous={"status": previous})
     _enqueue_range_status_event(range_obj, new_status, "")
@@ -137,7 +139,6 @@ def _apply_observation(row: OperationResultInbox, step: ResultStep, payload: dic
 
 def _declared_access(range_obj: Range) -> set[tuple[str, str]]:
     """Return this range's immutable ``(target_address, channel)`` declarations."""
-    from engine.models import RaesParticipantAccessBinding
 
     return {(row.target_address, row.channel) for row in RaesParticipantAccessBinding.objects.filter(range=range_obj)}
 
@@ -222,7 +223,6 @@ def _apply_ready_with_realized_access(
     range_obj.provisioned_instances = [
         _provisioned_instance(member, range_obj.range_backend or "gce") for member in members
     ]
-    from ._worker_observations import persist_worker_observations
 
     persist_worker_observations(row, payload, range_obj)
     range_obj.vpn_access_binding = bound_vpn_access(row, payload.get("vpn_access"), range_obj)
@@ -244,7 +244,6 @@ def _generation_cancelled(row: OperationResultInbox) -> bool:
     launcher enqueues the canonical destroy the generation also becomes stale by
     ``operation_id`` and is rejected earlier; this closes the window before that.
     """
-    from engine.models import InterruptState, ProvisionerLaunchIntent
 
     state = (
         ProvisionerLaunchIntent.objects.filter(operation_id=row.operation_id)
@@ -315,7 +314,6 @@ def _apply_uncancelled_raes_result(
         # Record scoped provider inventory/readback evidence BEFORE the DESTROYED
         # transition so verified_terminal, pruning, and CTF capacity release gate on
         # it, not on the logical status (#2086, ADR-063-R4/R5). Same transaction.
-        from ._gcp_project_release import project_restoration_uses
 
         try:
             project_restoration_uses(range_obj, payload.get("cleanup_inventory"))
@@ -331,7 +329,6 @@ def _record_cleanup_inventory(row: OperationResultInbox, payload: dict[str, Any]
     inventory = payload.get("cleanup_inventory")
     if not isinstance(inventory, dict) or "outcome" not in inventory:
         return
-    from ._cleanup_verification import record_cleanup_verification
 
     record_cleanup_verification(
         request_id=str(row.request_id),
@@ -345,10 +342,6 @@ def _record_cleanup_inventory(row: OperationResultInbox, payload: dict[str, Any]
 
 def _validate_completion(row: OperationResultInbox, payload: dict[str, Any], range_obj: Range) -> None:
     """Admit current evidence against the exact generation's immutable input."""
-    from engine.models import OperationInput
-    from shared.raes.completion import completed_snapshot, load_serialized_plan
-
-    from ._gcp_project_completion import project_completion_context
 
     try:
         record = OperationInput.objects.filter(operation_id=row.operation_id, request_id=row.request_id).first()
@@ -403,7 +396,6 @@ def _settle_warm_generation_on_activation(row: OperationResultInbox, range_obj: 
     """Move a CLAIMED warm generation to ACTIVATED when its activation succeeds (#28)."""
     if row.operation != "activate":
         return
-    from engine.models import WarmRangeGeneration
 
     request_id = getattr(getattr(range_obj, "request", None), "request_id", None)
     if request_id is None:
@@ -428,7 +420,6 @@ def _pending_warm_generation(row: OperationResultInbox, range_obj: Range) -> War
     """
     if row.operation != "provision":
         return None
-    from engine.models import WarmRangeGeneration
 
     request_id = getattr(getattr(range_obj, "request", None), "request_id", None)
     if request_id is None:
@@ -450,9 +441,6 @@ def _apply_warm_prepared(
     access resolver serves the range. The pool becomes able to claim it only when
     this ledger row flips to READY.
     """
-    from django.utils import timezone
-
-    from engine.models import WarmRangeGeneration
 
     members = payload["members"]
     _validated_member_endpoints(members, range_obj)
@@ -475,7 +463,6 @@ def _apply_warm_prepared(
 
 def _retire_warm_generation_on_failure(row: OperationResultInbox, range_obj: Range) -> None:
     """Move a failed warm generation (prepare or activate) to RETIRING for cleanup (#28)."""
-    from engine.models import WarmRangeGeneration
 
     request_id = getattr(getattr(range_obj, "request", None), "request_id", None)
     if request_id is None:

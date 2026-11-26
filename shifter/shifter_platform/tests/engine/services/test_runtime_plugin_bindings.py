@@ -11,7 +11,6 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from shifter_adapter_sdk.runtime import RuntimePlan, canonical_digest
 
-from engine.launch_intents import enqueue_provisioner_launch
 from engine.models import (
     OperationInput,
     Range,
@@ -27,6 +26,7 @@ from engine.services import (
     install_runtime_plugin,
     reconcile_runtime_plugin_operations,
 )
+from engine.services._launch_intents import enqueue_provisioner_launch
 from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
 from shared.exceptions import ValidationError
 from shared.raes.operation_input import parse_raes_operation_input
@@ -177,7 +177,7 @@ def test_existing_range_keeps_original_version_after_pack_upgrade_and_retirement
     )
     change_runtime_plugin(pack.credential, pack.organization.uuid, pack.installed.id, "retire")
     assert retained_runtime_plugin_pin(target) == original
-    from engine.operation_inputs import operation_input_payload
+    from engine.services._operation_inputs import operation_input_payload
 
     cleanup = parse_raes_operation_input(
         operation_input_payload(target, "raes-range", target.request, operation="destroy")
@@ -246,7 +246,7 @@ def test_pre_upgrade_pin_without_defaulted_profile_field_remains_usable_for_clea
     pin = retained_runtime_plugin_pin(target)
     assert pin is not None
     assert pin.bindings.image_profile_for("node.web").allow_public_web_egress is False
-    from engine.operation_inputs import operation_input_payload
+    from engine.services._operation_inputs import operation_input_payload
 
     cleanup = parse_raes_operation_input(
         operation_input_payload(target, "raes-range", target.request, operation="destroy")

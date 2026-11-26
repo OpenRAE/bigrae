@@ -5,19 +5,22 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
+from engine.models import DisposableWorker, WorkerRetirementHold
+from engine.worker_retention import fence_worker_retirement
 from shared.credentials import CredentialContext, resolve_local_credential
 
-from ._disposable_workers import WorkerView, _audit, _authorized_worker, _installation_authority, _view
-
-if TYPE_CHECKING:
-    from engine.models import DisposableWorker, WorkerRetirementHold
+from ._capacity_admit import release_range_capacity
+from ._cleanup_verification import is_range_generation_cleanup_verified_absent
+from ._disposable_workers import WorkerView, _audit, _installation_authority, _view
+from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+from ._range_cleanup_retry import retry_range_cleanup_verification
+from ._worker_custody import _authorized_worker, _lock_worker
 
 logger = logging.getLogger(__name__)
 
@@ -36,21 +39,8 @@ class WorkerHoldView:
     reason: str
 
 
-def _lock_worker(worker_id: UUID) -> DisposableWorker:
-    """Take the admission mutex before native range and retained custody locks."""
-    from engine.models import DisposableWorker, Range, WorkerPolicyRecord
-
-    WorkerPolicyRecord.objects.select_for_update().get(pk=1)
-    native_id = DisposableWorker.objects.values_list("range_id", flat=True).get(pk=worker_id)
-    runtime = Range.objects.select_for_update(of=("self",)).select_related("request").get(pk=native_id)
-    worker = DisposableWorker.objects.select_for_update().get(pk=worker_id, range=runtime)
-    worker.range = runtime
-    return worker
-
-
 def acquire_worker_hold(credential: CredentialContext, worker_id: UUID, *, reason: str) -> WorkerHoldView:
     """Hold a generation until its caller explicitly releases evidence custody."""
-    from engine.models import WorkerRetirementHold
 
     _authorized_worker(credential, worker_id, _RANGE_MANAGE)
     if reason not in {"evidence", "capture", "operator"}:
@@ -87,7 +77,6 @@ def release_worker_hold(
     credential: CredentialContext, hold_id: UUID, *, operator_override: bool = False
 ) -> WorkerHoldView:
     """Only a hold owner or an explicitly authorized installation operator releases it."""
-    from engine.models import WorkerRetirementHold
 
     hold = WorkerRetirementHold.objects.get(pk=hold_id)
     if operator_override:
@@ -128,7 +117,6 @@ def list_worker_holds(credential: CredentialContext, worker_id: UUID) -> tuple[W
 
 def retire_disposable_worker(credential: CredentialContext, worker_id: UUID) -> WorkerView:
     """Retain capacity and ownership while native cleanup converges."""
-    from engine.worker_retention import fence_worker_retirement
 
     _authorized_worker(credential, worker_id, _RANGE_MANAGE)
     with transaction.atomic():
@@ -144,7 +132,6 @@ def retire_disposable_worker(credential: CredentialContext, worker_id: UUID) -> 
 
 def resume_worker_cleanup(credential: CredentialContext, worker_id: UUID) -> WorkerView:
     """An operator resumes bounded cleanup after separately releasing each hold."""
-    from engine.worker_retention import fence_worker_retirement
 
     _installation_authority(credential)
     with transaction.atomic():
@@ -170,7 +157,6 @@ def reconcile_disposable_workers(
     credential: CredentialContext | None = None,
 ) -> int:
     """One bounded pass; expired holds escalate without silently releasing them."""
-    from engine.models import DisposableWorker
 
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("Worker reconciliation limit is invalid")
@@ -204,7 +190,6 @@ def reconcile_disposable_workers(
 
 def _reconcile_worker(identifier: UUID, now: datetime) -> None:
     """Advance one retained worker while holding its native destruction fence."""
-    from engine.worker_retention import fence_worker_retirement
 
     with transaction.atomic():
         worker = _lock_worker(identifier)
@@ -226,10 +211,6 @@ def _reconcile_worker(identifier: UUID, now: datetime) -> None:
 
 def _advance_retirement(worker: DisposableWorker, now: datetime) -> None:
     """Unknown state consumes bounded attempts, never capacity or custody."""
-    from ._capacity_admit import release_range_capacity
-    from ._cleanup_verification import is_range_generation_cleanup_verified_absent
-    from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
-    from ._range_cleanup_retry import retry_range_cleanup_verification
 
     if worker.terminal_at is not None:
         return

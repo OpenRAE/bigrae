@@ -1,11 +1,11 @@
 """Dispatch-failure lifecycle for provisioner launch intents.
 
-Split out of :mod:`engine.launch_intents` (Sonar S104) alongside the earlier
+Split out of :mod:`engine.services._launch_intents` (Sonar S104) alongside the earlier
 ``operation_inputs`` split. Owns the "a provider dispatch failed, close the
 episode" concern: resolving and locking the failed domain row, confirming the
 failure still owns the current generation, and persisting the sanitized FAILED
 projection plus its status event. The two public entry points are re-exported
-from :mod:`engine.launch_intents` so existing importers are unaffected.
+from :mod:`engine.services._launch_intents` so existing importers are unaffected.
 
 Imports of ``authorize_provisioner_payload`` / ``command_from_payload`` back from
 ``launch_intents`` are deferred (function-local) so the top-level import graph
@@ -18,8 +18,16 @@ from uuid import UUID, uuid4
 
 from django.utils import timezone
 
+from engine.launch_commands import command_from_payload
 from engine.launch_target import lock_provisioner_target
-from engine.models import GcpRangeProject, Instance, Range
+from engine.models import App, GcpRangeProject, Instance, Range, RangeEventOutbox
+from engine.services._gcp_project_operations import validate_project_operation
+from engine.services._launch_generation import validate_provisioner_generation
+from engine.services._principal_range_events import range_status_authority_fields
+from engine.services._receipt import _revoke_receipt_verifier_for_range
+from engine.services._worker_trials import fail_worker_trial_dispatch
+from shared.enums import ResourceStatus
+from shared.messages.events import EVENT_TYPE_STATUS_UPDATED
 
 PROVISIONER_DISPATCH_FAILED = "Provisioner dispatch failed"
 
@@ -39,7 +47,6 @@ def _generation_still_authorizes_failure(
     expected_operation_id: UUID | str,
 ) -> bool:
     """Return whether a provider failure still owns the current lifecycle."""
-    from engine.launch_intents import validate_provisioner_generation
 
     try:
         validate_provisioner_generation(
@@ -54,10 +61,6 @@ def _generation_still_authorizes_failure(
 
 def _publish_range_dispatch_failure(payload: dict[str, object], target: Range) -> None:
     """Publish the standard failed status event for a Range dispatch."""
-    from engine.models import RangeEventOutbox
-    from engine.services._principal_range_events import range_status_authority_fields
-    from shared.enums import ResourceStatus
-    from shared.messages.events import EVENT_TYPE_STATUS_UPDATED
 
     event_id = uuid4()
     related_request = target.request
@@ -83,8 +86,6 @@ def _publish_range_dispatch_failure(payload: dict[str, object], target: Range) -
 
 def _apply_dispatch_failure(payload: dict[str, object], target: Range | Instance) -> None:
     """Persist the sanitized failure state and its dependent projections."""
-    from engine.models import App
-    from shared.enums import ResourceStatus
 
     target.status = ResourceStatus.FAILED.value
     update_fields = ["status", "updated_at"]
@@ -94,8 +95,6 @@ def _apply_dispatch_failure(payload: dict[str, object], target: Range | Instance
         update_fields.append("error_message")
     target.save(update_fields=update_fields)
     if isinstance(target, Range):
-        from engine.services._receipt import _revoke_receipt_verifier_for_range
-
         _revoke_receipt_verifier_for_range(target)
         _publish_range_dispatch_failure(payload, target)
     else:
@@ -110,7 +109,6 @@ def fail_current_provisioner_operation(
     expected_operation_id: UUID | str,
 ) -> bool:
     """Fail only the domain projection still owned by this operation generation."""
-    from engine.launch_intents import command_from_payload
 
     try:
         command_from_payload(payload)
@@ -118,8 +116,6 @@ def fail_current_provisioner_operation(
         return False
     target = lock_provisioner_target(payload)
     if payload.get("resource") == "worker-trial":
-        from engine.services._worker_trials import fail_worker_trial_dispatch
-
         return fail_worker_trial_dispatch(payload, expected_operation_id)
     if isinstance(target, GcpRangeProject):
         failed = _fail_project_registration(payload, expected_operation_id, target)
@@ -137,7 +133,6 @@ def _fail_project_registration(
     payload: dict[str, object], expected_operation_id: UUID | str, target: GcpRangeProject
 ) -> bool:
     """Only the still-current registration generation may record a dispatch failure."""
-    from engine.services._gcp_project_operations import validate_project_operation
 
     try:
         validate_project_operation(payload, expected_operation_id)

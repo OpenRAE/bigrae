@@ -17,8 +17,8 @@ from engine.models import (
     RuntimePluginInstallation,
     RuntimePluginRangeBinding,
 )
-from engine.operation_inputs import operation_input_payload
 from engine.services._gcp_project_inputs import allocate_launch_projects, allocate_plan_projects, projects_for_input
+from engine.services._operation_inputs import operation_input_payload
 from engine.services._runtime_plugin_cleanup import preparation_cleanup_payload
 from engine.services._runtime_plugin_preparation import approved_preparation, retain_preparation
 from shared.operation_envelope import MAX_RAES_INPUT_BYTES, OperationEnvelopeError, build_operation_envelope

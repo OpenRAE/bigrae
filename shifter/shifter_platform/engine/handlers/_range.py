@@ -14,13 +14,14 @@ import logging
 from django.db import transaction
 from django.utils import timezone
 
+from engine._status_audit import _status_to_action
 from engine.models import Range
+from engine.services import revoke_receipt_verifier
+from engine.services._launch_intents import clear_provisioner_operation_after_failure
 from shared.audit import AuditEntityType, AuditTarget, StateChange, audit_log_system_event
 from shared.enums import ResourceStatus
 from shared.log_sanitize import safe_log_value
 from shared.messages.payloads import RangeProvisionedPayload, RangeStatusUpdatedPayload
-
-from ._audit import _status_to_action
 
 # Stable "engine.handlers" logger namespace (conftest propagation list, audit
 # source parity) even though this code now lives in a package submodule.
@@ -97,8 +98,6 @@ def _handle_status_updated(event: RangeStatusUpdatedPayload) -> None:
         update_fields.append("error_message")
 
     if new_status == ResourceStatus.FAILED.value:
-        from engine.launch_intents import clear_provisioner_operation_after_failure
-
         update_fields.extend(clear_provisioner_operation_after_failure(range_obj))
 
     if new_status == ResourceStatus.DESTROYED.value:
@@ -117,8 +116,6 @@ def _handle_status_updated(event: RangeStatusUpdatedPayload) -> None:
             }
             and request is not None
         ):
-            from engine.services import revoke_receipt_verifier
-
             revoke_receipt_verifier(request.request_id)
     except Exception:
         # Transient DB failure: propagate so the worker/DLQ can retry. The worker

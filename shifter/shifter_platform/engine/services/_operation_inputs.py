@@ -17,9 +17,31 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from engine.models import Instance, OperationInput, ProvisionerLaunchIntent, Range, Request
+from engine.models import (
+    DisposableWorker,
+    Instance,
+    OperationInput,
+    ProvisionerLaunchIntent,
+    RaesArtifactSatisfactionBinding,
+    RaesContentDeliveryBinding,
+    RaesImageMapping,
+    RaesParticipantAccessBinding,
+    Range,
+    Request,
+    WarmRangeGeneration,
+)
+from engine.services._gcp_project_inputs import projects_for_input, retained_project_cleanup_payload
+from engine.services._inventory_scope import inventory_scope_filter
+from engine.services._launch_authority import authority_envelope_fields
+from engine.services._range_authority import project_range_authority
+from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
+from engine.services._runtime_plugin_operations import queue_runtime_plugin_plans
+from engine.services._runtime_plugin_preparation import retained_cleanup_payload
+from shared.disposable_workers import WorkerHostProfile
 from shared.gcp_cloud_content import CloudContentEnvelope
+from shared.identity_scope import ResourceScope
 from shared.operation_envelope import build_operation_envelope
+from shared.principal_port import resolve_principal_uuid
 from shared.raes.artifact_binding import ArtifactBinding
 from shared.raes.content_delivery import DeliveryBinding
 from shared.raes.operation_input import (
@@ -32,11 +54,12 @@ from shared.raes.operation_input import (
 )
 from shared.raes.operation_input_remote_access import parse_remote_access
 from shared.raes.participant_access import ParticipantAccessBinding
+from shared.raes.worker_host import worker_host_nodes
+from shared.warm_pool.activation_input import ActivationClaimant, ActivationGeneration, build_activation_input
+from workspaces.services import resource_scope_from_ids
 
 if TYPE_CHECKING:
     from uuid import UUID
-
-    from engine.models import RaesImageMapping
 
 
 __all__ = ["operation_input_payload"]
@@ -96,7 +119,6 @@ def _raes_image_candidates(plan: dict[str, object], target: Range | None = None)
     ``WHERE enabled = TRUE`` read did, keeping a retired mapping fail-loud at
     realization.
     """
-    from engine.models import RaesImageMapping
 
     if target is not None:
         worker_candidates = _worker_image_candidates(target, plan)
@@ -108,16 +130,11 @@ def _raes_image_candidates(plan: dict[str, object], target: Range | None = None)
     projected: dict[str, list[dict[str, object]]] = {}
     rows = RaesImageMapping.objects.filter(source_name__in=list(keys), enabled=True)
     if target is not None and target.owner_principal_uuid is not None:
-        from engine.services._inventory_scope import inventory_scope_filter
-        from shared.identity_scope import ResourceScope
-
         if target.request is None:
             raise ValueError("Range request unavailable")
         if target.scope_kind == "installation":
             scope = ResourceScope("installation")
         else:
-            from engine.services._range_authority import project_range_authority
-
             scope = project_range_authority(target.request.request_id).scope
         rows = rows.filter(inventory_scope_filter(scope))
     else:
@@ -157,7 +174,6 @@ def _image_candidate_row(row: RaesImageMapping) -> dict[str, object]:
 
 def _raes_delivery_bindings(target: Range) -> list[DeliveryBinding]:
     """Rebuild this range's byte-free delivery bindings for transport."""
-    from engine.models import RaesContentDeliveryBinding
 
     bindings = []
     for row in RaesContentDeliveryBinding.objects.filter(range=target).order_by("pk"):
@@ -179,7 +195,6 @@ def _raes_delivery_bindings(target: Range) -> list[DeliveryBinding]:
 
 def _raes_access_bindings(target: Range) -> list[ParticipantAccessBinding]:
     """Rebuild this range's non-secret participant-access declarations (#1710)."""
-    from engine.models import RaesParticipantAccessBinding
 
     return [
         ParticipantAccessBinding(
@@ -200,7 +215,6 @@ def _raes_artifact_bindings(target: Range) -> list[ArtifactBinding]:
     never re-resolving. Byte-free by construction -- no credential, URL, or
     payload is persisted or shipped.
     """
-    from engine.models import RaesArtifactSatisfactionBinding
 
     return [
         ArtifactBinding(
@@ -262,9 +276,6 @@ def _raes_input_payload(
     access; warm activation later carries the access bindings and realizes the
     claimant's fresh access.
     """
-    from engine.services._gcp_project_inputs import projects_for_input, retained_project_cleanup_payload
-    from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
-    from engine.services._runtime_plugin_cleanup import retained_cleanup_payload
 
     plan = target.range_config or {}
     pin = retained_runtime_plugin_pin(target)
@@ -303,8 +314,6 @@ def _activation_input_payload(target: Range, request: Request) -> dict[str, obje
     identity comes from this immutable projection, never from HTTP/env/argv
     (preflight #28 security gate 6).
     """
-    from engine.models import WarmRangeGeneration
-    from shared.warm_pool.activation_input import ActivationClaimant, ActivationGeneration, build_activation_input
 
     gen = (
         WarmRangeGeneration.objects.filter(request_id=request.request_id, state=WarmRangeGeneration.State.CLAIMED)
@@ -315,8 +324,6 @@ def _activation_input_payload(target: Range, request: Request) -> dict[str, obje
         raise ValueError("activation requires a claimed warm generation for the request")
     if target.owner_principal_uuid is None:
         raise ValueError("Warm activation requires a principal claimant")
-    from shared.principal_port import resolve_principal_uuid
-    from workspaces.services import resource_scope_from_ids
 
     claimant = resolve_principal_uuid(target.owner_principal_uuid)
     scope = resource_scope_from_ids(
@@ -351,7 +358,6 @@ def _request_has_pending_warm_generation(request: Request) -> bool:
     The signal that a ``raes-range provision`` is a *warm-prepare*: its participant
     access is suppressed so the realized generation is quarantined until activation.
     """
-    from engine.models import WarmRangeGeneration
 
     return WarmRangeGeneration.objects.filter(
         request_id=request.request_id, state=WarmRangeGeneration.State.PROVISIONING
@@ -402,8 +408,6 @@ def operation_input_payload(
 
 def materialize_operation_input(payload: dict[str, object], operation_id: UUID | str, target: Range | Instance) -> None:
     """Persist input atomically with the incumbent intent and its authority hash."""
-    from engine.services._launch_authority import authority_envelope_fields
-    from engine.services._runtime_plugin_operations import queue_runtime_plugin_plans
 
     request: Request | None = getattr(target, "request", None)
     if request is None:
@@ -431,8 +435,6 @@ def materialize_operation_input(payload: dict[str, object], operation_id: UUID |
 
 def _management_targets(target: Range, plan: dict[str, object]) -> tuple[str, ...]:
     """Request private management only for the VMs of an Engine-owned worker."""
-    from engine.models import DisposableWorker
-    from shared.raes.worker_host import worker_host_nodes
 
     if not DisposableWorker.objects.filter(range_id=target.pk).exists():
         return ()
@@ -441,8 +443,6 @@ def _management_targets(target: Range, plan: dict[str, object]) -> tuple[str, ..
 
 def _worker_image_candidates(target: Range, plan: dict[str, object]) -> dict[str, list[dict[str, object]]] | None:
     """Project each worker VM's retained image identity without consulting the registry."""
-    from engine.models import DisposableWorker
-    from shared.disposable_workers import WorkerHostProfile
 
     worker = DisposableWorker.objects.filter(range_id=target.pk).first()
     if worker is None:

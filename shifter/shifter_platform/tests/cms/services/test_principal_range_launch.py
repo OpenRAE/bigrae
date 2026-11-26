@@ -103,8 +103,8 @@ def launch_actor(content_actor, settings, make_pack, tmp_path, transactional_db)
 def test_service_launch_retains_account_scope_and_original_authority(launch_actor):
     from cms.models import RangeInstance
     from cms.services import create_raes_native_range
-    from engine.launch_intents import authorize_provisioner_payload
     from engine.models import OperationInput, ProvisionerLaunchIntent, Range
+    from engine.services._launch_intents import authorize_provisioner_payload
     from management.models import ServiceCredentialAdmission
 
     actor = launch_actor
@@ -266,6 +266,8 @@ def test_failed_audit_rolls_back_native_range_and_queue(launch_actor, monkeypatc
         raise RuntimeError("Synthetic audit outage")
 
     monkeypatch.setattr("shared.audit.audit_log", unavailable)
+    for consumer in ("engine.services._principal_range_create", "engine.services._receipt"):
+        monkeypatch.setattr(f"{consumer}.audit_log", unavailable)
     with pytest.raises(CMSError):
         create_range(launch_actor.credential, launch_actor.source.scenario_id, scope=launch_actor.scope)
     assert RangeInstance.all_objects.get().status == "failed"
@@ -439,8 +441,8 @@ def test_queued_launch_cannot_change_executing_identity_before_dispatch(launch_a
 
     from cms.services import create_range
     from engine.ecs import dispatch_provisioner_command
-    from engine.launch_intents import command_from_payload
     from engine.models import ProvisionerLaunchIntent
+    from engine.services._launch_intents import command_from_payload
 
     create_range(launch_actor.credential, launch_actor.source.scenario_id, scope=launch_actor.scope)
     queued = ProvisionerLaunchIntent.objects.get()

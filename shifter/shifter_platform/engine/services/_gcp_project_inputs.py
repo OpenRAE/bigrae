@@ -8,13 +8,20 @@ from uuid import UUID
 from django.db import transaction
 from shifter_adapter_sdk.runtime import RuntimePlan, canonical_digest
 
+from engine.models import GcpRangeProjectUse, OperationInput, Range
+from shared.field_encryption import decrypt_value
+from shared.gcp_cloud_content import CloudContentEnvelope, open_cloud_content
 from shared.gcp_range_projects import GcpProjectLease
+from shared.gcp_runtime_plan import compile_cloud_work, selected_secret_payloads
 from shared.operation_envelope import validate_operation_envelope
 from shared.raes.gcp_project_demands import planned_gcp_project_demands
 from shared.raes.operation_input import parse_raes_operation_input
 
+from ._gcp_project_bindings import allocate_gcp_projects
+from ._range_authority import project_range_authority
+from ._runtime_plugin_bindings import retained_runtime_plugin_pin
+
 if TYPE_CHECKING:
-    from engine.models import Range
     from shared.runtime_plugin_binding import RuntimePin
 
 _UNAVAILABLE = "Registered project input is unavailable"
@@ -22,9 +29,6 @@ _UNAVAILABLE = "Registered project input is unavailable"
 
 def allocate_plan_projects(target: Range, plan: dict[str, Any], original_digest: str) -> tuple[GcpProjectLease, ...]:
     """Reserve only native concrete project demands under the existing Range mutex."""
-    from engine.models import GcpRangeProjectUse
-
-    from ._gcp_project_bindings import allocate_gcp_projects
 
     demands = planned_gcp_project_demands(plan)
     if not demands:
@@ -50,9 +54,6 @@ def allocate_plan_projects(target: Range, plan: dict[str, Any], original_digest:
 
 def retained_project_leases(target: Range) -> tuple[GcpProjectLease, ...]:
     """Scope changes cannot transplant a still-held project to another organization."""
-    from engine.models import GcpRangeProjectUse
-
-    from ._range_authority import project_range_authority
 
     leases = tuple(
         GcpProjectLease.model_validate(row.binding)
@@ -91,9 +92,6 @@ def projects_for_input(target: Range, plan: dict[str, Any], pin: RuntimePin | No
 
 def allocate_launch_projects(payload: dict[str, object], operation_id: UUID | str) -> None:
     """Called only after native launch admission, in its outbox transaction."""
-    from engine.models import Range
-
-    from ._runtime_plugin_bindings import retained_runtime_plugin_pin
 
     if (payload.get("resource"), payload.get("operation")) != ("raes-range", "provision"):
         return
@@ -124,9 +122,6 @@ def validate_project_preparation(
     pin: RuntimePin | None = None,
 ) -> None:
     """Admit all concrete native cloud shapes and payloads before committing custody."""
-    from shared.field_encryption import decrypt_value
-    from shared.gcp_cloud_content import CloudContentEnvelope, open_cloud_content
-    from shared.gcp_runtime_plan import compile_cloud_work, selected_secret_payloads
 
     envelope = CloudContentEnvelope.model_validate(sealed) if sealed is not None else None
     contents = open_cloud_content(envelope, original, decrypt_value)
@@ -137,7 +132,6 @@ def validate_project_preparation(
 
 def retained_project_cleanup_payload(target: Range) -> dict[str, Any] | None:
     """Recover original projections without a new image/material registry selection."""
-    from engine.models import OperationInput
 
     leases = retained_project_leases(target)
     if not leases:

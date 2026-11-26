@@ -63,7 +63,7 @@ def confirm_issuer_absence(monkeypatch):
     """Exercise the existing interrupt worker through its external native port."""
     from types import SimpleNamespace
 
-    from engine.launch_interrupt import drain_due_interrupts
+    from engine.services._launch_interrupt_convergence import drain_due_interrupts
     from shared.cloud.types import TaskInterruptDisposition
 
     monkeypatch.setattr(
@@ -115,7 +115,7 @@ def test_browser_issued_profile_survives_logout_but_not_principal_disable(
 
 
 def test_temporary_participant_profile_is_not_bound_to_browser_transport(monkeypatch):
-    from engine.services._vpn_profiles import _resolve_profile_credential
+    from engine.services._vpn_profile_authority import _resolve_profile_credential
     from shared.authorization import CredentialCeiling, TargetRef
     from shared.credentials import CredentialContext
     from shared.identity_scope import PrincipalRef
@@ -130,8 +130,9 @@ def test_temporary_participant_profile_is_not_bound_to_browser_transport(monkeyp
         event_uuid,
     )
     monkeypatch.setattr("shared.principal_port.resolve_principal", lambda principal: principal)
+    monkeypatch.setattr("engine.services._vpn_profile_authority.resolve_principal", lambda principal: principal)
     monkeypatch.setattr(
-        "engine.services._vpn_profiles.resolve_current_credential",
+        "engine.services._vpn_profile_authority.resolve_current_credential",
         lambda _credential: pytest.fail("issued participant profile must not depend on its browser session"),
     )
     assert _resolve_profile_credential(credential, retain_browser_authority=True) == credential
@@ -219,8 +220,8 @@ def test_profile_request_queues_once_without_mutating_range_operation(vpn_range)
 
 
 def test_queued_issuance_cannot_dispatch_after_original_credential_revocation(vpn_range):
-    from engine.launch_intents import authorize_provisioner_payload
     from engine.models import ProvisionerLaunchIntent
+    from engine.services._launch_intents import authorize_provisioner_payload
     from engine.services._vpn_profiles import request_vpn_profile
     from management.models import ServiceCredentialAdmission
 
@@ -393,7 +394,9 @@ def test_first_source_download_queues_preparation_without_delivering_shared_key(
     from engine.services._vpn import VpnProfilePending
 
     reads = []
-    monkeypatch.setattr("engine.services._vpn.get_openvpn_profile_secret", lambda reference: reads.append(reference))
+    monkeypatch.setattr(
+        "engine.services._vpn_profile_delivery.get_openvpn_profile_secret", lambda reference: reads.append(reference)
+    )
     with pytest.raises(VpnProfilePending):
         get_openvpn_profile(vpn_range.credential, vpn_range.request.request_id)
     assert reads == []
@@ -581,7 +584,8 @@ def test_credential_lookup_outage_denies_access_without_irreversible_certificate
     def unavailable(_credential):
         raise ValueError("Credential lookup temporarily unavailable")
 
-    monkeypatch.setattr("engine.services._vpn_profiles.resolve_current_credential", unavailable)
+    for consumer in ("engine.services._vpn_profiles", "engine.services._vpn_profile_authority"):
+        monkeypatch.setattr(f"{consumer}.resolve_current_credential", unavailable)
     assert reconcile_vpn_profiles(limit=10) == 0
     row.refresh_from_db()
     assert row.state == "ready"
@@ -596,6 +600,7 @@ def test_issuance_and_original_authority_are_rolled_back_when_strict_audit_fails
         raise RuntimeError("audit unavailable")
 
     monkeypatch.setattr("shared.audit.audit_log", audit_unavailable)
+    monkeypatch.setattr("engine.services._vpn_profile_operations.audit_log", audit_unavailable)
     with pytest.raises(RuntimeError, match="audit unavailable"):
         request_vpn_profile(vpn_range.credential, vpn_range.request.request_id)
     assert not VpnAccessProfile.objects.exists()
@@ -658,7 +663,7 @@ def test_profile_download_rejects_invalid_signed_or_expired_certificate(vpn_rang
         "tls-crypt": b"SYNTHETIC\n",
     }
     material += "".join(f"<{name}>\n{value.decode()}</{name}>\n" for name, value in blocks.items())
-    monkeypatch.setattr("engine.services._vpn.get_openvpn_profile_secret", lambda _reference: material)
+    monkeypatch.setattr("engine.services._vpn_profile_delivery.get_openvpn_profile_secret", lambda _reference: material)
     with pytest.raises(VpnProfileUnavailable):
         get_openvpn_profile(vpn_range.credential, vpn_range.request.request_id)
 
@@ -680,8 +685,8 @@ def test_retired_profile_reissuance_keeps_old_identity_revoked(vpn_range):
 
 
 def test_revoked_pending_issuance_waits_for_native_worker_absence_before_cleanup(vpn_range, monkeypatch):
-    from engine.launch_interrupt import drain_due_interrupts
     from engine.models import InterruptState, ProvisionerLaunchIntent
+    from engine.services._launch_interrupt_convergence import drain_due_interrupts
     from engine.services._vpn_profiles import reconcile_vpn_profiles, request_vpn_profile
     from management.models import ServiceCredentialAdmission
     from shared.cloud.types import TaskInterruptDisposition

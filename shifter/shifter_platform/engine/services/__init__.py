@@ -112,10 +112,10 @@ from ._range_authority import project_range_authority as project_range_authority
 from ._range_cleanup_retry import reconcile_range_cleanup_verification as reconcile_range_cleanup_verification
 from ._vpn_profiles import get_vpn_crl as get_vpn_crl
 from ._worker_qualification import (
-    WorkerQualification as WorkerQualification,
-)
-from ._worker_qualification import (
     qualify_disposable_worker as qualify_disposable_worker,
+)
+from ._worker_qualification_evidence import (
+    WorkerQualification as WorkerQualification,
 )
 from ._worker_retirement import (
     WorkerHoldView as WorkerHoldView,

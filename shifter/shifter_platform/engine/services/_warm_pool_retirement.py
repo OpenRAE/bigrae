@@ -3,16 +3,19 @@
 from __future__ import annotations
 
 import logging
-from datetime import datetime
-from typing import TYPE_CHECKING
+from datetime import datetime, timedelta
 from uuid import UUID
 
 from django.db import transaction
+from django.utils import timezone
+
+from engine.models import Range, WarmRangeGeneration
 
 from ._capacity_admit import release_range_capacity
-
-if TYPE_CHECKING:
-    from engine.models import Range, WarmRangeGeneration
+from ._cleanup_verification import is_range_generation_cleanup_verified_absent
+from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+from ._range_by_request import destroy_range_by_request
+from ._range_cleanup_retry import retry_range_cleanup_verification
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +29,6 @@ def retire_generation(generation: WarmRangeGeneration, *, _recovery_cutoff: date
     cutoff for a failed or stalled claim, whose current runtime is checked again
     under the ledger lock. Returns True when a retirement was initiated.
     """
-    from engine.models import WarmRangeGeneration
 
     with transaction.atomic():
         current = WarmRangeGeneration.objects.select_for_update().get(pk=generation.pk)
@@ -36,8 +38,6 @@ def retire_generation(generation: WarmRangeGeneration, *, _recovery_cutoff: date
         ):
             return False
         if current.claimed_by_request_id is not None:
-            from engine.models import Range
-
             runtime = Range.objects.select_for_update().filter(request__request_id=current.request_id).first()
             if _recovery_cutoff is None or not _generation_is_stalled(current, runtime, _recovery_cutoff):
                 return False
@@ -56,10 +56,6 @@ def retire_generation(generation: WarmRangeGeneration, *, _recovery_cutoff: date
 
 def _request_warm_retirement(generation: WarmRangeGeneration) -> None:
     """Request destroy for the exact retiring warm ledger and native runtime binding."""
-    from engine.models import Range, WarmRangeGeneration
-
-    from ._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
-    from ._range_by_request import destroy_range_by_request
 
     with transaction.atomic():
         current = WarmRangeGeneration.objects.select_for_update().get(pk=generation.pk, state="retiring")
@@ -78,7 +74,6 @@ def _request_warm_retirement(generation: WarmRangeGeneration) -> None:
 
 def abandon_warm_preparation(request_id: UUID | None, draw_key: UUID) -> bool:
     """Release only never-realized work; late failures cannot retire customer custody."""
-    from engine.models import Range, WarmRangeGeneration
 
     if request_id is None:
         release_range_capacity(draw_key)
@@ -98,7 +93,6 @@ def abandon_warm_preparation(request_id: UUID | None, draw_key: UUID) -> bool:
             release_range_capacity(draw_key)
             if generation is not None:
                 generation.state = "terminal"
-                from django.utils import timezone
 
                 generation.retired_at = timezone.now()
                 generation.save(update_fields=["state", "retired_at"])
@@ -112,7 +106,6 @@ def retire_removed_bucket_generations(active_bucket_ids: list[str]) -> int:
     must stop being claimable rather than lingering globally; this moves them to the
     canonical destroy lifecycle. Returns how many were retired.
     """
-    from engine.models import WarmRangeGeneration
 
     retired = 0
     rows = WarmRangeGeneration.objects.filter(state__in=WarmRangeGeneration.NONTERMINAL_UNCLAIMED_STATES).exclude(
@@ -142,11 +135,6 @@ def recover_stalled_generations(bucket_id: str, *, stall_grace_seconds: int, now
 
     Returns how many were retired. Idempotent and bounded.
     """
-    from datetime import timedelta
-
-    from django.utils import timezone
-
-    from engine.models import Range, WarmRangeGeneration
 
     moment = now or timezone.now()
     cutoff = moment - timedelta(seconds=stall_grace_seconds)
@@ -177,7 +165,6 @@ def _generation_is_stalled(generation: WarmRangeGeneration, realized: Range | No
     never realized a range past the stall grace, or a CLAIMED generation's range is
     still merely PROVISIONING past the grace (activation never completed).
     """
-    from engine.models import Range, WarmRangeGeneration
 
     unhealthy = generation.state == WarmRangeGeneration.State.UNHEALTHY
     failed = realized is not None and realized.status == Range.Status.FAILED
@@ -195,7 +182,6 @@ def retire_generations_for_request(request_id: UUID) -> int:
     Moves PROVISIONING/READY rows for the request to RETIRING through the canonical
     destroy lifecycle. Returns how many were retired. Idempotent.
     """
-    from engine.models import WarmRangeGeneration
 
     retired = 0
     rows = WarmRangeGeneration.objects.filter(
@@ -221,9 +207,6 @@ def finalize_retiring_generations(bucket_id: str, *, now: datetime | None = None
 
     Returns the number finalized.
     """
-    from django.utils import timezone
-
-    from engine.models import WarmRangeGeneration
 
     moment = now or timezone.now()
     rows = WarmRangeGeneration.objects.filter(
@@ -241,7 +224,6 @@ def finalize_retiring_generations(bucket_id: str, *, now: datetime | None = None
 
 def _finalize_warm_generation(generation: WarmRangeGeneration, *, now: datetime) -> bool:
     """Settle one locked ledger only after exact cleanup, otherwise retain its retry obligation."""
-    from engine.models import Range, WarmRangeGeneration
 
     with transaction.atomic():
         generation = WarmRangeGeneration.objects.select_for_update().get(pk=generation.pk)
@@ -256,8 +238,6 @@ def _finalize_warm_generation(generation: WarmRangeGeneration, *, now: datetime)
             generation.save(update_fields=["state", "retired_at"])
             return True
         if realized is not None and realized.status == "destroyed" and realized.owner_principal_uuid is not None:
-            from ._range_cleanup_retry import retry_range_cleanup_verification
-
             retry_range_cleanup_verification(generation.request_id, now=now)
         elif generation.state == "retiring" and realized is not None:
             _request_warm_retirement(generation)
@@ -266,12 +246,9 @@ def _finalize_warm_generation(generation: WarmRangeGeneration, *, now: datetime)
 
 def _warm_cleanup_absent(generation: WarmRangeGeneration, realized: Range | None) -> bool:
     """A native destroyed flag settles capacity only with exact accepted generation evidence."""
-    from engine.models import Range
 
     gone = realized is None or realized.status == Range.Status.DESTROYED
     if gone and realized is not None and realized.owner_principal_uuid is not None:
-        from ._cleanup_verification import is_range_generation_cleanup_verified_absent
-
         gone = realized.cms_range_uuid is not None and is_range_generation_cleanup_verified_absent(
             generation.request_id, realized.cms_range_uuid, realized.pk
         )
@@ -280,7 +257,6 @@ def _warm_cleanup_absent(generation: WarmRangeGeneration, realized: Range | None
 
 def _claim_activation_stalled(generation: WarmRangeGeneration, realized: Range | None, cutoff: datetime) -> bool:
     """Activation recovery ages the current customer claim, never the earlier pool preparation."""
-    from engine.models import Range, WarmRangeGeneration
 
     return (
         generation.state == WarmRangeGeneration.State.CLAIMED

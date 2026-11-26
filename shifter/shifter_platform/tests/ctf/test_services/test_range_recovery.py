@@ -708,7 +708,7 @@ class TestIdempotentRetry:
             called["value"] = True
             raise CloudTaskError("simulated transient teardown failure")
 
-        monkeypatch.setattr("engine.ecs.start_range_teardown", fail_teardown)
+        monkeypatch.setattr("engine.services._range_by_request.start_range_teardown", fail_teardown)
         result = recover_participant_range(
             participant.pk,
             strategy=RecoveryStrategy.REASSIGN_SPARE.value,
@@ -746,7 +746,7 @@ class TestIdempotentRetry:
             call_count["n"] += 1
             raise CloudTaskError("cloud execution must be deferred")
 
-        monkeypatch.setattr("engine.ecs.start_range_teardown", flaky_teardown)
+        monkeypatch.setattr("engine.services._range_by_request.start_range_teardown", flaky_teardown)
 
         from django.db import connection
 

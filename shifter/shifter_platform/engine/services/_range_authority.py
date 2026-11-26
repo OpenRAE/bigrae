@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from engine.models import Range
-
 from dataclasses import dataclass
 from uuid import UUID
 
+from django.db import transaction
+from django.db.models import Q
+
+from engine.models import Range, Request
 from shared.authorization import TargetRef, resolve_authorization_event_scope
 from shared.authorization.policy import require_authorization, scope_parent
 from shared.authorization.port import AuthorizationProviderBindingError, AuthorizationUnavailable
 from shared.credentials import CredentialContext, resolve_credential_scope, resolve_current_credential
 from shared.identity_scope import ResourceScope
 from shared.range_access_authority import range_action_request
+from workspaces.services import resource_scope_from_ids
 
 from ._common import EngineError
 
@@ -38,7 +38,6 @@ class RangeAuthorityProjection:
 
 def native_range_id_by_request(request_uuid: UUID) -> int:
     """Return the private runtime identifier for an already-created range."""
-    from engine.models import Range
 
     try:
         return int(Range.objects.values_list("pk", flat=True).get(request__request_id=request_uuid))
@@ -48,17 +47,12 @@ def native_range_id_by_request(request_uuid: UUID) -> int:
 
 def has_range_runtime(request_uuid: UUID, public_uuid: UUID) -> bool:
     """Establish runtime presence independently of valid principal custody."""
-    from django.db.models import Q
-
-    from engine.models import Range
 
     return Range.objects.filter(Q(request__request_id=request_uuid) | Q(cms_range_uuid=public_uuid)).exists()
 
 
 def project_range_authority(request_uuid: UUID) -> RangeAuthorityProjection:
     """Resolve only Engine's SQL facts, preserving existing runtime/public IDs."""
-    from engine.models import Range
-    from workspaces.services import resource_scope_from_ids
 
     try:
         row = Range.objects.select_related("request").filter(request__request_id=request_uuid).first()
@@ -99,9 +93,6 @@ def project_range_authority(request_uuid: UUID) -> RangeAuthorityProjection:
 
 def lock_range_remote_authority(range_uuid: UUID, member: str) -> RangeAuthorityProjection:
     """Lock ready native custody and exact guest membership before handoff."""
-    from django.db import transaction
-
-    from engine.models import Range, Request
 
     if not transaction.get_connection().in_atomic_block:
         raise ValueError("Range binding requires a transaction")
@@ -117,7 +108,6 @@ def lock_range_remote_authority(range_uuid: UUID, member: str) -> RangeAuthority
 
 def require_native_range_action(credential: CredentialContext, request_uuid: UUID, action: str) -> Range:
     """Enforce runtime authority independently of the CMS/HTTP caller."""
-    from engine.models import Range
 
     try:
         current = resolve_current_credential(credential)
@@ -161,7 +151,6 @@ def authorized_instance_range(
     credential: CredentialContext, instance_uuid: str, *, range_uuid: UUID | None = None
 ) -> Range:
     """Resolve exactly one realized guest, then authorize before secrets or I/O."""
-    from engine.models import Range
 
     try:
         if not isinstance(instance_uuid, str) or not instance_uuid:

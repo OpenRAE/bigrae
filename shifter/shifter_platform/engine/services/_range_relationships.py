@@ -5,19 +5,18 @@ from uuid import UUID
 
 from django.db import transaction
 
+from engine.models import Range, RangeAuthorityChange
 from shared.authorization import HierarchyRelationshipChange
 from shared.authorization.port import configured_authorization_provider
 
 from ._range_authority import project_range_authority
+from ._runtime_binding_digest import range_runtime_binding_digest
 
 _UNAVAILABLE = "Range authority publication unavailable"
 
 
 def publish_range_relationships(request_id: UUID) -> None:
     """Confirm the exact creation parent outside SQL before dispatch or recovery."""
-    from engine.models import Range, RangeAuthorityChange
-
-    from ._launch_authority import range_runtime_binding_digest
 
     if transaction.get_connection().in_atomic_block:
         raise ValueError(_UNAVAILABLE)

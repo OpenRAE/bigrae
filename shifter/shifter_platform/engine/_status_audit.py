@@ -1,7 +1,7 @@
-"""Audit-action mapping shared by the range and NGFW handlers.
+"""Audit-action mapping for range and NGFW status changes.
 
-Leaf helper split out of ``engine/handlers.py`` (#685) so both the range and
-NGFW handler submodules can use it without a package import cycle.
+Leaf helper shared by the event handlers and the operation-result appliers. It
+lives outside both packages so neither imports the other.
 """
 
 from __future__ import annotations

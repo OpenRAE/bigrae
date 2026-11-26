@@ -28,7 +28,7 @@ pytestmark = pytest.mark.django_db(databases=["default"])
 
 class TestStartRaesRangeProvisioning:
     def test_enqueues_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import start_raes_range_provisioning
+        from engine.services._launch_starts import start_raes_range_provisioning
 
         request_id = uuid4()
         make_authorized_range(request_id, status=Range.Status.PROVISIONING)
@@ -41,7 +41,7 @@ class TestStartRaesRangeProvisioning:
         ecs_client.run_task.assert_not_called()
 
     def test_returns_none_when_ecs_not_configured(self, aws_ecs_unconfigured, ecs_client):
-        from engine.ecs import start_raes_range_provisioning
+        from engine.services._launch_starts import start_raes_range_provisioning
 
         request_id = uuid4()
         make_authorized_range(request_id, status=Range.Status.PROVISIONING)
@@ -50,7 +50,7 @@ class TestStartRaesRangeProvisioning:
         ecs_client.run_task.assert_not_called()
 
     def test_raises_type_error_on_non_uuid_request_id(self, aws_ecs_configured):
-        from engine.ecs import start_raes_range_provisioning
+        from engine.services._launch_starts import start_raes_range_provisioning
 
         with pytest.raises(TypeError):
             start_raes_range_provisioning("not-a-uuid")
@@ -58,7 +58,7 @@ class TestStartRaesRangeProvisioning:
 
 class TestStartRaesRangeTeardown:
     def test_enqueues_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.ecs import start_raes_range_teardown
+        from engine.services._launch_starts import start_raes_range_teardown
 
         request_id = uuid4()
         make_authorized_range(request_id, status=Range.Status.DESTROYING)
@@ -71,7 +71,7 @@ class TestStartRaesRangeTeardown:
         ecs_client.run_task.assert_not_called()
 
     def test_returns_none_when_ecs_not_configured(self, aws_ecs_unconfigured, ecs_client):
-        from engine.ecs import start_raes_range_teardown
+        from engine.services._launch_starts import start_raes_range_teardown
 
         request_id = uuid4()
         make_authorized_range(request_id, status=Range.Status.DESTROYING)

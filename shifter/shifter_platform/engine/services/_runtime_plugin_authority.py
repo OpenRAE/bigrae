@@ -18,7 +18,11 @@ from shared.credentials import (
     resolve_local_credential,
 )
 from shared.exceptions import ValidationError
-from shared.operation_authority import credential_reference_fields, credential_reference_from_record
+from shared.operation_authority import (
+    authority_resource_scope,
+    credential_reference_fields,
+    credential_reference_from_record,
+)
 
 _PLUGIN_AUTHORITY_UNAVAILABLE = "Plugin authority unavailable"
 _ORGANIZATION_MANAGE_ADAPTERS = "organization.manage_adapters"
@@ -61,7 +65,6 @@ def admit_plugin_authority(credential: CredentialContext, organization_uuid: UUI
 
 def fence_plugin_authority(credential: CredentialContext, fields: dict[str, object]) -> None:
     """Fence current native proof and exact organization ancestry inside SQL."""
-    from shared.operation_authority import authority_resource_scope
 
     try:
         organization_uuid = fields["authority_organization_uuid"]

@@ -78,7 +78,7 @@ def device_session(provisioned_device, settings, monkeypatch):
     actor = provisioned_device
     actor.native.state = {"management_ip": "192.0.2.10", "ssh_key_secret_id": "synthetic-device-key"}
     actor.native.save(update_fields=["state"])
-    monkeypatch.setattr("engine.secrets.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
+    monkeypatch.setattr("engine.services._terminal.get_ssh_key", lambda reference: "SYNTHETIC_TEST_KEY")
     settings.GUACAMOLE_BOOTSTRAP_INLINE = True
     gateway = Gateway()
     result = launch_guacamole_session(

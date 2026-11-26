@@ -4,15 +4,25 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
+from django.db.models import OuterRef, Subquery
+from django.utils import timezone
+
+from engine.models import (
+    CleanupVerificationOutcome,
+    OperationResultInbox,
+    ProvisionerLaunchIntent,
+    Range,
+    RangeCleanupVerification,
+)
+from shared.operation_results import ResultStep
+
+from ._cleanup_verification import is_range_generation_cleanup_verified_absent
+from ._principal_lifecycle import _commit_destroy, prepare_system_range_cleanup
 
 logger = logging.getLogger(__name__)
-
-if TYPE_CHECKING:
-    from engine.models import OperationResultInbox, ProvisionerLaunchIntent, Range
 
 
 def retry_range_cleanup_verification(request_id: UUID, *, now: datetime) -> bool:
@@ -22,9 +32,6 @@ def retry_range_cleanup_verification(request_id: UUID, *, now: datetime) -> bool
     application, doubles from 60 seconds, and caps at one hour. The obligation
     never expires merely because inventory is unavailable.
     """
-    from engine.models import Range
-
-    from ._principal_lifecycle import _commit_destroy, prepare_system_range_cleanup
 
     with transaction.atomic():
         row = (
@@ -53,10 +60,6 @@ def _retryable_cleanup_evidence(
     request_id: UUID, operation_id: UUID, cms_range_uuid: UUID, native_id: int
 ) -> tuple[ProvisionerLaunchIntent, OperationResultInbox] | None:
     """Read only the current accepted destroy and its applied terminal observation under the target lock."""
-    from engine.models import OperationResultInbox, ProvisionerLaunchIntent
-    from shared.operation_results import ResultStep
-
-    from ._cleanup_verification import is_range_generation_cleanup_verified_absent
 
     intent = ProvisionerLaunchIntent.objects.select_for_update().filter(operation_id=operation_id).first()
     if intent is None or intent.payload.get("operation") != "destroy":
@@ -81,7 +84,6 @@ def _cleanup_retry_due(
     row: Range, intent: ProvisionerLaunchIntent, terminal: OperationResultInbox, now: datetime
 ) -> bool:
     """Bound retry cadence by exact current custody and the immutable applied observation time."""
-    from engine.models import ProvisionerLaunchIntent
 
     attempts = ProvisionerLaunchIntent.objects.filter(
         authority_resource_uuid=row.cms_range_uuid,
@@ -94,10 +96,6 @@ def _cleanup_retry_due(
 
 def reconcile_range_cleanup_verification(*, now: datetime | None = None, limit: int = 100) -> int:
     """Retry only current unverified ordinary native destroys in a bounded pass."""
-    from django.db.models import OuterRef, Subquery
-    from django.utils import timezone
-
-    from engine.models import CleanupVerificationOutcome, Range, RangeCleanupVerification
 
     if type(limit) is not int or not 1 <= limit <= 100:
         raise ValueError("Cleanup reconciliation limit is invalid")

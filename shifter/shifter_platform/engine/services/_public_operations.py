@@ -3,14 +3,15 @@
 Re-exports the retry-binding primitives and the request -> operation-generation
 lookup through ``engine.services`` so the CMS and presentation layers reach them
 only via the public facade (ADR-001), never through the private
-``engine.retry_binding`` module or the ORM directly.
+``engine.services._retry_binding`` module or the ORM directly.
 """
 
 from __future__ import annotations
 
 from uuid import UUID
 
-from engine.retry_binding import (
+from engine.models import Range
+from engine.services._retry_binding import (
     DEFAULT_RETRY_TTL_SECONDS,
     MintedOperation,
     RetryBindingResult,
@@ -34,7 +35,6 @@ __all__ = [
 
 def operation_id_for_request(request_id: str | UUID) -> str | None:
     """Return the current operation generation stamped on a request's range, if any."""
-    from engine.models import Range
 
     row = Range.objects.filter(request__request_id=UUID(str(request_id))).only("provisioner_operation_id").first()
     if row is None or row.provisioner_operation_id is None:

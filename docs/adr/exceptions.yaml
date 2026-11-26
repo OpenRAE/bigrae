@@ -1,5 +1,14 @@
 [
   {
+    "rule_id": "ADR-001-R5",
+    "owner": "@Brad-Edwards",
+    "reason": "Ruff PLC0415 does not apply to engine/apps.py. Django imports the AppConfig module before the model registry is ready (Django applications reference, Initialization process). EngineConfig.ready() binds the authorization range inventory, whose module imports engine models, so that one import must stay inside ready(). The pyproject.toml per-file ignore names only this file; every other engine module stays enforced. Decision: issue #2865.",
+    "expires_on": "2027-11-24",
+    "paths": [
+      "shifter/shifter_platform/engine/apps.py"
+    ]
+  },
+  {
     "rule_id": "ADR-070-R1",
     "owner": "@Brad-Edwards",
     "reason": "CVE-2026-56857 is a reviewed platform false positive only for opt/google-cloud-sdk/bin/gke-gcloud-auth-plugin in the Linux deployer image. The official Go advisory https://vuln.go.dev/ID/GO-2026-6604.json limits both affected imports to GOOS=windows. Google Cloud CLI 591.0.0 and the latest rapid component manifest name plugin 0.5.20 archive 20261016073856 with SHA-256 7ca2be31d6faa232b733cd3e91b98e182771516732d7230c19196b51cde7f823; the downloaded, checksum-verified binary reports go1.27.1, GOOS=linux, GOARCH=amd64. The exact CVE/path entry in the deployer-only Trivy file expires on the same date; no other artifact or vulnerability is exempted. Tracking: #2321.",

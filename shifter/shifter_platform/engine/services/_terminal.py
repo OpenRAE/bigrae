@@ -8,7 +8,9 @@ from uuid import UUID
 
 from django.conf import settings
 
-from engine.secrets import SecretsError
+from engine.models import Instance, Range
+from engine.secrets import SecretsError, get_ssh_key
+from engine.ssh import SSHConnection, build_ssh_connection
 from shared.credentials import CredentialContext
 from shared.enums import ResourceStatus
 from shared.log_sanitize import safe_log_value
@@ -26,13 +28,13 @@ from ._common import (
     _resolve_rdp_credentials,
     find_instance_by_uuid,
 )
+from ._device_authority import admit_native_device_access
 from ._queries import _owned_legacy_instance_request_ref
+from ._range_authority import authorized_instance_range
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
 
-    from engine.models import Instance, Range
-    from engine.ssh import SSHConnection
     from shared.remote_access import TerminalConnection, TerminalConnectionFactory
 
 _INSTANCE_UNAVAILABLE = "Instance unavailable"
@@ -46,7 +48,6 @@ def _get_ssh_key(secret_ref: str) -> str:
     affect every submodule call site — the canonical patch-at-source
     pattern.
     """
-    from engine.secrets import get_ssh_key
 
     return get_ssh_key(secret_ref)
 
@@ -164,8 +165,6 @@ def get_owned_instance_request_ref(
     """
 
     if isinstance(user, CredentialContext):
-        from ._range_authority import authorized_instance_range
-
         runtime = authorized_instance_range(user, instance_uuid, range_uuid=range_uuid)
         if runtime.request is None:
             raise ValueError("Range unavailable")
@@ -177,7 +176,6 @@ def get_rdp_connection_info(
     user: User | CredentialContext, instance_uuid: str, *, range_uuid: UUID | None = None
 ) -> dict[str, Any]:
     """Get connection info for RDP access to a range instance."""
-    from engine.models import Range
 
     if user is None:
         raise ValueError(_USER_REQUIRED_MSG)
@@ -223,7 +221,6 @@ def get_rdp_connection_info(
 
 def _rdp_fallback_range(user: User | CredentialContext) -> Range:
     """Retain incumbent range error semantics without widening principal access."""
-    from engine.models import Range
 
     # No active range contains the instance. Fall back to the user's active
     # range so the pre-existing error semantics are preserved now that a user
@@ -245,7 +242,6 @@ def get_ssh_connection_info(
     user: User | CredentialContext, instance_uuid: str, *, range_uuid: UUID | None = None
 ) -> dict[str, Any]:
     """Get SSH connection details for a range instance."""
-    from engine.models import Range
 
     if user is None:
         raise ValueError(_USER_REQUIRED_MSG)
@@ -323,7 +319,6 @@ def get_active_range_provisioned_instances(user: User) -> list[dict[str, Any]]:
     :func:`get_ssh_connection_info`'s active-range resolution, and returns an
     empty list when the user holds no active range.
     """
-    from engine.models import Range
 
     if user is None:
         raise ValueError(_USER_REQUIRED_MSG)
@@ -351,7 +346,6 @@ def connect_terminal(
     keyword-only signature to drive tests without a live connection or a
     library patch (issue #993).
     """
-    from engine.ssh import build_ssh_connection
 
     logger.debug("connect_terminal: instance_uuid=%s", safe_log_value(instance_uuid))
     factory = connection_factory or build_ssh_connection
@@ -373,11 +367,8 @@ def _connection_range(
     user: User | CredentialContext, instance_uuid: str, *, range_uuid: UUID | None = None
 ) -> Range | None:
     """Keep legacy lookup until S8; principal callers have one policy decision."""
-    from engine.models import Range
 
     if isinstance(user, CredentialContext):
-        from ._range_authority import authorized_instance_range
-
         return authorized_instance_range(user, instance_uuid, range_uuid=range_uuid)
     row = Range.resolve_active_for_instance(user, instance_uuid)
     if row is not None and row.owner_principal_uuid is not None:
@@ -387,11 +378,8 @@ def _connection_range(
 
 def connect_ngfw_terminal(user: User | CredentialContext, ngfw_uuid: str) -> SSHConnection:
     """Get SSH connection to NGFW management interface."""
-    from engine.ssh import SSHConnection
 
     if isinstance(user, CredentialContext):
-        from ._principal_ngfw import connect_principal_device_terminal
-
         return connect_principal_device_terminal(user, ngfw_uuid)
     if user is None:
         raise ValueError(_USER_REQUIRED_MSG)
@@ -434,7 +422,6 @@ def connect_ngfw_terminal(user: User | CredentialContext, ngfw_uuid: str) -> SSH
 
 def _legacy_terminal_device(user: User, ngfw_uuid: str) -> Instance:
     """Require incumbent request ownership and live device state before loading SSH material."""
-    from engine.models import Instance
 
     try:
         ngfw_instance = Instance.objects.select_related("request").get(
@@ -474,3 +461,18 @@ def _legacy_terminal_device(user: User, ngfw_uuid: str) -> Instance:
         raise ValueError(f"NGFW {ngfw_uuid} has no infrastructure state")
 
     return ngfw_instance
+
+
+def connect_principal_device_terminal(credential: CredentialContext, identifier: UUID | str) -> SSHConnection:
+    """Authorize the native device before loading SSH connection material."""
+
+    fields = admit_native_device_access(credential, identifier)
+    runtime = Instance.objects.get(uuid=fields["authority_resource_uuid"], status="ready")
+    host = _resolve_ngfw_management_ip(runtime.state or {})
+    reference = _resolve_ngfw_ssh_key_secret_ref(runtime.state or {})
+    if not host or not reference:
+        raise ValueError("Device connection unavailable")
+    key = _get_ssh_key(reference)
+    if fields != admit_native_device_access(credential, identifier):
+        raise PermissionError("Device connection changed")
+    return SSHConnection(host=host, username="admin", private_key=key, port=22, session_id=None)

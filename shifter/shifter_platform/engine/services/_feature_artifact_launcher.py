@@ -10,11 +10,12 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.utils import timezone
 
+from engine.models import AcquiredFeatureArtifact
 from engine.services._feature_artifacts import StorageTarget, finalize_attempt
 from shared.cloud import feature_artifact_jobs as jobs
+from shared.cloud import get_object_storage
 
 if TYPE_CHECKING:
-    from engine.models import AcquiredFeatureArtifact
     from shared.cloud.kubernetes import KubernetesTaskRunner
 
 logger = logging.getLogger(__name__)
@@ -24,7 +25,6 @@ JOB_IMAGE_ENV = "FEATURE_ARTIFACT_JOB_IMAGE"
 
 def default_storage_target() -> StorageTarget:
     """The deployment's content-addressed delivery location."""
-    from shared.cloud import get_object_storage
 
     return StorageTarget(
         storage=get_object_storage(),
@@ -72,7 +72,6 @@ def reconcile_feature_artifact_acquisitions(
     image = image if image is not None else os.environ.get(JOB_IMAGE_ENV, "")
     if not image:
         return 0
-    from engine.models import AcquiredFeatureArtifact
 
     rows = list(
         AcquiredFeatureArtifact.objects.filter(

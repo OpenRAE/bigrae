@@ -30,7 +30,7 @@ from engine._range_state import (
     first_victim_private_ip,
     victim_instances,
 )
-from engine.secrets import SecretsError
+from engine.secrets import SecretsError, get_rdp_password
 
 if TYPE_CHECKING:
     from engine.models import Range
@@ -47,19 +47,6 @@ __all__ = [
     "first_victim_private_ip",
     "victim_instances",
 ]
-
-
-def _get_rdp_password(secret_ref: str) -> str:
-    """Late-bound call to ``engine.services.get_rdp_password``.
-
-    Tests for the RDP password path patch ``engine.services.get_rdp_password``
-    (the historical public surface from before the engine.services split),
-    so we look the name up through the ``engine.services`` package at
-    call time to honor those mocks.
-    """
-    from engine import services as _es
-
-    return _es.get_rdp_password(secret_ref)
 
 
 class EngineError(Exception):
@@ -280,7 +267,7 @@ def _resolve_non_dc_rdp_password(instance: dict[str, Any]) -> str | None:
     if not secret_ref:
         return None
     try:
-        return _get_rdp_password(secret_ref)
+        return get_rdp_password(secret_ref)
     except SecretsError:
         logger.warning(
             "Failed to fetch per-instance RDP password (instance_uuid=%s); treating as credentials-unavailable",

@@ -4,12 +4,14 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from engine.models import OperationResultInbox, Range, VpnAccessProfile
+from shared.operation_results import ResultStep
+from shared.remote_access import parse_openvpn_binding
+
 if TYPE_CHECKING:
     from uuid import UUID
 
     from django.contrib.auth.models import User
-
-    from engine.models import Range
 
 
 def _vpn_custody_never_left(owner: User | None) -> bool:
@@ -24,7 +26,6 @@ def _vpn_custody_never_left(owner: User | None) -> bool:
 
 def range_owner_reassignment_available_by_request(request_id: UUID) -> bool:
     """Return whether ownership can move without leaving a client credential live."""
-    from engine.models import Range
 
     range_obj = Range.objects.select_related("user").filter(request__request_id=request_id).first()
     return (
@@ -47,9 +48,6 @@ def principal_range_owner_reassignment_available(range_obj: Range) -> bool:
 def _vpn_binding_is_server_side(range_obj: Range) -> bool:
     """Uncertain ownership or a delivered profile keeps VPN custody with its owner."""
     try:
-        from engine.models import VpnAccessProfile
-        from shared.remote_access import parse_openvpn_binding
-
         parsed = parse_openvpn_binding(range_obj.vpn_access_binding)
         return (
             parsed.owner_principal_uuid == range_obj.owner_principal_uuid
@@ -61,7 +59,6 @@ def _vpn_binding_is_server_side(range_obj: Range) -> bool:
 
 def get_pinned_range_egress_mode_by_request(request_id: UUID) -> str | None:
     """Project the immutable launch posture for a trusted CTF spare claim."""
-    from engine.models import Range
 
     return Range.objects.filter(request__request_id=request_id).values_list("egress_mode", flat=True).first()
 
@@ -73,8 +70,6 @@ def get_range_failure_reason_by_request(request_id: UUID) -> str:
     value-free diagnostic (MAX_DIAGNOSTIC_CHARS) rides the latest terminal-failed
     operation result. Empty when nothing failed.
     """
-    from engine.models import OperationResultInbox, Range
-    from shared.operation_results import ResultStep
 
     reason = Range.objects.filter(request__request_id=request_id).values_list("error_message", flat=True).first()
     envelope = (

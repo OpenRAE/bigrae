@@ -11,6 +11,12 @@ from uuid import UUID
 from django.db import transaction
 from django.utils import timezone
 
+from engine.models import (
+    RaesArtifactSatisfactionBinding,
+    RaesContentDeliveryBinding,
+    RaesParticipantAccessBinding,
+    Range,
+)
 from shared.gcp_cloud_content import CloudContentEnvelope
 from shared.raes.artifact_binding import ArtifactBinding
 from shared.raes.content_delivery import DeliveryBinding
@@ -21,13 +27,10 @@ from shared.runtime_plugin_binding import RuntimePluginPin
 from ._runtime_plugin_bindings import retained_runtime_plugin_pin
 
 if TYPE_CHECKING:
-    from engine.models import Range
     from shared.authorization import TargetRef
     from shared.credentials import CredentialContext
     from shared.identity_scope import PrincipalRef, ResourceScope
     from shared.runtime_plugin_binding import RuntimePluginScope
-
-    from ._principal_range_create import PreparedRaesRangeCreation
 
 
 @dataclass(frozen=True)
@@ -90,7 +93,6 @@ def mint_remote_access_capability(
 
 def _verify_existing_remote_access(existing: Range, deadline: datetime | None) -> None:
     """Reject an idempotent replay that requests different OpenVPN authority."""
-    from engine.models import RaesParticipantAccessBinding
 
     access = [
         ParticipantAccessBinding(row.target_address, row.channel, row.account_address)
@@ -110,7 +112,6 @@ def grant_raes_remote_access(request_id: UUID, deadline: datetime | None) -> boo
     persisted capability or binding here is a contract violation. Returns whether
     a capability was granted.
     """
-    from engine.models import RaesParticipantAccessBinding, Range
 
     if deadline is None:
         return False
@@ -162,11 +163,6 @@ def _verify_existing_cloud_content(existing: Range, content: CloudContentEnvelop
 
 def _persist_range_bindings(range_obj: Range, bindings: RangeBindings) -> None:
     """Persist every byte-free RAES sidecar binding in the range transaction."""
-    from engine.models import (
-        RaesArtifactSatisfactionBinding,
-        RaesContentDeliveryBinding,
-        RaesParticipantAccessBinding,
-    )
 
     if bindings.cloud_content is not None:
         range_obj.raes_cloud_content = bindings.cloud_content.model_dump(mode="json")
@@ -233,7 +229,6 @@ def _verify_existing_participant_access(
     same ``request_id`` realize access the caller did not ask for, so a mismatch
     fails closed instead.
     """
-    from engine.models import RaesParticipantAccessBinding
 
     persisted = {
         (row.target_address, row.channel, row.account_address)
@@ -242,3 +237,24 @@ def _verify_existing_participant_access(
     requested = {(binding.target_address, binding.channel, binding.account_address) for binding in participant_access}
     if persisted != requested:
         raise ValueError("RAES range replay carries different participant access intent than the persisted binding")
+
+
+@dataclass(frozen=True)
+class PreparedRaesRangeCreation:
+    """In-process parent admission, never accepted as a client/worker credential."""
+
+    bindings: RangeBindings
+    workspace_id: int | None
+    user_id: int | None
+    plan_digest: str
+    fields: tuple[tuple[str, object], ...]
+
+
+@dataclass(frozen=True)
+class RaesRangeRef:
+    """IDs/status returned to the dispatch port after an RAES range is accepted."""
+
+    request_id: str
+    range_id: str
+    status: str
+    accepted: bool

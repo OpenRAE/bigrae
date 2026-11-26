@@ -8,8 +8,17 @@ from typing import TYPE_CHECKING
 from django.conf import settings
 from django.db import connection, transaction
 
+from engine.models import WarmRangeGeneration
+
+from ._warm_pool import (
+    active_generation_count,
+    admit_warm_generation_capacity,
+    create_warm_generation,
+    total_active_generation_count,
+    warm_capacity_scope_ref,
+)
+
 if TYPE_CHECKING:
-    from engine.models import WarmRangeGeneration
     from shared.warm_pool.policy import WarmPoolBucketPolicy, WarmPoolRuntimePolicy
 
     from ._warm_pool import WarmGenerationDraft
@@ -26,12 +35,6 @@ class _CapacityRefused(Exception):
 
 def reserve_warm_generation(draft: WarmGenerationDraft) -> WarmRangeGeneration | None:
     """Reserve one configured slot and its draw together, or make no changes."""
-    from engine.models import WarmRangeGeneration
-
-    from ._warm_pool import (
-        admit_warm_generation_capacity,
-        create_warm_generation,
-    )
 
     try:
         with transaction.atomic():
@@ -63,7 +66,6 @@ def _lock_admission() -> None:
 
 def _admitted_bucket(draft: WarmGenerationDraft) -> tuple[WarmPoolRuntimePolicy, WarmPoolBucketPolicy]:
     """Bind the proposed generation to one current configured bucket before checking replay or limits."""
-    from ._warm_pool import warm_capacity_scope_ref
 
     policy = settings.WARM_POOL_POLICY
     bucket = next((item for item in policy.buckets if item.id == draft.bucket_id), None)
@@ -80,7 +82,6 @@ def _admitted_bucket(draft: WarmGenerationDraft) -> tuple[WarmPoolRuntimePolicy,
 
 def _require_available_slot(policy: WarmPoolRuntimePolicy, bucket: WarmPoolBucketPolicy) -> None:
     """Check bucket and deployment ceilings while holding the single admission mutex."""
-    from ._warm_pool import active_generation_count, total_active_generation_count
 
     ceiling = policy.max_total_ready or sum(item.maximum for item in policy.buckets)
     if (

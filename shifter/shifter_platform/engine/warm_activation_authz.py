@@ -1,6 +1,6 @@
 """Authorization gate for the warm-pool ``activate`` operation (#28).
 
-Extracted from :mod:`engine.launch_intents` so the launch-intent module stays
+Extracted from :mod:`engine.services._launch_intents` so the launch-intent module stays
 within its size budget and the warm-specific authority rule lives on its own seam.
 Activation is authorized only for a *claimed* warm generation on a realized,
 system-prepared (quarantined ``PROVISIONING``) range -- never for an arbitrary
@@ -11,8 +11,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
+from engine.models import Range, WarmRangeGeneration
+
 if TYPE_CHECKING:
-    from engine.models import Range, Request
+    from engine.models import Request
 
 
 def authorize_warm_activation(request: Request, row: Range) -> None:
@@ -23,7 +25,6 @@ def authorize_warm_activation(request: Request, row: Range) -> None:
     ``PROVISIONING`` (never public ``READY``) -- activation is the transition to
     ``READY``. Either failing means activation is not authorized.
     """
-    from engine.models import Range, WarmRangeGeneration
 
     claimed = WarmRangeGeneration.objects.filter(
         request_id=request.request_id, state=WarmRangeGeneration.State.CLAIMED

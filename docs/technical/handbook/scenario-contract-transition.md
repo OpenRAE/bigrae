@@ -17,7 +17,7 @@ parser added for #2090, do not change these pins.
 
 Repository-wide maintenance can change this manifest without a change to the
 scenario contract. The 2026-10-25 dependency security refresh changed only
-supporting framework and tool dependencies. In that manifest, the 2026-10-28 logging and exception-handling cleanup (#2569) changed only Ruff lint rules. The
+supporting framework and tool dependencies. In that manifest, the 2026-10-28 logging and exception-handling cleanup (#2569) changed only Ruff lint rules. The 2026-11-24 Engine import cleanup (#2865) also changed only Ruff lint rules. The
 2026-10-28 CI change (#2582) added the `pytest-split` test dependency and raised
 the `autobahn` floor for CVE-2026-116579. These changes did not alter the RAES
 package pins, the serialized plan versions, the ownership boundary, or the

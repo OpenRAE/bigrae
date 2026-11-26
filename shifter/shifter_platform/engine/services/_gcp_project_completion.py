@@ -12,12 +12,17 @@ if TYPE_CHECKING:
 
 from shifter_adapter_sdk.runtime import RuntimePlan, canonical_digest
 
+from engine.models import RuntimePluginRangeBinding
 from shared.field_encryption import decrypt_value
 from shared.gcp_cloud_content import open_cloud_content
 from shared.gcp_runtime_plan import compile_cloud_work, native_cloud_nodes, selected_secret_payloads
 from shared.raes.operation_input import RaesOperationInput, parse_raes_operation_input
+from shared.raes.runtime_preparation import validate_runtime_preparation
 from shared.runtime_plugin_binding import RuntimePin, runtime_plugin_requests
 from shared.runtime_plugin_preparation import RuntimePreparation
+
+from ._gcp_project_inputs import retained_project_leases
+from ._runtime_plugin_preparation import preparation_identity
 
 
 def project_completion_context(
@@ -26,7 +31,6 @@ def project_completion_context(
     """Project proof cannot supply its own leases, original plan or selected inputs."""
     if not native_cloud_nodes(immutable["plan"]):
         return None
-    from ._gcp_project_inputs import retained_project_leases
 
     original = parse_raes_operation_input(immutable)
     leases = retained_project_leases(target)
@@ -38,8 +42,6 @@ def project_completion_context(
     effective = original.plan
     contents = open_cloud_content(original.cloud_content, original.plan, decrypt_value)
     if pin is not None and "provision.prepare" in pin.manifest.capabilities:
-        from shared.raes.runtime_preparation import validate_runtime_preparation
-
         result = _completion_preparation(target, original, pin, leases, original.range_backend)
         effective = validate_runtime_preparation(original.plan, result, pin)
         contents.update(selected_secret_payloads(original.plan, result, pin.manifest.provisioning_concerns))
@@ -54,9 +56,6 @@ def _completion_preparation(
     backend: str,
 ) -> RuntimePlan:
     """Read only the accepted preparation bound to the original source and invocation."""
-    from engine.models import RuntimePluginRangeBinding
-
-    from ._runtime_plugin_preparation import preparation_identity
 
     binding = RuntimePluginRangeBinding.objects.get(range=target)
     record = RuntimePreparation.model_validate(binding.preparation)

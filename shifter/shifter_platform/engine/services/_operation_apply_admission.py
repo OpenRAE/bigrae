@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
+from engine.models import OperationResultDisposition
+from engine.models import OperationResultInbox as Inbox
+
 if TYPE_CHECKING:
     from engine.models import OperationResultInbox
 
@@ -18,7 +21,6 @@ def discriminator_mismatch(row: OperationResultInbox, envelope: dict[str, Any]) 
 
 def has_conflicting_sibling(row: OperationResultInbox) -> bool:
     """Return whether this step has another row with a different payload."""
-    from engine.models import OperationResultInbox as Inbox
 
     digests = (
         Inbox.objects.filter(operation_id=row.operation_id, result_step=row.result_step)
@@ -30,8 +32,6 @@ def has_conflicting_sibling(row: OperationResultInbox) -> bool:
 
 def applied_steps(row: OperationResultInbox) -> list[str]:
     """Return the steps already applied for this operation generation."""
-    from engine.models import OperationResultDisposition
-    from engine.models import OperationResultInbox as Inbox
 
     return list(
         Inbox.objects.filter(
@@ -45,8 +45,6 @@ def applied_steps(row: OperationResultInbox) -> list[str]:
 
 def has_earlier_pending_sibling(row: OperationResultInbox) -> bool:
     """Return whether an earlier-created result of this generation is pending."""
-    from engine.models import OperationResultDisposition
-    from engine.models import OperationResultInbox as Inbox
 
     return (
         Inbox.objects.filter(

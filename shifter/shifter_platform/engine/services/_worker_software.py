@@ -2,8 +2,11 @@
 
 from typing import TYPE_CHECKING
 
+from engine.models import RuntimePluginInstallation
 from shared.disposable_workers import WorkerHostProfile
 from shared.runtime_plugin_binding import RuntimeApparatusPin
+
+from ._runtime_plugin_bindings import persist_runtime_plugin_pin
 
 if TYPE_CHECKING:
     from engine.models import Range
@@ -12,9 +15,6 @@ if TYPE_CHECKING:
 
 def pin_worker_software(profile: WorkerHostProfile, runtime: Range, scope: ResourceScope) -> None:
     """Retain the administrator's exact installation under its existing lock."""
-    from engine.models import RuntimePluginInstallation
-
-    from ._runtime_plugin_bindings import persist_runtime_plugin_pin
 
     selected = profile.software
     if selected is None:

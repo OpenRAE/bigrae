@@ -8,6 +8,8 @@ from django.core.exceptions import ValidationError
 from django.db import IntegrityError, transaction
 from django.utils import timezone
 
+from engine.models import Range, ReceiptVerifierRegistration
+from shared.audit import AuditAction, AuditActorType, AuditEntityType, AuditEvent, audit_log
 from shared.receipt_validation import (
     ReceiptKeyMode,
     ReceiptRegistrationDemand,
@@ -19,7 +21,6 @@ from ._common import EngineError
 if TYPE_CHECKING:
     from uuid import UUID
 
-    from engine.models import Range, ReceiptVerifierRegistration
 
 __all__ = [
     "ReceiptBindingUnavailable",
@@ -55,7 +56,6 @@ def register_receipt_verifier(
     epoch.  A changed demand cannot overwrite an active registration; callers
     must explicitly revoke or advance the range lifecycle first.
     """
-    from engine.models import Range, ReceiptVerifierRegistration
 
     if not isinstance(demand, ReceiptRegistrationDemand):
         raise ReceiptRegistrationError("receipt registration demand is invalid")
@@ -117,7 +117,6 @@ def project_receipt_verifier_binding(
     objective_id: str,
 ) -> ReceiptVerifierBinding:
     """Return the exact active binding, or fail closed on any context mismatch."""
-    from engine.models import Range, ReceiptVerifierRegistration
 
     registration = (
         ReceiptVerifierRegistration.objects.select_related("range")
@@ -148,7 +147,6 @@ def confirm_receipt_verifier_binding(
     expected: ReceiptVerifierBinding,
 ) -> None:
     """Lock and confirm an exact binding before its CTF solve commits."""
-    from engine.models import Range, ReceiptVerifierRegistration
 
     range_obj = _locked_range(request_id)
     if range_obj.status != Range.Status.READY or range_obj.user_id != owner_user_id:
@@ -181,7 +179,6 @@ def revoke_receipt_verifier(request_id: UUID) -> bool:
 
 def _revoke_receipt_verifier_for_range(range_obj: Range) -> bool:
     """Revoke a locked range's active registration inside the caller transaction."""
-    from engine.models import ReceiptVerifierRegistration
 
     active = (
         ReceiptVerifierRegistration.objects.select_for_update()
@@ -214,7 +211,6 @@ def _locked_range(request_id: UUID, *, required: Literal[False]) -> Range | None
 
 def _locked_range(request_id: UUID, *, required: bool = True) -> Range | None:
     """Resolve and lock the unique Engine range correlated to ``request_id``."""
-    from engine.models import Range
 
     ranges = list(Range.objects.select_for_update().filter(request__request_id=request_id)[:2])
     if len(ranges) == 1:
@@ -320,7 +316,6 @@ def _audit_registration(
     status: str,
 ) -> None:
     """Commit bounded security-state evidence with registration mutations."""
-    from shared.audit import AuditAction, AuditActorType, AuditEntityType, AuditEvent, audit_log
 
     request = range_obj.request
     audit_log(

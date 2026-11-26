@@ -18,12 +18,12 @@ import re
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
 from uuid import UUID
 
 from django.db import transaction
 from django.utils import timezone
 
+from engine.models import Range, VpnAccessProfile, VpnSession, VpnSessionEndReason, VpnSessionState
 from shared.audit import AuditAction, AuditActorType, AuditEntityType, AuditEvent, audit_log
 from shared.remote_access import (
     OpenVpnBindingError,
@@ -32,8 +32,9 @@ from shared.remote_access import (
     parse_openvpn_capability,
 )
 
-if TYPE_CHECKING:
-    from engine.models import Range, VpnAccessProfile, VpnSession
+from ._vpn_destinations import _ACCESS_REVOKED, VpnDestination, _member_destinations
+from ._vpn_destinations import VpnSessionDenied as VpnSessionDenied
+from ._vpn_profile_authority import assert_profile_runtime, authorize_vpn_profile
 
 VPN_SESSION_HEARTBEAT_SECONDS = 15
 VPN_SESSION_LEASE_SECONDS = 60
@@ -42,29 +43,11 @@ MAX_HEARTBEAT_SESSIONS = 1000
 _COMMON_NAME = re.compile(r"participant-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.ASCII)
 _PROFILE_NAME = re.compile(r"access-([0-9a-f-]{36})", re.ASCII)
 _SERVER_NAME = re.compile(r"[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?", re.ASCII)
-_CHANNEL_PORTS = {"ssh": 22, "rdp": 3389}
 # Closed refusal codes the pool controller relays to OpenVPN.
 _INVALID_REQUEST = "vpn.invalid_request"
 _UNKNOWN_CLIENT = "vpn.unknown_client"
-_ACCESS_REVOKED = "vpn.access_revoked"
 _MAX_CLIENT_ID = 2**63 - 1
 _EXPIRY_BATCH = 200
-
-
-class VpnSessionDenied(ValueError):
-    """The connection or request is refused with one closed reason code."""
-
-    def __init__(self, code: str) -> None:
-        super().__init__(code)
-        self.code = code
-
-
-@dataclass(frozen=True)
-class VpnDestination:
-    """One exact private destination and its declared participant ports."""
-
-    target_ip: str
-    ports: tuple[int, ...]
 
 
 @dataclass(frozen=True)
@@ -121,7 +104,6 @@ def _client_address(value: object) -> str:
 
 def _current_targets(range_obj: Range, generation: UUID) -> tuple[VpnDestination, ...]:
     """Return every exact destination while this generation's access is valid."""
-    from engine.models import Range
 
     request = range_obj.request
     if range_obj.status != Range.Status.READY or request is None or request.request_id != generation:
@@ -144,44 +126,6 @@ def _current_targets(range_obj: Range, generation: UUID) -> tuple[VpnDestination
     return _member_destinations(range_obj, binding.target_refs)
 
 
-def _realized_member(range_obj: Range, target_ref: str) -> dict[str, object]:
-    """Return the one realized RAES member named ``target_ref``."""
-    members = range_obj.provisioned_instances if isinstance(range_obj.provisioned_instances, list) else []
-    matches = [
-        member
-        for member in members
-        if isinstance(member, dict) and member.get("uuid") == target_ref and member.get("role") == "raes-node"
-    ]
-    if len(matches) != 1:
-        raise VpnSessionDenied(_ACCESS_REVOKED)
-    return matches[0]
-
-
-def _channel_ports(channels: object) -> tuple[int, ...]:
-    """Return the sorted ports of the declared participant channels."""
-    if not isinstance(channels, list):
-        return ()
-    return tuple(sorted({_CHANNEL_PORTS[channel] for channel in channels if channel in _CHANNEL_PORTS}))
-
-
-def _member_destination(range_obj: Range, target_ref: str) -> tuple[str, tuple[int, ...]]:
-    """Resolve the realized participant target to one private address and its declared ports."""
-    member = _realized_member(range_obj, target_ref)
-    ports = _channel_ports(member.get("participant_access_channels"))
-    try:
-        address = ipaddress.ip_address(str(member.get("private_ip", "")))
-    except ValueError as exc:
-        raise VpnSessionDenied(_ACCESS_REVOKED) from exc
-    if not ports or address.version != 4 or not address.is_private:
-        raise VpnSessionDenied(_ACCESS_REVOKED)
-    return str(address), ports
-
-
-def _member_destinations(range_obj: Range, target_refs: tuple[str, ...]) -> tuple[VpnDestination, ...]:
-    """Resolve every authorized member without widening any member's ports."""
-    return tuple(VpnDestination(*_member_destination(range_obj, target_ref)) for target_ref in target_refs)
-
-
 def _audit(session: VpnSession, action: str, state: dict[str, str]) -> None:
     """Record one pool session event without credential or certificate material."""
     audit_log(
@@ -198,7 +142,6 @@ def _audit(session: VpnSession, action: str, state: dict[str, str]) -> None:
 
 def _end(session: VpnSession, reason: str) -> None:
     """End one active session and audit why."""
-    from engine.models import VpnSessionState
 
     session.state = VpnSessionState.ENDED
     session.end_reason = reason
@@ -217,9 +160,6 @@ def authorize_vpn_session(
     certificate_fingerprint: object = "",
 ) -> VpnSessionGrant:
     """Admit one verified certificate to its own target, superseding any older session."""
-    from engine.models import Range, VpnAccessProfile, VpnSession, VpnSessionEndReason, VpnSessionState
-
-    from ._vpn_profiles import assert_profile_runtime
 
     server_name = _require_server(server)
     cid = _require_client_id(client_id)
@@ -276,14 +216,11 @@ def _renewed(
     row: VpnSession, server_name: str, lease: datetime, admitted: dict[UUID, tuple[VpnDestination, ...]]
 ) -> bool:
     """Extend one reported session's lease, or end it when access is no longer valid."""
-    from engine.models import VpnSessionEndReason, VpnSessionState
 
     if row.state != VpnSessionState.ACTIVE or row.server != server_name:
         return False
     try:
         if row.profile_id is not None:
-            from ._vpn_profiles import assert_profile_runtime
-
             if row.profile is None or row.id not in admitted or assert_profile_runtime(row.profile) != admitted[row.id]:
                 raise ValueError("VPN authority unavailable")
         elif row.range.owner_principal_uuid is not None:
@@ -300,7 +237,6 @@ def _renewed(
 
 def _expire_lapsed() -> None:
     """End a bounded batch of sessions whose server stopped renewing them, for example after a crash."""
-    from engine.models import VpnSession, VpnSessionEndReason, VpnSessionState
 
     lapsed = VpnSession.objects.select_for_update(skip_locked=True).filter(
         state=VpnSessionState.ACTIVE, lease_expires_at__lt=timezone.now()
@@ -311,12 +247,10 @@ def _expire_lapsed() -> None:
 
 def renew_vpn_sessions(*, server: object, session_ids: object) -> tuple[UUID, ...]:
     """Renew still-valid sessions this server holds and return the ones it must disconnect."""
-    from engine.models import VpnSession, VpnSessionEndReason, VpnSessionState
 
     server_name = _require_server(server)
     reported = _require_session_ids(session_ids)
     lease = timezone.now() + timedelta(seconds=VPN_SESSION_LEASE_SECONDS)
-    from ._vpn_profiles import authorize_vpn_profile
 
     admitted = {}
     for session in VpnSession.objects.filter(id__in=reported, server=server_name).select_related(
@@ -349,7 +283,6 @@ def renew_vpn_sessions(*, server: object, session_ids: object) -> tuple[UUID, ..
 
 def end_vpn_session(*, server: object, session_id: object) -> None:
     """Record that a server's client disconnected; other servers' sessions are untouched."""
-    from engine.models import VpnSession, VpnSessionEndReason, VpnSessionState
 
     server_name = _require_server(server)
     try:
@@ -370,9 +303,6 @@ def _admitted_certificate(
     common_name: object, certificate_serial: object, certificate_fingerprint: object
 ) -> tuple[VpnAccessProfile | None, UUID, tuple[VpnDestination, ...] | None]:
     """Match public certificate evidence and evaluate policy before locking the native range."""
-    from engine.models import VpnAccessProfile
-
-    from ._vpn_profiles import authorize_vpn_profile
 
     admitted_destinations = None
     profile = None

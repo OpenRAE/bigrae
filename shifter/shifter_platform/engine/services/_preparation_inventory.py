@@ -5,6 +5,7 @@ from typing import Protocol
 
 from django.conf import settings
 
+from engine.models import PreparedArtifactAdmission
 from shared.operation_envelope import canonical_payload_digest
 from shared.raes.prepared_artifacts import VerifiedMaterialization
 
@@ -32,7 +33,6 @@ class RaesImageMappingLike(Protocol):
 
 def prepared_inventory_facts(mapping_ids: Iterable[int]) -> dict[int, VerifiedMaterialization | None]:
     """A present but invalid admission maps to None so its inventory row is excluded."""
-    from engine.models import PreparedArtifactAdmission
 
     result: dict[int, VerifiedMaterialization | None] = {}
     for row in PreparedArtifactAdmission.objects.filter(image_mapping_id__in=mapping_ids).select_related("operation"):

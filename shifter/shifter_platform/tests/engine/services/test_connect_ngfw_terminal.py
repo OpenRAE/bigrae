@@ -49,7 +49,7 @@ def _ngfw(user, *, status=ResourceStatus.READY.value, state=None, owner=None, wi
 
 class TestConnectNGFWTerminalOutputs:
     def test_returns_ssh_connection_for_ready_ngfw(self, settings, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
         from engine.ssh import SSHConnection
 
         settings.CLOUD_PROVIDER = "aws"
@@ -64,7 +64,7 @@ class TestConnectNGFWTerminalOutputs:
         assert result.session_id is None  # PAN-OS doesn't support tmux
 
     def test_resolves_gcp_ngfw_management_state_from_provider_metadata(self, settings, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         settings.CLOUD_PROVIDER = "aws"  # active store is the portal's AWS store
         ref = "projects/test/secrets/ngfw-admin"
@@ -85,7 +85,7 @@ class TestConnectNGFWTerminalOutputs:
 
 class TestConnectNGFWTerminalInputValidation:
     def test_does_not_modify_instance(self, settings, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         ngfw = _ngfw(user)
@@ -96,25 +96,25 @@ class TestConnectNGFWTerminalInputValidation:
         assert ngfw.updated_at == before  # no save() occurred
 
     def test_requires_user_argument(self):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         with pytest.raises(TypeError):
             connect_ngfw_terminal(ngfw_uuid="uuid-123")
 
     def test_raises_on_none_user(self):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         with pytest.raises(ValueError, match="user is required"):
             connect_ngfw_terminal(None, "uuid-123")
 
     def test_raises_on_none_ngfw_uuid(self, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         with pytest.raises(ValueError, match="ngfw_uuid is required"):
             connect_ngfw_terminal(user, None)
 
     def test_raises_on_empty_ngfw_uuid(self, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         with pytest.raises(ValueError, match="ngfw_uuid is required"):
             connect_ngfw_terminal(user, "")
@@ -122,20 +122,20 @@ class TestConnectNGFWTerminalInputValidation:
 
 class TestConnectNGFWTerminalAuthorizationErrors:
     def test_raises_when_ngfw_not_found(self, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         with pytest.raises(ValueError, match=r"NGFW instance.*not found"):
             connect_ngfw_terminal(user, str(uuid4()))
 
     def test_raises_when_ngfw_has_no_request(self, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         ngfw = _ngfw(user, with_request=False)
         with pytest.raises(ValueError, match=r"has no associated request"):
             connect_ngfw_terminal(user, str(ngfw.uuid))
 
     def test_raises_permission_error_for_non_owner(self, user, django_user_model):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         other = django_user_model.objects.create_user(username="ngfw-other@e.com", email="ngfw-other@e.com")
         ngfw = _ngfw(user, owner=other)
@@ -149,36 +149,36 @@ class TestConnectNGFWTerminalStateErrors:
         [ResourceStatus.PROVISIONING.value, ResourceStatus.FAILED.value, ResourceStatus.PAUSED.value],
     )
     def test_raises_when_ngfw_not_ready(self, user, status):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         ngfw = _ngfw(user, status=status)
         with pytest.raises(ValueError, match=r"not accessible"):
             connect_ngfw_terminal(user, str(ngfw.uuid))
 
     def test_raises_when_no_state(self, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         ngfw = _ngfw(user, state={})
         with pytest.raises(ValueError, match=r"no infrastructure state"):
             connect_ngfw_terminal(user, str(ngfw.uuid))
 
     def test_raises_when_no_management_ip(self, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         ngfw = _ngfw(user, state={"ssh_key_secret_arn": "arn:aws:secretsmanager:us-east-2:123:secret:key"})
         with pytest.raises(ValueError, match=r"no management IP"):
             connect_ngfw_terminal(user, str(ngfw.uuid))
 
     def test_raises_when_no_ssh_key_arn(self, user):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         ngfw = _ngfw(user, state={"management_ip": "10.1.5.10"})
         with pytest.raises(ValueError, match=r"no SSH key"):
             connect_ngfw_terminal(user, str(ngfw.uuid))
 
     def test_raises_when_secrets_manager_fails(self, settings, user):
-        from engine import connect_ngfw_terminal
         from engine.secrets import SecretsError
+        from engine.services import connect_ngfw_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         ngfw = _ngfw(user)
@@ -192,7 +192,7 @@ class TestConnectNGFWTerminalStateErrors:
 
 class TestConnectNGFWTerminalLogging:
     def test_logs_debug_on_entry(self, settings, user, caplog):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         ngfw = _ngfw(user)
@@ -201,7 +201,7 @@ class TestConnectNGFWTerminalLogging:
         assert str(ngfw.uuid) in caplog.text
 
     def test_logs_info_on_success(self, settings, user, caplog):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         settings.CLOUD_PROVIDER = "aws"
         ngfw = _ngfw(user)
@@ -210,7 +210,7 @@ class TestConnectNGFWTerminalLogging:
         assert "Creating SSH connection" in caplog.text or str(ngfw.uuid) in caplog.text
 
     def test_logs_warning_when_ngfw_not_found(self, user, caplog):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         with caplog.at_level(logging.WARNING, logger="engine"), pytest.raises(ValueError):
             connect_ngfw_terminal(user, str(uuid4()))
@@ -220,7 +220,7 @@ class TestConnectNGFWTerminalLogging:
         )
 
     def test_logs_warning_when_permission_denied(self, user, django_user_model, caplog):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         other = django_user_model.objects.create_user(username="ngfw-other2@e.com", email="ngfw-other2@e.com")
         ngfw = _ngfw(user, owner=other)
@@ -232,7 +232,7 @@ class TestConnectNGFWTerminalLogging:
         )
 
     def test_logs_warning_when_ngfw_not_accessible(self, user, caplog):
-        from engine import connect_ngfw_terminal
+        from engine.services import connect_ngfw_terminal
 
         ngfw = _ngfw(user, status=ResourceStatus.PROVISIONING.value)
         with caplog.at_level(logging.WARNING, logger="engine"), pytest.raises(ValueError):

@@ -98,8 +98,8 @@ def _launched_command(k8s_boundary) -> list[str]:
 def _intent(request_id: str = "11111111-1111-1111-1111-111111111111"):
     from django.contrib.auth import get_user_model
 
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import ProvisionerLaunchIntent, Range, Request
+    from engine.services._launch_intents import enqueue_provisioner_launch
 
     user = get_user_model().objects.create_user(username=f"launcher-{request_id}@example.com")
     request = Request.objects.create(request_id=request_id, request_type="range", user=user)
@@ -144,8 +144,8 @@ def test_drainer_launches_canonical_command_and_marks_succeeded(settings, k8s_bo
 @pytest.mark.postgres
 @pytest.mark.parametrize("operation", ["provision", "destroy"])
 def test_legacy_dispatch_locks_and_launches_on_postgresql(settings, k8s_boundary, django_user_model, operation):
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import ProvisionerLaunchIntent, Range
+    from engine.services._launch_intents import enqueue_provisioner_launch
 
     user = django_user_model.objects.create_user(username="synthetic-legacy-launcher")
     native = Range.objects.create(
@@ -271,8 +271,8 @@ def test_missing_task_runner_configuration_retries_instead_of_acknowledging(sett
 
 
 def test_dlq_fails_only_the_current_range_operation(settings, k8s_boundary, caplog) -> None:
-    from engine.launch_intents import PROVISIONER_DISPATCH_FAILED
     from engine.models import Range, RangeEventOutbox
+    from engine.services._launch_intents import PROVISIONER_DISPATCH_FAILED
 
     row = _intent()
     row.max_attempts = 1
@@ -327,8 +327,8 @@ def test_dlq_from_stale_generation_does_not_overwrite_newer_range_state(settings
 def test_dlq_fails_current_ngfw_instance_and_apps(settings, k8s_boundary) -> None:
     from django.contrib.auth import get_user_model
 
-    from engine.launch_intents import enqueue_provisioner_launch
     from engine.models import App, Instance, ProvisionerLaunchIntent, Request
+    from engine.services._launch_intents import enqueue_provisioner_launch
 
     request_id = uuid4()
     user = get_user_model().objects.create_user(username=f"launcher-{request_id}@example.com")
@@ -360,18 +360,18 @@ def test_dlq_fails_current_ngfw_instance_and_apps(settings, k8s_boundary) -> Non
 
 
 def test_reclaimed_lease_fences_stale_worker_result() -> None:
-    from engine.management.commands.drain_provisioner_launch_outbox import Command
     from engine.models import ProvisionerLaunchStatus
+    from engine.services._launch_outbox import _record_failure, claim_next_intent
 
     _intent()
-    claimed = Command._claim_next()
+    claimed = claim_next_intent()
     assert claimed is not None
     current = type(claimed).objects.get(pk=claimed.pk)
     current.status = ProvisionerLaunchStatus.SUCCEEDED
     current.next_attempt_at = current.next_attempt_at + timedelta(minutes=5)
     current.save(update_fields=["status", "next_attempt_at"])
 
-    Command()._record_failure(claimed, RuntimeError("late failure"))
+    _record_failure(claimed, RuntimeError("late failure"))
 
     current.refresh_from_db()
     assert current.status == ProvisionerLaunchStatus.SUCCEEDED
@@ -380,16 +380,16 @@ def test_reclaimed_lease_fences_stale_worker_result() -> None:
 
 def test_reclaimed_lease_fences_stale_worker_before_dispatch(settings, k8s_boundary) -> None:
     """A reclaimed lease must block the provider effect, not only its result write."""
-    from engine.management.commands.drain_provisioner_launch_outbox import Command
+    from engine.services._launch_outbox import claim_next_intent, launch_intent
 
     _intent()
     _configure_aws(settings)
-    claimed = Command._claim_next()
+    claimed = claim_next_intent()
     assert claimed is not None
     type(claimed).objects.filter(pk=claimed.pk).update(next_attempt_at=claimed.next_attempt_at + timedelta(minutes=5))
     k8s_boundary.batch_api.create_namespaced_job.return_value = _job("synthetic-stale-lease")
 
-    Command()._launch(claimed)
+    launch_intent(claimed)
 
     k8s_boundary.batch_api.create_namespaced_job.assert_not_called()
 

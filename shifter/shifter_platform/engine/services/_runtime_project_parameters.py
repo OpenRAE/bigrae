@@ -5,6 +5,7 @@ import re
 from pydantic import TypeAdapter
 from shifter_adapter_sdk.runtime import PluginManifest
 
+from engine.models import GcpRangeProject, RuntimePluginPackBinding
 from shared.exceptions import ValidationError
 from shared.gcp_range_projects import GcpBaselineRef, ProjectID
 from shared.runtime_plugin_binding import PluginTargetBindings, RuntimePluginScope
@@ -16,7 +17,6 @@ _UNAVAILABLE = "The pack's registered target project is unavailable"
 
 def project_parameters_for_binding(scope: RuntimePluginScope, bindings: PluginTargetBindings) -> dict[str, str]:
     """Project facts grant no authority; CMS must authorize the supplied scope first."""
-    from engine.models import GcpRangeProject
 
     project_id = bindings.parameters.get("project-id")
     if project_id is None:
@@ -38,7 +38,6 @@ def project_parameters_for_binding(scope: RuntimePluginScope, bindings: PluginTa
 
 def runtime_plugin_plan_parameters(scope: RuntimePluginScope) -> tuple[RuntimePluginScope, dict[str, str]]:
     """Capture the exact selection and reuse its existing launch-time digest fence."""
-    from engine.models import RuntimePluginPackBinding
 
     row = (
         RuntimePluginPackBinding.objects.select_related("installation")

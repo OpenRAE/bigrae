@@ -17,8 +17,14 @@ from uuid import uuid4
 
 from django.utils import timezone
 
+from engine._status_audit import _status_to_action
+from engine.models import RangeEventOutbox
 from shared.audit import AuditActorType, AuditEvent, audit_log
 from shared.enums import ResourceStatus
+from shared.messages.events import EVENT_TYPE_NGFW, EVENT_TYPE_STATUS_UPDATED
+
+from ._device_authority import device_status_authority_fields
+from ._principal_range_events import range_status_authority_fields
 
 if TYPE_CHECKING:
     from engine.models import App, Instance, Range
@@ -48,7 +54,6 @@ def _audit(
     The UUIDs go in the state instead — the same convention ``engine.handlers``
     already uses.
     """
-    from engine.handlers._audit import _status_to_action
 
     full_context = f"[{_AUDIT_SOURCE}] {context}" if context else f"[{_AUDIT_SOURCE}]"
     audit_log(
@@ -69,10 +74,6 @@ def _audit(
 
 def _enqueue_range_status_event(range_obj: Range, new_status: str, error_message: str) -> None:
     """Enqueue the ADR-025 range status notification for an applied transition."""
-    from engine.models import RangeEventOutbox
-    from shared.messages.events import EVENT_TYPE_STATUS_UPDATED
-
-    from ._principal_range_events import range_status_authority_fields
 
     event_id = uuid4()
     related_request = range_obj.request
@@ -103,10 +104,6 @@ def _enqueue_ngfw_status_event(ngfw: Instance, app: App | None, new_status: str,
     event for a transition that rolled back. Same notification-only shape as
     before: identifiers and status, no state.
     """
-    from engine.models import RangeEventOutbox
-    from shared.messages.events import EVENT_TYPE_NGFW
-
-    from ._device_authority import device_status_authority_fields
 
     event_id = uuid4()
     RangeEventOutbox.objects.create(

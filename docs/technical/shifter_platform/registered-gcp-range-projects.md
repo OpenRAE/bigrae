@@ -20,6 +20,7 @@ existing `ProvisionerLaunchIntent`, immutable `OperationInput`, installed worker
 identity and result inbox. Its request correlation is the registration UUID,
 not a fabricated range request. Both dispatch and capture acceptance recheck the
 original credential and `installation.manage_cloud_authority` decision.
+`engine.services._gcp_project_authority` owns that decision and the recorded authority fields.
 
 The input fixes the selected project, organization, existing private bucket and
 protected deployment and registered image projects. The worker independently excludes its current

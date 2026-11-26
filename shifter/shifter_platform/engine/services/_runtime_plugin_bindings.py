@@ -10,6 +10,7 @@ from uuid import UUID
 from django.db import transaction
 from shifter_adapter_sdk.runtime import PluginManifest, canonical_digest
 
+from engine.models import RuntimePluginInstallation, RuntimePluginPackBinding, RuntimePluginRangeBinding
 from shared.audit import (
     AuditAction,
     AuditEntityType,
@@ -18,7 +19,8 @@ from shared.audit import (
     audit_log,
     principal_actor_fields,
 )
-from shared.authorization import TargetRef
+from shared.authorization import AuthorizationRequest, TargetRef
+from shared.authorization.policy import require_authorization
 from shared.credentials import (
     CredentialContext,
     resolve_credential_scope,
@@ -34,12 +36,17 @@ from shared.runtime_plugin_binding import (
     parse_runtime_pin,
 )
 
-from ._runtime_plugin_authority import admit_plugin_authority, current_plugin_credential, fence_plugin_authority
+from ._runtime_plugin_authority import (
+    admit_plugin_authority,
+    current_plugin_credential,
+    fence_plugin_authority,
+    validate_plugin_scope,
+)
 from ._runtime_plugin_file_selection import assert_file_selection
 from ._runtime_plugins import _authorize
 
 if TYPE_CHECKING:
-    from engine.models import Range, RuntimePluginInstallation, RuntimePluginPackBinding
+    from engine.models import Range
 
 
 @dataclass(frozen=True)
@@ -106,9 +113,6 @@ def prepare_runtime_plugin_pack_binding_removal(
     credential: CredentialContext, scope: RuntimePluginScope
 ) -> RuntimePluginBindingRemovalAdmission:
     """Authorize the exact pack cleanup using its organization's content action."""
-    from engine.models import RuntimePluginPackBinding
-    from shared.authorization import AuthorizationRequest
-    from shared.authorization.policy import require_authorization
 
     credential = current_plugin_credential(credential)
     target = TargetRef("organization", scope.organization_uuid)
@@ -138,7 +142,6 @@ def bind_runtime_plugin(
     audit: RequestAudit | None = None,
 ) -> RuntimePluginPackView:
     """Authorize and update a pack's selection, without changing any range pin."""
-    from engine.models import RuntimePluginInstallation, RuntimePluginPackBinding
 
     admission = (
         user
@@ -213,7 +216,6 @@ def bind_runtime_plugin(
 
 def list_runtime_plugin_bindings(user: CredentialContext, organization_uuid: UUID) -> list[RuntimePluginPackView]:
     """List explicit selections owned by the authorized organization."""
-    from engine.models import RuntimePluginPackBinding
 
     organization_uuid = _authorize(user, organization_uuid)
     return [
@@ -238,7 +240,6 @@ def remove_runtime_plugin_pack_binding(
     Locks the installation before the binding, the order every binding writer
     and launch admission uses. Returns whether a selection existed.
     """
-    from engine.models import RuntimePluginInstallation, RuntimePluginPackBinding
 
     if not isinstance(user, RuntimePluginBindingRemovalAdmission) or (
         user.scope.organization_uuid,
@@ -304,7 +305,6 @@ def _fence_binding_removal(admission: RuntimePluginBindingRemovalAdmission) -> N
 
 def has_runtime_plugin_binding(organization_uuid: UUID, pack_id: str) -> bool:
     """Whether a trusted launch scope needs cold plugin admission, even if disabled."""
-    from engine.models import RuntimePluginPackBinding
 
     return RuntimePluginPackBinding.objects.filter(
         organization_uuid=organization_uuid,
@@ -320,7 +320,6 @@ def resolve_runtime_plugin_pin(
     Called only with the CMS launch boundary's authorized organization, verified
     pack digest and compiled plan, inside the Engine range transaction.
     """
-    from engine.models import RuntimePluginInstallation, RuntimePluginPackBinding
 
     organization_uuid, pack_digest = scope.organization_uuid, scope.pack_digest
 
@@ -370,7 +369,6 @@ def resolve_runtime_plugin_pin(
 
 def persist_runtime_plugin_pin(target: Range, pin: RuntimePin | None) -> None:
     """Retain the admitted installation and guest mapping for the range lifetime."""
-    from engine.models import RuntimePluginRangeBinding
 
     if pin is not None:
         RuntimePluginRangeBinding.objects.create(
@@ -383,7 +381,6 @@ def persist_runtime_plugin_pin(target: Range, pin: RuntimePin | None) -> None:
 
 def retained_runtime_plugin_pin(target: Range) -> RuntimePin | None:
     """Read the original pin for retries/cleanup even after registry retirement."""
-    from engine.models import RuntimePluginRangeBinding
 
     row = RuntimePluginRangeBinding.objects.filter(range=target).first()
     if row is None:
@@ -423,7 +420,6 @@ def _validate_binding_authority(
     authority: dict[str, object],
 ) -> None:
     """Fence the admitted plugin installation and local credential while its binding is locked."""
-    from ._runtime_plugin_authority import validate_plugin_scope
 
     validate_plugin_scope(installation, authority)
     fence_plugin_authority(user, authority)

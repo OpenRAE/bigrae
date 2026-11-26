@@ -13,13 +13,23 @@ import re
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from engine.models import RaesImageMapping
 from shared.raes.artifact_inventory import BackendArtifact
 from shared.raes.image_policy import validate_management_ssh_port, validate_management_ssh_username
+
+from ._inventory_scope import authorize_inventory_read
+from ._preparation_inventory import mapping_matches_admission, prepared_inventory_facts
+from ._principal_image_registry import RaesImageMappingError as RaesImageMappingError
+from ._principal_image_registry import (
+    authorize_image_registry,
+    disable_operator_image,
+    operator_image_selection,
+    upsert_operator_image,
+)
 
 if TYPE_CHECKING:
     from datetime import datetime
 
-    from engine.models import RaesImageMapping
     from shared.credentials import CredentialContext
     from shared.identity_scope import ResourceScope
 
@@ -33,14 +43,6 @@ __all__ = [
     "list_raes_image_mappings",
     "upsert_raes_image_mapping",
 ]
-
-
-class RaesImageMappingError(ValueError):
-    """Validation failure with an explicit user-facing message, separate from diagnostics."""
-
-    def __init__(self, message: str) -> None:
-        super().__init__(message)
-        self.message = message
 
 
 @dataclass(frozen=True)
@@ -129,7 +131,6 @@ def upsert_raes_image_mapping(
     by upserting with ``options.enabled=False`` (preserves audit; realization then
     fails loud) rather than deleting it.
     """
-    from engine.models import RaesImageMapping
 
     opts = options or RaesImageMappingOptions()
     normalized_provider = _normalize_provider(provider)
@@ -138,8 +139,6 @@ def upsert_raes_image_mapping(
     key = {"provider": normalized_provider, "source_name": name, "source_version": (opts.source_version or "").strip()}
     defaults = _validated_image_values(normalized_provider, ref, opts)
     if credential is not None:
-        from ._principal_image_registry import upsert_operator_image
-
         return upsert_operator_image(credential, key=key, defaults=defaults)
     mapping, _created = RaesImageMapping.objects.update_or_create(
         scope_kind="",
@@ -167,16 +166,11 @@ def list_raes_image_mappings(
     way the provisioner resolver ignores them; the default shows them so an
     operator can audit and re-enable.
     """
-    from engine.models import RaesImageMapping
 
     if for_administration:
-        from ._principal_image_registry import authorize_image_registry, operator_image_selection
-
         authorize_image_registry(credential)
         queryset = RaesImageMapping.objects.filter(**operator_image_selection(), owner_principal_uuid__isnull=False)
     elif credential is not None:
-        from ._inventory_scope import authorize_inventory_read
-
         if scope is None:
             raise RaesImageMappingError("Inventory scope unavailable")
         selection = authorize_inventory_read(credential, scope)
@@ -203,7 +197,6 @@ def list_backend_artifacts(
     catalog realizability contributor and the launch-time fencing resolver consume,
     so they agree on what the backend owns.
     """
-    from ._preparation_inventory import mapping_matches_admission, prepared_inventory_facts
 
     rows = list_raes_image_mappings(provider=provider, include_disabled=False, credential=credential, scope=scope)
     prepared = prepared_inventory_facts([row.id for row in rows])
@@ -247,14 +240,11 @@ def disable_raes_image_mapping(
     the surface disables what is registered rather than creating a disabled
     placeholder (disable is not delete, and not upsert).
     """
-    from engine.models import RaesImageMapping
 
     normalized_provider = _normalize_provider(provider)
     name = _require(source_name, field="source_name")
     version = (source_version or "").strip()
     if credential is not None:
-        from ._principal_image_registry import disable_operator_image
-
         return _to_view(
             disable_operator_image(
                 credential, key={"provider": normalized_provider, "source_name": name, "source_version": version}
@@ -445,7 +435,6 @@ def _validate_portable_identity(opts: RaesImageMappingOptions) -> dict[str, str]
 
 def _normalize_provider(provider: str) -> str:
     """Return the lower-cased provider if it is a known choice, else raise."""
-    from engine.models import RaesImageMapping
 
     value = (provider or "").strip().lower()
     valid = {choice for choice, _label in RaesImageMapping.Provider.choices}
