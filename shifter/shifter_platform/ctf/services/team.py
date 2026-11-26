@@ -182,6 +182,27 @@ def create_team(participant_id: UUID, name: str) -> CTFTeam:
     return team
 
 
+def _assert_locked_invite_joinable(locked_team: CTFTeam, participant: CTFParticipant, code: str) -> None:
+    """Reject an invalid code or non-joinable state from the locked rows (CTF-504).
+
+    Call only inside the join transaction, after locking the team and refreshing
+    the participant. Eligibility is re-checked here because a ban or
+    disqualification may commit between the initial load and the lock.
+    """
+    from ctf.services.participant import assert_participant_can_compete
+
+    assert_participant_can_compete(participant)
+    # Validity first, so a spent, expired, replaced, or unknown code always
+    # returns the same safe not-found answer — including a lost-response replay
+    # of a single-use join whose participant is now a member.
+    if locked_team.invite_code != code or not locked_team.invite_code_is_valid:
+        raise CTFNotFoundError("Invalid invite code")
+    if participant.team_id == locked_team.pk:
+        raise CTFStateError("You are already on this team", details={"team_id": str(locked_team.pk)})
+    if locked_team.is_full:
+        raise CTFStateError("This team is full", details={"team_id": str(locked_team.pk)})
+
+
 @transaction.atomic
 def join_team(participant_id: UUID, invite_code: str) -> CTFTeam:
     """Join a team by invite code with the #1140 capacity guard.
@@ -200,20 +221,7 @@ def join_team(participant_id: UUID, invite_code: str) -> CTFTeam:
     with transaction.atomic():
         locked_team = _lock_team(team.pk, extra_ids=(participant.pk,))
         participant.refresh_from_db()
-        # Re-assert eligibility on the refreshed row: a ban or disqualification
-        # may have committed between the initial load and the lock.
-        from ctf.services.participant import assert_participant_can_compete
-
-        assert_participant_can_compete(participant)
-        # Validity first, so a spent, expired, replaced, or unknown code always
-        # returns the same safe not-found answer — including a lost-response
-        # replay of a single-use join whose participant is now a member.
-        if locked_team.invite_code != code or not locked_team.invite_code_is_valid:
-            raise CTFNotFoundError("Invalid invite code")
-        if participant.team_id == locked_team.pk:
-            raise CTFStateError("You are already on this team", details={"team_id": str(locked_team.pk)})
-        if locked_team.is_full:
-            raise CTFStateError("This team is full", details={"team_id": str(locked_team.pk)})
+        _assert_locked_invite_joinable(locked_team, participant, code)
         old_team_id = participant.team_id
         participant.team = locked_team
         participant.save(update_fields=["team", "updated_at"])
