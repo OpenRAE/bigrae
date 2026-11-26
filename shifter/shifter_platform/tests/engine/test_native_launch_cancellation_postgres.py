@@ -20,7 +20,7 @@ def test_cancellation_serializes_before_launch_or_failure(launch_actor, k8s_boun
     from cms.services import create_raes_native_range
     from engine.management.commands.drain_provisioner_launch_outbox import Command
     from engine.models import InterruptState, ProvisionerLaunchIntent, Range
-    from engine.services._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+    from engine.services._principal.lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
 
     assert connection.vendor == "postgresql"
     actor = launch_actor

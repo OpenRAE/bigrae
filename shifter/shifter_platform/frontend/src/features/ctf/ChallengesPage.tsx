@@ -1,89 +1,52 @@
-import { useMemo, useState } from "react";
-import { Link } from "react-router";
-
-import { CheckCircle2 } from "lucide-react";
+import { useCallback, useMemo } from "react";
+import { useSearchParams } from "react-router";
 
 import { useCtfChallenges } from "@/api/ctf";
-import type { CtfChallengeListItem } from "@/api/types";
 import { PageHeader } from "@/components/page-header";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { ChallengeListControls } from "./ChallengeListControls";
+import { ChallengeGroupLayout } from "./ChallengeListLayouts";
+import { isSolved, readListView } from "./challenge-list";
 import { titleCase } from "./format";
-import { LabelFilterRow, distinctLabels, filterByLabels } from "./label-filters";
-import { ctfChallengeDetailPath } from "./routes";
+import { LabelFilterRow } from "./label-filters";
 
-const UNCATEGORIZED = "Uncategorized";
-const MISSION_CATEGORY = /^Mission\s+(\d+)\b/i;
-const START_HERE_CATEGORY = /^Start Here$/i;
+type ListParam = "view" | "sort" | "layout" | "tag" | "topic";
+const PARAM_DEFAULTS: Readonly<Record<ListParam, string | null>> = {
+  view: "category",
+  sort: "order",
+  layout: "cards",
+  tag: null,
+  topic: null,
+};
 
-function compareCategories(left: string, right: string): number {
-  const leftStart = START_HERE_CATEGORY.test(left);
-  const rightStart = START_HERE_CATEGORY.test(right);
-  if (leftStart || rightStart) {
-    if (leftStart && rightStart) return left.localeCompare(right);
-    return leftStart ? -1 : 1;
-  }
-  const leftMission = MISSION_CATEGORY.exec(left);
-  const rightMission = MISSION_CATEGORY.exec(right);
-  if (leftMission && rightMission) {
-    return Number(leftMission[1]) - Number(rightMission[1]) || left.localeCompare(right);
-  }
-  if (leftMission) return -1;
-  if (rightMission) return 1;
-  return left.localeCompare(right);
-}
-
-/** Group challenges by category, preserving each challenge's server `order`. */
-function groupByCategory(challenges: CtfChallengeListItem[]): Array<[string, CtfChallengeListItem[]]> {
-  const groups = new Map<string, CtfChallengeListItem[]>();
-  for (const challenge of challenges) {
-    const key = challenge.category || UNCATEGORIZED;
-    const bucket = groups.get(key) ?? [];
-    bucket.push(challenge);
-    groups.set(key, bucket);
-  }
-  for (const bucket of groups.values()) {
-    bucket.sort((a, b) => a.order - b.order || a.name.localeCompare(b.name));
-  }
-  return [...groups.entries()].sort(([a], [b]) => compareCategories(a, b));
-}
-
-function ChallengeCard({ challenge }: Readonly<{ challenge: CtfChallengeListItem }>) {
-  return (
-    <Link
-      to={ctfChallengeDetailPath(challenge.id)}
-      className="block rounded-lg border border-border/60 p-4 transition-colors hover:border-border hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-    >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-medium">{challenge.name}</span>
-        {challenge.solved ? (
-          <Badge variant="secondary" className="gap-1">
-            <CheckCircle2 className="size-3" aria-hidden="true" />
-            Solved
-          </Badge>
-        ) : null}
-      </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>{challenge.points} pts</span>
-        {challenge.difficulty ? <span>· {titleCase(challenge.difficulty)}</span> : null}
-      </div>
-    </Link>
+/** List state held in the URL, so it stays when the participant opens a challenge and goes back. */
+function useListParams() {
+  const [params, setParams] = useSearchParams();
+  const update = useCallback(
+    (key: ListParam, value: string | null) =>
+      setParams(
+        (previous) => {
+          const next = new URLSearchParams(previous);
+          if (value === null || value === PARAM_DEFAULTS[key]) next.delete(key);
+          else next.set(key, value);
+          return next;
+        },
+        { replace: true },
+      ),
+    [setParams],
   );
+  return { params, update };
 }
 
 function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfChallenges> }>) {
-  const [activeTag, setActiveTag] = useState<string | null>(null);
-  const [activeTopic, setActiveTopic] = useState<string | null>(null);
-  const challenges = useMemo(
-    () => filterByLabels(query.data ?? [], activeTag, activeTopic),
-    [query.data, activeTag, activeTopic],
+  const { params, update } = useListParams();
+  const { view, sort, layout, tagLabels, topicLabels, activeTag, activeTopic, groups: grouped } = useMemo(
+    () => readListView(query.data ?? [], params),
+    [query.data, params],
   );
-  const tagLabels = useMemo(() => distinctLabels(query.data ?? [], "tags"), [query.data]);
-  const topicLabels = useMemo(() => distinctLabels(query.data ?? [], "topics"), [query.data]);
-  const grouped = useMemo(() => groupByCategory(challenges), [challenges]);
 
   if (query.isLoading) {
     return (
@@ -104,19 +67,27 @@ function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfCha
     );
   }
 
-  const filterRows = (
+  const controls = (
     <div className="flex flex-col gap-2">
+      <ChallengeListControls
+        view={view}
+        sort={sort}
+        layout={layout}
+        onViewChange={(value) => update("view", value)}
+        onSortChange={(value) => update("sort", value)}
+        onLayoutChange={(value) => update("layout", value)}
+      />
       <LabelFilterRow
         axis="tags"
         labels={tagLabels}
         active={activeTag}
-        onToggle={(value) => setActiveTag(activeTag === value ? null : value)}
+        onToggle={(value) => update("tag", activeTag === value ? null : value)}
       />
       <LabelFilterRow
         axis="topics"
         labels={topicLabels}
         active={activeTopic}
-        onToggle={(value) => setActiveTopic(activeTopic === value ? null : value)}
+        onToggle={(value) => update("topic", activeTopic === value ? null : value)}
       />
     </div>
   );
@@ -124,7 +95,7 @@ function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfCha
   if (grouped.length === 0) {
     return (
       <div className="space-y-4">
-        {filterRows}
+        {controls}
         <Card>
           <CardContent className="grid place-items-center px-6 py-16 text-center">
             <p className="text-sm font-medium">
@@ -143,15 +114,11 @@ function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfCha
 
   return (
     <div className="space-y-8">
-      {filterRows}
-      {grouped.map(([category, items]) => (
-        <section key={category} aria-label={category}>
-          <h2 className="mb-3 text-sm font-semibold">{titleCase(category)}</h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((challenge) => (
-              <ChallengeCard key={challenge.id} challenge={challenge} />
-            ))}
-          </div>
+      {controls}
+      {grouped.map(({ key, label, items }) => (
+        <section key={key} aria-label={label ?? "All challenges"}>
+          {label === null ? null : <h2 className="mb-3 text-sm font-semibold">{titleCase(label)}</h2>}
+          <ChallengeGroupLayout layout={layout} items={items} name={label === null ? "All challenges" : titleCase(label)} />
         </section>
       ))}
     </div>
@@ -161,7 +128,7 @@ function ChallengesBody({ query }: Readonly<{ query: ReturnType<typeof useCtfCha
 export function ChallengesPage() {
   const query = useCtfChallenges();
   const total = query.data?.length ?? 0;
-  const solved = query.data?.filter((challenge) => challenge.solved).length ?? 0;
+  const solved = query.data?.filter(isSolved).length ?? 0;
 
   return (
     <>

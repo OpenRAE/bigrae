@@ -38,7 +38,7 @@ def _authorization_event_range_targets(event_uuid: UUID, limit: int) -> tuple[Ta
     """Include native event children with their independently verified ancestry."""
     from engine.models import Range
 
-    from ._range_authority import project_range_authority
+    from ._range.authority import project_range_authority
 
     result = []
     rows = (
@@ -61,7 +61,7 @@ def _authorization_range_binding(range_uuid: UUID) -> tuple[TargetRef, ResourceS
     """Return the exact SQL-owned parent and ancestry of one public range identity."""
     from engine.models import Range
 
-    from ._range_authority import project_range_authority
+    from ._range.authority import project_range_authority
 
     row = Range.objects.select_related("request").get(cms_range_uuid=range_uuid)
     if row.request is None:

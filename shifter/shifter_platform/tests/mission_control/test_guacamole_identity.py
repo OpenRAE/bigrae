@@ -147,3 +147,10 @@ def test_rdp_params_keep_desktop_credentials_without_sftp():
     assert params["password"] == "desktop-password"
     assert "enable-sftp" not in params
     assert "sftp-password" not in params
+
+
+def test_rdp_params_disable_the_graphics_pipeline_for_16_bit_color():
+    params = create_rdp_connection_params(RDPConnectionParams(hostname="10.50.2.19", sftp_enabled=False))
+
+    assert params["disable-gfx"] == "true"
+    assert params["color-depth"] == "16"

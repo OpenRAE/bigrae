@@ -348,11 +348,6 @@ Current mechanisms:
   server version aligned with the installed workflow skills while preserving
   the repository's other MCP servers.
 
-- `.github/workflows/ground-control-phase-e.yml`: the package-generated,
-  version-pinned Ground Control finalizer. After a delivery PR merges to `main` or `dev`, it replays the trusted Phase D handoff through `grndctl finalize-merged-pr`.
-  It performs no implementation verification.
-  It has read permissions plus the issue write needed for the final report and issue close.
-
 - `.importlinter`: Python package-level architecture contracts
 
 - `.tflint.hcl`: Terraform lint configuration with `tflint-ruleset-google`

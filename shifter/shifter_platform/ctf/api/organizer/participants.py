@@ -86,6 +86,7 @@ class ParticipantListView(APIView):
                 "id": str(p.id),
                 "name": p.name,
                 "email": p.email,
+                "username": p.user.username if p.user is not None else None,
                 "status": p.status,
                 "role": p.role,
                 "hidden": p.hidden,

@@ -93,16 +93,29 @@ def _record_submission_locked(
     challenge_id = challenge.id
     dynamic_mode = event.scoring_mode == ScoringMode.DYNAMIC.value
     with transaction.atomic():
-        locked_participant = CTFParticipant.objects.select_for_update().select_related("event").get(pk=participant.id)
+        # Lock only the participant and challenge rows, and with NO KEY UPDATE: the
+        # submission never changes their keys. A FOR UPDATE lock here blocked the
+        # key-share locks that an event-wide communication release takes on
+        # participant rows while it holds the event row, and the submission's own
+        # foreign-key checks then waited on that event row: a deadlock.
+        locked_participant = (
+            CTFParticipant.objects.select_for_update(no_key=True, of=("self",))
+            .select_related("event")
+            .get(pk=participant.id)
+        )
         # The challenge lock is the shared fence for receipt context and dynamic
         # scoring. Legacy static/regex/HTTP submissions retain the same behavior;
         # they simply gain a final availability check against the locked rows.
-        locked_challenge = CTFChallenge.objects.select_for_update().select_related("event").get(pk=challenge.pk)
+        locked_challenge = (
+            CTFChallenge.objects.select_for_update(no_key=True, of=("self",))
+            .select_related("event")
+            .get(pk=challenge.pk)
+        )
 
         from ctf.services.challenge import assert_challenge_available_for_participant
         from ctf.services.participant.queries import assert_participant_can_compete
 
-        assert_participant_can_compete(locked_participant, require_team=True)
+        assert_participant_can_compete(locked_participant, validate_team=True)
         assert_challenge_available_for_participant(locked_participant, locked_challenge)
         if decision.receipt_evidence is not None:
             revalidate_receipt_for_commit(decision.receipt_evidence, locked_participant, locked_challenge)
@@ -251,10 +264,12 @@ def submit_flag(
     participant, challenge = _load_submission_entities(participant_id, challenge_id)
 
     # Compete gate before any flag verification work: refuses unregistered,
-    # disqualified, and banned rows plus observers (CTF-604/605/609).
+    # disqualified, and banned rows plus observers (CTF-604/605/609). A teamless
+    # participant competes as an individual (#3000); validate_team only rejects a
+    # stale or cross-event team reference, never the absence of a team.
     from ctf.services.participant.queries import assert_participant_can_compete
 
-    assert_participant_can_compete(participant, require_team=True)
+    assert_participant_can_compete(participant, validate_team=True)
 
     # Issue #769: shared participant→challenge availability policy. Same
     # contract as use_hint(), so hints can never be easier to obtain than

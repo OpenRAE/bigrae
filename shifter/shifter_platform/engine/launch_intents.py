@@ -136,11 +136,11 @@ def validate_provisioner_command(command: list[str]) -> dict[str, object]:
     base, operation_id = _split_operation_id(command)
     payload: dict[str, object] | None
     if base[:1] == ["vpn-profile"]:
-        from engine.services._vpn_profile_operations import validate_vpn_command
+        from engine.services._vpn.profile_operations import validate_vpn_command
 
         payload = validate_vpn_command(base)
     elif base[:1] == ["worker-trial"]:
-        from engine.services._worker_trials import validate_worker_trial_command
+        from engine.services._worker.trials import validate_worker_trial_command
 
         payload = validate_worker_trial_command(base)
     else:
@@ -195,7 +195,7 @@ def _require_current_generation(row: Range | Instance, expected_operation_id: UU
         isinstance(row, Instance) and row.request is not None and row.request.owner_principal_uuid is not None
     )
     if principal_owned and expected_operation_id is not None:
-        from engine.services._launch_authority import assert_launch_authority_binding
+        from engine.services._launch.authority import assert_launch_authority_binding
 
         intent = ProvisionerLaunchIntent.objects.filter(operation_id=expected_operation_id).first()
         if intent is None:
@@ -277,17 +277,17 @@ def _authorize_request_ngfw(
 def assert_provisioner_input_matches(payload: dict[str, object], operation_id: UUID) -> None:
     """Fence immutable input at effect admission, independently of failure evidence."""
     if payload.get("resource") == "range-project":
-        from engine.services._gcp_project_operations import validate_project_operation
+        from engine.services._gcp_project.operations import validate_project_operation
 
         validate_project_operation(payload, operation_id)
         return
     if payload.get("resource") == "vpn-profile":
-        from engine.services._vpn_profile_operations import validate_vpn_operation
+        from engine.services._vpn.profile_operations import validate_vpn_operation
 
         validate_vpn_operation(payload, operation_id)
         return
     if payload.get("resource") == "worker-trial":
-        from engine.services._worker_trials import validate_worker_trial_operation
+        from engine.services._worker.trials import validate_worker_trial_operation
 
         validate_worker_trial_operation(payload, operation_id)
         return
@@ -300,15 +300,15 @@ def _validate_native_generation(payload: dict[str, object], expected_operation_i
     """Fence a project, VPN profile or worker trial operation; return False for other resources."""
     resource = payload.get("resource")
     if resource == "range-project":
-        from engine.services._gcp_project_operations import validate_project_operation
+        from engine.services._gcp_project.operations import validate_project_operation
 
         validate_project_operation(payload, expected_operation_id)
     elif resource == "vpn-profile":
-        from engine.services._vpn_profile_operations import validate_vpn_operation
+        from engine.services._vpn.profile_operations import validate_vpn_operation
 
         validate_vpn_operation(payload, expected_operation_id)
     elif resource == "worker-trial":
-        from engine.services._worker_trials import validate_worker_trial_operation
+        from engine.services._worker.trials import validate_worker_trial_operation
 
         validate_worker_trial_operation(payload, expected_operation_id)
     else:
@@ -361,7 +361,7 @@ def _operation_identity(payload: dict[str, object], authority: dict[str, object]
     operation = f"{payload['resource']}:{payload['operation']}"
     with transaction.atomic():
         row = _lock_operation_target(payload)
-        from engine.services._launch_authority import assert_admitted_launch_binding
+        from engine.services._launch.authority import assert_admitted_launch_binding
 
         assert_admitted_launch_binding(authority, row)
         authorize_provisioner_payload(payload, target=row)
@@ -408,7 +408,7 @@ def _assert_stored_intent_matches(payload: dict[str, object], operation_id: UUID
         if intent is not None and intent.authority_kind:
             raise ValueError(_OPERATION_AUTHORITY_UNAVAILABLE)
         return
-    from engine.services._launch_authority import assert_input_authority_binding
+    from engine.services._launch.authority import assert_input_authority_binding
 
     if intent is not None:
         assert_input_authority_binding(stored, intent)
@@ -427,7 +427,7 @@ def enqueue_provisioner_launch(
 ) -> str:
     """Persist one durable intent per authorized operation and return its UUID."""
     payload = validate_provisioner_command(command)
-    from engine.services._launch_authority import prepare_launch_authority
+    from engine.services._launch.authority import prepare_launch_authority
 
     authority = prepare_launch_authority(payload, credential, cleanup_for)
     return _enqueue_admitted_provisioner_launch(command, payload, authority)
@@ -437,11 +437,11 @@ def _enqueue_admitted_provisioner_launch(
     command: list[str], payload: dict[str, object], authority: dict[str, object]
 ) -> str:
     """Commit server-owned admission in the incumbent operation transaction."""
-    from engine.services._launch_authority import assert_launch_authority_replay
+    from engine.services._launch.authority import assert_launch_authority_replay
 
     with transaction.atomic():
         operation_id = _operation_identity(payload, authority)
-        from engine.services._gcp_project_inputs import allocate_launch_projects
+        from engine.services._gcp_project.inputs import allocate_launch_projects
 
         allocate_launch_projects(payload, operation_id)
         existing = ProvisionerLaunchIntent.objects.filter(operation_id=operation_id).first()

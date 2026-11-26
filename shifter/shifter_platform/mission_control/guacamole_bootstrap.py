@@ -263,7 +263,81 @@ def consume_ready_url(*, request_id: UUID, credential: CredentialContext | None 
     admitted = _delivery_actor(request_id, credential)
     if admitted is None:
         return None
-    return _consume_admitted_url(request_id, admitted)
+    url = _consume_admitted_url(request_id, admitted)
+    if url is not None:
+        end_previous_rdp_sessions(request_id)
+    return url
+
+
+def _previous_rdp_sessions(request_id: UUID) -> list[GuacamoleBootstrapRequest]:
+    """Return earlier live RDP native sessions of the same principal for the same target."""
+    current = GuacamoleBootstrapRequest.objects.filter(pk=request_id).first()
+    if (
+        current is None
+        or current.protocol != GuacamoleBootstrapRequest.Protocol.RDP
+        or current.authority_kind != "principal"
+        or current.initiating_principal_uuid is None
+        or current.authority_target_uuid is None
+    ):
+        return []
+    return list(
+        GuacamoleBootstrapRequest.objects.filter(
+            protocol=GuacamoleBootstrapRequest.Protocol.RDP,
+            authority_kind="principal",
+            initiating_principal_uuid=current.initiating_principal_uuid,
+            authority_target_uuid=current.authority_target_uuid,
+            target_id=current.target_id,
+            native_terminated_at__isnull=True,
+            created_at__lt=current.created_at,
+        )
+        .exclude(pk=current.pk)
+        # nosec B106
+        .exclude(native_session_token="")
+    )
+
+
+def end_previous_rdp_sessions(request_id: UUID) -> int:
+    """End the same principal's earlier RDP native sessions for the same target.
+
+    An RDP desktop accepts one client at a time. When a participant opens a
+    new RDP session while an earlier RDP tab is still open, the two tabs drop
+    each other and reconnect in a loop. After the new URL is delivered, end the
+    earlier native sessions for the same principal and the same target, so only
+    the new tab keeps the desktop. SSH and NGFW sessions, other targets and
+    other principals are never touched. This is best effort: a failure here
+    never fails the new session. Returns the number of sessions ended.
+    """
+    try:
+        previous = _previous_rdp_sessions(request_id)
+        if previous:
+            from .guacamole_session import _bind_guacamole_client
+
+            client = _bind_guacamole_client("Remote access", require_signing_key=False)
+    # best effort after delivery; the new session must not fail here, and errors can carry endpoints
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("Previous RDP session lookup failed: request_id=%s exc_type=%s", request_id, type(exc).__name__)
+        previous = []
+    if not previous:
+        return 0
+
+    from .guacamole_authority import terminate_bootstrap
+
+    ended = 0
+    for row in previous:
+        try:
+            if terminate_bootstrap(row, client):
+                ended += 1
+        # best effort per session; a native cleanup error can carry token material, so log the type only
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "Previous RDP session not ended: request_id=%s previous_id=%s exc_type=%s",
+                request_id,
+                row.pk,
+                type(exc).__name__,
+            )
+    if ended:
+        logger.info("Previous RDP sessions ended: request_id=%s count=%s", request_id, ended)
+    return ended
 
 
 def prune_expired_bootstrap_requests(*, batch_size: int | None = None) -> int:

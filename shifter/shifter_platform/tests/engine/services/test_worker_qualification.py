@@ -121,9 +121,10 @@ def test_expired_or_old_generation_qualification_is_not_current(apparatus, guest
 
 @pytest.mark.parametrize("change", ["deadline", "status", "retirement", "terminal", "observation"])
 def test_effect_transaction_rechecks_current_binding(apparatus, guest, monkeypatch, change):
-    from engine.services import _worker_qualification, qualify_disposable_worker
+    from engine.services import qualify_disposable_worker
+    from engine.services._worker import qualification
 
-    original = _worker_qualification._store_qualification
+    original = qualification._store_qualification
 
     def changed_before_store(*args, **kwargs):
         from engine.models import DisposableWorker, Range
@@ -141,7 +142,7 @@ def test_effect_transaction_rechecks_current_binding(apparatus, guest, monkeypat
             DisposableWorker.objects.filter(pk=guest.row.pk).update(**{field: timezone.now()})
         return original(*args, **kwargs)
 
-    monkeypatch.setattr(_worker_qualification, "_store_qualification", changed_before_store)
+    monkeypatch.setattr(qualification, "_store_qualification", changed_before_store)
     with pytest.raises(ValueError, match="binding changed"):
         qualify_disposable_worker(apparatus.credential, guest.worker.worker_id)
 
@@ -149,7 +150,7 @@ def test_effect_transaction_rechecks_current_binding(apparatus, guest, monkeypat
 @pytest.mark.parametrize("change", ["missing", "foreign", "extra", "legacy"])
 def test_result_projection_requires_exact_immutable_targets(apparatus, guest, change):
     from engine.models import WorkerHostObservation
-    from engine.services._worker_observations import persist_worker_observations
+    from engine.services._worker.observations import persist_worker_observations
 
     runtime = guest.record.range
     WorkerHostObservation.objects.all().delete()

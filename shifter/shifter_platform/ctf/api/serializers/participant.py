@@ -67,6 +67,20 @@ class ParticipantCurrentEventSerializer(serializers.Serializer):
     participant = ParticipantSelfSerializer(read_only=True)
 
 
+def _team_solved_by_field() -> serializers.CharField:
+    """Return the optional, nullable ``team_solved_by`` output field.
+
+    ADR-040-R3 permits only optional response fields as v1 additions. The schema
+    generator marks every ``read_only`` field as required, so this output-only
+    field is declared ``required=False`` instead. The serializers only render.
+    """
+    return serializers.CharField(
+        required=False,
+        allow_null=True,
+        help_text="Display name of the team member who solved it first (team mode); null when unsolved by the team.",
+    )
+
+
 class ParticipantChallengeListItemSerializer(serializers.Serializer):
     """A participant-safe browse entry for one available challenge.
 
@@ -81,6 +95,10 @@ class ParticipantChallengeListItemSerializer(serializers.Serializer):
     difficulty = serializers.CharField(read_only=True, allow_blank=True)
     order = serializers.IntegerField(read_only=True)
     solved = serializers.BooleanField(read_only=True)
+    team_solved = serializers.BooleanField(
+        read_only=True, help_text="True when any member of the participant's team has solved it (team mode)."
+    )
+    team_solved_by = _team_solved_by_field()
     tags = serializers.ListField(child=serializers.CharField(), read_only=True)
     topics = serializers.ListField(child=serializers.CharField(), read_only=True)
 
@@ -127,7 +145,10 @@ class ParticipantHintSerializer(serializers.Serializer):
 
     id = serializers.CharField(read_only=True)
     order = serializers.IntegerField(read_only=True)
-    penalty = serializers.IntegerField(read_only=True)
+    penalty = serializers.IntegerField(read_only=True, help_text="Percentage of the challenge value.")
+    cost_points = serializers.IntegerField(
+        read_only=True, help_text="Points this hint costs when the hints are unlocked in order."
+    )
     unlocked = serializers.BooleanField(read_only=True)
     text = serializers.CharField(read_only=True, allow_null=True)
 
@@ -178,6 +199,10 @@ class ParticipantChallengeDetailSerializer(serializers.Serializer):
     max_attempts = serializers.IntegerField(read_only=True)
     attempt_limit_mode = serializers.CharField(read_only=True)
     solved = serializers.BooleanField(read_only=True)
+    team_solved = serializers.BooleanField(
+        read_only=True, help_text="True when any member of the participant's team has solved it (team mode)."
+    )
+    team_solved_by = _team_solved_by_field()
     attempt_count = serializers.IntegerField(read_only=True)
     attempts_remaining = serializers.IntegerField(read_only=True, allow_null=True)
     timeout_retry_after = serializers.IntegerField(read_only=True, allow_null=True)
@@ -186,6 +211,9 @@ class ParticipantChallengeDetailSerializer(serializers.Serializer):
     next_hint_cost = serializers.IntegerField(read_only=True)
     points_after_next_hint = serializers.IntegerField(read_only=True)
     total_hint_penalty = serializers.IntegerField(read_only=True)
+    total_hint_penalty_points = serializers.IntegerField(
+        read_only=True, help_text="Points that the unlocked hints take from a solve."
+    )
     files = ParticipantChallengeFileSerializer(many=True, read_only=True)
     prerequisites_met = serializers.BooleanField(read_only=True)
     unmet_prerequisites = _NamedRefSerializer(many=True, read_only=True)
@@ -272,6 +300,11 @@ class SubmissionListItemSerializer(serializers.Serializer):
     points_awarded = serializers.IntegerField(read_only=True)
     attempt_number = serializers.IntegerField(read_only=True)
     submitted_at = serializers.DateTimeField(read_only=True, allow_null=True)
+    submitted_flag = serializers.CharField(
+        read_only=True,
+        allow_null=True,
+        help_text="The participant's own stored value for a correct submission; null for an incorrect one",
+    )
 
 
 class SubmissionListResponseSerializer(serializers.Serializer):

@@ -69,8 +69,18 @@ _EVENT_MUTABLE_FIELDS = frozenset(
         "logo_url",
         "visible_os_types",
         "theme_color",
+        "participant_password_override",
     }
 )
+
+
+def validate_shared_participant_password(event_data: dict[str, Any]) -> None:
+    """Apply the participant password policy to a non-empty event-shared initial password."""
+    value = event_data.get("participant_password_override")
+    if value:
+        from ctf.services.participant.accounts import _validate_participant_password
+
+        _validate_participant_password(value)
 
 
 def create_event_for_credential(
@@ -102,6 +112,7 @@ def create_event_for_credential(
         raise CTFValidationError("Event actor changed")
 
     _validate_creation_fields(event_data)
+    validate_shared_participant_password(event_data)
 
     validate_scoring_mode(event_data)
     validate_event_timezone(event_data)

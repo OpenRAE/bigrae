@@ -40,10 +40,14 @@ for (const surface of SURFACES) {
         await page.goto(surface.route);
         // Readiness/identity oracle: the intended surface/state rendered, not a
         // redirect, blank mount, or the not-found fallback (ADR-055-R3).
-        const readyLocator =
-          surface.readyKind === "alert"
-            ? page.getByRole("alert").filter({ hasText: surface.ready })
-            : page.getByRole("heading", { name: surface.ready, exact: true });
+        const readyLocators = {
+          alert: () => page.getByRole("alert").filter({ hasText: surface.ready }),
+          heading: () => page.getByRole("heading", { name: surface.ready, exact: true }),
+          text: () => page.getByText(surface.ready, { exact: true }),
+          list: () => page.getByRole("list", { name: surface.ready, exact: true }),
+          table: () => page.getByRole("table", { name: surface.ready, exact: true }),
+        };
+        const readyLocator = readyLocators[surface.readyKind ?? "heading"]();
         await expect(readyLocator.first()).toBeVisible();
 
         const results = await new AxeBuilder({ page }).include(SPA_ROOT).withTags([...AXE_WCAG_TAGS]).analyze();

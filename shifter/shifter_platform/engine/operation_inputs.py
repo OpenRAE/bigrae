@@ -116,7 +116,7 @@ def _raes_image_candidates(plan: dict[str, object], target: Range | None = None)
         if target.scope_kind == "installation":
             scope = ResourceScope("installation")
         else:
-            from engine.services._range_authority import project_range_authority
+            from engine.services._range.authority import project_range_authority
 
             scope = project_range_authority(target.request.request_id).scope
         rows = rows.filter(inventory_scope_filter(scope))
@@ -262,9 +262,9 @@ def _raes_input_payload(
     access; warm activation later carries the access bindings and realizes the
     claimant's fresh access.
     """
-    from engine.services._gcp_project_inputs import projects_for_input, retained_project_cleanup_payload
-    from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
-    from engine.services._runtime_plugin_cleanup import retained_cleanup_payload
+    from engine.services._gcp_project.inputs import projects_for_input, retained_project_cleanup_payload
+    from engine.services._runtime_plugin.bindings import retained_runtime_plugin_pin
+    from engine.services._runtime_plugin.cleanup import retained_cleanup_payload
 
     plan = target.range_config or {}
     pin = retained_runtime_plugin_pin(target)
@@ -402,8 +402,8 @@ def operation_input_payload(
 
 def materialize_operation_input(payload: dict[str, object], operation_id: UUID | str, target: Range | Instance) -> None:
     """Persist input atomically with the incumbent intent and its authority hash."""
-    from engine.services._launch_authority import authority_envelope_fields
-    from engine.services._runtime_plugin_operations import queue_runtime_plugin_plans
+    from engine.services._launch.authority import authority_envelope_fields
+    from engine.services._runtime_plugin.operations import queue_runtime_plugin_plans
 
     request: Request | None = getattr(target, "request", None)
     if request is None:

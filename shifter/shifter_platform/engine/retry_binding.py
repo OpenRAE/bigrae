@@ -157,7 +157,7 @@ def prune_expired_retry_bindings(*, batch_size: int) -> int:
     """
     from engine.models import PublicOperationRetryBinding
 
-    from .services._cleanup_verification import is_cleanup_verified_absent
+    from .services._cleanup.verification import is_cleanup_verified_absent
 
     limit = max(1, int(batch_size))
     candidates = list(

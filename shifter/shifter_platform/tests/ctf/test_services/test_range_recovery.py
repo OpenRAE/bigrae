@@ -32,6 +32,7 @@ from django.utils import timezone
 
 from cms.models import RaesPackageSource, RangeInstance
 from cms.models import Request as CmsRequest
+from cms.services._range_workspace import resolve_scope_egress_mode
 from ctf.enums import (
     EventStatus,
     ParticipantStatus,
@@ -102,7 +103,7 @@ def _make_spare_range(*, event: CTFEvent, owner, scenario_id: str = "basic", req
         scope_kind=event.scope_kind,
         account_id=event.account_id,
         organization_id=event.organization_id,
-        egress_mode="none",
+        egress_mode=resolve_scope_egress_mode(event.workspace_id),
         resource_generation=uuid4(),
         status=EngineRange.Status.READY,
         subnet_index=EngineRange.allocate_subnet_index(),
@@ -136,7 +137,7 @@ def _make_spare_range(*, event: CTFEvent, owner, scenario_id: str = "basic", req
 def _retain_initial_range_custody(instance, credential):
     """Represent the previously accepted native generation with its exact policy admission."""
     from engine.models import RangeAuthorityChange
-    from engine.services._launch_authority import admit_launch_authority, range_runtime_binding_digest
+    from engine.services._launch.authority import admit_launch_authority, range_runtime_binding_digest
 
     runtime = instance.engine_range
     payload = {
@@ -204,7 +205,7 @@ def event_with_scenario(ctf_event, organizer_user, monkeypatch, settings, transa
     from cms.raes.dispatch import CmsRaesDispatchPort
     from workspaces.services import resource_scope_from_ids
 
-    monkeypatch.setattr("engine.services._raes_range.start_raes_range_provisioning", lambda *_a, **_kw: None)
+    monkeypatch.setattr("engine.services._raes.range.start_raes_range_provisioning", lambda *_a, **_kw: None)
     settings.ENGINE_TASK_CLUSTER = "synthetic-namespace"
     settings.ENGINE_TASK_DEFINITION = "example.test/synthetic@sha256:" + "1" * 64
 

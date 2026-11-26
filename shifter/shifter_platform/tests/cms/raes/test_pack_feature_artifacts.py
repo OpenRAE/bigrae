@@ -10,7 +10,7 @@ from django.core.management import call_command
 from cms.raes.feature_artifacts import request_pack_feature_artifacts
 from cms.scenarios.inbox import SHIPPED_INBOX_MANIFEST, register_inbox_packs
 from engine.models import AcquiredFeatureArtifact
-from engine.services._feature_artifacts import StorageTarget
+from engine.services._feature_artifacts.acquisition import StorageTarget
 from tests.cms._native_catalog import native_catalog as native_catalog
 
 IMAGE = "registry.example/platform@sha256:" + "a" * 64

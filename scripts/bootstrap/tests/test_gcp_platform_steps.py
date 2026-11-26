@@ -8,6 +8,7 @@ from pathlib import Path
 from urllib import error as urllib_error
 
 import pytest
+from installation.capacity_profiles_gcp import resolve_capacity_profile
 
 import gcp_terraform
 from gcp_inputs import load_deployment_inputs
@@ -24,6 +25,7 @@ from gcp_terraform import (
     TerraformStepError,
     apply_destroy_settings,
     backend_prefix,
+    cloud_sql_disk_variables,
     deployment_values,
     drop_unremovable_kms_resources,
     kms_adoption_variables,
@@ -222,6 +224,26 @@ class TestTerraformSteps:
         assert "-var=adopt_storage_kms=true" in targeted.argv
         assert "-target=module.platform_core.module.portal_gcs.google_storage_bucket.assets" in targeted.argv
 
+    def test_cloud_sql_disk_keeps_the_floor_and_never_shrinks(self, inputs):
+        """Terraform grows the disk to the profile floor and keeps a larger live disk (#2965)."""
+        ctx = terraform_context(inputs, inputs.workdir, {})
+        describe = ["gcloud", "sql", "instances", "describe", "shifter-acme-pg"]
+        floor = str(resolve_capacity_profile(inputs.settings.shared_service_capacity_profile).cloud_sql.disk_size_gb)
+        small = FakeRunner().on(describe, ProcessResult(0, "10\n"))
+        assert cloud_sql_disk_variables(small, ctx, inputs) == {"cloud_sql_disk_size_gb": floor}
+        (call,) = small.find(*describe)
+        assert call.argv[-3:] == ["--project", PROJECT, "--format=value(settings.dataDiskSizeGb)"]
+        grown = FakeRunner().on(describe, ProcessResult(0, "5000\n"))
+        assert cloud_sql_disk_variables(grown, ctx, inputs) == {"cloud_sql_disk_size_gb": "5000"}
+        absent = FakeRunner().on(describe, ProcessResult(1, "", "ERROR: The Cloud SQL instance does not exist."))
+        assert cloud_sql_disk_variables(absent, ctx, inputs) == {}
+        denied = FakeRunner().on(describe, ProcessResult(1, "", "ERROR: (gcloud.sql.instances.describe) HTTP 403"))
+        with pytest.raises(GcpCommandError, match="cannot read the disk size"):
+            cloud_sql_disk_variables(denied, ctx, inputs)
+        blank = FakeRunner().on(describe, ProcessResult(0, "\n"))
+        with pytest.raises(GcpCommandError, match="no disk size"):
+            cloud_sql_disk_variables(blank, ctx, inputs)
+
     def test_reinstall_adopts_the_key_rings_that_a_destroy_left(self, inputs):
         # gcp-destroy drops the key rings from state; a reinstall adopts them (#2643, #2564).
         ctx = terraform_context(inputs, inputs.workdir, {})
@@ -316,8 +338,13 @@ class TestPrerequisites:
                 request.full_url, 404 if request.get_method() == "GET" else 403, "x", None, None
             )
 
-        with pytest.raises(PrerequisiteError, match="initializeAuth"):
-            ensure_identity_platform(self._runner(), {}, project_id=PROJECT, opener=failing)
+        times = iter([0.0, 300.0, 601.0])
+        waits = []
+        with pytest.raises(PrerequisiteError, match="init HTTP 403"):
+            ensure_identity_platform(
+                self._runner(), {}, project_id=PROJECT, opener=failing, sleep=waits.append, clock=lambda: next(times)
+            )
+        assert waits == [15]
 
         def down(request, timeout):
             raise urllib_error.URLError("down")
@@ -328,6 +355,39 @@ class TestPrerequisites:
             ensure_identity_platform(
                 FakeRunner().on(["gcloud", "auth"], ProcessResult(0, "")), {}, project_id=PROJECT, opener=down
             )
+
+    def test_identity_platform_waits_for_a_pending_grant(self):
+        """A 403 from initializeAuth is retried until the new grant takes effect (#2958)."""
+        posts = iter([403, 403, 200])
+        waits = []
+
+        def opener(request, timeout):
+            if request.get_method() == "GET":
+                raise urllib_error.HTTPError(request.full_url, 404, "nf", None, None)
+            status = next(posts)
+            if status != 200:
+                raise urllib_error.HTTPError(request.full_url, status, "x", None, None)
+            return _Resp()
+
+        ensure_identity_platform(
+            self._runner(), {}, project_id=PROJECT, opener=opener, sleep=waits.append, clock=lambda: 0.0
+        )
+        assert waits == [15, 15]
+
+    def test_identity_platform_does_not_retry_other_errors(self):
+        posts = []
+
+        def opener(request, timeout):
+            if request.get_method() == "GET":
+                raise urllib_error.HTTPError(request.full_url, 404, "nf", None, None)
+            posts.append(request.full_url)
+            raise urllib_error.HTTPError(request.full_url, 400, "x", None, None)
+
+        with pytest.raises(PrerequisiteError, match="init HTTP 400"):
+            ensure_identity_platform(
+                self._runner(), {}, project_id=PROJECT, opener=opener, sleep=pytest.fail, clock=lambda: 0.0
+            )
+        assert len(posts) == 1
 
     def test_state_bucket_is_created_hardened_and_cleaned(self):
         policy = {"bindings": [{"role": "roles/storage.objectViewer", "members": ["allUsers"]}]}

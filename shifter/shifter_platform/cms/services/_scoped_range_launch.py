@@ -65,12 +65,9 @@ def _validate_scoped_launch_inputs(
 
 def _initial_launch_egress(resolved: ResolvedResourceScope) -> str:
     """Resolve the initial egress mode for the launch workspace."""
-    egress = "none"
-    if resolved.workspace_id is not None:
-        from ._range_workspace import resolve_effective_egress_mode
+    from ._range_workspace import resolve_scope_egress_mode
 
-        egress = resolve_effective_egress_mode(resolved.workspace_id)
-    return egress
+    return resolve_scope_egress_mode(resolved.workspace_id)
 
 
 def _warm_claim(launch: PreparedScopedLaunch) -> RangeContext | None:

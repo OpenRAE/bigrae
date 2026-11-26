@@ -187,7 +187,7 @@ def _reschedule_challenge_release_tasks(event: CTFEvent) -> None:
     # already excluded by default — no inline deleted_at filter needed.
     challenges = CTFChallenge.objects.filter(
         event=event,
-        visibility=ChallengeVisibility.HIDDEN.value,
+        visibility__in=(ChallengeVisibility.HIDDEN.value, ChallengeVisibility.VISIBLE.value),
         release_time__isnull=False,
     )
     for challenge in challenges:

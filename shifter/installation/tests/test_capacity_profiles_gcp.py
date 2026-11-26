@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import ValidationError
@@ -48,7 +49,7 @@ def test_catalog_has_all_versioned_event_sizes():
         ("gcp-shared-v1-p50", 50, 8, 4, 4, 12, "db-custom-8-30720", "REGIONAL", 100, 350, 12),
         ("gcp-shared-v1-p100", 100, 14, 8, 6, 20, "db-custom-16-61440", "REGIONAL", 200, 650, 20),
         ("gcp-shared-v1-p200", 200, 26, 16, 12, 24, "db-custom-32-122880", "REGIONAL", 400, 800, 32),
-        ("gcp-shared-v1-p300", 300, 38, 24, 18, 36, "db-custom-48-184320", "REGIONAL", 600, 800, 48),
+        ("gcp-shared-v1-p300", 300, 68, 48, 18, 36, "db-custom-48-184320", "REGIONAL", 600, 800, 48),
         ("gcp-shared-v1-p500", 500, 62, 40, 28, 57, "db-custom-64-245760", "REGIONAL", 1000, 800, 80),
     ],
 )
@@ -84,6 +85,35 @@ def test_every_catalog_profile_has_its_authored_capacity_shape(
     assert profile.gate.concurrency == participants
     assert profile.gate.hold_seconds == 120
     assert profile.gate.telemetry_settle_seconds == 240
+
+
+def test_p300_carries_the_live_event_autoscaling_and_worker_values():
+    profile = resolve_capacity_profile("gcp-shared-v1-p300")
+
+    assert (profile.portal.autoscaling.min_replicas, profile.portal.autoscaling.max_replicas) == (68, 100)
+    assert (profile.guacd.autoscaling.min_replicas, profile.guacd.autoscaling.max_replicas) == (48, 72)
+    assert profile.portal.web_workers == 6
+    assert profile.helm_projection()["runtimeEnv"]["PORTAL_WEB_WORKERS"] == "6"
+    assert resolve_capacity_profile("gcp-shared-v1-p200").portal.web_workers == 4
+
+
+def test_p300_carries_the_live_event_openfga_values():
+    profile = resolve_capacity_profile("gcp-shared-v1-p300")
+    helm = profile.helm_projection()
+    kubernetes = cast(dict[str, object], profile.desired_state()["kubernetes"])
+
+    assert (profile.openfga.replicas, profile.openfga.timeout_ms) == (8, 5000)
+    assert helm["openfga"] == {"replicas": 8}
+    assert cast(dict[str, str], helm["runtimeEnv"])["OPENFGA_TIMEOUT_MS"] == "5000"
+    assert kubernetes["deployment/openfga.spec.replicas"] == 8
+    assert kubernetes["configmap/platform-runtime.data.OPENFGA_TIMEOUT_MS"] == "5000"
+
+
+@pytest.mark.parametrize("profile_id", ["gcp-shared-v1-p10", "gcp-shared-v1-p200", "gcp-shared-v1-p500"])
+def test_other_tiers_keep_the_chart_and_runtime_openfga_defaults(profile_id):
+    profile = resolve_capacity_profile(profile_id)
+
+    assert (profile.openfga.replicas, profile.openfga.timeout_ms) == (2, 1500)
 
 
 def test_unknown_profile_fails_closed():
@@ -234,17 +264,19 @@ def test_p30_helm_projection_carries_real_resources_autoscaling_and_backends():
     }
     assert helm["guacd"]["resources"]["limits"] == {
         "cpu": "2",
-        "memory": "2Gi",
+        "memory": "4Gi",
         "ephemeral-storage": "256Mi",
     }
+    assert helm["guacd"]["resources"]["requests"]["memory"] == "2Gi"
+    assert helm["guacamoleClient"]["replicas"] == 1
     assert helm["guacamoleClient"]["resources"]["requests"] == {
         "cpu": "500m",
         "memory": "1Gi",
         "ephemeral-storage": "256Mi",
     }
     assert helm["services"] == {
-        "portal": {"backendConfig": {"timeoutSec": 3600, "connectionDraining": {"drainingTimeoutSec": 300}}},
-        "guacamoleClient": {"backendConfig": {"timeoutSec": 3600, "connectionDraining": {"drainingTimeoutSec": 300}}},
+        "portal": {"backendConfig": {"timeoutSec": 28800, "connectionDraining": {"drainingTimeoutSec": 300}}},
+        "guacamoleClient": {"backendConfig": {"timeoutSec": 28800, "connectionDraining": {"drainingTimeoutSec": 300}}},
     }
 
 

@@ -54,6 +54,34 @@ def compute_hint_purchase_info(
     }
 
 
+def challenge_points_lost(event: CTFEvent, challenge: CTFChallenge, total_hint_penalty: int) -> int:
+    """Return the points that a cumulative hint penalty takes from a solve of ``challenge``.
+
+    ``CTFHint.penalty`` is a percentage of the challenge value, so the point
+    amount depends on the challenge and the event's scoring mode.
+    """
+    from ctf.services.scoring import calculate_solve_points
+
+    if total_hint_penalty <= 0:
+        return 0
+    return calculate_solve_points(event, challenge, 0) - calculate_solve_points(event, challenge, total_hint_penalty)
+
+
+def hint_point_costs(event: CTFEvent, challenge: CTFChallenge, all_hints: Iterable[CTFHint]) -> dict[UUID, int]:
+    """Return the points each hint costs when the hints are unlocked in order.
+
+    Each cost is the drop in solve value that the hint adds on top of the
+    hints before it, the same amount that ``next_hint_cost`` shows.
+    """
+    costs: dict[UUID, int] = {}
+    cumulative = 0
+    for hint in sorted(all_hints, key=lambda item: item.order):
+        before = challenge_points_lost(event, challenge, cumulative)
+        cumulative += hint.penalty
+        costs[hint.id] = challenge_points_lost(event, challenge, cumulative) - before
+    return costs
+
+
 def match_target_instance(challenge: CTFChallenge, instances: Iterable[dict[str, Any]]) -> dict[str, Any] | None:
     """Return connection info for the instance matching the challenge target, or None."""
     for inst in instances:

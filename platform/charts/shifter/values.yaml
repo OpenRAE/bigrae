@@ -261,6 +261,7 @@ workers:
         ephemeral-storage: 256Mi
   ctfCommunicationWorker:
     replicas: 1
+    # 512Mi was OOMKilled 37 times under event load on 2026-11-19 (370Mi at rest).
     resources:
       requests:
         cpu: 100m
@@ -268,19 +269,20 @@ workers:
         ephemeral-storage: 128Mi
       limits:
         cpu: 500m
-        memory: 512Mi
+        memory: 1Gi
         ephemeral-storage: 256Mi
   guacamolePrune:
     replicas: 1
     # Keep startup within the heartbeat window, including Django checks and
     # dependency loading. Qualified with the standard worker budget in #1583.
+    # Two CPUs give a large revalidation backlog headroom (event load, 2026-11-20).
     resources:
       requests:
         cpu: 100m
         memory: 256Mi
         ephemeral-storage: 128Mi
       limits:
-        cpu: "1"
+        cpu: "2"
         memory: 512Mi
         ephemeral-storage: 256Mi
   raesOperationRecordPrune:
@@ -449,7 +451,10 @@ services:
         checkIntervalSec: 15
         timeoutSec: 5
         healthyThreshold: 1
-        unhealthyThreshold: 2
+        # The channel-layer Redis check in /health/ can fail falsely when it
+        # runs at the same time as WebSocket traffic. Five failures in a row
+        # keep a working pod in the load balancer.
+        unhealthyThreshold: 5
   guacamoleClient:
     annotations: {}
     backendConfig:

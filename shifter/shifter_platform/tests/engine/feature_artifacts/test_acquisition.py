@@ -15,7 +15,7 @@ from django.utils import timezone
 
 from engine.models import AcquiredFeatureArtifact
 from engine.services import reconcile_feature_artifact_acquisitions
-from engine.services._feature_artifacts import (
+from engine.services._feature_artifacts.acquisition import (
     ArtifactRequest,
     FeatureArtifactUnavailableError,
     StorageTarget,

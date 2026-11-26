@@ -74,7 +74,7 @@ def test_tenant_admin_installs_without_staff_operator_grants_or_execution(tenant
     assert not actor.is_staff and not actor.is_superuser
     assert not OrganizationMembership.objects.filter(user=actor, organization=organization).exists()
     execute = Mock(side_effect=AssertionError("HTTP must not run plugin code"))
-    monkeypatch.setattr("engine.services._runtime_plugin_controller.launch_plugin", execute)
+    monkeypatch.setattr("engine.services._runtime_plugin.controller.launch_plugin", execute)
     client = APIClient()
     client.force_authenticate(user=actor)
     response = client.post(url(organization), {"manifest": manifest}, format="json")
@@ -120,12 +120,12 @@ def test_service_principal_can_install_inspect_and_disable_plugin_over_http(tena
 
 @pytest.mark.parametrize("kind", ["human", "service"])
 def test_native_plugin_proof_revoked_after_admission_cannot_install(tenant, manifest, monkeypatch, kind):
-    from engine.services import _runtime_plugins
+    from engine.services._runtime_plugin import installation
     from management.models import PrincipalSession, ServiceCredentialAdmission
 
     actor, organization = tenant
     credential = actor.credential if kind == "human" else _service_credential(actor)
-    parse = _runtime_plugins._credentials
+    parse = installation._credentials
 
     def parsed_then_revoked(payload):
         result = parse(payload)
@@ -135,7 +135,7 @@ def test_native_plugin_proof_revoked_after_admission_cannot_install(tenant, mani
             ServiceCredentialAdmission.objects.filter(uuid=credential.credential_uuid).update(is_active=False)
         return result
 
-    monkeypatch.setattr(_runtime_plugins, "_credentials", parsed_then_revoked)
+    monkeypatch.setattr(installation, "_credentials", parsed_then_revoked)
     client = APIClient()
     client.force_authenticate(user=actor if kind == "human" else None, token=credential)
     response = client.post(url(organization), {"manifest": manifest}, format="json")
@@ -144,7 +144,7 @@ def test_native_plugin_proof_revoked_after_admission_cannot_install(tenant, mani
 
 
 def test_installation_pages_are_bounded_complete_and_tenant_scoped(tenant, manifest):
-    from engine.services._runtime_plugin_authority import admit_plugin_authority
+    from engine.services._runtime_plugin.authority import admit_plugin_authority
 
     actor, organization = tenant
     authority = admit_plugin_authority(actor.credential, organization.uuid)
@@ -208,7 +208,9 @@ def test_staff_or_another_tenant_admin_cannot_inspect_or_mutate(tenant, manifest
 def test_registry_secret_is_encrypted_and_not_returned_or_audited(tenant, manifest, monkeypatch):
     actor, organization = tenant
     events = []
-    monkeypatch.setattr("engine.services._runtime_plugins.audit_log", lambda event, **kwargs: events.append(event))
+    monkeypatch.setattr(
+        "engine.services._runtime_plugin.installation.audit_log", lambda event, **kwargs: events.append(event)
+    )
     result = install_runtime_plugin(
         actor.credential,
         organization.uuid,
@@ -252,7 +254,7 @@ def test_unknown_install_authority_fields_are_rejected(tenant, manifest):
 @pytest.fixture
 def worker(monkeypatch):
     launch = Mock()
-    monkeypatch.setattr("engine.services._runtime_plugin_controller.launch_plugin", launch)
+    monkeypatch.setattr("engine.services._runtime_plugin.controller.launch_plugin", launch)
 
     def observe(request):
         return InspectionResult(
@@ -263,7 +265,7 @@ def worker(monkeypatch):
             status="compatible",
         )
 
-    monkeypatch.setattr("engine.services._runtime_plugin_controller.observe_plugin", observe)
+    monkeypatch.setattr("engine.services._runtime_plugin.controller.observe_plugin", observe)
     return launch
 
 
@@ -290,7 +292,7 @@ def test_another_probes_result_cannot_enable_installation(tenant, manifest, work
             status="compatible",
         )
 
-    monkeypatch.setattr("engine.services._runtime_plugin_controller.observe_plugin", observe)
+    monkeypatch.setattr("engine.services._runtime_plugin.controller.observe_plugin", observe)
     reconcile_runtime_plugins()
     row = RuntimePluginInstallation.objects.get()
     assert row.state == "failed"
@@ -311,7 +313,7 @@ def test_disable_during_probe_fences_completion(tenant, manifest, worker, monkey
             status="compatible",
         )
 
-    monkeypatch.setattr("engine.services._runtime_plugin_controller.observe_plugin", observe)
+    monkeypatch.setattr("engine.services._runtime_plugin.controller.observe_plugin", observe)
     reconcile_runtime_plugins()
     assert RuntimePluginInstallation.objects.get().state == "disabled"
 
@@ -336,7 +338,7 @@ def test_retirement_is_irreversible_and_expired_probe_cannot_enable(tenant, mani
     result = install_runtime_plugin(actor.credential, organization.uuid, manifest)
     RuntimePluginInstallation.objects.update(probe_expires_at=timezone.now())
     stop = Mock()
-    monkeypatch.setattr("engine.services._runtime_plugin_controller.interrupt_plugin", stop)
+    monkeypatch.setattr("engine.services._runtime_plugin.controller.interrupt_plugin", stop)
     reconcile_runtime_plugins()
     row = RuntimePluginInstallation.objects.get()
     assert row.state == "failed"

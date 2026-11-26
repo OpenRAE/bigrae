@@ -117,8 +117,8 @@ The executable tuple is Python 3.14, Django 6.0, RAES 12.0.0, and raes-env-packs
 Reload refuses an unsupported RAES/env-packs tuple.
 Portable plan and configuration versions remain subject to their owner validators.
 
-Current compiler limits are 10000 coordinates, domain values, and product outputs, plus a 32 MiB sealed plan.
-The complete retained record has a separate 64 MiB bound.
+Current compiler limits are 10000 coordinates, domain values, and product outputs, plus a 256 MiB sealed plan.
+The complete retained record has a separate 512 MiB bound.
 There is no silent study reduction or consumer-owned partitioning.
 
 The released typed factorial profile accepts fixed nuisance selections and seeded allocation.

@@ -33,6 +33,13 @@ Read the [decision guide](../adr/README.md), source code, and current handbook t
 
 ## Find implementation history
 
+The [Engine service package design](engine-service-packages-preflight-2863.md) records the package boundaries for issue #2863.
+
+The [Guacamole credential-file preflight (#2565)](guacamole-secret-files-preflight-2565.md)
+records the image, Secret, parser, and verification boundaries before implementation.
+The [Guacamole credential-file design (#2565)](guacamole-secret-files-design-2565.md)
+records the chosen file-delivery contract.
+
 Use the issue number or subject to locate a record without treating it as
 installation guidance:
 
@@ -44,6 +51,9 @@ REV1 and later adoption reviews are dated assessments. Their evidence limits and
 superseding decisions matter. Do not infer a live release claim from a proposed
 control or an earlier passing test. This directory remains excluded from the
 public MkDocs site; exclusion is not a confidentiality boundary.
+
+The [CTF range-status preflight (#2577)](ctf-range-status-commit-boundary-2577.md)
+explains the commit boundary clarified in ADR-025 and the remaining delivery risks.
 
 ## Durable design notes
 

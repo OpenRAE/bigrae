@@ -39,9 +39,11 @@ _VIEWING_PARTICIPANT_STATUSES: tuple[str, ...] = (
 def eligible_participant_q(field_prefix: str = "") -> Q:
     """Return a `Q` predicate matching participants eligible for scoring/access.
 
-    A participant is eligible iff they have completed registration
-    (`registered_at` is set) AND their status is one of ACTIVE / REGISTERED
-    / COMPLETED — i.e. NOT disqualified. This is the single shared
+    A participant is eligible iff the row is not soft-deleted, they have
+    completed registration (`registered_at` is set), AND their status is one
+    of ACTIVE / REGISTERED / COMPLETED — i.e. NOT disqualified. The explicit
+    `deleted_at` check matters for joined lookups (`participant__`,
+    `members__`): the soft-delete manager does not filter a join. This is the single shared
     predicate used by `is_active_participant` (access control), by
     `get_scoreboard` (individual rankings), and by `get_team_scoreboard`
     (team aggregates) so the three layers cannot drift apart.
@@ -56,7 +58,13 @@ def eligible_participant_q(field_prefix: str = "") -> Q:
         A `Q` object combining the registration and status checks.
     """
     p = field_prefix
-    return Q(**{f"{p}registered_at__isnull": False, f"{p}status__in": _PLAYING_PARTICIPANT_STATUSES})
+    return Q(
+        **{
+            f"{p}deleted_at__isnull": True,
+            f"{p}registered_at__isnull": False,
+            f"{p}status__in": _PLAYING_PARTICIPANT_STATUSES,
+        }
+    )
 
 
 def viewing_participant_q(field_prefix: str = "") -> Q:
@@ -77,7 +85,13 @@ def viewing_participant_q(field_prefix: str = "") -> Q:
         A `Q` object combining the registration and view-status checks.
     """
     p = field_prefix
-    return Q(**{f"{p}registered_at__isnull": False, f"{p}status__in": _VIEWING_PARTICIPANT_STATUSES})
+    return Q(
+        **{
+            f"{p}deleted_at__isnull": True,
+            f"{p}registered_at__isnull": False,
+            f"{p}status__in": _VIEWING_PARTICIPANT_STATUSES,
+        }
+    )
 
 
 def ranked_participant_q(field_prefix: str = "") -> Q:
@@ -101,18 +115,24 @@ def ranked_participant_q(field_prefix: str = "") -> Q:
     return eligible_participant_q(field_prefix) & Q(**{f"{p}hidden": False, f"{p}role": ParticipantRole.PLAYER.value})
 
 
-def assert_participant_can_compete(participant: CTFParticipant, *, require_team: bool = False) -> None:
+def assert_participant_can_compete(participant: CTFParticipant, *, validate_team: bool = False) -> None:
     """Raise unless `participant` may take competitive actions (submit, hints).
 
     The imperative twin of :func:`eligible_participant_q` for callers already
     holding a row, plus the CTF-604 role rule: observers watch but never act.
-    Flag submission also requires live same-event team membership in team mode
-    when ``require_team`` is set. Team onboarding and other callers do not.
+
+    A teamless participant competes as an individual in every event mode,
+    including team mode (#3000): a team is not a prerequisite for submitting a
+    flag or scoring. When ``validate_team`` is set the caller additionally
+    rejects a participant whose ``team_id`` points to a team that is not a live
+    team of the same event. Flag submission sets it so a stale or cross-event
+    membership cannot drive team-score maintenance; a ``None`` team always
+    passes.
 
     Raises:
-        CTFStateError: If the participant is unregistered or their status is
-            outside the playing set (invited, disqualified, banned), or required
-            team membership is missing.
+        CTFStateError: If the participant is unregistered, their status is
+            outside the playing set (invited, disqualified, banned), or
+            ``validate_team`` is set and their team reference is invalid.
         CTFPermissionError: If the participant is an observer.
     """
     from ctf.enums import ParticipantRole
@@ -129,15 +149,12 @@ def assert_participant_can_compete(participant: CTFParticipant, *, require_team:
             details={"participant_id": str(participant.id)},
         )
     if (
-        require_team
-        and participant.event.team_mode
-        and (
-            participant.team_id is None
-            or not CTFTeam.objects.filter(pk=participant.team_id, event_id=participant.event_id).exists()
-        )
+        validate_team
+        and participant.team_id is not None
+        and not CTFTeam.objects.filter(pk=participant.team_id, event_id=participant.event_id).exists()
     ):
         raise CTFStateError(
-            "Join or create a team before submitting flags",
+            "Your team is not a valid team for this event",
             details={"participant_id": str(participant.id)},
         )
 

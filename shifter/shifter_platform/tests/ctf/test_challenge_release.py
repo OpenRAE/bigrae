@@ -140,13 +140,31 @@ class TestSyncReleaseTask:
         assert task.status == ScheduledTaskStatus.PENDING.value
         assert task.scheduled_for == release_time
 
-    def test_no_task_for_visible_challenge(self, active_event):
-        """A VISIBLE challenge does not get a release task."""
+    def test_creates_task_for_visible_challenge_with_future_release(self, active_event):
+        """A time-gated VISIBLE challenge gets a release task for its notice (#2973)."""
         challenge = CTFChallenge.objects.create(
             event=active_event,
             name="Visible Challenge",
             **_CHALLENGE_DEFAULTS,
             visibility=ChallengeVisibility.VISIBLE.value,
+            release_time=timezone.now() + timedelta(hours=2),
+        )
+
+        _sync_release_task(challenge)
+
+        assert CTFScheduledTask.objects.filter(
+            task_type=ScheduledTaskType.RELEASE_CHALLENGE.value,
+            metadata__challenge_id=str(challenge.pk),
+            status=ScheduledTaskStatus.PENDING.value,
+        ).exists()
+
+    def test_no_task_for_locked_challenge(self, active_event):
+        """A LOCKED challenge does not get a release task."""
+        challenge = CTFChallenge.objects.create(
+            event=active_event,
+            name="Locked Challenge",
+            **_CHALLENGE_DEFAULTS,
+            visibility=ChallengeVisibility.LOCKED.value,
             release_time=timezone.now() + timedelta(hours=2),
         )
 
@@ -267,8 +285,8 @@ class TestChallengeServiceIntegration:
             status=ScheduledTaskStatus.PENDING.value,
         ).exists()
 
-    def test_create_challenge_visible_no_task(self, ctf_event):
-        """Creating a VISIBLE challenge with release_time does NOT schedule a task."""
+    def test_create_challenge_visible_schedules_task(self, ctf_event):
+        """Creating a VISIBLE challenge with release_time schedules its notice task (#2973)."""
         release_time = ctf_event.event_start + timedelta(hours=2)
         challenge = create_challenge(
             ctf_event.pk,
@@ -285,7 +303,7 @@ class TestChallengeServiceIntegration:
             actor_id=ctf_event.created_by_id,
         )
 
-        assert not CTFScheduledTask.objects.filter(
+        assert CTFScheduledTask.objects.filter(
             task_type=ScheduledTaskType.RELEASE_CHALLENGE.value,
             metadata__challenge_id=str(challenge.pk),
         ).exists()

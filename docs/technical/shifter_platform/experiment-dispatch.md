@@ -23,6 +23,7 @@ A failure in one entry is reported as `error` for that entry; the pass continues
 ## Engine worker trials
 
 `engine.services` owns one `WorkerTrial` row per worker.
+The private `engine.services._worker` package holds the trial implementation.
 
 | Service | Behavior |
 | --- | --- |
@@ -101,6 +102,9 @@ Evidence that names another attempt is refused.
 Intake still validates every inventory member and checksum.
 A trial seal has no RAES plan, so its plan metadata is empty.
 
+Adapter SDK 0.4.0 also defines the `trial.assigned` capability, its staged inputs, and the `bigrae.assigned-trial-seal/v1` seal.
+Dispatch and intake do not use these contracts.
+
 ## Cleanup receipt
 
 After verified VM absence, the coordinator records a RAES cleanup receipt.
@@ -126,4 +130,4 @@ The failed attempt keeps its archive receipt and cleanup receipt.
 
 ## Dependency tuple
 
-The tuple is Python 3.14, Django 6.0, RAES 12.0.0, raes-env-packs 7.2.3, and adapter SDK 0.3.0.
+The tuple is Python 3.14, Django 6.0, RAES 12.0.0, raes-env-packs 7.2.3, and adapter SDK 0.4.0.

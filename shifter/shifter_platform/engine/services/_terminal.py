@@ -164,7 +164,7 @@ def get_owned_instance_request_ref(
     """
 
     if isinstance(user, CredentialContext):
-        from ._range_authority import authorized_instance_range
+        from ._range.authority import authorized_instance_range
 
         runtime = authorized_instance_range(user, instance_uuid, range_uuid=range_uuid)
         if runtime.request is None:
@@ -376,7 +376,7 @@ def _connection_range(
     from engine.models import Range
 
     if isinstance(user, CredentialContext):
-        from ._range_authority import authorized_instance_range
+        from ._range.authority import authorized_instance_range
 
         return authorized_instance_range(user, instance_uuid, range_uuid=range_uuid)
     row = Range.resolve_active_for_instance(user, instance_uuid)
@@ -390,7 +390,7 @@ def connect_ngfw_terminal(user: User | CredentialContext, ngfw_uuid: str) -> SSH
     from engine.ssh import SSHConnection
 
     if isinstance(user, CredentialContext):
-        from ._principal_ngfw import connect_principal_device_terminal
+        from ._principal.ngfw import connect_principal_device_terminal
 
         return connect_principal_device_terminal(user, ngfw_uuid)
     if user is None:

@@ -55,13 +55,15 @@ export const ctfKeys = {
   all: ["ctf"] as const,
   currentEvent: () => ["ctf", "current-event"] as const,
   challenges: () => ["ctf", "challenges"] as const,
+  challengeAll: () => ["ctf", "challenge"] as const,
   challenge: (id: string) => ["ctf", "challenge", id] as const,
   team: () => ["ctf", "team"] as const,
   profile: () => ["ctf", "profile"] as const,
   announcements: () => ["ctf", "announcements"] as const,
   pages: () => ["ctf", "pages"] as const,
   contentImages: () => ["ctf", "content-images"] as const,
-  eventContentImages: (eventId: string) => ["ctf", "event-content-images", eventId] as const,
+  eventContentImages: (eventId: string) =>
+    ["ctf", "event-content-images", eventId] as const,
   briefing: () => ["ctf", "briefing"] as const,
   eventPages: (eventId: string) => ["ctf", "event-pages", eventId] as const,
   analytics: (eventId: string) => ["ctf", "analytics", eventId] as const,
@@ -75,19 +77,24 @@ export const ctfKeys = {
   events: () => ["ctf", "events"] as const,
   event: (id: string) => ["ctf", "event", id] as const,
   scenarios: () => ["ctf", "scenarios"] as const,
-  adminChallenges: (eventId: string) => ["ctf", ADMIN_CHALLENGES_KEY, eventId] as const,
+  adminChallenges: (eventId: string) =>
+    ["ctf", ADMIN_CHALLENGES_KEY, eventId] as const,
   adminChallengesAll: () => ["ctf", ADMIN_CHALLENGES_KEY] as const,
   adminChallenge: (id: string) => ["ctf", "admin-challenge", id] as const,
   hints: (challengeId: string) => ["ctf", "hints", challengeId] as const,
   files: (challengeId: string) => ["ctf", "files", challengeId] as const,
-  prerequisites: (challengeId: string) => ["ctf", "prerequisites", challengeId] as const,
+  prerequisites: (challengeId: string) =>
+    ["ctf", "prerequisites", challengeId] as const,
   participants: (eventId: string) => ["ctf", "participants", eventId] as const,
-  registrationRequests: (eventId: string) => ["ctf", "registration-requests", eventId] as const,
+  registrationRequests: (eventId: string) =>
+    ["ctf", "registration-requests", eventId] as const,
   participant: (id: string) => ["ctf", "participant", id] as const,
   awards: (participantId: string) => ["ctf", "awards", participantId] as const,
   ranges: (eventId: string) => ["ctf", "ranges", eventId] as const,
-  notifications: (eventId: string) => ["ctf", "notifications", eventId] as const,
-  scoreTimeline: (participantId: string) => ["ctf", "score-timeline", participantId] as const,
+  notifications: (eventId: string) =>
+    ["ctf", "notifications", eventId] as const,
+  scoreTimeline: (participantId: string) =>
+    ["ctf", "score-timeline", participantId] as const,
   eventStaff: (eventId: string) => ["ctf", "event-staff", eventId] as const,
   eventTasks: (eventId: string) => ["ctf", "event-tasks", eventId] as const,
   webhooks: (eventId: string) => ["ctf", "webhooks", eventId] as const,
@@ -97,14 +104,16 @@ export function useCtfCurrentEvent(enabled = true) {
   return useQuery({
     queryKey: ctfKeys.currentEvent(),
     enabled,
-    queryFn: ({ signal }) => apiFetch<CtfCurrentEvent>(`${BASE}/me/event/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfCurrentEvent>(`${BASE}/me/event/`, { signal }),
   });
 }
 
 export function useCtfChallenges() {
   return useQuery({
     queryKey: ctfKeys.challenges(),
-    queryFn: ({ signal }) => apiFetch<CtfChallengeListItem[]>(`${BASE}/me/challenges/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfChallengeListItem[]>(`${BASE}/me/challenges/`, { signal }),
   });
 }
 
@@ -112,7 +121,10 @@ export function useCtfChallenge(challengeId: string, enabled = true) {
   return useQuery({
     queryKey: ctfKeys.challenge(challengeId),
     enabled: enabled && Boolean(challengeId),
-    queryFn: ({ signal }) => apiFetch<CtfChallengeDetail>(`${BASE}/me/challenges/${challengeId}/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfChallengeDetail>(`${BASE}/me/challenges/${challengeId}/`, {
+        signal,
+      }),
   });
 }
 
@@ -132,17 +144,29 @@ export function useCtfTeam() {
   });
 }
 
+/**
+ * The participant's own submission history, which carries their correct flag
+ * values (#3002). The cache keeps no data after the last observer unmounts, the
+ * data is always stale, and the query refetches each time the tab regains focus.
+ * With the consumer withholding values during a fetch, the page shows only a
+ * response for the current session, never a value retained from another account.
+ */
 export function useCtfSubmissions() {
   return useQuery({
     queryKey: ctfKeys.submissions(),
-    queryFn: ({ signal }) => apiFetch<CtfSubmissionList>(`${BASE}/submissions/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfSubmissionList>(`${BASE}/submissions/`, { signal }),
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: "always",
   });
 }
 
 export function useCtfRangeStatus() {
   return useQuery({
     queryKey: ctfKeys.rangeStatus(),
-    queryFn: ({ signal }) => apiFetch<CtfRangeStatus>(`${BASE}/range/status/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfRangeStatus>(`${BASE}/range/status/`, { signal }),
   });
 }
 
@@ -150,8 +174,16 @@ export function useCtfRangeStatus() {
  * Public participant scoreboard. `kind` selects the individual or team board
  * (#2968); without it the server returns the event's default board.
  */
-export function useCtfScoreboard(eventId: string, bracketId?: string, enabled = true, kind?: CtfScoreboardKind) {
-  const query = { ...(bracketId ? { bracket: bracketId } : {}), ...(kind ? { kind } : {}) };
+export function useCtfScoreboard(
+  eventId: string,
+  bracketId?: string,
+  enabled = true,
+  kind?: CtfScoreboardKind,
+) {
+  const query = {
+    ...(bracketId ? { bracket: bracketId } : {}),
+    ...(kind ? { kind } : {}),
+  };
   return useQuery({
     queryKey: ctfKeys.scoreboard(eventId, bracketId, kind),
     enabled: enabled && Boolean(eventId),
@@ -172,15 +204,22 @@ export function useCtfScoreboard(eventId: string, bracketId?: string, enabled = 
  * Use it only from organizer surfaces; keep the participant scoreboard on the
  * public hook.
  */
-export function useCtfOrganizerScoreboard(eventId: string, bracketId?: string, enabled = true) {
+export function useCtfOrganizerScoreboard(
+  eventId: string,
+  bracketId?: string,
+  enabled = true,
+) {
   return useQuery({
     queryKey: ctfKeys.organizerScoreboard(eventId, bracketId),
     enabled: enabled && Boolean(eventId),
     queryFn: ({ signal }) =>
-      apiFetch<CtfOrganizerScoreboard>(`${BASE}/events/${eventId}/organizer-scoreboard/`, {
-        signal,
-        query: bracketId ? { bracket: bracketId } : undefined,
-      }),
+      apiFetch<CtfOrganizerScoreboard>(
+        `${BASE}/events/${eventId}/organizer-scoreboard/`,
+        {
+          signal,
+          query: bracketId ? { bracket: bracketId } : undefined,
+        },
+      ),
     ...SCOREBOARD_REFRESH,
   });
 }
@@ -190,7 +229,10 @@ export function useCtfOrganizerScoreboard(eventId: string, bracketId?: string, e
  * challenge detail (attempts/hints/solved), the browse list (solve status), the
  * current-event projection (score/rank), and the submission history.
  */
-function invalidatePlay(queryClient: ReturnType<typeof useQueryClient>, challengeId: string) {
+function invalidatePlay(
+  queryClient: ReturnType<typeof useQueryClient>,
+  challengeId: string,
+) {
   queryClient.invalidateQueries({ queryKey: ctfKeys.challenge(challengeId) });
   queryClient.invalidateQueries({ queryKey: ctfKeys.challenges() });
   queryClient.invalidateQueries({ queryKey: ctfKeys.currentEvent() });
@@ -203,10 +245,13 @@ export function useSubmitFlag(challengeId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (flag: string) =>
-      apiFetch<CtfSubmitFlagResult>(`${BASE}/challenges/${challengeId}/submit/`, {
-        method: "POST",
-        body: { flag },
-      }),
+      apiFetch<CtfSubmitFlagResult>(
+        `${BASE}/challenges/${challengeId}/submit/`,
+        {
+          method: "POST",
+          body: { flag },
+        },
+      ),
     onSuccess: () => invalidatePlay(queryClient, challengeId),
   });
 }
@@ -225,13 +270,26 @@ export function useUseHint(challengeId: string) {
   });
 }
 
+/**
+ * Refresh the challenge list and every challenge detail. Their team solve
+ * attribution depends on team membership and member display names.
+ */
+function invalidateChallengeReads(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ctfKeys.challenges() });
+  queryClient.invalidateQueries({ queryKey: ctfKeys.challengeAll() });
+}
+
 function useTeamMutation<TBody>(path: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: TBody) => apiFetch<CtfTeam>(`${BASE}/me/team/${path}/`, { method: "POST", body }),
+    mutationFn: (body: TBody) =>
+      apiFetch<CtfTeam>(`${BASE}/me/team/${path}/`, { method: "POST", body }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ctfKeys.team() });
       queryClient.invalidateQueries({ queryKey: ctfKeys.currentEvent() });
+      // Membership decides `team_solved`, which the challenge list groups by (#2998),
+      // and `team_solved_by` on the list and detail (#2997).
+      invalidateChallengeReads(queryClient);
     },
   });
 }
@@ -271,7 +329,8 @@ export function useDisbandTeam() {
 export function useCtfProfile() {
   return useQuery({
     queryKey: ctfKeys.profile(),
-    queryFn: ({ signal }) => apiFetch<CtfParticipantProfile>(`${BASE}/me/profile/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfParticipantProfile>(`${BASE}/me/profile/`, { signal }),
   });
 }
 
@@ -279,10 +338,14 @@ export function useUpdateCtfProfile() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: CtfProfileUpdateRequest) =>
-      apiFetch<CtfParticipantProfile>(`${BASE}/me/profile/`, { method: "PATCH", body }),
+      apiFetch<CtfParticipantProfile>(`${BASE}/me/profile/`, {
+        method: "PATCH",
+        body,
+      }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ctfKeys.profile() });
       queryClient.invalidateQueries({ queryKey: ctfKeys.currentEvent() });
+      invalidateChallengeReads(queryClient);
     },
   });
 }
@@ -291,20 +354,29 @@ export function useChangeCtfUsername() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (body: { username: string }) =>
-      apiFetch<CtfParticipantProfile>(`${BASE}/me/username/`, { method: "POST", body }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ctfKeys.profile() }),
+      apiFetch<CtfParticipantProfile>(`${BASE}/me/username/`, {
+        method: "POST",
+        body,
+      }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ctfKeys.profile() }),
   });
 }
 
 export function useCtfAnnouncements() {
   return useQuery({
     queryKey: ctfKeys.announcements(),
-    queryFn: ({ signal }) => apiFetch<CtfAnnouncementListResponse>(`${BASE}/me/announcements/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfAnnouncementListResponse>(`${BASE}/me/announcements/`, {
+        signal,
+      }),
   });
 }
 
 /** Poll interval while visible image copies are still pending; no polling otherwise. */
-export function contentImagesRefetchInterval(data: CtfContentImages | undefined): number | false {
+export function contentImagesRefetchInterval(
+  data: CtfContentImages | undefined,
+): number | false {
   return data?.pending ? CONTENT_IMAGE_POLL_MS : false;
 }
 
@@ -312,7 +384,8 @@ export function contentImagesRefetchInterval(data: CtfContentImages | undefined)
 export function useCtfContentImages() {
   return useQuery({
     queryKey: ctfKeys.contentImages(),
-    queryFn: ({ signal }) => apiFetch<CtfContentImages>(`${BASE}/me/content-images/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfContentImages>(`${BASE}/me/content-images/`, { signal }),
     refetchInterval: (query) => contentImagesRefetchInterval(query.state.data),
   });
 }
@@ -320,7 +393,8 @@ export function useCtfContentImages() {
 export function useCtfPages() {
   return useQuery({
     queryKey: ctfKeys.pages(),
-    queryFn: ({ signal }) => apiFetch<CtfEventPagesResponse>(`${BASE}/me/pages/`, { signal }),
+    queryFn: ({ signal }) =>
+      apiFetch<CtfEventPagesResponse>(`${BASE}/me/pages/`, { signal }),
   });
 }
 
@@ -334,10 +408,12 @@ export function useCtfBriefing() {
   return useQuery({
     queryKey: ctfKeys.briefing(),
     queryFn: ({ signal }): Promise<CtfEventPage | null> =>
-      apiFetch<CtfEventPage>(`${BASE}/me/briefing/`, { signal }).catch((error: unknown) => {
-        if (error instanceof ApiError && error.status === 404) return null;
-        throw error;
-      }),
+      apiFetch<CtfEventPage>(`${BASE}/me/briefing/`, { signal }).catch(
+        (error: unknown) => {
+          if (error instanceof ApiError && error.status === 404) return null;
+          throw error;
+        },
+      ),
   });
 }
 
@@ -345,19 +421,27 @@ export function useRateChallenge(challengeId: string) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (value: number) =>
-      apiFetch<CtfRateChallengeResult>(`${BASE}/challenges/${challengeId}/rate/`, {
-        method: "POST",
-        body: { value },
+      apiFetch<CtfRateChallengeResult>(
+        `${BASE}/challenges/${challengeId}/rate/`,
+        {
+          method: "POST",
+          body: { value },
+        },
+      ),
+    onSuccess: () =>
+      queryClient.invalidateQueries({
+        queryKey: ctfKeys.challenge(challengeId),
       }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ctfKeys.challenge(challengeId) }),
   });
 }
 
 export function useRangeAccess() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: () => apiFetch<CtfRangeAccess>(`${BASE}/range/access/`, { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ctfKeys.rangeStatus() }),
+    mutationFn: () =>
+      apiFetch<CtfRangeAccess>(`${BASE}/range/access/`, { method: "POST" }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: ctfKeys.rangeStatus() }),
   });
 }
 
@@ -366,7 +450,11 @@ const VPN_PROFILE_FILENAME = "shifter-ctf-range.ovpn";
 
 export function useVpnProfileDownload() {
   return useMutation({
-    retry: (count, error) => error instanceof ApiError && error.status === 202 && error.code === "vpn_preparing" && count < 24,
+    retry: (count, error) =>
+      error instanceof ApiError &&
+      error.status === 202 &&
+      error.code === "vpn_preparing" &&
+      count < 24,
     retryDelay: 5000,
     mutationFn: async () => {
       const blob = await apiDownload(`${BASE}/range/vpn-profile/`, {
@@ -393,6 +481,10 @@ export function useVpnProfileDownload() {
  * a short-lived URL + filename rather than streaming the file, so the caller
  * fetches this then navigates to `url`.
  */
-export function fetchCtfFileDownload(fileId: string): Promise<{ url: string; filename: string }> {
-  return apiFetch<{ url: string; filename: string }>(`${BASE}/files/${fileId}/download/`);
+export function fetchCtfFileDownload(
+  fileId: string,
+): Promise<{ url: string; filename: string }> {
+  return apiFetch<{ url: string; filename: string }>(
+    `${BASE}/files/${fileId}/download/`,
+  );
 }

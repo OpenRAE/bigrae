@@ -299,9 +299,16 @@ The approved gateway extension additionally uses Apache's supported
 the JSON-authenticated identity. The gateway sends only this opaque ID to
 `/api/v1/mission-control/guacamole/control/authority/`. Google's SDK supplies the gateway's metadata-issued ID token. The portal verifies audience, service-account email, and immutable subject. It then checks the original application credential, ceiling, range generation, and scope.
 
-The local monotonic lease is 90 seconds and renewals run every 15 seconds.
+The local monotonic lease is 90 seconds. Each lease renews 15 seconds after
+its last renewal attempt, so renewals spread out by admission time.
 Denial or expiry permanently invalidates that native session. Guacamole's
 one-minute native eviction cadence remains part of the shutdown bound.
+
+During an authorization evaluator outage, the renewal endpoint returns HTTP 503,
+not a denial. The gateway keeps the current lease deadline and retries, so a
+short outage does not end the session. An outage that continues past the lease
+deadline still ends it. Session creation and URL delivery still refuse access
+during an outage.
 
 Local
 synthetic native SSH/SFTP qualification measured guest closure at 73.02 seconds
@@ -314,10 +321,11 @@ That
 fixture measured transport closure at 33.80 seconds after denial and 138.89
 seconds during a control outage, within its 85/165-second test bounds.
 
-The bounded registry admits at most 512 decorated contexts. All admitted contexts receive
-a renewal queue slot, with at most four simultaneous control requests. The
-512-context concurrency test covers admission, queue capacity and renewal;
-the blocked-worker test verifies local expiry independently of control progress.
+The bounded registry admits at most 2048 decorated contexts. All admitted contexts receive
+a renewal queue slot, with at most 16 simultaneous control requests. The
+512-context concurrency test covers admission, queue capacity and renewal.
+The worker-bound test verifies that 16 slow control requests run in parallel.
+The blocked-worker test verifies local expiry independently of control progress.
 These component checks do not establish a 512-tunnel production shutdown bound.
 
 The image builds the pinned 1.6.0 extension and installs it through Apache's

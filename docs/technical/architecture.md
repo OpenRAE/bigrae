@@ -84,7 +84,9 @@ ownership, application administration and cloud administration remain distinct.
 
 Disposable trial workers reuse Engine's native lifecycle and capacity ledger.
 A trial archive carries a LilRAE trial record or a partial RAES run record under the SDK's `TrialSeal`.
+SDK 0.4.0 also defines assigned-trial contracts (`trial.assigned`), which dispatch does not use.
 BigRAE, not the worker, records the cleanup of each trial.
+
 Only the provisioner reads host-management keys and runs the fixed bounded SSH probe.
 The shared result/member parsers validate the closed observation shape.
 Engine validates credential-free host observations against the accepted
@@ -170,7 +172,7 @@ protected image responses after permission changes.
 | Schedulers and reconcilers | CTF scheduling, leases, launch delivery, result application and event-outbox delivery run as separate worker commands. The CTF communication worker delivers ledger messages to participants and to event organizers (ADR-065-R4) |
 | Provisioner Jobs | Independently packaged `shifter/engine/provisioner`; exact image, service account and namespace binding; provider effects and guest readback |
 | Plugin/preparation Jobs | Explicitly installed, isolated executable images; separate administrator grants and pinned worker/verifier identities |
-| Guacamole and guacd | Remote-access services. BigRAE authorizes each target and session. Guacamole has separate database credentials. guacd uses a bounded writable home for FreeRDP and a read-only root filesystem. |
+| Guacamole and guacd | Remote-access services. BigRAE authorizes each target and session. Guacamole has separate database credentials. It reads them from read-only Secret files (#2565). It reads its JSON authentication key in the same way. guacd uses a bounded writable home for FreeRDP and a read-only root filesystem. The Guacamole web application runs one replica. It keeps each session token in the memory of the replica that issued it (#2518). guacd scales out for capacity. |
 | Optional access services | Deployment-selected VPN and other integrations have their own identities and support conditions |
 | Content egress proxy | Credential-less CONNECT proxy; the only platform pod with public HTTPS egress. The CTF scheduler copies organizer images and the portal sends CTF webhooks through it |
 
@@ -292,6 +294,18 @@ through container-native network endpoint groups. Each BackendConfig sets an
 explicit health check: `/health/` on port 8000 for the portal and `/guacamole/`
 on port 8080 for Guacamole. The check does not depend on the pods that exist
 when GKE creates the backend.
+
+The load balancer closes a WebSocket when it reaches the backend timeout, also
+when the session is active. The GCP capacity profiles set the portal and
+Guacamole backend timeouts to 8 hours. Guacamole ends a session with no open
+connection after 15 minutes (`API_SESSION_TIMEOUT`). A session with an open
+connection does not time out.
+
+The `guacamole-bootstrap-prune` worker revalidates open Guacamole sessions and
+deletes expired bootstrap rows. It refreshes its liveness heartbeat after each
+session and each batch, because one cycle can take minutes under event load.
+The p300 capacity profile runs 8 OpenFGA servers. With 4 servers, gateway
+authority renewals at that load exceeded the portal's 5-second limit.
 
 The portal's WebSocket opening deadline is 30 seconds, including access checks
 and SSH setup. The gateway authority HTTP read deadline is 10 seconds, which
@@ -482,6 +496,11 @@ Cross-domain access uses public service facades and validated scalar identifiers
 not another app's model or a private split-package module. Concrete per-symbol
 allowlists remain authoritative when a table entry is broader.
 
+`engine.services` keeps its implementation in private responsibility packages,
+for example `engine.services._range` and `engine.services._vpn`.
+Each package initializer re-exports only the names that the facade uses.
+The leading underscore keeps these packages inside the private-module rule.
+
 The identity-cutover command composes the tenancy-owned hierarchy verifier
 directly through `workspaces.services.verify_identity_cutover_hierarchy`.
 The same sanctioned facade supplies the typed `IdentityCutoverStateView` for
@@ -567,7 +586,7 @@ trust boundaries, retention and admission checks.
 
 Adapters declaring `provision.prepare` may propose bounded scalar values and
 literal UTF-8 secret payloads for explicitly declared provisioning concerns.
-SDK 0.3.0 accepts at most 2048 distinct secret payload selections per response.
+SDK 0.4.0 accepts at most 2048 distinct secret payload selections per response.
 Each value is limited to 64 KiB, and the complete clear response remains limited to 512 KiB.
 
 The host checks the original invocation and declared authority before it uses any selection.

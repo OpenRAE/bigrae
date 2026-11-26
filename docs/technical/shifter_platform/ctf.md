@@ -295,6 +295,52 @@ Publication, freeze, and bracket rules apply to both boards.
 A team event shows the **Individual scoreboard** and **Team scoreboard** sidebar entries.
 See the [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-dual-scoreboards-2968.md).
 
+### Participant challenge list
+
+The SPA participant challenge list filters, sorts, and groups the rows from `GET /api/v1/ctf/me/challenges/` in the browser.
+The URL query parameters `view`, `sort`, `layout`, `tag`, and `topic` hold the list state.
+The `layout` parameter shows each group as cards, a list, or a table; it does not change the rows or their order.
+Unknown `view`, `sort`, and `layout` values give the defaults; unknown labels are ignored.
+The list API keeps its release, visibility, and prerequisite rules.
+
+In team mode, the list and detail responses give `team_solved_by`: the display name of the current team member with the earliest correct submission.
+The field is optional, and its value is `null` when the team has not solved the challenge.
+Team membership and profile changes refresh the list and each challenge page, because they can change `team_solved` and `team_solved_by`.
+
+The challenge page **Previous** and **Next** buttons use the same rows and query parameters.
+They open the adjacent challenge in the shown list order and keep the query parameters.
+When the current challenge is not in the list response, both buttons are disabled.
+See the
+[list design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-list-views-2998.md),
+the
+[layout design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-list-layout-3012.md),
+and the
+[navigation design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-challenge-navigation-2999.md).
+
+### Participant scoreboard controls
+
+The SPA participant scoreboards filter by name and sort the rows from the scoreboard API in the browser.
+The filter and the sort apply to the rows of the selected bracket. The API does not change.
+The rank column shows the server rank. A row without a rank shows a dash.
+
+The control state is component state.
+It stays during the refresh and resets for a new event or board kind.
+See the
+[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-leaderboard-controls-3001.md).
+
+### Participant correct flags
+
+`GET /api/v1/ctf/submissions/` returns the participant's own submission history.
+`submitted_flag` holds the stored submitted value of a correct row on a live challenge, and `null` for other rows.
+The view admits the participant with `viewing_participant_for_credential` and sends no-cache headers.
+A signed receipt keeps its stored redaction marker.
+
+The SPA **Account** page shows each row that has a value, with a link to its challenge.
+The page query fetches again when the tab gets focus.
+The page shows no values until that read completes, also when the browser is offline.
+See the
+[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-correct-flags-3002.md).
+
 ### Scoreboard refresh
 
 The SPA participant and organizer scoreboard hooks poll their API read every
@@ -304,6 +350,19 @@ within 30 seconds (CTF-401). A frozen participant board withholds later solves
 by design. The ADR-072 `position_changed` hint is optional and only accelerates
 the refresh. See the
 [design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-scoreboard-refresh-576.md).
+
+### Scoreboard graphs
+
+The public and organizer scoreboard responses include `progression`.
+It holds a score-over-time series for the first `PROGRESSION_LIMIT` (8) rows of the returned board.
+`get_score_progression` in `ctf/services/scoring/_progression.py` builds it.
+It uses the board's freeze cutoff, bracket filter, ranking eligibility, and team challenge deduplication.
+
+Each point holds only a time and a cumulative score (ADR-028-R3).
+A hidden public board returns `null`.
+The SPA draws the series as an SVG step graph above each scoreboard table.
+See the
+[design note](https://github.com/OpenRAE/bigrae/blob/dev/docs/design/ctf-leaderboard-graphs-3004.md).
 
 ## Scheduled Work
 

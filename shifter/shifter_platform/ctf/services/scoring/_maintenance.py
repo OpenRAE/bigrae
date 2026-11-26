@@ -47,7 +47,6 @@ def apply_dynamic_decay(challenge: CTFChallenge) -> None:
     of the same challenge so the count, the update, and the recomputes are one
     atomic re-pricing.
     """
-    from ctf.models import CTFHintUsage
     from ctf.services.scoring._strategy import dynamic_challenge_value, dynamic_points_with_penalty
 
     correct = list(
@@ -59,13 +58,10 @@ def apply_dynamic_decay(challenge: CTFChallenge) -> None:
         return
     value = dynamic_challenge_value(challenge, len(correct))
 
+    from ctf.services.hint import hint_penalties_for_solvers
+
     participant_ids = [submission.participant_id for submission in correct]
-    penalty_rows = (
-        CTFHintUsage.objects.filter(hint__challenge=challenge, participant_id__in=participant_ids)
-        .values("participant_id")
-        .annotate(total=Sum("hint__penalty"))
-    )
-    penalties = {row["participant_id"]: min(row["total"] or 0, 100) for row in penalty_rows}
+    penalties = hint_penalties_for_solvers(challenge.pk, participant_ids)
 
     changed: list[CTFSubmission] = []
     for submission in correct:

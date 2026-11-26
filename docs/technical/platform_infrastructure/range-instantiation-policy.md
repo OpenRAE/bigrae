@@ -87,7 +87,7 @@ Four layers, each independent:
    creation, subnet allocation, secret access, or any cloud mutation. Current RAES creation (`create_raes_native_range`) uses this boundary.
    Historical `create_range` naming does not establish a second scenario-authoring contract.
    `cyberscript` is retired. CTF rejects every non-live-fire purpose. `create_non_user_range` checks operator authority before deriving any purpose.
-2. **Engine persistence**—`engine.services._range_backend_binding` re-evaluates
+2. **Engine persistence**—`engine.services._range.backend_binding` re-evaluates
    the admitted pair before writing it to the write-once `Range.range_backend` /
    `Range.instantiation_purpose` columns. `BackendAdmission` is a constructible
    dataclass, so `admitted=True` from an arbitrary in-process caller is not by

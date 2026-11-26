@@ -88,7 +88,7 @@ storage, retention and export policy outside this broker audit boundary.
   organizer hints, but catches declaration/assessment/admission failures.
   #668/#621 are not blank-slate implementation tasks despite remaining open.
 - `shared/capacity`, `engine/models/_capacity_assessment.py`, and
-  `engine/services/_capacity_*` implement ADR-047. Extend those seams;
+  `engine/services/_capacity/` implement ADR-047. Extend those seams;
   security admission cannot inherit their advisory fallback.
 - ADR-043's operation projection, result inbox, and Engine applier provide
   generation fencing. Do not grant the standalone provisioner Django table

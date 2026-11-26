@@ -32,7 +32,7 @@ export const STAFF_BOOTSTRAP: Bootstrap = {
   modes: { participant: false, operator: true, default: "operator" },
 };
 
-function testQueryClient(): QueryClient {
+export function testQueryClient(): QueryClient {
   return new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -40,11 +40,19 @@ function testQueryClient(): QueryClient {
 
 export function renderRoute(
   element: ReactElement,
-  { path = "/", initialEntries = ["/"] }: { path?: string; initialEntries?: string[] } = {},
+  {
+    path = "/",
+    initialEntries = ["/"],
+    queryClient = testQueryClient(),
+  }: {
+    path?: string;
+    initialEntries?: string[];
+    queryClient?: QueryClient;
+  } = {},
 ): RenderResult {
   const router = createMemoryRouter([{ path, element }], { initialEntries });
   return render(
-    <QueryClientProvider client={testQueryClient()}>
+    <QueryClientProvider client={queryClient}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );

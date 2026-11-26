@@ -20,7 +20,9 @@ from ctf.services.challenge import get_available_challenges
 from ctf.services.submission import get_participant_submissions
 
 if TYPE_CHECKING:
-    from ctf.models import CTFChallenge, CTFEvent, CTFParticipant
+    from uuid import UUID
+
+    from ctf.models import CTFChallenge, CTFEvent, CTFParticipant, CTFSubmission
     from shared.credentials import CredentialContext
 
 
@@ -91,6 +93,7 @@ def participant_challenge_list(participant: CTFParticipant) -> list[dict[str, An
     solved_ids = set(
         get_participant_submissions(participant.id).filter(is_correct=True).values_list("challenge_id", flat=True)
     )
+    team_solvers = _team_first_solvers(participant)
     return [
         {
             "id": str(challenge.id),
@@ -100,11 +103,76 @@ def participant_challenge_list(participant: CTFParticipant) -> list[dict[str, An
             "difficulty": challenge.difficulty,
             "order": challenge.order,
             "solved": challenge.id in solved_ids,
+            "team_solved": challenge.id in team_solvers,
+            "team_solved_by": team_solvers.get(challenge.id),
             "tags": [tag.name for tag in challenge.tags.all()],
             "topics": [topic.name for topic in challenge.topics.all()],
         }
         for challenge in challenges
     ]
+
+
+def participant_submissions(participant: CTFParticipant) -> list[dict[str, Any]]:
+    """Return the participant's own submission history, newest first (#3002).
+
+    ``submitted_flag`` is the stored submitted value of a correct row on a live
+    challenge and ``None`` otherwise (ADR-028). It never comes from the authored ``CTFFlag``
+    answers, and a signed receipt keeps its stored redaction marker. The caller
+    MUST have admitted ``participant`` for the current credential.
+    """
+    return [
+        {
+            "id": str(submission.id),
+            "challenge_id": str(submission.challenge_id),
+            "challenge_name": submission.challenge.name,
+            "is_correct": submission.is_correct,
+            "points_awarded": submission.points_awarded,
+            "attempt_number": submission.attempt_number,
+            "submitted_at": submission.submitted_at,
+            "submitted_flag": _disclosed_flag(submission),
+        }
+        for submission in get_participant_submissions(participant.id)
+    ]
+
+
+def _disclosed_flag(submission: CTFSubmission) -> str | None:
+    """Return the stored value of a correct submission on a live challenge, else ``None``.
+
+    ``select_related`` does not apply the challenge's soft-delete manager, so a
+    retained submission on a deleted challenge keeps its metadata but no value.
+    """
+    if submission.is_correct and submission.challenge.deleted_at is None:
+        return submission.submitted_flag
+    return None
+
+
+def _team_first_solvers(participant: CTFParticipant, challenge_id: UUID | None = None) -> dict[UUID, str]:
+    """Map each challenge the participant's team has solved to its first solver's display name.
+
+    The first solver is the current team member with the earliest correct
+    submission (ties broken by submission id). A teammate's solve counts once
+    for the team, so the browse list and the detail page show it with that name.
+    The participant's own solves are included. Soft-deleted members and teams
+    are excluded. The map is empty outside team mode or for an unteamed
+    participant.
+    """
+    from ctf.models import CTFSubmission
+
+    if not participant.event.team_mode or participant.team_id is None:
+        return {}
+    qs = CTFSubmission.objects.filter(
+        participant__team_id=participant.team_id,
+        participant__event_id=participant.event_id,
+        participant__deleted_at__isnull=True,
+        participant__team__deleted_at__isnull=True,
+        is_correct=True,
+    )
+    if challenge_id is not None:
+        qs = qs.filter(challenge_id=challenge_id)
+    first_solvers: dict[UUID, str] = {}
+    for solved_id, solver_name in qs.order_by("submitted_at", "id").values_list("challenge_id", "participant__name"):
+        first_solvers.setdefault(solved_id, solver_name)
+    return first_solvers
 
 
 def participant_team(participant: CTFParticipant) -> dict[str, Any] | None:
@@ -154,19 +222,23 @@ def participant_challenge_detail(
     from ctf.services.challenge import check_prerequisites_met
     from ctf.services.hint import get_hints, get_total_hint_penalty, get_unlocked_hints
     from ctf.services.participant.play import (
+        challenge_points_lost,
         compute_attempt_state,
         compute_hint_purchase_info,
+        hint_point_costs,
         resolve_target_connection_info,
     )
 
     event = participant.event
     submissions = get_participant_submissions(participant.id, challenge_id=challenge.id)
     is_solved = submissions.filter(is_correct=True).exists()
+    team_solvers = _team_first_solvers(participant, challenge.id)
 
     all_hints = list(get_hints(challenge.id))
     unlocked_ids = {hint.id for hint in get_unlocked_hints(participant.id, challenge.id)}
     total_hint_penalty = get_total_hint_penalty(participant.id, challenge.id)
     hint_purchase = compute_hint_purchase_info(event, challenge, all_hints, unlocked_ids, total_hint_penalty)
+    hint_costs = hint_point_costs(event, challenge, all_hints)
     next_hint = hint_purchase["next_hint"]
 
     prereqs_met, unmet = check_prerequisites_met(challenge.id, participant.id)
@@ -187,6 +259,8 @@ def participant_challenge_detail(
         "max_attempts": challenge.max_attempts,
         "attempt_limit_mode": event.attempt_limit_mode,
         "solved": is_solved,
+        "team_solved": challenge.id in team_solvers,
+        "team_solved_by": team_solvers.get(challenge.id),
         "attempt_count": attempt_count,
         "attempts_remaining": attempts_remaining,
         "timeout_retry_after": timeout_retry_after,
@@ -195,6 +269,7 @@ def participant_challenge_detail(
                 "id": str(hint.id),
                 "order": hint.order,
                 "penalty": hint.penalty,
+                "cost_points": hint_costs[hint.id],
                 "unlocked": hint.id in unlocked_ids,
                 "text": hint.text if hint.id in unlocked_ids else None,
             }
@@ -204,6 +279,7 @@ def participant_challenge_detail(
         "next_hint_cost": hint_purchase["next_hint_cost"],
         "points_after_next_hint": hint_purchase["points_after_next_hint"],
         "total_hint_penalty": total_hint_penalty,
+        "total_hint_penalty_points": challenge_points_lost(event, challenge, total_hint_penalty),
         "files": [
             {
                 "id": str(challenge_file.id),

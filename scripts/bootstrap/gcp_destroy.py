@@ -119,6 +119,7 @@ def run_destroy(options: DestroyOptions, *, runner: ProcessRunner | None = None)
     from gcp_terraform import (
         apply_destroy_settings,
         backend_prefix,
+        cloud_sql_disk_variables,
         drop_unremovable_kms_resources,
         kms_adoption_variables,
         state_bucket_name,
@@ -167,7 +168,9 @@ def run_destroy(options: DestroyOptions, *, runner: ProcessRunner | None = None)
             remove_platform_release(runner, inputs)
             # A rerun after an interrupted destroy finds the keys out of state;
             # the settings apply adopts them, and the next step detaches them again (#2564).
-            apply_destroy_settings(runner, ctx, variables=kms_adoption_variables(runner, ctx, inputs))
+            # The targeted apply includes Cloud SQL, so it must not request a disk shrink.
+            variables = {**kms_adoption_variables(runner, ctx, inputs), **cloud_sql_disk_variables(runner, ctx, inputs)}
+            apply_destroy_settings(runner, ctx, variables=variables)
             drop_unremovable_kms_resources(runner, ctx)
             terraform_destroy(runner, ctx)
         success(f"GCP deployment {inputs.environment} platform resources are destroyed")

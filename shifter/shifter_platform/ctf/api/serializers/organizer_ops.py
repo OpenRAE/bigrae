@@ -26,6 +26,7 @@ class ParticipantSummarySerializer(serializers.Serializer):
     id = serializers.CharField(read_only=True)
     name = serializers.CharField(read_only=True)
     email = serializers.CharField(read_only=True)
+    username = serializers.CharField(read_only=True, allow_null=True)
     status = serializers.CharField(read_only=True)
     role = serializers.CharField(read_only=True)
     hidden = serializers.BooleanField(read_only=True)
@@ -386,6 +387,30 @@ class ScoreTimelineResponseSerializer(serializers.Serializer):
     timeline = serializers.ListField(child=serializers.DictField(), read_only=True)
 
 
+class _ScorePointSerializer(serializers.Serializer):
+    """One step of a score progression: a time and the cumulative score."""
+
+    at = serializers.DateTimeField(read_only=True)
+    score = serializers.IntegerField(read_only=True)
+
+
+class _ScoreSeriesSerializer(serializers.Serializer):
+    """One leading competitor's score progression (#3004)."""
+
+    id = serializers.CharField(read_only=True)
+    name = serializers.CharField(read_only=True)
+    rank = serializers.IntegerField(read_only=True)
+    points = _ScorePointSerializer(many=True, read_only=True)
+
+
+class ScoreProgressionSerializer(serializers.Serializer):
+    """Score-over-time series for the leading rows of the selected board (ADR-028-R3)."""
+
+    starts_at = serializers.DateTimeField(read_only=True)
+    ends_at = serializers.DateTimeField(read_only=True)
+    series = _ScoreSeriesSerializer(many=True, read_only=True)
+
+
 class PublicScoreboardQuerySerializer(serializers.Serializer):
     """Optional board selector for the public scoreboard read (#2968).
 
@@ -406,6 +431,7 @@ class PublicScoreboardResponseSerializer(serializers.Serializer):
     rankings = serializers.ListField(child=serializers.DictField(), read_only=True)
     bracket_rankings = serializers.ListField(child=serializers.DictField(), read_only=True, allow_null=True)
     brackets = _NamedRefSerializer(many=True, read_only=True)
+    progression = ScoreProgressionSerializer(read_only=True, allow_null=True)
 
 
 class OrganizerScoreboardResponseSerializer(serializers.Serializer):
@@ -424,3 +450,4 @@ class OrganizerScoreboardResponseSerializer(serializers.Serializer):
     rankings = serializers.ListField(child=serializers.DictField(), read_only=True)
     bracket_rankings = serializers.ListField(child=serializers.DictField(), read_only=True, allow_null=True)
     brackets = _NamedRefSerializer(many=True, read_only=True)
+    progression = ScoreProgressionSerializer(read_only=True)

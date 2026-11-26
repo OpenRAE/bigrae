@@ -363,12 +363,12 @@ def test_cancel_revokes_registration_created_during_provisioning():
 def test_terminal_failure_result_revokes_receipt_registration(monkeypatch):
     _user, request, range_obj = _owned_range()
     registered = register_receipt_verifier(request.request_id, _PROVISIONING_OPERATION_ID, _demand())
-    monkeypatch.setattr("engine.services._operation_apply_domain._audit", lambda *args, **kwargs: None)
+    monkeypatch.setattr("engine.services._operation_apply.domain._audit", lambda *args, **kwargs: None)
     monkeypatch.setattr(
-        "engine.services._operation_apply_domain._enqueue_range_status_event",
+        "engine.services._operation_apply.domain._enqueue_range_status_event",
         lambda *args, **kwargs: None,
     )
-    from engine.services._operation_apply_domain import _apply_failure
+    from engine.services._operation_apply.domain import _apply_failure
 
     _apply_failure(range_obj, {"reason_code": "cloud_operation_failed"}, str(request.request_id), is_range=True)
 
@@ -381,12 +381,12 @@ def test_raes_destroy_result_revokes_receipt_registration(monkeypatch):
     binding = register_receipt_verifier(request.request_id, _PROVISIONING_OPERATION_ID, _demand())
     range_obj.status = Range.Status.DESTROYING
     range_obj.save(update_fields=["status"])
-    monkeypatch.setattr("engine.services._operation_apply_raes._audit", lambda *args, **kwargs: None)
+    monkeypatch.setattr("engine.services._operation_apply.raes._audit", lambda *args, **kwargs: None)
     monkeypatch.setattr(
-        "engine.services._operation_apply_raes._enqueue_range_status_event",
+        "engine.services._operation_apply.raes._enqueue_range_status_event",
         lambda *args, **kwargs: None,
     )
-    from engine.services._operation_apply_raes import _apply_lifecycle
+    from engine.services._operation_apply.raes import _apply_lifecycle
 
     _apply_lifecycle(range_obj, ResourceStatus.DESTROYED.value, str(request.request_id))
 

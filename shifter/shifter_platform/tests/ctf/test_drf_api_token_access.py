@@ -148,6 +148,7 @@ class TestCTFPublicScoreboard:
             "rankings": [],
             "bracket_rankings": None,
             "brackets": [],
+            "progression": None,
         }
 
     def test_participants_mode_serves_registered_participant(
@@ -180,6 +181,7 @@ class TestCTFPublicScoreboard:
             "rankings": [],
             "bracket_rankings": None,
             "brackets": [],
+            "progression": None,
         }
 
     def test_public_exception_does_not_apply_to_score_timeline(self, api_client: APIClient, ctf_participant):

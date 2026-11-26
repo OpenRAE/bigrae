@@ -31,8 +31,11 @@ export interface A11ySurface {
   readonly actor: ActorName;
   /** Text proving the intended surface/state rendered before scanning. */
   readonly ready: string;
-  /** Whether the readiness text is a page heading (default) or an alert. */
-  readonly readyKind?: "heading" | "alert";
+  /**
+   * Whether the readiness text is a page heading (default), an alert, exact loaded-state
+   * text, or the accessible name of a list or table that only the loaded state renders.
+   */
+  readonly readyKind?: "heading" | "alert" | "text" | "list" | "table";
   /** Source path responsible for remediation. */
   readonly remediation: string;
 }
@@ -79,6 +82,57 @@ export const SURFACES: readonly A11ySurface[] = [
     actor: "inbox",
     ready: "Inbox",
     remediation: "src/features/ctf/inbox/InboxPage.tsx",
+  },
+  {
+    // `seed_e2e_ctf` releases two challenges. A loaded card, not the heading
+    // that also shows while loading, proves the view and sort controls and the
+    // challenge cards rendered (#2998).
+    id: "ctf-participant-challenges",
+    route: "/ctf/challenges",
+    actor: "inbox",
+    ready: "E2E Warm-up",
+    readyKind: "text",
+    remediation: "src/features/ctf/ChallengesPage.tsx",
+  },
+  {
+    // The list and table layouts of the same list (#3012). The named list or table
+    // renders only in the loaded state of the requested layout.
+    id: "ctf-participant-challenges-list-layout",
+    route: "/ctf/challenges?layout=list",
+    actor: "inbox",
+    ready: "Start Here",
+    readyKind: "list",
+    remediation: "src/features/ctf/ChallengeListLayouts.tsx",
+  },
+  {
+    id: "ctf-participant-challenges-table-layout",
+    route: "/ctf/challenges?layout=table",
+    actor: "inbox",
+    ready: "Start Here",
+    readyKind: "table",
+    remediation: "src/features/ctf/ChallengeListLayouts.tsx",
+  },
+  {
+    // The first seeded challenge, by its fixed `seed_e2e_ctf` ID. The next
+    // challenge name shows only in the loaded Next link, so it proves that the
+    // sequence buttons rendered (#2999).
+    id: "ctf-participant-challenge-detail",
+    route: "/ctf/challenges/5e3d0c1a-0000-4000-8000-000000002999/",
+    actor: "inbox",
+    ready: "E2E First Mission",
+    readyKind: "text",
+    remediation: "src/features/ctf/ChallengeDetailPage.tsx",
+  },
+  {
+    // Seeded public-scoreboard event. The seeded award gives the participant a
+    // score step, so the score graph renders with the loaded board, in the same
+    // state as the sort controls (#3001, #3004).
+    id: "ctf-participant-scoreboard",
+    route: "/ctf/scoreboard",
+    actor: "inbox",
+    ready: "Score over time",
+    readyKind: "text",
+    remediation: "src/features/ctf/ScoreboardPage.tsx",
   },
   {
     id: "ctf-admin-dashboard",

@@ -33,10 +33,19 @@ workers:
 
 guacd:
   replicas: 2
+  autoscaling:
+    enabled: true
+    minReplicas: 32
+    maxReplicas: 48
+    cpuUtilizationPercentage: 65
+    scaleDownStabilizationSeconds: 900
 
-# Single guacamole-client replica: tokens are minted and served from task-local
-# process memory, so N>1 replicas break first-click RDP (#928). Scale guacd for
-# capacity, not the client.
+# Single guacamole-client replica (#928, #2518). The portal mints each Guacamole
+# token server to server through the internal Service, and session revocation
+# deletes it the same way. Guacamole keeps tokens in the memory of one replica,
+# so with more replicas a browser can reach a replica without its token, and a
+# revocation can miss the live session. Browser affinity alone does not fix the
+# server-side legs. Scale guacd for capacity until #2518 shards the client.
 guacamoleClient:
   replicas: 1
 
@@ -49,6 +58,8 @@ services:
   guacamoleClient:
     annotations:
       cloud.google.com/neg: '{"ingress": true}'
+    backendConfig:
+      enabled: true
 
 network:
   ingressSourceCidrs:

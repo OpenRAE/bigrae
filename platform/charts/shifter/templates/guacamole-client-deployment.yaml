@@ -4,10 +4,10 @@ metadata:
   name: guacamole-client
   namespace: {{ .Values.namespaces.platform }}
   annotations:
-    # CKV_K8S_35: DB credentials arrive through envFrom until the Guacamole image
-    # file-secret fork (#2565) lands. The pinned 1.6.0 image has no _FILE support
-    # (GUACAMOLE-2119). Scoped, time-boxed entry in docs/adr/exceptions.yaml.
-    checkov.io/skip1: CKV_K8S_35=Guacamole 1.6.0 image has no file-secret support (GUACAMOLE-2119); fork tracked in #2565
+    # env-var-secret matches every variable name that contains "secret".
+    # JSON_SECRET_KEY_FILE holds a file path; the key is in the mounted file.
+    # Verified false positive; see docs/adr/exceptions.yaml.
+    ignore-check.kube-linter.io/env-var-secret: JSON_SECRET_KEY_FILE holds the path of a mounted Secret file, not a secret value
     {{- if .Values.capacityProfile.id }}
     shifter.dev/capacity-profile: {{ .Values.capacityProfile.id | quote }}
     {{- end }}
@@ -31,7 +31,12 @@ spec:
       annotations:
         checksum/runtime-config: {{ include "shifter.runtimeConfigChecksum" . }}
     spec:
-      {{- include "shifter.podSecurityContext" . | nindent 6 }}
+      # The group lets UID 10001 read the root-owned Secret projection.
+      securityContext:
+        fsGroup: {{ .Values.security.guacamole.runAsGroup }}
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile:
+          type: {{ .Values.security.pod.seccompProfile }}
       automountServiceAccountToken: false
       serviceAccountName: {{ .Values.serviceAccounts.guacamoleClient.name }}
       terminationGracePeriodSeconds: {{ .Values.guacamoleClient.terminationGracePeriodSeconds }}
@@ -49,6 +54,11 @@ spec:
               mountPath: /tmp
             - name: guacamole-home
               mountPath: /home/guacamole
+            # Credentials arrive as files, never as environment values. Keep
+            # this path outside every writable home.
+            - name: guacamole-runtime
+              mountPath: /run/secrets/guacamole-runtime
+              readOnly: true
           env:
             - name: OPENFGA_ENABLED
               value: "true"
@@ -101,9 +111,20 @@ spec:
               value: "true"
             - name: OPENID_ENABLED
               value: "false"
-          envFrom:
-            - secretRef:
-                name: {{ .Values.guacamoleRuntimeSecret.name }}
+            # Idle limit of a Guacamole session in minutes. Guacamole never
+            # times out a session with an open connection. This limit only
+            # frees sessions with no connection, which each hold an authority
+            # lease.
+            - name: API_SESSION_TIMEOUT
+              value: "15"
+            # Guacamole reads each property from the file that its *_FILE
+            # variable names. The variables carry paths only.
+            - name: POSTGRESQL_USERNAME_FILE
+              value: /run/secrets/guacamole-runtime/postgresql-username
+            - name: POSTGRESQL_PASSWORD_FILE
+              value: /run/secrets/guacamole-runtime/postgresql-password
+            - name: JSON_SECRET_KEY_FILE
+              value: /run/secrets/guacamole-runtime/json-secret-key
           ports:
             - name: http
               containerPort: 8080
@@ -135,3 +156,14 @@ spec:
         - name: guacamole-home
           emptyDir:
             sizeLimit: 64Mi
+        - name: guacamole-runtime
+          secret:
+            secretName: {{ .Values.guacamoleRuntimeSecret.name }}
+            defaultMode: 0440
+            items:
+              - key: POSTGRESQL_USER
+                path: postgresql-username
+              - key: POSTGRESQL_PASSWORD
+                path: postgresql-password
+              - key: JSON_SECRET_KEY
+                path: json-secret-key

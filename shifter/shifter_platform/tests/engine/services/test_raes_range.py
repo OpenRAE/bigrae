@@ -94,9 +94,9 @@ class TestCreateRaesRange:
 
     def test_absent_dispatch_task_reference_is_not_persisted(self, user, monkeypatch):
         persist_calls = []
-        monkeypatch.setattr("engine.services._raes_range.start_raes_range_provisioning", lambda _request_id: None)
+        monkeypatch.setattr("engine.services._raes.range.start_raes_range_provisioning", lambda _request_id: None)
         monkeypatch.setattr(
-            "engine.services._raes_range._persist_task_arn",
+            "engine.services._raes.range._persist_task_arn",
             lambda *args: persist_calls.append(args),
         )
 
@@ -333,7 +333,7 @@ def test_ec2_allowlist_denied_before_engine_request_or_dispatch(user, monkeypatc
     from shared.range_instantiation_policy import InstantiationPurpose, evaluate_range_backend_admission
 
     dispatch = Mock(return_value=None)
-    monkeypatch.setattr("engine.services._raes_range.start_raes_range_provisioning", dispatch)
+    monkeypatch.setattr("engine.services._raes.range.start_raes_range_provisioning", dispatch)
     request_id = uuid4()
     with pytest.raises(EngineError, match="allowlist"):
         _create_raes_range(

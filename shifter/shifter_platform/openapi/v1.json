@@ -18016,7 +18016,7 @@
     "/api/v1/ctf/submissions/": {
       "get": {
         "operationId": "ctf_submissions_retrieve",
-        "description": "Return the active participant's own submission history.",
+        "description": "Return the admitted participant's own submissions, newest first.",
         "tags": [
           "ctf"
         ],
@@ -18034,6 +18034,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/SubmissionListResponse"
+                }
+              }
+            },
+            "description": ""
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
                 }
               }
             },
@@ -26864,6 +26874,11 @@
             "readOnly": true,
             "nullable": true
           },
+          "participant_shared_password_set": {
+            "type": "boolean",
+            "description": "Report whether an event-shared initial password is set, never its value.",
+            "readOnly": true
+          },
           "range_config": {
             "type": "object",
             "additionalProperties": {},
@@ -26998,6 +27013,7 @@
           "name",
           "organization",
           "owner",
+          "participant_shared_password_set",
           "public_registration_enabled",
           "public_registration_url",
           "range_config",
@@ -27493,6 +27509,12 @@
                 "maxLength": 0
               }
             ]
+          },
+          "participant_password_override": {
+            "type": "string",
+            "writeOnly": true,
+            "description": "Event-shared initial participant password for new accounts. An empty value turns it off.",
+            "maxLength": 128
           }
         },
         "required": [
@@ -29048,6 +29070,14 @@
               "$ref": "#/components/schemas/_NamedRef"
             },
             "readOnly": true
+          },
+          "progression": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScoreProgression"
+              }
+            ],
+            "readOnly": true
           }
         },
         "required": [
@@ -29055,6 +29085,7 @@
           "brackets",
           "event_id",
           "frozen",
+          "progression",
           "rankings",
           "team_mode"
         ]
@@ -29481,6 +29512,16 @@
             "type": "boolean",
             "readOnly": true
           },
+          "team_solved": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "True when any member of the participant's team has solved it (team mode)."
+          },
+          "team_solved_by": {
+            "type": "string",
+            "nullable": true,
+            "description": "Display name of the team member who solved it first (team mode); null when unsolved by the team."
+          },
           "attempt_count": {
             "type": "integer",
             "readOnly": true
@@ -29518,6 +29559,11 @@
           "total_hint_penalty": {
             "type": "integer",
             "readOnly": true
+          },
+          "total_hint_penalty_points": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Points that the unlocked hints take from a solve."
           },
           "files": {
             "type": "array",
@@ -29593,9 +29639,11 @@
           "solution",
           "solved",
           "tags",
+          "team_solved",
           "timeout_retry_after",
           "topics",
           "total_hint_penalty",
+          "total_hint_penalty_points",
           "unmet_prerequisites"
         ]
       },
@@ -29664,6 +29712,16 @@
             "type": "boolean",
             "readOnly": true
           },
+          "team_solved": {
+            "type": "boolean",
+            "readOnly": true,
+            "description": "True when any member of the participant's team has solved it (team mode)."
+          },
+          "team_solved_by": {
+            "type": "string",
+            "nullable": true,
+            "description": "Display name of the team member who solved it first (team mode); null when unsolved by the team."
+          },
           "tags": {
             "type": "array",
             "items": {
@@ -29688,6 +29746,7 @@
           "points",
           "solved",
           "tags",
+          "team_solved",
           "topics"
         ]
       },
@@ -30020,7 +30079,13 @@
           },
           "penalty": {
             "type": "integer",
-            "readOnly": true
+            "readOnly": true,
+            "description": "Percentage of the challenge value."
+          },
+          "cost_points": {
+            "type": "integer",
+            "readOnly": true,
+            "description": "Points this hint costs when the hints are unlocked in order."
           },
           "unlocked": {
             "type": "boolean",
@@ -30033,6 +30098,7 @@
           }
         },
         "required": [
+          "cost_points",
           "id",
           "order",
           "penalty",
@@ -30406,6 +30472,11 @@
             "type": "string",
             "readOnly": true
           },
+          "username": {
+            "type": "string",
+            "readOnly": true,
+            "nullable": true
+          },
           "status": {
             "type": "string",
             "readOnly": true
@@ -30443,7 +30514,8 @@
           "role",
           "status",
           "team_name",
-          "total_score"
+          "total_score",
+          "username"
         ]
       },
       "ParticipantTeam": {
@@ -31521,6 +31593,15 @@
               "$ref": "#/components/schemas/_NamedRef"
             },
             "readOnly": true
+          },
+          "progression": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ScoreProgression"
+              }
+            ],
+            "readOnly": true,
+            "nullable": true
           }
         },
         "required": [
@@ -31528,6 +31609,7 @@
           "brackets",
           "event_id",
           "frozen",
+          "progression",
           "rankings",
           "scoreboard_hidden",
           "team_mode"
@@ -33638,6 +33720,34 @@
           "target_uuid"
         ]
       },
+      "ScoreProgression": {
+        "type": "object",
+        "description": "Score-over-time series for the leading rows of the selected board (ADR-028-R3).",
+        "properties": {
+          "starts_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "series": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/_ScoreSeries"
+            },
+            "readOnly": true
+          }
+        },
+        "required": [
+          "ends_at",
+          "series",
+          "starts_at"
+        ]
+      },
       "ScoreTimelineResponse": {
         "type": "object",
         "description": "Per-participant chronological score progression for a step chart.",
@@ -33864,6 +33974,12 @@
             "format": "date-time",
             "readOnly": true,
             "nullable": true
+          },
+          "submitted_flag": {
+            "type": "string",
+            "readOnly": true,
+            "nullable": true,
+            "description": "The participant's own stored value for a correct submission; null for an incorrect one"
           }
         },
         "required": [
@@ -33873,7 +33989,8 @@
           "id",
           "is_correct",
           "points_awarded",
-          "submitted_at"
+          "submitted_at",
+          "submitted_flag"
         ]
       },
       "SubmissionListResponse": {
@@ -34694,6 +34811,56 @@
         "required": [
           "id",
           "name"
+        ]
+      },
+      "_ScorePoint": {
+        "type": "object",
+        "description": "One step of a score progression: a time and the cumulative score.",
+        "properties": {
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "readOnly": true
+          },
+          "score": {
+            "type": "integer",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "at",
+          "score"
+        ]
+      },
+      "_ScoreSeries": {
+        "type": "object",
+        "description": "One leading competitor's score progression (#3004).",
+        "properties": {
+          "id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "name": {
+            "type": "string",
+            "readOnly": true
+          },
+          "rank": {
+            "type": "integer",
+            "readOnly": true
+          },
+          "points": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/_ScorePoint"
+            },
+            "readOnly": true
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "points",
+          "rank"
         ]
       }
     },

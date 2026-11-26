@@ -7,17 +7,22 @@ Run it after ``seed_e2e``, which gives the E2E organizer its individual account
 and native account administration. It seeds what ``dev_login`` cannot establish:
 one event in that account, owned by the organizer, with its authorization
 relationships published; a live participation and active event for the E2E
-inbox participant; and two released communications (#2053). The first goes
+inbox participant; two released challenges with fixed IDs for the challenge
+page accessibility scan (#2999); and two released communications (#2053). The first goes
 through the real authoring and admission services. The second carries a stored
 hostile body written below the admission validator, as a row admitted before a
 validator change would be; the browser journey proves the renderer and the
-enforced CSP keep it inert. Idempotent: safe to re-run.
+enforced CSP keep it inert. One synthetic award gives the participant a score,
+so the scoreboard renders its score graph for the accessibility lane (#3004).
+Idempotent: safe to re-run.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import timedelta
 from typing import TYPE_CHECKING
+from uuid import UUID
 
 from django.conf import settings
 from django.contrib.auth import get_user_model
@@ -28,9 +33,10 @@ from django.utils import timezone
 import workspaces.services as ws
 from ctf.communication_contracts import CONTENT_PROFILE_V1, canonical_digest
 from ctf.enums import EventStatus
-from ctf.models import CommunicationCampaign, CTFEvent, CTFParticipant, MessageRevision
+from ctf.models import CommunicationCampaign, CTFAward, CTFChallenge, CTFEvent, CTFParticipant, MessageRevision
 from ctf.services.communication import CampaignDraft, create_campaign, release_campaign
 from ctf.services.event import publish_event_relationships
+from ctf.services.scoring import recompute_participant_score
 from management.services import set_active_ctf_event
 from shared.auth import CTF_PARTICIPANT_GROUP
 from shared.principal_port import principal_for_user
@@ -46,12 +52,29 @@ INBOX_PARTICIPANT_EMAIL = "e2e-inbox@example.com"
 EVENT_NAME = "E2E Inbox Event"
 SAFE_SUBJECT = "Welcome to the E2E event"
 HOSTILE_SUBJECT = "Stored hostile content"
+AWARD_REASON = "E2E score"
 HOSTILE_BODY = (
     "Stored hostile content.\n\n"
     '<img src="x" onerror="window.__inboxXss = 1">\n\n'
     "<script>window.__inboxXss = 1</script>\n\n"
     "[run](javascript:window.__inboxXss=1)\n\n"
     "![remote](https://untrusted.example/x.png)\n"
+)
+
+
+@dataclass(frozen=True)
+class SeedChallenge:
+    """One synthetic released challenge. The fixed ID gives the browser scan a stable route."""
+
+    id: UUID
+    name: str
+    category: str
+
+
+#: Shared with ``frontend/e2e/a11y/matrix.ts``. The list shows them in this chain order.
+CHALLENGES = (
+    SeedChallenge(UUID("5e3d0c1a-0000-4000-8000-000000002999"), "E2E Warm-up", "Start Here"),
+    SeedChallenge(UUID("5e3d0c1a-0001-4000-8000-000000002999"), "E2E First Mission", "Mission 1"),
 )
 
 _ALLOWED_ENVIRONMENTS = frozenset({"development", "test"})
@@ -108,13 +131,32 @@ class Command(BaseCommand):
         account_uuid = str(scope.account_uuid)
 
         participant_user = _ensure_user(INBOX_PARTICIPANT_EMAIL)
-        CTFParticipant.objects.get_or_create(
+        participant, _ = CTFParticipant.objects.get_or_create(
             event=event,
             user=participant_user,
             defaults={"email": INBOX_PARTICIPANT_EMAIL, "name": "E2E Inbox", "status": "active", "registered_at": now},
         )
+        CTFAward.objects.get_or_create(
+            event=event,
+            participant=participant,
+            reason=AWARD_REASON,
+            defaults={"points": 100, "granted_by": organizer},
+        )
+        recompute_participant_score(participant.pk)
         participant_user.groups.add(Group.objects.get_or_create(name=CTF_PARTICIPANT_GROUP)[0])
         set_active_ctf_event(participant_user, event.pk)
+
+        for seeded in CHALLENGES:
+            CTFChallenge.objects.get_or_create(
+                id=seeded.id,
+                defaults={
+                    "event": event,
+                    "name": seeded.name,
+                    "category": seeded.category,
+                    "description": "A synthetic challenge for the browser accessibility scan.",
+                    "points": 100,
+                },
+            )
 
         safe = self._campaign(
             organizer, account_uuid, event, SAFE_SUBJECT, "Read the **rules** on the [help page](/ctf/help/)."

@@ -3942,6 +3942,19 @@
           "source": "selected immutable capacity profile projected during GCP Helm-value assembly"
         },
         {
+          "description": "Public GCP shared-service capacity value (OPENFGA_TIMEOUT_MS) emitted into the platform runtime environment.",
+          "destination": "runtime-env",
+          "kind": "runtime-env",
+          "name": "OPENFGA_TIMEOUT_MS",
+          "owner": "canonical GCP shared-service capacity profile Helm projection",
+          "process_roles": [
+            "portal",
+            "worker"
+          ],
+          "sensitivity": "public",
+          "source": "selected immutable capacity profile projected during GCP Helm-value assembly"
+        },
+        {
           "description": "Public GCP shared-service capacity value (PORTAL_WEB_GRACEFUL_TIMEOUT) emitted into the platform runtime environment.",
           "destination": "runtime-env",
           "kind": "runtime-env",

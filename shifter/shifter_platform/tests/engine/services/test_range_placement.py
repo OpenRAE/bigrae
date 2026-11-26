@@ -13,7 +13,7 @@ from collections import Counter
 
 import pytest
 
-from engine.services._range_placement import range_zone_pool, select_placement_zone
+from engine.services._range.placement import range_zone_pool, select_placement_zone
 
 
 class TestRangeZonePool:

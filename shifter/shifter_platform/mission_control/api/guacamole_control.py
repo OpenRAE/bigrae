@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from mission_control.guacamole_authority import renew_gateway_authority
+from shared.authorization import AuthorizationUnavailable
 from shared.aws_web_identity import verify_aws_web_identity_token
 from shared.control_identity import ControlAssertionError, verify_google_control_assertion
 
@@ -115,4 +116,9 @@ class GuacamoleAuthorityView(APIView):
                 raise ValueError
         except ValueError:
             return Response({"error": "gateway.invalid_request"}, status=400)
-        return Response({"allowed": renew_gateway_authority(value)})
+        try:
+            allowed = renew_gateway_authority(value)
+        except AuthorizationUnavailable:
+            # The gateway keeps its lease deadline and retries a non-200 answer.
+            return Response({"error": "gateway.authority_unavailable"}, status=503)
+        return Response({"allowed": allowed})

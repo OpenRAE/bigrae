@@ -25,10 +25,9 @@ _CTF_LOGIN_TEMPLATE = "ctf/participant/login.html"
 _CTF_CHANGE_CREDENTIAL_TEMPLATE = "ctf/participant/change_password.html"
 
 
-def _ctf_login_rate_limited(request: HttpRequest, username: str) -> tuple[bool, int]:
-    """Charge account/source login budgets without retaining raw identifiers."""
+def _ctf_login_budgets(request: HttpRequest, username: str) -> tuple[tuple[tuple[str, int], ...], int]:
+    """Return the account and source budget keys with their maxima, without raw identifiers."""
     from django.conf import settings
-    from django.core.cache import caches
 
     from shared.audit import get_client_ip
 
@@ -38,10 +37,56 @@ def _ctf_login_rate_limited(request: HttpRequest, username: str) -> tuple[bool, 
     account_key = hashlib.sha256(username.strip().lower().encode()).hexdigest()[:24]
     source = str(get_client_ip(request) or "unknown")
     source_key = hashlib.sha256(source.encode()).hexdigest()[:24]
+    budgets = (
+        (f"ctf-login:account:{account_key}", account_maximum),
+        (f"ctf-login:source:{source_key}", source_maximum),
+    )
+    return budgets, window
+
+
+def _ctf_login_rate_limited(request: HttpRequest, username: str) -> tuple[bool, int]:
+    """Return whether a failed-attempt budget is exhausted. Reading charges nothing.
+
+    Only failed attempts consume a budget (see ``_charge_failed_ctf_login``), so
+    participants who share one venue address can all sign in (#2973).
+    """
+    from django.core.cache import caches
+
+    budgets, window = _ctf_login_budgets(request, username)
     cache = caches["launch_rate_limit"]
-    account_count = consume_fixed_window(cache, f"ctf-login:account:{account_key}", window)
-    source_count = consume_fixed_window(cache, f"ctf-login:source:{source_key}", window)
-    return account_count > account_maximum or source_count > source_maximum, window
+    return any(int(cache.get(key) or 0) >= maximum for key, maximum in budgets), window
+
+
+def _charge_failed_ctf_login(request: HttpRequest, username: str) -> None:
+    """Charge one failed attempt to the account and source budgets."""
+    from django.core.cache import caches
+
+    budgets, window = _ctf_login_budgets(request, username)
+    cache = caches["launch_rate_limit"]
+    for key, _maximum in budgets:
+        consume_fixed_window(cache, key, window)
+
+
+def _limiter_unavailable_response(request: HttpRequest) -> HttpResponse:
+    """Return the fail-closed response for an unavailable login limiter."""
+    response = render(
+        request,
+        _CTF_LOGIN_TEMPLATE,
+        {"error": "Login is temporarily unavailable. Please retry shortly."},
+        status=503,
+    )
+    response["Retry-After"] = "60"
+    return response
+
+
+def _record_failed_ctf_login(request: HttpRequest, username: str) -> HttpResponse | None:
+    """Charge a failed attempt; an unavailable limiter fails closed."""
+    try:
+        _charge_failed_ctf_login(request, username)
+    except Exception:
+        logger.exception("CTF login rate limiter unavailable")
+        return _limiter_unavailable_response(request)
+    return None
 
 
 def _login_throttle_response(request: HttpRequest, username: str) -> HttpResponse | None:
@@ -51,13 +96,7 @@ def _login_throttle_response(request: HttpRequest, username: str) -> HttpRespons
         limited, window = _ctf_login_rate_limited(request, username)
     except Exception:
         logger.exception("CTF login rate limiter unavailable")
-        response = render(
-            request,
-            _CTF_LOGIN_TEMPLATE,
-            {"error": "Login is temporarily unavailable. Please retry shortly."},
-            status=503,
-        )
-        response["Retry-After"] = "60"
+        response = _limiter_unavailable_response(request)
     else:
         if limited:
             response = render(
@@ -89,6 +128,7 @@ def ctf_login(request: HttpRequest) -> HttpResponse:
         if response is None:
             user = authenticate_ctf_participant(username=username, password=password)
             if user is None:
+                response = _record_failed_ctf_login(request, username)
                 error = "Invalid username or password."
             else:
                 login(request, user, backend="config.auth.CTFParticipantBackend")

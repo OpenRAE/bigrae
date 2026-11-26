@@ -309,7 +309,7 @@ def test_service_administrator_opens_real_terminal_service_without_owner_imperso
 def test_owned_guest_remains_accessible_when_another_range_reuses_its_identifier(principal_range):
     from engine.models import Range
     from engine.models import Request as EngineRequest
-    from engine.services._range_authority import authorized_instance_range
+    from engine.services._range.authority import authorized_instance_range
     from management.services import create_service_principal
 
     fixture = principal_range
@@ -536,7 +536,7 @@ def test_queued_range_effect_revalidates_initiator_and_preserves_original_ceilin
 
     from engine.launch_intents import authorize_provisioner_payload
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_authority import admit_launch_authority
+    from engine.services._launch.authority import admit_launch_authority
     from management.models import Principal
 
     fixture = principal_range
@@ -674,7 +674,7 @@ def test_durable_authority_cannot_be_rewritten_by_bulk_updates(principal_range, 
     from django.utils import timezone
 
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_authority import admit_launch_authority
+    from engine.services._launch.authority import admit_launch_authority
 
     fixture = principal_range
     payload = {

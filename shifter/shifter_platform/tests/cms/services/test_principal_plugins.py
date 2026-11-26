@@ -117,7 +117,7 @@ def test_revocation_during_probe_does_not_commit_compatibility_as_ready(plugin_a
             status="compatible",
         )
 
-    monkeypatch.setattr("engine.services._runtime_plugin_controller.observe_plugin", observe)
+    monkeypatch.setattr("engine.services._runtime_plugin.controller.observe_plugin", observe)
     reconcile_runtime_plugins()
     row = RuntimePluginInstallation.objects.get(pk=installed.id)
     assert row.state == "failed" and row.verified_at is None

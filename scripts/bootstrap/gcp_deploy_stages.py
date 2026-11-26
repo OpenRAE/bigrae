@@ -172,6 +172,7 @@ def infrastructure_stage(
     from gcp_storage_cmek import migrate_buckets
     from gcp_terraform import (
         backend_prefix,
+        cloud_sql_disk_variables,
         kms_adoption_variables,
         state_bucket_name,
         terraform_apply,
@@ -190,7 +191,8 @@ def infrastructure_stage(
     ensure_gcp_artifact_registry_service_identity(gdc_config(inputs))
     ctx = terraform_context(inputs, inputs.workdir, {})
     terraform_init(runner, ctx, state_bucket=bucket, prefix=backend_prefix(inputs.environment))
-    terraform_apply(runner, ctx, variables=kms_adoption_variables(runner, ctx, inputs) or None)
+    variables = {**kms_adoption_variables(runner, ctx, inputs), **cloud_sql_disk_variables(runner, ctx, inputs)}
+    terraform_apply(runner, ctx, variables=variables or None)
     outputs = terraform_outputs(runner, ctx)
     # A bucket default key applies only to new writes; move the live objects too (#2564).
     migrate_buckets(runner, outputs["storage_cmek_buckets"]["value"])  # type: ignore[arg-type]

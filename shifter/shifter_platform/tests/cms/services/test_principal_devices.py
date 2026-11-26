@@ -289,7 +289,7 @@ def test_failed_device_can_be_destroyed_before_its_reserved_slot_is_reused(provi
     from cms.handlers.ngfw_events import process_ngfw_event
     from cms.services import create_ngfw, destroy_ngfw, get_ngfw
     from engine.models import RangeEventOutbox
-    from engine.services._operation_apply_effects import _enqueue_ngfw_status_event
+    from engine.services._operation_apply.effects import _enqueue_ngfw_status_event
 
     actor = provisioned_device
     actor.native.status = "failed"
@@ -436,7 +436,7 @@ def test_unaccepted_callback_cannot_change_a_principal_device(provisioned_device
 def test_accepted_native_device_event_releases_the_same_cms_custody(provisioned_device):
     from cms.handlers.ngfw_events import process_ngfw_event
     from engine.models import RangeEventOutbox
-    from engine.services._operation_apply_effects import _enqueue_ngfw_status_event
+    from engine.services._operation_apply.effects import _enqueue_ngfw_status_event
 
     actor = provisioned_device
     actor.native.status = "destroyed"

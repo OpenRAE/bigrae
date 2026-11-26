@@ -1,4 +1,8 @@
-"""CTF challenge scheduled release: HIDDEN -> VISIBLE at ``release_time``.
+"""CTF challenge scheduled release at ``release_time``.
+
+A HIDDEN challenge becomes VISIBLE. A VISIBLE challenge with a future
+``release_time`` is already time-gated; at that time it only sends the release
+notice, so participants learn about it the same way.
 
 ``release_challenge`` is invoked by the scheduler (RELEASE_CHALLENGE task);
 ``_sync_release_task`` is called from the challenge write path
@@ -44,6 +48,13 @@ def release_challenge(challenge_id: UUID) -> CTFChallenge:
             details={"challenge_id": str(challenge_id)},
         ) from None
 
+    from ctf.services.notification.live import request_challenge_released
+
+    if challenge.visibility == ChallengeVisibility.VISIBLE.value and challenge.release_time is not None:
+        # A time-gated visible challenge appears when its release time passes; send its notice (#2973).
+        request_challenge_released(challenge, was_released=False)
+        logger.info("Sent the release notice for time-gated challenge %s", challenge_id)
+        return challenge
     if challenge.visibility != ChallengeVisibility.HIDDEN.value:
         logger.info(
             "Challenge %s is already %s, skipping release",
@@ -51,8 +62,6 @@ def release_challenge(challenge_id: UUID) -> CTFChallenge:
             challenge.visibility,
         )
         return challenge
-
-    from ctf.services.notification.live import request_challenge_released
 
     with transaction.atomic():
         challenge.visibility = ChallengeVisibility.VISIBLE.value
@@ -67,7 +76,7 @@ def _sync_release_task(challenge: CTFChallenge) -> None:
     """Create or cancel the RELEASE_CHALLENGE scheduled task for a challenge.
 
     Cancels any existing pending release task for the challenge, then creates
-    a new one if the challenge is HIDDEN with a future release_time.
+    a new one if the challenge is HIDDEN or VISIBLE with a future release_time.
     """
     from ctf.enums import ChallengeVisibility, ScheduledTaskStatus, ScheduledTaskType
     from ctf.models import CTFScheduledTask
@@ -82,10 +91,10 @@ def _sync_release_task(challenge: CTFChallenge) -> None:
     for task in pending:
         task.cancel_if_active()
 
-    # Schedule a new release task if challenge is HIDDEN with a future release_time
+    # Schedule a new release task if challenge is HIDDEN or VISIBLE with a future release_time
     if (
         challenge.release_time is not None
-        and challenge.visibility == ChallengeVisibility.HIDDEN.value
+        and challenge.visibility in (ChallengeVisibility.HIDDEN.value, ChallengeVisibility.VISIBLE.value)
         and challenge.release_time > timezone.now()
     ):
         CTFScheduledTask.objects.create(

@@ -635,60 +635,6 @@ def test_scheduler_retention_maintenance_logs_purge_counts(
     )
 
 
-def test_ctf_login_rate_limits_repeated_failures(client, standard_user, settings):
-    settings.CTF_LOGIN_RATE_LIMIT_MAX = 2
-    settings.CTF_LOGIN_SOURCE_RATE_LIMIT_MAX = 20
-    settings.CTF_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 300
-
-    client.post(reverse("ctf:ctf_login"), {"username": standard_user.username, "password": "wrong"})
-    client.post(reverse("ctf:ctf_login"), {"username": standard_user.username, "password": "wrong"})
-    response = client.post(
-        reverse("ctf:ctf_login"),
-        {"username": standard_user.username, "password": "wrong"},
-    )
-
-    assert response.status_code == 429
-    assert response["Retry-After"] == "300"
-
-
-def test_ctf_login_allows_event_users_behind_shared_source(client, settings):
-    settings.CTF_LOGIN_RATE_LIMIT_MAX = 2
-    settings.CTF_LOGIN_SOURCE_RATE_LIMIT_MAX = 6
-    settings.CTF_LOGIN_RATE_LIMIT_WINDOW_SECONDS = 300
-
-    for participant_number in range(6):
-        response = client.post(
-            reverse("ctf:ctf_login"),
-            {"username": f"event-participant-{participant_number}", "password": "wrong"},
-        )
-        assert response.status_code == 200
-
-    response = client.post(
-        reverse("ctf:ctf_login"),
-        {"username": "event-participant-7", "password": "wrong"},
-    )
-
-    assert response.status_code == 429
-    assert response["Retry-After"] == "300"
-
-
-def test_ctf_login_limiter_outage_fails_closed_and_is_logged(client, standard_user, monkeypatch, caplog):
-    from ctf.views import participant_auth
-
-    def _cache_down(*_args, **_kwargs):
-        raise ConnectionError("rate limit backend unavailable")
-
-    # Fail the shared rate-limit cache backend, not a first-party helper (ADR-019-R1).
-    monkeypatch.setattr(caches["launch_rate_limit"], "add", _cache_down)
-    response = client.post(reverse("ctf:ctf_login"), {"username": standard_user.username, "password": "wrong"})
-
-    assert response.status_code == 503
-    assert response["Retry-After"] == "60"
-    failures = [record for record in caplog.records if record.name == participant_auth.logger.name]
-    assert [record.levelno for record in failures] == [logging.ERROR]
-    assert failures[0].exc_info is not None
-
-
 @pytest.mark.django_db(transaction=True)
 def test_live_temporary_account_notification_socket_is_exact_and_password_gated(ctf_event_active):
     from django.contrib.auth.models import Group

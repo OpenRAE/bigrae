@@ -12,7 +12,7 @@ from typing import Any
 import pytest
 import yaml
 
-from engine.services._feature_artifact_launcher import _job_env
+from engine.services._feature_artifacts.launcher import _job_env
 from shared.cloud.feature_artifact_jobs import (
     ACQUISITION_CONTAINER,
     acquisition_args,

@@ -111,6 +111,13 @@ class GuacamoleClientCapacity(_ClosedModel):
     absolute_tunnel_connections: int = Field(ge=1, le=1000)
 
 
+class OpenFgaCapacity(_ClosedModel):
+    """OpenFGA runtime server replicas and the portal's per-check timeout."""
+
+    replicas: int = Field(ge=1)
+    timeout_ms: int = Field(ge=100, le=10_000)
+
+
 class CloudSqlCapacity(_ClosedModel):
     """Cloud SQL sizing, availability, connection, and utilization limits."""
 
@@ -204,6 +211,7 @@ class GcpSharedServiceCapacityProfile(_ClosedModel):
     portal: PortalCapacity
     guacd: GuacdCapacity
     guacamole_client: GuacamoleClientCapacity
+    openfga: OpenFgaCapacity
     cloud_sql: CloudSqlCapacity
     redis: RedisCapacity
     access_nodes: AccessNodeCapacity
@@ -262,7 +270,9 @@ class GcpSharedServiceCapacityProfile(_ClosedModel):
                 "PORTAL_WEB_WS_PING_INTERVAL": str(self.timeouts.websocket_ping_interval_seconds),
                 "PORTAL_WEB_WS_PING_TIMEOUT": str(self.timeouts.websocket_ping_timeout_seconds),
                 "PORTAL_WEB_GRACEFUL_TIMEOUT": str(self.timeouts.process_graceful_timeout_seconds),
+                "OPENFGA_TIMEOUT_MS": str(self.openfga.timeout_ms),
             },
+            "openfga": {"replicas": self.openfga.replicas},
             "services": {
                 "portal": {
                     "backendConfig": {
@@ -308,6 +318,7 @@ class GcpSharedServiceCapacityProfile(_ClosedModel):
                 kubernetes[f"{resource_prefix}.cpu"] = quantity.cpu
                 kubernetes[f"{resource_prefix}.memory"] = quantity.memory
 
+        kubernetes["deployment/openfga.spec.replicas"] = self.openfga.replicas
         kubernetes[
             "deployment/guacamole-client.spec.template.spec.containers.guacamole-client.env."
             "POSTGRESQL_ABSOLUTE_MAX_CONNECTIONS"
@@ -373,9 +384,24 @@ _TIER_SIZES: dict[int, tuple[int, int, int, int, str, Literal["ZONAL", "REGIONAL
     50: (8, 4, 4, 12, "db-custom-8-30720", "REGIONAL", 12, 350),
     100: (14, 8, 6, 20, "db-custom-16-61440", "REGIONAL", 20, 650),
     200: (26, 16, 12, 24, "db-custom-32-122880", "REGIONAL", 32, 800),
-    300: (38, 24, 18, 36, "db-custom-48-184320", "REGIONAL", 48, 800),
+    300: (68, 48, 18, 36, "db-custom-48-184320", "REGIONAL", 48, 800),
     500: (62, 40, 28, 57, "db-custom-64-245760", "REGIONAL", 80, 800),
 }
+
+# The p300 values match the live event tenant on 2026-11-19. With 38 portal
+# replicas, Guacamole authority checks queued behind slow requests and sessions
+# failed. The access-node bounds were not changed with these values, so the
+# CPU-limit headroom note above does not apply to p300.
+_AUTOSCALING_MAXIMUMS: dict[int, tuple[int, int]] = {300: (100, 72)}
+_PORTAL_WEB_WORKERS: dict[int, int] = {300: 6}
+
+# On 2026-11-19 at p300 load, OpenFGA checks that took longer than 1.5 s failed
+# closed, and the Guacamole authority renewal ended live sessions. OpenFGA was
+# not CPU bound. p300 gives each check 5 s. On 2026-11-20, checks still timed
+# out at 5 s under a steady 250-300 requests/s across 4 servers with a 1-CPU
+# limit each, while OpenFGA's own reads stayed fast (p99 17 ms). p300 runs 8.
+_OPENFGA_REPLICAS: dict[int, int] = {300: 8}
+_OPENFGA_TIMEOUT_MS: dict[int, int] = {300: 5000}
 
 # guacamole-client stays at exactly one replica (#928 token affinity), and every
 # participant's display stream passes through it, so the larger tiers give that
@@ -393,27 +419,34 @@ def _build_profile(count: Literal[10, 30, 50, 100, 200, 300, 500]) -> GcpSharedS
     portal_replicas, guacd_replicas, access_nodes, access_max, sql_tier, sql_ha, redis_gb, sql_budget = _TIER_SIZES[
         count
     ]
+    portal_max, guacd_max = _AUTOSCALING_MAXIMUMS.get(
+        count,
+        (max(portal_replicas + 2, portal_replicas * 2), max(guacd_replicas + 2, guacd_replicas * 2)),
+    )
     return GcpSharedServiceCapacityProfile(
         profile_id=cast(CapacityProfileId, f"gcp-shared-v1-p{count}"),
         participant_count=count,
         portal=PortalCapacity(
             replicas=portal_replicas,
             resources=_resources("500m", "2Gi", "2", "4Gi"),
-            web_workers=4,
+            web_workers=_PORTAL_WEB_WORKERS.get(count, 4),
             bootstrap_workers=4,
             autoscaling=AutoscalingPolicy(
                 min_replicas=portal_replicas,
-                max_replicas=max(portal_replicas + 2, portal_replicas * 2),
+                max_replicas=portal_max,
                 cpu_utilization_pct=65,
                 scale_down_stabilization_seconds=900,
             ),
         ),
         guacd=GuacdCapacity(
             replicas=guacd_replicas,
-            resources=_resources("500m", "1Gi", "2", "2Gi"),
+            # An RDP session holds about 90-150 MB in guacd, and new sessions are
+            # spread randomly, so the busiest pod carries well above the mean.
+            # A 4Gi limit keeps that pod below its OOM limit.
+            resources=_resources("500m", "2Gi", "2", "4Gi"),
             autoscaling=AutoscalingPolicy(
                 min_replicas=guacd_replicas,
-                max_replicas=max(guacd_replicas + 2, guacd_replicas * 2),
+                max_replicas=guacd_max,
                 cpu_utilization_pct=65,
                 scale_down_stabilization_seconds=900,
             ),
@@ -421,6 +454,10 @@ def _build_profile(count: Literal[10, 30, 50, 100, 200, 300, 500]) -> GcpSharedS
         guacamole_client=GuacamoleClientCapacity(
             resources=_resources(*_GUACAMOLE_CLIENT_RESOURCES.get(count, _GUACAMOLE_CLIENT_DEFAULT_RESOURCES)),
             absolute_tunnel_connections=count,
+        ),
+        openfga=OpenFgaCapacity(
+            replicas=_OPENFGA_REPLICAS.get(count, 2),
+            timeout_ms=_OPENFGA_TIMEOUT_MS.get(count, 1500),
         ),
         cloud_sql=CloudSqlCapacity(
             tier=sql_tier,
@@ -443,8 +480,10 @@ def _build_profile(count: Literal[10, 30, 50, 100, 200, 300, 500]) -> GcpSharedS
         ),
         vpn_pool=_vpn_pool(count),
         timeouts=TimeoutCapacity(
-            portal_backend_seconds=3600,
-            guacamole_backend_seconds=3600,
+            # The load balancer closes a WebSocket at this age even when it is active.
+            # Eight hours covers a full event day of one terminal, RDP, or SSH session.
+            portal_backend_seconds=28800,
+            guacamole_backend_seconds=28800,
             websocket_ping_interval_seconds=30,
             websocket_ping_timeout_seconds=30,
             process_graceful_timeout_seconds=300,

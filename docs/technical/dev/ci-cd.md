@@ -368,7 +368,7 @@ The following points describe the retained CI adapter if an authorized target is
 - Check the `Render deployment inputs` step: the CI adapter stops when a required input is missing or when a GitHub value conflicts with the root config
 - Check the `Run the infrastructure stage` step for IAM or bucket-name conflicts on the GCS backend bucket. The step log shows each command that ran and the error of the command that failed
 - The command keeps the Terraform outputs, the runtime env, and the generated Helm values in a private temporary directory, not in the workflow log. Review the ingress resources and the `BackendConfig` resources if hostname, DNS, certificate, or Cloud Armor behavior is wrong
-- Review the `guacamole-runtime` Secret sync in the `Run the rollout stage` step if the Guacamole client pods stay in `CreateContainerConfigError`
+- Review the `guacamole-runtime` Secret sync in the `Run the rollout stage` step if the Guacamole client pods stay in `ContainerCreating` with a `FailedMount` event
 - If portal authentication fails, verify `public_hostname` and `managed_tls_enabled=true` in the Terraform outputs.
   Check Identity Platform, its blocking function, and MFA configuration.
   Confirm that bootstrap operator credentials were supplied and the managed certificate reaches `Active`.

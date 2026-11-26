@@ -228,6 +228,24 @@ class TestChallengeRelease:
         assert campaigns.count() == 2
         assert all(c.channels == ["in_app"] and "Scheduled" not in c.message_revisions.get().body for c in campaigns)
 
+    def test_time_gated_visible_challenge_declares_one_notice_at_release(
+        self, live_bus, ctf_event_active, make_participant, make_challenge
+    ):
+        """A visible challenge with a release time sends the notice when that time passes (#2973)."""
+        from ctf.services.challenge import release_challenge
+
+        make_participant(ctf_event_active, "watcher")
+        gated = make_challenge(ctf_event_active, name="Gated", visibility="visible")
+        CTFChallenge.objects.filter(pk=gated.pk).update(release_time=timezone.now() - timedelta(seconds=1))
+
+        release_challenge(gated.pk)
+        release_challenge(gated.pk)  # A retried task collapses onto the same occurrence.
+
+        notices = _tasks(ctf_event_active, ScheduledTaskType.LIVE_NOTICE)
+        assert {task.metadata["challenge_id"] for task in notices} == {str(gated.pk)}
+        _run_tasks(ctf_event_active, ScheduledTaskType.LIVE_NOTICE)
+        assert CommunicationCampaign.objects.filter(title="New challenge available").count() == 1
+
     def test_release_before_the_event_runs_declares_nothing(self, live_bus, ctf_event, make_challenge):
         from ctf.services.challenge import release_challenge
 

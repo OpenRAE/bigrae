@@ -216,95 +216,160 @@ def test_health_surfaces_degraded_audit_health_coarsely(health_check_registry):
         assert marker not in lowered, f"public /health body leaked sensitive marker {marker!r}: {body!r}"
 
 
-def test_redis_health_check_probe_runs_round_trip_over_configured_layer():
-    """``_probe`` drives the real async round-trip through the sync bridge.
+class _FakeRedis:
+    """Stand-in for ``redis.Redis`` that records how the probe built and used it."""
 
-    The in-memory test channel layer round-trips successfully, so a real probe
-    completes without raising — exercising the actual async_to_sync bridge and
-    ``_probe_configured_channel_layer`` rather than asserting the call shape.
-    """
+    def __init__(self, ping_result: bool = True, ping_error: Exception | None = None):
+        self.ping_result = ping_result
+        self.ping_error = ping_error
+        self.pings = 0
+
+    def ping(self) -> bool:
+        self.pings += 1
+        if self.ping_error is not None:
+            raise self.ping_error
+        return self.ping_result
+
+
+@pytest.fixture
+def fake_redis(monkeypatch, settings):
+    """Replace the ``redis.Redis.from_url`` seam and reset the cached probe client."""
+    import redis
+
+    import config.health_checks as health_checks
+
+    settings.CHANNEL_LAYERS = {
+        "default": {
+            "BACKEND": "channels_redis.core.RedisChannelLayer",
+            "CONFIG": {
+                "hosts": [
+                    {
+                        "address": "rediss://redis.invalid:6378/0",
+                        "ssl_ca_data": "synthetic-ca",
+                        "ssl_cert_reqs": "required",
+                    }
+                ]
+            },
+        }
+    }
+    client = _FakeRedis()
+    calls: list[tuple[str, dict]] = []
+
+    def from_url(url, **options):
+        calls.append((url, options))
+        return client
+
+    monkeypatch.setattr(redis.Redis, "from_url", staticmethod(from_url))
+    monkeypatch.setattr(health_checks, "_redis_client", None)
+    yield client, calls
+    monkeypatch.setattr(health_checks, "_redis_client", None)
+
+
+def test_redis_health_check_passes_when_ping_succeeds(fake_redis):
     from config.health_checks import ChannelLayerRedisHealthCheck
 
-    assert ChannelLayerRedisHealthCheck()._probe() is True
+    client, _ = fake_redis
+    check = ChannelLayerRedisHealthCheck()
+    check.check_status()
+
+    assert check.errors == []
+    assert client.pings == 1
 
 
-# The "/health surfaces a channel-layer probe failure coarsely" integration is
-# not re-driven here: forcing the registered probe to fail deterministically
-# would require either a first-party _probe patch (ADR-019-R1) or a real
-# unreachable-Redis dependency. The coarse public-body rendering of a failed
-# probe is already pinned by test_health_failure_body_is_coarse_on_db_failure /
-# _on_cache_failure (real ServiceUnavailable injected at the third-party
-# health_check backends), and the probe's registration by
-# test_redis_channel_layer_registers_redis_probe.
+def test_redis_health_check_reports_an_error_when_ping_fails(fake_redis):
+    from config.health_checks import ChannelLayerRedisHealthCheck
+
+    client, _ = fake_redis
+    client.ping_error = ConnectionError("synthetic connection failure")
+    check = ChannelLayerRedisHealthCheck()
+    check.check_status()
+
+    assert len(check.errors) == 1
+    assert "redis.invalid" not in str(check.errors[0])
 
 
-@pytest.mark.asyncio
-async def test_channel_layer_probe_round_trip_uses_configured_layer():
-    from config.health_checks import _round_trip
+def test_redis_health_check_reports_an_error_when_ping_returns_false(fake_redis):
+    from config.health_checks import ChannelLayerRedisHealthCheck
 
-    class FakeChannelLayer:
-        def __init__(self):
-            self.channel_prefix = None
-            self.sent_channel = None
-            self.sent_message = None
+    client, _ = fake_redis
+    client.ping_result = False
+    check = ChannelLayerRedisHealthCheck()
+    check.check_status()
 
-        async def new_channel(self, prefix: str = "specific") -> str:
-            self.channel_prefix = prefix
-            return "health.check.test!channel"
-
-        async def send(self, channel: str, message: dict[str, str]) -> None:
-            self.sent_channel = channel
-            self.sent_message = message
-
-        async def receive(self, channel: str) -> dict[str, str]:
-            assert channel == self.sent_channel
-            assert self.sent_message is not None
-            return self.sent_message
-
-    layer = FakeChannelLayer()
-
-    await _round_trip(layer)
-
-    assert layer.channel_prefix == "health.check"
-    assert layer.sent_channel == "health.check.test!channel"
-    assert layer.sent_message is not None
-    assert layer.sent_message["type"] == "health.check"
-    assert layer.sent_message["id"]
+    assert len(check.errors) == 1
 
 
-@pytest.mark.asyncio
-async def test_channel_layer_probe_fails_when_default_layer_is_missing(settings):
-    """With no configured default channel layer, the probe fails closed."""
-    from channels.layers import channel_layers
+def test_redis_probe_client_uses_the_configured_host_options_and_timeouts(fake_redis):
+    from config.health_checks import _PROBE_TIMEOUT_SECONDS, _ping_configured_redis
 
-    from config.health_checks import _probe_configured_channel_layer
+    _, calls = fake_redis
+    assert _ping_configured_redis() is True
 
-    settings.CHANNEL_LAYERS = {}
-    channel_layers.backends.clear()  # drop any cached default backend so the empty config takes effect
-    try:
-        with pytest.raises(ServiceUnavailable):
-            await _probe_configured_channel_layer()
-    finally:
-        channel_layers.backends.clear()  # don't leak the empty-config backend state to other tests
+    assert calls == [
+        (
+            "rediss://redis.invalid:6378/0",
+            {
+                "ssl_ca_data": "synthetic-ca",
+                "ssl_cert_reqs": "required",
+                "socket_timeout": _PROBE_TIMEOUT_SECONDS,
+                "socket_connect_timeout": _PROBE_TIMEOUT_SECONDS,
+            },
+        )
+    ]
 
 
-@pytest.mark.asyncio
-async def test_channel_layer_probe_fails_on_unexpected_round_trip_response():
-    from config.health_checks import _round_trip
+def test_redis_probe_client_accepts_a_url_host(fake_redis, settings):
+    from config.health_checks import _ping_configured_redis
 
-    class MismatchedChannelLayer:
-        async def new_channel(self, prefix: str = "specific") -> str:
-            return "health.check.test!channel"
+    _, calls = fake_redis
+    settings.CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] = ["redis://redis.invalid:6379/0"]
 
-        async def send(self, channel: str, message: dict[str, str]) -> None:
-            return None
+    assert _ping_configured_redis() is True
+    assert calls[0][0] == "redis://redis.invalid:6379/0"
+    assert set(calls[0][1]) == {"socket_timeout", "socket_connect_timeout"}
 
-        async def receive(self, channel: str) -> dict[str, str]:
-            return {"type": "health.check", "id": "different"}
 
-    layer = MismatchedChannelLayer()
-    with pytest.raises(ServiceUnavailable):
-        await _round_trip(layer)
+@pytest.mark.usefixtures("fake_redis")
+def test_redis_probe_client_accepts_a_plain_host_and_port(settings, monkeypatch):
+    """The non-TLS channel layer emits a ``(host, port)`` pair (``config._channels``)."""
+    import redis
+
+    from config.health_checks import _PROBE_TIMEOUT_SECONDS, _ping_configured_redis
+
+    built: list[dict] = []
+
+    def fake_init(self, **options):
+        built.append(options)
+
+    monkeypatch.setattr(redis.Redis, "__init__", fake_init)
+    monkeypatch.setattr(redis.Redis, "ping", lambda self: True)
+    settings.CHANNEL_LAYERS["default"]["CONFIG"]["hosts"] = [("redis", 6379)]
+
+    assert _ping_configured_redis() is True
+    assert built == [
+        {
+            "host": "redis",
+            "port": 6379,
+            "db": 0,
+            "socket_timeout": _PROBE_TIMEOUT_SECONDS,
+            "socket_connect_timeout": _PROBE_TIMEOUT_SECONDS,
+        }
+    ]
+
+
+def test_concurrent_redis_probes_all_pass_and_share_one_client(fake_redis):
+    """Concurrent health checks must not refuse each other (the old shared-layer defect)."""
+    from concurrent.futures import ThreadPoolExecutor
+
+    from config.health_checks import _ping_configured_redis
+
+    client, calls = fake_redis
+    with ThreadPoolExecutor(max_workers=16) as pool:
+        results = list(pool.map(lambda _: _ping_configured_redis(), range(160)))
+
+    assert results == [True] * 160
+    assert client.pings == 160
+    assert len(calls) == 1
 
 
 # ---------------------------------------------------------------------------

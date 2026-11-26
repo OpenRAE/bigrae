@@ -317,6 +317,16 @@ def authority_gateway(tmp_path_factory):
     docker("network", "create", prefix)
     try:
         gateway = docker("network", "inspect", prefix, "--format", "{{(index .IPAM.Config 0).Gateway}}")
+        # The deployment contract: credentials arrive as read-only files.
+        credentials = tmp_path_factory.mktemp("guacamole-runtime")
+        for name, value in (
+            ("postgresql-username", "synthetic"),
+            ("postgresql-password", "synthetic-test-only"),
+            ("json-secret-key", _SIGNING_KEY),
+        ):
+            (credentials / name).write_text(value, encoding="utf-8")
+            (credentials / name).chmod(0o444)
+        credentials.chmod(0o755)
         with authority_control(gateway, tmp_path_factory.mktemp("authority-control")) as control:
             control["network"] = prefix
             containers.append(docker("run", "--detach", "--network", prefix, "--network-alias", "guacd", _DAEMON_IMAGE))
@@ -366,7 +376,7 @@ def authority_gateway(tmp_path_factory):
                     "--env",
                     "JSON_ENABLED=true",
                     "--env",
-                    "JSON_SECRET_KEY=" + _SIGNING_KEY,
+                    "JSON_SECRET_KEY_FILE=/run/secrets/guacamole-runtime/json-secret-key",
                     "--env",
                     "GUACD_HOSTNAME=guacd",
                     "--env",
@@ -374,9 +384,11 @@ def authority_gateway(tmp_path_factory):
                     "--env",
                     "POSTGRESQL_DATABASE=guacamole",
                     "--env",
-                    "POSTGRESQL_USER=synthetic",
+                    "POSTGRESQL_USERNAME_FILE=/run/secrets/guacamole-runtime/postgresql-username",
                     "--env",
-                    "POSTGRESQL_PASSWORD=synthetic-test-only",
+                    "POSTGRESQL_PASSWORD_FILE=/run/secrets/guacamole-runtime/postgresql-password",
+                    "--volume",
+                    str(credentials) + ":/run/secrets/guacamole-runtime:ro",
                     "--env",
                     "POSTGRESQL_AUTO_CREATE_ACCOUNTS=true",
                     "--env",

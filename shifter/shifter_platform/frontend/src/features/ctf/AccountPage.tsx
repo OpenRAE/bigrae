@@ -1,6 +1,12 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router";
 
-import { useChangeCtfUsername, useCtfProfile, useUpdateCtfProfile } from "@/api/ctf";
+import {
+  useChangeCtfUsername,
+  useCtfProfile,
+  useCtfSubmissions,
+  useUpdateCtfProfile,
+} from "@/api/ctf";
 import { describeMutationError } from "@/api/errors";
 import type { CtfParticipantProfile } from "@/api/types";
 import { PageHeader } from "@/components/page-header";
@@ -11,8 +17,17 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 
 import { browserTimeZone } from "./admin/communications/time";
+import { ctfChallengeDetailPath } from "./routes";
 
 function MutationError({ error }: Readonly<{ error: unknown }>) {
   const message = describeMutationError(error, "That did not work. Try again.");
@@ -22,11 +37,85 @@ function MutationError({ error }: Readonly<{ error: unknown }>) {
 
 /** IANA names the browser knows, for input suggestions; empty when unsupported. */
 function supportedTimeZones(): string[] {
-  return typeof Intl.supportedValuesOf === "function" ? Intl.supportedValuesOf("timeZone") : [];
+  return typeof Intl.supportedValuesOf === "function"
+    ? Intl.supportedValuesOf("timeZone")
+    : [];
+}
+
+/** The participant's own correctly submitted flags, each with its challenge (#3002). */
+function CorrectFlags() {
+  const query = useCtfSubmissions();
+  // A correct row on a deleted challenge carries no value, so it is not listed.
+  const correct = (query.data?.submissions ?? []).filter(
+    (submission) => submission.is_correct && submission.submitted_flag !== null,
+  );
+  let body;
+  // Show values only after a completed read. A refetch after a session change
+  // in another tab, active or paused offline, must not show the earlier flags.
+  if (query.isPending || query.fetchStatus !== "idle") {
+    body = <Skeleton className="mt-3 h-16 w-full" />;
+  } else if (query.isError) {
+    body = (
+      <Alert variant="destructive" className="mt-3">
+        <AlertTitle>Could not load your correct flags</AlertTitle>
+        <AlertDescription>Please retry.</AlertDescription>
+      </Alert>
+    );
+  } else if (correct.length === 0) {
+    body = (
+      <p className="mt-2 text-sm text-muted-foreground">
+        No correct flags yet.
+      </p>
+    );
+  } else {
+    body = (
+      <Table className="mt-3">
+        <TableHeader>
+          <TableRow className="hover:bg-transparent">
+            <TableHead>Challenge</TableHead>
+            <TableHead>Flag</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {correct.map((submission) => (
+            <TableRow key={submission.id}>
+              <TableCell>
+                <Link
+                  to={ctfChallengeDetailPath(submission.challenge_id)}
+                  className="underline-offset-4 hover:underline"
+                >
+                  {submission.challenge_name}
+                </Link>
+              </TableCell>
+              <TableCell className="whitespace-normal">
+                <code className="break-all font-mono text-xs">
+                  {submission.submitted_flag}
+                </code>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    );
+  }
+  return (
+    <Card>
+      <CardContent>
+        <section aria-labelledby="correct-flags-heading">
+          <h2 id="correct-flags-heading" className="text-sm font-semibold">
+            Correct flags
+          </h2>
+          {body}
+        </section>
+      </CardContent>
+    </Card>
+  );
 }
 
 /** Display name + affiliation + time zone form (CTF-610, #582). */
-function ProfileForm({ profile }: Readonly<{ profile: CtfParticipantProfile }>) {
+function ProfileForm({
+  profile,
+}: Readonly<{ profile: CtfParticipantProfile }>) {
   const update = useUpdateCtfProfile();
   const [name, setName] = useState(profile.name);
   const [affiliation, setAffiliation] = useState(profile.affiliation);
@@ -48,20 +137,29 @@ function ProfileForm({ profile }: Readonly<{ profile: CtfParticipantProfile }>) 
       <CardContent>
         <h2 className="text-sm font-semibold">Profile</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          Your display name appears on the scoreboard; affiliation is your team, region, or organization.
+          Your display name appears on the scoreboard; affiliation is your team,
+          region, or organization.
         </p>
         <form
           className="mt-3 flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             if (name.trim() && dirty) {
-              update.mutate({ name: name.trim(), affiliation: affiliation.trim(), time_zone: timeZone.trim() });
+              update.mutate({
+                name: name.trim(),
+                affiliation: affiliation.trim(),
+                time_zone: timeZone.trim(),
+              });
             }
           }}
         >
           <div className="flex flex-col gap-1">
             <Label htmlFor="account-name">Display name</Label>
-            <Input id="account-name" value={name} onChange={(event) => setName(event.target.value)} />
+            <Input
+              id="account-name"
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+            />
           </div>
           <div className="flex flex-col gap-1">
             <Label htmlFor="account-affiliation">Affiliation</Label>
@@ -83,7 +181,11 @@ function ProfileForm({ profile }: Readonly<{ profile: CtfParticipantProfile }>) 
                 onChange={(event) => setTimeZone(event.target.value)}
               />
               {browserZone && browserZone !== timeZone ? (
-                <Button type="button" variant="outline" onClick={() => setTimeZone(browserZone)}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setTimeZone(browserZone)}
+                >
                   Use {browserZone}
                 </Button>
               ) : null}
@@ -93,12 +195,19 @@ function ProfileForm({ profile }: Readonly<{ profile: CtfParticipantProfile }>) 
                 <option key={zone} value={zone} />
               ))}
             </datalist>
-            <p id="account-time-zone-help" className="text-xs text-muted-foreground">
-              Reminder emails show the event start in this IANA time zone; blank uses the event time zone.
+            <p
+              id="account-time-zone-help"
+              className="text-xs text-muted-foreground"
+            >
+              Reminder emails show the event start in this IANA time zone; blank
+              uses the event time zone.
             </p>
           </div>
           <div>
-            <Button type="submit" disabled={!name.trim() || !dirty || update.isPending}>
+            <Button
+              type="submit"
+              disabled={!name.trim() || !dirty || update.isPending}
+            >
               Save profile
             </Button>
           </div>
@@ -110,7 +219,9 @@ function ProfileForm({ profile }: Readonly<{ profile: CtfParticipantProfile }>) 
 }
 
 /** Self-service login-handle change (#1593); isolated CTF accounts only. */
-function UsernameForm({ profile }: Readonly<{ profile: CtfParticipantProfile }>) {
+function UsernameForm({
+  profile,
+}: Readonly<{ profile: CtfParticipantProfile }>) {
   const change = useChangeCtfUsername();
   const [username, setUsername] = useState(profile.username ?? "");
   useEffect(() => setUsername(profile.username ?? ""), [profile.username]);
@@ -121,8 +232,9 @@ function UsernameForm({ profile }: Readonly<{ profile: CtfParticipantProfile }>)
       <CardContent>
         <h2 className="text-sm font-semibold">Login username</h2>
         <p className="mt-1 text-xs text-muted-foreground">
-          You sign in with this handle. It must start with <code className="font-mono">range-</code> and stay
-          globally unique; you will use the new handle at your next login.
+          You sign in with this handle. It must start with{" "}
+          <code className="font-mono">range-</code> and stay globally unique;
+          you will use the new handle at your next login.
         </p>
         <form
           className="mt-3 flex flex-wrap items-end gap-2"
@@ -135,12 +247,20 @@ function UsernameForm({ profile }: Readonly<{ profile: CtfParticipantProfile }>)
         >
           <div className="flex min-w-56 flex-1 flex-col gap-1">
             <Label htmlFor="account-username">Username</Label>
-            <Input id="account-username" value={username} onChange={(event) => setUsername(event.target.value)} />
+            <Input
+              id="account-username"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+            />
           </div>
           <Button
             type="submit"
             variant="outline"
-            disabled={!username.trim() || username.trim() === profile.username || change.isPending}
+            disabled={
+              !username.trim() ||
+              username.trim() === profile.username ||
+              change.isPending
+            }
           >
             Change username
           </Button>
@@ -184,10 +304,13 @@ export function AccountPage() {
       />
       <div className="space-y-4">
         {profile.role === "observer" ? (
-          <Badge variant="secondary">Observer — you can watch this event but not submit flags</Badge>
+          <Badge variant="secondary">
+            Observer — you can watch this event but not submit flags
+          </Badge>
         ) : null}
         <ProfileForm profile={profile} />
         <UsernameForm profile={profile} />
+        <CorrectFlags />
       </div>
     </>
   );

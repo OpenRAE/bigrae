@@ -28,6 +28,7 @@ from .inventory import (
 from .port import (
     AuthorizationProvider,
     AuthorizationProviderBindingError,
+    AuthorizationUnavailable,
     bind_authorization_provider_factory,
     configured_authorization_provider,
 )
@@ -63,6 +64,7 @@ __all__ = [
     "AuthorizationProviderError",
     "AuthorizationRelationshipChange",
     "AuthorizationRequest",
+    "AuthorizationUnavailable",
     "CredentialCeiling",
     "CutoverRelationshipChange",
     "DecisionKind",

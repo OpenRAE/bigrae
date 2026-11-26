@@ -3479,7 +3479,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** @description Return the active participant's own submission history. */
+        /** @description Return the admitted participant's own submissions, newest first. */
         get: operations["ctf_submissions_retrieve"];
         put?: never;
         post?: never;
@@ -5828,6 +5828,8 @@ export interface components {
             readonly max_participants: number | null;
             readonly team_mode: boolean;
             readonly team_size_limit: number | null;
+            /** @description Report whether an event-shared initial password is set, never its value. */
+            readonly participant_shared_password_set: boolean;
             readonly range_config: {
                 [key: string]: unknown;
             };
@@ -5998,6 +6000,8 @@ export interface components {
             logo_url?: string;
             visible_os_types?: string[];
             theme_color?: string;
+            /** @description Event-shared initial participant password for new accounts. An empty value turns it off. */
+            participant_password_override?: string;
         };
         /** @description Display metadata, with no content, object key, owner or digest. */
         FileAsset: {
@@ -6612,6 +6616,7 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
             readonly brackets: components["schemas"]["_NamedRef"][];
+            readonly progression: components["schemas"]["ScoreProgression"];
         };
         /**
          * @description * `kali` - kali
@@ -6792,6 +6797,10 @@ export interface components {
             readonly max_attempts: number;
             readonly attempt_limit_mode: string;
             readonly solved: boolean;
+            /** @description True when any member of the participant's team has solved it (team mode). */
+            readonly team_solved: boolean;
+            /** @description Display name of the team member who solved it first (team mode); null when unsolved by the team. */
+            team_solved_by?: string | null;
             readonly attempt_count: number;
             readonly attempts_remaining: number | null;
             readonly timeout_retry_after: number | null;
@@ -6800,6 +6809,8 @@ export interface components {
             readonly next_hint_cost: number;
             readonly points_after_next_hint: number;
             readonly total_hint_penalty: number;
+            /** @description Points that the unlocked hints take from a solve. */
+            readonly total_hint_penalty_points: number;
             readonly files: components["schemas"]["ParticipantChallengeFile"][];
             readonly prerequisites_met: boolean;
             readonly unmet_prerequisites: components["schemas"]["_NamedRef"][];
@@ -6831,6 +6842,10 @@ export interface components {
             readonly difficulty: string;
             readonly order: number;
             readonly solved: boolean;
+            /** @description True when any member of the participant's team has solved it (team mode). */
+            readonly team_solved: boolean;
+            /** @description Display name of the team member who solved it first (team mode); null when unsolved by the team. */
+            team_solved_by?: string | null;
             readonly tags: string[];
             readonly topics: string[];
         };
@@ -6917,7 +6932,10 @@ export interface components {
         ParticipantHint: {
             readonly id: string;
             readonly order: number;
+            /** @description Percentage of the challenge value. */
             readonly penalty: number;
+            /** @description Points this hint costs when the hints are unlocked in order. */
+            readonly cost_points: number;
             readonly unlocked: boolean;
             readonly text: string | null;
         };
@@ -7021,6 +7039,7 @@ export interface components {
             readonly id: string;
             readonly name: string;
             readonly email: string;
+            readonly username: string | null;
             readonly status: string;
             readonly role: string;
             readonly hidden: boolean;
@@ -7361,6 +7380,7 @@ export interface components {
                 [key: string]: unknown;
             }[] | null;
             readonly brackets: components["schemas"]["_NamedRef"][];
+            readonly progression: components["schemas"]["ScoreProgression"] | null;
         };
         /**
          * @description * `pending` - pending
@@ -8112,6 +8132,14 @@ export interface components {
             target_uuid: string;
             idempotency_key: string;
         };
+        /** @description Score-over-time series for the leading rows of the selected board (ADR-028-R3). */
+        ScoreProgression: {
+            /** Format: date-time */
+            readonly starts_at: string;
+            /** Format: date-time */
+            readonly ends_at: string;
+            readonly series: components["schemas"]["_ScoreSeries"][];
+        };
         /** @description Per-participant chronological score progression for a step chart. */
         ScoreTimelineResponse: {
             readonly participant_id: string;
@@ -8178,6 +8206,8 @@ export interface components {
             readonly attempt_number: number;
             /** Format: date-time */
             readonly submitted_at: string | null;
+            /** @description The participant's own stored value for a correct submission; null for an incorrect one */
+            readonly submitted_flag: string | null;
         };
         /** @description Envelope returned by the participant submission history. */
         SubmissionListResponse: {
@@ -8436,6 +8466,19 @@ export interface components {
         _ProfileEventRef: {
             readonly id: string;
             readonly name: string;
+        };
+        /** @description One step of a score progression: a time and the cumulative score. */
+        _ScorePoint: {
+            /** Format: date-time */
+            readonly at: string;
+            readonly score: number;
+        };
+        /** @description One leading competitor's score progression (#3004). */
+        _ScoreSeries: {
+            readonly id: string;
+            readonly name: string;
+            readonly rank: number;
+            readonly points: components["schemas"]["_ScorePoint"][];
         };
     };
     responses: never;
@@ -19642,6 +19685,14 @@ export interface operations {
             };
             /** @description Permission denied. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApiError"];
+                };
+            };
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
