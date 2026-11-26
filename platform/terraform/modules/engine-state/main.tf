@@ -39,6 +39,13 @@ resource "aws_s3_bucket_versioning" "engine_state" {
   }
 }
 
+resource "aws_s3_bucket_logging" "engine_state" {
+  bucket = aws_s3_bucket.engine_state.id
+
+  target_bucket = var.access_log_bucket
+  target_prefix = "${aws_s3_bucket.engine_state.id}/"
+}
+
 resource "aws_s3_bucket_server_side_encryption_configuration" "engine_state" {
   bucket = aws_s3_bucket.engine_state.id
 

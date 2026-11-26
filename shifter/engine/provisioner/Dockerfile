@@ -179,5 +179,8 @@ ENV HOME=/home/appuser \
 # `runAsNonRoot: true` can verify the user is non-root without resolving names.
 USER 10001:10001
 
+# The provisioner runs one Kubernetes Job and exits. It is not a service, so
+# it has no health check.
+HEALTHCHECK NONE
 # Entrypoint receives operation as argument
 ENTRYPOINT ["python", "main.py"]

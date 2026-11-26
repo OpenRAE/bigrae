@@ -250,6 +250,19 @@ class TestExactFlagSubmissions:
         assert incorrect.is_correct is False
         assert incorrect.points_awarded == 0
 
+    def test_flag_format_is_guidance_not_enforced(self, participant, challenge):
+        """A correct flag outside the challenge's flag_format still scores (#2658)."""
+        add_flag(
+            challenge.id,
+            {"flag": "plain-answer", "flag_type": "static"},
+            actor_id=challenge.event.created_by_id,
+        )
+
+        result = submit_flag(participant.id, challenge.id, "plain-answer")
+
+        assert challenge.flag_format == "FLAG{...}"
+        assert result.is_correct is True
+
 
 # ── Fixtures for attempt limit tests ─────────────────────────────────────
 

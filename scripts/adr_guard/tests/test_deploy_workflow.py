@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import importlib.util
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -633,6 +634,28 @@ class TestGcpReleaseSecurityClosure(unittest.TestCase):
         self.assertIn("find . -name uv.lock", run)
         self.assertNotIn("|| true", run)
 
+    def test_trivy_config_scan_blocks_on_every_root(self):
+        """#2566: every root runs, any finding fails the job, and SARIF survives failure."""
+        jobs = ADR_GUARD._dw_jobs(_load("_quality.yml"), "_quality.yml")
+        self.assertNotIn("security-trivy-advisory", jobs)
+        job = jobs["security-trivy-config"]
+        self.assertNotIn("continue-on-error", job)
+        steps = ADR_GUARD._dw_job_steps(job)
+        run = "\n".join(str(step.get("run", "")) for step in steps)
+        for root in ("shifter/engine", "shifter/shifter_platform", "shifter/packer", "platform/terraform"):
+            self.assertIn(root, run)
+        self.assertIn("--exit-code 1", run)
+        self.assertNotIn("--exit-code 0", run)
+        self.assertNotIn("|| true", run)
+        self.assertIn("scan_status=1", run)
+        self.assertIn('exit "${scan_status}"', run)
+        self.assertIn("--ignorefile .trivyignore-config.yaml", run)
+        self.assertIn('--checks-bundle-repository "${TRIVY_CHECKS_BUNDLE}"', run)
+        bundles = [str(step.get("env", {}).get("TRIVY_CHECKS_BUNDLE", "")) for step in steps]
+        self.assertTrue(any(re.fullmatch(r"\S+@sha256:[0-9a-f]{64}", b) for b in bundles), bundles)
+        upload = next(step for step in steps if "upload-artifact" in str(step.get("uses", "")))
+        self.assertEqual(upload.get("if"), "always()")
+
     def test_dependabot_owns_every_python_package_root(self):
         config = yaml.safe_load((REPO_ROOT / ".github/dependabot.yml").read_text(encoding="utf-8"))
         configured = {
@@ -640,11 +663,15 @@ class TestGcpReleaseSecurityClosure(unittest.TestCase):
             for update in config["updates"]
             if update["package-ecosystem"] in {"uv", "pip"}
         }
-        discovered = {
-            path.parent.relative_to(REPO_ROOT).as_posix()
-            for path in REPO_ROOT.rglob("pyproject.toml")
-            if ".venv" not in path.parts
-        }
+        # Tracked package roots only: ignored local tool installs are not repository roots.
+        tracked = subprocess.run(
+            ["git", "ls-files", "-z", "--", "pyproject.toml", "*/pyproject.toml"],
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+        ).stdout.split("\0")
+        discovered = {Path(path).parent.as_posix() for path in tracked if path}
         self.assertEqual(configured, discovered)
 
     def test_gcp_deploy_scans_each_exact_oci_digest(self):

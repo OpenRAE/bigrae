@@ -4,7 +4,7 @@ These functions are the single place the participant ``/api/v1/ctf/me/*`` reads
 are shaped. They compose the already-audited ``ctf.services.*`` facades and
 return plain dicts that the DRF serializers in :mod:`ctf.api.serializers` type.
 
-Permission-sensitive fields (flag hashes, flag formats, validator config,
+Permission-sensitive fields (flag hashes, validator config,
 solutions, unreleased/hidden content, other participants' scores) are filtered
 here, server-side, so the participant surface can never leak them regardless of
 what the client requests. Domain correctness (availability policy, prerequisite
@@ -216,10 +216,10 @@ def participant_challenge_detail(
 
     Composes the canonical challenge / hint / submission / scoring services and
     the shared play helpers (:mod:`ctf.services.participant.play`). The flag
-    hash, flag format, and validator configuration are never included; hint text
-    is present only for hints this participant has unlocked; the solution is
-    surfaced only once the event has ended/archived, matching the legacy
-    participant-detail policy. The caller MUST have already asserted the
+    hash and validator configuration are never included. The flag-format hint
+    is included as guidance only. Hint text is present only for hints this
+    participant has unlocked. The solution is surfaced only once the event has
+    ended/archived, matching the legacy participant-detail policy. The caller MUST have already asserted the
     challenge is readable for this participant.
     """
     from ctf.services.attachment import get_challenge_files
@@ -260,6 +260,7 @@ def participant_challenge_detail(
         "topics": [topic.name for topic in challenge.topics.all()],
         "points": challenge.points,
         "difficulty": challenge.difficulty,
+        "flag_format": challenge.flag_format,
         "max_attempts": challenge.max_attempts,
         "attempt_limit_mode": event.attempt_limit_mode,
         "solved": is_solved,

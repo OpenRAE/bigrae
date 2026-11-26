@@ -39,11 +39,19 @@ resource "aws_security_group" "rotation" {
   vpc_id      = var.vpc_id
 
   egress {
-    description = "All outbound (Secrets Manager, ElastiCache, Redis TLS)"
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "HTTPS to the Secrets Manager, ElastiCache, and Auto Scaling interface endpoints"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [var.aws_endpoints_security_group_id]
+  }
+
+  egress {
+    description     = "Redis TLS for the AUTH check"
+    from_port       = 6379
+    to_port         = 6379
+    protocol        = "tcp"
+    security_groups = [aws_security_group.this.id]
   }
 
   tags = merge(var.tags, {

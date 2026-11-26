@@ -54,11 +54,11 @@ resource "aws_security_group" "operator_access" {
   }
 
   egress {
-    description = "Session Manager and AWS APIs through NAT"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    description     = "Session Manager through the VPC interface endpoints"
+    from_port       = 443
+    to_port         = 443
+    protocol        = "tcp"
+    security_groups = [aws_security_group.interface_endpoints.id]
   }
 
   tags = merge(var.tags, {

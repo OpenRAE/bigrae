@@ -269,6 +269,13 @@ code-owned Content Security Policy (ADR-036). Browsers load images only from the
 portal origin, so organizer images from other hosts are copied into platform
 storage first; see the [CSP enforcement design](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/browser-csp-enforcement-design-2090.md).
 
+On AWS, the EKS management helpers have no internet egress. The OpenFGA
+rotation function and the operator access node reach AWS APIs only through
+private-DNS VPC interface endpoints for Secrets Manager and Session Manager.
+The portal Redis rotation function uses the portal VPC endpoints in the same
+way. The self-hosted GitHub runner keeps internet egress, because it must
+reach GitHub.
+
 ADR-056 defines provider-enforced guest containment. ADR-057 separates GKE
 Dataplane V2 NetworkPolicy reachability, Google Workload Identity, Job admission,
 and application authorization. The Helm chart renders the NetworkPolicies.

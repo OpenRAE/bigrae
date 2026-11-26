@@ -37,7 +37,7 @@ resource "random_password" "guacamole_db_password" {
 resource "google_sql_database_instance" "platform" {
   # checkov:skip=CKV_GCP_6:Reviewed false positive: ssl_mode=ENCRYPTED_ONLY rejects plaintext connections; Checkov 3.2 does not recognize the provider's replacement for require_ssl. See ADR-004-R11 exception (#2084).
   # checkov:skip=CKV_GCP_79:The supported PostgreSQL major is a release/migration decision; silently changing the module default to Checkov's moving "latest" target can trigger a destructive major upgrade. See ADR-004-R11 exception (#2084).
-  # checkov:skip=CKV_GCP_109:Error-statement logging can capture participant data and credentials embedded in failed queries. Error severity and pgaudit logging remain enabled. See ADR-004-R11 exception (#2084).
+  # checkov:skip=CKV_GCP_109:log_min_error_statement is panic so no log entry carries SQL text, which can hold participant data and credentials. Error severity and pgaudit logging remain enabled. See ADR-004-R11 exception (#2084, #2566).
   # checkov:skip=CKV_GCP_111:Statement-level logging can capture participant data and credentials embedded in queries. Connection, error, duration, lock-wait, and pgaudit logging remain enabled. See ADR-004-R11 exception (#2084).
   name                = "${var.name_prefix}-pg"
   project             = var.project_id
@@ -96,6 +96,21 @@ resource "google_sql_database_instance" "platform" {
     database_flags {
       name  = "log_min_messages"
       value = "error"
+    }
+
+    # PostgreSQL appends the statement text to every message at or above
+    # log_min_error_statement, and LOG ranks above ERROR. panic keeps SQL text
+    # out of error and temporary-file messages (#2084, #2566).
+    database_flags {
+      name  = "log_min_error_statement"
+      value = "panic"
+    }
+
+    # Log every temporary file with its size (GCP-0014). The entry carries no
+    # SQL text because of log_min_error_statement above.
+    database_flags {
+      name  = "log_temp_files"
+      value = "0"
     }
 
     database_flags {

@@ -314,3 +314,13 @@ variable "cognito_user_pool_arn" {
     error_message = "cognito_user_pool_arn must be an exact Cognito user pool ARN."
   }
 }
+
+variable "access_log_retention_days" {
+  description = "Days to keep S3 server access logs for this root's buckets."
+  type        = number
+
+  validation {
+    condition     = var.access_log_retention_days >= 1
+    error_message = "access_log_retention_days must be at least 1."
+  }
+}

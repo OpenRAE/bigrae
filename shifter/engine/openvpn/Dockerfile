@@ -31,6 +31,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1
 
 EXPOSE 1194/udp 8080/tcp
+# The server opens its health listener only when it is ready (see
+# shifter_openvpn/__main__.py). A completed TCP connect is the health signal.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+    CMD ["python3", "-c", "import os, socket; socket.create_connection((socket.gethostbyname(socket.gethostname()), int(os.environ.get('HEALTH_PORT', '8080'))), 5).close()"]
 USER shifter-vpn
 ENTRYPOINT ["setpriv", "--reuid=10001", "--regid=10001", "--clear-groups", \
             "--inh-caps=-all,+net_admin", "--ambient-caps=-all,+net_admin", \

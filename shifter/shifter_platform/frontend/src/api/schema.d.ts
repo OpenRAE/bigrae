@@ -6787,7 +6787,8 @@ export interface components {
         /**
          * @description Participant-safe challenge detail for the solve view.
          *
-         *     Never declares flag, flag-format, or validator-config fields. ``solution`` is
+         *     Never declares flag or validator-config fields. ``flag_format`` is the
+         *     organizer's format hint; validation does not enforce it. ``solution`` is
          *     non-null only after the event has ended/archived.
          */
         ParticipantChallengeDetail: {
@@ -6799,6 +6800,8 @@ export interface components {
             readonly topics: string[];
             readonly points: number;
             readonly difficulty: string;
+            /** @description Flag-format guidance; blank when the challenge has none. */
+            readonly flag_format: string;
             readonly max_attempts: number;
             readonly attempt_limit_mode: string;
             readonly solved: boolean;

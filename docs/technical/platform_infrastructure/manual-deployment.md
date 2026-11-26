@@ -10,7 +10,6 @@ Located in `platform/terraform/global/`. These stacks manage cross-cutting infra
 |-------|---------|
 | `iam/` | GitHub OIDC provider, CI/CD IAM roles |
 | `github-runner/` | Self-hosted GitHub Actions runner infrastructure |
-| `dev-box/` | Windows development workstation |
 
 ## IAM Stack
 
@@ -67,50 +66,12 @@ This provisions runner networking and instances. It creates one single-use token
 
 The authoritative runbook for standup, network isolation, health monitoring, removal, and gotchas is [`aws-runner-provisioning-runbook.md`](../../dev/aws-runner-provisioning-runbook.md).
 
-## Dev Box Stack
-
-Windows Server 2022 development workstation for remote development work.
-
-**What it creates:**
-
-- EC2 spot instance (Windows Server 2022)
-- IAM role with S3, ECR, and Secrets Manager access
-- Security group for RDP access
-- Scheduled shutdown at 11 PM Pacific (cost control)
-- Admin password in Secrets Manager
-
-**Deploy:**
-
-```bash
-cd platform/terraform/global/dev-box
-AWS_PROFILE=<dev account profile> terraform init
-AWS_PROFILE=<dev account profile> terraform apply
-```
-
-**Management:**
-
-Use the helper script from repo root:
-
-```bash
-./scripts/dev-box.sh status    # Check instance status
-./scripts/dev-box.sh start     # Start the instance
-./scripts/dev-box.sh stop      # Stop (saves costs)
-./scripts/dev-box.sh connect   # Open Fleet Manager RDP
-./scripts/dev-box.sh password  # Get admin password
-./scripts/dev-box.sh tunnel    # Start SSM port forwarding for local RDP client
-```
-
-**Pre-installed tools:** Git, Python 3.12, Node.js LTS, AWS CLI, Terraform, VS Code, Chrome, Claude Code.
-
-See `platform/terraform/global/dev-box/README.md` for full documentation.
-
 ## Deployment Order
 
 For a fresh environment:
 
 1. **Bootstrap (IAM + state backend)** - Must be first. `deploy.py bootstrap` creates the OIDC provider, CI/CD roles, and shared S3 state backend.
 2. **GitHub Runner** - Optional. Only needed for self-hosted runners (`deploy.py runners`).
-3. **Dev Box** - Optional. Only needed for Windows development.
 
 After bootstrap, CI/CD can manage all other infrastructure automatically.
 

@@ -30,3 +30,26 @@ run "native_login_flag_and_dedicated_policy_database" {
     error_message = "The policy datastore must be separate from application tables on the shared instance."
   }
 }
+
+# #2084 / #2566: temporary-file metadata is logged, but no log entry carries SQL
+# text. PostgreSQL appends the statement to every message at or above
+# log_min_error_statement, and LOG ranks above ERROR, so only panic keeps
+# temporary-file and error messages free of statement text.
+run "temp_file_metadata_logged_without_sql_text" {
+  command = plan
+  assert {
+    condition = anytrue([for flag in google_sql_database_instance.platform.settings[0].database_flags :
+    flag.name == "log_temp_files" && flag.value == "0"])
+    error_message = "Cloud SQL must log every temporary file (GCP-0014)."
+  }
+  assert {
+    condition = anytrue([for flag in google_sql_database_instance.platform.settings[0].database_flags :
+    flag.name == "log_min_error_statement" && flag.value == "panic"])
+    error_message = "Log entries must not carry SQL text (#2084)."
+  }
+  assert {
+    condition = !anytrue([for flag in google_sql_database_instance.platform.settings[0].database_flags :
+    contains(["log_statement", "log_min_duration_statement"], flag.name)])
+    error_message = "Statement logging stays off (#2084)."
+  }
+}

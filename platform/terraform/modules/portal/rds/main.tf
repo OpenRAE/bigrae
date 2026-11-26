@@ -103,7 +103,7 @@ resource "aws_secretsmanager_secret_version" "db_credentials" {
 
 resource "aws_db_instance" "this" {
   # checkov:skip=CKV_AWS_157:Multi-AZ controlled by var.multi_az; environments choose
-  # checkov:skip=CKV_AWS_293:Deletion protection controlled by var.deletion_protection (dev false / prod true)
+  # checkov:skip=CKV_AWS_293:Deletion protection is var.deletion_protection; dev and prod set it to true (#2566), and aws_env_destroy.py lifts it for an intended teardown. See ADR-004-R11 exception rds-deletion-protection-input.
   identifier = "${var.name_prefix}-db"
 
   # Engine

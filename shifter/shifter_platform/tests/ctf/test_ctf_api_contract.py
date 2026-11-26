@@ -8,16 +8,17 @@ on:
 
 1. The canonical CTF workspace paths are published.
 2. The participant browse/detail projections never carry flag material
-   (``flag_hash``, ``flags``, ``flag_format``) — a participant must not be able to obtain or
+   (``flag_hash``, ``flags``) — a participant must not be able to obtain or
    verify a flag from the typed read surface.
 
 ``solution`` is intentionally declared on the participant *detail* projection
 but is populated only after the event ends/archives (``ctf.api.projections``,
 ``show_solution`` gate at line ~190) — a post-event writeup, not a live leak — so
-it is asserted absent from the participant *browse* list only. The organizer
-challenge detail legitimately exposes ``flag_format``/``solution``; a positive
-control asserts that split is a real projection boundary rather than the fields
-simply vanishing everywhere.
+it is asserted absent from the participant *browse* list only. ``flag_format``
+is format guidance, not flag material: the participant detail declares it
+(#2658) and the browse list does not. The organizer challenge detail exposes
+``flag_format``/``solution``; a positive control asserts that split is a real
+projection boundary rather than the fields simply vanishing everywhere.
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ import pytest
 from shared.api.contract import artifact_path
 
 # Flag material that must never appear on any participant-facing challenge type.
-_FLAG_MATERIAL = ("flag_hash", "flags", "flag_format")
+_FLAG_MATERIAL = ("flag_hash", "flags")
 
 # Participant-facing challenge components (browse item, solve detail, attachment).
 _PARTICIPANT_CHALLENGE_COMPONENTS = (
@@ -72,8 +73,8 @@ def test_participant_challenge_types_hide_flag_material(openapi_document: dict) 
         assert not leaked, f"{name} leaks flag material: {leaked}"
 
 
-def test_participant_browse_list_hides_solution(openapi_document: dict) -> None:
-    """The participant browse list never carries a solution field.
+def test_participant_browse_list_hides_solution_and_flag_format(openapi_document: dict) -> None:
+    """The participant browse list carries neither a solution nor a flag-format field.
 
     The participant *detail* projection intentionally declares ``solution`` but
     gates it to ended/archived events (see module docstring); the browse list has
@@ -81,6 +82,13 @@ def test_participant_browse_list_hides_solution(openapi_document: dict) -> None:
     """
     props = _component_properties(openapi_document, "ParticipantChallengeListItem")
     assert "solution" not in props
+    assert "flag_format" not in props
+
+
+def test_participant_detail_declares_flag_format(openapi_document: dict) -> None:
+    """The participant solve view carries the flag-format guidance (#2658)."""
+    props = _component_properties(openapi_document, "ParticipantChallengeDetail")
+    assert "flag_format" in props
 
 
 def test_organizer_detail_retains_flag_format_and_solution(openapi_document: dict) -> None:
