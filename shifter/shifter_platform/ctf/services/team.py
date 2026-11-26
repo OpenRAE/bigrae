@@ -293,9 +293,9 @@ def regenerate_invite_code(
     """
     participant = _load_participant(participant_id)
     team = _require_captain(participant)
-    if single_use is not _UNSET:
+    if not isinstance(single_use, _Unset):
         team.invite_code_single_use = bool(single_use)
-    if expires_in_seconds is not _UNSET:
+    if not isinstance(expires_in_seconds, _Unset):
         team.invite_code_lifetime_seconds = expires_in_seconds
     if team.invite_code_lifetime_seconds:
         team.invite_code_expires_at = timezone.now() + timedelta(seconds=team.invite_code_lifetime_seconds)

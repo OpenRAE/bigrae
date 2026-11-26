@@ -156,7 +156,7 @@ class TeamRegenerateCodeView(_TeamActionView):
         An empty body keeps the current settings. ``single_use`` and
         ``expires_in_seconds`` are optional; an omitted field keeps its value.
         """
-        from ctf.services.team import regenerate_invite_code
+        from ctf.services.team import _UNSET, regenerate_invite_code
 
         serializer = TeamRegenerateCodeRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -165,12 +165,13 @@ class TeamRegenerateCodeView(_TeamActionView):
         # False, which would silently downgrade a single-use code. A key absent
         # from request.data (JSON or form) means "keep the current value".
         supplied = request.data
-        kwargs: dict[str, object] = {}
-        if "single_use" in supplied:
-            kwargs["single_use"] = serializer.validated_data["single_use"]
-        if "expires_in_seconds" in supplied:
-            kwargs["expires_in_seconds"] = serializer.validated_data["expires_in_seconds"]
-        return self._act(request, lambda p: regenerate_invite_code(p.pk, **kwargs))
+        validated = serializer.validated_data
+        single_use = validated["single_use"] if "single_use" in supplied else _UNSET
+        expires_in_seconds = validated["expires_in_seconds"] if "expires_in_seconds" in supplied else _UNSET
+        return self._act(
+            request,
+            lambda p: regenerate_invite_code(p.pk, single_use=single_use, expires_in_seconds=expires_in_seconds),
+        )
 
 
 class TeamTransferCaptaincyView(_TeamActionView):
