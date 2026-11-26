@@ -182,6 +182,9 @@ resource "google_compute_router_nat" "range_nat_extra" {
   }
 }
 
+# GCP-0074 reports a large port range, but this rule denies all ingress.
+# See ADR-004-R11 exception range-deny-ingress-port-range.
+#trivy:ignore:GCP-0074:exp:2027-11-25
 resource "google_compute_firewall" "range_deny_ingress_all" {
   name        = "${var.name_prefix}-range-deny-ingress-all"
   project     = var.project_id

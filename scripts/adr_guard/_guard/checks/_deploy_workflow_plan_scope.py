@@ -45,6 +45,7 @@ _QUALITY_SKIP_TESTS_IMMUNE_JOB_NAMES = frozenset(
         "terraform-lint",
         "security-iac",
         "security-k8s",
+        "security-trivy-config",
         "secrets-gitleaks",
         "k8s-schema",
         "mcp-lint",

@@ -43,7 +43,7 @@ db_allocated_storage     = 20
 db_max_allocated_storage = 100
 db_multi_az              = false
 db_backup_retention_days = 7
-db_deletion_protection   = false
+db_deletion_protection   = true # aws_env_destroy.py lifts it for teardown (#2566)
 db_skip_final_snapshot   = true
 db_apply_immediately     = true
 

@@ -79,3 +79,24 @@ variable "permissions_boundary_arn" {
   description = "Permissions boundary ARN required on CI-created shifter-* roles"
   type        = string
 }
+
+variable "access_log_bucket" {
+  description = "Name of this root's S3 server access log destination (modules/s3-access-logs)."
+  type        = string
+
+  validation {
+    condition     = length(var.access_log_bucket) > 0
+    error_message = "access_log_bucket must name the root's S3 server access log destination."
+  }
+}
+
+variable "noncurrent_version_expiration_days" {
+  description = "Days to keep a replaced or deleted log object version, so an operator can recover it."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.noncurrent_version_expiration_days >= 1
+    error_message = "noncurrent_version_expiration_days must be at least 1."
+  }
+}

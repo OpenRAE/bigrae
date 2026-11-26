@@ -1893,6 +1893,7 @@ class DeployWorkflowPlanScopeTests(unittest.TestCase):
             "container-images-lint-security",
             "adr-guard-lint-security",
             "stack-smoke-lint-security",
+            "security-trivy-config",
         )
         for job in jobs:
             with self.subTest(job=job), tempfile.TemporaryDirectory() as tmp:

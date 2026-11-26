@@ -38,3 +38,13 @@ variable "noncurrent_version_expiration_days" {
   type        = number
   default     = 90
 }
+
+variable "access_log_bucket" {
+  description = "Name of this root's S3 server access log destination (modules/s3-access-logs)."
+  type        = string
+
+  validation {
+    condition     = length(var.access_log_bucket) > 0
+    error_message = "access_log_bucket must name the root's S3 server access log destination."
+  }
+}

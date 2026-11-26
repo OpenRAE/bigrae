@@ -33,6 +33,9 @@ locals {
     # tier for the public SES API endpoint, so without this VPC endpoint the SES
     # SendRawEmail call blackholes and every outbound email hangs (issue #1460).
     "email",
+    # ElastiCache API for the Redis AUTH rotation function (modules/portal/redis),
+    # whose security group has no internet egress (#2566).
+    "elasticache",
     "elasticloadbalancing",
     "kms",
     "logs",

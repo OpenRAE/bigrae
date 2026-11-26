@@ -4,6 +4,8 @@
 # - S3 bucket for centralized log storage
 # - Dedicated S3 bucket for ALB access logs
 # - Server-side encryption
+# - Versioning, with noncurrent versions kept for a recovery window
+# - S3 server access logging to the root's access-log destination
 # - Lifecycle policy (transition to IA, then expire)
 # - Block public access
 # - Bucket policies for Firehose and ALB log delivery
@@ -33,14 +35,23 @@ resource "aws_s3_bucket" "logs" {
   })
 }
 
-# Versioning disabled for logs (ephemeral data)
+# Versioning keeps a deleted or overwritten log object recoverable for
+# var.noncurrent_version_expiration_days (AWS-0090).
 resource "aws_s3_bucket_versioning" "logs" {
   count  = var.enable_log_aggregation ? 1 : 0
   bucket = aws_s3_bucket.logs[0].id
 
   versioning_configuration {
-    status = "Disabled"
+    status = "Enabled"
   }
+}
+
+resource "aws_s3_bucket_logging" "logs" {
+  count  = var.enable_log_aggregation ? 1 : 0
+  bucket = aws_s3_bucket.logs[0].id
+
+  target_bucket = var.access_log_bucket
+  target_prefix = "${aws_s3_bucket.logs[0].id}/"
 }
 
 # Server-side encryption with the log-aggregation customer-managed CMK
@@ -75,6 +86,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
   count  = var.enable_log_aggregation ? 1 : 0
   bucket = aws_s3_bucket.logs[0].id
 
+  depends_on = [aws_s3_bucket_versioning.logs]
+
   rule {
     id     = "log-lifecycle"
     status = "Enabled"
@@ -90,8 +103,23 @@ resource "aws_s3_bucket_lifecycle_configuration" "logs" {
       days = var.log_retention_days
     }
 
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_expiration_days
+    }
+
     abort_incomplete_multipart_upload {
       days_after_initiation = 1
+    }
+  }
+
+  rule {
+    id     = "expired-delete-markers"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      expired_object_delete_marker = true
     }
   }
 }
@@ -112,17 +140,28 @@ resource "aws_s3_bucket" "alb_access_logs" {
   })
 }
 
-# Versioning disabled for append-only ALB log objects.
+# Versioning keeps a deleted or overwritten ALB log object recoverable for
+# var.noncurrent_version_expiration_days (AWS-0090).
 resource "aws_s3_bucket_versioning" "alb_access_logs" {
   count  = var.enable_alb_access_logs ? 1 : 0
   bucket = aws_s3_bucket.alb_access_logs[0].id
 
   versioning_configuration {
-    status = "Disabled"
+    status = "Enabled"
   }
 }
 
+resource "aws_s3_bucket_logging" "alb_access_logs" {
+  count  = var.enable_alb_access_logs ? 1 : 0
+  bucket = aws_s3_bucket.alb_access_logs[0].id
+
+  target_bucket = var.access_log_bucket
+  target_prefix = "${aws_s3_bucket.alb_access_logs[0].id}/"
+}
+
 # ALB access logs only support Amazon S3-managed keys (SSE-S3), not SSE-KMS.
+# See docs/adr/exceptions.yaml.
+#trivy:ignore:AWS-0132:exp:2027-11-25
 resource "aws_s3_bucket_server_side_encryption_configuration" "alb_access_logs" {
   count  = var.enable_alb_access_logs ? 1 : 0
   bucket = aws_s3_bucket.alb_access_logs[0].id
@@ -148,6 +187,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_access_logs" {
   count  = var.enable_alb_access_logs ? 1 : 0
   bucket = aws_s3_bucket.alb_access_logs[0].id
 
+  depends_on = [aws_s3_bucket_versioning.alb_access_logs]
+
   rule {
     id     = "alb-log-lifecycle"
     status = "Enabled"
@@ -163,8 +204,23 @@ resource "aws_s3_bucket_lifecycle_configuration" "alb_access_logs" {
       days = var.log_retention_days
     }
 
+    noncurrent_version_expiration {
+      noncurrent_days = var.noncurrent_version_expiration_days
+    }
+
     abort_incomplete_multipart_upload {
       days_after_initiation = 1
+    }
+  }
+
+  rule {
+    id     = "expired-delete-markers"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      expired_object_delete_marker = true
     }
   }
 }

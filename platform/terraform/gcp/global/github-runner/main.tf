@@ -71,6 +71,9 @@ module "runner_network" {
   runner_service_account_email = google_service_account.runner.email
 }
 
+# The boot disk uses Google-managed encryption (GCP-0033, CKV_GCP_38). See the
+# ADR-004-R11 exception for platform/terraform/gcp/global/github-runner/.
+#trivy:ignore:GCP-0033:exp:2027-07-13
 resource "google_compute_instance" "runner" {
   # checkov:skip=CKV_GCP_38:Boot disk uses Google-managed at-rest encryption (AES-256). CSEK/CMEK would add customer-key + IAM management to this dedicated root for marginal gain on a re-creatable dev-tenant runner. See ADR-004-R11 exception (gcp-runner-boot-disk-csek); CMEK revisit tracked with the runner hardening follow-up.
   count = var.runner_count
