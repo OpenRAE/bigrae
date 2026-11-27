@@ -276,6 +276,31 @@ function RatingCard({ challenge }: Readonly<{ challenge: CtfChallengeDetail }>) 
   );
 }
 
+function StatisticsCard({ challenge }: Readonly<{ challenge: CtfChallengeDetail }>) {
+  const stats = challenge.statistics;
+  // The server returns null when the event does not publish statistics to
+  // participants, so the card renders only when sharing is on (CTF-407).
+  if (!stats) return null;
+  const solvePercent = Math.round(stats.solve_rate * 100);
+  return (
+    <Card className="mt-6">
+      <CardContent>
+        <h2 className="text-sm font-semibold">Challenge statistics</h2>
+        <dl className="mt-2 grid grid-cols-2 gap-x-6 gap-y-1 text-sm">
+          <dt className="text-muted-foreground">Solves</dt>
+          <dd>{stats.solve_count}</dd>
+          <dt className="text-muted-foreground">Solve rate</dt>
+          <dd>{solvePercent}%</dd>
+          <dt className="text-muted-foreground">Attempts</dt>
+          <dd>{stats.total_attempts}</dd>
+          <dt className="text-muted-foreground">First blood</dt>
+          <dd>{stats.first_blood ? stats.first_blood.participant_name : "—"}</dd>
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
+
 function FlagSubmission({ challenge }: Readonly<{ challenge: CtfChallengeDetail }>) {
   const submit = useSubmitFlag(challenge.id);
   const [flag, setFlag] = useState("");
@@ -463,6 +488,7 @@ function ChallengeBody({ challenge }: Readonly<{ challenge: CtfChallengeDetail }
 
       <ConnectionInfoCard challenge={challenge} />
       <AttachmentsCard challenge={challenge} />
+      <StatisticsCard challenge={challenge} />
       <HintsSection challenge={challenge} />
       <FlagSubmission challenge={challenge} />
       <RatingCard challenge={challenge} />

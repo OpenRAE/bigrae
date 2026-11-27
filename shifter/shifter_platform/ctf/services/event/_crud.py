@@ -58,6 +58,7 @@ _EVENT_MUTABLE_FIELDS = frozenset(
         "attempt_limit_mode",
         "attempt_limit_cooldown_seconds",
         "rating_visibility",
+        "participant_challenge_stats_visible",
         "scoreboard_visibility",
         "scoreboard_freeze_at",
         "scoring_mode",

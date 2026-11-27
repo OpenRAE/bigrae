@@ -4963,6 +4963,11 @@ export interface components {
             readonly file_size_bytes: number;
             readonly file_size_display: string;
         };
+        /** @description The first solver shown in challenge statistics (display name only). */
+        ChallengeFirstBlood: {
+            readonly participant_name: string;
+            readonly time: string;
+        };
         /** @description Organizer-facing hint projection (full text is exposed). */
         ChallengeHint: {
             readonly id: string;
@@ -5005,6 +5010,20 @@ export interface components {
             readonly count: number;
             readonly own_rating: number | null;
             readonly public: boolean;
+        };
+        /**
+         * @description Per-challenge statistics shared by the participant and organizer detail (CTF-407).
+         *
+         *     Organizers always receive this. Participants receive it only when the event
+         *     enables it; otherwise the challenge detail carries ``statistics: null``.
+         */
+        ChallengeStatistics: {
+            readonly challenge_id: string;
+            readonly total_attempts: number;
+            readonly solve_count: number;
+            /** Format: double */
+            readonly solve_rate: number;
+            readonly first_blood: components["schemas"]["ChallengeFirstBlood"] | null;
         };
         /** @description List projection of one challenge for an event. */
         ChallengeSummary: {
@@ -5838,6 +5857,7 @@ export interface components {
             readonly attempt_limit_mode: string;
             readonly attempt_limit_cooldown_seconds: number;
             readonly rating_visibility: string;
+            readonly participant_challenge_stats_visible: boolean;
             readonly scoring_mode: string;
             readonly scoreboard_visible: boolean;
             readonly scoreboard_visibility: string;
@@ -5980,6 +6000,7 @@ export interface components {
             attempt_limit_mode?: string;
             attempt_limit_cooldown_seconds?: number;
             rating_visibility?: string;
+            participant_challenge_stats_visible?: boolean;
             scoring_mode?: string;
             scoreboard_visibility?: string;
             /** Format: date-time */
@@ -6570,6 +6591,7 @@ export interface components {
             readonly topics: string[];
             readonly solution: string;
             readonly rating: components["schemas"]["OrganizerChallengeRating"] | null;
+            readonly statistics: components["schemas"]["ChallengeStatistics"] | null;
         };
         /** @description Aggregate participant rating shown to organizers (CTF-120). */
         OrganizerChallengeRating: {
@@ -6822,6 +6844,7 @@ export interface components {
             readonly show_solution: boolean;
             readonly solution: string | null;
             readonly rating: components["schemas"]["ChallengeRating"] | null;
+            readonly statistics: components["schemas"]["ChallengeStatistics"] | null;
         };
         /** @description A participant-visible challenge attachment (metadata only). */
         ParticipantChallengeFile: {

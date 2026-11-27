@@ -65,6 +65,21 @@ class TestChallengeApi:
         assert resp.status_code == 200
         assert resp.json()["rating"] is None
 
+    def test_detail_includes_statistics_regardless_of_participant_setting(
+        self, authenticated_organizer_client: Client, ctf_challenge: CTFChallenge
+    ):
+        """CTF-407/CTF-013: organizers always see statistics, even with the participant switch off."""
+        event = ctf_challenge.event
+        assert event.participant_challenge_stats_visible is False
+        resp = _json(
+            authenticated_organizer_client, "get", "api_challenge_detail", kwargs={"challenge_id": ctf_challenge.id}
+        )
+        assert resp.status_code == 200
+        stats = resp.json()["statistics"]
+        assert stats["challenge_id"] == str(ctf_challenge.id)
+        assert stats["solve_count"] == 0
+        assert stats["first_blood"] is None
+
     def test_detail_get(self, authenticated_organizer_client: Client, ctf_challenge: CTFChallenge):
         resp = _json(
             authenticated_organizer_client, "get", "api_challenge_detail", kwargs={"challenge_id": ctf_challenge.id}

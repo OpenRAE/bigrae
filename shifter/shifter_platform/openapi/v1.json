@@ -24135,6 +24135,24 @@
           "id"
         ]
       },
+      "ChallengeFirstBlood": {
+        "type": "object",
+        "description": "The first solver shown in challenge statistics (display name only).",
+        "properties": {
+          "participant_name": {
+            "type": "string",
+            "readOnly": true
+          },
+          "time": {
+            "type": "string",
+            "readOnly": true
+          }
+        },
+        "required": [
+          "participant_name",
+          "time"
+        ]
+      },
       "ChallengeHint": {
         "type": "object",
         "description": "Organizer-facing hint projection (full text is exposed).",
@@ -24296,6 +24314,45 @@
           "count",
           "own_rating",
           "public"
+        ]
+      },
+      "ChallengeStatistics": {
+        "type": "object",
+        "description": "Per-challenge statistics shared by the participant and organizer detail (CTF-407).\n\nOrganizers always receive this. Participants receive it only when the event\nenables it; otherwise the challenge detail carries ``statistics: null``.",
+        "properties": {
+          "challenge_id": {
+            "type": "string",
+            "readOnly": true
+          },
+          "total_attempts": {
+            "type": "integer",
+            "readOnly": true
+          },
+          "solve_count": {
+            "type": "integer",
+            "readOnly": true
+          },
+          "solve_rate": {
+            "type": "number",
+            "format": "double",
+            "readOnly": true
+          },
+          "first_blood": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChallengeFirstBlood"
+              }
+            ],
+            "readOnly": true,
+            "nullable": true
+          }
+        },
+        "required": [
+          "challenge_id",
+          "first_blood",
+          "solve_count",
+          "solve_rate",
+          "total_attempts"
         ]
       },
       "ChallengeSummary": {
@@ -26904,6 +26961,10 @@
             "type": "string",
             "readOnly": true
           },
+          "participant_challenge_stats_visible": {
+            "type": "boolean",
+            "readOnly": true
+          },
           "scoring_mode": {
             "type": "string",
             "readOnly": true
@@ -27013,6 +27074,7 @@
           "name",
           "organization",
           "owner",
+          "participant_challenge_stats_visible",
           "participant_shared_password_set",
           "public_registration_enabled",
           "public_registration_url",
@@ -27426,6 +27488,9 @@
           },
           "rating_visibility": {
             "type": "string"
+          },
+          "participant_challenge_stats_visible": {
+            "type": "boolean"
           },
           "scoring_mode": {
             "type": "string"
@@ -28934,6 +28999,15 @@
             ],
             "readOnly": true,
             "nullable": true
+          },
+          "statistics": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChallengeStatistics"
+              }
+            ],
+            "readOnly": true,
+            "nullable": true
           }
         },
         "required": [
@@ -28954,6 +29028,7 @@
           "rating",
           "release_time",
           "solution",
+          "statistics",
           "tags",
           "target_instance_name",
           "target_port",
@@ -29618,6 +29693,15 @@
             ],
             "readOnly": true,
             "nullable": true
+          },
+          "statistics": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChallengeStatistics"
+              }
+            ],
+            "readOnly": true,
+            "nullable": true
           }
         },
         "required": [
@@ -29644,6 +29728,7 @@
           "show_solution",
           "solution",
           "solved",
+          "statistics",
           "tags",
           "team_solved",
           "timeout_retry_after",

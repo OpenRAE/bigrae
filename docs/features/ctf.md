@@ -106,6 +106,13 @@ You can still submit the flag for your individual score.
 
 Brackets provide separate cohort standings when the organizer uses them.
 
+## Challenge statistics
+
+The challenge page shows per-challenge statistics when the organizer enables them for the event.
+The statistics are the solve count, the solve rate, the attempt count, and the first solver's name.
+The statistics refresh while the page is open.
+The page hides the statistics when the organizer does not enable them.
+
 A captain can rename the team, remove members, and transfer captaincy.
 Disbanding requires the current members to have no recorded correct solve.
 A zero-point solve still prevents disbanding.

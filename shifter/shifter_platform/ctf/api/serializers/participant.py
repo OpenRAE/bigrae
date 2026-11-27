@@ -13,7 +13,7 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
-from ctf.api.serializers._common import _NamedRefSerializer
+from ctf.api.serializers._common import ChallengeStatisticsSerializer, _NamedRefSerializer
 
 
 class ParticipantSelfSerializer(serializers.Serializer):
@@ -227,6 +227,7 @@ class ParticipantChallengeDetailSerializer(serializers.Serializer):
     show_solution = serializers.BooleanField(read_only=True)
     solution = serializers.CharField(read_only=True, allow_null=True)
     rating = ChallengeRatingSerializer(read_only=True, allow_null=True)
+    statistics = ChallengeStatisticsSerializer(read_only=True, allow_null=True)
 
 
 # ---------------------------------------------------------------------------

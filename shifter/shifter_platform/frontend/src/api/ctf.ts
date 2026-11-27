@@ -117,10 +117,13 @@ export function useCtfChallenges() {
   });
 }
 
-export function useCtfChallenge(challengeId: string, enabled = true) {
+export function useCtfChallenge(challengeId: string, enabled = true, poll = true) {
   return useQuery({
     queryKey: ctfKeys.challenge(challengeId),
     enabled: enabled && Boolean(challengeId),
+    // A mounted detail page refreshes statistics within the 30-second bound and
+    // discovers both directions of the per-event visibility setting (CTF-407).
+    ...(poll ? SCOREBOARD_REFRESH : {}),
     queryFn: ({ signal }) =>
       apiFetch<CtfChallengeDetail>(`${BASE}/me/challenges/${challengeId}/`, {
         signal,

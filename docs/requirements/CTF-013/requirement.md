@@ -17,7 +17,7 @@ The CTF layer shall provide organizers with administrative dashboards and analyt
 
 ## Rationale
 
-Organizers need operational visibility into running events, who is stuck, which challenges are too easy or too hard, whether ranges are healthy. Without administrative dashboards, organizers operate blind during events and cannot make real-time adjustments like releasing hints or extending time. CTF admin views are delivered within Mission Control, leveraging existing UI patterns and access controls.
+Organizers need operational visibility into running events, who is stuck, which challenges are too simple or too hard, whether ranges are healthy. Without administrative dashboards, organizers operate blind during events and cannot make real-time adjustments like releasing hints or extending time. CTF admin views are delivered within Mission Control, leveraging existing UI patterns and access controls.
 
 ## Traceability
 
@@ -31,4 +31,7 @@ Organizers need operational visibility into running events, who is stuck, which 
 - IMPLEMENTS → CODE_FILE `shifter/shifter_platform/ctf/services/event/` (Event stats service - participants, challenges, submissions, points)
 - IMPLEMENTS → CODE_FILE `shifter/shifter_platform/ctf/services/scoring/_stats.py::get_challenge_statistics` (Challenge statistics service - event-roster solve-rate denominator, solve count, attempts, first blood)
 - TESTS → TEST `shifter/shifter_platform/tests/ctf/test_scoring_statistics.py` (Challenge statistics tests - roster denominator, attempts, solves, first blood, event scoping)
+- IMPLEMENTS → CODE_FILE `shifter/shifter_platform/ctf/api/organizer/_base.py::_organizer_challenge_stats` (Organizer challenge detail statistics - always visible, independent of the participant setting)
+- TESTS → TEST `shifter/shifter_platform/tests/ctf/test_api_challenge_flows.py` (Organizer always sees challenge statistics)
 - IMPLEMENTS → GITHUB_ISSUE `539` (Issue #539 - automated coverage and Ground Control TESTS trace links for active CTF requirements)
+- IMPLEMENTS → GITHUB_ISSUE `522` (Issue #522 - per-event participant visibility for challenge statistics)
