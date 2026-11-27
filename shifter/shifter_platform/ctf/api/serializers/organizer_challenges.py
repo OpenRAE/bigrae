@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from ctf.api.serializers._common import ChallengeStatisticsSerializer
+
 # ---------------------------------------------------------------------------
 # Organizer serializers (challenge management)
 # ---------------------------------------------------------------------------
@@ -110,6 +112,7 @@ class OrganizerChallengeDetailSerializer(serializers.Serializer):
     topics = serializers.ListField(child=serializers.CharField(), read_only=True)
     solution = serializers.CharField(read_only=True, allow_blank=True)
     rating = OrganizerChallengeRatingSerializer(read_only=True, allow_null=True)
+    statistics = ChallengeStatisticsSerializer(read_only=True, allow_null=True)
 
 
 class AwardSerializer(serializers.Serializer):

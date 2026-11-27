@@ -53,6 +53,7 @@ interface FormState {
   visible_os_types: string;
   scoreboard_visibility: string;
   rating_visibility: string;
+  participant_challenge_stats_visible: boolean;
   scoring_mode: string;
   live_notifications: LiveNotificationKind[];
   participant_shared_password: string;
@@ -86,6 +87,7 @@ const EMPTY: FormState = {
   visible_os_types: "kali",
   scoreboard_visibility: "public",
   rating_visibility: "public",
+  participant_challenge_stats_visible: false,
   scoring_mode: "standard",
   live_notifications: LIVE_NOTIFICATION_OPTIONS.map((option) => option.kind),
   participant_shared_password: "",
@@ -122,6 +124,7 @@ function fromEvent(event: CtfEventDetail): FormState {
     visible_os_types: (event.visible_os_types ?? ["kali"]).join(", "),
     scoreboard_visibility: event.scoreboard_visibility || "public",
     rating_visibility: event.rating_visibility || "public",
+    participant_challenge_stats_visible: Boolean(event.participant_challenge_stats_visible),
     scoring_mode: event.scoring_mode || "standard",
     live_notifications: LIVE_NOTIFICATION_OPTIONS.map((option) => option.kind).filter((kind) =>
       (event.live_notifications ?? []).includes(kind),
@@ -201,6 +204,7 @@ function toPayload(state: FormState): CtfEventWrite {
       .filter(Boolean),
     scoreboard_visibility: state.scoreboard_visibility,
     rating_visibility: state.rating_visibility,
+    participant_challenge_stats_visible: state.participant_challenge_stats_visible,
     scoring_mode: state.scoring_mode,
     live_notifications: state.live_notifications,
     ...sharedPasswordPayload(state),

@@ -225,6 +225,12 @@ export function EventFormPage({ mode }: Readonly<{ mode: "create" | "edit" }>) {
                 <FieldError id="e-scoreboardvis-e" error={firstError("scoreboard_visibility")} />
               </div>
               <CheckboxField
+                id="e-challengestats"
+                label="Show per-challenge statistics to participants (publishes solve counts and the first solver's name)"
+                checked={state.participant_challenge_stats_visible}
+                onChange={(c) => set("participant_challenge_stats_visible", c)}
+              />
+              <CheckboxField
                 id="e-cleanup"
                 label="Auto-clean up ranges after the event"
                 checked={state.auto_cleanup}
