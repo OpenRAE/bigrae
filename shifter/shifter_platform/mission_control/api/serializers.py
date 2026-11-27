@@ -248,6 +248,8 @@ class CurrentRangeResponseSerializer(serializers.Serializer):
     raes_participant_runtime = serializers.DictField(allow_null=True)
     lifecycle = RangeLeaseSerializer(allow_null=True)
     vpn_profile_available = serializers.BooleanField()
+    # Catalog name of the range's package source; null when the source is gone.
+    scenario_name = serializers.CharField(allow_null=True)
 
 
 class RangeLeaseResponseSerializer(serializers.Serializer):

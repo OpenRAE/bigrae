@@ -137,6 +137,7 @@ export function RangeDetailPage() {
         <Breadcrumb current={activeRange.scenario_id} />
         <ActiveRangePanel
           range={activeRange}
+          scenarioName={currentRange.data?.scenario_name ?? null}
           lifecycle={currentRange.data?.lifecycle ?? null}
           vpnProfileAvailable={currentRange.data?.vpn_profile_available ?? false}
           isFetching={currentRange.isFetching}

@@ -15,6 +15,7 @@ from cms.services import (
     get_mission_control_range_lease,
     has_mission_control_openvpn_profile,
     mission_control_range_scope,
+    range_scenario_name,
 )
 from cms.services import (
     extend_mission_control_range as cms_extend_mission_control_range,
@@ -95,6 +96,7 @@ class CurrentRangeView(MissionControlReadAPIView):
                     "raes_participant_runtime": None,
                     "lifecycle": None,
                     "vpn_profile_available": False,
+                    "scenario_name": None,
                 }
             )
         projection = build_range_raes_projection(active_range.request_id)
@@ -113,6 +115,7 @@ class CurrentRangeView(MissionControlReadAPIView):
                 "vpn_profile_available": has_mission_control_openvpn_profile(
                     credential, request_id=active_range.request_id
                 ),
+                "scenario_name": range_scenario_name(active_range.scenario_id),
             }
         )
 

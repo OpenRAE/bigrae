@@ -107,6 +107,7 @@ from ._principal_scopes import mission_control_resource_scope as mission_control
 from ._queries import (
     find_range_instance_id_by_request,
     get_principal_range_target_instances,
+    get_range_scenario_name_by_id,
     get_range_spec_by_id,
     get_range_status_by_id,
     get_range_target_instances,
@@ -194,6 +195,7 @@ from ._scenarios import (
     get_scenario,
     list_launchable_scenarios,
     list_scenarios,
+    range_scenario_name,
     validate_scenario_requirements,
 )
 from ._scoped_devices import admit_device_remote_authority as admit_device_remote_authority
@@ -354,6 +356,7 @@ __all__ = (
     "get_range",
     "get_range_by_request_id",
     "get_range_rdp_connection_info",
+    "get_range_scenario_name_by_id",
     "get_range_spec_by_id",
     "get_range_ssh_connection_info",
     "get_range_status_by_id",
@@ -398,6 +401,7 @@ __all__ = (
     "range_egress_compatible_with_scope",
     "range_identity_present",
     "range_owner_reassignment_available",
+    "range_scenario_name",
     "range_status_changed",
     "reassign_event_range_owner",
     "reassign_range_owner",

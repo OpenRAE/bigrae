@@ -5701,6 +5701,7 @@ export interface components {
             } | null;
             lifecycle: components["schemas"]["RangeLease"] | null;
             vpn_profile_available: boolean;
+            scenario_name: string | null;
         };
         /** @description Bounded active-event summary. */
         DashboardEvent: {
@@ -7785,6 +7786,7 @@ export interface components {
             /** @default false */
             readonly vpn_profile_available: boolean;
             readonly target_instances: components["schemas"]["RangeTargetInstance"][];
+            readonly scenario_name: string | null;
         };
         /**
          * @description A participant-safe target box in a ready range (issue #1740).

@@ -219,6 +219,13 @@ def cms_get_range_status(range_instance_id: int) -> str:
     return cms_services.get_range_status_by_id(range_instance_id)
 
 
+def cms_get_range_scenario_name(range_instance_id: int) -> str | None:
+    """Get the catalog scenario name of a participant's range from CMS."""
+    import cms.services as cms_services
+
+    return cms_services.get_range_scenario_name_by_id(range_instance_id)
+
+
 def cms_project_ctf_receipt_binding(
     range_instance_id: int,
     *,

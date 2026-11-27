@@ -153,6 +153,12 @@ export function RangePage() {
             <span className="text-sm text-muted-foreground">Status</span>
             <Badge variant="secondary">{titleCase(status.status)}</Badge>
           </div>
+          {status.scenario_name ? (
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-sm text-muted-foreground">Scenario</span>
+              <span className="text-sm font-medium">{status.scenario_name}</span>
+            </div>
+          ) : null}
           {status.range_instance_id === null ? null : (
             <p className="mt-2 text-sm text-muted-foreground">Range instance #{status.range_instance_id}</p>
           )}

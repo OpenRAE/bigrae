@@ -65,6 +65,7 @@ export function RangeDashboardPage() {
   return (
     <ActiveRangePanel
       range={data.range}
+      scenarioName={data.scenario_name}
       lifecycle={data.lifecycle}
       vpnProfileAvailable={data.vpn_profile_available}
       isFetching={query.isFetching}

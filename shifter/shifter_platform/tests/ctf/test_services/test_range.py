@@ -14,7 +14,7 @@ from uuid import uuid4
 import pytest
 from django.utils import timezone
 
-from cms.models import RangeInstance
+from cms.models import RaesPackageSource, RangeInstance
 from cms.models import Request as CMSRequest
 from ctf.bridges import RangeProvisionResult
 from ctf.enums import ParticipantStatus
@@ -234,7 +234,9 @@ class TestGetRangeStatus:
         """Returns not_assigned when no range."""
         result = range_service.get_range_status(mock_participant.pk)
         assert result["status"] == "not_assigned"
+        assert result["scenario_name"] is None
 
+    @pytest.mark.django_db
     @pytest.mark.usefixtures("_patch_participant_get")
     @pytest.mark.parametrize(
         ("cached_status", "expect_save"),
@@ -253,6 +255,8 @@ class TestGetRangeStatus:
 
         assert result["status"] == "ready"
         assert result["vpn_profile_available"] is False
+        # No CMS range row exists for the mock participant, so no name resolves.
+        assert result["scenario_name"] is None
         assert mock_participant.range_status == "ready"
         if expect_save:
             mock_participant.save.assert_called_once()
@@ -316,10 +320,22 @@ class TestGetRangeStatus:
         ctf_participant.range_status = "provisioning"
         ctf_participant.save(update_fields=["range_instance_id", "range_status", "updated_at"])
 
+        RaesPackageSource.objects.create(
+            scenario_id="basic",
+            contract_kind="raes",
+            contract_profile="shifter",
+            package_ref="tests/packs/basic",
+            package_version="1.0.0",
+            package_digest="sha256:" + "b" * 64,
+            scope_kind="installation",
+        )
+        RaesPackageSource.objects.filter(scenario_id="basic").update(package_name="basic-pack")
+
         result = range_service.get_range_status(ctf_participant.pk)
 
         assert result["status"] == "ready"
         assert result["vpn_profile_available"] is False
+        assert result["scenario_name"] == "basic-pack"
         ctf_participant.refresh_from_db()
         assert ctf_participant.range_status == "ready"
 

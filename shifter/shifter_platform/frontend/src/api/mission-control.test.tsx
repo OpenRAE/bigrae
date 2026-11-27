@@ -45,6 +45,7 @@ describe("useCurrentRange", () => {
       raes_participant_runtime: null,
       lifecycle: null,
       vpn_profile_available: false,
+      scenario_name: null,
     });
 
     const { wrapper } = makeClientWrapper();

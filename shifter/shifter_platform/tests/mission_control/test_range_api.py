@@ -18,6 +18,7 @@ from django.test import Client
 from django.urls import reverse
 from django.utils import timezone
 
+from cms.models import RaesPackageSource
 from engine.models import Range
 from shared.audit import AuditAction
 from shared.models import AuditLog, RaesOperationRecord, RaesParticipantRuntimeRecord
@@ -89,6 +90,7 @@ class TestGetRange:
         assert data["connection_urls"] == []
         assert data["lifecycle"] is None
         assert data["vpn_profile_available"] is False
+        assert data["scenario_name"] is None
 
     def test_returns_active_range_after_launch(self, authenticated_client, launch_range_via_api):
         client, user = authenticated_client(email="active@example.com")
@@ -111,6 +113,18 @@ class TestGetRange:
         assert data["lifecycle"]["extension_days"] == 30
         assert data["lifecycle"]["can_extend"] is True
         assert data["lifecycle"]["expires_at"] < data["lifecycle"]["maximum_expires_at"]
+        # A source without a package name shows its catalog id as its name.
+        assert data["scenario_name"] == scenario_id
+
+    def test_returns_package_name_as_scenario_name(self, authenticated_client, launch_range_via_api):
+        client, user = authenticated_client(email="named@example.com")
+        _launch_resp, _agent, scenario_id = launch_range_via_api(client, user)
+        RaesPackageSource.objects.filter(scenario_id=scenario_id).update(package_name="behavior-pack")
+
+        data = _json(client.get(reverse("v1:mission_control:range-current")))
+
+        assert data["range"]["scenario_id"] == scenario_id
+        assert data["scenario_name"] == "behavior-pack"
 
     def test_does_not_return_another_users_range(self, authenticated_client, launch_range_via_api):
         owner_client, owner = authenticated_client(email="owner@example.com")
