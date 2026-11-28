@@ -34,8 +34,8 @@ GUACAMOLE_CONTROLLER_SERVICE_ACCOUNT_ID = os.environ.get("GUACAMOLE_CONTROLLER_S
 GUACAMOLE_CONTROLLER_ROLE_ARN = os.environ.get("GUACAMOLE_CONTROLLER_ROLE_ARN", "")
 
 # JSON auth secret key for signing RDP session URLs. Must match the
-# JSON_SECRET_KEY configured in Guacamole's ECS task definition; a hex string
-# key (64-character/256-bit preferred) stored in Secrets Manager.
+# JSON_SECRET_KEY key of the guacamole-runtime Secret, which guacamole-client
+# reads as a file; a hex string key (64-character/256-bit preferred).
 GUACAMOLE_JSON_AUTH_SECRET = os.environ.get("GUACAMOLE_JSON_AUTH_SECRET", "")
 # Public URL for browser (returned to client).
 GUACAMOLE_BASE_URL = os.environ.get("GUACAMOLE_BASE_URL", "/guacamole")

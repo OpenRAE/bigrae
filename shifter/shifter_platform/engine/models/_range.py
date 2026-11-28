@@ -17,11 +17,10 @@ from engine._range_state import (
     is_range_usable,
     victim_instances,
 )
+from engine.models._range_allocation import RangeAllocationMixin
+from engine.models._range_egress import RANGE_EGRESS_DEFAULT, RANGE_EGRESS_MODE_CHOICES
+from engine.models._request import Request
 from shared.schemas.persistence import unwrap_persisted_spec
-
-from ._range_allocation import RangeAllocationMixin
-from ._range_egress import RANGE_EGRESS_DEFAULT, RANGE_EGRESS_MODE_CHOICES
-from ._request import Request
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User
@@ -272,7 +271,7 @@ class Range(RangeAllocationMixin, models.Model):
         status vocabulary is canonical ``shared.enums.ResourceStatus``. That
         module is dependency-neutral (no import of ``engine.models`` or
         ``engine.services``), so this stays a downward-only dependency even
-        though ``engine.services._lifecycle`` re-exports the same function.
+        though ``engine.services._range_lifecycle.pause_resume`` re-exports the same function.
         """
 
         return is_range_usable(self.status)
@@ -283,7 +282,7 @@ class Range(RangeAllocationMixin, models.Model):
 
         Delegates to ``engine._range_state.is_range_terminal`` (#685); see
         ``is_usable`` for why the model imports the neutral module directly
-        rather than ``engine.services._lifecycle``.
+        rather than ``engine.services._range_lifecycle.pause_resume``.
         """
 
         return is_range_terminal(self.status)

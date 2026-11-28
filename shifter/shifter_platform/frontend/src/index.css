@@ -35,6 +35,17 @@
   --border: #e4e4e7;
   --input: #71717a;
   --ring: #2563eb;
+
+  /* Categorical chart series, fixed order. Validated for colour-vision
+     deficiency and >= 3:1 non-text contrast on the light card. */
+  --series-1: #2a78d6;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #008300;
+  --series-7: #6250d6;
+  --series-8: #e34948;
 }
 
 /* Dark theme — near-black canvas, high-contrast off-white text.
@@ -63,6 +74,16 @@
   --border: rgba(255, 255, 255, 0.1);
   --input: #6d6d73;
   --ring: #0a84ff;
+
+  /* The same eight series hues, stepped for the dark card. */
+  --series-1: #3987e5;
+  --series-2: #d95926;
+  --series-3: #199e70;
+  --series-4: #c98500;
+  --series-5: #d55181;
+  --series-6: #0ca30c;
+  --series-7: #9085e9;
+  --series-8: #e66767;
 }
 
 @theme inline {
@@ -91,6 +112,14 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
+  --color-series-1: var(--series-1);
+  --color-series-2: var(--series-2);
+  --color-series-3: var(--series-3);
+  --color-series-4: var(--series-4);
+  --color-series-5: var(--series-5);
+  --color-series-6: var(--series-6);
+  --color-series-7: var(--series-7);
+  --color-series-8: var(--series-8);
 
   --font-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-mono: "Geist Mono Variable", ui-monospace, "SF Mono", monospace;

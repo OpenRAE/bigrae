@@ -8,7 +8,7 @@ into the lifecycle policy layer (#685) and are expressed against the canonical
 
 from __future__ import annotations
 
-from engine.services._lifecycle import is_range_terminal, is_range_usable
+from engine.services._range_lifecycle.pause_resume import is_range_terminal, is_range_usable
 from shared.enums import ResourceStatus
 
 

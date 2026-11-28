@@ -23,6 +23,7 @@ A failure in one entry is reported as `error` for that entry; the pass continues
 ## Engine worker trials
 
 `engine.services` owns one `WorkerTrial` row per worker.
+The private `engine.services._worker` package holds the trial implementation.
 
 | Service | Behavior |
 | --- | --- |

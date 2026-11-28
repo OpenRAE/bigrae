@@ -16,7 +16,7 @@ import pytest
 from django.db import connection
 
 from engine.models import PublicOperationRetryBinding
-from engine.services._retry_binding import MintedOperation, RetryKeyConflict, bind_public_operation
+from engine.services._cleanup.retry_binding import MintedOperation, RetryKeyConflict, bind_public_operation
 
 pytestmark = [pytest.mark.postgres, pytest.mark.django_db(transaction=True)]
 

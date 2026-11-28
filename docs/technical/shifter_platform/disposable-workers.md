@@ -232,6 +232,9 @@ The updated composition allowance permits the worker ancestry resolver.
 The layer-import checker enforces this model.
 `.importlinter` also rejects an import cycle inside Engine (ADR-001-R5).
 
+The private `engine.services._worker` package implements worker trials and custody; `engine.services._worker_lifecycle` implements admission, qualification and retirement.
+The `engine.services` facade is the only entry point for other layers.
+
 No new application, provider, public listener, or deployment environment is added.
 Existing range containment and Job policies continue to apply.
 The capacity and native hold fences extend their existing owning services.

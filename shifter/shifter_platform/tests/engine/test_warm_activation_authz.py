@@ -16,7 +16,7 @@ from django.contrib.auth import get_user_model
 from django.utils import timezone
 
 from engine.models import Range, Request, WarmRangeGeneration
-from engine.services._launch_intents import authorize_provisioner_payload
+from engine.services._launch.intents import authorize_provisioner_payload
 from engine.warm_activation_authz import authorize_warm_activation
 
 pytestmark = pytest.mark.django_db

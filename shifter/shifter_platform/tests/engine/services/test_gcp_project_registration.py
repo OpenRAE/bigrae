@@ -7,7 +7,7 @@ import pytest
 from django.contrib.auth.models import User
 
 from engine.models import GcpRangeProject, OperationInput, OperationResultInbox, ProvisionerLaunchIntent
-from engine.services._gcp_project_registration import disable_gcp_range_project, register_gcp_range_project
+from engine.services._gcp_project.registration import disable_gcp_range_project, register_gcp_range_project
 from shared.exceptions import ValidationError
 
 pytestmark = [pytest.mark.django_db, pytest.mark.postgres]
@@ -137,7 +137,7 @@ def test_operator_registration_commits_one_reference_input_and_original_authorit
         "--operation-id",
         str(row.provisioner_operation_id),
     ]
-    from engine.services._launch_payload_authority import authorize_provisioner_payload
+    from engine.services._launch.payload_authority import authorize_provisioner_payload
 
     authorize_provisioner_payload(intent.payload, expected_operation_id=intent.operation_id)
 
@@ -174,7 +174,7 @@ def test_registration_cannot_move_to_another_organization(operator):
 
 @pytest.mark.parametrize("change", ["credential", "policy", "disabled"])
 def test_revoked_or_disabled_registration_cannot_launch(operator, change):
-    from engine.services._launch_payload_authority import authorize_provisioner_payload
+    from engine.services._launch.payload_authority import authorize_provisioner_payload
     from management.models import PrincipalSession
 
     result = register(operator)

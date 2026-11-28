@@ -1,0 +1,178 @@
+"""Range pause / resume lifecycle operations."""
+
+from __future__ import annotations
+
+import logging
+from collections.abc import Callable
+from uuid import UUID
+
+from django.db import transaction
+
+# Re-exported (see ``__all__``): historical import path for callers and tests
+# that reference status predicates at ``engine.services._range_lifecycle.pause_resume`` (#685).
+# The implementation lives in the dependency-neutral ``engine._range_state`` so
+# the model compatibility wrappers on ``engine.models.Range`` can consume the
+# same pure functions without importing a private ``engine.services`` submodule
+# (that would make the model depend upward on the service layer, which already
+# depends on the model).
+from engine._range_state import is_range_terminal, is_range_usable
+from engine.models import Range
+from engine.services._launch.starts import start_range_operation
+from engine.services._principal_lifecycle.lifecycle import commit_prepared_range_lifecycle, prepare_range_lifecycle
+from shared.cloud.exceptions import CloudTaskError
+from shared.credentials import CredentialContext
+from shared.enums import ResourceStatus
+from shared.raes.runtime_target import is_raes_provisioning_plan
+
+__all__ = [
+    "is_range_terminal",
+    "is_range_usable",
+    "pause_range",
+    "resume_range",
+]
+
+logger = logging.getLogger(__name__)
+
+
+def _run_range_lifecycle_op(
+    request_id: UUID,
+    op_name: str,
+    *,
+    idempotent_statuses: tuple[str, ...],
+    required_status: str,
+    target_status: str,
+    revert_status: str,
+    defer_dispatch: bool = False,
+) -> bool:
+    """Shared pause/resume transition + ECS-dispatch helper.
+
+    Returns True if the operation was initiated (or already complete);
+    False if the range was missing, in the wrong state, or the ECS task
+    could not be started. Status transitions and revert-on-failure mirror
+    the original per-operation implementations so behaviour is unchanged.
+    """
+
+    logger.debug("%s_range: request_id=%s", op_name, request_id)
+
+    with transaction.atomic():
+        range_obj = Range.objects.select_for_update().filter(request__request_id=request_id).first()
+        decision: bool | None
+        if not range_obj:
+            logger.warning("%s_range: no range for request_id=%s", op_name, request_id)
+            decision = False
+        elif range_obj.owner_principal_uuid is not None:
+            raise PermissionError("Range operation authority unavailable")
+        elif is_raes_provisioning_plan(range_obj.range_config):
+            # Native realization owns its member inventory outside engine_instance;
+            # the legacy power worker cannot consume it. Refuse before state changes.
+            decision = False
+        else:
+            decision = _classify_lifecycle_decision(
+                range_obj.status,
+                request_id=request_id,
+                op_name=op_name,
+                idempotent_statuses=idempotent_statuses,
+                required_status=required_status,
+            )
+            if decision is None:
+                range_obj.status = target_status
+                range_obj.save(update_fields=["status", "updated_at"])
+
+    if decision is not None:
+        return decision
+
+    if defer_dispatch:
+        return True
+    # Invoke ECS task outside the atomic block (don't hold DB lock during network call)
+    assert range_obj is not None
+    return _dispatch_lifecycle_ecs(range_obj, request_id, op_name, revert_status, start_range_operation, CloudTaskError)
+
+
+def _classify_lifecycle_decision(
+    status: str,
+    *,
+    request_id: UUID,
+    op_name: str,
+    idempotent_statuses: tuple[str, ...],
+    required_status: str,
+) -> bool | None:
+    """Return True / False to short-circuit, or None to proceed with the transition."""
+    if status in idempotent_statuses:
+        logger.info("%s_range: already %s/%sing request_id=%s", op_name, op_name, op_name, request_id)
+        return True
+    if status != required_status:
+        logger.warning(
+            "%s_range: cannot %s range in status=%s request_id=%s",
+            op_name,
+            op_name,
+            status,
+            request_id,
+        )
+        return False
+    return None
+
+
+def _dispatch_lifecycle_ecs(
+    range_obj: Range,
+    request_id: UUID,
+    op_name: str,
+    revert_status: str,
+    start_range_operation: Callable[[UUID, str], str | None],
+    cloud_task_error_cls: type[BaseException],
+) -> bool:
+    """Invoke the ECS task and revert state on failure."""
+    try:
+        task_arn = start_range_operation(request_id, op_name)
+    except cloud_task_error_cls:
+        logger.exception("%s_range: ECS CloudTaskError request_id=%s", op_name, request_id)
+        range_obj.status = revert_status
+        range_obj.save(update_fields=["status", "updated_at"])
+        return False
+
+    if task_arn:
+        logger.info("%s_range: started ECS task=%s request_id=%s", op_name, task_arn, request_id)
+        return True
+
+    logger.warning("%s_range: ECS returned None, reverting status request_id=%s", op_name, request_id)
+    range_obj.status = revert_status
+    range_obj.save(update_fields=["status", "updated_at"])
+    return False
+
+
+def pause_range(request_id: UUID, *, credential: CredentialContext | None = None) -> bool:
+    """Pause all instances in a range. Idempotent."""
+    if credential is not None:
+        return commit_prepared_range_lifecycle(prepare_range_lifecycle(credential, request_id, "pause"))
+    return _run_range_lifecycle_op(
+        request_id,
+        "pause",
+        idempotent_statuses=(ResourceStatus.PAUSED.value, ResourceStatus.PAUSING.value),
+        required_status=ResourceStatus.READY.value,
+        target_status=ResourceStatus.PAUSING.value,
+        revert_status=ResourceStatus.READY.value,
+    )
+
+
+def resume_range(
+    request_id: UUID, *, defer_dispatch: bool = False, credential: CredentialContext | None = None
+) -> bool:
+    """Resume all instances in a range. Idempotent."""
+    if credential is not None:
+        if defer_dispatch:
+            raise ValueError("Principal lifecycle requires an atomic launch intent")
+        return commit_prepared_range_lifecycle(prepare_range_lifecycle(credential, request_id, "resume"))
+    return _run_range_lifecycle_op(
+        request_id,
+        "resume",
+        idempotent_statuses=(ResourceStatus.READY.value, ResourceStatus.RESUMING.value),
+        required_status=ResourceStatus.PAUSED.value,
+        target_status=ResourceStatus.RESUMING.value,
+        revert_status=ResourceStatus.PAUSED.value,
+        defer_dispatch=defer_dispatch,
+    )
+
+
+def dispatch_prepared_range_resume(request_id: UUID) -> bool:
+    """Enqueue the existing resume operation after the owner refreshes model authority."""
+
+    return bool(start_range_operation(request_id, "resume"))

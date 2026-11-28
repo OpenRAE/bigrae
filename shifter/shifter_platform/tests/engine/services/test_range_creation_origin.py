@@ -195,7 +195,9 @@ def test_prepared_dispatch_locks_actual_ancestry_before_native_range(deferred_cr
 
 def test_first_dispatch_cannot_commit_a_proof_revoked_after_live_admission(deferred_creation, monkeypatch):
     from engine.models import ProvisionerLaunchIntent
-    from engine.services import _launch_authority, _principal_range_create, dispatch_created_raes_range
+    from engine.services import dispatch_created_raes_range
+    from engine.services._launch_authority import authority as _launch_authority
+    from engine.services._principal_lifecycle import range_create as _principal_range_create
     from management.models import PrincipalSession, ServiceCredentialAdmission
 
     case = deferred_creation

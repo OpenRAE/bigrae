@@ -12,7 +12,7 @@ from uuid import uuid4
 import pytest
 
 from engine.models import PublicOperationRetryBinding, RetryBindingStatus
-from engine.services._retry_binding import (
+from engine.services._cleanup.retry_binding import (
     MintedOperation,
     RetryKeyConflict,
     bind_public_operation,
@@ -122,7 +122,7 @@ def _lose_the_insert_race(monkeypatch) -> None:
     """
     from django.db import IntegrityError
 
-    monkeypatch.setattr("engine.services._retry_binding.lookup_public_operation", lambda **_key: None)
+    monkeypatch.setattr("engine.services._cleanup.retry_binding.lookup_public_operation", lambda **_key: None)
 
     def _raise_on_create(**_kwargs):
         raise IntegrityError("duplicate key value violates unique constraint")

@@ -5,12 +5,12 @@ intent of an operation -- the validated action and target, actor and workspace
 scope, admission, egress and lease policy, package/lock and producer/contract
 versions, the compiled plan, and the selected image/artifact/configuration and
 delivery/participant-access bindings -- not merely the dispatch argv. Internal
-reuse previously compared only ``argv|operation_id`` (``engine.services._launch_intents``),
+reuse previously compared only ``argv|operation_id`` (``engine.services._launch.intents``),
 which is precisely why a same-key/different-intent replay could slip past.
 
 This module owns the intent-projection *version* and the canonical digest over a
 validated projection. Assembling the projection from the persisted contracts is
-the engine/cms layer's job (``engine.services._operation_inputs``); it is not re-modelled
+the engine/cms layer's job (``engine.services._launch.operation_inputs``); it is not re-modelled
 here. Like ``shared.operation_envelope`` the digest is a pure function so it can
 be exercised without Django, and there is exactly one native error type -- no
 parallel exception hierarchy.

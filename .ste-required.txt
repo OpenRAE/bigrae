@@ -128,7 +128,6 @@ docs/technical/shifter_platform/user-lifecycle-administration.md
 docs/technical/shifter_platform/workspace-member-invitations.md
 docs/technical/shifter_platform/workspaces.md
 platform/terraform/gcp/README.md
-platform/terraform/global/dev-box/README.md
 platform/terraform/global/github-runner/README.md
 scripts/bootstrap/README.md
 scripts/post_deploy_smoke/README.md

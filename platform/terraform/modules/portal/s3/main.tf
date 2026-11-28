@@ -3,8 +3,10 @@
 # Creates:
 # - S3 bucket for user uploads (agents, etc.)
 # - Block public access
+# - S3 server access logging to the root's access-log destination
 #
-# Note: No versioning, backup, or storage limits. Data is ephemeral.
+# Note: No backup or storage limits. Data is ephemeral. Versioning is on, but a
+# replaced or deleted version expires after one day (#109, #2566).
 
 locals {
   common_tags = merge(var.tags, {
@@ -12,8 +14,6 @@ locals {
   })
 }
 
-# checkov:skip=CKV_AWS_21:Versioning intentionally disabled - ephemeral data, see #109
-# checkov:skip=CKV_AWS_18:Access logging deferred to the unified logging strategy - see #310
 # checkov:skip=CKV2_AWS_62:No S3 event consumer exists; creating an unused notification stream just to silence Checkov is an anti-pattern - see docs/_deprecated/architecture/s3-bucket-hardening-preflight.md. Revisit when a real consumer (Macie, SQS scanner, Lambda) is added.
 # checkov:skip=CKV_AWS_144:Cross-region replication deferred - see #219
 resource "aws_s3_bucket" "this" {
@@ -24,11 +24,21 @@ resource "aws_s3_bucket" "this" {
   })
 }
 
+# Versioning protects against an accidental overwrite (AWS-0090). The
+# lifecycle below expires noncurrent versions after one day, so deleted uploads
+# stay ephemeral (#109).
 resource "aws_s3_bucket_versioning" "this" {
   bucket = aws_s3_bucket.this.id
   versioning_configuration {
-    status = "Disabled"
+    status = "Enabled"
   }
+}
+
+resource "aws_s3_bucket_logging" "this" {
+  bucket = aws_s3_bucket.this.id
+
+  target_bucket = var.access_log_bucket
+  target_prefix = "${aws_s3_bucket.this.id}/"
 }
 
 # SSE-KMS with bucket key enabled (CKV_AWS_145 / #218). bucket_key_enabled
@@ -151,9 +161,12 @@ resource "aws_s3_bucket_cors_configuration" "this" {
   }
 }
 
-# Lifecycle rule to clean up incomplete/orphaned uploads
+# Lifecycle rules clean up incomplete uploads, replaced or deleted versions,
+# and the delete markers that remain after those versions expire.
 resource "aws_s3_bucket_lifecycle_configuration" "this" {
   bucket = aws_s3_bucket.this.id
+
+  depends_on = [aws_s3_bucket_versioning.this]
 
   rule {
     id     = "abort-incomplete-multipart"
@@ -163,6 +176,28 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
 
     abort_incomplete_multipart_upload {
       days_after_initiation = 1
+    }
+  }
+
+  rule {
+    id     = "expire-noncurrent-versions"
+    status = "Enabled"
+
+    filter {}
+
+    noncurrent_version_expiration {
+      noncurrent_days = 1
+    }
+  }
+
+  rule {
+    id     = "expired-delete-markers"
+    status = "Enabled"
+
+    filter {}
+
+    expiration {
+      expired_object_delete_marker = true
     }
   }
 }

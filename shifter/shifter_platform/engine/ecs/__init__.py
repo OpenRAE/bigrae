@@ -15,27 +15,26 @@ The implementation is split by responsibility across private submodules
 local subprocess fallback, ``_status`` task-status projection) and re-exported
 here (#685) so callers keep using ``from engine.ecs import X``. Provider
 dispatch stays in this facade. The ``start_*`` launch entry points live in
-``engine.services._launch_starts`` because they enqueue launch intents.
+``engine.services._launch.starts`` because they enqueue launch intents.
 """
 
 from __future__ import annotations
 
 from django.conf import settings
 
-from engine.launch_commands import validate_provisioner_command
-from shared.cloud import PROVISIONER_CONTAINER_NAME, get_task_runner
-
-from ._config import _get_engine_task_config
-from ._env import (
+from engine.ecs._config import _get_engine_task_config
+from engine.ecs._env import (
     _AWS_PROVISIONER_ENV_KEYS,
     _GCP_PROVISIONER_ENV_KEYS,
     _get_aws_provisioner_env_overrides,
     _get_gcp_provisioner_env_overrides,
     _get_provisioner_env_overrides,
 )
-from ._local import _is_local_provisioner_enabled, _run_local_provisioner
-from ._status import get_task_status
-from ._workload import assert_provisioner_workload
+from engine.ecs._local import _is_local_provisioner_enabled, _run_local_provisioner
+from engine.ecs._status import get_task_status
+from engine.ecs._workload import assert_provisioner_workload
+from engine.launch_commands import validate_provisioner_command
+from shared.cloud import PROVISIONER_CONTAINER_NAME, get_task_runner
 
 
 def dispatch_provisioner_command(

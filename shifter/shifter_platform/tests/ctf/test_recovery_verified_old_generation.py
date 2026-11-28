@@ -22,7 +22,7 @@ pytestmark = pytest.mark.django_db(transaction=True)
 
 @pytest.mark.postgres
 def test_failed_old_range_keeps_authorized_cleanup_after_rebuild(launch_event, ctf_participant, organizer_credential):
-    from engine.services._launch_authority import authorize_launch_authority
+    from engine.services._launch_authority.authority import authorize_launch_authority
 
     old, _spare = ready_pool(launch_event, ctf_participant, organizer_credential)
     Range.objects.filter(request__request_id=old.request.request_id).update(status="failed")

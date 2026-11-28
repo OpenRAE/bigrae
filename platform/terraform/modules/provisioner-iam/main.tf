@@ -21,6 +21,10 @@ locals {
 # Managed policy - EC2 provisioning (lifecycle + networking)
 # ------------------------------------------------------------------------------
 
+# Every iam:PassRole grant here names a role namespace and a target service;
+# check_tf_iam_role_naming enforces that. See ADR-004-R11 exception
+# passrole-scoped-grants.
+#trivy:ignore:AWS-0342:exp:2027-11-25
 resource "aws_iam_policy" "ec2_provisioning" {
   name        = "${var.name_prefix}-pulumi-ec2-provisioning-managed"
   description = "Shifter provisioner EC2 lifecycle and networking permissions (managed to stay under the role inline-policy size limit)."

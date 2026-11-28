@@ -154,3 +154,13 @@ variable "lambda_code_signing" {
     code_signing_config_arn = string
   })
 }
+
+variable "aws_endpoints_security_group_id" {
+  description = "Security group of the VPC interface endpoints. The rotation function sends HTTPS only to it."
+  type        = string
+
+  validation {
+    condition     = can(regex("^sg-", var.aws_endpoints_security_group_id))
+    error_message = "aws_endpoints_security_group_id must be a security group ID."
+  }
+}

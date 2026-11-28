@@ -22,7 +22,7 @@ pytestmark = pytest.mark.django_db(databases=["default"])
 
 class TestStartProvisioning:
     def test_enqueues_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.services._launch_starts import start_provisioning
+        from engine.services._launch.starts import start_provisioning
 
         range_row = make_authorized_legacy_range()
         ref = start_provisioning(range_id=range_row.pk, user_id=range_row.user_id)
@@ -34,7 +34,7 @@ class TestStartProvisioning:
         ecs_client.run_task.assert_not_called()
 
     def test_returns_none_when_ecs_not_configured(self, aws_ecs_unconfigured, ecs_client):
-        from engine.services._launch_starts import start_provisioning
+        from engine.services._launch.starts import start_provisioning
 
         range_row = make_authorized_legacy_range()
         assert start_provisioning(range_id=range_row.pk, user_id=range_row.user_id) is None
@@ -55,7 +55,7 @@ class TestStartProvisioningInputValidation:
         ],
     )
     def test_raises_on_invalid_input(self, aws_ecs_configured, range_id, user_id, exc_type):
-        from engine.services._launch_starts import start_provisioning
+        from engine.services._launch.starts import start_provisioning
 
         with pytest.raises(exc_type):
             start_provisioning(range_id=range_id, user_id=user_id)

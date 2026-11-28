@@ -185,3 +185,73 @@ allowed_symbols:
       - get_ranges_for_ngfw
       - get_rdp_connection_info
       - get_ssh_connection_info
+
+# ADR-001-R5 (#2865): internal layers of a package, bottom layer first. Each
+# member is a direct child module or subpackage of the container. A member may
+# import a member of its own layer or of a lower layer, never a higher layer or
+# the container package itself. Every direct child must be a member, so a new
+# child fails closed until it is classified here. `.importlinter` adds the
+# package-level `acyclic_siblings` backstop for imports inside one layer.
+internal_layers:
+  engine:
+    - name: leaf
+      members: [_range_state, _status_audit, field_encryption, launch_commands, secrets, ssh]
+    - name: models
+      members: [models]
+    - name: primitives
+      members: [ecs, interpreter, launch_target, warm_activation_authz, worker_retention]
+    - name: services
+      members: [services]
+    - name: entry_points
+      members: [admin, apps, handlers, management, migrations]
+  engine.services:
+    # Records, queries, and shared helpers with no other service dependency.
+    - name: records
+      members:
+        [
+          _capacity,
+          _common,
+          _device_authority,
+          _identity_cutover,
+          _inventory_scope,
+          _launch_interrupt,
+          _operation_admission,
+          _public_api,
+          _queries,
+          _subnet_coordination,
+          operation_policy,
+        ]
+    # Authority projections and launch authority binding.
+    - name: authority
+      members: [_authorization_inventory, _launch_authority, _range]
+    # Per-resource operation contracts that the launch kernel validates and authorizes.
+    - name: operations
+      members:
+        [
+          _cleanup,
+          _feature_artifacts,
+          _gcp_project,
+          _preparation,
+          _principal,
+          _raes,
+          _runtime_plugin,
+          _runtime_plugin_operations,
+          _vpn,
+          _worker,
+        ]
+    # Launch kernel: operation inputs, admission checks, outbox, intents, and starters.
+    - name: launch
+      members: [_launch]
+    # Orchestration that enqueues launches, and authoritative result application.
+    - name: lifecycle
+      members:
+        [
+          _ngfw,
+          _operation_apply,
+          _principal_lifecycle,
+          _raes_range,
+          _range_lifecycle,
+          _terminal,
+          _warm_pool,
+          _worker_lifecycle,
+        ]

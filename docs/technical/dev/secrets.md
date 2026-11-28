@@ -73,12 +73,6 @@ The AWS EKS provisioner environment carries the secret reference through the exi
 The secret is not stored in Helm values or committed configuration.
 A fresh environment uses the normal infrastructure apply; no manual secret creation is required.
 
-### Dev Box
-
-| Secret Name | Contains |
-|-------------|----------|
-| `shifter-dev-box-admin-password` | Windows Administrator password (auto-generated) |
-
 ## GCP Secret Manager
 
 `gcp-dev` stages parallel runtime secret bundles with the same shapes the portal
@@ -94,7 +88,7 @@ already expects at startup:
 Current rollout behavior:
 
 - `shifter-gcp-dev-app` and `shifter-gcp-dev-db` are seeded by Terraform for the first deployable control-plane slice
-- `shifter-gcp-dev-guacamole-db` and `shifter-gcp-dev-guacamole-json-auth` are seeded by Terraform and synced into the `guacamole-runtime` Kubernetes Secret **out of band** during deploy (`kubectl apply` from Secret Manager, before the Helm release). Secret Manager and the Kubernetes Secret are the only runtime copies: these values are never placed in Helm chart values or Helm release history. The chart references the `guacamole-runtime` Secret by name only (`envFrom.secretRef`).
+- `shifter-gcp-dev-guacamole-db` and `shifter-gcp-dev-guacamole-json-auth` are seeded by Terraform and synced into the `guacamole-runtime` Kubernetes Secret **out of band** during deploy (`kubectl apply` from Secret Manager, before the Helm release). Secret Manager and the Kubernetes Secret are the only runtime copies: these values are never placed in Helm chart values or Helm release history. The chart references the `guacamole-runtime` Secret by name only and mounts its keys as read-only files in the `guacamole-client` container.
 - Identity Platform is provisioned by Terraform for the secure GCP portal login path
 - `gcp-deploy` seeds the first GCP operator from `settings.operator_bootstrap`: the `admin_email`, and the password in the Secret Manager secret that `admin_password_secret_ref` names. CI supplies `GCP_BOOTSTRAP_ADMIN_EMAIL` through the CI adapter and passes `GCP_BOOTSTRAP_ADMIN_PASSWORD` through `--operator-password-env`. The password never enters Terraform, the deployment input bundle, or a command argument
 - Bootstrap operator elevation comes from `settings.operator_bootstrap.staff_emails` / `superuser_emails`, which the deploy renders into `PLATFORM_BOOTSTRAP_STAFF_EMAILS` / `PLATFORM_BOOTSTRAP_SUPERUSER_EMAILS`. CI maps those GitHub secrets onto the settings. These values must stay out of committed source

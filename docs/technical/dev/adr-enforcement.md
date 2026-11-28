@@ -348,7 +348,13 @@ The first slice intentionally stays small:
 - `import-linter`
   Adds package-level forbidden-import contracts across the main Django app layers.
   For ADR-001-R5, an `acyclic_siblings` contract rejects an import cycle between the children of any `engine` package.
-  Forbidden contracts reject a module that imports its own package facade: `engine`, `engine.services`, `engine.models`, `engine.ecs`, or `engine.handlers`.
+  Forbidden contracts reject a module that imports its own package facade: `engine.models`, `engine.ecs`, or `engine.handlers`.
+
+- `scripts/check_layer_imports` internal layers
+  Enforces ADR-001-R5 from the `internal_layers` section of `layer_imports.yaml`.
+  The section lists the layers of `engine` and `engine.services` from bottom to top.
+  A member may import only members of its own or a lower layer.
+  An import of a higher layer, an import of the container package, and an unclassified child fail the check.
   The [engine import design (#2865)](../../architecture/engine-import-design-2865.md) describes the layers.
 
 - Ruff `PLC0415`
@@ -565,14 +571,25 @@ The first slice intentionally stays small:
   `docs/adr/exceptions.yaml` entry (`rule_id: ADR-004-R11`, owner, reason with
   the Checkov policy ID, `expires_on`, `paths`).
 
-  Making the Trivy configuration scan blocking is tracked separately in #2566;
-  the [#2558 architecture preflight](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/blocking-config-security-preflight-2558.md)
-  records the cross-repository contracts for that follow-up.
+- `trivy-config`
+  Trivy configuration scan of the first-party Dockerfiles and Terraform
+  (`security-trivy-config` job). A **blocking gate** under ADR-004-R11 since
+  #2566. The job scans `shifter/engine`, `shifter/shifter_platform`,
+  `shifter/packer`, and `platform/terraform`. It runs every root and fails on
+  any finding. The Trivy binary is checksum-pinned, and the checks bundle is
+  pinned by digest. Change the digest only on purpose.
+
+  An exception uses an exact-resource `trivy:ignore:<ID>:exp:<date>` comment.
+  Trivy cannot ignore an absence check inline, so those entries go in
+  `.trivyignore-config.yaml`. Each exception has a matching
+  `docs/adr/exceptions.yaml` entry with the same expiry. The root
+  `.trivyignore.yaml` stays the exact-release image policy. See the
+  [#2566 design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/blocking-trivy-config-design-2566.md).
 
   ADR-008-R5's [#2564 CMEK design](https://github.com/OpenRAE/bigrae/blob/dev/docs/architecture/gcp-gcs-cmek-design-2564.md)
   puts every Terraform-owned GCS bucket on a customer-managed key. A
   `trivy config` scan of `platform/terraform/gcp` reports no GCP-0066 finding,
-  with no exception. #2566 makes that scan a CI gate. The `terraform test` contracts of `modules/gcs-cmek`,
+  with no exception. The `security-trivy-config` gate enforces it since #2566. The `terraform test` contracts of `modules/gcs-cmek`,
   `modules/portal/gcs`, `modules/image-export-storage`,
   `modules/raes-package-storage`, and `global/cicd-oidc` enforce the keys and
   the lifecycle KMS roles.

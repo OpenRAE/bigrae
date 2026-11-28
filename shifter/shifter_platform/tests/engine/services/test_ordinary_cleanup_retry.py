@@ -47,7 +47,7 @@ def ordinary_destroy(launch_actor):
 
 def test_scheduled_pass_retries_unknown_native_cleanup_after_delay_once(ordinary_destroy, monkeypatch):
     from cms.management.commands.reconcile_range_events import Command
-    from engine.services._launch_authority import authorize_launch_authority
+    from engine.services._launch_authority.authority import authorize_launch_authority
 
     runtime, original = ordinary_destroy
     old_input = OperationInput.objects.get(operation_id=original.operation_id).envelope

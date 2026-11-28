@@ -138,8 +138,8 @@ class TestIsImportAllowed:
     def test_private_submodule_rejected(self):
         """A private split-package submodule is not a public facade member."""
         allowed = {"cms": ["engine.services"], "mission_control": ["cms.services"]}
-        # Direct dotted private submodule import (e.g. import engine.services._lifecycle).
-        assert is_import_allowed("cms", "engine.services._lifecycle", allowed) is False
+        # Direct dotted private submodule import (e.g. import engine.services._range_lifecycle.pause_resume).
+        assert is_import_allowed("cms", "engine.services._range_lifecycle.pause_resume", allowed) is False
         assert is_import_allowed("mission_control", "cms.services._range_pause", allowed) is False
         # A private component anywhere in the remainder is rejected.
         assert is_import_allowed("mission_control", "cms.services.sub._private", allowed) is False
@@ -734,8 +734,9 @@ class TestMain:
                 f'base_path = Path("{platform}")',
             )
         )
-        # The CLI imports its sibling _symbol_facade module, so copy it alongside.
+        # The CLI imports its sibling check modules, so copy them alongside.
         (checker_dir / "_symbol_facade.py").write_text((SCRIPT_PATH.parent / "_symbol_facade.py").read_text())
+        (checker_dir / "_internal_layers.py").write_text((SCRIPT_PATH.parent / "_internal_layers.py").read_text())
 
         result = subprocess.run(
             [sys.executable, str(script), "-q"],

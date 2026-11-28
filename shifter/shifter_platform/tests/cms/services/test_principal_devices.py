@@ -134,7 +134,7 @@ def test_service_creates_device_with_native_generation_and_revocable_authority(d
     from cms.models import App
     from cms.services import create_ngfw, get_ngfw
     from engine.models import Instance, ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload
+    from engine.services._launch.intents import authorize_provisioner_payload
     from management.models import ServiceCredentialAdmission
 
     actor = device_administrator
@@ -289,7 +289,7 @@ def test_failed_device_can_be_destroyed_before_its_reserved_slot_is_reused(provi
     from cms.handlers.ngfw_events import process_ngfw_event
     from cms.services import create_ngfw, destroy_ngfw, get_ngfw
     from engine.models import RangeEventOutbox
-    from engine.services._operation_apply_effects import _enqueue_ngfw_status_event
+    from engine.services._operation_apply.effects import _enqueue_ngfw_status_event
 
     actor = provisioned_device
     actor.native.status = "failed"
@@ -436,7 +436,7 @@ def test_unaccepted_callback_cannot_change_a_principal_device(provisioned_device
 def test_accepted_native_device_event_releases_the_same_cms_custody(provisioned_device):
     from cms.handlers.ngfw_events import process_ngfw_event
     from engine.models import RangeEventOutbox
-    from engine.services._operation_apply_effects import _enqueue_ngfw_status_event
+    from engine.services._operation_apply.effects import _enqueue_ngfw_status_event
 
     actor = provisioned_device
     actor.native.status = "destroyed"
@@ -512,7 +512,7 @@ def test_device_teardown_cleanup_requires_native_absence_after_revocation(provis
 
     from cms.services import destroy_ngfw
     from engine.models import ProvisionerLaunchIntent, ProvisionerLaunchStatus
-    from engine.services._launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
+    from engine.services._launch.intents import authorize_provisioner_payload, enqueue_provisioner_launch
     from management.models import ServiceCredentialAdmission
     from shared.cloud.types import TaskInterruptDisposition
 
@@ -542,7 +542,7 @@ def test_device_teardown_cleanup_requires_native_absence_after_revocation(provis
 
 def test_device_cleanup_cannot_borrow_a_provision_or_running_operation(provisioned_device):
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     actor = provisioned_device
     origin = ProvisionerLaunchIntent.objects.get()
@@ -559,7 +559,7 @@ def test_device_cleanup_cannot_overwrite_a_concurrent_terminal_interrupt(provisi
 
     from cms.services import destroy_ngfw
     from engine.models import InterruptState, ProvisionerLaunchIntent
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
     from shared.cloud.types import TaskInterruptDisposition
 
     actor = provisioned_device
@@ -587,8 +587,8 @@ def test_uncertain_device_cleanup_waits_for_existing_interrupt_worker(provisione
 
     from cms.services import destroy_ngfw
     from engine.models import InterruptState, ProvisionerLaunchIntent
-    from engine.services._launch_intents import enqueue_provisioner_launch
-    from engine.services._launch_interrupt_convergence import drain_due_interrupts
+    from engine.services._launch.intents import enqueue_provisioner_launch
+    from engine.services._launch.interrupt_convergence import drain_due_interrupts
     from management.models import ServiceCredentialAdmission
     from shared.cloud.types import TaskInterruptDisposition
 

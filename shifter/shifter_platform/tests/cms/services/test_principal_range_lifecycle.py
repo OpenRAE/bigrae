@@ -22,7 +22,7 @@ def test_force_delete_retained_event_preserves_native_cleanup_after_event_is_gon
     from ctf.services.credential_scope import event_credential_scope
     from ctf.services.event import force_delete_event
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
+    from engine.services._launch.intents import authorize_provisioner_payload, enqueue_provisioner_launch
     from management.models import ProviderBinding, ServiceCredentialAdmission
     from management.services import resolve_service_credential
 
@@ -180,7 +180,7 @@ def test_source_destroy_audit_failure_rolls_back_both_projections_and_queue(life
 def test_soft_deleted_teardown_rechecks_original_principal_before_dispatch(lifecycle_range):
     from cms.services import destroy_range
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload
+    from engine.services._launch.intents import authorize_provisioner_payload
     from management.models import ServiceCredentialAdmission
 
     fixture = lifecycle_range
@@ -196,7 +196,7 @@ def test_soft_deleted_teardown_rechecks_original_principal_before_dispatch(lifec
 def cancellable_range(lifecycle_range):
     from uuid import uuid4
 
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
     from management.models import ProviderBinding, ServiceCredentialAdmission
     from management.services import resolve_service_credential
     from tests.engine.test_launch_interrupt import _plan
@@ -304,8 +304,8 @@ def test_native_admission_revoked_during_policy_cannot_commit_destroy(lifecycle_
 def test_accepted_cancellation_cleanup_outlives_revoked_callers(cancellable_range, monkeypatch):
     from cms.services import cancel_range_by_request_id
     from engine.models import InterruptState, ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload
-    from engine.services._launch_interrupt_convergence import drain_due_interrupts
+    from engine.services._launch.intents import authorize_provisioner_payload
+    from engine.services._launch.interrupt_convergence import drain_due_interrupts
     from management.models import ServiceCredentialAdmission
     from shared.cloud.types import TaskInterruptDisposition
 
@@ -371,7 +371,7 @@ def test_expired_principal_range_uses_explicit_cleanup_after_initiator_revocatio
     from cms.services import pause_range
     from cms.services._range_destroy import destroy_expired_range
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload
+    from engine.services._launch.intents import authorize_provisioner_payload
     from management.models import ServiceCredentialAdmission
 
     fixture = lifecycle_range
@@ -579,7 +579,7 @@ def test_native_admission_cannot_adopt_resource_changes_made_during_policy(lifec
     from uuid import uuid4
 
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
     from shared.authorization import port
 
     fixture = lifecycle_range
@@ -628,7 +628,7 @@ def test_failed_cleanup_retry_reserves_one_fresh_attempt_with_the_original_autho
 
     from cms.services import destroy_range
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._principal_lifecycle import (
+    from engine.services._principal_lifecycle.lifecycle import (
         _commit_destroy,
         commit_prepared_range_lifecycle,
         prepare_system_range_cleanup,
@@ -645,7 +645,7 @@ def test_failed_cleanup_retry_reserves_one_fresh_attempt_with_the_original_autho
     generation = fixture.realized.resource_generation
     runner = Mock()
     runner.get_task_status.return_value = {"status": "FAILED"}
-    monkeypatch.setattr("engine.services._failed_cleanup_task.get_task_runner", lambda: runner)
+    monkeypatch.setattr("engine.services._cleanup.failed_task.get_task_runner", lambda: runner)
     assert commit_prepared_range_lifecycle(prepare_system_range_cleanup(fixture.request.request_id))
     runner.get_task_status.assert_not_called()
     prepared = [prepare_system_range_cleanup(fixture.request.request_id) for _ in range(2)]
@@ -687,8 +687,11 @@ def test_launcher_observes_current_cleanup_once_per_minute_and_retries_only_fail
 
     from cms.services import destroy_range
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._failed_cleanup_retry import retry_due_failed_cleanup_tasks
-    from engine.services._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+    from engine.services._principal_lifecycle.lifecycle import (
+        commit_prepared_range_lifecycle,
+        prepare_system_range_cleanup,
+    )
+    from engine.services._range_lifecycle.failed_cleanup_retry import retry_due_failed_cleanup_tasks
 
     fixture = lifecycle_range
     destroy_range(fixture.credential, fixture.instance.pk)
@@ -701,7 +704,7 @@ def test_launcher_observes_current_cleanup_once_per_minute_and_retries_only_fail
     previous.save(update_fields=["status", "next_attempt_at"])
     runner = Mock()
     runner.get_task_status.return_value = {"status": "RUNNING"}
-    monkeypatch.setattr("engine.services._failed_cleanup_task.get_task_runner", lambda: runner)
+    monkeypatch.setattr("engine.services._cleanup.failed_task.get_task_runner", lambda: runner)
     call_command("drain_provisioner_launch_outbox", stdout=StringIO())
     assert retry_due_failed_cleanup_tasks() == 0
     runner.get_task_status.assert_called_once()

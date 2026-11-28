@@ -172,7 +172,7 @@ protected image responses after permission changes.
 | Schedulers and reconcilers | CTF scheduling, leases, launch delivery, result application and event-outbox delivery run as separate worker commands. The CTF communication worker delivers ledger messages to participants and to event organizers (ADR-065-R4) |
 | Provisioner Jobs | Independently packaged `shifter/engine/provisioner`; exact image, service account and namespace binding; provider effects and guest readback |
 | Plugin/preparation Jobs | Explicitly installed, isolated executable images; separate administrator grants and pinned worker/verifier identities |
-| Guacamole and guacd | Remote-access services. BigRAE authorizes each target and session. Guacamole has separate database credentials. guacd uses a bounded writable home for FreeRDP and a read-only root filesystem. The Guacamole web application runs one replica. It keeps each session token in the memory of the replica that issued it (#2518). guacd scales out for capacity. |
+| Guacamole and guacd | Remote-access services. BigRAE authorizes each target and session. Guacamole has separate database credentials. It reads them from read-only Secret files (#2565). It reads its JSON authentication key in the same way. guacd uses a bounded writable home for FreeRDP and a read-only root filesystem. The Guacamole web application runs one replica. It keeps each session token in the memory of the replica that issued it (#2518). guacd scales out for capacity. |
 | Optional access services | Deployment-selected VPN and other integrations have their own identities and support conditions |
 | Content egress proxy | Credential-less CONNECT proxy; the only platform pod with public HTTPS egress. The CTF scheduler copies organizer images and the portal sends CTF webhooks through it |
 
@@ -268,6 +268,13 @@ nonglobal addresses and carry no cloud identity. The portal enforces one
 code-owned Content Security Policy (ADR-036). Browsers load images only from the
 portal origin, so organizer images from other hosts are copied into platform
 storage first; see the [CSP enforcement design](https://github.com/Brad-Edwards/bigrae/blob/dev/docs/architecture/browser-csp-enforcement-design-2090.md).
+
+On AWS, the EKS management helpers have no internet egress. The OpenFGA
+rotation function and the operator access node reach AWS APIs only through
+private-DNS VPC interface endpoints for Secrets Manager and Session Manager.
+The portal Redis rotation function uses the portal VPC endpoints in the same
+way. The self-hosted GitHub runner keeps internet egress, because it must
+reach GitHub.
 
 ADR-056 defines provider-enforced guest containment. ADR-057 separates GKE
 Dataplane V2 NetworkPolicy reachability, Google Workload Identity, Job admission,
@@ -383,7 +390,7 @@ sequenceDiagram
 
 This is the authoritative path for the declared RAES, pause/resume and NGFW
 operation families. `shared.operation_results` declares supported step contracts;
-`engine.services._operation_apply` fences versions, ownership, generation,
+`engine.services._operation_apply.applier` fences versions, ownership, generation,
 digests and legal ordering. Undeclared compatibility families remain
 validation-only shadow results while their incumbent writer is retained; do not
 assume all direct provisioner SQL is gone.
@@ -496,6 +503,12 @@ Inside `engine`, imports are at module level and the package has no import cycle
 Cross-domain access uses public service facades and validated scalar identifiers,
 not another app's model or a private split-package module. Concrete per-symbol
 allowlists remain authoritative when a table entry is broader.
+
+`engine.services` keeps its implementation in private layer packages,
+for example `engine.services._range` and `engine.services._range_lifecycle`.
+Each package initializer exports nothing; Engine code imports the owning leaf module.
+The leading underscore keeps these packages inside the private-module rule.
+`scripts/check_layer_imports/layer_imports.yaml` states the package layers (ADR-001-R5).
 
 The identity-cutover command composes the tenancy-owned hierarchy verifier
 directly through `workspaces.services.verify_identity_cutover_hierarchy`.

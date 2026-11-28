@@ -1,0 +1,473 @@
+"""Compose the immutable operation-input projection (ADR-043).
+
+Split out of ``launch_intents.py`` (Sonar S104), which grew past the file-size
+budget when the RAES family was cut over in phase 5 (#1837). ``launch_intents``
+owns *authorizing and minting* an operation generation; this module owns *what
+that generation's immutable input contains*.
+
+The projection is reference-only: it composes the existing persisted contracts
+(the serialized RAES plan, ``DeliveryBinding``, the registry candidate shape,
+the normalized backend vocabulary) rather than dumping ORM rows. Payload-owned
+ownership, raw ``engine_instance.state``, and registry management metadata do
+not cross the boundary.
+"""
+
+from __future__ import annotations
+
+import json
+from typing import TYPE_CHECKING
+
+from engine.models import (
+    DisposableWorker,
+    Instance,
+    OperationInput,
+    ProvisionerLaunchIntent,
+    RaesArtifactSatisfactionBinding,
+    RaesContentDeliveryBinding,
+    RaesImageMapping,
+    RaesParticipantAccessBinding,
+    Range,
+    Request,
+    WarmRangeGeneration,
+)
+from engine.services._gcp_project.inputs import projects_for_input, retained_project_cleanup_payload
+from engine.services._inventory_scope import inventory_scope_filter
+from engine.services._launch_authority.authority import authority_envelope_fields
+from engine.services._range.authority import project_range_authority
+from engine.services._runtime_plugin.bindings import retained_runtime_plugin_pin
+from engine.services._runtime_plugin_operations.operations import queue_runtime_plugin_plans
+from engine.services._runtime_plugin_operations.preparation import retained_cleanup_payload
+from shared.disposable_workers import WorkerHostProfile
+from shared.gcp_cloud_content import CloudContentEnvelope
+from shared.identity_scope import ResourceScope
+from shared.operation_envelope import build_operation_envelope
+from shared.principal_port import resolve_principal_uuid
+from shared.raes.artifact_binding import ArtifactBinding
+from shared.raes.content_delivery import DeliveryBinding
+from shared.raes.operation_input import (
+    RaesInputBindings,
+    RaesRangeIdentity,
+    RaesRemoteAccess,
+    build_raes_operation_input,
+    candidate_key,
+    plan_image_lookup_keys,
+)
+from shared.raes.operation_input_remote_access import parse_remote_access
+from shared.raes.participant_access import ParticipantAccessBinding
+from shared.raes.worker_host import worker_host_nodes
+from shared.warm_pool.activation_input import ActivationClaimant, ActivationGeneration, build_activation_input
+from workspaces.services import resource_scope_from_ids
+
+if TYPE_CHECKING:
+    from uuid import UUID
+
+
+__all__ = ["operation_input_payload"]
+
+
+# Durable ownership discriminants persisted on ``engine_instance.state`` (#1666).
+# Mirrors the resolution the provisioner used to perform itself; the Engine owns
+# these rows, so it evaluates the evidence and ships only the normalized outcome.
+_GDC_ASSET_TYPES = frozenset({"vm_runtime_vm", "scenario_pod"})
+_GCE_ASSET_TYPE = "gce_vm"
+
+
+def _resolve_backend_from_evidence(request: Request) -> str | None:
+    """Resolve a legacy (NULL-binding) range's backend from ownership evidence.
+
+    Returns the proven backend only when the evidence is unambiguous (exactly
+    one backend across all request-owned instances); returns ``None`` for an
+    empty, mixed, or unrecognized set so the consumer fails closed. Names,
+    scenario shape, the current selector, and successful VM boot are not
+    evidence -- after a ``gdc -> gce`` flip, guessing strands the range.
+    """
+    backends: set[str] = set()
+    for state in Instance.objects.filter(request=request).values_list("state", flat=True):
+        if isinstance(state, str):
+            try:
+                state = json.loads(state)
+            except (TypeError, ValueError):
+                continue
+        if not isinstance(state, dict):
+            continue
+        asset_type = str(state.get("asset_type", "")).strip()
+        if asset_type == _GCE_ASSET_TYPE:
+            backends.add("gce")
+        elif asset_type in _GDC_ASSET_TYPES:
+            backends.add("gdc")
+    return next(iter(backends)) if len(backends) == 1 else None
+
+
+def _resolved_range_backend(target: Range, request: Request) -> str | None:
+    """Return the range's normalized backend binding, else the proven legacy one.
+
+    ``request`` is the one already resolved by the caller, so the legacy
+    evidence sweep is always scoped to a real request rather than re-deriving a
+    nullable relation here.
+    """
+    if target.range_backend:
+        return str(target.range_backend)
+    return _resolve_backend_from_evidence(request)
+
+
+def _raes_image_candidates(plan: dict[str, object], target: Range | None = None) -> dict[str, list[dict[str, object]]]:
+    """Project the enabled registry rows this plan can actually ask for.
+
+    Scoped to the plan's own lookup keys (ADR-032-R2 authored source, else the
+    node's OS family) so the tenant-wide registry never crosses the boundary
+    wholesale. Disabled rows are excluded exactly as the direct
+    ``WHERE enabled = TRUE`` read did, keeping a retired mapping fail-loud at
+    realization.
+    """
+
+    if target is not None:
+        worker_candidates = _worker_image_candidates(target, plan)
+        if worker_candidates is not None:
+            return worker_candidates
+    keys = plan_image_lookup_keys(plan)
+    if not keys:
+        return {}
+    projected: dict[str, list[dict[str, object]]] = {}
+    rows = RaesImageMapping.objects.filter(source_name__in=list(keys), enabled=True)
+    if target is not None and target.owner_principal_uuid is not None:
+        if target.request is None:
+            raise ValueError("Range request unavailable")
+        if target.scope_kind == "installation":
+            scope = ResourceScope("installation")
+        else:
+            scope = project_range_authority(target.request.request_id).scope
+        rows = rows.filter(inventory_scope_filter(scope))
+    else:
+        rows = rows.filter(scope_kind="")
+    rows = rows.order_by("provider", "source_name", "source_version")
+    for row in rows:
+        key = candidate_key(str(row.provider), str(row.source_name))
+        projected.setdefault(key, []).append(_image_candidate_row(row))
+    return projected
+
+
+def _image_candidate_row(row: RaesImageMapping) -> dict[str, object]:
+    """Project only resolver columns, omitting unchanged optional defaults."""
+    candidate: dict[str, object] = {
+        "source_version": row.source_version,
+        "image_ref": row.image_ref,
+        "machine_type": row.machine_type,
+        "disk_size_gb": row.disk_size_gb,
+        "disk_type": row.disk_type,
+    }
+    optional_defaults = {
+        "management_ssh_port": 22,
+        "management_ssh_username": "",
+        "image_kind": "image",
+        "bootstrap_capability": "standard",
+        "participant_container_name": "",
+        "participant_username": "",
+        "participant_readiness_contract": "",
+        "participant_readiness_manifest_sha256": "",
+    }
+    for key, default in optional_defaults.items():
+        value = getattr(row, key)
+        if value != default:
+            candidate[key] = value
+    return candidate
+
+
+def _raes_delivery_bindings(target: Range) -> list[DeliveryBinding]:
+    """Rebuild this range's byte-free delivery bindings for transport."""
+
+    bindings = []
+    for row in RaesContentDeliveryBinding.objects.filter(range=target).order_by("pk"):
+        bindings.append(
+            DeliveryBinding(
+                content_address=row.content_address or None,
+                sha256=row.sha256,
+                storage_key=row.storage_key,
+                byte_count=row.byte_count,
+                binding_version=row.binding_version,
+                resource_type=row.resource_type or None,
+                resource_address=row.resource_address or None,
+                payload_kind=row.payload_kind or None,
+                install_policy=row.install_policy or None,
+            )
+        )
+    return bindings
+
+
+def _raes_access_bindings(target: Range) -> list[ParticipantAccessBinding]:
+    """Rebuild this range's non-secret participant-access declarations (#1710)."""
+
+    return [
+        ParticipantAccessBinding(
+            target_address=row.target_address,
+            channel=row.channel,
+            account_address=row.account_address,
+            binding_version=row.binding_version,
+        )
+        for row in RaesParticipantAccessBinding.objects.filter(range=target).order_by("pk")
+    ]
+
+
+def _raes_artifact_bindings(target: Range) -> list[ArtifactBinding]:
+    """Rebuild this range's generation-fenced artifact-satisfaction bindings (#1580).
+
+    The CMS launch resolved each authored artifact requirement to a concrete
+    backend image and persisted it; the provisioner realizes exactly these,
+    never re-resolving. Byte-free by construction -- no credential, URL, or
+    payload is persisted or shipped.
+    """
+
+    return [
+        ArtifactBinding(
+            target=row.target_address,
+            requirement_id=row.requirement_id,
+            artifact_id=row.artifact_id,
+            version=row.artifact_version,
+            digest=row.digest,
+            media_type=row.media_type,
+            mechanism=row.mechanism,
+            acquisition=row.acquisition,
+            timing=row.timing,
+            image_ref=row.image_ref,
+            image_id=row.image_id,
+            machine_type=row.machine_type,
+            disk_size_gb=row.disk_size_gb,
+            disk_type=row.disk_type,
+            management_ssh_port=row.management_ssh_port,
+            management_ssh_username=row.management_ssh_username,
+        )
+        for row in RaesArtifactSatisfactionBinding.objects.filter(range=target).order_by("pk")
+    ]
+
+
+def _raes_remote_access(target: Range) -> RaesRemoteAccess | None:
+    """Project the range's OpenVPN capability (#2030, #2480).
+
+    Carried on every operation of a range that holds a capability -- including
+    destroy, which must delete the generation's profile -- so the provisioner
+    never reads it from ``mission_control_range`` (ADR-043).
+    """
+    capability = target.remote_access_capability
+    if capability is None:
+        return None
+    return parse_remote_access({"capability": capability})
+
+
+def _raes_cloud_content(target: Range) -> CloudContentEnvelope | None:
+    """Project only the retained sealed content; absence keeps the old input shape."""
+    return (
+        CloudContentEnvelope.model_validate(target.raes_cloud_content)
+        if target.raes_cloud_content is not None
+        else None
+    )
+
+
+def _raes_input_payload(
+    target: Range, request: Request, *, suppress_access: bool = False, preparation_for_cleanup: bool = False
+) -> dict[str, object]:
+    """Compose the RAES operation input (ADR-043 phase 5, #1837).
+
+    Replaces direct provisioner reads with one immutable row: the serialized
+    plan, the delivery bindings, the participant-access bindings, the fenced
+    artifact bindings, the plan-scoped image candidates, and the normalized
+    backend ownership.
+
+    ``suppress_access`` (#28) drops the participant-access bindings so a warm-prepare
+    provision realizes a system-owned, quarantined generation with no participant
+    access; warm activation later carries the access bindings and realizes the
+    claimant's fresh access.
+    """
+
+    plan = target.range_config or {}
+    pin = retained_runtime_plugin_pin(target)
+    if preparation_for_cleanup:
+        retained = retained_cleanup_payload(target, pin)
+        if retained is not None:
+            return retained
+        retained = retained_project_cleanup_payload(target)
+        if retained is not None:
+            return retained
+    return build_raes_operation_input(
+        plan=plan,
+        bindings=RaesInputBindings(
+            delivery=_raes_delivery_bindings(target),
+            management_targets=_management_targets(target, plan),
+            access=() if suppress_access else _raes_access_bindings(target),
+            artifact=_raes_artifact_bindings(target),
+            runtime_plugin=pin,
+            gcp_projects=projects_for_input(target, plan, pin),
+            cloud_content=_raes_cloud_content(target),
+            remote_access=None if suppress_access else _raes_remote_access(target),
+        ),
+        image_candidates=_raes_image_candidates(plan, target),
+        range_backend=_resolved_range_backend(target, request),
+        instantiation_purpose=target.instantiation_purpose or None,
+        identity=RaesRangeIdentity(target.id, str(target.resource_generation) if target.resource_generation else None),
+        egress_mode=target.egress_mode,
+    )
+
+
+def _activation_input_payload(target: Range, request: Request) -> dict[str, object]:
+    """Compose the warm-pool ``activate`` claimant projection (#28).
+
+    Self-sufficient from the claimed warm-generation ledger row plus the Range,
+    which has already been reassigned to the claimant at claim time. The claimant
+    identity comes from this immutable projection, never from HTTP/env/argv
+    (preflight #28 security gate 6).
+    """
+
+    gen = (
+        WarmRangeGeneration.objects.filter(request_id=request.request_id, state=WarmRangeGeneration.State.CLAIMED)
+        .order_by("pk")
+        .first()
+    )
+    if gen is None:
+        raise ValueError("activation requires a claimed warm generation for the request")
+    if target.owner_principal_uuid is None:
+        raise ValueError("Warm activation requires a principal claimant")
+
+    claimant = resolve_principal_uuid(target.owner_principal_uuid)
+    scope = resource_scope_from_ids(
+        kind=target.scope_kind,
+        account_id=target.account_id,
+        organization_id=target.organization_id,
+        workspace_id=target.workspace_id,
+    )
+    if scope.kind != "account":
+        raise ValueError("Warm activation requires a customer-scoped range")
+    purpose = target.instantiation_purpose or "live_fire"
+    return build_activation_input(
+        claimant=ActivationClaimant(principal=claimant, scope=scope),
+        generation=ActivationGeneration(
+            range_source=gen.range_source,
+            instantiation_purpose=str(purpose),
+            range_backend=str(target.range_backend or gen.backend),
+            legacy_range_id=int(target.id),
+            compatibility_digest=gen.compatibility_digest,
+            prepared_generation_fence=str(gen.operation_id or ""),
+        ),
+        # The full realization projection (plan + the now-unsuppressed participant
+        # access bindings) so the provisioner can locate the realized hosts and
+        # realize the claimant's fresh access.
+        raes_input=_raes_input_payload(target, request),
+    )
+
+
+def _request_has_pending_warm_generation(request: Request) -> bool:
+    """Return True when a warm generation is provisioning against this request (#28).
+
+    The signal that a ``raes-range provision`` is a *warm-prepare*: its participant
+    access is suppressed so the realized generation is quarantined until activation.
+    """
+
+    return WarmRangeGeneration.objects.filter(
+        request_id=request.request_id, state=WarmRangeGeneration.State.PROVISIONING
+    ).exists()
+
+
+def _range_operation_payload(target: Range, resource: str, request: Request, operation: str) -> dict[str, object]:
+    """Compose the operation-input projection for a :class:`Range` target."""
+    if resource == "raes-range" and operation == "activate":
+        return _activation_input_payload(target, request)
+    if resource == "raes-range":
+        # A warm-prepare provision suppresses participant access so the realized
+        # generation is system-owned and quarantined until it is claimed and
+        # activated (#28).
+        return _raes_input_payload(
+            target,
+            request,
+            suppress_access=_request_has_pending_warm_generation(request),
+            preparation_for_cleanup=operation == "destroy",
+        )
+    return {
+        "range_spec": target.range_config or {},
+        "legacy_range_backend": _resolved_range_backend(target, request),
+        # Effective egress posture pinned at create (PLAT-238, ADR-017-R5).
+        # Delivered per-range so the provisioner realizes it from the operation
+        # input, never from the deployment-owned RANGE_EGRESS_MODE env once a
+        # decision is pinned. Always present on a new generation; the provisioner
+        # parser fails closed on absence rather than defaulting (ADR-043 window).
+        "egress_mode": target.egress_mode,
+    }
+
+
+def operation_input_payload(
+    target: Range | Instance, resource: str, request: Request, *, operation: str = "provision"
+) -> dict[str, object]:
+    """Compose the immutable operation-input projection from engine-owned models.
+
+    A reference-only projection of the existing persisted contracts, not an ORM
+    dump. The RAES family consumes the full projection (#1837); the cyberscript
+    range family still reads most of its inputs directly, and takes only the
+    normalized legacy backend it can no longer resolve for itself. The warm-pool
+    ``activate`` operation (#28) carries the claimant projection instead.
+    """
+    if isinstance(target, Range):
+        return _range_operation_payload(target, resource, request, operation)
+    return {"role": str(target.role), "os_type": str(target.os_type)}
+
+
+def materialize_operation_input(payload: dict[str, object], operation_id: UUID | str, target: Range | Instance) -> None:
+    """Persist input atomically with the incumbent intent and its authority hash."""
+
+    request: Request | None = getattr(target, "request", None)
+    if request is None:
+        return
+    resource, operation = str(payload["resource"]), str(payload["operation"])
+    intent = ProvisionerLaunchIntent.objects.get(operation_id=operation_id)
+    envelope = build_operation_envelope(
+        operation_id=operation_id,
+        request_id=request.request_id,
+        resource=resource,
+        operation=operation,
+        payload=operation_input_payload(target, resource, request, operation=operation),
+        **authority_envelope_fields(intent),
+    )
+    OperationInput.objects.create(
+        operation_id=operation_id,
+        request_id=request.request_id,
+        resource=resource,
+        operation=operation,
+        contract_version=envelope["contract_version"],
+        envelope=envelope,
+    )
+    queue_runtime_plugin_plans(envelope)
+
+
+def _management_targets(target: Range, plan: dict[str, object]) -> tuple[str, ...]:
+    """Request private management only for the VMs of an Engine-owned worker."""
+
+    if not DisposableWorker.objects.filter(range_id=target.pk).exists():
+        return ()
+    return tuple(node.address for node in worker_host_nodes(plan))
+
+
+def _worker_image_candidates(target: Range, plan: dict[str, object]) -> dict[str, list[dict[str, object]]] | None:
+    """Project each worker VM's retained image identity without consulting the registry."""
+
+    worker = DisposableWorker.objects.filter(range_id=target.pk).first()
+    if worker is None:
+        return None
+    profile = WorkerHostProfile.model_validate(worker.profile)
+    if profile.digest != worker.profile_digest or profile.plan != plan:
+        raise ValueError("Worker apparatus binding changed")
+    candidates: dict[str, list[dict[str, object]]] = {}
+    images = profile.host_images
+    for node in profile.nodes:
+        image, image_id = images[node.address]
+        candidate = {
+            "source_version": node.version,
+            "image_ref": image.image_ref,
+            "image_id": image_id,
+            "machine_type": image.machine_type,
+            "disk_size_gb": image.disk_size_gb,
+            "disk_type": image.disk_type,
+            "management_ssh_port": image.management_ssh_port,
+            "management_ssh_username": image.management_ssh_username,
+            # Non-default hardware choices only, so default profiles keep their input.
+            **image.model_dump(include={"nic_type", "disk_interface", "enable_secure_boot"}),
+        }
+        existing = candidates.setdefault(candidate_key("gce", node.source), [candidate])
+        if existing != [candidate]:
+            # Candidates are keyed by source, so VMs that share a source must share an image.
+            raise ValueError("Worker VMs with one source must use one image")
+    return candidates

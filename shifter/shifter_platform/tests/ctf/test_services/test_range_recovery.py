@@ -137,7 +137,7 @@ def _make_spare_range(*, event: CTFEvent, owner, scenario_id: str = "basic", req
 def _retain_initial_range_custody(instance, credential):
     """Represent the previously accepted native generation with its exact policy admission."""
     from engine.models import RangeAuthorityChange
-    from engine.services._launch_authority import admit_launch_authority, range_runtime_binding_digest
+    from engine.services._launch_authority.authority import admit_launch_authority, range_runtime_binding_digest
 
     runtime = instance.engine_range
     payload = {
@@ -708,7 +708,7 @@ class TestIdempotentRetry:
             called["value"] = True
             raise CloudTaskError("simulated transient teardown failure")
 
-        monkeypatch.setattr("engine.services._range_by_request.start_range_teardown", fail_teardown)
+        monkeypatch.setattr("engine.services._range_lifecycle.by_request.start_range_teardown", fail_teardown)
         result = recover_participant_range(
             participant.pk,
             strategy=RecoveryStrategy.REASSIGN_SPARE.value,
@@ -746,7 +746,7 @@ class TestIdempotentRetry:
             call_count["n"] += 1
             raise CloudTaskError("cloud execution must be deferred")
 
-        monkeypatch.setattr("engine.services._range_by_request.start_range_teardown", flaky_teardown)
+        monkeypatch.setattr("engine.services._range_lifecycle.by_request.start_range_teardown", flaky_teardown)
 
         from django.db import connection
 

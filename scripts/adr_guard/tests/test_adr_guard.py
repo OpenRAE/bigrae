@@ -809,7 +809,7 @@ class LayerImportTighteningTests(unittest.TestCase):
     def test_is_import_allowed_rejects_private_submodule(self) -> None:
         allowed = {"mission_control": ["cms.services"], "cms": ["engine.services"]}
         self.assertFalse(ADR_GUARD.is_import_allowed("mission_control", "cms.services._range_pause", allowed))
-        self.assertFalse(ADR_GUARD.is_import_allowed("cms", "engine.services._lifecycle", allowed))
+        self.assertFalse(ADR_GUARD.is_import_allowed("cms", "engine.services._range_lifecycle.pause_resume", allowed))
         self.assertTrue(ADR_GUARD.is_import_allowed("mission_control", "cms.services", allowed))
         self.assertTrue(ADR_GUARD.is_import_allowed("mission_control", "cms.services.public", allowed))
 
@@ -1893,6 +1893,7 @@ class DeployWorkflowPlanScopeTests(unittest.TestCase):
             "container-images-lint-security",
             "adr-guard-lint-security",
             "stack-smoke-lint-security",
+            "security-trivy-config",
         )
         for job in jobs:
             with self.subTest(job=job), tempfile.TemporaryDirectory() as tmp:

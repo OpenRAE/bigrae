@@ -208,7 +208,7 @@ class TestDestroyRangeIntegration:
         )
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("engine.services._range.start_teardown", lambda *args: None)
+            mp.setattr("engine.services._range_lifecycle.compatibility.start_teardown", lambda *args: None)
             result = destroy_range(context)
 
         assert result is True
@@ -276,7 +276,7 @@ class TestDestroyRangeIntegration:
         )
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("engine.services._range_by_request.start_range_teardown", lambda *args: None)
+            mp.setattr("engine.services._range_lifecycle.by_request.start_range_teardown", lambda *args: None)
             result = destroy_range(context)
 
         assert result is True
@@ -623,7 +623,7 @@ class TestDestroyRangeByRequestIntegration:
         request_id = range_ready.request.request_id
 
         with pytest.MonkeyPatch.context() as mp:
-            mp.setattr("engine.services._range_by_request.start_range_teardown", lambda *args: None)
+            mp.setattr("engine.services._range_lifecycle.by_request.start_range_teardown", lambda *args: None)
             result = destroy_range_by_request(request_id)
 
         assert result is True

@@ -1,7 +1,7 @@
 # Revoke the provisioner's ACES read capability (ADR-043 phase 5, #1837).
 #
 # Both ACES inputs now arrive on the immutable operation-input projection,
-# materialized by engine.services._launch_intents in the launch-intent transaction and
+# materialized by engine.services._launch.intents in the launch-intent transaction and
 # selected by the provisioner via its canonical operation_id:
 #   - content-delivery bindings  aces_range_ops -> AcesOperationInput.delivery_bindings
 #   - image registry candidates  aces_range_ops -> AcesOperationInput.image_candidates_for

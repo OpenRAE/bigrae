@@ -26,8 +26,8 @@ from engine.services import (
     install_runtime_plugin,
     reconcile_runtime_plugin_operations,
 )
-from engine.services._launch_intents import enqueue_provisioner_launch
-from engine.services._runtime_plugin_bindings import retained_runtime_plugin_pin
+from engine.services._launch.intents import enqueue_provisioner_launch
+from engine.services._runtime_plugin.bindings import retained_runtime_plugin_pin
 from shared.exceptions import ValidationError
 from shared.raes.operation_input import parse_raes_operation_input
 from shared.range_instantiation_policy import BackendAdmission, InstantiationPurpose
@@ -146,7 +146,7 @@ def test_required_file_selection_is_fenced_before_range_creation(pack):
 
 def test_revoked_file_material_blocks_worker_dispatch(pack, monkeypatch):
     target = launch(pack)
-    from engine.services import _runtime_plugin_operations as operations
+    from engine.services._runtime_plugin_operations import operations
 
     launch_job = Mock()
     monkeypatch.setattr(operations, "launch_plugin", launch_job)
@@ -177,7 +177,7 @@ def test_existing_range_keeps_original_version_after_pack_upgrade_and_retirement
     )
     change_runtime_plugin(pack.credential, pack.organization.uuid, pack.installed.id, "retire")
     assert retained_runtime_plugin_pin(target) == original
-    from engine.services._operation_inputs import operation_input_payload
+    from engine.services._launch.operation_inputs import operation_input_payload
 
     cleanup = parse_raes_operation_input(
         operation_input_payload(target, "raes-range", target.request, operation="destroy")
@@ -246,7 +246,7 @@ def test_pre_upgrade_pin_without_defaulted_profile_field_remains_usable_for_clea
     pin = retained_runtime_plugin_pin(target)
     assert pin is not None
     assert pin.bindings.image_profile_for("node.web").allow_public_web_egress is False
-    from engine.services._operation_inputs import operation_input_payload
+    from engine.services._launch.operation_inputs import operation_input_payload
 
     cleanup = parse_raes_operation_input(
         operation_input_payload(target, "raes-range", target.request, operation="destroy")
@@ -380,9 +380,9 @@ def test_pack_update_requires_explicit_rebinding_instead_of_silently_skipping_pl
 @pytest.fixture
 def worker(monkeypatch):
     dispatch = Mock()
-    monkeypatch.setattr("engine.services._runtime_plugin_operations.launch_plugin", dispatch)
-    monkeypatch.setattr("engine.services._runtime_plugin_operations._pull_secret", lambda *args: "")
-    monkeypatch.setattr("engine.services._runtime_plugin_operations.interrupt_plugin", Mock())
+    monkeypatch.setattr("engine.services._runtime_plugin_operations.operations.launch_plugin", dispatch)
+    monkeypatch.setattr("engine.services._runtime_plugin_operations.operations._pull_secret", lambda *args: "")
+    monkeypatch.setattr("engine.services._runtime_plugin_operations.operations.interrupt_plugin", Mock())
 
     def observe(request):
         return RuntimePlan(
@@ -398,7 +398,7 @@ def worker(monkeypatch):
             ],
         )
 
-    monkeypatch.setattr("engine.services._runtime_plugin_operations.observe_plugin", observe)
+    monkeypatch.setattr("engine.services._runtime_plugin_operations.operations.observe_plugin", observe)
     return dispatch
 
 
@@ -447,7 +447,7 @@ def test_controller_rejects_generation_change_during_worker_observation(pack, wo
             ],
         )
 
-    monkeypatch.setattr("engine.services._runtime_plugin_operations.observe_plugin", observe)
+    monkeypatch.setattr("engine.services._runtime_plugin_operations.operations.observe_plugin", observe)
     reconcile_runtime_plugin_operations()
     assert not RuntimePluginInvocation.objects.filter(state="planned").exists()
 

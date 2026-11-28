@@ -2,10 +2,9 @@
 
 from django.db import models
 
+from engine.models._range import Range
+from engine.models._request import Instantiation
 from shared.schemas.persistence import unwrap_persisted_spec
-
-from ._range import Range
-from ._request import Instantiation
 
 
 class Subnet(Instantiation):

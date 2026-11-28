@@ -349,8 +349,9 @@ module "rds" {
 module "lambda_code_signing" {
   source = "../../../modules/lambda-code-signing"
 
-  name_prefix = local.name_prefix
-  tags        = var.tags
+  name_prefix       = local.name_prefix
+  access_log_bucket = module.s3_access_logs.bucket
+  tags              = var.tags
 }
 
 module "redis" {
@@ -361,6 +362,8 @@ module "redis" {
   lambda_code_signing = module.lambda_code_signing.signing
   vpc_id              = module.vpc.vpc_id
   subnet_ids          = module.vpc.private_subnet_ids
+  # Rotation HTTPS goes only to the VPC interface endpoints (#2566).
+  aws_endpoints_security_group_id = module.vpc.interface_endpoints_security_group_id
   # Reached by the EKS control plane over the portal<->EKS VPC peering; scoped to
   # the peered EKS VPC CIDR (see the RDS module note above).
   allowed_cidr_blocks = [var.eks_vpc_cidr]
@@ -622,7 +625,26 @@ module "s3" {
   bucket_name          = var.user_storage_bucket
   cors_allowed_origins = ["https://${var.domain_name}"]
   kms_key_arn          = aws_kms_key.portal_s3.arn
+  access_log_bucket    = module.s3_access_logs.bucket
   tags                 = var.tags
+}
+
+# ------------------------------------------------------------------------------
+# S3 server access log destination for this root's buckets (#2566)
+# ------------------------------------------------------------------------------
+
+module "s3_access_logs" {
+  source = "../../../modules/s3-access-logs"
+
+  name_prefix    = local.name_prefix
+  retention_days = var.log_retention_days
+  source_bucket_names = compact([
+    module.s3.bucket_name,
+    module.lambda_code_signing.signing.bucket,
+    module.log_aggregation.logs_bucket_name,
+    module.log_aggregation.alb_logs_bucket_name,
+  ])
+  tags = var.tags
 }
 
 resource "aws_iam_role_policy" "range_instance_portal_s3_kms_read" {
@@ -776,6 +798,7 @@ module "log_aggregation" {
   aws_region               = var.aws_region
   log_retention_days       = var.log_retention_days
   enable_log_aggregation   = var.enable_log_aggregation
+  access_log_bucket        = module.s3_access_logs.bucket
 
   # Phase 5: ALB and WAF logging
   enable_alb_access_logs = var.enable_alb_access_logs

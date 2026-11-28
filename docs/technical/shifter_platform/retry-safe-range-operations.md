@@ -32,7 +32,7 @@ digest.
   even after package/registry/default-configuration changes.
 - The **compiled intent** (the full `OperationInput`—compiled plan plus
   artifact/configuration/delivery/participant-access bindings) is enforced by the
-  engine: `engine.services._launch_intents.enqueue_provisioner_launch` compares the composed intent with stored immutable `OperationInput`. A changed internal replay conflicts before effects.
+  engine: `engine.services._launch.intents.enqueue_provisioner_launch` compares the composed intent with stored immutable `OperationInput`. A changed internal replay conflicts before effects.
 
 ## Binding persistence and concurrency
 
@@ -43,7 +43,7 @@ never owns lifecycle, status, or effects (ADR-043-R3/R4). A `UniqueConstraint` o
 `(deployment_scope, actor_key, action, caller_key)` lets PostgreSQL arbitrate
 concurrent first use.
 
-`engine.services._retry_binding.bind_public_operation` recovers an existing binding, else
+`engine.services._cleanup.retry_binding.bind_public_operation` recovers an existing binding, else
 runs a caller-supplied `mint` inside the binding transaction and inserts the
 binding. Concurrent first use has one winner. The loser's unique insert raises `IntegrityError`, rolling back its complete transaction and reservations. Outside the failed savepoint, it reads the committed winner and recovers or conflicts. Same-key contenders therefore converge on
 one binding and one set of effects; the real-PostgreSQL proofs live in
@@ -80,5 +80,5 @@ All three cleanup consumers gate on the latest `RangeCleanupVerification` being
   `provider_inventory_unconfirmed` obligation, and `RESIDUALS_FOUND`/`INCOMPLETE`
   are `unknown` with residual obligations.
 - **CTF capacity/linkage release.** `ctf.services.range.lifecycle` dispatches destroy and retains participant/range/reservation linkage while `destroying`. Capacity release and linkage removal require `ctf.signals.sync_ctf_participant_range_status` to receive DESTROYED with `cleanup_verified=True`. The CMS event handler derives that flag from inventory evidence. Revalidates #1919 (ADR-063-R5).
-- **Retention pruning.** `engine.services._retry_binding.prune_expired_retry_bindings`
+- **Retention pruning.** `engine.services._cleanup.retry_binding.prune_expired_retry_bindings`
   deletes an expired binding only after verified cleanup absence. The `prune_retry_bindings` command uses this function. Unresolved recovery and residual evidence remain retained.

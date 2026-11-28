@@ -10,13 +10,7 @@ from django.conf import settings
 
 from engine.models import Instance, Range
 from engine.secrets import SecretsError, get_ssh_key
-from engine.ssh import SSHConnection, build_ssh_connection
-from shared.credentials import CredentialContext
-from shared.enums import ResourceStatus
-from shared.log_sanitize import safe_log_value
-from shared.remote_access import PrincipalCredentialRequired
-
-from ._common import (
+from engine.services._common import (
     _first_connection_value,
     _resolve_instance_connection_name,
     _resolve_instance_host,
@@ -28,9 +22,14 @@ from ._common import (
     _resolve_rdp_credentials,
     find_instance_by_uuid,
 )
-from ._device_authority import admit_native_device_access
-from ._queries import _owned_legacy_instance_request_ref
-from ._range_authority import authorized_instance_range
+from engine.services._device_authority import admit_native_device_access
+from engine.services._queries import _owned_legacy_instance_request_ref
+from engine.services._range.authority import authorized_instance_range
+from engine.ssh import SSHConnection, build_ssh_connection
+from shared.credentials import CredentialContext
+from shared.enums import ResourceStatus
+from shared.log_sanitize import safe_log_value
+from shared.remote_access import PrincipalCredentialRequired
 
 if TYPE_CHECKING:
     from django.contrib.auth.models import User

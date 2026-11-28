@@ -10,13 +10,16 @@ from django.db.models import Prefetch
 
 from engine.interpreter import interpret
 from engine.models import App, Instance, Range, Request
-from engine.services._launch_intents import clear_provisioner_operation_after_failure
-from engine.services._launch_starts import start_ngfw_operation, start_ngfw_provisioning, start_ngfw_teardown
+from engine.services._common import EngineError
+from engine.services._launch.intents import clear_provisioner_operation_after_failure
+from engine.services._launch.starts import start_ngfw_operation, start_ngfw_provisioning, start_ngfw_teardown
+from engine.services._principal_lifecycle.ngfw import (
+    commit_ngfw_lifecycle,
+    create_principal_ngfw,
+    prepare_ngfw_lifecycle,
+)
 from shared.enums import ResourceStatus
 from shared.schemas import InstanceSpec, RequestSpec
-
-from ._common import EngineError
-from ._principal_ngfw import commit_ngfw_lifecycle, create_principal_ngfw, prepare_ngfw_lifecycle
 
 if TYPE_CHECKING:
     from uuid import UUID

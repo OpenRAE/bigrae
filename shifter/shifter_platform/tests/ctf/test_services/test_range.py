@@ -133,7 +133,7 @@ class TestProvisionParticipantRange:
     def test_provision_success_persists_assignment(self, ctf_participant, organizer_credential, monkeypatch):
         """The real queue is empty until CTF records its exact runtime association."""
         from engine.models import ProvisionerLaunchIntent
-        from engine.services._launch_authority import authorize_launch_authority
+        from engine.services._launch_authority.authority import authorize_launch_authority
         from shared.authorization import configured_authorization_provider
 
         provider = configured_authorization_provider()

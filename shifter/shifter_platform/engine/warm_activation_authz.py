@@ -1,6 +1,6 @@
 """Authorization gate for the warm-pool ``activate`` operation (#28).
 
-Extracted from :mod:`engine.services._launch_intents` so the launch-intent module stays
+Extracted from :mod:`engine.services._launch.intents` so the launch-intent module stays
 within its size budget and the warm-specific authority rule lives on its own seam.
 Activation is authorized only for a *claimed* warm generation on a realized,
 system-prepared (quarantined ``PROVISIONING``) range -- never for an arbitrary

@@ -119,7 +119,7 @@ def test_audit_failure_rolls_back_executable_registration(administrator, grant, 
     def fail(*args, **kwargs):
         raise RuntimeError("audit unavailable")
 
-    monkeypatch.setattr("engine.services._preparation_adapters.audit_log", fail)
+    monkeypatch.setattr("engine.services._preparation.adapters.audit_log", fail)
     with pytest.raises(RuntimeError):
         install_preparation_adapter(administrator, grant.pk, manifest_payload())
     assert not PreparationAdapter.objects.exists()

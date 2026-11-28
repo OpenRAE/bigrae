@@ -153,7 +153,7 @@ def test_existing_authorize_bootstrap_callers_still_deny_during_outage(device_se
 
 @pytest.mark.parametrize("bind", ["evaluator_error", "provider_raises"])
 def test_native_range_action_reports_evaluator_outage(principal_range, monkeypatch, bind):
-    from engine.services._range_authority import require_native_range_action
+    from engine.services._range.authority import require_native_range_action
 
     if bind == "evaluator_error":
         _bind_decision(monkeypatch, DecisionKind.EVALUATOR_ERROR)
@@ -164,7 +164,7 @@ def test_native_range_action_reports_evaluator_outage(principal_range, monkeypat
 
 
 def test_native_range_action_keeps_bounded_denials(principal_range, monkeypatch):
-    from engine.services._range_authority import require_native_range_action
+    from engine.services._range.authority import require_native_range_action
 
     _bind_decision(monkeypatch, DecisionKind.DENIED)
     with pytest.raises(PermissionError) as denied:
@@ -182,7 +182,7 @@ def test_native_range_action_keeps_bounded_denials(principal_range, monkeypatch)
     reason="Native range guest selection requires PostgreSQL JSON containment",
 )
 def test_instance_range_carries_only_evaluator_outage(principal_range, monkeypatch):
-    from engine.services._range_authority import authorized_instance_range
+    from engine.services._range.authority import authorized_instance_range
 
     target = "provision.node.client#0"
     principal_range.realized.provisioned_instances = [{"uuid": target}]

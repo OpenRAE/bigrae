@@ -38,7 +38,7 @@
         "shifter/shifter_platform/cms/services/_experiment_dispatch.py",
         "shifter/shifter_platform/cms/services/_experiment_dispatch_state.py",
         "shifter/shifter_platform/shared/raes/experiment_dispatch_inputs.py",
-        "shifter/shifter_platform/engine/services/_worker_trials.py",
+        "shifter/shifter_platform/engine/services/_worker/trials.py",
         "shifter/shifter_platform/shared/worker_trial.py",
         "shifter/engine/provisioner/worker_trial_ops.py",
         "shifter/shifter_adapter_sdk/trial.py"
@@ -55,8 +55,8 @@
         "technical/shifter_platform/disposable-workers.md"
       ],
       "drift_sources": [
-        "shifter/shifter_platform/engine/services/_disposable_workers.py",
-        "shifter/shifter_platform/engine/services/_worker_retirement.py",
+        "shifter/shifter_platform/engine/services/_worker_lifecycle/disposable.py",
+        "shifter/shifter_platform/engine/services/_worker_lifecycle/retirement.py",
         "shifter/shifter_platform/engine/worker_retention.py",
         "shifter/shifter_platform/shared/disposable_workers.py",
         "shifter/shifter_platform/engine/management/commands/qualify_disposable_workers.py",
@@ -343,7 +343,7 @@
         "shifter/shifter_platform/shared/gcp_project_completion.py",
         "shifter/shifter_platform/shared/raes/cloud_*.py",
         "shifter/shifter_platform/engine/models/_gcp_range_projects.py",
-        "shifter/shifter_platform/engine/services/_gcp_project*.py",
+        "shifter/shifter_platform/engine/services/_gcp_project/*.py",
         "shifter/shifter_platform/cms/api/gcp_range_projects.py",
         "shifter/engine/provisioner/gcp_project_*.py"
       ]

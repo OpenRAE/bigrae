@@ -15,7 +15,7 @@ from django.utils import timezone
 from shifter_adapter_sdk.runtime import PluginManifest
 from shifter_adapter_sdk.validation import ValidationInput, ValidationResult
 
-from engine.services import _participant_validation as validation
+from engine.services._runtime_plugin import participant_validation as validation
 
 OWNER = "lilrae-opencode-request@1"
 MANIFEST = PluginManifest(
@@ -152,7 +152,9 @@ def launcher(monkeypatch):
     monkeypatch.setattr("engine.models.RuntimePluginValidation.objects", _Validations())
     monkeypatch.setattr(validation, "launch_plugin", lambda item, **_: state.launched.append(item))
     monkeypatch.setattr(validation, "interrupt_plugin", state.interrupted.append)
-    monkeypatch.setattr("engine.services._participant_validation._pull_secret", lambda _row, _request: "")
+    monkeypatch.setattr(
+        "engine.services._runtime_plugin.participant_validation._pull_secret", lambda _row, _request: ""
+    )
     monkeypatch.setattr(validation, "observe_plugin", lambda _request: state.observed.pop(0))
     state.request, state.pending_row = request, pending_row
     return state

@@ -14,6 +14,8 @@ from __future__ import annotations
 import logging
 from typing import cast
 
+from engine.handlers._ngfw import _handle_ngfw_event
+from engine.handlers._range import _handle_provisioned, _handle_status_updated
 from engine.services import record_raes_operation_status, record_raes_runtime_snapshot
 from shared.messages.envelope import parse_sns_message
 from shared.messages.events import (
@@ -27,9 +29,6 @@ from shared.messages.payloads import (
     RangeStatusUpdatedPayload,
 )
 from shared.raes.contracts import EVENT_TYPE_RAES_OPERATION, EVENT_TYPE_RAES_SNAPSHOT
-
-from ._ngfw import _handle_ngfw_event
-from ._range import _handle_provisioned, _handle_status_updated
 
 logger = logging.getLogger(__name__)
 

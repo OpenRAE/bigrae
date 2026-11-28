@@ -11,10 +11,10 @@ from shifter_adapter_sdk.runtime import RuntimeInput, RuntimePlan
 
 from engine.models import Range, RuntimePluginInstallation, RuntimePluginInvocation, RuntimePluginRangeBinding
 from engine.services import RangeBindings, bind_runtime_plugin, create_raes_range, install_runtime_plugin
-from engine.services import _runtime_plugin_operations as operations
-from engine.services._launch_intents import enqueue_provisioner_launch
-from engine.services._operation_inputs import operation_input_payload
-from engine.services._runtime_plugin_preparation import preparation_result_secret
+from engine.services._launch.intents import enqueue_provisioner_launch
+from engine.services._launch.operation_inputs import operation_input_payload
+from engine.services._runtime_plugin_operations import operations
+from engine.services._runtime_plugin_operations.preparation import preparation_result_secret
 from shared.field_encryption import decrypt_value
 from shared.raes.operation_input import parse_raes_operation_input
 from shared.range_instantiation_policy import BackendAdmission, InstantiationPurpose
@@ -198,7 +198,7 @@ def test_cancel_intent_fences_preparation_even_before_the_range_changes_state(pe
 @pytest.mark.parametrize("pending", ["oversized"], indirect=True)
 def test_valid_values_that_would_overflow_cleanup_are_rejected_before_acceptance(pending):
     from engine.models import OperationInput
-    from engine.services._runtime_plugin_preparation import approve_invocation
+    from engine.services._runtime_plugin_operations.preparation import approve_invocation
     from shared.exceptions import ValidationError
     from shared.operation_envelope import validate_operation_envelope
 
@@ -223,6 +223,6 @@ def test_prepared_cleanup_uses_original_input_even_when_registry_projection_chan
     def changed(*_args):
         raise AssertionError("cleanup must not consult a changed registry")
 
-    monkeypatch.setattr("engine.services._operation_inputs._raes_image_candidates", changed)
+    monkeypatch.setattr("engine.services._launch.operation_inputs._raes_image_candidates", changed)
     cleanup = operation_input_payload(pending.target, "raes-range", pending.target.request, operation="destroy")
     assert {key: value for key, value in cleanup.items() if key != "runtime_preparation"} == source

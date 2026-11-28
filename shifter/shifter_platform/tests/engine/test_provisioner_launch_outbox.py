@@ -99,7 +99,7 @@ def _intent(request_id: str = "11111111-1111-1111-1111-111111111111"):
     from django.contrib.auth import get_user_model
 
     from engine.models import ProvisionerLaunchIntent, Range, Request
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     user = get_user_model().objects.create_user(username=f"launcher-{request_id}@example.com")
     request = Request.objects.create(request_id=request_id, request_type="range", user=user)
@@ -145,7 +145,7 @@ def test_drainer_launches_canonical_command_and_marks_succeeded(settings, k8s_bo
 @pytest.mark.parametrize("operation", ["provision", "destroy"])
 def test_legacy_dispatch_locks_and_launches_on_postgresql(settings, k8s_boundary, django_user_model, operation):
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     user = django_user_model.objects.create_user(username="synthetic-legacy-launcher")
     native = Range.objects.create(
@@ -272,7 +272,7 @@ def test_missing_task_runner_configuration_retries_instead_of_acknowledging(sett
 
 def test_dlq_fails_only_the_current_range_operation(settings, k8s_boundary, caplog) -> None:
     from engine.models import Range, RangeEventOutbox
-    from engine.services._launch_intents import PROVISIONER_DISPATCH_FAILED
+    from engine.services._launch.intents import PROVISIONER_DISPATCH_FAILED
 
     row = _intent()
     row.max_attempts = 1
@@ -328,7 +328,7 @@ def test_dlq_fails_current_ngfw_instance_and_apps(settings, k8s_boundary) -> Non
     from django.contrib.auth import get_user_model
 
     from engine.models import App, Instance, ProvisionerLaunchIntent, Request
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     request_id = uuid4()
     user = get_user_model().objects.create_user(username=f"launcher-{request_id}@example.com")
@@ -361,7 +361,7 @@ def test_dlq_fails_current_ngfw_instance_and_apps(settings, k8s_boundary) -> Non
 
 def test_reclaimed_lease_fences_stale_worker_result() -> None:
     from engine.models import ProvisionerLaunchStatus
-    from engine.services._launch_outbox import _record_failure, claim_next_intent
+    from engine.services._launch.outbox import _record_failure, claim_next_intent
 
     _intent()
     claimed = claim_next_intent()
@@ -380,7 +380,7 @@ def test_reclaimed_lease_fences_stale_worker_result() -> None:
 
 def test_reclaimed_lease_fences_stale_worker_before_dispatch(settings, k8s_boundary) -> None:
     """A reclaimed lease must block the provider effect, not only its result write."""
-    from engine.services._launch_outbox import claim_next_intent, launch_intent
+    from engine.services._launch.outbox import claim_next_intent, launch_intent
 
     _intent()
     _configure_aws(settings)

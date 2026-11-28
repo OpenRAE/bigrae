@@ -17,7 +17,7 @@ from django.utils import timezone
 from engine._status_audit import _status_to_action
 from engine.models import Range
 from engine.services import revoke_receipt_verifier
-from engine.services._launch_intents import clear_provisioner_operation_after_failure
+from engine.services._launch.intents import clear_provisioner_operation_after_failure
 from shared.audit import AuditEntityType, AuditTarget, StateChange, audit_log_system_event
 from shared.enums import ResourceStatus
 from shared.log_sanitize import safe_log_value

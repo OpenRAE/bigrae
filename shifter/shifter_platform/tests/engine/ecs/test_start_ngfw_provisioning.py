@@ -26,7 +26,7 @@ TEST_REQUEST_ID = UUID("550e8400-e29b-41d4-a716-446655440000")
 
 class TestStartNgfwProvisioning:
     def test_enqueues_intent_and_returns_reserved_ref(self, aws_ecs_configured, ecs_client):
-        from engine.services._launch_starts import start_ngfw_provisioning
+        from engine.services._launch.starts import start_ngfw_provisioning
 
         make_authorized_ngfw(TEST_REQUEST_ID, status="provisioning")
         ref = start_ngfw_provisioning(request_id=TEST_REQUEST_ID)
@@ -38,7 +38,7 @@ class TestStartNgfwProvisioning:
         ecs_client.run_task.assert_not_called()
 
     def test_returns_none_when_ecs_not_configured(self, aws_ecs_unconfigured, ecs_client):
-        from engine.services._launch_starts import start_ngfw_provisioning
+        from engine.services._launch.starts import start_ngfw_provisioning
 
         make_authorized_ngfw(TEST_REQUEST_ID, status="provisioning")
         assert start_ngfw_provisioning(request_id=TEST_REQUEST_ID) is None
@@ -46,7 +46,7 @@ class TestStartNgfwProvisioning:
         ecs_client.run_task.assert_not_called()
 
     def test_raises_type_error_for_none_request_id(self, aws_ecs_configured):
-        from engine.services._launch_starts import start_ngfw_provisioning
+        from engine.services._launch.starts import start_ngfw_provisioning
 
         with pytest.raises(TypeError):
             start_ngfw_provisioning(request_id=None)

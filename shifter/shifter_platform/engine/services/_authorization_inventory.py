@@ -6,6 +6,7 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from engine.models import Range
+from engine.services._range.authority import project_range_authority
 from shared.authorization import TargetRef, bind_authorization_descendant_resolver
 from shared.authorization.inventory import (
     AuthorizationDescendantResolutionError,
@@ -13,8 +14,6 @@ from shared.authorization.inventory import (
     bind_authorization_range_binding_resolver,
 )
 from shared.identity_scope import ResourceScope
-
-from ._range_authority import project_range_authority
 
 
 def list_authorization_range_uuids(workspace_ids: Sequence[int], limit: int) -> tuple[UUID, ...]:

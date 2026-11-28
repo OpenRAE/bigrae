@@ -54,19 +54,6 @@ skip-check:
   - CKV_AWS_290
   - CKV_AWS_289
 
-  # ── Path-scoped (demo / event ranges) ───────────────────────────────────────
-  # CKV_AWS_88 / CKV_AWS_130 — public IP + public subnets for workshop access.
-  - CKV_AWS_88
-  - CKV_AWS_130
-  # CKV_AWS_24 / CKV_AWS_25 / CKV_AWS_260 — open SSH/RDP/HTTP for workshops.
-  - CKV_AWS_24
-  - CKV_AWS_25
-  - CKV_AWS_260
-
-  # ── Default outbound egress ─────────────────────────────────────────────────
-  # CKV_AWS_382 — egress 0.0.0.0/0 all-ports. Default outbound.
-  - CKV_AWS_382
-
   # ── Service-account IAM users ───────────────────────────────────────────────
   # CKV_AWS_273 / CKV_AWS_274 / CKV_AWS_40 / CKV2_AWS_22 — programmatic users.
   - CKV_AWS_273
@@ -86,22 +73,16 @@ skip-check:
   # CKV2_AWS_57 — covered by manual rotation procedures in each owning module.
   - CKV2_AWS_57
 
-  # ── Log-archive S3 bucket / ephemeral state buckets ─────────────────────────
-  # CKV_AWS_18 / CKV_AWS_21 / CKV_AWS_144 / CKV2_AWS_62 — log/state buckets.
-  - CKV_AWS_18
-  - CKV_AWS_21
+  # ── S3 replication and event notifications ──────────────────────────────────
+  # CKV_AWS_144 / CKV2_AWS_62 — no cross-region replication or event consumer.
+  # Access logging (CKV_AWS_18) and versioning (CKV_AWS_21) are on since #2566;
+  # the access-log destination carries a resource skip.
   - CKV_AWS_144
   - CKV2_AWS_62
 
   # ── Module-default driven by per-environment variable ───────────────────────
   # CKV_AWS_157 — RDS Multi-AZ controlled by var.multi_az / var.db_multi_az.
   - CKV_AWS_157
-  # CKV_AWS_293 — RDS deletion protection controlled by var.deletion_protection.
-  - CKV_AWS_293
-
-  # ── Container networking ────────────────────────────────────────────────────
-  # CKV_AWS_341 — Launch template hop_limit=2 required for bridged containers.
-  - CKV_AWS_341
 
   # ── Guacamole ALB target group HTTP (TLS terminates at ALB) ─────────────────
   - CKV_AWS_378

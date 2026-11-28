@@ -265,7 +265,7 @@ def test_unsupported_backend_refused_before_effects(apparatus, settings, monkeyp
 def test_expired_capacity_with_live_worker_stays_reserved(apparatus):
     from engine.models import CapacityDraw, CapacityReservation
     from engine.services import reconcile_capacity_budgets
-    from engine.services._capacity_plan_persistence import _committed_reservation
+    from engine.services._capacity.plan_persistence import _committed_reservation
 
     create(apparatus)
     now = timezone.now()
@@ -353,7 +353,7 @@ def test_optional_software_uses_apparatus_protocol_without_pack(apparatus, prepa
 
         from engine.models import DisposableWorker, OperationInput, ProvisionerLaunchIntent
         from engine.services import retire_disposable_worker
-        from engine.services._runtime_plugin_preparation import approve_invocation, retain_preparation
+        from engine.services._runtime_plugin_operations.preparation import approve_invocation, retain_preparation
         from shared.raes.operation_input import parse_raes_operation_input
 
         settings.FIELD_ENCRYPTION_KEY = Fernet.generate_key().decode()

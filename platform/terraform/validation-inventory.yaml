@@ -145,13 +145,6 @@ roots:
     test: tests/placement.tftest.hcl
     providers:
       - registry.terraform.io/hashicorp/aws
-  - id: aws-global-dev-box
-    path: platform/terraform/global/dev-box
-    owner: "@Brad-Edwards"
-    toolchain: aws-1.13.3
-    providers:
-      - registry.terraform.io/hashicorp/aws
-      - registry.terraform.io/hashicorp/random
   - id: provisioner-range
     path: shifter/engine/provisioner/terraform/modules/range
     owner: "@Brad-Edwards"
@@ -282,6 +275,11 @@ modules:
     contract: terraform_test
     test: tests/firewall.tftest.hcl
     test_profile: aws-1.13.3
+  - path: platform/terraform/modules/s3-access-logs
+    owner: "@Brad-Edwards"
+    contract: terraform_test
+    test: tests/access_logs.tftest.hcl
+    test_profile: aws-1.13.3
   # GCP shared modules
   - path: platform/terraform/gcp/modules/cicd-oidc-identity
     owner: "@Brad-Edwards"
@@ -346,9 +344,9 @@ modules:
     tracking: "#1597"
   - path: platform/terraform/gcp/modules/portal/cloud-sql
     owner: "@Brad-Edwards"
-    contract: deferred
-    reason: "Contract-test rollout tracked in #1597."
-    tracking: "#1597"
+    contract: terraform_test
+    test: tests/native_identity.tftest.hcl
+    test_profile: gcp-1.17.1
   - path: platform/terraform/gcp/modules/portal/gcs
     owner: "@Brad-Edwards"
     contract: terraform_test

@@ -17,10 +17,10 @@ from engine.models import (
     RuntimePluginInstallation,
     RuntimePluginRangeBinding,
 )
-from engine.services._gcp_project_inputs import allocate_launch_projects, allocate_plan_projects, projects_for_input
-from engine.services._operation_inputs import operation_input_payload
-from engine.services._runtime_plugin_cleanup import preparation_cleanup_payload
-from engine.services._runtime_plugin_preparation import approved_preparation, retain_preparation
+from engine.services._gcp_project.inputs import allocate_launch_projects, allocate_plan_projects, projects_for_input
+from engine.services._launch.operation_inputs import operation_input_payload
+from engine.services._runtime_plugin.cleanup import preparation_cleanup_payload
+from engine.services._runtime_plugin_operations.preparation import approved_preparation, retain_preparation
 from shared.operation_envelope import MAX_RAES_INPUT_BYTES, OperationEnvelopeError, build_operation_envelope
 from shared.raes.operation_input import RaesInputBindings, RaesRangeIdentity, build_raes_operation_input
 from shared.runtime_plugin_binding import RuntimePluginPin, runtime_plugin_requests
@@ -99,8 +99,8 @@ def test_number_mismatch_rolls_back_project_uses_even_when_caller_catches_failur
 
 
 def test_held_project_blocks_owner_and_scope_moves_even_without_vpn(registration, native_plan):
-    from engine.services._principal_range_scope import _assert_move_supported
-    from engine.services._range_custody import (
+    from engine.services._principal.range_scope import _assert_move_supported
+    from engine.services._range.custody import (
         principal_range_owner_reassignment_available,
         range_owner_reassignment_available_by_request,
     )

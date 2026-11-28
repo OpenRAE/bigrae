@@ -1427,8 +1427,8 @@ def _sync_guacamole_runtime_secret(
 ) -> None:
     """Create the guacamole-runtime Kubernetes Secret from the eks-owned guacamole secrets.
 
-    guacamole-client reads POSTGRESQL_USER/POSTGRESQL_PASSWORD/JSON_SECRET_KEY from
-    this Secret via envFrom; the values are the Terraform-generated guacamole_admin
+    guacamole-client mounts POSTGRESQL_USER/POSTGRESQL_PASSWORD/JSON_SECRET_KEY as files from
+    this Secret; the values are the Terraform-generated guacamole_admin
     credentials and the shared JSON-auth signing key (also hydrated by the portal as
     GUACAMOLE_JSON_AUTH_SECRET). Mirrors GCP's sync_gcp_guacamole_runtime_secret; the
     manifest is streamed to kubectl over stdin so values never reach disk, argv or the log.

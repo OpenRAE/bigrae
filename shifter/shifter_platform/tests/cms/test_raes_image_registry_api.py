@@ -451,7 +451,7 @@ def test_registry_change_rolls_back_when_audit_fails(api_client, threat_research
     def fail_audit(*args, **kwargs):
         raise RuntimeError("Synthetic audit outage")
 
-    monkeypatch.setattr("engine.services._principal_image_registry.audit_log", fail_audit)
+    monkeypatch.setattr("engine.services._principal.image_registry.audit_log", fail_audit)
     url = LIST_CREATE_URL if operation == "replace" else DISABLE_URL
     data = (
         {**payload, "image_ref": "img-after"}

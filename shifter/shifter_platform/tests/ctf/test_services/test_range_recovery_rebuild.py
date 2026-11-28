@@ -139,7 +139,7 @@ def test_old_generation_cleanup_remains_authorized_after_the_participant_is_repo
 ):
     from ctf.services.range.recovery import recover_participant_range
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_authority import authorize_launch_authority
+    from engine.services._launch_authority.authority import authorize_launch_authority
 
     participant, old = rich_participant
     result = recover_participant_range(participant.pk, strategy="rebuild", operator=organizer_credential)

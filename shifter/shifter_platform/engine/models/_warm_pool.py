@@ -27,7 +27,7 @@ import uuid
 
 from django.db import models
 
-from ._range import Range
+from engine.models._range import Range
 
 
 class WarmRangeGeneration(models.Model):

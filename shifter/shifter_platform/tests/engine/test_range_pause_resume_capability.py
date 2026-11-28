@@ -6,7 +6,7 @@ mix is classified against the persisted range-backend binding.
 
 import pytest
 
-import engine.services._range as range_service
+import engine.services._range_lifecycle.compatibility as range_service
 
 
 def _patch_status(monkeypatch, instances, backend):
@@ -74,7 +74,7 @@ def test_native_range_refuses_power_operations_before_dispatch(
         provisioned_instances=[{"cloud_provider": "gcp" if backend == "gce" else "aws", "asset_type": f"{backend}_vm"}],
     )
     dispatch = Mock(side_effect=AssertionError("Native ranges cannot use legacy power dispatch"))
-    monkeypatch.setattr("engine.services._lifecycle.start_range_operation", dispatch)
+    monkeypatch.setattr("engine.services._range_lifecycle.pause_resume.start_range_operation", dispatch)
     capability = range_service.get_range_pause_resume_capability(range_obj.pk)
     assert not capability.supported
     assert capability.reason == "Pause and resume are not available for native scenario ranges."

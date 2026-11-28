@@ -38,12 +38,12 @@ def test_applier_descriptions_reflect_authoritative_cutovers():
     """Public worker descriptions must not present every result as shadow-only."""
     from engine.management.commands.apply_operation_results import Command
     from engine.models import _operation_io
-    from engine.services import _operation_apply
+    from engine.services._operation_apply import applier
 
     descriptions = (
         _operation_io.__doc__ or "",
-        _operation_apply.__doc__ or "",
-        _operation_apply.apply_pending_operation_results.__doc__ or "",
+        applier.__doc__ or "",
+        applier.apply_pending_operation_results.__doc__ or "",
     )
 
     assert all("sole authoritative writer" not in description for description in descriptions)

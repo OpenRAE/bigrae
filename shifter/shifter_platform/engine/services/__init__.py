@@ -6,149 +6,152 @@ import django.db as _api_django_db
 
 import engine.secrets as _api_engine_secrets
 import engine.ssh as _api_engine_ssh
-
-from . import _authorization_inventory as _api_authorization_inventory
-from . import _capacity as _api_capacity
-from . import _capacity_admit as _api_capacity_admit
-from . import _capacity_plan as _api_capacity_plan
-from . import _cleanup_outcome as _api_cleanup_outcome
-from . import _cleanup_verification as _api_cleanup_verification
-from . import _common as _api_common
-from . import _device_authority as _api_device_authority
-from . import _feature_artifact_launcher as _api_feature_artifact_launcher
-from . import _feature_artifacts as _api_feature_artifacts
-from . import _gcp_project_registration as _api_gcp_project_registration
-from . import _lifecycle as _api_lifecycle
-from . import _ngfw as _api_ngfw
-from . import _operation_apply as _api_operation_apply
-from . import _preparation_adapters as _api_preparation_adapters
-from . import _preparation_controller as _api_preparation_controller
-from . import _preparation_grants as _api_preparation_grants
-from . import _preparation_operations as _api_preparation_operations
-from . import _preparation_worker as _api_preparation_worker
-from . import _principal_lifecycle as _api_principal_lifecycle
-from . import _principal_ngfw as _api_principal_ngfw
-from . import _principal_range_create as _api_principal_range_create
-from . import _principal_warm_claim as _api_principal_warm_claim
-from . import _public_operations as _api_public_operations
-from . import _queries as _api_queries
-from . import _raes_evidence as _api_raes_evidence
-from . import _raes_image as _api_raes_image
-from . import _raes_range as _api_raes_range
-from . import _raes_status as _api_raes_status
-from . import _range as _api_range
-from . import _range_by_request as _api_range_by_request
-from . import _range_escape as _api_range_escape
-from . import _range_ownership as _api_range_ownership
-from . import _range_relationships as _api_range_relationships
-from . import _receipt as _api_receipt
-from . import _runtime_plugin_bindings as _api_runtime_plugin_bindings
-from . import _runtime_plugin_controller as _api_runtime_plugin_controller
-from . import _runtime_plugin_file_selection as _api_runtime_plugin_file_selection
-from . import _runtime_plugin_operations as _api_runtime_plugin_operations
-from . import _runtime_plugins as _api_runtime_plugins
-from . import _runtime_project_parameters as _api_runtime_project_parameters
-from . import _subnet_coordination as _api_subnet_coordination
-from . import _terminal as _api_terminal
-from . import _vpn as _api_vpn
-from . import _vpn_sessions as _api_vpn_sessions
-from . import _warm_pool as _api_warm_pool
-from . import _warm_pool_admission as _api_warm_pool_admission
-from . import _warm_pool_sweep as _api_warm_pool_sweep
-from ._disposable_workers import (
-    WorkerView as WorkerView,
-)
-from ._disposable_workers import (
-    bind_worker_trial as bind_worker_trial,
-)
-from ._disposable_workers import (
-    configure_worker_policy as configure_worker_policy,
-)
-from ._disposable_workers import (
-    create_disposable_worker as create_disposable_worker,
-)
-from ._disposable_workers import (
-    get_disposable_worker as get_disposable_worker,
-)
-from ._disposable_workers import (
-    published_worker_profile as published_worker_profile,
-)
-from ._disposable_workers import (
-    worker_credential_scope as worker_credential_scope,
-)
-from ._disposable_workers import (
-    worker_profile_binding as worker_profile_binding,
-)
-from ._identity_cutover import (
+from engine.services import _authorization_inventory as _api_authorization_inventory
+from engine.services import _common as _api_common
+from engine.services import _device_authority as _api_device_authority
+from engine.services import _ngfw as _api_ngfw
+from engine.services import _queries as _api_queries
+from engine.services import _raes_range as _api_raes_range
+from engine.services import _subnet_coordination as _api_subnet_coordination
+from engine.services import _terminal as _api_terminal
+from engine.services._capacity import admit as _api_capacity_admit
+from engine.services._capacity import declarations as _api_capacity
+from engine.services._capacity import plan as _api_capacity_plan
+from engine.services._cleanup import outcome as _api_cleanup_outcome
+from engine.services._cleanup import public_operations as _api_public_operations
+from engine.services._cleanup import verification as _api_cleanup_verification
+from engine.services._feature_artifacts import acquisition as _api_feature_artifacts
+from engine.services._feature_artifacts import launcher as _api_feature_artifact_launcher
+from engine.services._gcp_project import registration as _api_gcp_project_registration
+from engine.services._identity_cutover import (
     apply_identity_cutover_resources as apply_identity_cutover_resources,
 )
-from ._identity_cutover import (
+from engine.services._identity_cutover import (
     identity_cutover_resource_disposition as identity_cutover_resource_disposition,
 )
-from ._identity_cutover import (
+from engine.services._identity_cutover import (
     pending_identity_cutover_work as pending_identity_cutover_work,
 )
-from ._participant_validation import (
+from engine.services._operation_apply import applier as _api_operation_apply
+from engine.services._preparation import adapters as _api_preparation_adapters
+from engine.services._preparation import controller as _api_preparation_controller
+from engine.services._preparation import grants as _api_preparation_grants
+from engine.services._preparation import operations as _api_preparation_operations
+from engine.services._preparation import worker as _api_preparation_worker
+from engine.services._principal import warm_claim as _api_principal_warm_claim
+from engine.services._principal.range_events import verified_range_status_projection as verified_range_status_projection
+from engine.services._principal.range_owner import commit_range_owner_move as commit_range_owner_move
+from engine.services._principal.range_owner import prepare_event_range_owner_move as prepare_event_range_owner_move
+from engine.services._principal.range_owner import prepare_range_owner_move as prepare_range_owner_move
+from engine.services._principal.range_scope import commit_range_scope_move as commit_range_scope_move
+from engine.services._principal.range_scope import prepare_range_scope_move as prepare_range_scope_move
+from engine.services._principal_lifecycle import lifecycle as _api_principal_lifecycle
+from engine.services._principal_lifecycle import ngfw as _api_principal_ngfw
+from engine.services._principal_lifecycle import range_create as _api_principal_range_create
+from engine.services._principal_lifecycle.lifecycle import (
+    commit_prepared_range_lifecycle as commit_prepared_range_lifecycle,
+)
+from engine.services._principal_lifecycle.lifecycle import prepare_range_lifecycle as prepare_range_lifecycle
+from engine.services._principal_lifecycle.lifecycle import prepare_system_range_cleanup as prepare_system_range_cleanup
+from engine.services._public_api import PUBLIC_API as _DECLARED_PUBLIC_API
+from engine.services._raes import evidence as _api_raes_evidence
+from engine.services._raes import image as _api_raes_image
+from engine.services._raes import status as _api_raes_status
+from engine.services._range import escape as _api_range_escape
+from engine.services._range import receipt as _api_receipt
+from engine.services._range import relationships as _api_range_relationships
+from engine.services._range.authority import RangeAuthorityProjection as RangeAuthorityProjection
+from engine.services._range.authority import has_range_runtime as has_range_runtime
+from engine.services._range.authority import lock_range_remote_authority as lock_range_remote_authority
+from engine.services._range.authority import native_range_id_by_request as native_range_id_by_request
+from engine.services._range.authority import project_range_authority as project_range_authority
+from engine.services._range_lifecycle import by_request as _api_range_by_request
+from engine.services._range_lifecycle import compatibility as _api_range
+from engine.services._range_lifecycle import ownership as _api_range_ownership
+from engine.services._range_lifecycle import pause_resume as _api_lifecycle
+from engine.services._range_lifecycle.cleanup_retry import (
+    reconcile_range_cleanup_verification as reconcile_range_cleanup_verification,
+)
+from engine.services._runtime_plugin import bindings as _api_runtime_plugin_bindings
+from engine.services._runtime_plugin import controller as _api_runtime_plugin_controller
+from engine.services._runtime_plugin import file_selection as _api_runtime_plugin_file_selection
+from engine.services._runtime_plugin import installation as _api_runtime_plugins
+from engine.services._runtime_plugin import project_parameters as _api_runtime_project_parameters
+from engine.services._runtime_plugin.participant_validation import (
     reconcile_participant_validations as reconcile_participant_validations,
 )
-from ._participant_validation import (
+from engine.services._runtime_plugin.participant_validation import (
     validate_participant_configurations as validate_participant_configurations,
 )
-from ._principal_lifecycle import commit_prepared_range_lifecycle as commit_prepared_range_lifecycle
-from ._principal_lifecycle import prepare_range_lifecycle as prepare_range_lifecycle
-from ._principal_lifecycle import prepare_system_range_cleanup as prepare_system_range_cleanup
-from ._principal_range_events import verified_range_status_projection as verified_range_status_projection
-from ._principal_range_owner import commit_range_owner_move as commit_range_owner_move
-from ._principal_range_owner import prepare_event_range_owner_move as prepare_event_range_owner_move
-from ._principal_range_owner import prepare_range_owner_move as prepare_range_owner_move
-from ._principal_range_scope import commit_range_scope_move as commit_range_scope_move
-from ._principal_range_scope import prepare_range_scope_move as prepare_range_scope_move
-from ._public_api import PUBLIC_API as _DECLARED_PUBLIC_API
-from ._range_authority import RangeAuthorityProjection as RangeAuthorityProjection
-from ._range_authority import has_range_runtime as has_range_runtime
-from ._range_authority import lock_range_remote_authority as lock_range_remote_authority
-from ._range_authority import native_range_id_by_request as native_range_id_by_request
-from ._range_authority import project_range_authority as project_range_authority
-from ._range_cleanup_retry import reconcile_range_cleanup_verification as reconcile_range_cleanup_verification
-from ._vpn_profiles import get_vpn_crl as get_vpn_crl
-from ._worker_qualification import (
-    qualify_disposable_worker as qualify_disposable_worker,
-)
-from ._worker_qualification_evidence import (
+from engine.services._runtime_plugin_operations import operations as _api_runtime_plugin_operations
+from engine.services._vpn import profile_access as _api_vpn
+from engine.services._vpn import sessions as _api_vpn_sessions
+from engine.services._vpn.profiles import get_vpn_crl as get_vpn_crl
+from engine.services._warm_pool import admission as _api_warm_pool_admission
+from engine.services._warm_pool import allocation as _api_warm_pool
+from engine.services._warm_pool import sweep as _api_warm_pool_sweep
+from engine.services._worker.qualification_evidence import (
     WorkerQualification as WorkerQualification,
 )
-from ._worker_retirement import (
-    WorkerHoldView as WorkerHoldView,
-)
-from ._worker_retirement import (
-    acquire_worker_hold as acquire_worker_hold,
-)
-from ._worker_retirement import (
-    list_worker_holds as list_worker_holds,
-)
-from ._worker_retirement import (
-    reconcile_disposable_workers as reconcile_disposable_workers,
-)
-from ._worker_retirement import (
-    release_worker_hold as release_worker_hold,
-)
-from ._worker_retirement import (
-    resume_worker_cleanup as resume_worker_cleanup,
-)
-from ._worker_retirement import (
-    retire_disposable_worker as retire_disposable_worker,
-)
-from ._worker_trials import (
+from engine.services._worker.trials import (
     WorkerTrialView as WorkerTrialView,
 )
-from ._worker_trials import (
+from engine.services._worker.trials import (
     collect_worker_trial as collect_worker_trial,
 )
-from ._worker_trials import (
+from engine.services._worker.trials import (
     get_worker_trial as get_worker_trial,
 )
-from ._worker_trials import (
+from engine.services._worker.trials import (
     start_worker_trial as start_worker_trial,
+)
+from engine.services._worker_lifecycle.disposable import (
+    WorkerView as WorkerView,
+)
+from engine.services._worker_lifecycle.disposable import (
+    bind_worker_trial as bind_worker_trial,
+)
+from engine.services._worker_lifecycle.disposable import (
+    configure_worker_policy as configure_worker_policy,
+)
+from engine.services._worker_lifecycle.disposable import (
+    create_disposable_worker as create_disposable_worker,
+)
+from engine.services._worker_lifecycle.disposable import (
+    get_disposable_worker as get_disposable_worker,
+)
+from engine.services._worker_lifecycle.disposable import (
+    published_worker_profile as published_worker_profile,
+)
+from engine.services._worker_lifecycle.disposable import (
+    worker_credential_scope as worker_credential_scope,
+)
+from engine.services._worker_lifecycle.disposable import (
+    worker_profile_binding as worker_profile_binding,
+)
+from engine.services._worker_lifecycle.qualification import (
+    qualify_disposable_worker as qualify_disposable_worker,
+)
+from engine.services._worker_lifecycle.retirement import (
+    WorkerHoldView as WorkerHoldView,
+)
+from engine.services._worker_lifecycle.retirement import (
+    acquire_worker_hold as acquire_worker_hold,
+)
+from engine.services._worker_lifecycle.retirement import (
+    list_worker_holds as list_worker_holds,
+)
+from engine.services._worker_lifecycle.retirement import (
+    reconcile_disposable_workers as reconcile_disposable_workers,
+)
+from engine.services._worker_lifecycle.retirement import (
+    release_worker_hold as release_worker_hold,
+)
+from engine.services._worker_lifecycle.retirement import (
+    resume_worker_cleanup as resume_worker_cleanup,
+)
+from engine.services._worker_lifecycle.retirement import (
+    retire_disposable_worker as retire_disposable_worker,
 )
 
 transaction = _api_django_db.transaction

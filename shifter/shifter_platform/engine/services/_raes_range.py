@@ -17,45 +17,42 @@ from django.utils import timezone
 from installation.range_egress import RangeEgressMode
 
 from engine.models import Range, Request
-from engine.services._launch_starts import start_raes_range_provisioning
-from shared.enums import RequestType
-from shared.raes.operations import persist_operation_receipt_record
-
-from ._common import _persist_task_arn
-from ._principal_range_create import (
+from engine.services._common import _persist_task_arn
+from engine.services._launch.starts import start_raes_range_provisioning
+from engine.services._principal_lifecycle.range_create import (
     assert_principal_range_creation,
     dispatch_principal_raes_range,
     prepare_principal_range_fields,
     prepared_creation_fields,
     verify_principal_range_replay,
 )
-from ._raes_range_bindings import RaesRangeRef as RaesRangeRef
-from ._raes_range_bindings import (
+from engine.services._raes.range_bindings import RaesRangeRef as RaesRangeRef
+from engine.services._raes.range_bindings import (
     RangeBindings as RangeBindings,
 )
-from ._raes_range_bindings import (
+from engine.services._raes.range_bindings import (
     _persist_range_bindings as _persist_range_bindings,
 )
-from ._raes_range_bindings import (
+from engine.services._raes.range_bindings import (
     _verify_existing_cloud_content,
 )
-from ._raes_range_bindings import (
+from engine.services._raes.range_bindings import (
     _verify_existing_participant_access as _verify_existing_participant_access,
 )
-from ._raes_range_bindings import (
+from engine.services._raes.range_bindings import (
     _verify_existing_plugin_scope as _verify_existing_plugin_scope,
 )
-from ._raes_range_bindings import (
+from engine.services._raes.range_bindings import (
     _verify_existing_remote_access as _verify_existing_remote_access,
 )
-from ._raes_range_bindings import (
+from engine.services._raes.range_bindings import (
     grant_raes_remote_access as grant_raes_remote_access,
 )
-from ._raes_range_bindings import (
+from engine.services._raes.range_bindings import (
     mint_remote_access_capability as mint_remote_access_capability,
 )
-from ._range_authority_history import lock_warm_range_creation, record_range_authority_change
-from ._range_backend_binding import (
+from engine.services._range.authority_history import lock_warm_range_creation, record_range_authority_change
+from engine.services._range.backend_binding import (
     assert_backend_supports_egress,
     backend_binding_fields,
     egress_binding_fields,
@@ -64,20 +61,21 @@ from ._range_backend_binding import (
     verify_existing_egress_binding,
     verify_existing_workspace_binding,
 )
-from ._range_placement import select_placement_zone
-from ._receipt import revoke_receipt_verifier
-from ._runtime_plugin_bindings import (
+from engine.services._range.placement import select_placement_zone
+from engine.services._range.receipt import revoke_receipt_verifier
+from engine.services._runtime_plugin.bindings import (
     persist_runtime_plugin_pin,
     resolve_runtime_plugin_pin,
 )
+from shared.enums import RequestType
+from shared.raes.operations import persist_operation_receipt_record
 
 if TYPE_CHECKING:
     from uuid import UUID
 
+    from engine.services._raes.range_bindings import PreparedRaesRangeCreation
     from shared.credentials import CredentialContext
     from shared.range_instantiation_policy import BackendAdmission
-
-    from ._raes_range_bindings import PreparedRaesRangeCreation
 
 
 __all__ = [

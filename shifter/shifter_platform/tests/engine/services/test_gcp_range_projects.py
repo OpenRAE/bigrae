@@ -201,7 +201,7 @@ def test_applied_current_restore_releases_once_and_allows_a_new_range(registrati
 
 
 def allocate(target, project_ids, digest="sha256:" + "a" * 64):
-    from engine.services._gcp_project_bindings import allocate_gcp_projects
+    from engine.services._gcp_project.bindings import allocate_gcp_projects
 
     return allocate_gcp_projects(range_id=target.pk, project_ids=project_ids, plan_digest=digest)
 
@@ -290,7 +290,7 @@ def test_concurrent_ranges_cannot_both_acquire_the_same_project(registration):
     barrier = Barrier(2)
 
     def attempt(range_id):
-        from engine.services._gcp_project_bindings import allocate_gcp_projects
+        from engine.services._gcp_project.bindings import allocate_gcp_projects
 
         close_old_connections()
         try:

@@ -106,9 +106,10 @@ def apply_range_status(
     unit. If either raises (for example a transient DB failure), the status
     update rolls back with it, so a redelivered event is not seen as an
     already-converged no-op — the worker retry re-runs the whole unit. The CTF
-    bridge persists a pending delivery in that unit before running receivers in
-    a savepoint. A receiver failure leaves the CMS status committed and retains
-    ordered retry through the existing reconciler, including terminal statuses.
+    bridge persists a pending delivery in that unit. CTF receivers run only after
+    the outermost commit, in their own transaction, and hold no lock on this
+    projection. A receiver failure retains ordered retry through the existing
+    reconciler, including terminal statuses.
 
     Args:
         instance: The RangeInstance to update.

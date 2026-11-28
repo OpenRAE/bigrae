@@ -5,7 +5,7 @@ were near-identical copies that differed only in operation-specific facts. This
 module parameterizes those facts on an ``_LifecycleOp`` spec so the validation,
 ownership masking, CMS status transition + revert-on-engine-rejection, and audit
 logging live in one place. It mirrors the engine-side parameterized pattern in
-``engine.services._lifecycle``.
+``engine.services._range_lifecycle.pause_resume``.
 
 The thin ``_range_pause`` / ``_range_resume`` modules keep the public function
 names (so ``cms.services`` re-exports are unchanged) and delegate here.

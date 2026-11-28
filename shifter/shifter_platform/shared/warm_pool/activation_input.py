@@ -209,7 +209,7 @@ def build_activation_input(
 
     Returns the JSON-serialisable payload for ``build_operation_envelope``.
     ``raes_input`` is the ownership-neutral RAES realization projection built by
-    ``engine.services._operation_inputs`` (already validated by ``build_raes_operation_input``).
+    ``engine.services._launch.operation_inputs`` (already validated by ``build_raes_operation_input``).
     """
     payload = {
         "schema": ACTIVATION_SCHEMA,

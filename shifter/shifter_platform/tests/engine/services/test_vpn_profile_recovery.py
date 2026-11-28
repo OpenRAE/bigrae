@@ -18,9 +18,9 @@ def test_dispatched_maintenance_without_receipt_waits_for_absence_then_recovers(
     from django.db import transaction
 
     from engine.models import InterruptState, OperationInput, OperationResultInbox, ProvisionerLaunchIntent
-    from engine.services._launch_interrupt_convergence import drain_due_interrupts
-    from engine.services._vpn_profile_operations import authorize_vpn_operation, queue_vpn_operation
-    from engine.services._vpn_profiles import (
+    from engine.services._launch.interrupt_convergence import drain_due_interrupts
+    from engine.services._vpn.profile_operations import authorize_vpn_operation, queue_vpn_operation
+    from engine.services._vpn.profiles import (
         reconcile_vpn_profiles,
         request_vpn_issuance_interrupt,
         request_vpn_profile,
@@ -66,7 +66,7 @@ def test_dispatched_maintenance_without_receipt_waits_for_absence_then_recovers(
             row.revocation_operation_id = row.provisioner_operation_id
             row.save(update_fields=["revocation_operation_id"])
             later = row.expires_at + timedelta(seconds=1)
-            monkeypatch.setattr("engine.services._vpn_profiles.timezone.now", lambda: later)
+            monkeypatch.setattr("engine.services._vpn.profiles.timezone.now", lambda: later)
             queue_vpn_operation(row, operation)
     origin = ProvisionerLaunchIntent.objects.get(operation_id=row.provisioner_operation_id)
     original_input = OperationInput.objects.get(operation_id=origin.operation_id).envelope["payload"]
@@ -94,7 +94,7 @@ def test_dispatched_maintenance_without_receipt_waits_for_absence_then_recovers(
 @pytest.mark.parametrize("dispatch", ["exhausted", "missing_receipt"])
 def test_failed_or_unconfirmed_issuance_converges_to_native_interrupt(vpn_range, dispatch):
     from engine.models import InterruptState, ProvisionerLaunchIntent, ProvisionerLaunchStatus
-    from engine.services._vpn_profiles import reconcile_vpn_profiles, request_vpn_profile
+    from engine.services._vpn.profiles import reconcile_vpn_profiles, request_vpn_profile
 
     row = request_vpn_profile(vpn_range.credential, vpn_range.request.request_id)
     origin = ProvisionerLaunchIntent.objects.get(operation_id=row.issuance_operation_id)
@@ -111,8 +111,8 @@ def test_failed_or_unconfirmed_issuance_converges_to_native_interrupt(vpn_range,
 
 def test_revocation_interrupts_an_active_crl_refresh_before_replacement(vpn_range, monkeypatch):
     from engine.models import InterruptState, ProvisionerLaunchIntent
-    from engine.services._vpn_profile_operations import queue_vpn_operation
-    from engine.services._vpn_profiles import reconcile_vpn_profiles, request_vpn_profile
+    from engine.services._vpn.profile_operations import queue_vpn_operation
+    from engine.services._vpn.profiles import reconcile_vpn_profiles, request_vpn_profile
     from management.models import ServiceCredentialAdmission
 
     row = request_vpn_profile(vpn_range.credential, vpn_range.request.request_id)
@@ -137,7 +137,7 @@ def test_failed_revocation_is_retried_under_the_same_confirmed_cleanup_origin(vp
     from uuid import uuid4
 
     from engine.models import InterruptState, OperationResultInbox, ProvisionerLaunchIntent, ProvisionerLaunchStatus
-    from engine.services._vpn_profiles import reconcile_vpn_profiles, request_vpn_profile
+    from engine.services._vpn.profiles import reconcile_vpn_profiles, request_vpn_profile
     from management.models import ServiceCredentialAdmission
 
     row = request_vpn_profile(vpn_range.credential, vpn_range.request.request_id)
@@ -189,7 +189,7 @@ def test_failed_revocation_is_retried_under_the_same_confirmed_cleanup_origin(vp
 
 def test_cleanup_keeps_issuance_storage_binding_after_configuration_changes(vpn_range, settings, monkeypatch):
     from engine.models import OperationInput
-    from engine.services._vpn_profiles import reconcile_vpn_profiles, request_vpn_profile
+    from engine.services._vpn.profiles import reconcile_vpn_profiles, request_vpn_profile
     from management.models import ServiceCredentialAdmission
 
     settings.GCP_DYNAMIC_SECRET_PROJECT_ID = "recorded-secrets"

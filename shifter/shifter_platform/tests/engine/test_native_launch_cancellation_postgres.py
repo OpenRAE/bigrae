@@ -19,8 +19,11 @@ def test_cancellation_serializes_before_launch_or_failure(launch_actor, k8s_boun
     """Observe locks acquired by production services; never supply locks in the test."""
     from cms.services import create_raes_native_range
     from engine.models import InterruptState, ProvisionerLaunchIntent, Range
-    from engine.services._launch_outbox import _record_failure, claim_next_intent, launch_intent
-    from engine.services._principal_lifecycle import commit_prepared_range_lifecycle, prepare_system_range_cleanup
+    from engine.services._launch.outbox import _record_failure, claim_next_intent, launch_intent
+    from engine.services._principal_lifecycle.lifecycle import (
+        commit_prepared_range_lifecycle,
+        prepare_system_range_cleanup,
+    )
 
     assert connection.vendor == "postgresql"
     actor = launch_actor
@@ -105,7 +108,7 @@ def test_revocation_after_preflight_prevents_job_submission(launch_actor, k8s_bo
     """Revoke the real proof after its preflight transaction commits."""
     from cms.services import create_raes_native_range
     from engine.models import Range
-    from engine.services._launch_outbox import claim_next_intent, launch_intent
+    from engine.services._launch.outbox import claim_next_intent, launch_intent
     from management.models import ServiceCredentialAdmission
 
     actor = launch_actor

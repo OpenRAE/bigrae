@@ -96,6 +96,11 @@ In team mode, you can join or create a team to share a score.
 A participant with no team competes as an individual and can still submit flags and score.
 The event's team-size limit applies to teams.
 Solo events require no team membership.
+
+The challenge list and the challenge page show a challenge that a teammate solved as **Solved by** *name*.
+The name is the current team member who solved it first.
+You can still submit the flag for your individual score.
+
 Brackets provide separate cohort standings when the organizer uses them.
 
 A captain can rename the team, remove members, and transfer captaincy.
@@ -110,6 +115,10 @@ In a team-mode event, open **Individual scoreboard** for participant standings.
 Open **Team scoreboard** for team standings.
 An open scoreboard refreshes every **15 seconds**.
 
+A graph above the table shows the score over time of the top eight entries.
+Open **Score history** below the graph to read each time and score as a table.
+The graph shows times and scores only, not challenge names.
+
 To change the board:
 
 1. Type a name in **Filter participants** or **Filter teams** to show only the matching entries.
@@ -118,6 +127,7 @@ To change the board:
 
 The rank column always shows the official rank.
 The filter and the sort apply to the selected bracket.
+They do not change the graph.
 
 The organizer can hide it or freeze results near event end.
 Do not infer final standings from a frozen display.

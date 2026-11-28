@@ -311,7 +311,7 @@ def test_service_administrator_opens_real_terminal_service_without_owner_imperso
 def test_owned_guest_remains_accessible_when_another_range_reuses_its_identifier(principal_range):
     from engine.models import Range
     from engine.models import Request as EngineRequest
-    from engine.services._range_authority import authorized_instance_range
+    from engine.services._range.authority import authorized_instance_range
     from management.services import create_service_principal
 
     fixture = principal_range
@@ -537,8 +537,8 @@ def test_queued_range_effect_revalidates_initiator_and_preserves_original_ceilin
     from django.utils import timezone
 
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_authority import admit_launch_authority
-    from engine.services._launch_intents import authorize_provisioner_payload
+    from engine.services._launch.intents import authorize_provisioner_payload
+    from engine.services._launch_authority.authority import admit_launch_authority
     from management.models import Principal
 
     fixture = principal_range
@@ -563,7 +563,7 @@ def test_queued_range_effect_revalidates_initiator_and_preserves_original_ceilin
     assert queued.initiating_principal_uuid == fixture.credential.principal.uuid
     assert queued.authority_owner_uuid == fixture.owner.uuid
     assert queued.credential_uuid == fixture.credential.credential_uuid
-    from engine.services._operation_inputs import materialize_operation_input
+    from engine.services._launch.operation_inputs import materialize_operation_input
 
     materialize_operation_input(payload, operation_id, fixture.realized)
     authorize_provisioner_payload(payload, expected_operation_id=operation_id)
@@ -574,7 +574,7 @@ def test_queued_range_effect_revalidates_initiator_and_preserves_original_ceilin
 
 def test_principal_owned_enqueue_cannot_omit_initiating_authority(principal_range):
     from engine.models import OperationInput, ProvisionerLaunchIntent
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     fixture = principal_range
     fixture.realized.status = "resuming"
@@ -590,7 +590,7 @@ def test_principal_owned_enqueue_cannot_omit_initiating_authority(principal_rang
 
 def test_dispatch_rejects_operation_input_that_loses_its_original_authority(principal_range):
     from engine.models import OperationInput, ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
+    from engine.services._launch.intents import authorize_provisioner_payload, enqueue_provisioner_launch
 
     fixture = principal_range
     fixture.realized.status = "resuming"
@@ -610,7 +610,7 @@ def test_rejected_dispatch_still_records_failure_for_its_current_generation(prin
     from django.db import transaction
 
     from engine.models import OperationInput, ProvisionerLaunchIntent
-    from engine.services._launch_intents import enqueue_provisioner_launch, fail_current_provisioner_operation
+    from engine.services._launch.intents import enqueue_provisioner_launch, fail_current_provisioner_operation
 
     fixture = principal_range
     fixture.realized.status = "resuming"
@@ -629,7 +629,7 @@ def test_rejected_dispatch_still_records_failure_for_its_current_generation(prin
 
 def test_native_enqueue_binds_original_authority_and_equal_replay(principal_range):
     from engine.models import OperationInput, ProvisionerLaunchIntent
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
     from management.models import ServiceCredentialAdmission
 
     fixture = principal_range
@@ -676,7 +676,7 @@ def test_durable_authority_cannot_be_rewritten_by_bulk_updates(principal_range, 
     from django.utils import timezone
 
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_authority import admit_launch_authority
+    from engine.services._launch_authority.authority import admit_launch_authority
 
     fixture = principal_range
     payload = {
@@ -700,7 +700,7 @@ def test_durable_authority_cannot_be_rewritten_by_bulk_updates(principal_range, 
 
 def test_explicit_cleanup_outlives_initiator_but_cannot_launch_or_change_resource_generation(principal_range):
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload, enqueue_provisioner_launch
+    from engine.services._launch.intents import authorize_provisioner_payload, enqueue_provisioner_launch
     from management.models import Principal
 
     fixture = principal_range

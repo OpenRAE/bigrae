@@ -151,7 +151,7 @@ def _ready_payload(intent):
 def _apply_result(intent, step, payload):
     from engine.models import OperationResultDisposition, OperationResultInbox
     from engine.services import apply_pending_operation_results
-    from engine.services._launch_authority import launch_authority_digest
+    from engine.services._launch_authority.authority import launch_authority_digest
     from shared.operation_envelope import build_operation_envelope, canonical_payload_digest
     from shared.operation_results import build_result_identity, result_kind_for
 
@@ -231,7 +231,7 @@ def _cleanup_provider(case):
 def test_native_warm_retirement_survives_revocation_and_releases_only_verified_generation(warm_runtime, queued):
     from engine.models import CapacityDraw, ProvisionerLaunchIntent, RangeAuthorityChange
     from engine.services import dispatch_created_raes_range, finalize_retiring_generations, retire_generation
-    from engine.services._launch_authority import authorize_launch_authority
+    from engine.services._launch_authority.authority import authorize_launch_authority
     from management.models import ServiceCredentialAdmission
     from shared.operation_results import ResultStep
 
@@ -389,7 +389,7 @@ def test_claim_crash_before_activation_uses_current_owner_receipt_and_verified_c
 ):
     from engine.models import CapacityDraw, ProvisionerLaunchIntent, WarmRangeGeneration
     from engine.services import finalize_retiring_generations, recover_stalled_generations
-    from engine.services._launch_authority import authorize_launch_authority
+    from engine.services._launch_authority.authority import authorize_launch_authority
     from shared.operation_results import ResultStep
 
     case = warm_runtime
@@ -457,8 +457,8 @@ def test_queued_warm_operation_is_interrupted_through_real_sdk_absence(
         recover_stalled_generations,
         retire_generation,
     )
-    from engine.services._launch_authority import authorize_launch_authority
-    from engine.services._launch_interrupt_convergence import drain_due_interrupts
+    from engine.services._launch.interrupt_convergence import drain_due_interrupts
+    from engine.services._launch_authority.authority import authorize_launch_authority
     from shared.cloud.kubernetes import KubernetesTaskRunner
 
     case = warm_runtime
@@ -512,7 +512,7 @@ def test_queued_warm_operation_is_interrupted_through_real_sdk_absence(
 def test_retained_warm_cleanup_refuses_changed_generation_or_custody(warm_runtime, changed):
     from engine.models import CapacityDraw, ProvisionerLaunchIntent, Range, WarmRangeGeneration
     from engine.services import finalize_retiring_generations, retire_generation
-    from engine.services._launch_authority import authorize_launch_authority
+    from engine.services._launch_authority.authority import authorize_launch_authority
 
     case = warm_runtime
     assert retire_generation(case.generation)
@@ -538,7 +538,7 @@ def test_worker_retains_removed_policy_cleanup_and_retries_real_inventory(
     from django.core.management import call_command
 
     from engine.models import CapacityDraw, OperationInput, ProvisionerLaunchIntent
-    from engine.services._launch_authority import authorize_launch_authority
+    from engine.services._launch_authority.authority import authorize_launch_authority
     from shared.operation_results import ResultStep
     from shared.warm_pool.policy import load_policy_json
 

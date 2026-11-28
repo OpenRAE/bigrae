@@ -36,7 +36,7 @@
       },
       {
         "id": "ADR-001-R5",
-        "description": "All imports in shifter_platform/engine are at module level, and the engine package has no import cycle. Ruff PLC0415 rejects a function-local import under engine/**. The only exception is engine/apps.py, because Django imports the AppConfig module before the model registry is ready and AppConfig.ready() must defer its import. The .importlinter acyclic_siblings contract rejects a cycle between the children of any engine package, and its forbidden contracts reject a module that imports its own package facade (engine, engine.services, engine.models, engine.ecs, engine.handlers). The engine root package exports nothing; engine.services is the public interface.",
+        "description": "All imports in shifter_platform/engine are at module level. Ruff PLC0415 rejects a function-local import under engine/**; the only exception is engine/apps.py, because Django imports the AppConfig module before the model registry is ready and AppConfig.ready() must defer its import. The engine packages form layers with no package cycle. The internal_layers section of scripts/check_layer_imports/layer_imports.yaml lists the layers of engine and engine.services from bottom to top; a member may import only members of its own or a lower layer, never a higher layer or its container package, and every direct child must be classified. check_layer_imports.py enforces the model, and the .importlinter acyclic_siblings contract rejects a package cycle inside one layer. The engine root package and the engine.services subpackage initializers export nothing; engine.services is the public interface.",
         "checks": []
       }
     ],
@@ -49,6 +49,7 @@
     ],
     "evidence": [
       "shifter/shifter_platform/pyproject.toml",
+      "scripts/check_layer_imports/_internal_layers.py",
       "docs/architecture/engine-import-design-2865.md",
       "scripts/check_layer_imports/layer_imports.yaml",
       "scripts/check_layer_imports/check_layer_imports.py",
@@ -57,7 +58,7 @@
       "shifter/shifter_platform/management/management/commands/check_model_fks.py",
       "docs/_deprecated/architecture/mission-control-runtime-service-boundary-preflight-994.md",
       "shifter/shifter_platform/config/credential_scope.py",
-      "shifter/shifter_platform/engine/services/_disposable_workers.py"
+      "shifter/shifter_platform/engine/services/_worker_lifecycle/disposable.py"
     ]
   },
   {
@@ -255,7 +256,7 @@
       },
       {
         "id": "ADR-004-R11",
-        "description": "Checkov is a blocking gate for first-party Terraform under `platform/terraform/`. The GitHub Actions security-iac job (`.github/workflows/_quality.yml`) consumes the canonical config at `platform/terraform/.checkov.yaml` with external module loading and soft_fail=false. The local Checkov hook is optional to keep commits fast; if installed, it must use the same config, directory and blocking policy. CI invocation validation remains mandatory. Accepted-risk waivers (Checkov `skip-check` entries in `.checkov.yaml` or inline `# checkov:skip=CKV_X:...` comments on individual resources) MUST have a matching entry in `docs/adr/exceptions.yaml` with `rule_id: ADR-004-R11`, owner, reason (containing the Checkov policy ID), `expires_on`, and the affected `paths`. `adr_guard.py` rejects expired exceptions, forcing owner re-review. GCP waivers MUST be placed inline on the exact Terraform resource; global `CKV_GCP_*` and `CKV2_GCP_*` skip lists are prohibited because they hide unrelated future resources. Terraform Checkov policy and Kubernetes Checkov policy are separate surfaces: the `security-k8s` job is a blocking gate since #2558 (`soft_fail: false`, no `continue-on-error`), with accepted-risk waivers recorded as resource `checkov.io/skipN` annotations plus matching `docs/adr/exceptions.yaml` entries; a Kubernetes waiver does NOT justify a Terraform waiver. Since #2571 the security-k8s job scans the rendered Helm chart for every supported values file, because the chart is the only Kubernetes renderer (ADR-007). Making the Trivy configuration scan blocking is tracked in #2566. If non-GCP rule-level policy grows beyond a flat skip list, centralize it in `platform/terraform/.checkov.yaml` only \u2014 do NOT duplicate skip semantics across pre-commit args and workflow inputs. Rename amendment (#2555): CI loads a narrow immutable-subject syntax adapter through the pinned Checkov external-check hook. It requires package 3.2.494 from the existing action image tag 3.2.495 and the known vendor repository grammar; incompatible initialization stops the scanner. Only repository syntax is extended. All CKV_GCP_125 policy decisions remain active, with native positive/negative and fatal-drift probes in the same digest-pinned image. CI invocation parity requires the adapter path. No rule skip or soft-fail exception is added.",
+        "description": "Checkov is a blocking gate for first-party Terraform under `platform/terraform/`. The GitHub Actions security-iac job (`.github/workflows/_quality.yml`) consumes the canonical config at `platform/terraform/.checkov.yaml` with external module loading and soft_fail=false. The local Checkov hook is optional to keep commits fast; if installed, it must use the same config, directory and blocking policy. CI invocation validation remains mandatory. Accepted-risk waivers (Checkov `skip-check` entries in `.checkov.yaml` or inline `# checkov:skip=CKV_X:...` comments on individual resources) MUST have a matching entry in `docs/adr/exceptions.yaml` with `rule_id: ADR-004-R11`, owner, reason (containing the Checkov policy ID), `expires_on`, and the affected `paths`. `adr_guard.py` rejects expired exceptions, forcing owner re-review. GCP waivers MUST be placed inline on the exact Terraform resource; global `CKV_GCP_*` and `CKV2_GCP_*` skip lists are prohibited because they hide unrelated future resources. Terraform Checkov policy and Kubernetes Checkov policy are separate surfaces: the `security-k8s` job is a blocking gate since #2558 (`soft_fail: false`, no `continue-on-error`), with accepted-risk waivers recorded as resource `checkov.io/skipN` annotations plus matching `docs/adr/exceptions.yaml` entries; a Kubernetes waiver does NOT justify a Terraform waiver. Since #2571 the security-k8s job scans the rendered Helm chart for every supported values file, because the chart is the only Kubernetes renderer (ADR-007). Since #2566 the `security-trivy-config` job is a blocking gate: it scans every first-party root with the checksum-pinned Trivy binary and a digest-pinned checks bundle, runs every root, and fails on any finding. Trivy exceptions use exact-resource `trivy:ignore` comments, or `.trivyignore-config.yaml` for absence checks, each with a matching `docs/adr/exceptions.yaml` entry and the same expiry. If non-GCP rule-level policy grows beyond a flat skip list, centralize it in `platform/terraform/.checkov.yaml` only \u2014 do NOT duplicate skip semantics across pre-commit args and workflow inputs. Rename amendment (#2555): CI loads a narrow immutable-subject syntax adapter through the pinned Checkov external-check hook. It requires package 3.2.494 from the existing action image tag 3.2.495 and the known vendor repository grammar; incompatible initialization stops the scanner. Only repository syntax is extended. All CKV_GCP_125 policy decisions remain active, with native positive/negative and fatal-drift probes in the same digest-pinned image. CI invocation parity requires the adapter path. No rule skip or soft-fail exception is added.",
         "checks": []
       },
       {
@@ -1360,12 +1361,12 @@
       },
       {
         "id": "ADR-025-R2",
-        "description": "Every correctness-critical event must have at least one durable recovery path: either (a) transactional outbox (`engine_range_event_outbox` enqueued atomically with the authoritative state write) with a drainer that publishes with exponential-backoff retry, a DLQ terminal state after max_attempts, and an operator alert; or (b) idempotent DB-authoritative reconciliation that re-reads `engine.Range` state and re-drives the affected domain projections through existing handler/orchestrator/bridge seams. The two paths are complementary and both are present in the shipping implementation. CMS-to-CTF status delivery is persisted atomically with the CMS status in cms.RangeStatusDelivery. Receiver writes and successful delivery removal are atomic; failures retain ordered, bounded-backoff retries through the existing range reconciler, including terminal or physically pruned CMS projections. Capacity-release failures must preserve the participant linkage and pending delivery. Raw receiver exception text is neither persisted nor logged.",
+        "description": "Every correctness-critical event must have at least one durable recovery path: either (a) transactional outbox (`engine_range_event_outbox` enqueued atomically with the authoritative state write) with a drainer that publishes with exponential-backoff retry, a DLQ terminal state after max_attempts, and an operator alert; or (b) idempotent DB-authoritative reconciliation that re-reads `engine.Range` state and re-drives the affected domain projections through existing handler/orchestrator/bridge seams. The two paths are complementary and both are present in the shipping implementation. CMS-to-CTF status delivery is persisted atomically with the CMS status in cms.RangeStatusDelivery. CTF receivers execute only after the outermost CMS transaction commits, in a separate delivery transaction; a savepoint inside the source transaction is insufficient. Receiver execution must not retain a CMS status-row lock that makes later CMS writes wait on CTF work. Receiver writes and successful delivery removal are atomic; failures retain ordered, bounded-backoff retries through the existing range reconciler, including terminal or physically pruned CMS projections. Capacity-release failures must preserve the participant linkage and pending delivery. Raw receiver exception text is neither persisted nor logged.",
         "checks": []
       },
       {
         "id": "ADR-025-R3",
-        "description": "Consumer handlers must propagate transient DB or broker failures so the worker ack-after-handler retry and DLQ engage. Swallowing a transient exception and returning normally is not acceptable for correctness-critical events. A local CTF receiver may fail independently only when its pending CMS delivery has been persisted with the status write; the reconciler retries those records until receiver writes and delivery removal commit together. Invalid, permanently unprocessable, or duplicate payloads may be deliberately logged and acknowledged; the distinction must be explicit in the handler.",
+        "description": "Consumer handlers must propagate transient DB or broker failures so the worker ack-after-handler retry and DLQ engage. Swallowing a transient exception and returning normally is not acceptable for correctness-critical events. A local CTF receiver may fail independently only when its pending CMS delivery has been persisted with the status write; the existing reconciler retries those committed records until receiver writes and delivery removal commit together. An optional post-commit attempt is only an accelerator and must not leak receiver errors into the completed CMS handler. Failure to persist the status, CMS quota settlement, or delivery obligation still propagates to the source worker retry. Invalid, permanently unprocessable, or duplicate payloads may be deliberately logged and acknowledged; the distinction must be explicit in the handler.",
         "checks": []
       },
       {
@@ -1400,6 +1401,7 @@
       "shifter/shifter_platform/cms/migrations/0067_range_status_delivery.py",
       "shifter/shifter_platform/cms/handlers/ctf_bridge.py",
       "shifter/shifter_platform/tests/cms/test_ctf_status_delivery.py",
+      "docs/architecture/ctf-range-status-commit-boundary-2577.md",
       "docs/runbooks/rb006-worker-errors.md",
       "shifter/shifter_platform/engine/handlers.py",
       "shifter/shifter_platform/mission_control/handlers.py",
@@ -1593,7 +1595,7 @@
     "title": "CTF participant solve history is semi-private (participant and organizer only)",
     "status": "accepted",
     "scope": "shifter_platform",
-    "decision": "The individual scoreboard (CTF-401) exposes aggregate ranking data -- rank, display name, total score, solve count, and last-solve time -- publicly to all participants. A participant's per-challenge solve history is semi-private: it is visible only to that participant and to the event organizer, unless the participant explicitly chooses to share it. This clarifies and supersedes the literal reading of CTF-401's \"Participants shall be able to click a row to see that participant's solve history\" clause, which would expose every participant's per-challenge history to all participants. Rationale: aggregate standing is inherently public on a scoreboard, but which specific challenges a participant solved reveals skill areas and progress and enables targeting or collusion inference -- it is nobody's business except the participant and the organizer. Concretely, scoreboard rows link to the solve-history drill-down only for the viewer's own row; the ctf:participant_solve_history view authorizes own-participant-or-event-organizer. Solve-history projections are correct-solves-only and exclude incorrect-attempt details and attempt source IP addresses. Amendment for issue #3002: an authenticated self-history response may disclose only the viewer's own correct stored submission value with its challenge identity. This does not authorize authored flag values, teammates' values, receipt credentials, or flag values in scoreboard or organizer drill-down projections. Signed receipts retain their existing stored redaction marker. Ranking and CTF-406 tie-breaking stay in ctf.services.scoring; presentation never re-ranks. Governing requirement: CTF-1404 (Solve History Visibility).",
+    "decision": "The individual scoreboard (CTF-401) exposes aggregate ranking data -- rank, display name, total score, solve count, and last-solve time -- publicly to all participants. A participant's per-challenge solve history is semi-private: it is visible only to that participant and to the event organizer, unless the participant explicitly chooses to share it. This clarifies and supersedes the literal reading of CTF-401's \"Participants shall be able to click a row to see that participant's solve history\" clause, which would expose every participant's per-challenge history to all participants. Rationale: aggregate standing is inherently public on a scoreboard, but which specific challenges a participant solved reveals skill areas and progress and enables targeting or collusion inference -- it is nobody's business except the participant and the organizer. Concretely, scoreboard rows link to the solve-history drill-down only for the viewer's own row; the ctf:participant_solve_history view authorizes own-participant-or-event-organizer. Solve-history projections are correct-solves-only and exclude incorrect-attempt details and attempt source IP addresses. Amendment for issue #3002: an authenticated self-history response may disclose only the viewer's own correct stored submission value with its challenge identity. This does not authorize authored flag values, teammates' values, receipt credentials, or flag values in scoreboard or organizer drill-down projections. Signed receipts retain their existing stored redaction marker. Ranking and CTF-406 tie-breaking stay in ctf.services.scoring; presentation never re-ranks. Governing requirement: CTF-1404 (Solve History Visibility). Amendment (#3004): the published scoreboard also exposes a score progression for its leading rows. Each point is a time and a cumulative score. Score timing is public aggregate standing, even though a score step can imply a challenge by its point value. The progression never names a challenge or an award reason, and it follows the same publication, freeze, bracket, and eligibility rules as the rankings.",
     "rules": [
       {
         "id": "ADR-028-R1",
@@ -1603,6 +1605,11 @@
       {
         "id": "ADR-028-R2",
         "description": "Solve-history projections must be correct-solves-only and exclude incorrect-attempt details and attempt source IP addresses. Issue #3002 permits a self-history projection to disclose only the authenticated viewer's own correct CTFSubmission.submitted_flag value with its challenge identity, preserving signed-receipt redaction. Reuse ctf.services.submission.get_participant_submissions with exact participant/event scope and is_correct=True for that value projection; do not enumerate CTFFlag answers or teammates' submissions. Scoreboard and organizer drill-down projections remain free of submitted flag values. Existing attempt-history metadata and its published envelope are a separate contract; do not silently filter or replace them.",
+        "checks": []
+      },
+      {
+        "id": "ADR-028-R3",
+        "description": "A published score progression must contain only times and cumulative scores for at most ctf.services.scoring.PROGRESSION_LIMIT leading rows. It must not name a challenge or an award reason. It must use the same publication gate, freeze cutoff, bracket filter, and ranking eligibility as the rankings it accompanies. Build it only through ctf.services.scoring.get_score_progression.",
         "checks": []
       }
     ],
@@ -1619,7 +1626,9 @@
       "shifter/shifter_platform/templates/ctf/includes/scoreboard_table.html",
       "shifter/shifter_platform/templates/ctf/participant/scoreboard.html",
       "shifter/shifter_platform/tests/ctf/test_scoreboard_views.py",
-      "shifter/shifter_platform/tests/ctf/test_submission_service.py"
+      "shifter/shifter_platform/tests/ctf/test_submission_service.py",
+      "shifter/shifter_platform/ctf/services/scoring/_progression.py",
+      "shifter/shifter_platform/tests/ctf/test_score_progression.py"
     ]
   },
   {
@@ -2458,8 +2467,8 @@
       "shifter/installation/contract.py",
       "shifter/installation/registry.py",
       "shifter/shifter_platform/engine/ecs.py",
-      "shifter/shifter_platform/engine/services/_range.py",
-      "shifter/shifter_platform/engine/services/_lifecycle.py",
+      "shifter/shifter_platform/engine/services/_range_lifecycle/compatibility.py",
+      "shifter/shifter_platform/engine/services/_range_lifecycle/pause_resume.py",
       "shifter/engine/provisioner/range_terraform_runner.py",
       "shifter/engine/provisioner/range_ops.py",
       "shifter/engine/provisioner/events.py",
@@ -2604,8 +2613,8 @@
       "docs/architecture/external-scenario-runtime-design.md",
       "docs/architecture/named-file-assets-2719.md",
       "shifter/shifter_adapter_sdk/runtime.py",
-      "shifter/shifter_platform/engine/services/_runtime_plugins.py",
-      "shifter/shifter_platform/engine/services/_runtime_plugin_controller.py",
+      "shifter/shifter_platform/engine/services/_runtime_plugin/installation.py",
+      "shifter/shifter_platform/engine/services/_runtime_plugin/controller.py",
       "shifter/shifter_platform/shared/cloud/runtime_plugins.py",
       "platform/charts/shifter/templates/runtime-plugins.yaml",
       "platform/terraform/modules/portal/eks/runtime_plugins.tf",
@@ -2617,7 +2626,7 @@
       ".github/quality-path-filters.yaml",
       ".github/workflows/_quality.yml",
       "docs/architecture/adapter-pre-provisioning-2718.md",
-      "shifter/shifter_platform/engine/services/_runtime_plugin_cleanup.py"
+      "shifter/shifter_platform/engine/services/_runtime_plugin/cleanup.py"
     ]
   },
   {
@@ -2747,7 +2756,7 @@
       "docs/_deprecated/architecture/raes-gce-shared-vpc-subnet-allocation-preflight-2219.md",
       "docs/_deprecated/architecture/gcp-provisioner-launch-boundary-preflight-1518.md",
       "docs/_deprecated/architecture/range-event-delivery-preflight-476.md",
-      "shifter/shifter_platform/engine/services/_launch_intents.py",
+      "shifter/shifter_platform/engine/services/_launch/intents.py",
       "shifter/shifter_platform/engine/models",
       "shifter/shifter_platform/engine/services",
       "shifter/shifter_platform/shared",
@@ -3092,13 +3101,13 @@
       "shifter/shifter_platform/shared/cloud/aws/capacity_inventory.py",
       "shifter/shifter_platform/shared/cloud/gcp/capacity_inventory.py",
       "shifter/shifter_platform/engine/models/_capacity_assessment.py",
-      "shifter/shifter_platform/engine/services/_capacity_plan.py",
+      "shifter/shifter_platform/engine/services/_capacity/plan.py",
       "shifter/shifter_platform/config/_capacity_planning_settings.py",
       "shifter/shifter_platform/tests/shared/capacity",
       "shifter/shifter_platform/tests/shared/cloud/test_capacity_inventory.py",
       "shifter/shifter_platform/tests/engine/test_capacity_plan.py",
       "shifter/shifter_platform/tests/ctf/test_capacity_admission_wiring.py",
-      "shifter/shifter_platform/engine/services/_capacity_admit.py",
+      "shifter/shifter_platform/engine/services/_capacity/admit.py",
       "shifter/shifter_platform/tests/engine/test_capacity_admit.py",
       "shifter/shifter_platform/tests/ctf/test_capacity_draw_wiring.py",
       "docs/technical/shifter_platform/disposable-workers.md",
@@ -3203,7 +3212,7 @@
     "title": "GCP range cells select a persisted multi-region placement zone at creation",
     "status": "accepted",
     "scope": "shifter_platform",
-    "decision": "GCP range-cell placement spreads a range fleet across regions because Compute CPU quota is enforced per project per region. RANGE_NETWORK_ZONES is an ordered, deployment-owned zone pool and is the single canonical operator input. A range's zone is selected from the pool once, in the range-create transaction (alongside subnet_index, via engine.services._range_placement), and persisted on the range row (mission_control_range.placement_zone, migration engine 0054). The provisioner is a pure reader: both the legacy gcp_range_cells and the RAES-native raes_range_ops apply/destroy lifecycles bind the range-cell config to the stored zone and never recompute from the pool. Deciding placement at creation makes it a durable property of the range, so teardown reconstructs the exact zone even if the pool is later reordered or resized, there is no apply-time race (creation is single and transactional), and an empty placement_zone unambiguously means a pre-#2029 single-zone range that stays on the scalar RANGE_NETWORK_ZONE. Cross-region cells keep an egress path: platform/terraform/gcp/modules/range/vpc provisions a Cloud Router + external address + Cloud NAT for every non-primary region a pooled zone lives in, and those NAT regions are derived from the same range_network_zones list (projected from the same RANGE_NETWORK_ZONES variable) so NAT coverage cannot diverge from where cells are placed. This reverses two boundaries the issue #2029 architecture preflight had set as non-goals (no new placement column; no regional NAT), which pre-push review showed documentation alone could not safely uphold.",
+    "decision": "GCP range-cell placement spreads a range fleet across regions because Compute CPU quota is enforced per project per region. RANGE_NETWORK_ZONES is an ordered, deployment-owned zone pool and is the single canonical operator input. A range's zone is selected from the pool once, in the range-create transaction (alongside subnet_index, via engine.services._range.placement), and persisted on the range row (mission_control_range.placement_zone, migration engine 0054). The provisioner is a pure reader: both the legacy gcp_range_cells and the RAES-native raes_range_ops apply/destroy lifecycles bind the range-cell config to the stored zone and never recompute from the pool. Deciding placement at creation makes it a durable property of the range, so teardown reconstructs the exact zone even if the pool is later reordered or resized, there is no apply-time race (creation is single and transactional), and an empty placement_zone unambiguously means a pre-#2029 single-zone range that stays on the scalar RANGE_NETWORK_ZONE. Cross-region cells keep an egress path: platform/terraform/gcp/modules/range/vpc provisions a Cloud Router + external address + Cloud NAT for every non-primary region a pooled zone lives in, and those NAT regions are derived from the same range_network_zones list (projected from the same RANGE_NETWORK_ZONES variable) so NAT coverage cannot diverge from where cells are placed. This reverses two boundaries the issue #2029 architecture preflight had set as non-goals (no new placement column; no regional NAT), which pre-push review showed documentation alone could not safely uphold.",
     "rules": [
       {
         "id": "ADR-050-R1",
@@ -3220,7 +3229,7 @@
     "evidence": [
       "https://github.com/Brad-Edwards/bigrae/issues/2029",
       "docs/_deprecated/architecture/gcp-range-cell-zone-pool-preflight-2029.md",
-      "shifter/shifter_platform/engine/services/_range_placement.py",
+      "shifter/shifter_platform/engine/services/_range/placement.py",
       "shifter/shifter_platform/engine/migrations/0054_range_placement_zone.py",
       "shifter/engine/provisioner/range_placement.py",
       "platform/terraform/gcp/modules/range/vpc/main.tf"
@@ -4041,9 +4050,9 @@
       "shifter/shifter_platform/ctf/services/range/lifecycle.py",
       "shifter/shifter_platform/ctf/bridges.py",
       "shifter/shifter_platform/cms/services/_range_lifecycle.py",
-      "shifter/shifter_platform/engine/services/_launch_intents.py",
+      "shifter/shifter_platform/engine/services/_launch/intents.py",
       "shifter/shifter_platform/engine/models/_operation_io.py",
-      "shifter/shifter_platform/engine/services/_operation_apply.py",
+      "shifter/shifter_platform/engine/services/_operation_apply/applier.py",
       "shifter/shifter_platform/shared/audit",
       "shifter/engine/provisioner/range_ops/_pause_resume.py",
       "docs/requirements/GEN-2005/requirement.md",
@@ -4252,10 +4261,10 @@
       "shifter/shifter_platform/ctf/validators",
       "shifter/shifter_platform/ctf/extensions.py",
       "shifter/shifter_platform/ctf/bridges.py",
-      "shifter/shifter_platform/engine/services/_receipt.py",
+      "shifter/shifter_platform/engine/services/_range/receipt.py",
       "shifter/shifter_platform/shared/receipt_validation.py",
       "docs/dev/ctf-signed-receipt-validators.md",
-      "shifter/shifter_platform/engine/services/_launch_intents.py"
+      "shifter/shifter_platform/engine/services/_launch/intents.py"
     ]
   },
   {
@@ -4312,14 +4321,14 @@
       "docs/_deprecated/architecture/public-range-operations-preflight-2086.md",
       "docs/features/retry-safe-range-operations.md",
       "docs/technical/shifter_platform/retry-safe-range-operations.md",
-      "shifter/shifter_platform/engine/services/_launch_intents.py",
-      "shifter/shifter_platform/engine/services/_operation_inputs.py",
+      "shifter/shifter_platform/engine/services/_launch/intents.py",
+      "shifter/shifter_platform/engine/services/_launch/operation_inputs.py",
       "shifter/shifter_platform/engine/models",
       "shifter/shifter_platform/shared/operation_envelope.py",
       "shifter/shifter_platform/mission_control/api",
       "docs/architecture/disposable-trial-workers-boundary-2741.md",
       "shifter/shifter_platform/engine/worker_retention.py",
-      "shifter/shifter_platform/engine/services/_worker_retirement.py"
+      "shifter/shifter_platform/engine/services/_worker_lifecycle/retirement.py"
     ]
   },
   {

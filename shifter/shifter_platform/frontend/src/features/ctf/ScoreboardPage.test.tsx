@@ -75,6 +75,67 @@ describe("ScoreboardPage", () => {
     expect(await screen.findByText("Scoreboard hidden")).toBeInTheDocument();
   });
 
+  it("graphs the published score progression above the table", async () => {
+    mockScoreboard({
+      scoreboard_hidden: false,
+      event_id: "e1",
+      team_mode: false,
+      frozen: true,
+      rankings: [{ rank: 1, participant_id: "p1", name: "Alice", score: 100, solve_count: 2 }],
+      bracket_rankings: null,
+      brackets: [],
+      progression: {
+        starts_at: "2026-11-21T10:00:00Z",
+        ends_at: "2026-11-21T12:00:00Z",
+        series: [
+          {
+            id: "p1",
+            name: "Alice",
+            rank: 1,
+            points: [
+              { at: "2026-11-21T10:00:00Z", score: 0 },
+              { at: "2026-11-21T11:00:00Z", score: 100 },
+            ],
+          },
+        ],
+      },
+    });
+    const { container } = renderRoute(<ScoreboardPage />);
+    const graph = await screen.findByRole("img", { name: "Score over time" });
+    expect(graph).toHaveAccessibleDescription(
+      "Cumulative score of the top 1 participants up to the freeze. Open Score history below the graph for each value.",
+    );
+    expect(screen.getByRole("list", { name: "Graph legend" })).toHaveTextContent("1. Alice");
+
+    // The history is readable without the SVG: a native disclosure (keyboard-operable
+    // in browsers; jsdom only activates it by click) holding a table.
+    const user = setupUser();
+    const summary = screen.getByText("Score history");
+    expect(summary.tagName).toBe("SUMMARY");
+    await user.click(summary);
+    expect(summary.closest("details")).toHaveAttribute("open");
+    const rows = within(summary.closest("details") as HTMLElement).getAllByRole("row").slice(1);
+    expect(rows.map((row) => within(row).getAllByRole("cell").at(-1)?.textContent)).toEqual(["0", "100"]);
+    expect(rows[1]).toHaveTextContent("1. Alice");
+    expect((await axe(container)).violations).toEqual([]);
+  });
+
+  it("shows no graph when the board publishes no progression", async () => {
+    mockScoreboard({
+      scoreboard_hidden: false,
+      event_id: "e1",
+      team_mode: false,
+      frozen: false,
+      rankings: [{ rank: 1, participant_id: "p1", name: "Alice", score: 100, solve_count: 2 }],
+      bracket_rankings: null,
+      brackets: [],
+      progression: null,
+    });
+    renderRoute(<ScoreboardPage />);
+    await screen.findByText("Alice");
+    expect(screen.queryByRole("img", { name: "Score over time" })).not.toBeInTheDocument();
+  });
+
   it("has no axe violations when loaded", async () => {
     mockScoreboard({
       scoreboard_hidden: false,

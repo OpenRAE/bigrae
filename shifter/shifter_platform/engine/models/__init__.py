@@ -27,20 +27,25 @@ All models are re-exported here so Django's app registry discovers them via
 exactly as before the split.
 """
 
-from ._capacity import CapacityDeclaration
-from ._capacity_assessment import CapacityAssessment, CapacityDraw, CapacityReservation
-from ._cleanup_verification import CleanupVerificationOutcome, RangeCleanupVerification
-from ._feature_artifacts import AcquiredFeatureArtifact
-from ._gcp_range_projects import GcpRangeProject, GcpRangeProjectUse
-from ._launch import InterruptState, ProvisionerLaunchIntent, ProvisionerLaunchStatus, RangeCancellationAuthority
-from ._operation_io import (
+from engine.models._capacity import CapacityDeclaration
+from engine.models._capacity_assessment import CapacityAssessment, CapacityDraw, CapacityReservation
+from engine.models._cleanup_verification import CleanupVerificationOutcome, RangeCleanupVerification
+from engine.models._feature_artifacts import AcquiredFeatureArtifact
+from engine.models._gcp_range_projects import GcpRangeProject, GcpRangeProjectUse
+from engine.models._launch import (
+    InterruptState,
+    ProvisionerLaunchIntent,
+    ProvisionerLaunchStatus,
+    RangeCancellationAuthority,
+)
+from engine.models._operation_io import (
     OperationInput,
     OperationResultDisposition,
     OperationResultInbox,
     OperationResultKind,
 )
-from ._outbox import OutboxStatus, RangeEventOutbox
-from ._preparation import (
+from engine.models._outbox import OutboxStatus, RangeEventOutbox
+from engine.models._preparation import (
     PreparationAdapter,
     PreparationAttempt,
     PreparationGrant,
@@ -48,28 +53,28 @@ from ._preparation import (
     PreparationScopeLock,
     PreparedArtifactAdmission,
 )
-from ._raes import (
+from engine.models._raes import (
     RaesArtifactSatisfactionBinding,
     RaesContentDeliveryBinding,
     RaesImageMapping,
     RaesParticipantAccessBinding,
 )
-from ._range import Range
-from ._range_authority_change import RangeAuthorityChange
-from ._receipt import ReceiptVerifierRegistration
-from ._request import App, Instance, Instantiation, Request
-from ._retry_binding import PublicOperationRetryBinding, RetryBindingStatus
-from ._runtime_plugins import (
+from engine.models._range import Range
+from engine.models._range_authority_change import RangeAuthorityChange
+from engine.models._receipt import ReceiptVerifierRegistration
+from engine.models._request import App, Instance, Instantiation, Request
+from engine.models._retry_binding import PublicOperationRetryBinding, RetryBindingStatus
+from engine.models._runtime_plugins import (
     RuntimePluginInstallation,
     RuntimePluginInvocation,
     RuntimePluginPackBinding,
     RuntimePluginRangeBinding,
     RuntimePluginValidation,
 )
-from ._subnet import Subnet, SubnetAllocation
-from ._vpn_profile import VpnAccessProfile, VpnCrlState
-from ._vpn_session import VpnSession, VpnSessionEndReason, VpnSessionState
-from ._warm_pool import WarmRangeGeneration
+from engine.models._subnet import Subnet, SubnetAllocation
+from engine.models._vpn_profile import VpnAccessProfile, VpnCrlState
+from engine.models._vpn_session import VpnSession, VpnSessionEndReason, VpnSessionState
+from engine.models._warm_pool import WarmRangeGeneration
 
 __all__ = [
     "AcquiredFeatureArtifact",
@@ -131,11 +136,11 @@ __all__ = [
     "WorkerTrial",
 ]
 
-from ._disposable_worker import (
+from engine.models._disposable_worker import (
     DisposableWorker,
     WorkerHostIdentity,
     WorkerHostObservation,
     WorkerPolicyRecord,
     WorkerRetirementHold,
 )
-from ._worker_trial import WorkerTrial
+from engine.models._worker_trial import WorkerTrial

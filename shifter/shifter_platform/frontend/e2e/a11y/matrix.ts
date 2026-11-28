@@ -124,12 +124,13 @@ export const SURFACES: readonly A11ySurface[] = [
     remediation: "src/features/ctf/ChallengeDetailPage.tsx",
   },
   {
-    // Seeded public-scoreboard event. The sort label renders only with the
-    // loaded board, not while it loads, so it proves the controls rendered (#3001).
+    // Seeded public-scoreboard event. The seeded award gives the participant a
+    // score step, so the score graph renders with the loaded board, in the same
+    // state as the sort controls (#3001, #3004).
     id: "ctf-participant-scoreboard",
     route: "/ctf/scoreboard",
     actor: "inbox",
-    ready: "Sort by",
+    ready: "Score over time",
     readyKind: "text",
     remediation: "src/features/ctf/ScoreboardPage.tsx",
   },

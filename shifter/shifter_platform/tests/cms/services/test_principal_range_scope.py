@@ -477,7 +477,7 @@ def test_expiry_cleanup_retains_custody_after_authorized_scope_move(transferable
     from cms.services import RangeScopeAuditContext, rebind_range_workspace
     from cms.services._range_destroy import destroy_expired_range
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload
+    from engine.services._launch.intents import authorize_provisioner_payload
     from management.models import ServiceCredentialAdmission
 
     settings.LOCAL_PROVISIONER = None
@@ -529,7 +529,7 @@ def test_expiry_cleanup_retains_custody_after_authorized_owner_change(transferab
     from cms.services import reassign_range_owner
     from cms.services._range_destroy import destroy_expired_range
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_intents import authorize_provisioner_payload
+    from engine.services._launch.intents import authorize_provisioner_payload
     from management.models import ServiceCredentialAdmission
     from management.services import create_service_principal
     from workspaces.services import add_account_member

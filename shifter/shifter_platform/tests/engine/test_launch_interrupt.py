@@ -22,8 +22,8 @@ from django.utils import timezone
 
 from engine.models import InterruptState, ProvisionerLaunchIntent, ProvisionerLaunchStatus, Range, Request
 from engine.services import cancel_range_by_request
-from engine.services._launch_intents import command_from_payload, enqueue_provisioner_launch
-from engine.services._launch_interrupt_convergence import drain_due_interrupts
+from engine.services._launch.intents import command_from_payload, enqueue_provisioner_launch
+from engine.services._launch.interrupt_convergence import drain_due_interrupts
 from tests.shared.cloud.test_gcp_task_runner import _ApiException, _make_fake_k8s_client, _observed_job
 
 _WORKSPACE_ID = 1

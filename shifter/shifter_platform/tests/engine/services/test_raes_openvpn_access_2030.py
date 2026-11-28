@@ -36,7 +36,7 @@ from engine.services import (
     grant_raes_remote_access,
     has_openvpn_profile,
 )
-from engine.services._launch_intents import enqueue_provisioner_launch
+from engine.services._launch.intents import enqueue_provisioner_launch
 from shared.enums import ResourceStatus
 from shared.operation_envelope import build_operation_envelope, canonical_payload_digest
 from shared.operation_results import ResultStep, build_result_identity, result_kind_for

@@ -1,0 +1,324 @@
+"""Connect-time authorization and session leases for the shared OpenVPN pool (#2480).
+
+Each pool server runs a controller that asks this service before it admits a
+client whose certificate OpenVPN has already verified. A grant names the one
+target address and ports that client may reach. The controller renews its live
+sessions with a heartbeat and disconnects every session this service returns.
+
+PostgreSQL arbitrates the claim: one active session per range, and a newer
+connection supersedes the older one. Access is re-validated on every renewal,
+so destroy, ownership change, the access deadline, or a newer session ends a
+live tunnel within one heartbeat interval.
+"""
+
+from __future__ import annotations
+
+import ipaddress
+import re
+from contextlib import suppress
+from dataclasses import dataclass
+from datetime import datetime, timedelta
+from uuid import UUID
+
+from django.db import transaction
+from django.utils import timezone
+
+from engine.models import Range, VpnAccessProfile, VpnSession, VpnSessionEndReason, VpnSessionState
+from engine.services._vpn.destinations import _ACCESS_REVOKED, VpnDestination, _member_destinations
+from engine.services._vpn.destinations import VpnSessionDenied as VpnSessionDenied
+from engine.services._vpn.profile_authority import assert_profile_runtime, authorize_vpn_profile
+from shared.audit import AuditAction, AuditActorType, AuditEntityType, AuditEvent, audit_log
+from shared.remote_access import (
+    OpenVpnBindingError,
+    is_raes_member_target,
+    parse_openvpn_binding,
+    parse_openvpn_capability,
+)
+
+VPN_SESSION_HEARTBEAT_SECONDS = 15
+VPN_SESSION_LEASE_SECONDS = 60
+MAX_HEARTBEAT_SESSIONS = 1000
+
+_COMMON_NAME = re.compile(r"participant-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", re.ASCII)
+_PROFILE_NAME = re.compile(r"access-([0-9a-f-]{36})", re.ASCII)
+_SERVER_NAME = re.compile(r"[a-z](?:[-a-z0-9]{0,61}[a-z0-9])?", re.ASCII)
+# Closed refusal codes the pool controller relays to OpenVPN.
+_INVALID_REQUEST = "vpn.invalid_request"
+_UNKNOWN_CLIENT = "vpn.unknown_client"
+_MAX_CLIENT_ID = 2**63 - 1
+_EXPIRY_BATCH = 200
+
+
+@dataclass(frozen=True)
+class VpnSessionGrant:
+    """The exact destinations one authorized client may reach."""
+
+    session_id: UUID
+    destinations: tuple[VpnDestination, ...]
+
+    @property
+    def target_ip(self) -> str:
+        """Return the sole target for backward-compatible single-target callers."""
+        if len(self.destinations) != 1:
+            raise ValueError("VPN session does not authorize exactly one destination")
+        return self.destinations[0].target_ip
+
+    @property
+    def ports(self) -> tuple[int, ...]:
+        """Return the sole target's ports for backward-compatible callers."""
+        if len(self.destinations) != 1:
+            raise ValueError("VPN session does not authorize exactly one destination")
+        return self.destinations[0].ports
+
+
+def _require_server(server: object) -> str:
+    """Accept only a Compute Engine instance name for the reporting server."""
+    if not isinstance(server, str) or not _SERVER_NAME.fullmatch(server):
+        raise VpnSessionDenied(_INVALID_REQUEST)
+    return server
+
+
+def _require_generation(common_name: object) -> UUID:
+    """Return the binding generation a participant certificate was minted for."""
+    match = _COMMON_NAME.fullmatch(common_name) if isinstance(common_name, str) else None
+    if match is None:
+        raise VpnSessionDenied(_UNKNOWN_CLIENT)
+    return UUID(match.group(1))
+
+
+def _require_client_id(client_id: object) -> int:
+    """Accept only the non-negative OpenVPN client id of the server."""
+    if isinstance(client_id, bool) or not isinstance(client_id, int) or not 0 <= client_id <= _MAX_CLIENT_ID:
+        raise VpnSessionDenied(_INVALID_REQUEST)
+    return client_id
+
+
+def _client_address(value: object) -> str:
+    """Keep only a well-formed client address for the audit record."""
+    try:
+        return str(ipaddress.ip_address(str(value)))
+    except ValueError:
+        return ""
+
+
+def _current_targets(range_obj: Range, generation: UUID) -> tuple[VpnDestination, ...]:
+    """Return every exact destination while this generation's access is valid."""
+
+    request = range_obj.request
+    if range_obj.status != Range.Status.READY or request is None or request.request_id != generation:
+        raise VpnSessionDenied(_ACCESS_REVOKED)
+    try:
+        binding = parse_openvpn_binding(range_obj.vpn_access_binding)
+        capability = parse_openvpn_capability(range_obj.remote_access_capability)
+    except OpenVpnBindingError as exc:
+        raise VpnSessionDenied(_ACCESS_REVOKED) from exc
+    valid = (
+        binding.ready
+        and binding.generation == generation
+        and binding.owner_user_id == range_obj.user_id
+        and capability.target_refs == binding.target_refs
+        and capability.teardown_at > timezone.now()
+        and all(is_raes_member_target(target_ref) for target_ref in binding.target_refs)
+    )
+    if not valid:
+        raise VpnSessionDenied(_ACCESS_REVOKED)
+    return _member_destinations(range_obj, binding.target_refs)
+
+
+def _audit(session: VpnSession, action: str, state: dict[str, str]) -> None:
+    """Record one pool session event without credential or certificate material."""
+    audit_log(
+        AuditEvent(
+            entity_type=AuditEntityType.RANGE,
+            entity_id=session.range_id,
+            action=action,
+            actor_type=AuditActorType.SYSTEM,
+            new_state={"channel": "openvpn", "session": str(session.id), "server": session.server, **state},
+            context="range_vpn_session",
+        )
+    )
+
+
+def _end(session: VpnSession, reason: str) -> None:
+    """End one active session and audit why."""
+
+    session.state = VpnSessionState.ENDED
+    session.end_reason = reason
+    session.ended_at = timezone.now()
+    session.save(update_fields=["state", "end_reason", "ended_at"])
+    _audit(session, AuditAction.DISCONNECT, {"reason": reason})
+
+
+def authorize_vpn_session(
+    *,
+    common_name: object,
+    server: object,
+    client_id: object,
+    client_address: object = "",
+    certificate_serial: object = "",
+    certificate_fingerprint: object = "",
+) -> VpnSessionGrant:
+    """Admit one verified certificate to its own target, superseding any older session."""
+
+    server_name = _require_server(server)
+    cid = _require_client_id(client_id)
+    profile, generation, admitted_destination = _admitted_certificate(
+        common_name, certificate_serial, certificate_fingerprint
+    )
+    with transaction.atomic():
+        range_obj = (
+            Range.objects.select_for_update(of=("self",))
+            .select_related("request")
+            .filter(request__request_id=generation)
+            .first()
+        )
+        if range_obj is None:
+            raise VpnSessionDenied(_UNKNOWN_CLIENT)
+        if profile is None:
+            if range_obj.owner_principal_uuid is not None:
+                raise VpnSessionDenied(_ACCESS_REVOKED)
+            destinations = _current_targets(range_obj, generation)
+        else:
+            profile = VpnAccessProfile.objects.select_for_update(of=("self",)).get(pk=profile.pk)
+            profile.range = range_obj
+            try:
+                destinations = assert_profile_runtime(profile)
+                if destinations != admitted_destination:
+                    raise ValueError("Destination changed")
+            except Exception:  # noqa: BLE001  # fail-closed authority check; every failure is one bounded denial
+                raise VpnSessionDenied(_ACCESS_REVOKED) from None
+        for previous in VpnSession.objects.select_for_update().filter(range=range_obj, state=VpnSessionState.ACTIVE):
+            _end(previous, VpnSessionEndReason.SUPERSEDED)
+        session = VpnSession.objects.create(
+            range=range_obj,
+            profile=profile,
+            generation=generation,
+            server=server_name,
+            client_id=cid,
+            lease_expires_at=timezone.now() + timedelta(seconds=VPN_SESSION_LEASE_SECONDS),
+        )
+        _audit(session, AuditAction.CONNECT, {"client_address": _client_address(client_address)})
+    return VpnSessionGrant(session_id=session.id, destinations=destinations)
+
+
+def _require_session_ids(session_ids: object) -> set[UUID]:
+    """Accept a bounded list of session identifiers from one heartbeat."""
+    if not isinstance(session_ids, list) or len(session_ids) > MAX_HEARTBEAT_SESSIONS:
+        raise VpnSessionDenied(_INVALID_REQUEST)
+    try:
+        return {UUID(str(value)) for value in session_ids}
+    except ValueError as exc:
+        raise VpnSessionDenied(_INVALID_REQUEST) from exc
+
+
+def _renewed(
+    row: VpnSession, server_name: str, lease: datetime, admitted: dict[UUID, tuple[VpnDestination, ...]]
+) -> bool:
+    """Extend one reported session's lease, or end it when access is no longer valid."""
+
+    if row.state != VpnSessionState.ACTIVE or row.server != server_name:
+        return False
+    try:
+        if row.profile_id is not None:
+            if row.profile is None or row.id not in admitted or assert_profile_runtime(row.profile) != admitted[row.id]:
+                raise ValueError("VPN authority unavailable")
+        elif row.range.owner_principal_uuid is not None:
+            raise ValueError("VPN authority unavailable")
+        else:
+            _current_targets(row.range, row.generation)
+    except ValueError:
+        _end(row, VpnSessionEndReason.REVOKED)
+        return False
+    row.lease_expires_at = lease
+    row.save(update_fields=["lease_expires_at"])
+    return True
+
+
+def _expire_lapsed() -> None:
+    """End a bounded batch of sessions whose server stopped renewing them, for example after a crash."""
+
+    lapsed = VpnSession.objects.select_for_update(skip_locked=True).filter(
+        state=VpnSessionState.ACTIVE, lease_expires_at__lt=timezone.now()
+    )
+    for row in lapsed[:_EXPIRY_BATCH]:
+        _end(row, VpnSessionEndReason.LEASE_EXPIRED)
+
+
+def renew_vpn_sessions(*, server: object, session_ids: object) -> tuple[UUID, ...]:
+    """Renew still-valid sessions this server holds and return the ones it must disconnect."""
+
+    server_name = _require_server(server)
+    reported = _require_session_ids(session_ids)
+    lease = timezone.now() + timedelta(seconds=VPN_SESSION_LEASE_SECONDS)
+
+    admitted = {}
+    for session in VpnSession.objects.filter(id__in=reported, server=server_name).select_related(
+        "profile__range__request"
+    ):
+        if session.profile is not None:
+            # Fail closed: a profile that no longer authorizes stays out of
+            # ``admitted``, so _renewed ends its session as revoked.
+            with suppress(Exception):
+                admitted[session.id] = authorize_vpn_profile(session.profile)
+    with transaction.atomic():
+        rows = {
+            row.id: row
+            for row in VpnSession.objects.select_for_update(of=("self",))
+            .select_related("range__request", "profile__range__request")
+            .filter(id__in=reported)
+        }
+        kill = {session_id for session_id in reported if session_id not in rows}
+        kill.update(session_id for session_id, row in rows.items() if not _renewed(row, server_name, lease, admitted))
+        # A session the server no longer reports has left that server.
+        for row in (
+            VpnSession.objects.select_for_update()
+            .filter(server=server_name, state=VpnSessionState.ACTIVE)
+            .exclude(id__in=reported)
+        ):
+            _end(row, VpnSessionEndReason.DISCONNECTED)
+        _expire_lapsed()
+    return tuple(sorted(kill))
+
+
+def end_vpn_session(*, server: object, session_id: object) -> None:
+    """Record that a server's client disconnected; other servers' sessions are untouched."""
+
+    server_name = _require_server(server)
+    try:
+        identifier = UUID(str(session_id))
+    except ValueError as exc:
+        raise VpnSessionDenied(_INVALID_REQUEST) from exc
+    with transaction.atomic():
+        row = (
+            VpnSession.objects.select_for_update()
+            .filter(id=identifier, server=server_name, state=VpnSessionState.ACTIVE)
+            .first()
+        )
+        if row is not None:
+            _end(row, VpnSessionEndReason.DISCONNECTED)
+
+
+def _admitted_certificate(
+    common_name: object, certificate_serial: object, certificate_fingerprint: object
+) -> tuple[VpnAccessProfile | None, UUID, tuple[VpnDestination, ...] | None]:
+    """Match public certificate evidence and evaluate policy before locking the native range."""
+
+    admitted_destinations = None
+    profile = None
+    match = _PROFILE_NAME.fullmatch(common_name) if isinstance(common_name, str) else None
+    if match is not None:
+        try:
+            profile = VpnAccessProfile.objects.select_related("range__request").get(pk=UUID(match.group(1)))
+            if (
+                certificate_serial != profile.certificate_serial
+                or not isinstance(certificate_fingerprint, str)
+                or certificate_fingerprint.replace(":", "").lower() != profile.certificate_fingerprint
+            ):
+                raise ValueError("Certificate mismatch")
+            admitted_destinations = authorize_vpn_profile(profile)
+            generation = profile.generation
+        except Exception:  # noqa: BLE001  # fail-closed authority check; every failure is one bounded denial
+            raise VpnSessionDenied(_ACCESS_REVOKED) from None
+    else:
+        generation = _require_generation(common_name)
+    return profile, generation, admitted_destinations

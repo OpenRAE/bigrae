@@ -5,13 +5,18 @@
 #
 # The base image handles:
 # - Extension loading (via JSON_ENABLED=true, OPENID_ENABLED=false)
+# - Properties read from the files that *_FILE variables name
 #
 # Our entrypoint adds:
 # - Automatic schema creation on first startup (idempotent)
 #
 # Required environment variables:
-# - JSON_SECRET_KEY: 128-bit hex key for signing/encrypting JSON auth payloads
-# - POSTGRESQL_HOSTNAME, POSTGRESQL_DATABASE, POSTGRESQL_USER, POSTGRESQL_PASSWORD
+# - JSON_SECRET_KEY_FILE: file with the 128-bit hex key for JSON auth payloads
+# - POSTGRESQL_USERNAME_FILE, POSTGRESQL_PASSWORD_FILE: files with the database
+#   credentials
+# - POSTGRESQL_HOSTNAME, POSTGRESQL_DATABASE
+#
+# Credentials must arrive as files. The entrypoint rejects credential variables.
 #
 # Reference: https://guacamole.apache.org/doc/gug/guacamole-docker.html
 
@@ -138,6 +143,10 @@ COPY entrypoint.sh /opt/guacamole/bin/custom-entrypoint.sh
 COPY --from=authority-build /authority/target/guacamole-authority-1.0.0.jar /opt/guacamole/shifter-authority.jar
 COPY authority-entrypoint.sh /opt/guacamole/entrypoint.d/600-shifter-authority.sh
 RUN chmod +x /opt/guacamole/bin/custom-entrypoint.sh
+
+# Read each property from the file that its *_FILE variable names. The base
+# image sets the same value; this image depends on it, so it states it.
+ENV ENABLE_FILE_ENVIRONMENT_PROPERTIES=true
 
 USER guacamole
 

@@ -26,7 +26,7 @@ def _authorized_range(request_id: str) -> None:
 
 def test_enqueue_stores_only_validated_non_secret_intent() -> None:
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     request_id = "11111111-1111-1111-1111-111111111111"
     _authorized_range(request_id)
@@ -49,7 +49,7 @@ def test_duplicate_delivery_is_idempotent() -> None:
     from django.utils import timezone
 
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     request_id = "22222222-2222-2222-2222-222222222222"
     _authorized_range(request_id)
@@ -64,7 +64,7 @@ def test_duplicate_delivery_is_idempotent() -> None:
 
 def test_same_operation_generation_reuses_intent_across_command_aliases() -> None:
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     request_id = "77777777-7777-7777-7777-777777777777"
     _authorized_range(request_id)
@@ -81,7 +81,7 @@ def test_same_operation_generation_reuses_intent_across_command_aliases() -> Non
 
 def test_new_domain_operation_gets_a_new_stable_identity() -> None:
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     request_id = "55555555-5555-5555-5555-555555555555"
     _authorized_range(request_id)
@@ -103,7 +103,7 @@ def test_intent_insert_failure_rolls_back_operation_generation() -> None:
     from django.db import IntegrityError, connection
 
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     if connection.vendor != "sqlite":
         pytest.skip("failure-injection trigger is SQLite-specific")
@@ -138,14 +138,14 @@ def test_intent_insert_failure_rolls_back_operation_generation() -> None:
     ],
 )
 def test_rejects_non_canonical_launch_commands(command: list[str]) -> None:
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     with pytest.raises(ValueError):
         enqueue_provisioner_launch(command)
 
 
 def test_legacy_range_intent_validates_integer_identifiers() -> None:
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     with pytest.raises(ValueError):
         enqueue_provisioner_launch(["range", "provision", "--range-id", "-1", "--user-id", "7"])
@@ -153,7 +153,7 @@ def test_legacy_range_intent_validates_integer_identifiers() -> None:
 
 def test_gcp_public_dispatch_enqueues_without_launching(settings) -> None:
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_starts import start_range_provisioning
+    from engine.services._launch.starts import start_range_provisioning
 
     settings.CLOUD_PROVIDER = "gcp"
     settings.LOCAL_PROVISIONER = None
@@ -176,7 +176,7 @@ def test_public_dispatch_enqueues_the_same_intent_on_both_providers(settings, pr
     and returns its reserved ref without ever launching the provider TaskRunner,
     regardless of which provider is configured."""
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_starts import start_range_provisioning
+    from engine.services._launch.starts import start_range_provisioning
 
     settings.CLOUD_PROVIDER = provider
     settings.LOCAL_PROVISIONER = None
@@ -205,7 +205,7 @@ def test_public_dispatch_fails_closed_when_domain_state_forbids_operation(settin
     this exercises the ``authorize_provisioner_payload`` rejection branch they
     never hit — deleting that check would now fail a test, on both providers."""
     from engine.models import ProvisionerLaunchIntent, Range
-    from engine.services._launch_starts import start_range_provisioning
+    from engine.services._launch.starts import start_range_provisioning
 
     settings.CLOUD_PROVIDER = provider
     settings.LOCAL_PROVISIONER = None
@@ -227,7 +227,7 @@ def test_public_dispatch_fails_closed_when_domain_state_forbids_operation(settin
 
 def test_gcp_public_dispatch_does_not_enqueue_with_incomplete_task_config(settings) -> None:
     from engine.models import ProvisionerLaunchIntent
-    from engine.services._launch_starts import start_range_provisioning
+    from engine.services._launch.starts import start_range_provisioning
 
     settings.CLOUD_PROVIDER = "gcp"
     settings.LOCAL_PROVISIONER = None
@@ -244,7 +244,7 @@ def test_gcp_public_dispatch_does_not_enqueue_with_incomplete_task_config(settin
 
 def test_succeeded_operation_cannot_be_reenqueued() -> None:
     from engine.models import ProvisionerLaunchIntent, ProvisionerLaunchStatus
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     command = ["range", "provision", "--request-id", "44444444-4444-4444-4444-444444444444"]
     _authorized_range("44444444-4444-4444-4444-444444444444")
@@ -257,7 +257,7 @@ def test_succeeded_operation_cannot_be_reenqueued() -> None:
 
 def test_dead_lettered_same_operation_starts_a_new_generation() -> None:
     from engine.models import ProvisionerLaunchIntent, ProvisionerLaunchStatus, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     request_id = "77777777-7777-7777-7777-777777777777"
     _authorized_range(request_id)
@@ -278,7 +278,7 @@ def test_dead_lettered_same_operation_starts_a_new_generation() -> None:
 
 def test_failed_episode_can_retry_the_same_operation() -> None:
     from engine.models import ProvisionerLaunchIntent, ProvisionerLaunchStatus, Range
-    from engine.services._launch_intents import clear_provisioner_operation_after_failure, enqueue_provisioner_launch
+    from engine.services._launch.intents import clear_provisioner_operation_after_failure, enqueue_provisioner_launch
 
     request_id = "88888888-8888-8888-8888-888888888888"
     _authorized_range(request_id)
@@ -302,7 +302,7 @@ def test_enqueue_materializes_immutable_operation_input() -> None:
     """The immutable operation-input projection is created with the intent,
     keyed by the same operation_id, and carries a valid transport envelope."""
     from engine.models import OperationInput, ProvisionerLaunchIntent, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
     from shared.operation_envelope import validate_operation_envelope
 
     request_id = "12121212-1212-1212-1212-121212121212"
@@ -324,7 +324,7 @@ def test_enqueue_materializes_immutable_operation_input() -> None:
 
 def test_operation_input_is_not_duplicated_on_idempotent_replay() -> None:
     from engine.models import OperationInput
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     request_id = "13131313-1313-1313-1313-131313131313"
     _authorized_range(request_id)
@@ -337,7 +337,7 @@ def test_operation_input_is_not_duplicated_on_idempotent_replay() -> None:
 
 def test_new_operation_generation_materializes_a_new_input() -> None:
     from engine.models import OperationInput, Range
-    from engine.services._launch_intents import enqueue_provisioner_launch
+    from engine.services._launch.intents import enqueue_provisioner_launch
 
     request_id = "14141414-1414-1414-1414-141414141414"
     _authorized_range(request_id)
@@ -353,7 +353,7 @@ def test_new_operation_generation_materializes_a_new_input() -> None:
 
 
 def test_command_from_payload_round_trips_the_operation_id() -> None:
-    from engine.services._launch_intents import command_from_payload, validate_provisioner_command
+    from engine.services._launch.intents import command_from_payload, validate_provisioner_command
 
     operation_id = "15151515-1515-1515-1515-151515151515"
     request_id = "16161616-1616-1616-1616-161616161616"
@@ -370,7 +370,7 @@ def test_command_from_payload_round_trips_the_operation_id() -> None:
 
 
 def test_validate_rejects_non_uuid_operation_id() -> None:
-    from engine.services._launch_intents import validate_provisioner_command
+    from engine.services._launch.intents import validate_provisioner_command
 
     request_id = "17171717-1717-1717-1717-171717171717"
     with pytest.raises(ValueError, match="operation_id must be a UUID"):
@@ -382,7 +382,7 @@ def test_stored_intent_check_is_a_noop_when_no_input_was_materialized() -> None:
     to compare, so the replay-equivalence guard returns without raising."""
     from uuid import uuid4
 
-    from engine.services._launch_generation import _assert_stored_intent_matches
+    from engine.services._launch.generation import _assert_stored_intent_matches
 
     payload = {
         "version": 1,
@@ -402,7 +402,7 @@ def test_stored_intent_check_is_a_noop_for_a_legacy_range_without_a_request() ->
     from django.contrib.auth import get_user_model
 
     from engine.models import OperationInput, Range
-    from engine.services._launch_generation import _assert_stored_intent_matches
+    from engine.services._launch.generation import _assert_stored_intent_matches
 
     operation_id = uuid4()
     user = get_user_model().objects.create_user(username=f"{uuid4()}@example.com")

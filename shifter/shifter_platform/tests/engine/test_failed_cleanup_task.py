@@ -5,7 +5,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from engine.services._failed_cleanup_task import retire_failed_cleanup_task
+from engine.services._cleanup.failed_task import retire_failed_cleanup_task
 from shared.cloud.exceptions import CloudTaskError
 
 
@@ -26,7 +26,7 @@ def task(settings, monkeypatch):
         executing_workload=workload, task_ref="synthetic-jobs/synthetic-cleanup", status="SUCCEEDED"
     )
     runner = Mock()
-    monkeypatch.setattr("engine.services._failed_cleanup_task.get_task_runner", lambda: runner)
+    monkeypatch.setattr("engine.services._cleanup.failed_task.get_task_runner", lambda: runner)
     return intent, runner
 
 

@@ -27,6 +27,11 @@ from typing import TextIO
 
 import yaml
 
+from _internal_layers import (
+    analyze_internal_layers,
+    apply_internal_layer_violations,
+    load_internal_layers,
+)
 from _symbol_facade import (
     analyze_symbol_facade_imports,
     apply_symbol_facade_violations,
@@ -325,6 +330,7 @@ def _apply_extra_violations(
     cyberscript: dict[str, list[str]] | None,
     private_facade: dict[str, list[str]] | None,
     symbol_facade: dict[str, list[str]] | None,
+    internal_layers: dict[str, list[str]] | None = None,
 ) -> None:
     """Roll the boundary-specific violation categories into summary stats."""
     if cyberscript:
@@ -333,6 +339,8 @@ def _apply_extra_violations(
         _apply_private_facade_violations(stats, private_facade)
     if symbol_facade:
         apply_symbol_facade_violations(stats, symbol_facade)
+    if internal_layers:
+        apply_internal_layer_violations(stats, internal_layers)
 
 
 def compute_stats(
@@ -341,6 +349,7 @@ def compute_stats(
     cyberscript: dict[str, list[str]] | None = None,
     private_facade: dict[str, list[str]] | None = None,
     symbol_facade: dict[str, list[str]] | None = None,
+    internal_layers: dict[str, list[str]] | None = None,
 ) -> dict[str, object]:
     """Compute summary statistics from import analysis."""
     stats = {
@@ -373,7 +382,7 @@ def compute_stats(
         if layer_has_violation:
             stats["layers_with_violations"].append(from_layer)
 
-    _apply_extra_violations(stats, cyberscript, private_facade, symbol_facade)
+    _apply_extra_violations(stats, cyberscript, private_facade, symbol_facade, internal_layers)
 
     # Determine clean layers (no violations)
     for layer in ALL_LAYERS:
@@ -450,7 +459,8 @@ def main() -> int:
     cyberscript = analyze_cyberscript_imports(base_path)
     private_facade = analyze_private_facade_imports(base_path, allowed)
     symbol_facade = analyze_symbol_facade_imports(base_path, allowed_symbols, ALL_LAYERS)
-    stats = compute_stats(imports, allowed, cyberscript, private_facade, symbol_facade)
+    internal_layers = analyze_internal_layers(base_path, load_internal_layers(config_path))
+    stats = compute_stats(imports, allowed, cyberscript, private_facade, symbol_facade, internal_layers)
 
     # Build output
     output = {
@@ -458,6 +468,7 @@ def main() -> int:
         "cyberscript_imports": cyberscript,
         "private_facade_imports": private_facade,
         "symbol_facade_imports": symbol_facade,
+        "internal_layer_imports": internal_layers,
         "stats": stats,
     }
 

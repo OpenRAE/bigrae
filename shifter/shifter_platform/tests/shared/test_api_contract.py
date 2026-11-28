@@ -216,6 +216,7 @@ class TestPublishedContract:
             "rankings",
             "bracket_rankings",
             "brackets",
+            "progression",
         }
         assert set(scoreboard["required"]) == expected
         assert set(scoreboard["properties"]) == expected
