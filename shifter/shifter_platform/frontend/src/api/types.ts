@@ -183,6 +183,7 @@ export type CtfHint = components["schemas"]["ParticipantHint"];
 export type CtfChallengeFile = components["schemas"]["ParticipantChallengeFile"];
 export type CtfTeam = components["schemas"]["ParticipantTeam"];
 export type CtfTeamMember = components["schemas"]["ParticipantTeamMember"];
+export type CtfTeamRegenerateCodeRequest = components["schemas"]["TeamRegenerateCodeRequest"];
 export type CtfSubmitFlagResult = components["schemas"]["SubmitFlagResult"];
 export type CtfUseHintResult = components["schemas"]["UseHintResult"];
 export type CtfRateChallengeResult = components["schemas"]["RateChallengeResult"];

@@ -9,14 +9,16 @@ authorize on the acting participant being the team's captain.
 from __future__ import annotations
 
 import logging
-import secrets
+from datetime import timedelta
 from typing import TYPE_CHECKING
 
 from django.core.exceptions import ValidationError as DjangoValidationError
 from django.db import IntegrityError, OperationalError, transaction
+from django.utils import timezone
 
 from ctf.exceptions import CTFNotFoundError, CTFPermissionError, CTFStateError, CTFValidationError
 from ctf.models import CTFParticipant, CTFTeam
+from ctf.models.team import generate_invite_code
 
 if TYPE_CHECKING:
     from uuid import UUID
@@ -24,6 +26,17 @@ if TYPE_CHECKING:
 logger = logging.getLogger(__name__)
 
 _TEAM_NAME_MAX_LENGTH = 100
+
+
+class _Unset:
+    """Sentinel type for a regeneration setting the caller did not supply.
+
+    An omitted setting keeps its current value; this is distinct from an
+    explicit ``None`` lifetime, which removes expiry.
+    """
+
+
+_UNSET = _Unset()
 
 
 def _load_participant(participant_id: UUID) -> CTFParticipant:
@@ -169,6 +182,27 @@ def create_team(participant_id: UUID, name: str) -> CTFTeam:
     return team
 
 
+def _assert_locked_invite_joinable(locked_team: CTFTeam, participant: CTFParticipant, code: str) -> None:
+    """Reject an invalid code or non-joinable state from the locked rows (CTF-504).
+
+    Call only inside the join transaction, after locking the team and refreshing
+    the participant. Eligibility is re-checked here because a ban or
+    disqualification may commit between the initial load and the lock.
+    """
+    from ctf.services.participant import assert_participant_can_compete
+
+    assert_participant_can_compete(participant)
+    # Validity first, so a spent, expired, replaced, or unknown code always
+    # returns the same safe not-found answer — including a lost-response replay
+    # of a single-use join whose participant is now a member.
+    if locked_team.invite_code != code or not locked_team.invite_code_is_valid:
+        raise CTFNotFoundError("Invalid invite code")
+    if participant.team_id == locked_team.pk:
+        raise CTFStateError("You are already on this team", details={"team_id": str(locked_team.pk)})
+    if locked_team.is_full:
+        raise CTFStateError("This team is full", details={"team_id": str(locked_team.pk)})
+
+
 @transaction.atomic
 def join_team(participant_id: UUID, invite_code: str) -> CTFTeam:
     """Join a team by invite code with the #1140 capacity guard.
@@ -184,21 +218,22 @@ def join_team(participant_id: UUID, invite_code: str) -> CTFTeam:
     team = CTFTeam.objects.filter(event=participant.event, invite_code=code).first()
     if team is None:
         raise CTFNotFoundError("Invalid invite code")
-    if participant.team_id == team.pk:
-        raise CTFStateError("You are already on this team", details={"team_id": str(team.pk)})
     with transaction.atomic():
         locked_team = _lock_team(team.pk, extra_ids=(participant.pk,))
         participant.refresh_from_db()
-        if locked_team.is_full:
-            raise CTFStateError("This team is full", details={"team_id": str(team.pk)})
+        _assert_locked_invite_joinable(locked_team, participant, code)
         old_team_id = participant.team_id
         participant.team = locked_team
         participant.save(update_fields=["team", "updated_at"])
+        # Spend a single-use code only when the membership change commits.
+        if locked_team.invite_code_single_use:
+            locked_team.invite_code_spent = True
+            locked_team.save(update_fields=["invite_code_spent", "updated_at"])
         _recompute_team(locked_team.pk)
         if old_team_id is not None and old_team_id != locked_team.pk:
             _recompute_team(old_team_id)
-    logger.info("Participant %s joined team %s in event %s", participant.pk, team.pk, participant.event_id)
-    return team
+    logger.info("Participant %s joined team %s in event %s", participant.pk, locked_team.pk, participant.event_id)
+    return locked_team
 
 
 @transaction.atomic
@@ -252,12 +287,40 @@ def rename_team(participant_id: UUID, name: str) -> CTFTeam:
 
 
 @transaction.atomic
-def regenerate_invite_code(participant_id: UUID) -> CTFTeam:
-    """Mint a fresh invite code (captain only), invalidating the old one."""
+def regenerate_invite_code(
+    participant_id: UUID,
+    *,
+    single_use: bool | _Unset = _UNSET,
+    expires_in_seconds: int | None | _Unset = _UNSET,
+) -> CTFTeam:
+    """Mint a fresh invite code (captain only), invalidating the old one.
+
+    An omitted setting keeps its current value. A provided lifetime restarts
+    from now; a ``None`` lifetime removes expiry. Regeneration always clears
+    consumption so the new code starts usable.
+    """
     participant = _load_participant(participant_id)
     team = _require_captain(participant)
-    team.invite_code = secrets.token_urlsafe(16)
-    team.save(update_fields=["invite_code", "updated_at"])
+    if not isinstance(single_use, _Unset):
+        team.invite_code_single_use = bool(single_use)
+    if not isinstance(expires_in_seconds, _Unset):
+        team.invite_code_lifetime_seconds = expires_in_seconds
+    if team.invite_code_lifetime_seconds:
+        team.invite_code_expires_at = timezone.now() + timedelta(seconds=team.invite_code_lifetime_seconds)
+    else:
+        team.invite_code_expires_at = None
+    team.invite_code = generate_invite_code()
+    team.invite_code_spent = False
+    team.save(
+        update_fields=[
+            "invite_code",
+            "invite_code_single_use",
+            "invite_code_lifetime_seconds",
+            "invite_code_expires_at",
+            "invite_code_spent",
+            "updated_at",
+        ]
+    )
     logger.info("Captain %s regenerated the invite code for team %s", participant.pk, team.pk)
     return team
 

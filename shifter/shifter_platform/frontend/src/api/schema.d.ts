@@ -2965,7 +2965,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** @description Invalidate the old invite code and return the new one. */
+        /**
+         * @description Invalidate the old invite code and return the new one.
+         *
+         *     An empty body keeps the current settings. ``single_use`` and
+         *     ``expires_in_seconds`` are optional; an omitted field keeps its value.
+         */
         post: operations["ctf_me_team_regenerate_code_create"];
         delete?: never;
         options?: never;
@@ -7083,6 +7088,9 @@ export interface components {
             readonly is_captain: boolean;
             readonly team_size_limit: number | null;
             readonly invite_code: string | null;
+            invite_code_single_use?: boolean | null;
+            /** Format: date-time */
+            invite_code_expires_at?: string | null;
         };
         /** @description A teammate's display identity (no score or account fields). */
         ParticipantTeamMember: {
@@ -8283,6 +8291,17 @@ export interface components {
         TeamMemberRequest: {
             /** Format: uuid */
             participant_id: string;
+        };
+        /**
+         * @description Optional settings for a regenerated invite code (CTF-504).
+         *
+         *     Both fields are optional. An omitted field keeps its current value. A
+         *     ``null`` ``expires_in_seconds`` removes expiry; a positive value sets a
+         *     lifetime that each regeneration restarts.
+         */
+        TeamRegenerateCodeRequest: {
+            single_use?: boolean;
+            expires_in_seconds?: number | null;
         };
         /** @description The immutable registered pack identity and conformance result. */
         TenantPackInstalled: {
@@ -18278,7 +18297,13 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["TeamRegenerateCodeRequest"];
+                "application/x-www-form-urlencoded": components["schemas"]["TeamRegenerateCodeRequest"];
+                "multipart/form-data": components["schemas"]["TeamRegenerateCodeRequest"];
+            };
+        };
         responses: {
             200: {
                 headers: {

@@ -170,7 +170,11 @@ class ParticipantTeamView(APIView):
                 status_code=status.HTTP_404_NOT_FOUND,
                 request=request,
             )
-        return Response(ParticipantTeamSerializer(team).data)
+        # The captain projection carries the invite code, a join secret, so the
+        # read is never cached (CTF-504).
+        response = Response(ParticipantTeamSerializer(team).data)
+        add_never_cache_headers(response)
+        return response
 
 
 class ParticipantChallengeDetailView(APIView):

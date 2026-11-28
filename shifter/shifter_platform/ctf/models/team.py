@@ -27,6 +27,11 @@ from ._base import CTFBaseModel
 logger = logging.getLogger(__name__)
 
 
+def generate_invite_code() -> str:
+    """Return a fresh URL-safe team invite code."""
+    return secrets.token_urlsafe(16)
+
+
 class CTFBracket(CTFBaseModel):
     """Named bracket for grouping participants by skill level.
 
@@ -112,6 +117,26 @@ class CTFTeam(CTFBaseModel):
         db_index=True,
         help_text="Code for joining the team",
     )
+    invite_code_single_use = models.BooleanField(
+        default=False,
+        db_default=False,
+        help_text="When true, the current invite code admits one member, then is spent (CTF-504)",
+    )
+    invite_code_lifetime_seconds = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        help_text="Lifetime applied to each new code; null never expires. Rotation restarts it (CTF-504)",
+    )
+    invite_code_expires_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        help_text="Deadline of the current invite code; null never expires (CTF-504)",
+    )
+    invite_code_spent = models.BooleanField(
+        default=False,
+        db_default=False,
+        help_text="True once a single-use code is redeemed; cleared on regeneration (CTF-504)",
+    )
     captain = models.ForeignKey(
         "CTFParticipant",
         on_delete=models.SET_NULL,
@@ -173,8 +198,19 @@ class CTFTeam(CTFBaseModel):
     def save(self, *args, **kwargs) -> None:
         """Generate invite code on first save."""
         if not self.invite_code:
-            self.invite_code = secrets.token_urlsafe(16)
+            self.invite_code = generate_invite_code()
         super().save(*args, **kwargs)
+
+    @property
+    def invite_code_is_valid(self) -> bool:
+        """Return True when the current code can still admit a member (CTF-504).
+
+        A spent single-use code or a code past its deadline is invalid. The
+        deadline is inclusive: equality with ``now`` counts as expired.
+        """
+        if self.invite_code_spent:
+            return False
+        return self.invite_code_expires_at is None or timezone.now() < self.invite_code_expires_at
 
     @property
     def member_count(self) -> int:

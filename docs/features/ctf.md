@@ -115,6 +115,11 @@ The statistics refresh while the page is open.
 The page hides the statistics when the organizer does not enable them.
 
 A captain can rename the team, remove members, and transfer captaincy.
+A captain can regenerate the invite code at any time.
+A regenerated code can be single-use or multi-use.
+A captain can also set an expiry on the code.
+The platform rejects an expired, used, or replaced code.
+
 Disbanding requires the current members to have no recorded correct solve.
 A zero-point solve still prevents disbanding.
 The same rule applies when the last member leaves.

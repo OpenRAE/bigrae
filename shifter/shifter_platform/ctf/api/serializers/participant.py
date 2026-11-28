@@ -14,6 +14,7 @@ from __future__ import annotations
 from rest_framework import serializers
 
 from ctf.api.serializers._common import ChallengeStatisticsSerializer, _NamedRefSerializer
+from shared.api.closed_serializer import ClosedSerializer
 
 
 class ParticipantSelfSerializer(serializers.Serializer):
@@ -121,6 +122,12 @@ class ParticipantTeamSerializer(serializers.Serializer):
     is_captain = serializers.BooleanField(read_only=True)
     team_size_limit = serializers.IntegerField(read_only=True, allow_null=True)
     invite_code = serializers.CharField(read_only=True, allow_null=True)
+    # Code settings are shown to the captain only (CTF-504). ADR-040-R3 allows
+    # only optional v1 additions, and the generator marks read-only fields
+    # required, so these output-only fields use required=False (see
+    # _team_solved_by_field).
+    invite_code_single_use = serializers.BooleanField(required=False, allow_null=True)
+    invite_code_expires_at = serializers.DateTimeField(required=False, allow_null=True)
 
 
 class TeamCreateRequestSerializer(serializers.Serializer):
@@ -133,6 +140,23 @@ class TeamJoinRequestSerializer(serializers.Serializer):
     """Request body for joining a team by invite code."""
 
     invite_code = serializers.CharField(max_length=64)
+
+
+class TeamRegenerateCodeRequestSerializer(ClosedSerializer):
+    """Optional settings for a regenerated invite code (CTF-504).
+
+    Both fields are optional. An omitted field keeps its current value. A
+    ``null`` ``expires_in_seconds`` removes expiry; a positive value sets a
+    lifetime that each regeneration restarts.
+    """
+
+    single_use = serializers.BooleanField(required=False)
+    expires_in_seconds = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        min_value=1,
+        max_value=2_147_483_647,
+    )
 
 
 class TeamMemberRequestSerializer(serializers.Serializer):
